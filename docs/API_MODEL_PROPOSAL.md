@@ -26,9 +26,9 @@ This document proposes the data model for the Dynamic Ranking Calculation API.
 
 ## Proposed Data Model
 
-### Option 1: Structured Detailed Model (Recommended)
+### Option 1: Map-Based Model (Recommended)
 
-This model provides maximum flexibility for capturing all match details.
+This model uses player IDs as map keys for a cleaner, more scalable design.
 
 #### Core Data Classes
 
@@ -39,9 +39,8 @@ enum class RatingSystem {
     UTR    // Universal Tennis Rating (1.0 - 16.5+)
 }
 
-// Player Profile
+// Player Profile (without ID since ID is the map key)
 data class PlayerProfile(
-    val playerId: String,
     val name: String,
     val rating: Double,
     val ratingSystem: RatingSystem
@@ -60,39 +59,39 @@ enum class MatchFormat {
     ADVANTAGE_SET
 }
 
-// Set Score
+// Set Score (using player IDs as keys)
 data class SetScore(
-    val playerOneGames: Int,
-    val playerTwoGames: Int,
+    val games: Map<String, Int>,  // playerId -> games won
     val tiebreak: TiebreakScore? = null,
-    val winner: Int,  // 1 or 2
-    val games: List<GameScore> = emptyList()  // Optional: detailed game scores
+    val winner: String,  // playerId of winner
+    val gameDetails: List<GameScore> = emptyList()  // Optional: detailed game scores
 )
 
 // Tiebreak Score
 data class TiebreakScore(
-    val playerOnePoints: Int,
-    val playerTwoPoints: Int,
-    val winner: Int  // 1 or 2
+    val points: Map<String, Int>,  // playerId -> points
+    val winner: String  // playerId of winner
 )
 
 // Game Score (Optional - for detailed tracking)
 data class GameScore(
     val gameNumber: Int,
-    val playerOnePoints: String,  // "0", "15", "30", "40", "AD"
-    val playerTwoPoints: String,
-    val winner: Int,  // 1 or 2
+    val points: Map<String, String>,  // playerId -> "0", "15", "30", "40", "AD"
+    val winner: String,  // playerId of winner
     val deuces: Int = 0
 )
 
 // Request
 data class RankingCalculationRequest(
-    val playerOne: PlayerProfile,
-    val playerTwo: PlayerProfile,
+    val players: Map<String, PlayerProfile>,  // playerId -> profile
     val matchScore: MatchScore,
     val matchDate: String? = null,  // ISO 8601 format (optional)
     val metadata: MatchMetadata? = null  // Optional additional info
-)
+) {
+    init {
+        require(players.size == 2) { "Exactly 2 players required for singles match" }
+    }
+}
 
 data class MatchMetadata(
     val tournament: String? = null,
@@ -103,29 +102,23 @@ data class MatchMetadata(
 
 // Response
 data class RankingCalculationResponse(
-    val playerOne: PlayerProfile,  // Updated rating
-    val playerTwo: PlayerProfile,  // Updated rating
-    val ratingChange: RatingChange,
+    val players: Map<String, PlayerProfile>,  // playerId -> updated profile
+    val ratingChanges: Map<String, RatingChange>,  // playerId -> rating change
     val calculationDetails: CalculationDetails? = null
 )
 
 data class RatingChange(
-    val playerOneChange: Double,
-    val playerTwoChange: Double,
-    val playerOnePercentChange: Double,
-    val playerTwoPercentChange: Double
+    val change: Double,
+    val percentChange: Double,
+    val previousRating: Double,
+    val newRating: Double
 )
 
 data class CalculationDetails(
-    val expectedOutcome: ExpectedOutcome,
-    val actualOutcome: String,
+    val expectedOutcome: Map<String, Double>,  // playerId -> win probability
+    val actualWinner: String,  // playerId
     val algorithm: String,  // "ELO", "Glicko", etc.
     val confidence: Double? = null
-)
-
-data class ExpectedOutcome(
-    val playerOneProbability: Double,  // 0.0 to 1.0
-    val playerTwoProbability: Double
 )
 ```
 
@@ -138,29 +131,33 @@ data class ExpectedOutcome(
 **Request:**
 ```json
 {
-  "playerOne": {
-    "playerId": "P123",
-    "name": "John Doe",
-    "rating": 4.5,
-    "ratingSystem": "NTRP"
-  },
-  "playerTwo": {
-    "playerId": "P456",
-    "name": "Jane Smith",
-    "rating": 4.0,
-    "ratingSystem": "NTRP"
+  "players": {
+    "P123": {
+      "name": "John Doe",
+      "rating": 4.5,
+      "ratingSystem": "NTRP"
+    },
+    "P456": {
+      "name": "Jane Smith",
+      "rating": 4.0,
+      "ratingSystem": "NTRP"
+    }
   },
   "matchScore": {
     "sets": [
       {
-        "playerOneGames": 6,
-        "playerTwoGames": 4,
-        "winner": 1
+        "games": {
+          "P123": 6,
+          "P456": 4
+        },
+        "winner": "P123"
       },
       {
-        "playerOneGames": 6,
-        "playerTwoGames": 3,
-        "winner": 1
+        "games": {
+          "P123": 6,
+          "P456": 3
+        },
+        "winner": "P123"
       }
     ],
     "matchFormat": "BEST_OF_THREE"
@@ -172,30 +169,38 @@ data class ExpectedOutcome(
 **Response:**
 ```json
 {
-  "playerOne": {
-    "playerId": "P123",
-    "name": "John Doe",
-    "rating": 4.52,
-    "ratingSystem": "NTRP"
+  "players": {
+    "P123": {
+      "name": "John Doe",
+      "rating": 4.52,
+      "ratingSystem": "NTRP"
+    },
+    "P456": {
+      "name": "Jane Smith",
+      "rating": 3.98,
+      "ratingSystem": "NTRP"
+    }
   },
-  "playerTwo": {
-    "playerId": "P456",
-    "name": "Jane Smith",
-    "rating": 3.98,
-    "ratingSystem": "NTRP"
-  },
-  "ratingChange": {
-    "playerOneChange": 0.02,
-    "playerTwoChange": -0.02,
-    "playerOnePercentChange": 0.44,
-    "playerTwoPercentChange": -0.50
+  "ratingChanges": {
+    "P123": {
+      "change": 0.02,
+      "percentChange": 0.44,
+      "previousRating": 4.5,
+      "newRating": 4.52
+    },
+    "P456": {
+      "change": -0.02,
+      "percentChange": -0.50,
+      "previousRating": 4.0,
+      "newRating": 3.98
+    }
   },
   "calculationDetails": {
     "expectedOutcome": {
-      "playerOneProbability": 0.65,
-      "playerTwoProbability": 0.35
+      "P123": 0.65,
+      "P456": 0.35
     },
-    "actualOutcome": "Player One Won 2-0",
+    "actualWinner": "P123",
     "algorithm": "Modified ELO for Tennis",
     "confidence": 0.85
   }
@@ -207,39 +212,47 @@ data class ExpectedOutcome(
 **Request:**
 ```json
 {
-  "playerOne": {
-    "playerId": "P789",
-    "name": "Mike Wilson",
-    "rating": 8.5,
-    "ratingSystem": "UTR"
-  },
-  "playerTwo": {
-    "playerId": "P101",
-    "name": "Sarah Lee",
-    "rating": 8.2,
-    "ratingSystem": "UTR"
+  "players": {
+    "P789": {
+      "name": "Mike Wilson",
+      "rating": 8.5,
+      "ratingSystem": "UTR"
+    },
+    "P101": {
+      "name": "Sarah Lee",
+      "rating": 8.2,
+      "ratingSystem": "UTR"
+    }
   },
   "matchScore": {
     "sets": [
       {
-        "playerOneGames": 7,
-        "playerTwoGames": 6,
-        "tiebreak": {
-          "playerOnePoints": 7,
-          "playerTwoPoints": 5,
-          "winner": 1
+        "games": {
+          "P789": 7,
+          "P101": 6
         },
-        "winner": 1
+        "tiebreak": {
+          "points": {
+            "P789": 7,
+            "P101": 5
+          },
+          "winner": "P789"
+        },
+        "winner": "P789"
       },
       {
-        "playerOneGames": 4,
-        "playerTwoGames": 6,
-        "winner": 2
+        "games": {
+          "P789": 4,
+          "P101": 6
+        },
+        "winner": "P101"
       },
       {
-        "playerOneGames": 6,
-        "playerTwoGames": 3,
-        "winner": 1
+        "games": {
+          "P789": 6,
+          "P101": 3
+        },
+        "winner": "P789"
       }
     ]
   }
@@ -251,44 +264,52 @@ data class ExpectedOutcome(
 **Request:**
 ```json
 {
-  "playerOne": {
-    "playerId": "P111",
-    "name": "Carlos Rodriguez",
-    "rating": 5.5,
-    "ratingSystem": "NTRP"
-  },
-  "playerTwo": {
-    "playerId": "P222",
-    "name": "Anna Kowalski",
-    "rating": 5.0,
-    "ratingSystem": "NTRP"
+  "players": {
+    "P111": {
+      "name": "Carlos Rodriguez",
+      "rating": 5.5,
+      "ratingSystem": "NTRP"
+    },
+    "P222": {
+      "name": "Anna Kowalski",
+      "rating": 5.0,
+      "ratingSystem": "NTRP"
+    }
   },
   "matchScore": {
     "sets": [
       {
-        "playerOneGames": 6,
-        "playerTwoGames": 4,
-        "winner": 1,
-        "games": [
+        "games": {
+          "P111": 6,
+          "P222": 4
+        },
+        "winner": "P111",
+        "gameDetails": [
           {
             "gameNumber": 1,
-            "playerOnePoints": "40",
-            "playerTwoPoints": "30",
-            "winner": 1,
+            "points": {
+              "P111": "40",
+              "P222": "30"
+            },
+            "winner": "P111",
             "deuces": 0
           },
           {
             "gameNumber": 2,
-            "playerOnePoints": "30",
-            "playerTwoPoints": "40",
-            "winner": 2,
+            "points": {
+              "P111": "30",
+              "P222": "40"
+            },
+            "winner": "P222",
             "deuces": 0
           },
           {
             "gameNumber": 3,
-            "playerOnePoints": "AD",
-            "playerTwoPoints": "40",
-            "winner": 1,
+            "points": {
+              "P111": "AD",
+              "P222": "40"
+            },
+            "winner": "P111",
             "deuces": 3
           }
           // ... more games
@@ -312,30 +333,29 @@ For simpler use cases, allow score input as strings.
 
 ```kotlin
 data class SimpleRankingRequest(
-    val playerOne: PlayerProfile,
-    val playerTwo: PlayerProfile,
+    val players: Map<String, PlayerProfile>,  // playerId -> profile
     val scoreString: String,  // e.g., "6-4, 6-3" or "7-6(5), 4-6, 6-3"
-    val winner: Int  // 1 or 2
+    val winner: String  // playerId of winner
 )
 ```
 
 **Example:**
 ```json
 {
-  "playerOne": {
-    "playerId": "P123",
-    "name": "John Doe",
-    "rating": 4.5,
-    "ratingSystem": "NTRP"
-  },
-  "playerTwo": {
-    "playerId": "P456",
-    "name": "Jane Smith",
-    "rating": 4.0,
-    "ratingSystem": "NTRP"
+  "players": {
+    "P123": {
+      "name": "John Doe",
+      "rating": 4.5,
+      "ratingSystem": "NTRP"
+    },
+    "P456": {
+      "name": "Jane Smith",
+      "rating": 4.0,
+      "ratingSystem": "NTRP"
+    }
   },
   "scoreString": "6-4, 6-3",
-  "winner": 1
+  "winner": "P123"
 }
 ```
 
@@ -349,22 +369,25 @@ Support both formats - accept either structured or string-based input.
 
 ```kotlin
 data class RankingCalculationRequest(
-    val playerOne: PlayerProfile,
-    val playerTwo: PlayerProfile,
+    val players: Map<String, PlayerProfile>,  // playerId -> profile
 
     // Option A: Structured (preferred)
     val matchScore: MatchScore? = null,
 
     // Option B: Simple string
     val scoreString: String? = null,
-    val winner: Int? = null,
+    val winner: String? = null,  // playerId
 
     val matchDate: String? = null,
     val metadata: MatchMetadata? = null
 ) {
     init {
+        require(players.size == 2) { "Exactly 2 players required for singles match" }
         require(matchScore != null || (scoreString != null && winner != null)) {
             "Either matchScore or (scoreString + winner) must be provided"
+        }
+        if (winner != null) {
+            require(winner in players.keys) { "Winner must be one of the players" }
         }
     }
 }
@@ -375,7 +398,7 @@ data class RankingCalculationRequest(
 ## Validation Rules
 
 ### Player Profile Validation
-- `playerId`: Non-empty string, max 50 chars
+- `playerId` (map key): Non-empty string, max 50 chars
 - `name`: Non-empty string, max 100 chars
 - `rating`:
   - NTRP: 1.0 to 7.0 (increments of 0.5)
@@ -383,6 +406,7 @@ data class RankingCalculationRequest(
 - `ratingSystem`: Must be NTRP or UTR
 
 ### Match Score Validation
+- Exactly 2 players required for singles match
 - Both players must use the same `ratingSystem`
 - At least 1 set required
 - Max 5 sets
@@ -390,7 +414,9 @@ data class RankingCalculationRequest(
   - Set must be won by 2+ games (unless tiebreak)
   - Tiebreak at 6-6 (or other format-specific rules)
   - Games: 0-7 for regular sets, 0-6 with tiebreak
+- Winner must be a valid playerId from the players map
 - Winner must be consistent with scores
+- All score maps must contain exactly the 2 player IDs
 
 ### Score String Format (if using Option 2/3)
 - Pattern: `"6-4, 6-3"` or `"7-6(5), 4-6, 6-3"`
