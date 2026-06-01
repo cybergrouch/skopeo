@@ -39,12 +39,21 @@ class RankingCalculator {
         // UTR-specific constants
         private val UTR_MIN = BigDecimal("1.0")
 
-        // Helper extension functions for BigDecimal conversions
+        // Helper extension functions for BigDecimal conversions (Kotlin idioms)
         private fun Double.toBigDecimalPrecise(): BigDecimal = BigDecimal(this.toString()).setScale(CALCULATION_SCALE, ROUNDING_MODE)
 
         private fun Int.toBigDecimalPrecise(): BigDecimal = BigDecimal(this).setScale(CALCULATION_SCALE, ROUNDING_MODE)
 
+        private fun String.toBigDecimalPrecise(): BigDecimal = BigDecimal(this).setScale(CALCULATION_SCALE, ROUNDING_MODE)
+
         private fun BigDecimal.toDoublePrecise(): Double = this.toDouble()
+
+        // Kotlin idiom: Extension properties for cleaner BigDecimal creation
+        private val String.bd: BigDecimal get() = this.toBigDecimalPrecise()
+
+        private val Double.bd: BigDecimal get() = this.toBigDecimalPrecise()
+
+        private val Int.bd: BigDecimal get() = this.toBigDecimalPrecise()
     }
 
     /**
@@ -136,15 +145,17 @@ class RankingCalculator {
         // Calculate rating changes and percentages using BigDecimal for precision
         val player1ChangeValue = player1NewRating.value.toBigDecimalPrecise() - player1.rating.value.toBigDecimalPrecise()
         val player1PercentChange =
-            (player1ChangeValue.divide(player1.rating.value.toBigDecimalPrecise(), CALCULATION_SCALE, ROUNDING_MODE))
-                .multiply(BigDecimal("100"))
-                .setScale(2, ROUNDING_MODE)
+            (
+                player1ChangeValue.divide(player1.rating.value.toBigDecimalPrecise(), CALCULATION_SCALE, ROUNDING_MODE) *
+                    BigDecimal("100")
+            ).setScale(2, ROUNDING_MODE)
 
         val player2ChangeValue = player2NewRating.value.toBigDecimalPrecise() - player2.rating.value.toBigDecimalPrecise()
         val player2PercentChange =
-            (player2ChangeValue.divide(player2.rating.value.toBigDecimalPrecise(), CALCULATION_SCALE, ROUNDING_MODE))
-                .multiply(BigDecimal("100"))
-                .setScale(2, ROUNDING_MODE)
+            (
+                player2ChangeValue.divide(player2.rating.value.toBigDecimalPrecise(), CALCULATION_SCALE, ROUNDING_MODE) *
+                    BigDecimal("100")
+            ).setScale(2, ROUNDING_MODE)
 
         val ratingChanges =
             mapOf(
@@ -260,12 +271,8 @@ class RankingCalculator {
         val baseChange2 = K_FACTOR * (player2ActualScore - expectedPlayer2)
 
         // Apply dominance factor (larger changes for more decisive matches)
-        val adjustedChange1 =
-            baseChange1.multiply(dominanceFactor)
-                .setScale(CALCULATION_SCALE, ROUNDING_MODE)
-        val adjustedChange2 =
-            baseChange2.multiply(dominanceFactor)
-                .setScale(CALCULATION_SCALE, ROUNDING_MODE)
+        val adjustedChange1 = (baseChange1 * dominanceFactor).setScale(CALCULATION_SCALE, ROUNDING_MODE)
+        val adjustedChange2 = (baseChange2 * dominanceFactor).setScale(CALCULATION_SCALE, ROUNDING_MODE)
 
         return Pair(adjustedChange1, adjustedChange2)
     }
