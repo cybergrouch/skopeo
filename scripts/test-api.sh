@@ -49,8 +49,23 @@ else
 fi
 echo ""
 
+# Test metrics endpoint
+echo "3️⃣  Testing METRICS endpoint (GET /metrics):"
+echo "   URL: $BASE_URL/metrics"
+RESPONSE=$(curl -s -w "\n%{http_code}" "$BASE_URL/metrics")
+HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+BODY_LINES=$(echo "$RESPONSE" | sed '$d' | wc -l | tr -d ' ')
+echo "   Metrics lines: $BODY_LINES"
+echo "   Status: $HTTP_CODE"
+if [ "$HTTP_CODE" = "200" ] && [ "$BODY_LINES" -gt "0" ]; then
+    echo "   ✅ PASSED"
+else
+    echo "   ❌ FAILED"
+fi
+echo ""
+
 # Performance test
-echo "3️⃣  Performance Test:"
+echo "4️⃣  Performance Test:"
 echo "   Measuring response time..."
 TIME=$(curl -s -w "%{time_total}" -o /dev/null "$BASE_URL/")
 echo "   Response time: ${TIME}s"

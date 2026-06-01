@@ -34,6 +34,12 @@ dependencies {
 
     // Logging
     implementation("ch.qos.logback:logback-classic:1.5.16")
+    implementation("io.github.microutils:kotlin-logging-jvm:3.0.5")
+    implementation("io.ktor:ktor-server-call-logging-jvm:$ktorVersion")
+
+    // Metrics
+    implementation("io.ktor:ktor-server-metrics-micrometer-jvm:$ktorVersion")
+    implementation("io.micrometer:micrometer-registry-prometheus:1.12.0")
 
     // Testing
     testImplementation("io.ktor:ktor-server-test-host-jvm:$ktorVersion")
