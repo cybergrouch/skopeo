@@ -329,32 +329,27 @@ class RankingCalculator {
         val originalValue = rating.value.toBigDecimalPrecise()
         val newValue = originalValue + change
 
-        // Round to 2 decimal places for NTRP
-        val rounded = newValue.setScale(2, ROUNDING_MODE)
-
-        // Clamp to valid NTRP range
+        // Clamp to valid NTRP range (no rounding - keep 6 decimal precision)
         val clamped =
-            if (rounded < NTRP_MIN) {
+            if (newValue < NTRP_MIN) {
                 NTRP_MIN
-            } else if (rounded > NTRP_MAX) {
+            } else if (newValue > NTRP_MAX) {
                 NTRP_MAX
             } else {
-                rounded
+                newValue
             }
 
         audit.add(
             AuditEntry(
                 message =
                     "NTRP change: ${rating.value} + ${change.toStringPrecise()} = " +
-                        "${newValue.toStringPrecise()} -> rounded ${rounded.toStringPrecise()} -> " +
-                        "clamped ${clamped.toStringPrecise()}",
+                        "${newValue.toStringPrecise()} -> clamped ${clamped.toStringPrecise()}",
                 context =
                     mapOf(
                         "system" to "NTRP",
                         "original" to rating.value,
                         "change" to change.toStringPrecise(),
                         "newValue" to newValue.toStringPrecise(),
-                        "rounded" to rounded.toStringPrecise(),
                         "clamped" to clamped.toStringPrecise(),
                     ),
             ),
@@ -375,25 +370,20 @@ class RankingCalculator {
         val originalValue = rating.value.toBigDecimalPrecise()
         val newValue = originalValue + change
 
-        // Round to 1 decimal place for UTR
-        val rounded = newValue.setScale(1, ROUNDING_MODE)
-
-        // Ensure minimum UTR rating
-        val clamped = if (rounded < UTR_MIN) UTR_MIN else rounded
+        // Ensure minimum UTR rating (no rounding - keep 6 decimal precision)
+        val clamped = if (newValue < UTR_MIN) UTR_MIN else newValue
 
         audit.add(
             AuditEntry(
                 message =
                     "UTR change: ${rating.value} + ${change.toStringPrecise()} = " +
-                        "${newValue.toStringPrecise()} -> rounded ${rounded.toStringPrecise()} -> " +
-                        "clamped ${clamped.toStringPrecise()}",
+                        "${newValue.toStringPrecise()} -> clamped ${clamped.toStringPrecise()}",
                 context =
                     mapOf(
                         "system" to "UTR",
                         "original" to rating.value,
                         "change" to change.toStringPrecise(),
                         "newValue" to newValue.toStringPrecise(),
-                        "rounded" to rounded.toStringPrecise(),
                         "clamped" to clamped.toStringPrecise(),
                     ),
             ),

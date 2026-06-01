@@ -77,7 +77,7 @@ class RankingCalculatorUnitTest {
     }
 
     @Test
-    fun testNTRP_RoundsToTwoDecimals() {
+    fun testNTRP_MaintainsPrecision() {
         val request =
             createRequest(
                 player1Rating = 4.5,
@@ -88,12 +88,12 @@ class RankingCalculatorUnitTest {
 
         val result = calculator.calculate(request)
 
-        // Check both players have at most 2 decimal places
-        val p1Rating = result.response.players["P1"]!!.rating.value.toDouble()
-        val p2Rating = result.response.players["P2"]!!.rating.value.toDouble()
+        // Check both players have at most 6 decimal places (CALCULATION_SCALE)
+        val p1Rating = result.response.players["P1"]!!.rating.value
+        val p2Rating = result.response.players["P2"]!!.rating.value
 
-        assertEquals(p1Rating, roundToDecimals(p1Rating, 2), "P1 rating should be rounded to 2 decimals")
-        assertEquals(p2Rating, roundToDecimals(p2Rating, 2), "P2 rating should be rounded to 2 decimals")
+        assertTrue(hasAtMostNDecimals(p1Rating, 6), "P1 rating should have at most 6 decimals, got: $p1Rating")
+        assertTrue(hasAtMostNDecimals(p2Rating, 6), "P2 rating should have at most 6 decimals, got: $p2Rating")
     }
 
     // ========== UTR Tests ==========
@@ -156,7 +156,7 @@ class RankingCalculatorUnitTest {
     }
 
     @Test
-    fun testUTR_RoundsToOneDecimal() {
+    fun testUTR_MaintainsPrecision() {
         val request =
             createRequest(
                 player1Rating = 8.5,
@@ -167,12 +167,12 @@ class RankingCalculatorUnitTest {
 
         val result = calculator.calculate(request)
 
-        // Check both players have at most 1 decimal place
-        val p1Rating = result.response.players["P1"]!!.rating.value.toDouble()
-        val p2Rating = result.response.players["P2"]!!.rating.value.toDouble()
+        // Check both players have at most 6 decimal places (CALCULATION_SCALE)
+        val p1Rating = result.response.players["P1"]!!.rating.value
+        val p2Rating = result.response.players["P2"]!!.rating.value
 
-        assertEquals(p1Rating, roundToDecimals(p1Rating, 1), "P1 rating should be rounded to 1 decimal")
-        assertEquals(p2Rating, roundToDecimals(p2Rating, 1), "P2 rating should be rounded to 1 decimal")
+        assertTrue(hasAtMostNDecimals(p1Rating, 6), "P1 rating should have at most 6 decimals, got: $p1Rating")
+        assertTrue(hasAtMostNDecimals(p2Rating, 6), "P2 rating should have at most 6 decimals, got: $p2Rating")
     }
 
     // ========== Dominance Factor Tests ==========
@@ -545,5 +545,17 @@ class RankingCalculatorUnitTest {
     ): Double {
         val multiplier = Math.pow(10.0, decimals.toDouble())
         return Math.round(value * multiplier) / multiplier
+    }
+
+    private fun hasAtMostNDecimals(
+        value: String,
+        maxDecimals: Int,
+    ): Boolean {
+        val parts = value.split(".")
+        return if (parts.size == 1) {
+            true // No decimal point, so 0 decimals
+        } else {
+            parts[1].length <= maxDecimals
+        }
     }
 }
