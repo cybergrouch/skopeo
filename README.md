@@ -171,6 +171,7 @@ All utility scripts are located in the `scripts/` directory:
 | `test-api.sh` | Run automated tests for all endpoints |
 | `curl-examples.sh` | Display cURL command examples and usage |
 | `docker-build.sh` | Build and tag Docker images for deployment |
+| `format-code.sh` | Auto-format all Kotlin code with ktlint |
 
 See `scripts/README.md` for detailed documentation.
 
@@ -265,14 +266,37 @@ See [TESTING_STRATEGY.md](docs/TESTING_STRATEGY.md) for complete details.
 
 ### Code Style
 
-This project uses ktlint for consistent code formatting. Before committing:
+This project uses ktlint for consistent code formatting.
+
+#### Automatic Formatting on Commit (Recommended)
+
+Install the Git pre-commit hook to automatically format code before every commit:
 
 ```bash
+# Install the pre-commit hook (one-time setup)
+./gradlew installGitHooks
+
+# Uninstall if needed
+./gradlew uninstallGitHooks
+```
+
+Once installed, the hook will:
+1. Auto-format your code with ktlint
+2. Auto-stage the formatted files
+3. Run ktlint check to verify
+4. Abort commit if style violations can't be fixed
+
+#### Manual Formatting
+
+```bash
+# Auto-fix style violations
+./scripts/format-code.sh
+
+# Or use Gradle directly
+./gradlew ktlintFormat
+
 # Check for style violations
 ./gradlew ktlintCheck
-
-# Auto-fix style violations
-./gradlew ktlintFormat
 ```
 
 ### Building

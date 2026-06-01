@@ -14,9 +14,9 @@ class AuditTrailSimpleExample {
         val audit = AuditTrail()
 
         // Add entries using the single method
-        audit.add(AuditEntry(AuditLevel.INFO, "Starting calculation"))
-        audit.add(AuditEntry(AuditLevel.DEBUG, "Step 1 complete", mapOf("value" to 42)))
-        audit.add(AuditEntry(AuditLevel.INFO, "Calculation finished"))
+        audit.add(AuditEntry(level = AuditLevel.INFO, message = "Starting calculation"))
+        audit.add(AuditEntry(level = AuditLevel.DEBUG, message = "Step 1 complete", context = mapOf("value" to 42)))
+        audit.add(AuditEntry(level = AuditLevel.INFO, message = "Calculation finished"))
 
         // Get all entries
         val entries = audit.getEntries()
@@ -53,10 +53,10 @@ class AuditTrailSimpleExample {
         val audit = AuditTrail()
 
         // Add various levels
-        audit.add(AuditEntry(AuditLevel.DEBUG, "Debug 1"))
-        audit.add(AuditEntry(AuditLevel.INFO, "Info 1"))
-        audit.add(AuditEntry(AuditLevel.DEBUG, "Debug 2"))
-        audit.add(AuditEntry(AuditLevel.WARN, "Warning 1"))
+        audit.add(AuditEntry(level = AuditLevel.DEBUG, message = "Debug 1"))
+        audit.add(AuditEntry(level = AuditLevel.INFO, message = "Info 1"))
+        audit.add(AuditEntry(level = AuditLevel.DEBUG, message = "Debug 2"))
+        audit.add(AuditEntry(level = AuditLevel.WARN, message = "Warning 1"))
 
         val entries = audit.getEntries()
 

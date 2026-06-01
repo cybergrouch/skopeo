@@ -66,6 +66,70 @@ ktlint {
     ignoreFailures.set(false)
 }
 
+// Install Git pre-commit hook that runs ktlint format
+tasks.register("installGitHooks") {
+    description = "Install Git pre-commit hook for automatic code formatting"
+    group = "git hooks"
+
+    doLast {
+        val hooksDir = file(".git/hooks")
+        if (!hooksDir.exists()) {
+            println("⚠️  .git/hooks directory not found. Make sure you're in a git repository.")
+            return@doLast
+        }
+
+        val preCommitFile = file(".git/hooks/pre-commit")
+        preCommitFile.writeText(
+            """
+            #!/bin/bash
+            # Auto-format code before commit
+
+            echo "🎨 Running ktlint format..."
+            ./gradlew ktlintFormat --quiet
+
+            # Check if formatting introduced any changes
+            if ! git diff --quiet; then
+                echo "✅ Code formatted. Changes auto-staged."
+                git add -u
+            fi
+
+            # Verify code style
+            echo "🔍 Checking code style..."
+            if ! ./gradlew ktlintCheck --quiet; then
+                echo "❌ ktlint check failed. Please fix the issues and try again."
+                exit 1
+            fi
+
+            echo "✅ Code style check passed!"
+            exit 0
+            """.trimIndent()
+        )
+
+        // Make it executable
+        preCommitFile.setExecutable(true)
+
+        println("✅ Git pre-commit hook installed successfully!")
+        println("   Location: .git/hooks/pre-commit")
+        println("   The hook will automatically format code before each commit.")
+    }
+}
+
+// Uninstall Git hooks
+tasks.register("uninstallGitHooks") {
+    description = "Remove Git pre-commit hook"
+    group = "git hooks"
+
+    doLast {
+        val preCommitFile = file(".git/hooks/pre-commit")
+        if (preCommitFile.exists()) {
+            preCommitFile.delete()
+            println("✅ Git pre-commit hook removed")
+        } else {
+            println("ℹ️  No pre-commit hook found")
+        }
+    }
+}
+
 // JaCoCo configuration for code coverage
 jacoco {
     toolVersion = "0.8.12"

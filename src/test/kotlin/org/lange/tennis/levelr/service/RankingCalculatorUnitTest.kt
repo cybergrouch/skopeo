@@ -26,7 +26,7 @@ class RankingCalculatorUnitTest {
                 player1Rating = 4.5,
                 player2Rating = 4.5,
                 system = RatingSystem.NTRP,
-                sets = listOf(SetScore(mapOf("P1" to 6, "P2" to 4), "P1")),
+                sets = listOf(SetScore(games = mapOf("P1" to 6, "P2" to 4), winner = "P1")),
             )
 
         val result = calculator.calculate(request)
@@ -44,10 +44,11 @@ class RankingCalculatorUnitTest {
     fun testNTRP_RespectsBoundaries_Max() {
         val request =
             createRequest(
-                player1Rating = 7.0, // Already at max
+                // Already at max
+                player1Rating = 7.0,
                 player2Rating = 6.5,
                 system = RatingSystem.NTRP,
-                sets = listOf(SetScore(mapOf("P1" to 6, "P2" to 0), "P1")),
+                sets = listOf(SetScore(games = mapOf("P1" to 6, "P2" to 0), winner = "P1")),
             )
 
         val result = calculator.calculate(request)
@@ -61,10 +62,11 @@ class RankingCalculatorUnitTest {
     fun testNTRP_RespectsBoundaries_Min() {
         val request =
             createRequest(
-                player1Rating = 1.0, // Already at min
+                // Already at min
+                player1Rating = 1.0,
                 player2Rating = 5.0,
                 system = RatingSystem.NTRP,
-                sets = listOf(SetScore(mapOf("P1" to 0, "P2" to 6), "P2")),
+                sets = listOf(SetScore(games = mapOf("P1" to 0, "P2" to 6), winner = "P2")),
             )
 
         val result = calculator.calculate(request)
@@ -81,7 +83,7 @@ class RankingCalculatorUnitTest {
                 player1Rating = 4.5,
                 player2Rating = 4.0,
                 system = RatingSystem.NTRP,
-                sets = listOf(SetScore(mapOf("P1" to 6, "P2" to 4), "P1")),
+                sets = listOf(SetScore(games = mapOf("P1" to 6, "P2" to 4), winner = "P1")),
             )
 
         val result = calculator.calculate(request)
@@ -103,7 +105,7 @@ class RankingCalculatorUnitTest {
                 player1Rating = 10.0,
                 player2Rating = 10.0,
                 system = RatingSystem.UTR,
-                sets = listOf(SetScore(mapOf("P1" to 6, "P2" to 3), "P1")),
+                sets = listOf(SetScore(games = mapOf("P1" to 6, "P2" to 3), winner = "P1")),
             )
 
         val result = calculator.calculate(request)
@@ -121,10 +123,11 @@ class RankingCalculatorUnitTest {
     fun testUTR_RespectsMinimum() {
         val request =
             createRequest(
-                player1Rating = 1.0, // At minimum
+                // At minimum
+                player1Rating = 1.0,
                 player2Rating = 8.0,
                 system = RatingSystem.UTR,
-                sets = listOf(SetScore(mapOf("P1" to 0, "P2" to 6), "P2")),
+                sets = listOf(SetScore(games = mapOf("P1" to 0, "P2" to 6), winner = "P2")),
             )
 
         val result = calculator.calculate(request)
@@ -138,10 +141,11 @@ class RankingCalculatorUnitTest {
     fun testUTR_NoMaximum() {
         val request =
             createRequest(
-                player1Rating = 16.0, // Very high rating
+                // Very high rating
+                player1Rating = 16.0,
                 player2Rating = 15.5,
                 system = RatingSystem.UTR,
-                sets = listOf(SetScore(mapOf("P1" to 6, "P2" to 4), "P1")),
+                sets = listOf(SetScore(games = mapOf("P1" to 6, "P2" to 4), winner = "P1")),
             )
 
         val result = calculator.calculate(request)
@@ -158,7 +162,7 @@ class RankingCalculatorUnitTest {
                 player1Rating = 8.5,
                 player2Rating = 8.2,
                 system = RatingSystem.UTR,
-                sets = listOf(SetScore(mapOf("P1" to 6, "P2" to 4), "P1")),
+                sets = listOf(SetScore(games = mapOf("P1" to 6, "P2" to 4), winner = "P1")),
             )
 
         val result = calculator.calculate(request)
@@ -180,7 +184,8 @@ class RankingCalculatorUnitTest {
                 player1Rating = 5.0,
                 player2Rating = 5.0,
                 system = RatingSystem.NTRP,
-                sets = listOf(SetScore(mapOf("P1" to 6, "P2" to 0), "P1")), // 6-0 = dominant
+                // 6-0 = dominant
+                sets = listOf(SetScore(games = mapOf("P1" to 6, "P2" to 0), winner = "P1")),
             )
 
         val closeWin =
@@ -188,7 +193,8 @@ class RankingCalculatorUnitTest {
                 player1Rating = 5.0,
                 player2Rating = 5.0,
                 system = RatingSystem.NTRP,
-                sets = listOf(SetScore(mapOf("P1" to 7, "P2" to 5), "P1")), // 7-5 = close
+                // 7-5 = close
+                sets = listOf(SetScore(games = mapOf("P1" to 7, "P2" to 5), winner = "P1")),
             )
 
         val dominantResult = calculator.calculate(dominantWin)
@@ -211,9 +217,9 @@ class RankingCalculatorUnitTest {
                 system = RatingSystem.NTRP,
                 sets =
                     listOf(
-                        SetScore(mapOf("P1" to 6, "P2" to 4), "P1"),
-                        SetScore(mapOf("P1" to 3, "P2" to 6), "P2"),
-                        SetScore(mapOf("P1" to 6, "P2" to 2), "P1"),
+                        SetScore(games = mapOf("P1" to 6, "P2" to 4), winner = "P1"),
+                        SetScore(games = mapOf("P1" to 3, "P2" to 6), winner = "P2"),
+                        SetScore(games = mapOf("P1" to 6, "P2" to 2), winner = "P1"),
                     ),
             )
 
@@ -230,10 +236,11 @@ class RankingCalculatorUnitTest {
     fun testExpectedScore_HigherRatedFavored() {
         val request =
             createRequest(
-                player1Rating = 6.0, // Higher rated
+                // Higher rated
+                player1Rating = 6.0,
                 player2Rating = 4.0,
                 system = RatingSystem.NTRP,
-                sets = listOf(SetScore(mapOf("P1" to 6, "P2" to 4), "P1")),
+                sets = listOf(SetScore(games = mapOf("P1" to 6, "P2" to 4), winner = "P1")),
             )
 
         val result = calculator.calculate(request)
@@ -259,7 +266,7 @@ class RankingCalculatorUnitTest {
                 player1Rating = 5.0,
                 player2Rating = 5.0,
                 system = RatingSystem.NTRP,
-                sets = listOf(SetScore(mapOf("P1" to 6, "P2" to 4), "P1")),
+                sets = listOf(SetScore(games = mapOf("P1" to 6, "P2" to 4), winner = "P1")),
             )
 
         val result = calculator.calculate(request)
@@ -284,10 +291,12 @@ class RankingCalculatorUnitTest {
     fun testUpset_UnderdogWins() {
         val request =
             createRequest(
-                player1Rating = 3.0, // Underdog
-                player2Rating = 6.0, // Favorite
+                // Underdog
+                player1Rating = 3.0,
+                // Favorite
+                player2Rating = 6.0,
                 system = RatingSystem.NTRP,
-                sets = listOf(SetScore(mapOf("P1" to 6, "P2" to 4), "P1")),
+                sets = listOf(SetScore(games = mapOf("P1" to 6, "P2" to 4), winner = "P1")),
             )
 
         val result = calculator.calculate(request)
@@ -305,10 +314,12 @@ class RankingCalculatorUnitTest {
     fun testExpectedResult_FavoriteWins() {
         val request =
             createRequest(
-                player1Rating = 6.0, // Favorite
-                player2Rating = 3.0, // Underdog
+                // Favorite
+                player1Rating = 6.0,
+                // Underdog
+                player2Rating = 3.0,
                 system = RatingSystem.NTRP,
-                sets = listOf(SetScore(mapOf("P1" to 6, "P2" to 2), "P1")),
+                sets = listOf(SetScore(games = mapOf("P1" to 6, "P2" to 2), winner = "P1")),
             )
 
         val result = calculator.calculate(request)
@@ -332,7 +343,7 @@ class RankingCalculatorUnitTest {
                 player1Rating = 4.5,
                 player2Rating = 4.0,
                 system = RatingSystem.NTRP,
-                sets = listOf(SetScore(mapOf("P1" to 6, "P2" to 4), "P1")),
+                sets = listOf(SetScore(games = mapOf("P1" to 6, "P2" to 4), winner = "P1")),
             )
 
         // Call multiple times with same input
@@ -362,7 +373,7 @@ class RankingCalculatorUnitTest {
                 player1Rating = 4.5,
                 player2Rating = 4.0,
                 system = RatingSystem.NTRP,
-                sets = listOf(SetScore(mapOf("P1" to 6, "P2" to 4), "P1")),
+                sets = listOf(SetScore(games = mapOf("P1" to 6, "P2" to 4), winner = "P1")),
             )
 
         // Store original values
@@ -386,7 +397,7 @@ class RankingCalculatorUnitTest {
                 player1Rating = 4.5,
                 player2Rating = 4.0,
                 system = RatingSystem.NTRP,
-                sets = listOf(SetScore(mapOf("P1" to 6, "P2" to 4), "P1")),
+                sets = listOf(SetScore(games = mapOf("P1" to 6, "P2" to 4), winner = "P1")),
             )
 
         val result = calculator.calculate(request)
@@ -406,7 +417,7 @@ class RankingCalculatorUnitTest {
                 player1Rating = 4.5,
                 player2Rating = 4.0,
                 system = RatingSystem.NTRP,
-                sets = listOf(SetScore(mapOf("P1" to 6, "P2" to 4), "P1")),
+                sets = listOf(SetScore(games = mapOf("P1" to 6, "P2" to 4), winner = "P1")),
             )
 
         val result = calculator.calculate(request)
@@ -431,7 +442,7 @@ class RankingCalculatorUnitTest {
                 player1Rating = 4.5,
                 player2Rating = 4.0,
                 system = RatingSystem.NTRP,
-                sets = listOf(SetScore(mapOf("P1" to 6, "P2" to 4), "P1")),
+                sets = listOf(SetScore(games = mapOf("P1" to 6, "P2" to 4), winner = "P1")),
             )
 
         val result = calculator.calculate(request)
@@ -457,7 +468,7 @@ class RankingCalculatorUnitTest {
                 player1Rating = 4.5,
                 player2Rating = 4.0,
                 system = RatingSystem.NTRP,
-                sets = listOf(SetScore(mapOf("P1" to 6, "P2" to 4), "P1")),
+                sets = listOf(SetScore(games = mapOf("P1" to 6, "P2" to 4), winner = "P1")),
             )
 
         val result = calculator.calculate(request)
@@ -488,7 +499,7 @@ class RankingCalculatorUnitTest {
                 player1Rating = 4.0,
                 player2Rating = 4.0,
                 system = RatingSystem.NTRP,
-                sets = listOf(SetScore(mapOf("P1" to 6, "P2" to 4), "P1")),
+                sets = listOf(SetScore(games = mapOf("P1" to 6, "P2" to 4), winner = "P1")),
             )
 
         val result = calculator.calculate(request)
