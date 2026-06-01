@@ -48,7 +48,6 @@ class RankingCalculator {
 
         audit.add(
             AuditEntry(
-                level = AuditLevel.INFO,
                 message =
                     "Calculating ranking for ${player1.name} (${player1.rating.value}) vs " +
                         "${player2.name} (${player2.rating.value})",
@@ -63,11 +62,15 @@ class RankingCalculator {
         )
 
         // Determine match winner and calculate performance score
-        val matchResult = analyzeMatchResult(request, player1Id, player2Id, audit)
+        val matchResult =
+            analyzeMatchResult(
+                request = request,
+                player1Id = player1Id,
+                player2Id = player2Id,
+            )
 
         audit.add(
             AuditEntry(
-                level = AuditLevel.DEBUG,
                 message =
                     "Match result - Winner: ${matchResult.winnerId}, " +
                         "Score: ${matchResult.winnerScore}, Sets: ${matchResult.setsWon}",
@@ -94,7 +97,6 @@ class RankingCalculator {
 
         audit.add(
             AuditEntry(
-                level = AuditLevel.INFO,
                 message = "Rating changes - ${player1.name}: $player1Change, ${player2.name}: $player2Change",
                 context =
                     mapOf(
@@ -105,8 +107,8 @@ class RankingCalculator {
         )
 
         // Apply rating changes with system-specific constraints
-        val player1NewRating = applyRatingChange(player1.rating, player1Change, audit)
-        val player2NewRating = applyRatingChange(player2.rating, player2Change, audit)
+        val player1NewRating = applyRatingChange(rating = player1.rating, change = player1Change, audit = audit)
+        val player2NewRating = applyRatingChange(rating = player2.rating, change = player2Change, audit = audit)
 
         val updatedPlayers =
             mapOf(
@@ -151,7 +153,6 @@ class RankingCalculator {
         request: RankingCalculationRequest,
         player1Id: String,
         player2Id: String,
-        audit: AuditTrail,
     ): MatchResult {
         val sets = request.matchScore.sets
         val setsWonByPlayer1 = sets.count { it.winner == player1Id }
@@ -204,12 +205,11 @@ class RankingCalculator {
         audit: AuditTrail,
     ): Pair<Double, Double> {
         // Calculate expected scores based on rating differential
-        val expectedPlayer1 = calculateExpectedScore(player1.rating.value, player2.rating.value)
+        val expectedPlayer1 = calculateExpectedScore(ratingA = player1.rating.value, ratingB = player2.rating.value)
         val expectedPlayer2 = 1.0 - expectedPlayer1
 
         audit.add(
             AuditEntry(
-                level = AuditLevel.DEBUG,
                 message = "Expected scores - Player1: $expectedPlayer1, Player2: $expectedPlayer2",
                 context =
                     mapOf(
@@ -249,8 +249,8 @@ class RankingCalculator {
         audit: AuditTrail,
     ): Rating {
         return when (rating.system) {
-            RatingSystem.NTRP -> applyNTRPChange(rating, change, audit)
-            RatingSystem.UTR -> applyUTRChange(rating, change, audit)
+            RatingSystem.NTRP -> applyNTRPChange(rating = rating, change = change, audit = audit)
+            RatingSystem.UTR -> applyUTRChange(rating = rating, change = change, audit = audit)
         }
     }
 
@@ -272,7 +272,6 @@ class RankingCalculator {
 
         audit.add(
             AuditEntry(
-                level = AuditLevel.DEBUG,
                 message = "NTRP change: ${rating.value} + $change = $newValue -> rounded $rounded -> clamped $clamped",
                 context =
                     mapOf(
@@ -307,7 +306,6 @@ class RankingCalculator {
 
         audit.add(
             AuditEntry(
-                level = AuditLevel.DEBUG,
                 message = "UTR change: ${rating.value} + $change = $newValue -> rounded $rounded -> clamped $clamped",
                 context =
                     mapOf(

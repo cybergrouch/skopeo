@@ -27,8 +27,7 @@ class RankingCalculatorAuditTest {
         // Verify audit trail contains calculation start message
         val startEntry =
             result.audit.find {
-                it.level == AuditLevel.INFO &&
-                    it.message.contains("Calculating ranking")
+                it.message.contains("Calculating ranking")
             }
 
         assertTrue(startEntry != null, "Audit should contain calculation start entry")
@@ -47,8 +46,7 @@ class RankingCalculatorAuditTest {
         // Verify audit trail contains match result analysis
         val matchResultEntry =
             result.audit.find {
-                it.level == AuditLevel.DEBUG &&
-                    it.message.contains("Match result")
+                it.message.contains("Match result")
             }
 
         assertTrue(matchResultEntry != null, "Audit should contain match result entry")
@@ -65,8 +63,7 @@ class RankingCalculatorAuditTest {
         // Verify audit trail contains expected scores
         val expectedScoresEntry =
             result.audit.find {
-                it.level == AuditLevel.DEBUG &&
-                    it.message.contains("Expected scores")
+                it.message.contains("Expected scores")
             }
 
         assertTrue(expectedScoresEntry != null, "Audit should contain expected scores entry")
@@ -88,8 +85,7 @@ class RankingCalculatorAuditTest {
         // Verify audit trail contains rating changes
         val ratingChangesEntry =
             result.audit.find {
-                it.level == AuditLevel.INFO &&
-                    it.message.contains("Rating changes")
+                it.message.contains("Rating changes")
             }
 
         assertTrue(ratingChangesEntry != null, "Audit should contain rating changes entry")
@@ -111,8 +107,7 @@ class RankingCalculatorAuditTest {
         // Verify audit trail contains NTRP-specific changes
         val ntrpChanges =
             result.audit.filter {
-                it.level == AuditLevel.DEBUG &&
-                    it.message.contains("NTRP change")
+                it.message.contains("NTRP change")
             }
 
         assertEquals(2, ntrpChanges.size, "Should have NTRP change entries for both players")
@@ -137,8 +132,7 @@ class RankingCalculatorAuditTest {
         // Verify audit trail contains UTR-specific changes
         val utrChanges =
             result.audit.filter {
-                it.level == AuditLevel.DEBUG &&
-                    it.message.contains("UTR change")
+                it.message.contains("UTR change")
             }
 
         assertEquals(2, utrChanges.size, "Should have UTR change entries for both players")
@@ -174,21 +168,6 @@ class RankingCalculatorAuditTest {
         assertTrue(calculatingIndex < matchResultIndex, "Calculation start should come before match result")
         assertTrue(matchResultIndex < expectedScoresIndex, "Match result should come before expected scores")
         assertTrue(expectedScoresIndex < ratingChangesIndex, "Expected scores should come before rating changes")
-    }
-
-    @Test
-    fun testAuditLevels() {
-        val request = createSimpleRequest()
-
-        val result = calculator.calculate(request)
-
-        // Verify we have both INFO and DEBUG level entries
-        val infoEntries = result.audit.filter { it.level == AuditLevel.INFO }
-        val debugEntries = result.audit.filter { it.level == AuditLevel.DEBUG }
-
-        assertTrue(infoEntries.isNotEmpty(), "Should have INFO level entries")
-        assertTrue(debugEntries.isNotEmpty(), "Should have DEBUG level entries")
-        assertTrue(infoEntries.size < debugEntries.size, "Should have more DEBUG entries than INFO")
     }
 
     @Test

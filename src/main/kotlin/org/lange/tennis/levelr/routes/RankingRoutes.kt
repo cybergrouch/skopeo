@@ -9,7 +9,6 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import mu.KotlinLogging
 import org.lange.tennis.levelr.dto.RankingCalculationRequest
-import org.lange.tennis.levelr.service.AuditLevel
 import org.lange.tennis.levelr.service.RankingCalculator
 
 private val logger = KotlinLogging.logger {}
@@ -34,12 +33,7 @@ fun Application.configureRankingRoutes() {
 
                 // Log the audit trail from the calculation
                 result.audit.forEach { entry ->
-                    when (entry.level) {
-                        AuditLevel.DEBUG -> logger.debug { entry.message }
-                        AuditLevel.INFO -> logger.info { entry.message }
-                        AuditLevel.WARN -> logger.warn { entry.message }
-                        AuditLevel.ERROR -> logger.error { entry.message }
-                    }
+                    logger.info { entry.message }
                 }
 
                 logger.info { "Ranking calculation completed successfully" }

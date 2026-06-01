@@ -1,20 +1,9 @@
 package org.lange.tennis.levelr.service
 
 /**
- * Represents the level/severity of an audit entry.
- */
-enum class AuditLevel {
-    DEBUG,
-    INFO,
-    WARN,
-    ERROR,
-}
-
-/**
  * A single audit entry capturing a point in the calculation process.
  */
 data class AuditEntry(
-    val level: AuditLevel,
     val message: String,
     val context: Map<String, Any> = emptyMap(),
 )
