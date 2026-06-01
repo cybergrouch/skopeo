@@ -29,7 +29,7 @@ fun Application.configureRankingRoutes() {
                 }
 
                 // TODO: Implement actual ranking calculation algorithm
-                // For now, return hardcoded response with small rating changes
+                // For now, return hardcoded response with valid rating changes
 
                 val playerIds = request.players.keys.toList()
                 val player1Id = playerIds[0]
@@ -38,15 +38,22 @@ fun Application.configureRankingRoutes() {
                 val player1 = request.players[player1Id]!!
                 val player2 = request.players[player2Id]!!
 
-                // Hardcoded: Player 1 wins, gets +0.02, Player 2 gets -0.02
+                // Determine rating change based on system
+                val ratingChange =
+                    when (player1.rating.system) {
+                        org.lange.tennis.levelr.model.RatingSystem.NTRP -> 0.0 // No change for NTRP (must be 0.5 increments)
+                        org.lange.tennis.levelr.model.RatingSystem.UTR -> 0.1 // UTR can have decimal changes
+                    }
+
+                // Hardcoded: Player 1 stays same, Player 2 stays same (or small UTR change)
                 val player1NewRating =
                     Rating(
-                        value = player1.rating.value + 0.02,
+                        value = player1.rating.value + ratingChange,
                         system = player1.rating.system,
                     )
                 val player2NewRating =
                     Rating(
-                        value = player2.rating.value - 0.02,
+                        value = maxOf(1.0, player2.rating.value - ratingChange), // Ensure minimum 1.0
                         system = player2.rating.system,
                     )
 
@@ -60,15 +67,15 @@ fun Application.configureRankingRoutes() {
                     mapOf(
                         player1Id to
                             RatingChange(
-                                change = 0.02,
-                                percentChange = (0.02 / player1.rating.value) * 100,
+                                change = ratingChange,
+                                percentChange = (ratingChange / player1.rating.value) * 100,
                                 previousRating = player1.rating,
                                 newRating = player1NewRating,
                             ),
                         player2Id to
                             RatingChange(
-                                change = -0.02,
-                                percentChange = (-0.02 / player2.rating.value) * 100,
+                                change = -ratingChange,
+                                percentChange = (-ratingChange / player2.rating.value) * 100,
                                 previousRating = player2.rating,
                                 newRating = player2NewRating,
                             ),
@@ -87,6 +94,12 @@ fun Application.configureRankingRoutes() {
                 call.respond(
                     HttpStatusCode.BadRequest,
                     mapOf("error" to "Validation error", "message" to (e.message ?: "Invalid request")),
+                )
+            } catch (e: kotlinx.serialization.SerializationException) {
+                logger.warn(e) { "JSON serialization error in ranking calculation request" }
+                call.respond(
+                    HttpStatusCode.BadRequest,
+                    mapOf("error" to "Invalid JSON", "message" to (e.message ?: "Invalid request format")),
                 )
             } catch (e: Exception) {
                 logger.error(e) { "Error processing ranking calculation request" }

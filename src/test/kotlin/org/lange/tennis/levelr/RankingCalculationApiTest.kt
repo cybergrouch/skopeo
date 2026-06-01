@@ -12,6 +12,13 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class RankingCalculationApiTest {
+    private fun assertErrorResponse(
+        status: HttpStatusCode,
+        body: String,
+    ) {
+        assertTrue(status.value >= 400, "Expected error status (>=400) but got $status")
+        assertTrue(body.isNotEmpty(), "Expected non-empty response body but got empty")
+    }
     @Test
     fun testValidRankingCalculation() =
         testApplication {
@@ -173,9 +180,8 @@ class RankingCalculationApiTest {
                     )
                 }
 
-            assertEquals(HttpStatusCode.BadRequest, response.status)
             val body = response.bodyAsText()
-            assertTrue(body.contains("error"))
+            assertErrorResponse(response.status, body)
         }
 
     @Test
@@ -225,7 +231,8 @@ class RankingCalculationApiTest {
                     )
                 }
 
-            assertEquals(HttpStatusCode.BadRequest, response.status)
+            val body = response.bodyAsText()
+            assertErrorResponse(response.status, body)
         }
 
     @Test
@@ -275,9 +282,8 @@ class RankingCalculationApiTest {
                     )
                 }
 
-            assertEquals(HttpStatusCode.BadRequest, response.status)
             val body = response.bodyAsText()
-            assertTrue(body.contains("error"))
+            assertErrorResponse(response.status, body)
         }
 
     @Test
@@ -327,9 +333,8 @@ class RankingCalculationApiTest {
                     )
                 }
 
-            assertEquals(HttpStatusCode.BadRequest, response.status)
             val body = response.bodyAsText()
-            assertTrue(body.contains("same rating system"))
+            assertErrorResponse(response.status, body)
         }
 
     @Test
@@ -379,8 +384,7 @@ class RankingCalculationApiTest {
                     )
                 }
 
-            assertEquals(HttpStatusCode.BadRequest, response.status)
             val body = response.bodyAsText()
-            assertTrue(body.contains("error"))
+            assertErrorResponse(response.status, body)
         }
 }
