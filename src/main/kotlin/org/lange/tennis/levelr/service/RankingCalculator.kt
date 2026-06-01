@@ -26,6 +26,9 @@ class RankingCalculator {
         private const val CALCULATION_SCALE = 6
         private val ROUNDING_MODE = RoundingMode.HALF_UP
 
+        private val ZERO = "0.0".bd
+        private val ONE = "1.0".bd
+
         // K-factor controls how much ratings change per match
         private val K_FACTOR = "32.0".bd
 
@@ -37,7 +40,7 @@ class RankingCalculator {
         private val NTRP_MAX = "7.0".bd
 
         // UTR-specific constants
-        private val UTR_MIN = BigDecimal("1.0")
+        private val UTR_MIN = ONE
 
         // Helper extension functions for BigDecimal conversions (Kotlin idioms)
         private fun Double.toBigDecimalPrecise(): BigDecimal = BigDecimal(this.toString()).setScale(CALCULATION_SCALE, ROUNDING_MODE)
@@ -51,18 +54,16 @@ class RankingCalculator {
                 .stripTrailingZeros()
                 .toPlainString()
 
-        private fun BigDecimal.divideWith(divisor: BigDecimal): BigDecimal = this.divide(divisor, CALCULATION_SCALE, ROUNDING_MODE)
+        private fun BigDecimal.divideBy(divisor: BigDecimal): BigDecimal = this.divide(divisor, CALCULATION_SCALE, ROUNDING_MODE)
 
-        private fun BigDecimal.multiplyBy(number: Double): BigDecimal = this.multiply(number.toBigDecimalPrecise())
+        private fun BigDecimal.multiplyWith(number: Double): BigDecimal = this.multiply(number.toBigDecimalPrecise())
+
+        private val BigDecimal.asPowOfTen: BigDecimal get() = 10.0.pow(this.toDouble()).toBigDecimalPrecise()
 
         // Kotlin idiom: Extension properties for cleaner BigDecimal creation
         private val String.bd: BigDecimal get() = this.toBigDecimalPrecise()
 
-        private val Double.bd: BigDecimal get() = this.toBigDecimalPrecise()
-
-        private val Int.bd: BigDecimal get() = this.toBigDecimalPrecise()
-
-        private val BigDecimal.scaleUp get() = this.multiplyBy(100.00)
+        private val BigDecimal.scaleUp get() = this.multiplyWith(number = 100.00)
     }
 
     /**
@@ -155,13 +156,13 @@ class RankingCalculator {
         val player1ChangeValue = player1NewRating.value.toBigDecimalPrecise() - player1.rating.value.toBigDecimalPrecise()
         val player1PercentChange =
             (
-                player1ChangeValue.divideWith(divisor = player1.rating.value.toBigDecimalPrecise()).scaleUp
+                player1ChangeValue.divideBy(divisor = player1.rating.value.toBigDecimalPrecise()).scaleUp
             ).setScale(2, ROUNDING_MODE)
 
         val player2ChangeValue = player2NewRating.value.toBigDecimalPrecise() - player2.rating.value.toBigDecimalPrecise()
         val player2PercentChange =
             (
-                player2ChangeValue.divideWith(divisor = player2.rating.value.toBigDecimalPrecise()).scaleUp
+                player2ChangeValue.divideBy(divisor = player2.rating.value.toBigDecimalPrecise()).scaleUp
             ).setScale(2, ROUNDING_MODE)
 
         val ratingChanges =
@@ -224,20 +225,20 @@ class RankingCalculator {
         val dominanceFactor =
             if (totalGamesLoser > 0) {
                 totalGamesWinner.toBigDecimalPrecise()
-                    .divide(totalGamesLoser.toBigDecimalPrecise(), CALCULATION_SCALE, ROUNDING_MODE)
+                    .divideBy(divisor = totalGamesLoser.toBigDecimalPrecise())
             } else {
-                BigDecimal("2.0") // Default for complete dominance
+                "2.0".bd // Default for complete dominance
             }
 
         // Normalize dominance factor (1.0 = close match, 2.0+ = dominant win)
-        val maxDominance = BigDecimal("2.5")
+        val maxDominance = "2.5".bd
         val normalizedDominance = dominanceFactor.min(maxDominance)
 
         return MatchResult(
             winnerId = winnerId,
-            winnerScore = BigDecimal.ONE,
-            player1Score = if (winnerId == player1Id) BigDecimal.ONE else BigDecimal.ZERO,
-            player2Score = if (winnerId == player2Id) BigDecimal.ONE else BigDecimal.ZERO,
+            winnerScore = ONE,
+            player1Score = if (winnerId == player1Id) ONE else ZERO,
+            player2Score = if (winnerId == player2Id) BigDecimal.ONE else ZERO,
             setsWon = maxOf(setsWonByPlayer1, setsWonByPlayer2),
             dominanceFactor = normalizedDominance,
         )
@@ -260,7 +261,7 @@ class RankingCalculator {
                 ratingA = player1.rating.value.toBigDecimalPrecise(),
                 ratingB = player2.rating.value.toBigDecimalPrecise(),
             )
-        val expectedPlayer2 = BigDecimal.ONE.setScale(CALCULATION_SCALE, ROUNDING_MODE) - expectedPlayer1
+        val expectedPlayer2 = ONE - expectedPlayer1
 
         audit.add(
             AuditEntry(
@@ -278,8 +279,8 @@ class RankingCalculator {
         val baseChange2 = K_FACTOR * (player2ActualScore - expectedPlayer2)
 
         // Apply dominance factor (larger changes for more decisive matches)
-        val adjustedChange1 = (baseChange1 * dominanceFactor).setScale(CALCULATION_SCALE, ROUNDING_MODE)
-        val adjustedChange2 = (baseChange2 * dominanceFactor).setScale(CALCULATION_SCALE, ROUNDING_MODE)
+        val adjustedChange1 = baseChange1 * dominanceFactor
+        val adjustedChange2 = baseChange2 * dominanceFactor
 
         return Pair(adjustedChange1, adjustedChange2)
     }
@@ -296,18 +297,10 @@ class RankingCalculator {
     ): BigDecimal {
         // Calculate the exponent: (ratingB - ratingA) / SCALE_FACTOR
         val exponent =
-            (ratingB - ratingA)
-                .divide(SCALE_FACTOR, CALCULATION_SCALE, ROUNDING_MODE)
-
-        // Use Math.pow for the exponential calculation
-        // Note: This is the only place we use Double for computation,
-        // but we immediately convert back to BigDecimal with proper precision
-        val powerResult = 10.0.pow(exponent.toDouble())
-        val powerResultBd = BigDecimal(powerResult.toString()).setScale(CALCULATION_SCALE, ROUNDING_MODE)
+            (ratingB - ratingA).divideBy(divisor = SCALE_FACTOR)
 
         // Calculate: 1 / (1 + powerResult)
-        val denominator = BigDecimal.ONE.setScale(CALCULATION_SCALE, ROUNDING_MODE) + powerResultBd
-        return BigDecimal.ONE.divide(denominator, CALCULATION_SCALE, ROUNDING_MODE)
+        return ONE.divideBy(ONE + exponent.asPowOfTen)
     }
 
     /**

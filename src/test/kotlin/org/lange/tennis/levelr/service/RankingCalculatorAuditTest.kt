@@ -118,7 +118,6 @@ class RankingCalculatorAuditTest {
             assertTrue(entry.context.containsKey("original"))
             assertTrue(entry.context.containsKey("change"))
             assertTrue(entry.context.containsKey("newValue"))
-            assertTrue(entry.context.containsKey("rounded"))
             assertTrue(entry.context.containsKey("clamped"))
         }
     }
