@@ -39,8 +39,9 @@ enum class RatingSystem {
     UTR    // Universal Tennis Rating (1.0 - 16.5+)
 }
 
-// Player Profile (without ID since ID is the map key)
+// Player Profile
 data class PlayerProfile(
+    val playerId: String,  // Must match the map key for validation
     val name: String,
     val rating: Double,
     val ratingSystem: RatingSystem
@@ -83,13 +84,16 @@ data class GameScore(
 
 // Request
 data class RankingCalculationRequest(
-    val players: Map<String, PlayerProfile>,  // playerId -> profile
+    val players: Map<String, PlayerProfile>,  // playerId (key) -> profile
     val matchScore: MatchScore,
     val matchDate: String? = null,  // ISO 8601 format (optional)
     val metadata: MatchMetadata? = null  // Optional additional info
 ) {
     init {
         require(players.size == 2) { "Exactly 2 players required for singles match" }
+        require(players.all { (key, profile) -> key == profile.playerId }) {
+            "Map key must match player profile ID"
+        }
     }
 }
 
@@ -133,11 +137,13 @@ data class CalculationDetails(
 {
   "players": {
     "P123": {
+      "playerId": "P123",
       "name": "John Doe",
       "rating": 4.5,
       "ratingSystem": "NTRP"
     },
     "P456": {
+      "playerId": "P456",
       "name": "Jane Smith",
       "rating": 4.0,
       "ratingSystem": "NTRP"
@@ -171,11 +177,13 @@ data class CalculationDetails(
 {
   "players": {
     "P123": {
+      "playerId": "P123",
       "name": "John Doe",
       "rating": 4.52,
       "ratingSystem": "NTRP"
     },
     "P456": {
+      "playerId": "P456",
       "name": "Jane Smith",
       "rating": 3.98,
       "ratingSystem": "NTRP"
@@ -214,11 +222,13 @@ data class CalculationDetails(
 {
   "players": {
     "P789": {
+      "playerId": "P789",
       "name": "Mike Wilson",
       "rating": 8.5,
       "ratingSystem": "UTR"
     },
     "P101": {
+      "playerId": "P101",
       "name": "Sarah Lee",
       "rating": 8.2,
       "ratingSystem": "UTR"
@@ -266,11 +276,13 @@ data class CalculationDetails(
 {
   "players": {
     "P111": {
+      "playerId": "P111",
       "name": "Carlos Rodriguez",
       "rating": 5.5,
       "ratingSystem": "NTRP"
     },
     "P222": {
+      "playerId": "P222",
       "name": "Anna Kowalski",
       "rating": 5.0,
       "ratingSystem": "NTRP"
@@ -344,11 +356,13 @@ data class SimpleRankingRequest(
 {
   "players": {
     "P123": {
+      "playerId": "P123",
       "name": "John Doe",
       "rating": 4.5,
       "ratingSystem": "NTRP"
     },
     "P456": {
+      "playerId": "P456",
       "name": "Jane Smith",
       "rating": 4.0,
       "ratingSystem": "NTRP"
@@ -398,7 +412,8 @@ data class RankingCalculationRequest(
 ## Validation Rules
 
 ### Player Profile Validation
-- `playerId` (map key): Non-empty string, max 50 chars
+- `playerId`: Non-empty string, max 50 chars
+  - **Must match the map key** (validated in request)
 - `name`: Non-empty string, max 100 chars
 - `rating`:
   - NTRP: 1.0 to 7.0 (increments of 0.5)
@@ -407,6 +422,7 @@ data class RankingCalculationRequest(
 
 ### Match Score Validation
 - Exactly 2 players required for singles match
+- Map key must match `playerId` in the profile
 - Both players must use the same `ratingSystem`
 - At least 1 set required
 - Max 5 sets
