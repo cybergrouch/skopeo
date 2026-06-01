@@ -102,7 +102,7 @@ tasks.register("installGitHooks") {
 
             echo "✅ Code style check passed!"
             exit 0
-            """.trimIndent()
+            """.trimIndent(),
         )
 
         // Make it executable

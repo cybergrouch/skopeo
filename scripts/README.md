@@ -104,6 +104,47 @@ To run the container:
 
 ---
 
+### 🎨 Code Quality
+
+#### `format-code.sh`
+Auto-format all Kotlin code using ktlint.
+- Applies opinionated formatting rules
+- Fixes style violations automatically
+- Ensures consistent code style
+- Compatible with ktlint linting rules
+
+**Usage:**
+```bash
+./scripts/format-code.sh
+```
+
+**Sample Output:**
+```
+======================================
+  🎨 Formatting Code with ktlint
+======================================
+
+Formatting Kotlin code...
+[ktlint output...]
+
+======================================
+  ✅ Formatting Complete!
+======================================
+
+Next steps:
+  1. Review changes: git diff
+  2. Verify format: ./gradlew ktlintCheck
+  3. Run tests: ./gradlew test
+```
+
+**When to use:**
+- Before committing code
+- After writing new features
+- To fix ktlint violations automatically
+- To ensure consistent code style across the team
+
+---
+
 ### 📚 Reference
 
 #### `curl-examples.sh`
