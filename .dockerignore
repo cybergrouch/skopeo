@@ -1,0 +1,59 @@
+# Docker ignore file for Tennis Levelr
+# Excludes unnecessary files from Docker build context
+
+# Build outputs
+build/
+.gradle/
+*.jar
+*.war
+*.ear
+*.class
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Documentation (not needed in container)
+docs/
+*.md
+README.md
+LICENSE
+
+# Scripts (not needed in container)
+scripts/
+
+# Logs
+logs/
+*.log
+
+# Test reports and coverage
+build/reports/
+build/test-results/
+.jacoco/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+
+# Environment files (security)
+.env
+.env.local
+*.pem
+*.key

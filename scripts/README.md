@@ -59,6 +59,51 @@ Automated test suite for all API endpoints.
 
 ---
 
+### 🐳 Docker
+
+#### `docker-build.sh`
+Build and tag Docker images for Tennis Levelr.
+- Builds multi-stage Docker image
+- Tags with specified version
+- Also tags as 'latest'
+- Shows image size after build
+
+**Usage:**
+```bash
+# Build with version tag
+./scripts/docker-build.sh 1.0.0
+
+# Build as latest only
+./scripts/docker-build.sh
+```
+
+**Sample Output:**
+```
+======================================
+  Building Docker Image
+======================================
+
+Image: tennis-levelr:1.0.0
+Dockerfile: ./Dockerfile
+
+Building image...
+[Docker build output...]
+
+Tagging as latest...
+
+======================================
+  Build Complete!
+======================================
+
+Image: tennis-levelr:1.0.0
+Size: 215MB
+
+To run the container:
+  docker run -p 8080:8080 tennis-levelr:1.0.0
+```
+
+---
+
 ### 📚 Reference
 
 #### `curl-examples.sh`

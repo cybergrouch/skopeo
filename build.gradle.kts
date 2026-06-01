@@ -92,7 +92,8 @@ tasks.jacocoTestReport {
                         "**/dto/**",
                         "**/model/**",
                         "**/*Application*.*",
-                        "**/*Kt.class", // Kotlin file-level functions
+                        // Kotlin file-level functions
+                        "**/*Kt.class",
                     )
                 }
             },
@@ -118,9 +119,11 @@ tasks.jacocoTestCoverageVerification {
             }
 
             // Exclude exception handling blocks which are hard to test
-            excludes = listOf(
-                "*.configureRankingRoutes.*", // Route error handling lambdas
-            )
+            // Route error handling lambdas
+            excludes =
+                listOf(
+                    "*.configureRankingRoutes.*",
+                )
         }
     }
 

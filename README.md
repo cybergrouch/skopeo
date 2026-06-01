@@ -76,6 +76,39 @@ Future enhancements include:
 
 The API will start on `http://localhost:8080`
 
+### Docker Deployment
+
+#### Option 1: Using Docker Compose (recommended)
+```bash
+docker-compose up
+```
+
+#### Option 2: Using Docker directly
+```bash
+# Build the image
+docker build -t tennis-levelr .
+
+# Run the container
+docker run -d -p 8080:8080 --name tennis-levelr tennis-levelr
+
+# View logs
+docker logs -f tennis-levelr
+
+# Stop the container
+docker stop tennis-levelr
+```
+
+#### Option 3: Using the helper script
+```bash
+# Build with version tag
+./scripts/docker-build.sh 1.0.0
+
+# Run with Docker
+docker run -d -p 8080:8080 tennis-levelr:1.0.0
+```
+
+See [docs/DOCKER_DEPLOYMENT.md](docs/DOCKER_DEPLOYMENT.md) for comprehensive Docker deployment guide.
+
 ### Testing the API
 
 #### Automated Testing
@@ -137,6 +170,7 @@ All utility scripts are located in the `scripts/` directory:
 | `stop-server.sh` | Stop the running API server |
 | `test-api.sh` | Run automated tests for all endpoints |
 | `curl-examples.sh` | Display cURL command examples and usage |
+| `docker-build.sh` | Build and tag Docker images for deployment |
 
 See `scripts/README.md` for detailed documentation.
 

@@ -19,6 +19,7 @@ class RankingCalculationApiTest {
         assertTrue(status.value >= 400, "Expected error status (>=400) but got $status")
         assertTrue(body.isNotEmpty(), "Expected non-empty response body but got empty")
     }
+
     @Test
     fun testValidRankingCalculation() =
         testApplication {
