@@ -1,14 +1,18 @@
 plugins {
     kotlin("jvm") version "2.2.21"
-    kotlin("plugin.spring") version "2.2.21"
-    war
-    id("org.springframework.boot") version "4.0.6"
-    id("io.spring.dependency-management") version "1.1.7"
+    kotlin("plugin.serialization") version "2.2.21"
+    application
 }
 
 group = "org.lange.tennis.levelr"
 version = "0.0.1-SNAPSHOT"
 description = "tennis_levelr"
+
+application {
+    mainClass.set("org.lange.tennis.levelr.ApplicationKt")
+}
+
+val ktor_version = "3.0.3"
 
 java {
     toolchain {
@@ -21,17 +25,24 @@ repositories {
 }
 
 dependencies {
-    implementation("org.springframework.boot:spring-boot-starter-webmvc")
-    implementation("org.jetbrains.kotlin:kotlin-reflect")
-    providedRuntime("org.springframework.boot:spring-boot-starter-tomcat-runtime")
-    testImplementation("org.springframework.boot:spring-boot-starter-test")
+    // Ktor server
+    implementation("io.ktor:ktor-server-core-jvm:$ktor_version")
+    implementation("io.ktor:ktor-server-netty-jvm:$ktor_version")
+    implementation("io.ktor:ktor-server-content-negotiation-jvm:$ktor_version")
+    implementation("io.ktor:ktor-serialization-kotlinx-json-jvm:$ktor_version")
+
+    // Logging
+    implementation("ch.qos.logback:logback-classic:1.5.16")
+
+    // Testing
+    testImplementation("io.ktor:ktor-server-test-host-jvm:$ktor_version")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 kotlin {
     compilerOptions {
-        freeCompilerArgs.addAll("-Xjsr305=strict", "-Xannotation-default-target=param-property")
+        freeCompilerArgs.addAll("-Xjsr305=strict")
     }
 }
 
