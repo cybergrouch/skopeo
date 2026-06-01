@@ -19,6 +19,7 @@ import io.ktor.server.routing.routing
 import io.micrometer.prometheus.PrometheusConfig
 import io.micrometer.prometheus.PrometheusMeterRegistry
 import mu.KotlinLogging
+import org.lange.tennis.levelr.routes.configureRankingRoutes
 import org.slf4j.event.Level
 
 private val logger = KotlinLogging.logger {}
@@ -33,6 +34,7 @@ fun Application.module() {
     configureMonitoring()
     configurePlugins()
     configureRouting()
+    configureRankingRoutes()
     logger.info { "Tennis Levelr API started successfully on port 8080" }
 }
 
@@ -93,5 +95,5 @@ fun Application.configureRouting() {
             )
         }
     }
-    logger.info { "Routing configured with endpoints: /, /health, /metrics" }
+    logger.info { "Routing configured with endpoints: /, /health, /metrics, /api/v1/calculate-ranking" }
 }
