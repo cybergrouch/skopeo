@@ -185,7 +185,7 @@ class RankingCalculationApiTest {
         }
 
     @Test
-    fun testInvalidRating_WrongIncrement() =
+    fun testValidRating_ContinuousValue() =
         testApplication {
             application {
                 module()
@@ -231,8 +231,11 @@ class RankingCalculationApiTest {
                     )
                 }
 
+            // NTRP now supports continuous values, not just 0.5 increments
+            assertEquals(HttpStatusCode.OK, response.status)
             val body = response.bodyAsText()
-            assertErrorResponse(response.status, body)
+            assertTrue(body.contains("\"playerId\":\"P123\""))
+            assertTrue(body.contains("\"playerId\":\"P456\""))
         }
 
     @Test

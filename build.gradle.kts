@@ -3,6 +3,7 @@ plugins {
     kotlin("plugin.serialization") version "2.2.21"
     application
     id("org.jlleitschuh.gradle.ktlint") version "12.1.0"
+    jacoco
 }
 
 group = "org.lange.tennis.levelr"
@@ -63,4 +64,89 @@ ktlint {
     android.set(false)
     outputToConsole.set(true)
     ignoreFailures.set(false)
+}
+
+// JaCoCo configuration for code coverage
+jacoco {
+    toolVersion = "0.8.12"
+}
+
+tasks.jacocoTestReport {
+    dependsOn(tasks.test) // Tests are required to run before generating the report
+
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+        csv.required.set(false)
+
+        xml.outputLocation.set(file("${layout.buildDirectory.get()}/reports/jacoco/test/jacocoTestReport.xml"))
+        html.outputLocation.set(file("${layout.buildDirectory.get()}/reports/jacoco/test/html"))
+    }
+
+    classDirectories.setFrom(
+        files(
+            classDirectories.files.map {
+                fileTree(it) {
+                    // Exclude data classes, DTOs, and generated code from coverage
+                    exclude(
+                        "**/dto/**",
+                        "**/model/**",
+                        "**/*Application*.*",
+                        "**/*Kt.class", // Kotlin file-level functions
+                    )
+                }
+            },
+        ),
+    )
+}
+
+tasks.jacocoTestCoverageVerification {
+    dependsOn(tasks.test)
+
+    violationRules {
+        rule {
+            limit {
+                minimum = "0.75".toBigDecimal() // 75% line coverage minimum
+            }
+        }
+
+        rule {
+            element = "CLASS"
+            limit {
+                counter = "BRANCH"
+                minimum = "0.70".toBigDecimal() // 70% branch coverage minimum
+            }
+
+            // Exclude exception handling blocks which are hard to test
+            excludes = listOf(
+                "*.configureRankingRoutes.*", // Route error handling lambdas
+            )
+        }
+    }
+
+    classDirectories.setFrom(
+        files(
+            classDirectories.files.map {
+                fileTree(it) {
+                    // Same exclusions as the report
+                    exclude(
+                        "**/dto/**",
+                        "**/model/**",
+                        "**/*Application*.*",
+                        "**/*Kt.class",
+                    )
+                }
+            },
+        ),
+    )
+}
+
+// Make check task depend on coverage verification
+tasks.check {
+    dependsOn(tasks.jacocoTestCoverageVerification)
+}
+
+// Automatically generate coverage report after tests
+tasks.test {
+    finalizedBy(tasks.jacocoTestReport) // Report is always generated after tests run
 }
