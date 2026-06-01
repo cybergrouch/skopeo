@@ -11,7 +11,7 @@ Tennis Levelr provides real-time ranking calculations for tennis players using e
 ### Current Functionality
 
 - **Dynamic Ranking Calculation**: Calculate updated player rankings based on match results
-- **ELO-Based Algorithm**: Sophisticated ranking system that considers:
+- **Elo-Based Algorithm**: Sophisticated ranking system that considers:
   - Rating differential between players
   - Match dominance (games won ratio)
   - Expected vs actual performance
@@ -199,7 +199,7 @@ Comprehensive documentation is available in the `docs/` directory:
   - Examples and error codes
 
 - **[RANKING_ALGORITHM.md](docs/RANKING_ALGORITHM.md)** - Ranking algorithm details
-  - ELO-based system explanation
+  - Elo-based system explanation
   - Mathematical formulas
   - Parameter tuning guidelines
   - Examples and limitations

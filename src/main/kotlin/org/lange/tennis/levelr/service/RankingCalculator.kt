@@ -12,7 +12,7 @@ import kotlin.math.pow
 
 /**
  * Service for calculating tennis ranking updates based on match results.
- * Uses an ELO-based algorithm adapted for tennis rating systems (NTRP and UTR).
+ * Uses an Elo-based algorithm adapted for tennis rating systems (NTRP and UTR).
  *
  * This is a pure function with no side effects - it returns both the calculation
  * result and an audit trail that can be logged by the caller.
@@ -99,7 +99,7 @@ class RankingCalculator {
             ),
         )
 
-        // Calculate ELO-based rating changes
+        // Calculate Elo-based rating changes
         val (player1Change, player2Change) =
             calculateRatingChanges(
                 player1 = player1,
@@ -226,7 +226,7 @@ class RankingCalculator {
     }
 
     /**
-     * Calculate rating changes using ELO algorithm.
+     * Calculate rating changes using Elo algorithm.
      */
     private fun calculateRatingChanges(
         player1: PlayerProfile,
@@ -271,7 +271,7 @@ class RankingCalculator {
     }
 
     /**
-     * Calculate expected score based on rating differential (ELO formula).
+     * Calculate expected score based on rating differential (Elo formula).
      * Uses BigDecimal for precise calculations.
      *
      * Formula: 1 / (1 + 10^((ratingB - ratingA) / SCALE_FACTOR))

@@ -28,7 +28,7 @@ fun Application.configureRankingRoutes() {
                     "Processing ranking calculation for players: ${request.players.keys.joinToString()}"
                 }
 
-                // Calculate ranking using ELO-based algorithm (pure function)
+                // Calculate ranking using Elo-based algorithm (pure function)
                 val result = rankingCalculator.calculate(request)
 
                 // Log the audit trail from the calculation

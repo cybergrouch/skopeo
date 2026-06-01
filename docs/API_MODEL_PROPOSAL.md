@@ -143,7 +143,7 @@ data class RatingChange(
 data class CalculationDetails(
     val expectedOutcome: Map<String, Double>,  // playerId -> win probability
     val actualWinner: String,  // playerId
-    val algorithm: String,  // "ELO", "Glicko", etc.
+    val algorithm: String,  // "Elo", "Glicko", etc.
     val confidence: Double? = null
 )
 ```
@@ -251,7 +251,7 @@ data class CalculationDetails(
       "P456": 0.35
     },
     "actualWinner": "P123",
-    "algorithm": "Modified ELO for Tennis",
+    "algorithm": "Modified Elo for Tennis",
     "confidence": 0.85
   }
 }
@@ -596,7 +596,7 @@ src/main/kotlin/org/lange/tennis/levelr/
 
 3. **Rating calculation algorithm:**
    - Should we implement actual NTRP/UTR algorithms?
-   - Or use a simplified ELO-based approach initially?
+   - Or use a simplified Elo-based approach initially?
    - Should the algorithm be different for NTRP vs UTR?
 
 4. **Should players in a match be required to have the same rating system?**

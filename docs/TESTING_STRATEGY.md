@@ -69,7 +69,7 @@ Tests pure business logic in complete isolation - no infrastructure, no HTTP, no
   - Dominant vs close wins
   - Multi-set match handling
 
-- ELO expected scores (2 tests)
+- Elo expected scores (2 tests)
   - Higher rated player advantage
   - Equal ratings = 50/50
 

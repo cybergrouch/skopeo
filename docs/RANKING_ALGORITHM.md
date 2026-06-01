@@ -2,7 +2,7 @@
 
 ## Overview
 
-Tennis Levelr uses an **ELO-based rating system** adapted for tennis match scoring. The algorithm calculates rating changes based on match outcomes, considering both the rating differential between players and the dominance of the victory.
+Tennis Levelr uses an **Elo-based rating system** adapted for tennis match scoring. The algorithm calculates rating changes based on match outcomes, considering both the rating differential between players and the dominance of the victory.
 
 **Key Features:**
 - Dynamic rating adjustments based on expected vs actual performance
@@ -12,9 +12,86 @@ Tennis Levelr uses an **ELO-based rating system** adapted for tennis match scori
 
 ---
 
-## Algorithm Foundation: ELO Rating System
+## What is "Elo"?
 
-The ELO rating system, originally designed for chess, has been adapted for tennis. It operates on the principle that a player's rating should increase after a win and decrease after a loss, with the magnitude of change depending on the opponent's rating.
+### The Name, Not an Acronym
+
+**Important:** "Elo" is a person's name, not an acronym. It should be written as "Elo" (capitalized like a name), not "Elo" (all caps).
+
+**Elo** refers to **Arpad Elo** (1903-1992), a Hungarian-American physics professor and chess master who invented the Elo rating system in the 1960s. The United States Chess Federation (USCF) adopted his system in 1960, and FIDE (World Chess Federation) adopted it in 1970.
+
+### Why Elo Created the System
+
+Before Elo's system, chess ratings were subjective and inconsistent. Players needed a way to:
+- **Compare skill levels** objectively across different players
+- **Predict match outcomes** based on rating differences
+- **Track improvement** over time with quantifiable metrics
+- **Organize tournaments** fairly by grouping similar-skill players
+
+Elo's breakthrough was creating a mathematical model that:
+1. Self-corrects over time (ratings converge toward true skill)
+2. Accounts for expected outcomes (beating a stronger opponent gains more points)
+3. Maintains a zero-sum system (points transfer between players)
+4. Updates continuously after each match
+
+### Elo Beyond Chess
+
+The success of Elo's system in chess led to adoption across many competitive domains:
+
+**Sports:**
+- Table tennis, soccer, basketball, American football
+- Major League Baseball (FiveThirtyEight's MLB Elo ratings)
+- NFL predictions and power rankings
+- International football (FIFA rankings use a modified Elo)
+
+**Esports:**
+- League of Legends, Counter-Strike, Dota 2
+- Rocket League, Overwatch competitive modes
+- Many online gaming platforms
+
+**Online Platforms:**
+- Chess.com, Lichess (chess platforms)
+- Dating apps (compatibility scoring)
+- Competitive matchmaking systems
+
+**Why Elo Works Across Domains:**
+- Simple mathematical foundation
+- Proven statistical properties
+- Self-stabilizing over multiple matches
+- Easy to understand and explain
+- Computationally efficient
+
+---
+
+## Algorithm Foundation: The Elo Rating System
+
+The Elo rating system, originally designed for chess, has been adapted for tennis. It operates on the principle that a player's rating should increase after a win and decrease after a loss, with the magnitude of change depending on the opponent's rating.
+
+### Why Elo for Tennis?
+
+Tennis is well-suited for Elo ratings because:
+
+1. **One-on-one competition**: Direct head-to-head matches (like chess)
+2. **Clear outcomes**: Every match has a winner and loser
+3. **Skill-based**: Performance depends primarily on player skill
+4. **Frequent matches**: Players compete regularly, allowing ratings to stabilize
+5. **Measurable dominance**: Match scores provide additional context (games won)
+
+### Adaptations for Tennis
+
+Our implementation enhances the traditional Elo system with tennis-specific features:
+
+**Standard Elo:**
+- Win = 1 point, Loss = 0 points
+- Only considers outcome (win/loss)
+- Designed for chess (discrete moves, long games)
+
+**Tennis Elo (Tennis Levelr):**
+- Win = 1 point, Loss = 0 points (same)
+- **Adds dominance factor** based on games won (6-0, 6-0 vs 7-6, 7-6)
+- **System-specific constraints** (NTRP 1.0-7.0 range, UTR 1.0+ range)
+- **Different precision levels** (NTRP: 2 decimals, UTR: 1 decimal)
+- **BigDecimal calculations** for 6-digit precision (no floating-point errors)
 
 ### Core Principles
 
@@ -348,7 +425,7 @@ Player B: 10.2 - 17.75 = -7.55 → clamped to 1.0
 1. **Considers Match Dominance**: Unlike simple win/loss systems, accounts for how convincingly the match was won
 2. **Self-Correcting**: Over multiple matches, ratings converge to true skill level
 3. **Responsive**: Significant rating changes when upsets occur
-4. **Proven System**: ELO has been successfully used in chess, esports, and other sports
+4. **Proven System**: Elo has been successfully used in chess, esports, and other sports
 5. **Continuous Ratings**: Allows precise skill differentiation without artificial increments
 
 ---
@@ -464,9 +541,25 @@ To validate algorithm accuracy:
 
 ## References
 
-### ELO Rating System
+### Elo Rating System - Primary Sources
+
+**Original Work:**
 - Elo, Arpad (1978). *The Rating of Chessplayers, Past and Present*. Arco Publishing.
-- [Wikipedia: Elo Rating System](https://en.wikipedia.org/wiki/Elo_rating_system)
+  - The definitive book by Arpad Elo explaining his rating system
+  - Includes statistical analysis and historical player comparisons
+  - Still considered the authoritative reference
+
+**About Arpad Elo:**
+- Born: August 25, 1903, in Egyházaskesző, Hungary
+- Died: November 5, 1992, in Brookfield, Wisconsin, USA
+- Education: University of Chicago (Master's in Physics)
+- Career: Physics professor, chess master (8-time Wisconsin State Champion)
+- Legacy: FIDE (World Chess Federation) named him an International Arbiter in 1970
+
+**Online Resources:**
+- [Wikipedia: Elo Rating System](https://en.wikipedia.org/wiki/Elo_rating_system) - Comprehensive overview
+- [Wikipedia: Arpad Elo](https://en.wikipedia.org/wiki/Arpad_Elo) - Biography
+- [FIDE Handbook: Rating Regulations](https://handbook.fide.com/chapter/B02) - Official chess ratings
 
 ### Tennis Rating Systems
 - [USTA NTRP Rating System](https://www.usta.com/en/home/play/play-tournaments/ntrp-rating-system.html)
@@ -474,7 +567,7 @@ To validate algorithm accuracy:
 
 ### Related Implementations
 - [FiveThirtyEight: NFL Elo Ratings](https://fivethirtyeight.com/methodology/how-our-nfl-predictions-work/)
-- [Glicko Rating System](http://www.glicko.net/glicko.html) (improved ELO with rating confidence)
+- [Glicko Rating System](http://www.glicko.net/glicko.html) (improved Elo with rating confidence)
 
 ---
 

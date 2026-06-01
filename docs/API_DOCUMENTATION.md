@@ -253,7 +253,7 @@ curl -X POST http://localhost:8080/api/v1/calculate-ranking \
 }
 ```
 
-*Note: Uses ELO-based ranking algorithm. See [RANKING_ALGORITHM.md](./RANKING_ALGORITHM.md) for details.*
+*Note: Uses Elo-based ranking algorithm. See [RANKING_ALGORITHM.md](./RANKING_ALGORITHM.md) for details.*
 
 ### Example 2: UTR Match with Tiebreak
 
@@ -411,7 +411,7 @@ http POST :8080/api/v1/calculate-ranking < test-data.json
 
 ## Current Limitations
 
-1. **Algorithm Tuning**: ELO-based algorithm may produce large rating swings
+1. **Algorithm Tuning**: Elo-based algorithm may produce large rating swings
    - K-factor of 32 may be aggressive for single matches
    - Consider K=16-24 for more stable ratings
    - See [RANKING_ALGORITHM.md](./RANKING_ALGORITHM.md) for tuning details
@@ -431,7 +431,7 @@ http POST :8080/api/v1/calculate-ranking < test-data.json
 - ✅ API documentation
 
 ### Phase 2: Ranking Algorithm (Next)
-- Implement ELO-based algorithm
+- Implement Elo-based algorithm
 - Support for NTRP-specific calculations
 - Support for UTR-specific calculations
 - Algorithm selection based on rating system
