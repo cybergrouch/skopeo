@@ -39,12 +39,29 @@ enum class RatingSystem {
     UTR    // Universal Tennis Rating (1.0 - 16.5+)
 }
 
+// Rating (encapsulates value and system)
+data class Rating(
+    val value: Double,
+    val system: RatingSystem
+) {
+    init {
+        when (system) {
+            RatingSystem.NTRP -> {
+                require(value in 1.0..7.0) { "NTRP rating must be between 1.0 and 7.0" }
+                require(value % 0.5 == 0.0) { "NTRP rating must be in 0.5 increments" }
+            }
+            RatingSystem.UTR -> {
+                require(value >= 1.0) { "UTR rating must be at least 1.0" }
+            }
+        }
+    }
+}
+
 // Player Profile
 data class PlayerProfile(
     val playerId: String,  // Must match the map key for validation
     val name: String,
-    val rating: Double,
-    val ratingSystem: RatingSystem
+    val rating: Rating
 )
 
 // Match Score Container
@@ -94,6 +111,11 @@ data class RankingCalculationRequest(
         require(players.all { (key, profile) -> key == profile.playerId }) {
             "Map key must match player profile ID"
         }
+        // Ensure both players use the same rating system
+        val ratingSystems = players.values.map { it.rating.system }.toSet()
+        require(ratingSystems.size == 1) {
+            "Both players must use the same rating system"
+        }
     }
 }
 
@@ -114,8 +136,8 @@ data class RankingCalculationResponse(
 data class RatingChange(
     val change: Double,
     val percentChange: Double,
-    val previousRating: Double,
-    val newRating: Double
+    val previousRating: Rating,
+    val newRating: Rating
 )
 
 data class CalculationDetails(
@@ -139,14 +161,18 @@ data class CalculationDetails(
     "P123": {
       "playerId": "P123",
       "name": "John Doe",
-      "rating": 4.5,
-      "ratingSystem": "NTRP"
+      "rating": {
+        "value": 4.5,
+        "system": "NTRP"
+      }
     },
     "P456": {
       "playerId": "P456",
       "name": "Jane Smith",
-      "rating": 4.0,
-      "ratingSystem": "NTRP"
+      "rating": {
+        "value": 4.0,
+        "system": "NTRP"
+      }
     }
   },
   "matchScore": {
@@ -179,28 +205,44 @@ data class CalculationDetails(
     "P123": {
       "playerId": "P123",
       "name": "John Doe",
-      "rating": 4.52,
-      "ratingSystem": "NTRP"
+      "rating": {
+        "value": 4.52,
+        "system": "NTRP"
+      }
     },
     "P456": {
       "playerId": "P456",
       "name": "Jane Smith",
-      "rating": 3.98,
-      "ratingSystem": "NTRP"
+      "rating": {
+        "value": 3.98,
+        "system": "NTRP"
+      }
     }
   },
   "ratingChanges": {
     "P123": {
       "change": 0.02,
       "percentChange": 0.44,
-      "previousRating": 4.5,
-      "newRating": 4.52
+      "previousRating": {
+        "value": 4.5,
+        "system": "NTRP"
+      },
+      "newRating": {
+        "value": 4.52,
+        "system": "NTRP"
+      }
     },
     "P456": {
       "change": -0.02,
       "percentChange": -0.50,
-      "previousRating": 4.0,
-      "newRating": 3.98
+      "previousRating": {
+        "value": 4.0,
+        "system": "NTRP"
+      },
+      "newRating": {
+        "value": 3.98,
+        "system": "NTRP"
+      }
     }
   },
   "calculationDetails": {
@@ -224,14 +266,18 @@ data class CalculationDetails(
     "P789": {
       "playerId": "P789",
       "name": "Mike Wilson",
-      "rating": 8.5,
-      "ratingSystem": "UTR"
+      "rating": {
+        "value": 8.5,
+        "system": "UTR"
+      }
     },
     "P101": {
       "playerId": "P101",
       "name": "Sarah Lee",
-      "rating": 8.2,
-      "ratingSystem": "UTR"
+      "rating": {
+        "value": 8.2,
+        "system": "UTR"
+      }
     }
   },
   "matchScore": {
@@ -278,14 +324,18 @@ data class CalculationDetails(
     "P111": {
       "playerId": "P111",
       "name": "Carlos Rodriguez",
-      "rating": 5.5,
-      "ratingSystem": "NTRP"
+      "rating": {
+        "value": 5.5,
+        "system": "NTRP"
+      }
     },
     "P222": {
       "playerId": "P222",
       "name": "Anna Kowalski",
-      "rating": 5.0,
-      "ratingSystem": "NTRP"
+      "rating": {
+        "value": 5.0,
+        "system": "NTRP"
+      }
     }
   },
   "matchScore": {
@@ -358,14 +408,18 @@ data class SimpleRankingRequest(
     "P123": {
       "playerId": "P123",
       "name": "John Doe",
-      "rating": 4.5,
-      "ratingSystem": "NTRP"
+      "rating": {
+        "value": 4.5,
+        "system": "NTRP"
+      }
     },
     "P456": {
       "playerId": "P456",
       "name": "Jane Smith",
-      "rating": 4.0,
-      "ratingSystem": "NTRP"
+      "rating": {
+        "value": 4.0,
+        "system": "NTRP"
+      }
     }
   },
   "scoreString": "6-4, 6-3",
@@ -415,15 +469,16 @@ data class RankingCalculationRequest(
 - `playerId`: Non-empty string, max 50 chars
   - **Must match the map key** (validated in request)
 - `name`: Non-empty string, max 100 chars
-- `rating`:
-  - NTRP: 1.0 to 7.0 (increments of 0.5)
-  - UTR: 1.0 to 16.5+ (any decimal)
-- `ratingSystem`: Must be NTRP or UTR
+- `rating`: Rating object
+  - `value`: Validated based on system
+    - NTRP: 1.0 to 7.0 (increments of 0.5)
+    - UTR: 1.0 to 16.5+ (any decimal)
+  - `system`: Must be NTRP or UTR
 
 ### Match Score Validation
 - Exactly 2 players required for singles match
 - Map key must match `playerId` in the profile
-- Both players must use the same `ratingSystem`
+- Both players must use the same rating system (validated in request)
 - At least 1 set required
 - Max 5 sets
 - Valid tennis scores:
