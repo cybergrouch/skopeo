@@ -38,3 +38,40 @@ out/
 
 ### Kotlin ###
 .kotlin
+
+### Tennis Levelr Specific ###
+# Environment and configuration files
+.env
+.env.local
+.env.*.local
+application-local.yaml
+application-local.yml
+
+# Log files
+logs/
+*.log
+spring.log
+
+# Database files (for future persistence)
+*.db
+*.sqlite
+*.h2.db
+
+# Claude Code
+.claude/
+
+### macOS ###
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+
+### Linux ###
+*~
+.directory
+
+### Windows ###
+Thumbs.db
+ehthumbs.db
+Desktop.ini
