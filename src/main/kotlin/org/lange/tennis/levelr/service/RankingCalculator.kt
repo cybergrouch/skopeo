@@ -6,8 +6,9 @@ import org.lange.tennis.levelr.dto.RatingChange
 import org.lange.tennis.levelr.model.PlayerProfile
 import org.lange.tennis.levelr.model.Rating
 import org.lange.tennis.levelr.model.RatingSystem
+import java.math.BigDecimal
+import java.math.RoundingMode
 import kotlin.math.pow
-import kotlin.math.round
 
 /**
  * Service for calculating tennis ranking updates based on match results.
@@ -15,21 +16,35 @@ import kotlin.math.round
  *
  * This is a pure function with no side effects - it returns both the calculation
  * result and an audit trail that can be logged by the caller.
+ *
+ * All internal calculations use BigDecimal with 6 decimal places precision
+ * to ensure accurate and predictable results.
  */
 class RankingCalculator {
     companion object {
+        // Precision for all calculations (6 decimal places)
+        private const val CALCULATION_SCALE = 6
+        private val ROUNDING_MODE = RoundingMode.HALF_UP
+
         // K-factor controls how much ratings change per match
-        private const val K_FACTOR = 32.0
+        private val K_FACTOR = BigDecimal("32.0")
 
         // Scale factor for expected score calculation
-        private const val SCALE_FACTOR = 400.0
+        private val SCALE_FACTOR = BigDecimal("400.0")
 
         // NTRP-specific constants
-        private const val NTRP_MIN = 1.0
-        private const val NTRP_MAX = 7.0
+        private val NTRP_MIN = BigDecimal("1.0")
+        private val NTRP_MAX = BigDecimal("7.0")
 
         // UTR-specific constants
-        private const val UTR_MIN = 1.0
+        private val UTR_MIN = BigDecimal("1.0")
+
+        // Helper extension functions for BigDecimal conversions
+        private fun Double.toBigDecimalPrecise(): BigDecimal = BigDecimal(this.toString()).setScale(CALCULATION_SCALE, ROUNDING_MODE)
+
+        private fun Int.toBigDecimalPrecise(): BigDecimal = BigDecimal(this).setScale(CALCULATION_SCALE, ROUNDING_MODE)
+
+        private fun BigDecimal.toDoublePrecise(): Double = this.toDouble()
     }
 
     /**
@@ -73,13 +88,13 @@ class RankingCalculator {
             AuditEntry(
                 message =
                     "Match result - Winner: ${matchResult.winnerId}, " +
-                        "Score: ${matchResult.winnerScore}, Sets: ${matchResult.setsWon}",
+                        "Score: ${matchResult.winnerScore.toDoublePrecise()}, Sets: ${matchResult.setsWon}",
                 context =
                     mapOf(
                         "winnerId" to matchResult.winnerId,
-                        "winnerScore" to matchResult.winnerScore,
+                        "winnerScore" to matchResult.winnerScore.toDoublePrecise(),
                         "setsWon" to matchResult.setsWon,
-                        "dominanceFactor" to matchResult.dominanceFactor,
+                        "dominanceFactor" to matchResult.dominanceFactor.toDoublePrecise(),
                     ),
             ),
         )
@@ -97,11 +112,13 @@ class RankingCalculator {
 
         audit.add(
             AuditEntry(
-                message = "Rating changes - ${player1.name}: $player1Change, ${player2.name}: $player2Change",
+                message =
+                    "Rating changes - ${player1.name}: ${player1Change.toDoublePrecise()}, " +
+                        "${player2.name}: ${player2Change.toDoublePrecise()}",
                 context =
                     mapOf(
-                        "player1Change" to player1Change,
-                        "player2Change" to player2Change,
+                        "player1Change" to player1Change.toDoublePrecise(),
+                        "player2Change" to player2Change.toDoublePrecise(),
                     ),
             ),
         )
@@ -116,19 +133,32 @@ class RankingCalculator {
                 player2Id to player2.copy(rating = player2NewRating),
             )
 
+        // Calculate rating changes and percentages using BigDecimal for precision
+        val player1ChangeValue = player1NewRating.value.toBigDecimalPrecise() - player1.rating.value.toBigDecimalPrecise()
+        val player1PercentChange =
+            (player1ChangeValue.divide(player1.rating.value.toBigDecimalPrecise(), CALCULATION_SCALE, ROUNDING_MODE))
+                .multiply(BigDecimal("100"))
+                .setScale(2, ROUNDING_MODE)
+
+        val player2ChangeValue = player2NewRating.value.toBigDecimalPrecise() - player2.rating.value.toBigDecimalPrecise()
+        val player2PercentChange =
+            (player2ChangeValue.divide(player2.rating.value.toBigDecimalPrecise(), CALCULATION_SCALE, ROUNDING_MODE))
+                .multiply(BigDecimal("100"))
+                .setScale(2, ROUNDING_MODE)
+
         val ratingChanges =
             mapOf(
                 player1Id to
                     RatingChange(
-                        change = player1NewRating.value - player1.rating.value,
-                        percentChange = ((player1NewRating.value - player1.rating.value) / player1.rating.value) * 100,
+                        change = player1ChangeValue.toDoublePrecise(),
+                        percentChange = player1PercentChange.toDoublePrecise(),
                         previousRating = player1.rating,
                         newRating = player1NewRating,
                     ),
                 player2Id to
                     RatingChange(
-                        change = player2NewRating.value - player2.rating.value,
-                        percentChange = ((player2NewRating.value - player2.rating.value) / player2.rating.value) * 100,
+                        change = player2ChangeValue.toDoublePrecise(),
+                        percentChange = player2PercentChange.toDoublePrecise(),
                         previousRating = player2.rating,
                         newRating = player2NewRating,
                     ),
@@ -175,19 +205,21 @@ class RankingCalculator {
         // Dominance factor: ratio of games won (affects rating change magnitude)
         val dominanceFactor =
             if (totalGamesLoser > 0) {
-                totalGamesWinner.toDouble() / totalGamesLoser.toDouble()
+                totalGamesWinner.toBigDecimalPrecise()
+                    .divide(totalGamesLoser.toBigDecimalPrecise(), CALCULATION_SCALE, ROUNDING_MODE)
             } else {
-                2.0 // Default for complete dominance
+                BigDecimal("2.0") // Default for complete dominance
             }
 
         // Normalize dominance factor (1.0 = close match, 2.0+ = dominant win)
-        val normalizedDominance = minOf(dominanceFactor, 2.5)
+        val maxDominance = BigDecimal("2.5")
+        val normalizedDominance = dominanceFactor.min(maxDominance)
 
         return MatchResult(
             winnerId = winnerId,
-            winnerScore = 1.0,
-            player1Score = if (winnerId == player1Id) 1.0 else 0.0,
-            player2Score = if (winnerId == player2Id) 1.0 else 0.0,
+            winnerScore = BigDecimal.ONE,
+            player1Score = if (winnerId == player1Id) BigDecimal.ONE else BigDecimal.ZERO,
+            player2Score = if (winnerId == player2Id) BigDecimal.ONE else BigDecimal.ZERO,
             setsWon = maxOf(setsWonByPlayer1, setsWonByPlayer2),
             dominanceFactor = normalizedDominance,
         )
@@ -199,22 +231,26 @@ class RankingCalculator {
     private fun calculateRatingChanges(
         player1: PlayerProfile,
         player2: PlayerProfile,
-        player1ActualScore: Double,
-        player2ActualScore: Double,
-        dominanceFactor: Double,
+        player1ActualScore: BigDecimal,
+        player2ActualScore: BigDecimal,
+        dominanceFactor: BigDecimal,
         audit: AuditTrail,
-    ): Pair<Double, Double> {
+    ): Pair<BigDecimal, BigDecimal> {
         // Calculate expected scores based on rating differential
-        val expectedPlayer1 = calculateExpectedScore(ratingA = player1.rating.value, ratingB = player2.rating.value)
-        val expectedPlayer2 = 1.0 - expectedPlayer1
+        val expectedPlayer1 =
+            calculateExpectedScore(
+                ratingA = player1.rating.value.toBigDecimalPrecise(),
+                ratingB = player2.rating.value.toBigDecimalPrecise(),
+            )
+        val expectedPlayer2 = BigDecimal.ONE.setScale(CALCULATION_SCALE, ROUNDING_MODE) - expectedPlayer1
 
         audit.add(
             AuditEntry(
                 message = "Expected scores - Player1: $expectedPlayer1, Player2: $expectedPlayer2",
                 context =
                     mapOf(
-                        "expectedPlayer1" to expectedPlayer1,
-                        "expectedPlayer2" to expectedPlayer2,
+                        "expectedPlayer1" to expectedPlayer1.toDoublePrecise(),
+                        "expectedPlayer2" to expectedPlayer2.toDoublePrecise(),
                     ),
             ),
         )
@@ -224,20 +260,40 @@ class RankingCalculator {
         val baseChange2 = K_FACTOR * (player2ActualScore - expectedPlayer2)
 
         // Apply dominance factor (larger changes for more decisive matches)
-        val adjustedChange1 = baseChange1 * dominanceFactor
-        val adjustedChange2 = baseChange2 * dominanceFactor
+        val adjustedChange1 =
+            baseChange1.multiply(dominanceFactor)
+                .setScale(CALCULATION_SCALE, ROUNDING_MODE)
+        val adjustedChange2 =
+            baseChange2.multiply(dominanceFactor)
+                .setScale(CALCULATION_SCALE, ROUNDING_MODE)
 
         return Pair(adjustedChange1, adjustedChange2)
     }
 
     /**
      * Calculate expected score based on rating differential (ELO formula).
+     * Uses BigDecimal for precise calculations.
+     *
+     * Formula: 1 / (1 + 10^((ratingB - ratingA) / SCALE_FACTOR))
      */
     private fun calculateExpectedScore(
-        ratingA: Double,
-        ratingB: Double,
-    ): Double {
-        return 1.0 / (1.0 + 10.0.pow((ratingB - ratingA) / SCALE_FACTOR))
+        ratingA: BigDecimal,
+        ratingB: BigDecimal,
+    ): BigDecimal {
+        // Calculate the exponent: (ratingB - ratingA) / SCALE_FACTOR
+        val exponent =
+            (ratingB - ratingA)
+                .divide(SCALE_FACTOR, CALCULATION_SCALE, ROUNDING_MODE)
+
+        // Use Math.pow for the exponential calculation
+        // Note: This is the only place we use Double for computation,
+        // but we immediately convert back to BigDecimal with proper precision
+        val powerResult = 10.0.pow(exponent.toDouble())
+        val powerResultBd = BigDecimal(powerResult.toString()).setScale(CALCULATION_SCALE, ROUNDING_MODE)
+
+        // Calculate: 1 / (1 + powerResult)
+        val denominator = BigDecimal.ONE.setScale(CALCULATION_SCALE, ROUNDING_MODE) + powerResultBd
+        return BigDecimal.ONE.divide(denominator, CALCULATION_SCALE, ROUNDING_MODE)
     }
 
     /**
@@ -245,7 +301,7 @@ class RankingCalculator {
      */
     private fun applyRatingChange(
         rating: Rating,
-        change: Double,
+        change: BigDecimal,
         audit: AuditTrail,
     ): Rating {
         return when (rating.system) {
@@ -256,78 +312,95 @@ class RankingCalculator {
 
     /**
      * Apply rating change for NTRP (continuous values, range 1.0-7.0).
+     * Rounds to 2 decimal places for NTRP display.
      */
     private fun applyNTRPChange(
         rating: Rating,
-        change: Double,
+        change: BigDecimal,
         audit: AuditTrail,
     ): Rating {
-        val newValue = rating.value + change
+        val originalValue = rating.value.toBigDecimalPrecise()
+        val newValue = originalValue + change
 
         // Round to 2 decimal places for NTRP
-        val rounded = round(newValue * 100.0) / 100.0
+        val rounded = newValue.setScale(2, ROUNDING_MODE)
 
         // Clamp to valid NTRP range
-        val clamped = rounded.coerceIn(NTRP_MIN, NTRP_MAX)
+        val clamped =
+            if (rounded < NTRP_MIN) {
+                NTRP_MIN
+            } else if (rounded > NTRP_MAX) {
+                NTRP_MAX
+            } else {
+                rounded
+            }
 
         audit.add(
             AuditEntry(
-                message = "NTRP change: ${rating.value} + $change = $newValue -> rounded $rounded -> clamped $clamped",
+                message =
+                    "NTRP change: ${rating.value} + ${change.toDoublePrecise()} = " +
+                        "${newValue.toDoublePrecise()} -> rounded ${rounded.toDoublePrecise()} -> " +
+                        "clamped ${clamped.toDoublePrecise()}",
                 context =
                     mapOf(
                         "system" to "NTRP",
                         "original" to rating.value,
-                        "change" to change,
-                        "newValue" to newValue,
-                        "rounded" to rounded,
-                        "clamped" to clamped,
+                        "change" to change.toDoublePrecise(),
+                        "newValue" to newValue.toDoublePrecise(),
+                        "rounded" to rounded.toDoublePrecise(),
+                        "clamped" to clamped.toDoublePrecise(),
                     ),
             ),
         )
 
-        return Rating(value = clamped, system = RatingSystem.NTRP)
+        return Rating(value = clamped.toDoublePrecise(), system = RatingSystem.NTRP)
     }
 
     /**
      * Apply rating change for UTR (decimal values allowed, minimum 1.0).
+     * Rounds to 1 decimal place for UTR display.
      */
     private fun applyUTRChange(
         rating: Rating,
-        change: Double,
+        change: BigDecimal,
         audit: AuditTrail,
     ): Rating {
-        val newValue = rating.value + change
+        val originalValue = rating.value.toBigDecimalPrecise()
+        val newValue = originalValue + change
 
         // Round to 1 decimal place for UTR
-        val rounded = round(newValue * 10.0) / 10.0
+        val rounded = newValue.setScale(1, ROUNDING_MODE)
 
         // Ensure minimum UTR rating
-        val clamped = maxOf(rounded, UTR_MIN)
+        val clamped = if (rounded < UTR_MIN) UTR_MIN else rounded
 
         audit.add(
             AuditEntry(
-                message = "UTR change: ${rating.value} + $change = $newValue -> rounded $rounded -> clamped $clamped",
+                message =
+                    "UTR change: ${rating.value} + ${change.toDoublePrecise()} = " +
+                        "${newValue.toDoublePrecise()} -> rounded ${rounded.toDoublePrecise()} -> " +
+                        "clamped ${clamped.toDoublePrecise()}",
                 context =
                     mapOf(
                         "system" to "UTR",
                         "original" to rating.value,
-                        "change" to change,
-                        "newValue" to newValue,
-                        "rounded" to rounded,
-                        "clamped" to clamped,
+                        "change" to change.toDoublePrecise(),
+                        "newValue" to newValue.toDoublePrecise(),
+                        "rounded" to rounded.toDoublePrecise(),
+                        "clamped" to clamped.toDoublePrecise(),
                     ),
             ),
         )
 
-        return Rating(value = clamped, system = RatingSystem.UTR)
+        return Rating(value = clamped.toDoublePrecise(), system = RatingSystem.UTR)
     }
 
     private data class MatchResult(
         val winnerId: String,
-        val winnerScore: Double,
-        val player1Score: Double,
-        val player2Score: Double,
+        val winnerScore: BigDecimal,
+        val player1Score: BigDecimal,
+        val player2Score: BigDecimal,
         val setsWon: Int,
-        val dominanceFactor: Double,
+        val dominanceFactor: BigDecimal,
     )
 }
