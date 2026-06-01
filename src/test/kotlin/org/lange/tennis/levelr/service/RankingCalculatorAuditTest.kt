@@ -32,9 +32,9 @@ class RankingCalculatorAuditTest {
 
         assertTrue(startEntry != null, "Audit should contain calculation start entry")
         assertEquals("John Doe", startEntry.context["player1"])
-        assertEquals(4.5, startEntry.context["player1Rating"])
+        assertEquals("4.5", startEntry.context["player1Rating"])
         assertEquals("Jane Smith", startEntry.context["player2"])
-        assertEquals(4.0, startEntry.context["player2Rating"])
+        assertEquals("4.0", startEntry.context["player2Rating"])
     }
 
     @Test
@@ -71,8 +71,8 @@ class RankingCalculatorAuditTest {
         assertTrue(expectedScoresEntry.context.containsKey("expectedPlayer2"))
 
         // Expected scores should sum to 1.0
-        val expected1 = expectedScoresEntry.context["expectedPlayer1"] as Double
-        val expected2 = expectedScoresEntry.context["expectedPlayer2"] as Double
+        val expected1 = (expectedScoresEntry.context["expectedPlayer1"] as String).toDouble()
+        val expected2 = (expectedScoresEntry.context["expectedPlayer2"] as String).toDouble()
         assertEquals(1.0, expected1 + expected2, 0.0001)
     }
 
@@ -93,8 +93,8 @@ class RankingCalculatorAuditTest {
         assertTrue(ratingChangesEntry.context.containsKey("player2Change"))
 
         // Changes should be opposite (zero-sum)
-        val change1 = ratingChangesEntry.context["player1Change"] as Double
-        val change2 = ratingChangesEntry.context["player2Change"] as Double
+        val change1 = (ratingChangesEntry.context["player1Change"] as String).toDouble()
+        val change2 = (ratingChangesEntry.context["player2Change"] as String).toDouble()
         assertEquals(0.0, change1 + change2, 0.0001, "Rating changes should be zero-sum before clamping")
     }
 
@@ -195,14 +195,14 @@ class RankingCalculatorAuditTest {
             PlayerProfile(
                 playerId = "P123",
                 name = "John Doe",
-                rating = Rating(value = 4.5, system = RatingSystem.NTRP),
+                rating = Rating(value = "4.5", system = RatingSystem.NTRP),
             )
 
         val player2 =
             PlayerProfile(
                 playerId = "P456",
                 name = "Jane Smith",
-                rating = Rating(value = 4.0, system = RatingSystem.NTRP),
+                rating = Rating(value = "4.0", system = RatingSystem.NTRP),
             )
 
         val sets =
@@ -228,14 +228,14 @@ class RankingCalculatorAuditTest {
             PlayerProfile(
                 playerId = "P789",
                 name = "Mike Wilson",
-                rating = Rating(value = 8.5, system = RatingSystem.UTR),
+                rating = Rating(value = "8.5", system = RatingSystem.UTR),
             )
 
         val player2 =
             PlayerProfile(
                 playerId = "P101",
                 name = "Sarah Lee",
-                rating = Rating(value = 8.2, system = RatingSystem.UTR),
+                rating = Rating(value = "8.2", system = RatingSystem.UTR),
             )
 
         val sets =

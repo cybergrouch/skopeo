@@ -27,14 +27,14 @@ class RankingCalculator {
         private val ROUNDING_MODE = RoundingMode.HALF_UP
 
         // K-factor controls how much ratings change per match
-        private val K_FACTOR = BigDecimal("32.0")
+        private val K_FACTOR = "32.0".bd
 
         // Scale factor for expected score calculation
-        private val SCALE_FACTOR = BigDecimal("400.0")
+        private val SCALE_FACTOR = "400.0".bd
 
         // NTRP-specific constants
-        private val NTRP_MIN = BigDecimal("1.0")
-        private val NTRP_MAX = BigDecimal("7.0")
+        private val NTRP_MIN = "1.0".bd
+        private val NTRP_MAX = "7.0".bd
 
         // UTR-specific constants
         private val UTR_MIN = BigDecimal("1.0")
@@ -46,7 +46,14 @@ class RankingCalculator {
 
         private fun String.toBigDecimalPrecise(): BigDecimal = BigDecimal(this).setScale(CALCULATION_SCALE, ROUNDING_MODE)
 
-        private fun BigDecimal.toDoublePrecise(): Double = this.toDouble()
+        private fun BigDecimal.toStringPrecise(): String =
+            this.setScale(CALCULATION_SCALE, ROUNDING_MODE)
+                .stripTrailingZeros()
+                .toPlainString()
+
+        private fun BigDecimal.divideWith(divisor: BigDecimal): BigDecimal = this.divide(divisor, CALCULATION_SCALE, ROUNDING_MODE)
+
+        private fun BigDecimal.multiplyBy(number: Double): BigDecimal = this.multiply(number.toBigDecimalPrecise())
 
         // Kotlin idiom: Extension properties for cleaner BigDecimal creation
         private val String.bd: BigDecimal get() = this.toBigDecimalPrecise()
@@ -54,6 +61,8 @@ class RankingCalculator {
         private val Double.bd: BigDecimal get() = this.toBigDecimalPrecise()
 
         private val Int.bd: BigDecimal get() = this.toBigDecimalPrecise()
+
+        private val BigDecimal.scaleUp get() = this.multiplyBy(100.00)
     }
 
     /**
@@ -97,13 +106,13 @@ class RankingCalculator {
             AuditEntry(
                 message =
                     "Match result - Winner: ${matchResult.winnerId}, " +
-                        "Score: ${matchResult.winnerScore.toDoublePrecise()}, Sets: ${matchResult.setsWon}",
+                        "Score: ${matchResult.winnerScore.toStringPrecise()}, Sets: ${matchResult.setsWon}",
                 context =
                     mapOf(
                         "winnerId" to matchResult.winnerId,
-                        "winnerScore" to matchResult.winnerScore.toDoublePrecise(),
+                        "winnerScore" to matchResult.winnerScore.toStringPrecise(),
                         "setsWon" to matchResult.setsWon,
-                        "dominanceFactor" to matchResult.dominanceFactor.toDoublePrecise(),
+                        "dominanceFactor" to matchResult.dominanceFactor.toStringPrecise(),
                     ),
             ),
         )
@@ -122,12 +131,12 @@ class RankingCalculator {
         audit.add(
             AuditEntry(
                 message =
-                    "Rating changes - ${player1.name}: ${player1Change.toDoublePrecise()}, " +
-                        "${player2.name}: ${player2Change.toDoublePrecise()}",
+                    "Rating changes - ${player1.name}: ${player1Change.toStringPrecise()}, " +
+                        "${player2.name}: ${player2Change.toStringPrecise()}",
                 context =
                     mapOf(
-                        "player1Change" to player1Change.toDoublePrecise(),
-                        "player2Change" to player2Change.toDoublePrecise(),
+                        "player1Change" to player1Change.toStringPrecise(),
+                        "player2Change" to player2Change.toStringPrecise(),
                     ),
             ),
         )
@@ -146,30 +155,28 @@ class RankingCalculator {
         val player1ChangeValue = player1NewRating.value.toBigDecimalPrecise() - player1.rating.value.toBigDecimalPrecise()
         val player1PercentChange =
             (
-                player1ChangeValue.divide(player1.rating.value.toBigDecimalPrecise(), CALCULATION_SCALE, ROUNDING_MODE) *
-                    BigDecimal("100")
+                player1ChangeValue.divideWith(divisor = player1.rating.value.toBigDecimalPrecise()).scaleUp
             ).setScale(2, ROUNDING_MODE)
 
         val player2ChangeValue = player2NewRating.value.toBigDecimalPrecise() - player2.rating.value.toBigDecimalPrecise()
         val player2PercentChange =
             (
-                player2ChangeValue.divide(player2.rating.value.toBigDecimalPrecise(), CALCULATION_SCALE, ROUNDING_MODE) *
-                    BigDecimal("100")
+                player2ChangeValue.divideWith(divisor = player2.rating.value.toBigDecimalPrecise()).scaleUp
             ).setScale(2, ROUNDING_MODE)
 
         val ratingChanges =
             mapOf(
                 player1Id to
                     RatingChange(
-                        change = player1ChangeValue.toDoublePrecise(),
-                        percentChange = player1PercentChange.toDoublePrecise(),
+                        change = player1ChangeValue.toStringPrecise(),
+                        percentChange = player1PercentChange.toStringPrecise(),
                         previousRating = player1.rating,
                         newRating = player1NewRating,
                     ),
                 player2Id to
                     RatingChange(
-                        change = player2ChangeValue.toDoublePrecise(),
-                        percentChange = player2PercentChange.toDoublePrecise(),
+                        change = player2ChangeValue.toStringPrecise(),
+                        percentChange = player2PercentChange.toStringPrecise(),
                         previousRating = player2.rating,
                         newRating = player2NewRating,
                     ),
@@ -188,7 +195,7 @@ class RankingCalculator {
     }
 
     /**
-     * Analyze match result to determine winner and calculate dominance factor.
+     * Analyze a match result to determine winner and calculate dominance factor.
      */
     private fun analyzeMatchResult(
         request: RankingCalculationRequest,
@@ -260,8 +267,8 @@ class RankingCalculator {
                 message = "Expected scores - Player1: $expectedPlayer1, Player2: $expectedPlayer2",
                 context =
                     mapOf(
-                        "expectedPlayer1" to expectedPlayer1.toDoublePrecise(),
-                        "expectedPlayer2" to expectedPlayer2.toDoublePrecise(),
+                        "expectedPlayer1" to expectedPlayer1.toStringPrecise(),
+                        "expectedPlayer2" to expectedPlayer2.toStringPrecise(),
                     ),
             ),
         )
@@ -345,22 +352,22 @@ class RankingCalculator {
         audit.add(
             AuditEntry(
                 message =
-                    "NTRP change: ${rating.value} + ${change.toDoublePrecise()} = " +
-                        "${newValue.toDoublePrecise()} -> rounded ${rounded.toDoublePrecise()} -> " +
-                        "clamped ${clamped.toDoublePrecise()}",
+                    "NTRP change: ${rating.value} + ${change.toStringPrecise()} = " +
+                        "${newValue.toStringPrecise()} -> rounded ${rounded.toStringPrecise()} -> " +
+                        "clamped ${clamped.toStringPrecise()}",
                 context =
                     mapOf(
                         "system" to "NTRP",
                         "original" to rating.value,
-                        "change" to change.toDoublePrecise(),
-                        "newValue" to newValue.toDoublePrecise(),
-                        "rounded" to rounded.toDoublePrecise(),
-                        "clamped" to clamped.toDoublePrecise(),
+                        "change" to change.toStringPrecise(),
+                        "newValue" to newValue.toStringPrecise(),
+                        "rounded" to rounded.toStringPrecise(),
+                        "clamped" to clamped.toStringPrecise(),
                     ),
             ),
         )
 
-        return Rating(value = clamped.toDoublePrecise(), system = RatingSystem.NTRP)
+        return Rating(value = clamped.toStringPrecise(), system = RatingSystem.NTRP)
     }
 
     /**
@@ -384,22 +391,22 @@ class RankingCalculator {
         audit.add(
             AuditEntry(
                 message =
-                    "UTR change: ${rating.value} + ${change.toDoublePrecise()} = " +
-                        "${newValue.toDoublePrecise()} -> rounded ${rounded.toDoublePrecise()} -> " +
-                        "clamped ${clamped.toDoublePrecise()}",
+                    "UTR change: ${rating.value} + ${change.toStringPrecise()} = " +
+                        "${newValue.toStringPrecise()} -> rounded ${rounded.toStringPrecise()} -> " +
+                        "clamped ${clamped.toStringPrecise()}",
                 context =
                     mapOf(
                         "system" to "UTR",
                         "original" to rating.value,
-                        "change" to change.toDoublePrecise(),
-                        "newValue" to newValue.toDoublePrecise(),
-                        "rounded" to rounded.toDoublePrecise(),
-                        "clamped" to clamped.toDoublePrecise(),
+                        "change" to change.toStringPrecise(),
+                        "newValue" to newValue.toStringPrecise(),
+                        "rounded" to rounded.toStringPrecise(),
+                        "clamped" to clamped.toStringPrecise(),
                     ),
             ),
         )
 
-        return Rating(value = clamped.toDoublePrecise(), system = RatingSystem.UTR)
+        return Rating(value = clamped.toStringPrecise(), system = RatingSystem.UTR)
     }
 
     private data class MatchResult(

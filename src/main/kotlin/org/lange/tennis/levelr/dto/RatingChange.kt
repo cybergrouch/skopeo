@@ -5,8 +5,8 @@ import org.lange.tennis.levelr.model.Rating
 
 @Serializable
 data class RatingChange(
-    val change: Double,
-    val percentChange: Double,
+    val change: String,
+    val percentChange: String,
     val previousRating: Rating,
     val newRating: Rating,
 )

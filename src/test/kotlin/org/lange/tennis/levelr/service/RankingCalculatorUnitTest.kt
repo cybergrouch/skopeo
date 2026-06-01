@@ -32,11 +32,11 @@ class RankingCalculatorUnitTest {
         val result = calculator.calculate(request)
 
         // Winner should gain rating
-        val p1Change = result.response.ratingChanges["P1"]!!.change
+        val p1Change = result.response.ratingChanges["P1"]!!.change.toDouble()
         assertTrue(p1Change > 0, "Winner should gain rating, got $p1Change")
 
         // Loser should lose rating
-        val p2Change = result.response.ratingChanges["P2"]!!.change
+        val p2Change = result.response.ratingChanges["P2"]!!.change.toDouble()
         assertTrue(p2Change < 0, "Loser should lose rating, got $p2Change")
     }
 
@@ -54,7 +54,7 @@ class RankingCalculatorUnitTest {
         val result = calculator.calculate(request)
 
         // Should not exceed 7.0
-        val newRating = result.response.players["P1"]!!.rating.value
+        val newRating = result.response.players["P1"]!!.rating.value.toDouble()
         assertTrue(newRating <= 7.0, "NTRP should not exceed 7.0, got $newRating")
     }
 
@@ -72,7 +72,7 @@ class RankingCalculatorUnitTest {
         val result = calculator.calculate(request)
 
         // Should not go below 1.0
-        val newRating = result.response.players["P1"]!!.rating.value
+        val newRating = result.response.players["P1"]!!.rating.value.toDouble()
         assertTrue(newRating >= 1.0, "NTRP should not go below 1.0, got $newRating")
     }
 
@@ -89,8 +89,8 @@ class RankingCalculatorUnitTest {
         val result = calculator.calculate(request)
 
         // Check both players have at most 2 decimal places
-        val p1Rating = result.response.players["P1"]!!.rating.value
-        val p2Rating = result.response.players["P2"]!!.rating.value
+        val p1Rating = result.response.players["P1"]!!.rating.value.toDouble()
+        val p2Rating = result.response.players["P2"]!!.rating.value.toDouble()
 
         assertEquals(p1Rating, roundToDecimals(p1Rating, 2), "P1 rating should be rounded to 2 decimals")
         assertEquals(p2Rating, roundToDecimals(p2Rating, 2), "P2 rating should be rounded to 2 decimals")
@@ -111,11 +111,11 @@ class RankingCalculatorUnitTest {
         val result = calculator.calculate(request)
 
         // Winner should gain rating
-        val p1Change = result.response.ratingChanges["P1"]!!.change
+        val p1Change = result.response.ratingChanges["P1"]!!.change.toDouble()
         assertTrue(p1Change > 0, "Winner should gain rating")
 
         // Loser should lose rating
-        val p2Change = result.response.ratingChanges["P2"]!!.change
+        val p2Change = result.response.ratingChanges["P2"]!!.change.toDouble()
         assertTrue(p2Change < 0, "Loser should lose rating")
     }
 
@@ -133,7 +133,7 @@ class RankingCalculatorUnitTest {
         val result = calculator.calculate(request)
 
         // Should not go below 1.0
-        val newRating = result.response.players["P1"]!!.rating.value
+        val newRating = result.response.players["P1"]!!.rating.value.toDouble()
         assertTrue(newRating >= 1.0, "UTR should not go below 1.0, got $newRating")
     }
 
@@ -151,7 +151,7 @@ class RankingCalculatorUnitTest {
         val result = calculator.calculate(request)
 
         // Should be able to exceed 16.0 (no max for UTR)
-        val newRating = result.response.players["P1"]!!.rating.value
+        val newRating = result.response.players["P1"]!!.rating.value.toDouble()
         assertTrue(newRating >= 16.0, "UTR can exceed 16.0")
     }
 
@@ -168,8 +168,8 @@ class RankingCalculatorUnitTest {
         val result = calculator.calculate(request)
 
         // Check both players have at most 1 decimal place
-        val p1Rating = result.response.players["P1"]!!.rating.value
-        val p2Rating = result.response.players["P2"]!!.rating.value
+        val p1Rating = result.response.players["P1"]!!.rating.value.toDouble()
+        val p2Rating = result.response.players["P2"]!!.rating.value.toDouble()
 
         assertEquals(p1Rating, roundToDecimals(p1Rating, 1), "P1 rating should be rounded to 1 decimal")
         assertEquals(p2Rating, roundToDecimals(p2Rating, 1), "P2 rating should be rounded to 1 decimal")
@@ -200,8 +200,8 @@ class RankingCalculatorUnitTest {
         val dominantResult = calculator.calculate(dominantWin)
         val closeResult = calculator.calculate(closeWin)
 
-        val dominantChange = kotlin.math.abs(dominantResult.response.ratingChanges["P1"]!!.change)
-        val closeChange = kotlin.math.abs(closeResult.response.ratingChanges["P1"]!!.change)
+        val dominantChange = kotlin.math.abs(dominantResult.response.ratingChanges["P1"]!!.change.toDouble())
+        val closeChange = kotlin.math.abs(closeResult.response.ratingChanges["P1"]!!.change.toDouble())
 
         // Dominant win should produce larger rating change (unless both get clamped)
         // This test may not always pass due to clamping, but shows the concept
@@ -226,7 +226,7 @@ class RankingCalculatorUnitTest {
         val result = calculator.calculate(request)
 
         // Match winner (P1) should gain rating
-        val p1Change = result.response.ratingChanges["P1"]!!.change
+        val p1Change = result.response.ratingChanges["P1"]!!.change.toDouble()
         assertTrue(p1Change > 0, "Match winner should gain rating")
     }
 
@@ -251,8 +251,8 @@ class RankingCalculatorUnitTest {
                 it.message.contains("Expected scores")
             }!!
 
-        val expected1 = expectedScoreEntry.context["expectedPlayer1"] as Double
-        val expected2 = expectedScoreEntry.context["expectedPlayer2"] as Double
+        val expected1 = (expectedScoreEntry.context["expectedPlayer1"] as String).toDouble()
+        val expected2 = (expectedScoreEntry.context["expectedPlayer2"] as String).toDouble()
 
         // Higher rated player should have higher expected score
         assertTrue(expected1 > expected2, "Higher rated player should be favored")
@@ -277,8 +277,8 @@ class RankingCalculatorUnitTest {
                 it.message.contains("Expected scores")
             }!!
 
-        val expected1 = expectedScoreEntry.context["expectedPlayer1"] as Double
-        val expected2 = expectedScoreEntry.context["expectedPlayer2"] as Double
+        val expected1 = (expectedScoreEntry.context["expectedPlayer1"] as String).toDouble()
+        val expected2 = (expectedScoreEntry.context["expectedPlayer2"] as String).toDouble()
 
         // Equal ratings = 50/50 chance
         assertEquals(0.5, expected1, 0.01, "Equal ratings should give ~0.5 expected score")
@@ -302,11 +302,11 @@ class RankingCalculatorUnitTest {
         val result = calculator.calculate(request)
 
         // Underdog should gain rating
-        val underdogChange = result.response.ratingChanges["P1"]!!.change
+        val underdogChange = result.response.ratingChanges["P1"]!!.change.toDouble()
         assertTrue(underdogChange > 0, "Underdog should gain rating for upset win")
 
         // Favorite should lose rating
-        val favoriteChange = result.response.ratingChanges["P2"]!!.change
+        val favoriteChange = result.response.ratingChanges["P2"]!!.change.toDouble()
         assertTrue(favoriteChange < 0, "Favorite should lose rating for upset loss")
     }
 
@@ -325,8 +325,8 @@ class RankingCalculatorUnitTest {
         val result = calculator.calculate(request)
 
         // Both players should have rating changes
-        val favoriteChange = result.response.ratingChanges["P1"]!!.change
-        val underdogChange = result.response.ratingChanges["P2"]!!.change
+        val favoriteChange = result.response.ratingChanges["P1"]!!.change.toDouble()
+        val underdogChange = result.response.ratingChanges["P2"]!!.change.toDouble()
 
         // Favorite gains (expected result)
         assertTrue(favoriteChange > 0, "Favorite should gain rating")
@@ -429,8 +429,8 @@ class RankingCalculatorUnitTest {
             }!!
 
         // Should have structured context
-        assertEquals(4.5, startEntry.context["player1Rating"])
-        assertEquals(4.0, startEntry.context["player2Rating"])
+        assertEquals("4.5", startEntry.context["player1Rating"])
+        assertEquals("4.0", startEntry.context["player2Rating"])
     }
 
     // ========== Response Structure Tests ==========
@@ -481,13 +481,13 @@ class RankingCalculatorUnitTest {
         val p2Change = result.response.ratingChanges["P2"]!!
 
         // Should have all fields
-        assertEquals(4.5, p1Change.previousRating.value)
-        assertEquals(4.0, p2Change.previousRating.value)
+        assertEquals("4.5", p1Change.previousRating.value)
+        assertEquals("4.0", p2Change.previousRating.value)
 
         // Change should match difference
         assertEquals(
-            p1Change.newRating.value - p1Change.previousRating.value,
-            p1Change.change,
+            p1Change.newRating.value.toDouble() - p1Change.previousRating.value.toDouble(),
+            p1Change.change.toDouble(),
             0.0001,
         )
     }
@@ -507,8 +507,8 @@ class RankingCalculatorUnitTest {
         val p1Change = result.response.ratingChanges["P1"]!!
 
         // Percent change should be calculated correctly
-        val expectedPercent = (p1Change.change / 4.0) * 100
-        assertEquals(expectedPercent, p1Change.percentChange, 0.01)
+        val expectedPercent = (p1Change.change.toDouble() / 4.0) * 100
+        assertEquals(expectedPercent, p1Change.percentChange.toDouble(), 0.01)
     }
 
     // ========== Helper Methods ==========
@@ -523,14 +523,14 @@ class RankingCalculatorUnitTest {
             PlayerProfile(
                 playerId = "P1",
                 name = "Player 1",
-                rating = Rating(value = player1Rating, system = system),
+                rating = Rating(value = player1Rating.toString(), system = system),
             )
 
         val player2 =
             PlayerProfile(
                 playerId = "P2",
                 name = "Player 2",
-                rating = Rating(value = player2Rating, system = system),
+                rating = Rating(value = player2Rating.toString(), system = system),
             )
 
         return RankingCalculationRequest(
