@@ -11,17 +11,17 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 /**
- * Snapshot tests that validate exact JSON payloads.
+ * Snapshot tests that validate exact JSON payloads for successful requests.
  * These tests ensure the API contract remains stable by comparing
  * exact input/output JSON (minified for comparison).
  *
- * Test organization:
- * - NTRP tests: testNTRP_*
- * - UTR tests: testUTR_*
- * - Validation tests: testValidation_*
+ * Focus: Exact payload matching for rating calculations
+ * - NTRP tests: testNTRP_* (5 tests)
+ * - UTR tests: testUTR_* (2 tests)
+ *
+ * For validation/error cases, see RankingCalculationApiTest.
  */
 class RankingCalculationPayloadTest {
     private val json =
@@ -823,73 +823,6 @@ class RankingCalculationPayloadTest {
                 expected = minifyJson(expectedJson.trimIndent()),
                 actual = minifyJson(actualJson),
                 message = "Response payload should match expected JSON exactly",
-            )
-        }
-
-    // ========================================
-    // Validation Tests (Invalid Inputs)
-    // ========================================
-
-    @Test
-    fun testValidation_MixedRatingSystems_ShouldReject() =
-        testApplication {
-            application {
-                module()
-            }
-
-            val requestJson =
-                """
-                {
-                  "players": {
-                    "P1": {
-                      "playerId": "P1",
-                      "name": "NTRP Player",
-                      "rating": {
-                        "value": "4.5",
-                        "system": "NTRP"
-                      }
-                    },
-                    "P2": {
-                      "playerId": "P2",
-                      "name": "UTR Player",
-                      "rating": {
-                        "value": "8.0",
-                        "system": "UTR"
-                      }
-                    }
-                  },
-                  "matchScore": {
-                    "sets": [
-                      {
-                        "games": {
-                          "P1": 6,
-                          "P2": 4
-                        },
-                        "winner": "P1"
-                      }
-                    ]
-                  }
-                }
-                """
-
-            val response =
-                client.post("/api/v1/calculate-ranking") {
-                    contentType(ContentType.Application.Json)
-                    setBody(requestJson.trimIndent())
-                }
-
-            // Should return an error status
-            assertTrue(
-                actual = response.status.value >= 400,
-                message = "API should reject mixed rating systems with error status (>=400), got ${response.status}",
-            )
-
-            val actualJson = response.bodyAsText()
-
-            // Should have an error response body
-            assertTrue(
-                actual = actualJson.isNotEmpty(),
-                message = "Error response should have non-empty body",
             )
         }
 }
