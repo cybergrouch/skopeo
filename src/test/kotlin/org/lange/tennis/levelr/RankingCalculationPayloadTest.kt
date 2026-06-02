@@ -11,11 +11,17 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
  * Snapshot tests that validate exact JSON payloads.
  * These tests ensure the API contract remains stable by comparing
  * exact input/output JSON (minified for comparison).
+ *
+ * Test organization:
+ * - NTRP tests: testNTRP_*
+ * - UTR tests: testUTR_*
+ * - Validation tests: testValidation_*
  */
 class RankingCalculationPayloadTest {
     private val json =
@@ -32,6 +38,10 @@ class RankingCalculationPayloadTest {
         val element = json.parseToJsonElement(jsonString)
         return json.encodeToString(JsonElement.serializer(), element)
     }
+
+    // ========================================
+    // NTRP System Payload Tests
+    // ========================================
 
     @Test
     fun testNTRP_BasicMatch_ExactPayload() =
@@ -238,115 +248,6 @@ class RankingCalculationPayloadTest {
                       "newRating": {
                         "value": "4.880000",
                         "system": "NTRP"
-                      }
-                    }
-                  }
-                }
-                """
-
-            assertEquals(
-                expected = minifyJson(expectedJson.trimIndent()),
-                actual = minifyJson(actualJson),
-                message = "Response payload should match expected JSON exactly",
-            )
-        }
-
-    @Test
-    fun testUTR_BasicMatch_ExactPayload() =
-        testApplication {
-            application {
-                module()
-            }
-
-            val requestJson =
-                """
-                {
-                  "players": {
-                    "P100": {
-                      "playerId": "P100",
-                      "name": "Pro Player",
-                      "rating": {
-                        "value": "12.5",
-                        "system": "UTR"
-                      }
-                    },
-                    "P200": {
-                      "playerId": "P200",
-                      "name": "Amateur",
-                      "rating": {
-                        "value": "8.0",
-                        "system": "UTR"
-                      }
-                    }
-                  },
-                  "matchScore": {
-                    "sets": [
-                      {
-                        "games": {
-                          "P100": 6,
-                          "P200": 2
-                        },
-                        "winner": "P100"
-                      }
-                    ]
-                  }
-                }
-                """
-
-            val response =
-                client.post("/api/v1/calculate-ranking") {
-                    contentType(ContentType.Application.Json)
-                    setBody(requestJson.trimIndent())
-                }
-
-            assertEquals(expected = HttpStatusCode.OK, actual = response.status)
-
-            val actualJson = response.bodyAsText()
-
-            val expectedJson =
-                """
-                {
-                  "players": {
-                    "P100": {
-                      "playerId": "P100",
-                      "name": "Pro Player",
-                      "rating": {
-                        "value": "12.993524",
-                        "system": "UTR"
-                      }
-                    },
-                    "P200": {
-                      "playerId": "P200",
-                      "name": "Amateur",
-                      "rating": {
-                        "value": "7.506476",
-                        "system": "UTR"
-                      }
-                    }
-                  },
-                  "ratingChanges": {
-                    "P100": {
-                      "change": "0.493524",
-                      "percentChange": "3.948200",
-                      "previousRating": {
-                        "value": "12.5",
-                        "system": "UTR"
-                      },
-                      "newRating": {
-                        "value": "12.993524",
-                        "system": "UTR"
-                      }
-                    },
-                    "P200": {
-                      "change": "-0.493524",
-                      "percentChange": "-6.169100",
-                      "previousRating": {
-                        "value": "8.0",
-                        "system": "UTR"
-                      },
-                      "newRating": {
-                        "value": "7.506476",
-                        "system": "UTR"
                       }
                     }
                   }
@@ -696,6 +597,119 @@ class RankingCalculationPayloadTest {
             )
         }
 
+    // ========================================
+    // UTR System Payload Tests
+    // ========================================
+
+    @Test
+    fun testUTR_BasicMatch_ExactPayload() =
+        testApplication {
+            application {
+                module()
+            }
+
+            val requestJson =
+                """
+                {
+                  "players": {
+                    "P100": {
+                      "playerId": "P100",
+                      "name": "Pro Player",
+                      "rating": {
+                        "value": "12.5",
+                        "system": "UTR"
+                      }
+                    },
+                    "P200": {
+                      "playerId": "P200",
+                      "name": "Amateur",
+                      "rating": {
+                        "value": "8.0",
+                        "system": "UTR"
+                      }
+                    }
+                  },
+                  "matchScore": {
+                    "sets": [
+                      {
+                        "games": {
+                          "P100": 6,
+                          "P200": 2
+                        },
+                        "winner": "P100"
+                      }
+                    ]
+                  }
+                }
+                """
+
+            val response =
+                client.post("/api/v1/calculate-ranking") {
+                    contentType(ContentType.Application.Json)
+                    setBody(requestJson.trimIndent())
+                }
+
+            assertEquals(expected = HttpStatusCode.OK, actual = response.status)
+
+            val actualJson = response.bodyAsText()
+
+            val expectedJson =
+                """
+                {
+                  "players": {
+                    "P100": {
+                      "playerId": "P100",
+                      "name": "Pro Player",
+                      "rating": {
+                        "value": "12.993524",
+                        "system": "UTR"
+                      }
+                    },
+                    "P200": {
+                      "playerId": "P200",
+                      "name": "Amateur",
+                      "rating": {
+                        "value": "7.506476",
+                        "system": "UTR"
+                      }
+                    }
+                  },
+                  "ratingChanges": {
+                    "P100": {
+                      "change": "0.493524",
+                      "percentChange": "3.948200",
+                      "previousRating": {
+                        "value": "12.5",
+                        "system": "UTR"
+                      },
+                      "newRating": {
+                        "value": "12.993524",
+                        "system": "UTR"
+                      }
+                    },
+                    "P200": {
+                      "change": "-0.493524",
+                      "percentChange": "-6.169100",
+                      "previousRating": {
+                        "value": "8.0",
+                        "system": "UTR"
+                      },
+                      "newRating": {
+                        "value": "7.506476",
+                        "system": "UTR"
+                      }
+                    }
+                  }
+                }
+                """
+
+            assertEquals(
+                expected = minifyJson(expectedJson.trimIndent()),
+                actual = minifyJson(actualJson),
+                message = "Response payload should match expected JSON exactly",
+            )
+        }
+
     @Test
     fun testUTR_Tiebreak_ExactPayload() =
         testApplication {
@@ -809,6 +823,73 @@ class RankingCalculationPayloadTest {
                 expected = minifyJson(expectedJson.trimIndent()),
                 actual = minifyJson(actualJson),
                 message = "Response payload should match expected JSON exactly",
+            )
+        }
+
+    // ========================================
+    // Validation Tests (Invalid Inputs)
+    // ========================================
+
+    @Test
+    fun testValidation_MixedRatingSystems_ShouldReject() =
+        testApplication {
+            application {
+                module()
+            }
+
+            val requestJson =
+                """
+                {
+                  "players": {
+                    "P1": {
+                      "playerId": "P1",
+                      "name": "NTRP Player",
+                      "rating": {
+                        "value": "4.5",
+                        "system": "NTRP"
+                      }
+                    },
+                    "P2": {
+                      "playerId": "P2",
+                      "name": "UTR Player",
+                      "rating": {
+                        "value": "8.0",
+                        "system": "UTR"
+                      }
+                    }
+                  },
+                  "matchScore": {
+                    "sets": [
+                      {
+                        "games": {
+                          "P1": 6,
+                          "P2": 4
+                        },
+                        "winner": "P1"
+                      }
+                    ]
+                  }
+                }
+                """
+
+            val response =
+                client.post("/api/v1/calculate-ranking") {
+                    contentType(ContentType.Application.Json)
+                    setBody(requestJson.trimIndent())
+                }
+
+            // Should return an error status
+            assertTrue(
+                actual = response.status.value >= 400,
+                message = "API should reject mixed rating systems with error status (>=400), got ${response.status}",
+            )
+
+            val actualJson = response.bodyAsText()
+
+            // Should have an error response body
+            assertTrue(
+                actual = actualJson.isNotEmpty(),
+                message = "Error response should have non-empty body",
             )
         }
 }
