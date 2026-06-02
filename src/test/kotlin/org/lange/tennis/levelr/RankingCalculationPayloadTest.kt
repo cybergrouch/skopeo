@@ -1,5 +1,6 @@
 package org.lange.tennis.levelr
 
+import io.kotest.matchers.shouldBe
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
@@ -10,7 +11,6 @@ import io.ktor.server.testing.testApplication
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlin.test.Test
-import kotlin.test.assertEquals
 
 /**
  * Snapshot tests that validate exact JSON payloads for successful requests.
@@ -22,6 +22,8 @@ import kotlin.test.assertEquals
  * - UTR tests: testUTR_* (2 tests)
  *
  * For validation/error cases, see RankingCalculationApiTest.
+ *
+ * Uses Kotest assertions for improved readability.
  */
 class RankingCalculationPayloadTest {
     private val json =
@@ -91,7 +93,7 @@ class RankingCalculationPayloadTest {
                     setBody(requestJson.trimIndent())
                 }
 
-            assertEquals(expected = HttpStatusCode.OK, actual = response.status)
+            response.status shouldBe HttpStatusCode.OK
 
             val actualJson = response.bodyAsText()
 
@@ -145,11 +147,7 @@ class RankingCalculationPayloadTest {
                 }
                 """
 
-            assertEquals(
-                expected = minifyJson(expectedJson.trimIndent()),
-                actual = minifyJson(actualJson),
-                message = "Response payload should match expected JSON exactly",
-            )
+            minifyJson(actualJson) shouldBe minifyJson(expectedJson.trimIndent())
         }
 
     @Test
@@ -200,7 +198,7 @@ class RankingCalculationPayloadTest {
                     setBody(requestJson.trimIndent())
                 }
 
-            assertEquals(expected = HttpStatusCode.OK, actual = response.status)
+            response.status shouldBe HttpStatusCode.OK
 
             val actualJson = response.bodyAsText()
 
@@ -254,11 +252,7 @@ class RankingCalculationPayloadTest {
                 }
                 """
 
-            assertEquals(
-                expected = minifyJson(expectedJson.trimIndent()),
-                actual = minifyJson(actualJson),
-                message = "Response payload should match expected JSON exactly",
-            )
+            minifyJson(actualJson) shouldBe minifyJson(expectedJson.trimIndent())
         }
 
     @Test
@@ -316,7 +310,7 @@ class RankingCalculationPayloadTest {
                     setBody(requestJson.trimIndent())
                 }
 
-            assertEquals(expected = HttpStatusCode.OK, actual = response.status)
+            response.status shouldBe HttpStatusCode.OK
 
             val actualJson = response.bodyAsText()
 
@@ -370,11 +364,7 @@ class RankingCalculationPayloadTest {
                 }
                 """
 
-            assertEquals(
-                expected = minifyJson(expectedJson.trimIndent()),
-                actual = minifyJson(actualJson),
-                message = "Response payload should match expected JSON exactly",
-            )
+            minifyJson(actualJson) shouldBe minifyJson(expectedJson.trimIndent())
         }
 
     @Test
@@ -425,7 +415,7 @@ class RankingCalculationPayloadTest {
                     setBody(requestJson.trimIndent())
                 }
 
-            assertEquals(expected = HttpStatusCode.OK, actual = response.status)
+            response.status shouldBe HttpStatusCode.OK
 
             val actualJson = response.bodyAsText()
 
@@ -480,11 +470,7 @@ class RankingCalculationPayloadTest {
                 }
                 """
 
-            assertEquals(
-                expected = minifyJson(expectedJson.trimIndent()),
-                actual = minifyJson(actualJson),
-                message = "Response payload should match expected JSON exactly (with minimum clamping)",
-            )
+            minifyJson(actualJson) shouldBe minifyJson(expectedJson.trimIndent())
         }
 
     @Test
@@ -535,7 +521,7 @@ class RankingCalculationPayloadTest {
                     setBody(requestJson.trimIndent())
                 }
 
-            assertEquals(expected = HttpStatusCode.OK, actual = response.status)
+            response.status shouldBe HttpStatusCode.OK
 
             val actualJson = response.bodyAsText()
 
@@ -590,11 +576,7 @@ class RankingCalculationPayloadTest {
                 }
                 """
 
-            assertEquals(
-                expected = minifyJson(expectedJson.trimIndent()),
-                actual = minifyJson(actualJson),
-                message = "Response payload should match expected JSON exactly (with maximum clamping)",
-            )
+            minifyJson(actualJson) shouldBe minifyJson(expectedJson.trimIndent())
         }
 
     // ========================================
@@ -649,7 +631,7 @@ class RankingCalculationPayloadTest {
                     setBody(requestJson.trimIndent())
                 }
 
-            assertEquals(expected = HttpStatusCode.OK, actual = response.status)
+            response.status shouldBe HttpStatusCode.OK
 
             val actualJson = response.bodyAsText()
 
@@ -703,11 +685,7 @@ class RankingCalculationPayloadTest {
                 }
                 """
 
-            assertEquals(
-                expected = minifyJson(expectedJson.trimIndent()),
-                actual = minifyJson(actualJson),
-                message = "Response payload should match expected JSON exactly",
-            )
+            minifyJson(actualJson) shouldBe minifyJson(expectedJson.trimIndent())
         }
 
     @Test
@@ -765,7 +743,7 @@ class RankingCalculationPayloadTest {
                     setBody(requestJson.trimIndent())
                 }
 
-            assertEquals(expected = HttpStatusCode.OK, actual = response.status)
+            response.status shouldBe HttpStatusCode.OK
 
             val actualJson = response.bodyAsText()
 
@@ -819,10 +797,6 @@ class RankingCalculationPayloadTest {
                 }
                 """
 
-            assertEquals(
-                expected = minifyJson(expectedJson.trimIndent()),
-                actual = minifyJson(actualJson),
-                message = "Response payload should match expected JSON exactly",
-            )
+            minifyJson(actualJson) shouldBe minifyJson(expectedJson.trimIndent())
         }
 }

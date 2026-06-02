@@ -46,6 +46,7 @@ dependencies {
     testImplementation("io.ktor:ktor-server-test-host-jvm:$ktorVersion")
     testImplementation("io.ktor:ktor-client-content-negotiation:$ktorVersion")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
+    testImplementation("io.kotest:kotest-assertions-core:5.8.0")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 

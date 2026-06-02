@@ -1,5 +1,11 @@
 package org.lange.tennis.levelr
 
+import io.kotest.matchers.doubles.shouldBeGreaterThan
+import io.kotest.matchers.doubles.shouldBeLessThan
+import io.kotest.matchers.nulls.shouldNotBeNull
+import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
+import io.kotest.matchers.string.shouldNotBeEmpty
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.post
@@ -13,17 +19,15 @@ import io.ktor.server.testing.testApplication
 import kotlinx.serialization.json.Json
 import org.lange.tennis.levelr.dto.RankingCalculationResponse
 import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
-import kotlin.test.assertTrue
+import io.kotest.matchers.ints.shouldBeGreaterThan as intsShouldBeGreaterThan
 
 class RankingCalculationApiTest {
     private fun assertErrorResponse(
         status: HttpStatusCode,
         body: String,
     ) {
-        assertTrue(status.value >= 400, "Expected error status (>=400) but got $status")
-        assertTrue(body.isNotEmpty(), "Expected non-empty response body but got empty")
+        status.value intsShouldBeGreaterThan 399
+        body.shouldNotBeEmpty()
     }
 
     @Test
@@ -84,82 +88,48 @@ class RankingCalculationApiTest {
                     )
                 }
 
-            assertEquals(expected = HttpStatusCode.OK, actual = response.status)
+            response.status shouldBe HttpStatusCode.OK
 
             val result = response.body<RankingCalculationResponse>()
 
             // Validate players are present
-            assertNotNull(actual = result.players["P123"])
-            assertNotNull(actual = result.players["P456"])
+            result.players["P123"].shouldNotBe(null)
+            result.players["P456"].shouldNotBe(null)
 
             // Validate ratingChanges exists for both players
-            val p123Changes = result.ratingChanges["P123"]
-            val p456Changes = result.ratingChanges["P456"]
-            assertNotNull(actual = p123Changes, message = "P123 should have rating changes")
-            assertNotNull(actual = p456Changes, message = "P456 should have rating changes")
+            val p123Changes = result.ratingChanges["P123"].shouldNotBeNull()
+            val p456Changes = result.ratingChanges["P456"].shouldNotBeNull()
 
             // Validate rating change structure for P123 (winner)
-            assertEquals(expected = "4.5", actual = p123Changes.previousRating.value, message = "P123 previous rating should match input")
-            assertTrue(
-                actual = p123Changes.change.toDouble() > 0,
-                message = "Winner should gain rating, got ${p123Changes.change}",
-            )
-            assertTrue(
-                actual = p123Changes.newRating.value.toDouble() > 4.5,
-                message = "Winner's new rating should be higher than previous",
-            )
+            p123Changes.previousRating.value shouldBe "4.5"
+            p123Changes.change.toDouble() shouldBeGreaterThan 0.0
+            p123Changes.newRating.value.toDouble() shouldBeGreaterThan 4.5
 
             // Validate rating change structure for P456 (loser)
-            assertEquals(expected = "4.0", actual = p456Changes.previousRating.value, message = "P456 previous rating should match input")
-            assertTrue(
-                actual = p456Changes.change.toDouble() < 0,
-                message = "Loser should lose rating, got ${p456Changes.change}",
-            )
-            assertTrue(
-                actual = p456Changes.newRating.value.toDouble() < 4.0,
-                message = "Loser's new rating should be lower than previous",
-            )
+            p456Changes.previousRating.value shouldBe "4.0"
+            p456Changes.change.toDouble() shouldBeLessThan 0.0
+            p456Changes.newRating.value.toDouble() shouldBeLessThan 4.0
 
             // Validate zero-sum property (approximately, may not be exact due to clamping)
             // The changes should have opposite signs
-            assertTrue(
-                actual = p123Changes.change.toDouble() > 0,
-                message = "Winner's change should be positive",
-            )
-            assertTrue(
-                actual = p456Changes.change.toDouble() < 0,
-                message = "Loser's change should be negative",
-            )
+            p123Changes.change.toDouble() shouldBeGreaterThan 0.0
+            p456Changes.change.toDouble() shouldBeLessThan 0.0
 
             // Validate percentChange is calculated correctly for P123
             val expectedP123Percent = (p123Changes.change.toDouble() / 4.5) * 100
             val actualP123Percent = p123Changes.percentChange.toDouble()
-            assertEquals(
-                expected = expectedP123Percent,
-                actual = actualP123Percent,
-                absoluteTolerance = 0.01,
-                message = "P123 percent change should be calculated correctly",
-            )
+            kotlin.math.abs(actualP123Percent - expectedP123Percent) shouldBeLessThan 0.01
 
             // Validate percentChange is calculated correctly for P456
             val expectedP456Percent = (p456Changes.change.toDouble() / 4.0) * 100
             val actualP456Percent = p456Changes.percentChange.toDouble()
-            assertEquals(
-                expected = expectedP456Percent,
-                actual = actualP456Percent,
-                absoluteTolerance = 0.01,
-                message = "P456 percent change should be calculated correctly",
-            )
+            kotlin.math.abs(actualP456Percent - expectedP456Percent) shouldBeLessThan 0.01
 
             // Validate rating values are within NTRP bounds
-            assertTrue(
-                actual = p123Changes.newRating.value.toDouble() in 1.0..7.0,
-                message = "NTRP rating should be within 1.0-7.0 range",
-            )
-            assertTrue(
-                actual = p456Changes.newRating.value.toDouble() in 1.0..7.0,
-                message = "NTRP rating should be within 1.0-7.0 range",
-            )
+            // p123Changes.newRating.value.toDouble() should be in 1.0..7.0
+            assert(p123Changes.newRating.value.toDouble() in 1.0..7.0)
+            // p456Changes.newRating.value.toDouble() should be in 1.0..7.0
+            assert(p456Changes.newRating.value.toDouble() in 1.0..7.0)
         }
 
     @Test
@@ -227,61 +197,35 @@ class RankingCalculationApiTest {
                     )
                 }
 
-            assertEquals(expected = HttpStatusCode.OK, actual = response.status)
+            response.status shouldBe HttpStatusCode.OK
 
             val result = response.body<RankingCalculationResponse>()
 
             // Validate ratingChanges exists for both players
-            val p789Changes = result.ratingChanges["P789"]
-            val p101Changes = result.ratingChanges["P101"]
-            assertNotNull(actual = p789Changes, message = "P789 should have rating changes")
-            assertNotNull(actual = p101Changes, message = "P101 should have rating changes")
+            val p789Changes = result.ratingChanges["P789"].shouldNotBeNull()
+            val p101Changes = result.ratingChanges["P101"].shouldNotBeNull()
 
             // Validate rating change structure for P789 (winner)
-            assertEquals(expected = "8.5", actual = p789Changes.previousRating.value, message = "P789 previous rating should match input")
-            assertTrue(
-                actual = p789Changes.change.toDouble() > 0,
-                message = "Winner should gain rating, got ${p789Changes.change}",
-            )
-            assertEquals(expected = "UTR", actual = p789Changes.previousRating.system.name)
-            assertEquals(expected = "UTR", actual = p789Changes.newRating.system.name)
+            p789Changes.previousRating.value shouldBe "8.5"
+            p789Changes.change.toDouble() shouldBeGreaterThan 0.0
+            p789Changes.previousRating.system.name shouldBe "UTR"
+            p789Changes.newRating.system.name shouldBe "UTR"
 
             // Validate rating change structure for P101 (loser)
-            assertEquals(expected = "8.2", actual = p101Changes.previousRating.value, message = "P101 previous rating should match input")
-            assertTrue(
-                actual = p101Changes.change.toDouble() < 0,
-                message = "Loser should lose rating, got ${p101Changes.change}",
-            )
+            p101Changes.previousRating.value shouldBe "8.2"
+            p101Changes.change.toDouble() shouldBeLessThan 0.0
 
             // Validate changes have opposite signs (zero-sum may not hold due to clamping)
-            assertTrue(
-                actual = p789Changes.change.toDouble() > 0,
-                message = "Winner's change should be positive",
-            )
-            assertTrue(
-                actual = p101Changes.change.toDouble() < 0,
-                message = "Loser's change should be negative",
-            )
+            p789Changes.change.toDouble() shouldBeGreaterThan 0.0
+            p101Changes.change.toDouble() shouldBeLessThan 0.0
 
             // Validate UTR minimum (1.0)
-            assertTrue(
-                actual = p789Changes.newRating.value.toDouble() >= 1.0,
-                message = "UTR rating should be at least 1.0",
-            )
-            assertTrue(
-                actual = p101Changes.newRating.value.toDouble() >= 1.0,
-                message = "UTR rating should be at least 1.0",
-            )
+            p789Changes.newRating.value.toDouble() shouldBeGreaterThan (1.0 - 0.001)
+            p101Changes.newRating.value.toDouble() shouldBeGreaterThan (1.0 - 0.001)
 
             // Validate percent changes have proper sign
-            assertTrue(
-                actual = p789Changes.percentChange.toDouble() > 0,
-                message = "Winner's percent change should be positive",
-            )
-            assertTrue(
-                actual = p101Changes.percentChange.toDouble() < 0,
-                message = "Loser's percent change should be negative",
-            )
+            p789Changes.percentChange.toDouble() shouldBeGreaterThan 0.0
+            p101Changes.percentChange.toDouble() shouldBeLessThan 0.0
         }
 
     @Test
@@ -394,33 +338,25 @@ class RankingCalculationApiTest {
                 }
 
             // NTRP now supports continuous values, not just 0.5 increments
-            assertEquals(expected = HttpStatusCode.OK, actual = response.status)
+            response.status shouldBe HttpStatusCode.OK
 
             val result = response.body<RankingCalculationResponse>()
 
             // Validate ratingChanges exists and preserves continuous values
-            val p123Changes = result.ratingChanges["P123"]
-            assertNotNull(actual = p123Changes)
-            assertEquals(
-                expected = "4.3",
-                actual = p123Changes.previousRating.value,
-                message = "Continuous rating value should be preserved",
-            )
+            val p123Changes = result.ratingChanges["P123"].shouldNotBeNull()
+            p123Changes.previousRating.value shouldBe "4.3"
 
             // Validate new rating can also be continuous
             val newRating = p123Changes.newRating.value.toDouble()
-            assertTrue(
-                actual = newRating > 4.3,
-                message = "Winner's continuous rating should increase",
-            )
+            newRating shouldBeGreaterThan 4.3
 
             // Validate rating changes are calculated with precision
             val change = p123Changes.change.toDouble()
-            assertTrue(actual = change > 0, message = "Rating change should be positive for winner")
+            change shouldBeGreaterThan 0.0
 
             // Validate percent change is present and valid
             val percentChange = p123Changes.percentChange.toDouble()
-            assertTrue(actual = percentChange > 0, message = "Percent change should be positive for winner")
+            percentChange shouldBeGreaterThan 0.0
         }
 
     @Test
