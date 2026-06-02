@@ -352,7 +352,7 @@ Only game counts matter; tiebreak point scores (7-5, 10-8) are not factored into
 ## Implementation Notes
 
 ### File Location
-`../src/main/kotlin/org/lange/tennis/levelr/service/calculator/PerformanceBasedRankingCalculatorImpl.kt`
+`../src/main/kotlin/org/lange/tennis/levelr/service/calculator/impl/v1/PerformanceBasedRankingCalculatorImpl.kt`
 
 ### Key Methods
 - `calculate(request)`: Main entry point

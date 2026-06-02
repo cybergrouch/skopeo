@@ -1,4 +1,4 @@
-package org.lange.tennis.levelr.service.calculator
+package org.lange.tennis.levelr.service.calculator.impl.v1
 
 import io.kotest.matchers.comparables.shouldBeGreaterThan
 import io.kotest.matchers.comparables.shouldBeLessThan

@@ -557,4 +557,4 @@ Potential improvements to the audit trail system:
 - `RankingCalculationResult.kt` - Result wrapper
 - `RankingCalculator.kt` - Pure calculator function
 
-**Tests:** `../src/test/kotlin/org/lange/tennis/levelr/service/calculator/PerformanceBasedRankingCalculatorImplAuditTest.kt`
+**Tests:** `../src/test/kotlin/org/lange/tennis/levelr/service/calculator/impl/v1/PerformanceBasedRankingCalculatorImplAuditTest.kt`

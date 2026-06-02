@@ -1,4 +1,4 @@
-package org.lange.tennis.levelr.service.calculator
+package org.lange.tennis.levelr.service.calculator.impl.v1
 
 import org.lange.tennis.levelr.dto.RankingCalculationRequest
 import org.lange.tennis.levelr.dto.RankingCalculationResponse
@@ -6,6 +6,10 @@ import org.lange.tennis.levelr.dto.RatingChange
 import org.lange.tennis.levelr.model.PlayerProfile
 import org.lange.tennis.levelr.model.Rating
 import org.lange.tennis.levelr.model.RatingSystem
+import org.lange.tennis.levelr.service.calculator.AuditEntry
+import org.lange.tennis.levelr.service.calculator.AuditTrail
+import org.lange.tennis.levelr.service.calculator.RankingCalculationResult
+import org.lange.tennis.levelr.service.calculator.RankingCalculator
 import java.math.BigDecimal
 import java.math.RoundingMode
 import kotlin.math.pow

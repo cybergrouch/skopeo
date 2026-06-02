@@ -1,4 +1,4 @@
-package org.lange.tennis.levelr.service.calculator
+package org.lange.tennis.levelr.service.calculator.impl.v1
 
 import io.kotest.matchers.doubles.shouldBeGreaterThan
 import io.kotest.matchers.doubles.shouldBeLessThan
@@ -21,207 +21,82 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 import org.lange.tennis.levelr.dto.RankingCalculationResponse
 import org.lange.tennis.levelr.module
+import org.lange.tennis.levelr.service.calculator.impl.RankingTestCase
+import org.lange.tennis.levelr.service.calculator.impl.Scenarios.scenario_Hw_6_0
+import org.lange.tennis.levelr.service.calculator.impl.Scenarios.scenario_Hw_6_1
+import org.lange.tennis.levelr.service.calculator.impl.Scenarios.scenario_Hw_6_2
+import org.lange.tennis.levelr.service.calculator.impl.Scenarios.scenario_Hw_6_3
+import org.lange.tennis.levelr.service.calculator.impl.Scenarios.scenario_Hw_6_4
+import org.lange.tennis.levelr.service.calculator.impl.Scenarios.scenario_Hw_7_5
+import org.lange.tennis.levelr.service.calculator.impl.Scenarios.scenario_Lw_6_0
+import org.lange.tennis.levelr.service.calculator.impl.Scenarios.scenario_Lw_6_1
+import org.lange.tennis.levelr.service.calculator.impl.Scenarios.scenario_Lw_6_3
+import org.lange.tennis.levelr.service.calculator.impl.Scenarios.scenario_Lw_6_4
+import org.lange.tennis.levelr.service.calculator.impl.Scenarios.scenario_Lw_7_5
 import kotlin.math.abs
 import kotlin.test.Test
 import io.kotest.matchers.ints.shouldBeGreaterThan as intsShouldBeGreaterThan
 
 class PerformanceBasedRankingCalculatorImplTest {
-    data class RankingTestCase(
-        val description: String,
-        val player1Rating: String,
-        val player2Rating: String,
-        val ratingSystem: String,
-        val player1Games: Int,
-        val player2Games: Int,
-        val expectedPlayer1Rating: String,
-        val expectedPlayer2Rating: String,
-    ) {
-        val winnerId: String get() = if (player1Games > player2Games) "P1" else "P2"
-
-        override fun toString(): String = description
-    }
-
     companion object {
         @JvmStatic
         fun rankingTestCases() =
             listOf(
                 RankingTestCase(
-                    description = "NTRP: Higher rated player wins (6-0) - really big delta from match expectation",
-                    player1Rating = "4.5",
-                    player2Rating = "4.0",
-                    ratingSystem = "NTRP",
-                    player1Games = 6,
-                    player2Games = 0,
+                    scenario = scenario_Hw_6_0,
                     expectedPlayer1Rating = "4.666667",
                     expectedPlayer2Rating = "3.833333",
                 ),
                 RankingTestCase(
-                    description = "NTRP: Higher rated player wins (6-1) - big delta from match expectation",
-                    player1Rating = "4.5",
-                    player2Rating = "4.0",
-                    ratingSystem = "NTRP",
-                    player1Games = 6,
-                    player2Games = 1,
+                    scenario = scenario_Hw_6_1,
                     expectedPlayer1Rating = "4.666667",
                     expectedPlayer2Rating = "3.833333",
                 ),
                 RankingTestCase(
-                    description = "NTRP: Higher rated player wins (6-2) - delta from match expectation",
-                    player1Rating = "4.5",
-                    player2Rating = "4.0",
-                    ratingSystem = "NTRP",
-                    player1Games = 6,
-                    player2Games = 2,
+                    scenario = scenario_Hw_6_2,
                     expectedPlayer1Rating = "4.633141",
                     expectedPlayer2Rating = "3.866859",
                 ),
                 RankingTestCase(
-                    description = "NTRP: Higher rated player wins (6-3) - meets match expectation",
-                    player1Rating = "4.5",
-                    player2Rating = "4.0",
-                    ratingSystem = "NTRP",
-                    player1Games = 6,
-                    player2Games = 3,
+                    scenario = scenario_Hw_6_3,
                     expectedPlayer1Rating = "4.500000",
                     expectedPlayer2Rating = "4.000000",
                 ),
                 RankingTestCase(
-                    description = "NTRP: Higher rated player wins closely (6-4) - big delta from match expectation",
-                    player1Rating = "4.5",
-                    player2Rating = "4.0",
-                    ratingSystem = "NTRP",
-                    player1Games = 6,
-                    player2Games = 4,
+                    scenario = scenario_Hw_6_4,
                     expectedPlayer1Rating = "4.460058",
                     expectedPlayer2Rating = "4.039942",
                 ),
-                // 6-5 is an invalid tennis score (would require tiebreak at 6-6)
-                // Commenting out until validation is fixed
-                /*
                 RankingTestCase(
-                    description = "NTRP: Higher rated player wins closely (6-5) - big delta from match expectation",
-                    player1Rating = "4.5",
-                    player2Rating = "4.0",
-                    ratingSystem = "NTRP",
-                    player1Games = 6,
-                    player2Games = 5,
-                    expectedPlayer1Rating = "4.519172",
-                    expectedPlayer2Rating = "3.980828",
-                ),
-                 */
-                RankingTestCase(
-                    description = "NTRP: Higher rated player wins closely (7-5) - really big delta from match expectation",
-                    player1Rating = "4.5",
-                    player2Rating = "4.0",
-                    ratingSystem = "NTRP",
-                    player1Games = 7,
-                    player2Games = 5,
+                    scenario = scenario_Hw_7_5,
                     expectedPlayer1Rating = "4.462720",
                     expectedPlayer2Rating = "4.037280",
                 ),
-                // 7-6 requires a tiebreak to be specified
-                // Commenting out until validation is fixed or tiebreak is added
-                /*
                 RankingTestCase(
-                    description = "NTRP: Higher rated player wins closely (7-6) - really big delta from match expectation",
-                    player1Rating = "4.5",
-                    player2Rating = "4.0",
-                    ratingSystem = "NTRP",
-                    player1Games = 7,
-                    player2Games = 6,
-                    expectedPlayer1Rating = "4.519172",
-                    expectedPlayer2Rating = "3.980828",
-                ),
-                 */
-                RankingTestCase(
-                    description = "NTRP: Lower rated player wins upset (6-0)",
-                    player1Rating = "4.0",
-                    player2Rating = "4.5",
-                    ratingSystem = "NTRP",
-                    player1Games = 6,
-                    player2Games = 0,
+                    scenario = scenario_Lw_6_0,
                     expectedPlayer1Rating = "4.166667",
                     expectedPlayer2Rating = "4.333333",
                 ),
                 RankingTestCase(
-                    description = "NTRP: Lower rated player wins upset (6-1)",
-                    player1Rating = "4.0",
-                    player2Rating = "4.5",
-                    ratingSystem = "NTRP",
-                    player1Games = 6,
-                    player2Games = 1,
+                    scenario = scenario_Lw_6_1,
                     expectedPlayer1Rating = "4.166667",
                     expectedPlayer2Rating = "4.333333",
                 ),
                 RankingTestCase(
-                    description = "NTRP: Lower rated player wins upset (6-2)",
-                    player1Rating = "4.0",
-                    player2Rating = "4.5",
-                    ratingSystem = "NTRP",
-                    player1Games = 6,
-                    player2Games = 2,
+                    scenario = scenario_Lw_6_3,
                     expectedPlayer1Rating = "4.166667",
                     expectedPlayer2Rating = "4.333333",
                 ),
                 RankingTestCase(
-                    description = "NTRP: Lower rated player wins upset (6-3)",
-                    player1Rating = "4.0",
-                    player2Rating = "4.5",
-                    ratingSystem = "NTRP",
-                    player1Games = 6,
-                    player2Games = 3,
+                    scenario = scenario_Lw_6_4,
                     expectedPlayer1Rating = "4.166667",
                     expectedPlayer2Rating = "4.333333",
                 ),
                 RankingTestCase(
-                    description = "NTRP: Lower rated player wins upset (6-4)",
-                    player1Rating = "4.0",
-                    player2Rating = "4.5",
-                    ratingSystem = "NTRP",
-                    player1Games = 6,
-                    player2Games = 4,
+                    scenario = scenario_Lw_7_5,
                     expectedPlayer1Rating = "4.166667",
                     expectedPlayer2Rating = "4.333333",
                 ),
-                // 6-5 is an invalid tennis score (would require tiebreak at 6-6)
-                // Also, this had player2Games = 7 which made it actually 6-7 (not 6-5)
-                // Commenting out until validation is fixed
-                /*
-                RankingTestCase(
-                    description = "NTRP: Lower rated player wins upset (6-5)",
-                    player1Rating = "4.0",
-                    player2Rating = "4.5",
-                    ratingSystem = "NTRP",
-                    player1Games = 6,
-                    player2Games = 5,
-                    expectedPlayer1Rating = "4.240345",
-                    expectedPlayer2Rating = "4.259655",
-                ),
-                 */
-                RankingTestCase(
-                    description = "NTRP: Lower rated player wins upset (7-5)",
-                    player1Rating = "4.0",
-                    player2Rating = "4.5",
-                    ratingSystem = "NTRP",
-                    player1Games = 7,
-                    player2Games = 5,
-                    expectedPlayer1Rating = "4.166667",
-                    expectedPlayer2Rating = "4.333333",
-                ),
-                // 7-6 requires a tiebreak to be specified
-                // Commenting out until validation is fixed or tiebreak is added
-                /*
-                RankingTestCase(
-                    description = "NTRP: Lower rated player wins upset (7-6)",
-                    player1Rating = "4.0",
-                    player2Rating = "4.5",
-                    ratingSystem = "NTRP",
-                    player1Games = 7,
-                    player2Games = 6,
-                    expectedPlayer1Rating = "4.240345",
-                    expectedPlayer2Rating = "4.259655",
-                ),
-                 */
             )
     }
 
@@ -263,16 +138,16 @@ class PerformanceBasedRankingCalculatorImplTest {
                               "playerId": "P1",
                               "name": "Player 1",
                               "rating": {
-                                "value": "${testCase.player1Rating}",
-                                "system": "${testCase.ratingSystem}"
+                                "value": "${testCase.scenario.player1Rating}",
+                                "system": "${testCase.scenario.ratingSystem}"
                               }
                             },
                             "P2": {
                               "playerId": "P2",
                               "name": "Player 2",
                               "rating": {
-                                "value": "${testCase.player2Rating}",
-                                "system": "${testCase.ratingSystem}"
+                                "value": "${testCase.scenario.player2Rating}",
+                                "system": "${testCase.scenario.ratingSystem}"
                               }
                             }
                           },
@@ -280,8 +155,8 @@ class PerformanceBasedRankingCalculatorImplTest {
                             "sets": [
                               {
                                 "games": {
-                                  "P1": ${testCase.player1Games},
-                                  "P2": ${testCase.player2Games}
+                                  "P1": ${testCase.scenario.matchScore.player1Games},
+                                  "P2": ${testCase.scenario.matchScore.player2Games}
                                 },
                                 "winner": "${testCase.winnerId}"
                               }
@@ -305,14 +180,14 @@ class PerformanceBasedRankingCalculatorImplTest {
             val p2Changes = result.ratingChanges["P2"].shouldNotBeNull()
 
             // Validate previous ratings match input
-            p1Changes.previousRating.value shouldBe testCase.player1Rating
-            p2Changes.previousRating.value shouldBe testCase.player2Rating
+            p1Changes.previousRating.value shouldBe testCase.scenario.player1Rating
+            p2Changes.previousRating.value shouldBe testCase.scenario.player2Rating
 
             // Validate rating system is preserved
-            p1Changes.previousRating.system.name shouldBe testCase.ratingSystem
-            p2Changes.previousRating.system.name shouldBe testCase.ratingSystem
-            p1Changes.newRating.system.name shouldBe testCase.ratingSystem
-            p2Changes.newRating.system.name shouldBe testCase.ratingSystem
+            p1Changes.previousRating.system.name shouldBe testCase.scenario.ratingSystem
+            p2Changes.previousRating.system.name shouldBe testCase.scenario.ratingSystem
+            p1Changes.newRating.system.name shouldBe testCase.scenario.ratingSystem
+            p2Changes.newRating.system.name shouldBe testCase.scenario.ratingSystem
 
             // Validate new ratings match expected values
             p1Changes.newRating.value shouldBe testCase.expectedPlayer1Rating
@@ -325,11 +200,11 @@ class PerformanceBasedRankingCalculatorImplTest {
             // winner always gains and loser always loses.
 
             // Validate percentChange is calculated correctly
-            val p1ExpectedPercent = (p1Changes.change.toDouble() / testCase.player1Rating.toDouble()) * 100
+            val p1ExpectedPercent = (p1Changes.change.toDouble() / testCase.scenario.player1Rating.toDouble()) * 100
             val p1ActualPercent = p1Changes.percentChange.toDouble()
             abs(p1ActualPercent - p1ExpectedPercent) shouldBeLessThan 0.01
 
-            val p2ExpectedPercent = (p2Changes.change.toDouble() / testCase.player2Rating.toDouble()) * 100
+            val p2ExpectedPercent = (p2Changes.change.toDouble() / testCase.scenario.player2Rating.toDouble()) * 100
             val p2ActualPercent = p2Changes.percentChange.toDouble()
             abs(p2ActualPercent - p2ExpectedPercent) shouldBeLessThan 0.01
         }

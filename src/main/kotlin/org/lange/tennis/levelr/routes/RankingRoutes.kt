@@ -8,8 +8,8 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import mu.KotlinLogging
 import org.lange.tennis.levelr.dto.RankingCalculationRequest
-import org.lange.tennis.levelr.service.calculator.PerformanceBasedRankingCalculatorImpl
 import org.lange.tennis.levelr.service.calculator.RankingCalculator
+import org.lange.tennis.levelr.service.calculator.impl.v1.PerformanceBasedRankingCalculatorImpl
 
 private val logger = KotlinLogging.logger {}
 
