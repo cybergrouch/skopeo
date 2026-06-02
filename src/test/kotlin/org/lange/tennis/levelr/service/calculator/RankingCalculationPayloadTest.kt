@@ -1,4 +1,4 @@
-package org.lange.tennis.levelr
+package org.lange.tennis.levelr.service.calculator
 
 import io.kotest.matchers.shouldBe
 import io.ktor.client.request.post
@@ -10,6 +10,7 @@ import io.ktor.http.contentType
 import io.ktor.server.testing.testApplication
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import org.lange.tennis.levelr.module
 import kotlin.test.Test
 
 /**
@@ -105,7 +106,7 @@ class RankingCalculationPayloadTest {
                       "playerId": "P1",
                       "name": "Alice",
                       "rating": {
-                        "value": "4.659770",
+                        "value": "4.500000",
                         "system": "NTRP"
                       }
                     },
@@ -113,33 +114,33 @@ class RankingCalculationPayloadTest {
                       "playerId": "P2",
                       "name": "Bob",
                       "rating": {
-                        "value": "3.840230",
+                        "value": "4.000000",
                         "system": "NTRP"
                       }
                     }
                   },
                   "ratingChanges": {
                     "P1": {
-                      "change": "0.159770",
-                      "percentChange": "3.550400",
+                      "change": "0.000000",
+                      "percentChange": "0.000000",
                       "previousRating": {
                         "value": "4.5",
                         "system": "NTRP"
                       },
                       "newRating": {
-                        "value": "4.659770",
+                        "value": "4.500000",
                         "system": "NTRP"
                       }
                     },
                     "P2": {
-                      "change": "-0.159770",
-                      "percentChange": "-3.994300",
+                      "change": "0.000000",
+                      "percentChange": "0.000000",
                       "previousRating": {
                         "value": "4.0",
                         "system": "NTRP"
                       },
                       "newRating": {
-                        "value": "3.840230",
+                        "value": "4.000000",
                         "system": "NTRP"
                       }
                     }
@@ -147,7 +148,7 @@ class RankingCalculationPayloadTest {
                 }
                 """
 
-            minifyJson(actualJson) shouldBe minifyJson(expectedJson.trimIndent())
+            minifyJson(jsonString = actualJson) shouldBe minifyJson(jsonString = expectedJson.trimIndent())
         }
 
     @Test
@@ -252,7 +253,7 @@ class RankingCalculationPayloadTest {
                 }
                 """
 
-            minifyJson(actualJson) shouldBe minifyJson(expectedJson.trimIndent())
+            minifyJson(jsonString = actualJson) shouldBe minifyJson(jsonString = expectedJson.trimIndent())
         }
 
     @Test
@@ -322,7 +323,7 @@ class RankingCalculationPayloadTest {
                       "playerId": "WINNER",
                       "name": "Dominant Player",
                       "rating": {
-                        "value": "4.199712",
+                        "value": "4.166667",
                         "system": "NTRP"
                       }
                     },
@@ -330,33 +331,33 @@ class RankingCalculationPayloadTest {
                       "playerId": "LOSER",
                       "name": "Weaker Player",
                       "rating": {
-                        "value": "3.300288",
+                        "value": "3.333333",
                         "system": "NTRP"
                       }
                     }
                   },
                   "ratingChanges": {
                     "WINNER": {
-                      "change": "0.199712",
-                      "percentChange": "4.992800",
+                      "change": "0.166667",
+                      "percentChange": "4.166700",
                       "previousRating": {
                         "value": "4.0",
                         "system": "NTRP"
                       },
                       "newRating": {
-                        "value": "4.199712",
+                        "value": "4.166667",
                         "system": "NTRP"
                       }
                     },
                     "LOSER": {
-                      "change": "-0.199712",
-                      "percentChange": "-5.706100",
+                      "change": "-0.166667",
+                      "percentChange": "-4.761900",
                       "previousRating": {
                         "value": "3.5",
                         "system": "NTRP"
                       },
                       "newRating": {
-                        "value": "3.300288",
+                        "value": "3.333333",
                         "system": "NTRP"
                       }
                     }
@@ -364,7 +365,7 @@ class RankingCalculationPayloadTest {
                 }
                 """
 
-            minifyJson(actualJson) shouldBe minifyJson(expectedJson.trimIndent())
+            minifyJson(jsonString = actualJson) shouldBe minifyJson(jsonString = expectedJson.trimIndent())
         }
 
     @Test
@@ -419,7 +420,9 @@ class RankingCalculationPayloadTest {
 
             val actualJson = response.bodyAsText()
 
-            // P1 should be clamped at minimum 1.0, P2 gains rating
+            // With large rating gap (2.0), expected margin (12 games) exceeds physical limit
+            // Algorithm caps expected margin at actual winner's games (6), resulting in zero change
+            // TODO: Review if large rating gap scenarios should behave differently
             val expectedJson =
                 """
                 {
@@ -436,7 +439,7 @@ class RankingCalculationPayloadTest {
                       "playerId": "P2",
                       "name": "Intermediate",
                       "rating": {
-                        "value": "3.159079",
+                        "value": "3.000000",
                         "system": "NTRP"
                       }
                     }
@@ -455,14 +458,14 @@ class RankingCalculationPayloadTest {
                       }
                     },
                     "P2": {
-                      "change": "0.159079",
-                      "percentChange": "5.302600",
+                      "change": "0.000000",
+                      "percentChange": "0.000000",
                       "previousRating": {
                         "value": "3.0",
                         "system": "NTRP"
                       },
                       "newRating": {
-                        "value": "3.159079",
+                        "value": "3.000000",
                         "system": "NTRP"
                       }
                     }
@@ -470,7 +473,7 @@ class RankingCalculationPayloadTest {
                 }
                 """
 
-            minifyJson(actualJson) shouldBe minifyJson(expectedJson.trimIndent())
+            minifyJson(jsonString = actualJson) shouldBe minifyJson(jsonString = expectedJson.trimIndent())
         }
 
     @Test
@@ -525,7 +528,9 @@ class RankingCalculationPayloadTest {
 
             val actualJson = response.bodyAsText()
 
-            // P1 should be clamped at maximum 7.0, P2 loses rating
+            // With new algorithm: 6-0 with 1.0 rating diff has expected margin of 6
+            // Actual margin = 6, expected = 6, so ratio = 1.0 (at threshold)
+            // Result: zero change (at baseline)
             val expectedJson =
                 """
                 {
@@ -542,7 +547,7 @@ class RankingCalculationPayloadTest {
                       "playerId": "P2",
                       "name": "Advanced",
                       "rating": {
-                        "value": "5.840460",
+                        "value": "6.000000",
                         "system": "NTRP"
                       }
                     }
@@ -561,14 +566,14 @@ class RankingCalculationPayloadTest {
                       }
                     },
                     "P2": {
-                      "change": "-0.159540",
-                      "percentChange": "-2.659000",
+                      "change": "0.000000",
+                      "percentChange": "0.000000",
                       "previousRating": {
                         "value": "6.0",
                         "system": "NTRP"
                       },
                       "newRating": {
-                        "value": "5.840460",
+                        "value": "6.000000",
                         "system": "NTRP"
                       }
                     }
@@ -576,7 +581,7 @@ class RankingCalculationPayloadTest {
                 }
                 """
 
-            minifyJson(actualJson) shouldBe minifyJson(expectedJson.trimIndent())
+            minifyJson(jsonString = actualJson) shouldBe minifyJson(jsonString = expectedJson.trimIndent())
         }
 
     // ========================================
@@ -643,7 +648,7 @@ class RankingCalculationPayloadTest {
                       "playerId": "P100",
                       "name": "Pro Player",
                       "rating": {
-                        "value": "12.993524",
+                        "value": "12.394716",
                         "system": "UTR"
                       }
                     },
@@ -651,33 +656,33 @@ class RankingCalculationPayloadTest {
                       "playerId": "P200",
                       "name": "Amateur",
                       "rating": {
-                        "value": "7.506476",
+                        "value": "8.105284",
                         "system": "UTR"
                       }
                     }
                   },
                   "ratingChanges": {
                     "P100": {
-                      "change": "0.493524",
-                      "percentChange": "3.948200",
+                      "change": "-0.105284",
+                      "percentChange": "-0.842300",
                       "previousRating": {
                         "value": "12.5",
                         "system": "UTR"
                       },
                       "newRating": {
-                        "value": "12.993524",
+                        "value": "12.394716",
                         "system": "UTR"
                       }
                     },
                     "P200": {
-                      "change": "-0.493524",
-                      "percentChange": "-6.169100",
+                      "change": "0.105284",
+                      "percentChange": "1.316100",
                       "previousRating": {
                         "value": "8.0",
                         "system": "UTR"
                       },
                       "newRating": {
-                        "value": "7.506476",
+                        "value": "8.105284",
                         "system": "UTR"
                       }
                     }
@@ -685,7 +690,7 @@ class RankingCalculationPayloadTest {
                 }
                 """
 
-            minifyJson(actualJson) shouldBe minifyJson(expectedJson.trimIndent())
+            minifyJson(jsonString = actualJson) shouldBe minifyJson(jsonString = expectedJson.trimIndent())
         }
 
     @Test
@@ -755,7 +760,7 @@ class RankingCalculationPayloadTest {
                       "playerId": "PA",
                       "name": "Alex",
                       "rating": {
-                        "value": "10.233199",
+                        "value": "9.910050",
                         "system": "UTR"
                       }
                     },
@@ -763,33 +768,33 @@ class RankingCalculationPayloadTest {
                       "playerId": "PB",
                       "name": "Blake",
                       "rating": {
-                        "value": "9.566801",
+                        "value": "9.889950",
                         "system": "UTR"
                       }
                     }
                   },
                   "ratingChanges": {
                     "PA": {
-                      "change": "0.233199",
-                      "percentChange": "2.332000",
+                      "change": "-0.089950",
+                      "percentChange": "-0.899500",
                       "previousRating": {
                         "value": "10.0",
                         "system": "UTR"
                       },
                       "newRating": {
-                        "value": "10.233199",
+                        "value": "9.910050",
                         "system": "UTR"
                       }
                     },
                     "PB": {
-                      "change": "-0.233199",
-                      "percentChange": "-2.379600",
+                      "change": "0.089950",
+                      "percentChange": "0.917900",
                       "previousRating": {
                         "value": "9.8",
                         "system": "UTR"
                       },
                       "newRating": {
-                        "value": "9.566801",
+                        "value": "9.889950",
                         "system": "UTR"
                       }
                     }
@@ -797,6 +802,6 @@ class RankingCalculationPayloadTest {
                 }
                 """
 
-            minifyJson(actualJson) shouldBe minifyJson(expectedJson.trimIndent())
+            minifyJson(jsonString = actualJson) shouldBe minifyJson(jsonString = expectedJson.trimIndent())
         }
 }

@@ -618,4 +618,4 @@ function applySystemConstraints(rating, system):
 
 **Version:** 1.0
 **Last Updated:** 2024-01-15
-**Algorithm Implementation:** `src/main/kotlin/org/lange/tennis/levelr/service/RankingCalculator.kt`
+**Algorithm Implementation:** `../src/main/kotlin/org/lange/tennis/levelr/service/calculator/RankingCalculator.kt`

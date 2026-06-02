@@ -188,6 +188,62 @@ See `scripts/README.md` for detailed documentation.
 
 See [docs/API_DOCUMENTATION.md](docs/API_DOCUMENTATION.md) for detailed API specifications.
 
+## How Ratings Are Calculated
+
+Tennis Levelr uses a **performance-based Elo rating system** that goes beyond simple win/loss to consider **how dominantly** you won and whether you **exceeded expectations**.
+
+### Quick Guide for Players
+
+**What affects your rating?**
+1. **The result** - Win or lose
+2. **Your opponent's rating** - Beating stronger players gains more points
+3. **How dominant** - 6-0 wins count more than 7-6 wins
+4. **Expectations** - Exceeding predictions boosts your rating
+
+**Five scenarios:**
+
+1. **Equal match** (ratings within 0.01): Standard Elo with dominance boost
+2. **Upset win**: Underdog gains capped points (prevents single-match jumps)
+3. **Met expectations**: Both ratings stay the same (you performed as predicted)
+4. **Underperformed**: Favorite *loses* rating despite winning (didn't meet expectations)
+5. **Overperformed**: Gains capped to prevent excessive jumps
+
+### Examples
+
+**Scenario 1: Close match between equals**
+- You (5.0) vs Opponent (5.0)
+- You win 7-5: Gain ~0.11 points
+- Close win = moderate rating gain
+
+**Scenario 2: Upset victory**
+- You (3.0) vs Opponent (6.0)
+- You win 6-4: Gain capped at 1.0 point (rating gap / 3)
+- Same gain whether you win 6-0 or 7-6
+
+**Scenario 3: Dominant win**
+- You (5.0) vs Opponent (4.0)
+- You win 6-1, 6-0: Gain capped at 0.33 points
+- Very dominant, but single matches can't close large gaps
+
+**Scenario 4: Weak win (underperformance)**
+- You (4.5) vs Opponent (4.0)
+- You barely win 7-6, 3-6, 7-5
+- You *lose* 0.05 points (failed to meet expectations)
+- Opponent *gains* 0.05 points despite losing!
+
+**Scenario 5: Mismatch**
+- You (6.0) vs Opponent (1.0)
+- You win 6-0, 6-0
+- Both ratings unchanged (massive mismatches don't inform ratings)
+
+### Rating Boundaries
+- **NTRP**: 1.0 (beginner) to 7.0 (world-class)
+- **UTR**: 1.0+ (no upper limit, but 16+ is pro level)
+
+### Want More Details?
+- **[ALGORITHM_BEHAVIOR.md](docs/ALGORITHM_BEHAVIOR.md)** - Complete algorithm explanation with formulas, edge cases, and technical details
+- **[RANKING_ALGORITHM.md](docs/RANKING_ALGORITHM.md)** - Original algorithm design document
+
 ## Documentation
 
 Comprehensive documentation is available in the `docs/` directory:
@@ -198,7 +254,14 @@ Comprehensive documentation is available in the `docs/` directory:
   - Data models and validation rules
   - Examples and error codes
 
-- **[RANKING_ALGORITHM.md](docs/RANKING_ALGORITHM.md)** - Ranking algorithm details
+- **[ALGORITHM_BEHAVIOR.md](docs/ALGORITHM_BEHAVIOR.md)** - Complete algorithm behavior guide (NEW)
+  - Performance-based Elo system overview
+  - Five adjustment cases explained with examples
+  - Edge cases and special handling
+  - Magic constant explanations
+  - Known limitations and test coverage
+
+- **[RANKING_ALGORITHM.md](docs/RANKING_ALGORITHM.md)** - Original algorithm design
   - Elo-based system explanation
   - Mathematical formulas
   - Parameter tuning guidelines
@@ -211,7 +274,7 @@ Comprehensive documentation is available in the `docs/` directory:
   - Usage examples
 
 - **[TESTING_STRATEGY.md](docs/TESTING_STRATEGY.md)** - Testing pyramid and strategy
-  - Test organization (70 tests)
+  - Test organization (79 tests including 12 edge case tests)
   - Unit vs integration tests
   - Pure function testing
   - Coverage goals and best practices
@@ -224,14 +287,15 @@ Comprehensive documentation is available in the `docs/` directory:
 
 ## Testing
 
-Tennis Levelr uses a comprehensive testing strategy with **70 tests** across unit and integration layers:
+Tennis Levelr uses a comprehensive testing strategy with **79 tests** across unit, integration, and edge case layers:
 
 ### Test Distribution
 
 ```
-Unit Tests (40):        57% - Fast, isolated, pure function testing
-Integration Tests (30): 43% - API contracts, HTTP layer
-Total:                  70 tests in ~5.5 seconds
+Unit Tests (40):        51% - Fast, isolated, pure function testing
+Integration Tests (27): 34% - API contracts, HTTP layer
+Edge Case Tests (12):   15% - Algorithm behavior validation
+Total:                  79 tests in ~6 seconds
 ```
 
 ### Running Tests

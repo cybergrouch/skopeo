@@ -2,19 +2,21 @@ package org.lange.tennis.levelr.routes
 
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
-import io.ktor.server.application.call
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import mu.KotlinLogging
 import org.lange.tennis.levelr.dto.RankingCalculationRequest
-import org.lange.tennis.levelr.service.RankingCalculator
+import org.lange.tennis.levelr.service.calculator.PerformanceBasedRankingCalculatorImpl
+import org.lange.tennis.levelr.service.calculator.RankingCalculator
 
 private val logger = KotlinLogging.logger {}
 
 fun Application.configureRankingRoutes() {
-    val rankingCalculator = RankingCalculator()
+    // TODO: Make this configurable via dependency injection
+    // For now, hardcode to use the performance-based implementation
+    val rankingCalculator: RankingCalculator = PerformanceBasedRankingCalculatorImpl()
 
     routing {
         post("/api/v1/calculate-ranking") {

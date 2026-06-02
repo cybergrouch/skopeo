@@ -1,4 +1,4 @@
-package org.lange.tennis.levelr.service
+package org.lange.tennis.levelr.service.calculator
 
 import org.lange.tennis.levelr.dto.RankingCalculationResponse
 

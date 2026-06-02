@@ -1,4 +1,4 @@
-package org.lange.tennis.levelr
+package org.lange.tennis.levelr.service.calculator
 
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -12,12 +12,13 @@ import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.testing.testApplication
 import kotlinx.serialization.json.Json
 import org.lange.tennis.levelr.dto.RankingCalculationResponse
+import org.lange.tennis.levelr.module
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
-class RankingCalculationExtendedTest {
+class RankingCalculationApiTest {
     private fun assertErrorResponse(
         status: HttpStatusCode,
         body: String,

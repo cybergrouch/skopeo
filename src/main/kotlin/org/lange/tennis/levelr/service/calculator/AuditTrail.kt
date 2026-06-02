@@ -1,4 +1,4 @@
-package org.lange.tennis.levelr.service
+package org.lange.tennis.levelr.service.calculator
 
 /**
  * A single audit entry capturing a point in the calculation process.

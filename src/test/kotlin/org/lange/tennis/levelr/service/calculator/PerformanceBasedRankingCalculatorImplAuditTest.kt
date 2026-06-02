@@ -1,4 +1,4 @@
-package org.lange.tennis.levelr.service
+package org.lange.tennis.levelr.service.calculator
 
 import org.lange.tennis.levelr.dto.RankingCalculationRequest
 import org.lange.tennis.levelr.model.MatchScore
@@ -15,8 +15,8 @@ import kotlin.test.assertTrue
  * These tests verify that the calculator produces the expected audit entries
  * without requiring actual logging infrastructure.
  */
-class RankingCalculatorAuditTest {
-    private val calculator = RankingCalculator()
+class PerformanceBasedRankingCalculatorImplAuditTest {
+    private val calculator = PerformanceBasedRankingCalculatorImpl()
 
     @Test
     fun testAuditTrailContainsCalculationStart() {
