@@ -49,9 +49,12 @@ class RankingCalculator {
 
         private fun String.toBigDecimalPrecise(): BigDecimal = BigDecimal(this).setScale(CALCULATION_SCALE, ROUNDING_MODE)
 
+        /**
+         * Convert BigDecimal to String preserving full precision (6 decimal places).
+         * Used for rating change values and percentages to maintain exact precision.
+         */
         private fun BigDecimal.toStringPrecise(): String =
             this.setScale(CALCULATION_SCALE, ROUNDING_MODE)
-                .stripTrailingZeros()
                 .toPlainString()
 
         private fun BigDecimal.divideBy(divisor: BigDecimal): BigDecimal = this.divide(divisor, CALCULATION_SCALE, ROUNDING_MODE)
@@ -155,15 +158,11 @@ class RankingCalculator {
         // Calculate rating changes and percentages using BigDecimal for precision
         val player1ChangeValue = player1NewRating.value.toBigDecimalPrecise() - player1.rating.value.toBigDecimalPrecise()
         val player1PercentChange =
-            (
-                player1ChangeValue.divideBy(divisor = player1.rating.value.toBigDecimalPrecise()).scaleUp
-            ).setScale(2, ROUNDING_MODE)
+            player1ChangeValue.divideBy(divisor = player1.rating.value.toBigDecimalPrecise()).scaleUp
 
         val player2ChangeValue = player2NewRating.value.toBigDecimalPrecise() - player2.rating.value.toBigDecimalPrecise()
         val player2PercentChange =
-            (
-                player2ChangeValue.divideBy(divisor = player2.rating.value.toBigDecimalPrecise()).scaleUp
-            ).setScale(2, ROUNDING_MODE)
+            player2ChangeValue.divideBy(divisor = player2.rating.value.toBigDecimalPrecise()).scaleUp
 
         val ratingChanges =
             mapOf(
