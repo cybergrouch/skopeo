@@ -30,7 +30,10 @@ class RankingCalculator {
         private val ONE = "1.0".bd
 
         // K-factor controls how much ratings change per match
-        private val K_FACTOR = "32.0".bd
+        // Scaled for NTRP/UTR range (1.0-7.0) vs chess range (1000-3000)
+        // K=0.16 gives typical changes of ±0.08 to ±0.16 for normal matches
+        // With dominance factor (up to 2.5x), max change is ~0.4 rating points
+        private val K_FACTOR = "0.16".bd
 
         // Scale factor for expected score calculation
         private val SCALE_FACTOR = "400.0".bd
