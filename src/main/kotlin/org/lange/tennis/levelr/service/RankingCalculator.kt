@@ -282,7 +282,7 @@ class RankingCalculator {
         val adjustedChange1 = baseChange1 * dominanceFactor
         val adjustedChange2 = baseChange2 * dominanceFactor
 
-        return Pair(adjustedChange1, adjustedChange2)
+        return Pair(first = adjustedChange1, second = adjustedChange2)
     }
 
     /**

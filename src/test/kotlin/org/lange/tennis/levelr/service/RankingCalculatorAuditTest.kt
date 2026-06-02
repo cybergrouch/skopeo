@@ -30,11 +30,11 @@ class RankingCalculatorAuditTest {
                 it.message.contains("Calculating ranking")
             }
 
-        assertTrue(startEntry != null, "Audit should contain calculation start entry")
-        assertEquals("John Doe", startEntry.context["player1"])
-        assertEquals("4.5", startEntry.context["player1Rating"])
-        assertEquals("Jane Smith", startEntry.context["player2"])
-        assertEquals("4.0", startEntry.context["player2Rating"])
+        assertTrue(actual = startEntry != null, message = "Audit should contain calculation start entry")
+        assertEquals(expected = "John Doe", actual = startEntry.context["player1"])
+        assertEquals(expected = "4.5", actual = startEntry.context["player1Rating"])
+        assertEquals(expected = "Jane Smith", actual = startEntry.context["player2"])
+        assertEquals(expected = "4.0", actual = startEntry.context["player2Rating"])
     }
 
     @Test
@@ -49,7 +49,7 @@ class RankingCalculatorAuditTest {
                 it.message.contains("Match result")
             }
 
-        assertTrue(matchResultEntry != null, "Audit should contain match result entry")
+        assertTrue(actual = matchResultEntry != null, message = "Audit should contain match result entry")
         assertTrue(matchResultEntry.context.containsKey("winnerId"))
         assertTrue(matchResultEntry.context.containsKey("dominanceFactor"))
     }
@@ -66,14 +66,14 @@ class RankingCalculatorAuditTest {
                 it.message.contains("Expected scores")
             }
 
-        assertTrue(expectedScoresEntry != null, "Audit should contain expected scores entry")
+        assertTrue(actual = expectedScoresEntry != null, message = "Audit should contain expected scores entry")
         assertTrue(expectedScoresEntry.context.containsKey("expectedPlayer1"))
         assertTrue(expectedScoresEntry.context.containsKey("expectedPlayer2"))
 
         // Expected scores should sum to 1.0
         val expected1 = (expectedScoresEntry.context["expectedPlayer1"] as String).toDouble()
         val expected2 = (expectedScoresEntry.context["expectedPlayer2"] as String).toDouble()
-        assertEquals(1.0, expected1 + expected2, 0.0001)
+        assertEquals(expected = 1.0, actual = expected1 + expected2, absoluteTolerance = 0.0001)
     }
 
     @Test
@@ -88,14 +88,19 @@ class RankingCalculatorAuditTest {
                 it.message.contains("Rating changes")
             }
 
-        assertTrue(ratingChangesEntry != null, "Audit should contain rating changes entry")
+        assertTrue(actual = ratingChangesEntry != null, message = "Audit should contain rating changes entry")
         assertTrue(ratingChangesEntry.context.containsKey("player1Change"))
         assertTrue(ratingChangesEntry.context.containsKey("player2Change"))
 
         // Changes should be opposite (zero-sum)
         val change1 = (ratingChangesEntry.context["player1Change"] as String).toDouble()
         val change2 = (ratingChangesEntry.context["player2Change"] as String).toDouble()
-        assertEquals(0.0, change1 + change2, 0.0001, "Rating changes should be zero-sum before clamping")
+        assertEquals(
+            expected = 0.0,
+            actual = change1 + change2,
+            absoluteTolerance = 0.0001,
+            message = "Rating changes should be zero-sum before clamping",
+        )
     }
 
     @Test
@@ -110,11 +115,11 @@ class RankingCalculatorAuditTest {
                 it.message.contains("NTRP change")
             }
 
-        assertEquals(2, ntrpChanges.size, "Should have NTRP change entries for both players")
+        assertEquals(expected = 2, actual = ntrpChanges.size, message = "Should have NTRP change entries for both players")
 
         // Verify each entry has detailed context
         ntrpChanges.forEach { entry ->
-            assertEquals("NTRP", entry.context["system"])
+            assertEquals(expected = "NTRP", actual = entry.context["system"])
             assertTrue(entry.context.containsKey("original"))
             assertTrue(entry.context.containsKey("change"))
             assertTrue(entry.context.containsKey("newValue"))
@@ -134,11 +139,11 @@ class RankingCalculatorAuditTest {
                 it.message.contains("UTR change")
             }
 
-        assertEquals(2, utrChanges.size, "Should have UTR change entries for both players")
+        assertEquals(expected = 2, actual = utrChanges.size, message = "Should have UTR change entries for both players")
 
         // Verify each entry has detailed context
         utrChanges.forEach { entry ->
-            assertEquals("UTR", entry.context["system"])
+            assertEquals(expected = "UTR", actual = entry.context["system"])
             assertTrue(entry.context.containsKey("original"))
             assertTrue(entry.context.containsKey("change"))
         }
@@ -158,15 +163,15 @@ class RankingCalculatorAuditTest {
         val expectedScoresIndex = messages.indexOfFirst { it.contains("Expected scores") }
         val ratingChangesIndex = messages.indexOfFirst { it.contains("Rating changes") }
 
-        assertTrue(calculatingIndex >= 0, "Should have 'Calculating ranking' entry")
-        assertTrue(matchResultIndex >= 0, "Should have 'Match result' entry")
-        assertTrue(expectedScoresIndex >= 0, "Should have 'Expected scores' entry")
-        assertTrue(ratingChangesIndex >= 0, "Should have 'Rating changes' entry")
+        assertTrue(actual = calculatingIndex >= 0, message = "Should have 'Calculating ranking' entry")
+        assertTrue(actual = matchResultIndex >= 0, message = "Should have 'Match result' entry")
+        assertTrue(actual = expectedScoresIndex >= 0, message = "Should have 'Expected scores' entry")
+        assertTrue(actual = ratingChangesIndex >= 0, message = "Should have 'Rating changes' entry")
 
         // Verify order
-        assertTrue(calculatingIndex < matchResultIndex, "Calculation start should come before match result")
-        assertTrue(matchResultIndex < expectedScoresIndex, "Match result should come before expected scores")
-        assertTrue(expectedScoresIndex < ratingChangesIndex, "Expected scores should come before rating changes")
+        assertTrue(actual = calculatingIndex < matchResultIndex, message = "Calculation start should come before match result")
+        assertTrue(actual = matchResultIndex < expectedScoresIndex, message = "Match result should come before expected scores")
+        assertTrue(actual = expectedScoresIndex < ratingChangesIndex, message = "Expected scores should come before rating changes")
     }
 
     @Test
@@ -180,8 +185,8 @@ class RankingCalculatorAuditTest {
             entry.context.values.forEach { value ->
                 // All context values should be non-null and of expected types
                 assertTrue(
-                    value is String || value is Number,
-                    "Context value should be String or Number, got ${value::class.simpleName}",
+                    actual = value is String || value is Number,
+                    message = "Context value should be String or Number, got ${value::class.simpleName}",
                 )
             }
         }
