@@ -29,21 +29,27 @@ class RankingCalculator {
         private val ZERO = "0.0".bd
         private val ONE = "1.0".bd
 
-        // K-factor controls how much ratings change per match
-        // Scaled for NTRP/UTR range (1.0-7.0) vs chess range (1000-3000)
-        // K=0.16 gives typical changes of ±0.08 to ±0.16 for normal matches
-        // With dominance factor (up to 2.5x), max change is ~0.4 rating points
-        private val K_FACTOR = "0.16".bd
-
-        // Scale factor for expected score calculation
-        private val SCALE_FACTOR = "400.0".bd
-
         // NTRP-specific constants
         private val NTRP_MIN = "1.0".bd
         private val NTRP_MAX = "7.0".bd
+        private val NTRP_RANGE = NTRP_MAX - NTRP_MIN // 6.0
 
         // UTR-specific constants
         private val UTR_MIN = ONE
+        private val UTR_RANGE = "15.0".bd // Practical range (1.0-16.0 for professional level)
+
+        // K-factor for NTRP (base calibration)
+        // K=0.16 gives typical changes of ±0.08 to ±0.16 for normal NTRP matches
+        // With dominance factor (up to 2.5x), max change is ~0.4 rating points
+        private val K_FACTOR_NTRP = "0.16".bd
+
+        // K-factor for UTR (derived from NTRP to maintain proportional changes)
+        // K_UTR = K_NTRP × (UTR_RANGE / NTRP_RANGE) = 0.16 × (15.0 / 6.0) = 0.4
+        // This gives UTR 2.5× larger changes, proportional to its 2.5× larger range
+        private val K_FACTOR_UTR = K_FACTOR_NTRP * UTR_RANGE.divideBy(NTRP_RANGE)
+
+        // Scale factor for expected score calculation
+        private val SCALE_FACTOR = "400.0".bd
 
         // Helper extension functions for BigDecimal conversions (Kotlin idioms)
         private fun Double.toBigDecimalPrecise(): BigDecimal = BigDecimal(this.toString()).setScale(CALCULATION_SCALE, ROUNDING_MODE)
@@ -125,6 +131,7 @@ class RankingCalculator {
         )
 
         // Calculate Elo-based rating changes
+        val kFactor = if (player1.rating.system == RatingSystem.NTRP) K_FACTOR_NTRP else K_FACTOR_UTR
         val (player1Change, player2Change) =
             calculateRatingChanges(
                 player1 = player1,
@@ -132,6 +139,7 @@ class RankingCalculator {
                 player1ActualScore = matchResult.player1Score,
                 player2ActualScore = matchResult.player2Score,
                 dominanceFactor = matchResult.dominanceFactor,
+                kFactor = kFactor,
                 audit = audit,
             )
 
@@ -255,6 +263,7 @@ class RankingCalculator {
         player1ActualScore: BigDecimal,
         player2ActualScore: BigDecimal,
         dominanceFactor: BigDecimal,
+        kFactor: BigDecimal,
         audit: AuditTrail,
     ): Pair<BigDecimal, BigDecimal> {
         // Calculate expected scores based on rating differential
@@ -277,8 +286,8 @@ class RankingCalculator {
         )
 
         // Calculate base rating changes
-        val baseChange1 = K_FACTOR * (player1ActualScore - expectedPlayer1)
-        val baseChange2 = K_FACTOR * (player2ActualScore - expectedPlayer2)
+        val baseChange1 = kFactor * (player1ActualScore - expectedPlayer1)
+        val baseChange2 = kFactor * (player2ActualScore - expectedPlayer2)
 
         // Apply dominance factor (larger changes for more decisive matches)
         val adjustedChange1 = baseChange1 * dominanceFactor

@@ -311,7 +311,7 @@ class RankingCalculationPayloadTest {
                       "playerId": "P100",
                       "name": "Pro Player",
                       "rating": {
-                        "value": "12.697410",
+                        "value": "12.993524",
                         "system": "UTR"
                       }
                     },
@@ -319,33 +319,33 @@ class RankingCalculationPayloadTest {
                       "playerId": "P200",
                       "name": "Amateur",
                       "rating": {
-                        "value": "7.802590",
+                        "value": "7.506476",
                         "system": "UTR"
                       }
                     }
                   },
                   "ratingChanges": {
                     "P100": {
-                      "change": "0.197410",
-                      "percentChange": "1.579300",
+                      "change": "0.493524",
+                      "percentChange": "3.948200",
                       "previousRating": {
                         "value": "12.5",
                         "system": "UTR"
                       },
                       "newRating": {
-                        "value": "12.697410",
+                        "value": "12.993524",
                         "system": "UTR"
                       }
                     },
                     "P200": {
-                      "change": "-0.197410",
-                      "percentChange": "-2.467600",
+                      "change": "-0.493524",
+                      "percentChange": "-6.169100",
                       "previousRating": {
                         "value": "8.0",
                         "system": "UTR"
                       },
                       "newRating": {
-                        "value": "7.802590",
+                        "value": "7.506476",
                         "system": "UTR"
                       }
                     }
@@ -763,7 +763,7 @@ class RankingCalculationPayloadTest {
                       "playerId": "PA",
                       "name": "Alex",
                       "rating": {
-                        "value": "10.093280",
+                        "value": "10.233199",
                         "system": "UTR"
                       }
                     },
@@ -771,33 +771,33 @@ class RankingCalculationPayloadTest {
                       "playerId": "PB",
                       "name": "Blake",
                       "rating": {
-                        "value": "9.706720",
+                        "value": "9.566801",
                         "system": "UTR"
                       }
                     }
                   },
                   "ratingChanges": {
                     "PA": {
-                      "change": "0.093280",
-                      "percentChange": "0.932800",
+                      "change": "0.233199",
+                      "percentChange": "2.332000",
                       "previousRating": {
                         "value": "10.0",
                         "system": "UTR"
                       },
                       "newRating": {
-                        "value": "10.093280",
+                        "value": "10.233199",
                         "system": "UTR"
                       }
                     },
                     "PB": {
-                      "change": "-0.093280",
-                      "percentChange": "-0.951800",
+                      "change": "-0.233199",
+                      "percentChange": "-2.379600",
                       "previousRating": {
                         "value": "9.8",
                         "system": "UTR"
                       },
                       "newRating": {
-                        "value": "9.706720",
+                        "value": "9.566801",
                         "system": "UTR"
                       }
                     }
