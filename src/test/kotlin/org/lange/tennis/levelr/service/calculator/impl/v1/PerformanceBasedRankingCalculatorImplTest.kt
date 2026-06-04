@@ -15,7 +15,7 @@ import org.lange.tennis.levelr.model.SetScore
 import java.util.stream.Stream
 
 /**
- * Comprehensive test suite for simplified rating formula.
+ * Comprehensive test suite for PerformanceBasedRankingCalculatorImpl.
  *
  * Uses parameterized tests for easy verification of expected deltas.
  * All test data is defined in testScenarios() method for easy review and tuning.
@@ -28,7 +28,7 @@ import java.util.stream.Stream
  * - Various score margins (6-0, 6-4, 7-5)
  * - Large rating gaps
  */
-class SimplifiedFormulaTest {
+class PerformanceBasedRankingCalculatorImplTest {
     private val calculator = PerformanceBasedRankingCalculatorImpl()
 
     companion object {
