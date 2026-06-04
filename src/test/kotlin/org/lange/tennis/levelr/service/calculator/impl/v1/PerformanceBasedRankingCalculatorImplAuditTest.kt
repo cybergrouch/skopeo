@@ -223,7 +223,10 @@ class PerformanceBasedRankingCalculatorImplAuditTest {
 
         return RankingCalculationRequest(
             players = mapOf("P123" to player1, "P456" to player2),
-            matchScore = MatchScore(sets = sets),
+            matchScore =
+                MatchScore(
+                    sets = sets,
+                ),
         )
     }
 
