@@ -101,12 +101,38 @@ class RankingCalculationPayloadTest {
             val expectedJson =
                 """
                 {
+                  "ratingChanges": {
+                    "P1": {
+                      "change": "0.026667",
+                      "previousRating": {
+                        "value": "4.5",
+                        "system": "NTRP"
+                      },
+                      "newRating": {
+                        "value": "4.526667",
+                        "system": "NTRP"
+                      },
+                      "percentChange": "0.592600"
+                    },
+                    "P2": {
+                      "change": "-0.026667",
+                      "previousRating": {
+                        "value": "4.0",
+                        "system": "NTRP"
+                      },
+                      "newRating": {
+                        "value": "3.973333",
+                        "system": "NTRP"
+                      },
+                      "percentChange": "-0.666700"
+                    }
+                  },
                   "players": {
                     "P1": {
                       "playerId": "P1",
                       "name": "Alice",
                       "rating": {
-                        "value": "4.500000",
+                        "value": "4.526667",
                         "system": "NTRP"
                       }
                     },
@@ -114,33 +140,7 @@ class RankingCalculationPayloadTest {
                       "playerId": "P2",
                       "name": "Bob",
                       "rating": {
-                        "value": "4.000000",
-                        "system": "NTRP"
-                      }
-                    }
-                  },
-                  "ratingChanges": {
-                    "P1": {
-                      "change": "0.000000",
-                      "percentChange": "0.000000",
-                      "previousRating": {
-                        "value": "4.5",
-                        "system": "NTRP"
-                      },
-                      "newRating": {
-                        "value": "4.500000",
-                        "system": "NTRP"
-                      }
-                    },
-                    "P2": {
-                      "change": "0.000000",
-                      "percentChange": "0.000000",
-                      "previousRating": {
-                        "value": "4.0",
-                        "system": "NTRP"
-                      },
-                      "newRating": {
-                        "value": "4.000000",
+                        "value": "3.973333",
                         "system": "NTRP"
                       }
                     }
@@ -206,12 +206,38 @@ class RankingCalculationPayloadTest {
             val expectedJson =
                 """
                 {
+                  "ratingChanges": {
+                    "P1": {
+                      "change": "0.032000",
+                      "previousRating": {
+                        "value": "5.0",
+                        "system": "NTRP"
+                      },
+                      "newRating": {
+                        "value": "5.032000",
+                        "system": "NTRP"
+                      },
+                      "percentChange": "0.640000"
+                    },
+                    "P2": {
+                      "change": "-0.032000",
+                      "previousRating": {
+                        "value": "5.0",
+                        "system": "NTRP"
+                      },
+                      "newRating": {
+                        "value": "4.968000",
+                        "system": "NTRP"
+                      },
+                      "percentChange": "-0.640000"
+                    }
+                  },
                   "players": {
                     "P1": {
                       "playerId": "P1",
                       "name": "Player One",
                       "rating": {
-                        "value": "5.120000",
+                        "value": "5.032000",
                         "system": "NTRP"
                       }
                     },
@@ -219,33 +245,7 @@ class RankingCalculationPayloadTest {
                       "playerId": "P2",
                       "name": "Player Two",
                       "rating": {
-                        "value": "4.880000",
-                        "system": "NTRP"
-                      }
-                    }
-                  },
-                  "ratingChanges": {
-                    "P1": {
-                      "change": "0.120000",
-                      "percentChange": "2.400000",
-                      "previousRating": {
-                        "value": "5.0",
-                        "system": "NTRP"
-                      },
-                      "newRating": {
-                        "value": "5.120000",
-                        "system": "NTRP"
-                      }
-                    },
-                    "P2": {
-                      "change": "-0.120000",
-                      "percentChange": "-2.400000",
-                      "previousRating": {
-                        "value": "5.0",
-                        "system": "NTRP"
-                      },
-                      "newRating": {
-                        "value": "4.880000",
+                        "value": "4.968000",
                         "system": "NTRP"
                       }
                     }
@@ -318,12 +318,38 @@ class RankingCalculationPayloadTest {
             val expectedJson =
                 """
                 {
+                  "ratingChanges": {
+                    "WINNER": {
+                      "change": "0.067692",
+                      "previousRating": {
+                        "value": "4.0",
+                        "system": "NTRP"
+                      },
+                      "newRating": {
+                        "value": "4.067692",
+                        "system": "NTRP"
+                      },
+                      "percentChange": "1.692300"
+                    },
+                    "LOSER": {
+                      "change": "-0.067692",
+                      "previousRating": {
+                        "value": "3.5",
+                        "system": "NTRP"
+                      },
+                      "newRating": {
+                        "value": "3.432308",
+                        "system": "NTRP"
+                      },
+                      "percentChange": "-1.934100"
+                    }
+                  },
                   "players": {
                     "WINNER": {
                       "playerId": "WINNER",
                       "name": "Dominant Player",
                       "rating": {
-                        "value": "4.166667",
+                        "value": "4.067692",
                         "system": "NTRP"
                       }
                     },
@@ -331,33 +357,7 @@ class RankingCalculationPayloadTest {
                       "playerId": "LOSER",
                       "name": "Weaker Player",
                       "rating": {
-                        "value": "3.333333",
-                        "system": "NTRP"
-                      }
-                    }
-                  },
-                  "ratingChanges": {
-                    "WINNER": {
-                      "change": "0.166667",
-                      "percentChange": "4.166700",
-                      "previousRating": {
-                        "value": "4.0",
-                        "system": "NTRP"
-                      },
-                      "newRating": {
-                        "value": "4.166667",
-                        "system": "NTRP"
-                      }
-                    },
-                    "LOSER": {
-                      "change": "-0.166667",
-                      "percentChange": "-4.761900",
-                      "previousRating": {
-                        "value": "3.5",
-                        "system": "NTRP"
-                      },
-                      "newRating": {
-                        "value": "3.333333",
+                        "value": "3.432308",
                         "system": "NTRP"
                       }
                     }
@@ -426,6 +426,32 @@ class RankingCalculationPayloadTest {
             val expectedJson =
                 """
                 {
+                  "ratingChanges": {
+                    "P1": {
+                      "change": "0.000000",
+                      "previousRating": {
+                        "value": "1.0",
+                        "system": "NTRP"
+                      },
+                      "newRating": {
+                        "value": "1.000000",
+                        "system": "NTRP"
+                      },
+                      "percentChange": "0.000000"
+                    },
+                    "P2": {
+                      "change": "0.000000",
+                      "previousRating": {
+                        "value": "3.0",
+                        "system": "NTRP"
+                      },
+                      "newRating": {
+                        "value": "3.000000",
+                        "system": "NTRP"
+                      },
+                      "percentChange": "0.000000"
+                    }
+                  },
                   "players": {
                     "P1": {
                       "playerId": "P1",
@@ -439,32 +465,6 @@ class RankingCalculationPayloadTest {
                       "playerId": "P2",
                       "name": "Intermediate",
                       "rating": {
-                        "value": "3.000000",
-                        "system": "NTRP"
-                      }
-                    }
-                  },
-                  "ratingChanges": {
-                    "P1": {
-                      "change": "0.000000",
-                      "percentChange": "0.000000",
-                      "previousRating": {
-                        "value": "1.0",
-                        "system": "NTRP"
-                      },
-                      "newRating": {
-                        "value": "1.000000",
-                        "system": "NTRP"
-                      }
-                    },
-                    "P2": {
-                      "change": "0.000000",
-                      "percentChange": "0.000000",
-                      "previousRating": {
-                        "value": "3.0",
-                        "system": "NTRP"
-                      },
-                      "newRating": {
                         "value": "3.000000",
                         "system": "NTRP"
                       }
@@ -534,6 +534,32 @@ class RankingCalculationPayloadTest {
             val expectedJson =
                 """
                 {
+                  "ratingChanges": {
+                    "P1": {
+                      "change": "0.000000",
+                      "previousRating": {
+                        "value": "7.0",
+                        "system": "NTRP"
+                      },
+                      "newRating": {
+                        "value": "7.000000",
+                        "system": "NTRP"
+                      },
+                      "percentChange": "0.000000"
+                    },
+                    "P2": {
+                      "change": "0.000000",
+                      "previousRating": {
+                        "value": "6.0",
+                        "system": "NTRP"
+                      },
+                      "newRating": {
+                        "value": "6.000000",
+                        "system": "NTRP"
+                      },
+                      "percentChange": "0.000000"
+                    }
+                  },
                   "players": {
                     "P1": {
                       "playerId": "P1",
@@ -547,32 +573,6 @@ class RankingCalculationPayloadTest {
                       "playerId": "P2",
                       "name": "Advanced",
                       "rating": {
-                        "value": "6.000000",
-                        "system": "NTRP"
-                      }
-                    }
-                  },
-                  "ratingChanges": {
-                    "P1": {
-                      "change": "0.000000",
-                      "percentChange": "0.000000",
-                      "previousRating": {
-                        "value": "7.0",
-                        "system": "NTRP"
-                      },
-                      "newRating": {
-                        "value": "7.000000",
-                        "system": "NTRP"
-                      }
-                    },
-                    "P2": {
-                      "change": "0.000000",
-                      "percentChange": "0.000000",
-                      "previousRating": {
-                        "value": "6.0",
-                        "system": "NTRP"
-                      },
-                      "newRating": {
                         "value": "6.000000",
                         "system": "NTRP"
                       }
@@ -643,12 +643,38 @@ class RankingCalculationPayloadTest {
             val expectedJson =
                 """
                 {
+                  "ratingChanges": {
+                    "P100": {
+                      "change": "0.000000",
+                      "previousRating": {
+                        "value": "12.5",
+                        "system": "UTR"
+                      },
+                      "newRating": {
+                        "value": "12.500000",
+                        "system": "UTR"
+                      },
+                      "percentChange": "0.000000"
+                    },
+                    "P200": {
+                      "change": "0.000000",
+                      "previousRating": {
+                        "value": "8.0",
+                        "system": "UTR"
+                      },
+                      "newRating": {
+                        "value": "8.000000",
+                        "system": "UTR"
+                      },
+                      "percentChange": "0.000000"
+                    }
+                  },
                   "players": {
                     "P100": {
                       "playerId": "P100",
                       "name": "Pro Player",
                       "rating": {
-                        "value": "12.394716",
+                        "value": "12.500000",
                         "system": "UTR"
                       }
                     },
@@ -656,33 +682,7 @@ class RankingCalculationPayloadTest {
                       "playerId": "P200",
                       "name": "Amateur",
                       "rating": {
-                        "value": "8.105284",
-                        "system": "UTR"
-                      }
-                    }
-                  },
-                  "ratingChanges": {
-                    "P100": {
-                      "change": "-0.105284",
-                      "percentChange": "-0.842300",
-                      "previousRating": {
-                        "value": "12.5",
-                        "system": "UTR"
-                      },
-                      "newRating": {
-                        "value": "12.394716",
-                        "system": "UTR"
-                      }
-                    },
-                    "P200": {
-                      "change": "0.105284",
-                      "percentChange": "1.316100",
-                      "previousRating": {
-                        "value": "8.0",
-                        "system": "UTR"
-                      },
-                      "newRating": {
-                        "value": "8.105284",
+                        "value": "8.000000",
                         "system": "UTR"
                       }
                     }
@@ -755,12 +755,38 @@ class RankingCalculationPayloadTest {
             val expectedJson =
                 """
                 {
+                  "ratingChanges": {
+                    "PA": {
+                      "change": "0.024615",
+                      "previousRating": {
+                        "value": "10.0",
+                        "system": "UTR"
+                      },
+                      "newRating": {
+                        "value": "10.024615",
+                        "system": "UTR"
+                      },
+                      "percentChange": "0.246200"
+                    },
+                    "PB": {
+                      "change": "-0.024615",
+                      "previousRating": {
+                        "value": "9.8",
+                        "system": "UTR"
+                      },
+                      "newRating": {
+                        "value": "9.775385",
+                        "system": "UTR"
+                      },
+                      "percentChange": "-0.251200"
+                    }
+                  },
                   "players": {
                     "PA": {
                       "playerId": "PA",
                       "name": "Alex",
                       "rating": {
-                        "value": "9.910050",
+                        "value": "10.024615",
                         "system": "UTR"
                       }
                     },
@@ -768,33 +794,7 @@ class RankingCalculationPayloadTest {
                       "playerId": "PB",
                       "name": "Blake",
                       "rating": {
-                        "value": "9.889950",
-                        "system": "UTR"
-                      }
-                    }
-                  },
-                  "ratingChanges": {
-                    "PA": {
-                      "change": "-0.089950",
-                      "percentChange": "-0.899500",
-                      "previousRating": {
-                        "value": "10.0",
-                        "system": "UTR"
-                      },
-                      "newRating": {
-                        "value": "9.910050",
-                        "system": "UTR"
-                      }
-                    },
-                    "PB": {
-                      "change": "0.089950",
-                      "percentChange": "0.917900",
-                      "previousRating": {
-                        "value": "9.8",
-                        "system": "UTR"
-                      },
-                      "newRating": {
-                        "value": "9.889950",
+                        "value": "9.775385",
                         "system": "UTR"
                       }
                     }

@@ -127,6 +127,10 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
             val player1NewRating = applyRatingChange(rating = player1.rating, change = player1Change, audit = audit)
             val player2NewRating = applyRatingChange(rating = player2.rating, change = player2Change, audit = audit)
 
+            // Calculate percent changes
+            val player1PercentChange = calculatePercentChange(player1.rating.value.bd, player1NewRating.value.bd)
+            val player2PercentChange = calculatePercentChange(player2.rating.value.bd, player2NewRating.value.bd)
+
             val ratingChanges =
                 mapOf(
                     player1Id to
@@ -134,18 +138,28 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
                             change = (player1NewRating.value.bd - player1.rating.value.bd).toStringPrecise(),
                             previousRating = player1.rating,
                             newRating = player1NewRating,
+                            percentChange = player1PercentChange,
                         ),
                     player2Id to
                         RatingChange(
                             change = (player2NewRating.value.bd - player2.rating.value.bd).toStringPrecise(),
                             previousRating = player2.rating,
                             newRating = player2NewRating,
+                            percentChange = player2PercentChange,
                         ),
+                )
+
+            // Create updated player profiles
+            val updatedPlayers =
+                mapOf(
+                    player1Id to player1.copy(rating = player1NewRating),
+                    player2Id to player2.copy(rating = player2NewRating),
                 )
 
             val response =
                 RankingCalculationResponse(
                     ratingChanges = ratingChanges,
+                    players = updatedPlayers,
                 )
 
             return RankingCalculationResult(
@@ -383,5 +397,20 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
         return rating.copy(
             value = clamped.toStringPrecise(),
         )
+    }
+
+    /**
+     * Calculate percent change between old and new rating values.
+     * Returns "0.000000" if old rating is zero to avoid division by zero.
+     */
+    private fun calculatePercentChange(
+        oldValue: BigDecimal,
+        newValue: BigDecimal,
+    ): String {
+        if (oldValue == ZERO) {
+            return "0.000000"
+        }
+        val percentChange = ((newValue - oldValue) / oldValue * "100.0".bd)
+        return percentChange.toStringPrecise()
     }
 }

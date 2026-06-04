@@ -51,29 +51,30 @@ class PerformanceBasedRankingCalculatorImplAuditTest {
 
         assertTrue(actual = matchResultEntry != null, message = "Audit should contain match result entry")
         assertTrue(matchResultEntry.context.containsKey("winnerId"))
-        assertTrue(matchResultEntry.context.containsKey("dominanceFactor"))
+        assertTrue(matchResultEntry.context.containsKey("winnerDominanceFactor"))
+        assertTrue(matchResultEntry.context.containsKey("loserDominanceFactor"))
     }
 
     @Test
-    fun testAuditTrailContainsExpectedScores() {
+    fun testAuditTrailContainsRankingAdjustment() {
         val request = createSimpleRequest()
 
         val result = calculator.calculate(request)
 
-        // Verify audit trail contains expected scores
-        val expectedScoresEntry =
+        // Verify audit trail contains ranking adjustment calculation
+        val rankingAdjustmentEntry =
             result.audit.find {
-                it.message.contains("Expected scores")
+                it.message.contains("Ranking Adjustment Calculation")
             }
 
-        assertTrue(actual = expectedScoresEntry != null, message = "Audit should contain expected scores entry")
-        assertTrue(expectedScoresEntry.context.containsKey("expectedPlayer1"))
-        assertTrue(expectedScoresEntry.context.containsKey("expectedPlayer2"))
+        assertTrue(actual = rankingAdjustmentEntry != null, message = "Audit should contain ranking adjustment entry")
+        assertTrue(rankingAdjustmentEntry.context.containsKey("player1RankingAdjustment"))
+        assertTrue(rankingAdjustmentEntry.context.containsKey("player2RankingAdjustment"))
 
-        // Expected scores should sum to 1.0
-        val expected1 = (expectedScoresEntry.context["expectedPlayer1"] as String).toDouble()
-        val expected2 = (expectedScoresEntry.context["expectedPlayer2"] as String).toDouble()
-        assertEquals(expected = 1.0, actual = expected1 + expected2, absoluteTolerance = 0.0001)
+        // Ranking adjustments should be opposite (zero-sum before clamping)
+        val adjustment1 = (rankingAdjustmentEntry.context["player1RankingAdjustment"] as String).toDouble()
+        val adjustment2 = (rankingAdjustmentEntry.context["player2RankingAdjustment"] as String).toDouble()
+        assertEquals(expected = 0.0, actual = adjustment1 + adjustment2, absoluteTolerance = 0.0001)
     }
 
     @Test
@@ -160,18 +161,18 @@ class PerformanceBasedRankingCalculatorImplAuditTest {
 
         val calculatingIndex = messages.indexOfFirst { it.contains("Calculating ranking") }
         val matchResultIndex = messages.indexOfFirst { it.contains("Match result") }
-        val expectedScoresIndex = messages.indexOfFirst { it.contains("Expected scores") }
+        val rankingAdjustmentIndex = messages.indexOfFirst { it.contains("Ranking Adjustment Calculation") }
         val ratingChangesIndex = messages.indexOfFirst { it.contains("Rating changes") }
 
         assertTrue(actual = calculatingIndex >= 0, message = "Should have 'Calculating ranking' entry")
         assertTrue(actual = matchResultIndex >= 0, message = "Should have 'Match result' entry")
-        assertTrue(actual = expectedScoresIndex >= 0, message = "Should have 'Expected scores' entry")
+        assertTrue(actual = rankingAdjustmentIndex >= 0, message = "Should have 'Ranking Adjustment Calculation' entry")
         assertTrue(actual = ratingChangesIndex >= 0, message = "Should have 'Rating changes' entry")
 
         // Verify order
         assertTrue(actual = calculatingIndex < matchResultIndex, message = "Calculation start should come before match result")
-        assertTrue(actual = matchResultIndex < expectedScoresIndex, message = "Match result should come before expected scores")
-        assertTrue(actual = expectedScoresIndex < ratingChangesIndex, message = "Expected scores should come before rating changes")
+        assertTrue(actual = matchResultIndex < rankingAdjustmentIndex, message = "Match result should come before ranking adjustment")
+        assertTrue(actual = rankingAdjustmentIndex < ratingChangesIndex, message = "Ranking adjustment should come before rating changes")
     }
 
     @Test

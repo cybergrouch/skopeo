@@ -8,4 +8,5 @@ data class RatingChange(
     val change: String,
     val previousRating: Rating,
     val newRating: Rating,
+    val percentChange: String,
 )
