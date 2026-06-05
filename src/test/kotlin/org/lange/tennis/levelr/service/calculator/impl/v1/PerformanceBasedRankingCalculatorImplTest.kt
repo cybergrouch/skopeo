@@ -1,9 +1,14 @@
 package org.lange.tennis.levelr.service.calculator.impl.v1
 
+import io.kotest.matchers.comparables.shouldBeGreaterThan
+import io.kotest.matchers.comparables.shouldBeGreaterThanOrEqualTo
+import io.kotest.matchers.comparables.shouldBeLessThan
+import io.kotest.matchers.comparables.shouldBeLessThanOrEqualTo
+import io.kotest.matchers.doubles.plusOrMinus
 import io.kotest.matchers.doubles.shouldBeBetween
+import io.kotest.matchers.maps.shouldContainKey
 import io.kotest.matchers.shouldBe
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertTrue
+import io.kotest.matchers.shouldNotBe
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
@@ -203,16 +208,8 @@ class PerformanceBasedRankingCalculatorImplTest {
                     ),
             )
 
-        assertEquals(
-            expectedP1Delta,
-            result.response.ratingChanges["P1"]?.change,
-            "$scenario - P1 delta mismatch: $description",
-        )
-        assertEquals(
-            expectedP2Delta,
-            result.response.ratingChanges["P2"]?.change,
-            "$scenario - P2 delta mismatch: $description",
-        )
+        result.response.ratingChanges["P1"]?.change shouldBe expectedP1Delta
+        result.response.ratingChanges["P2"]?.change shouldBe expectedP2Delta
     }
 
     @ParameterizedTest(name = "{0}: {8}")
@@ -246,16 +243,8 @@ class PerformanceBasedRankingCalculatorImplTest {
                     ),
             )
 
-        assertEquals(
-            expectedP1Delta,
-            result.response.ratingChanges["P1"]?.change,
-            "$scenario - P1 delta mismatch: $description",
-        )
-        assertEquals(
-            expectedP2Delta,
-            result.response.ratingChanges["P2"]?.change,
-            "$scenario - P2 delta mismatch: $description",
-        )
+        result.response.ratingChanges["P1"]?.change shouldBe expectedP1Delta
+        result.response.ratingChanges["P2"]?.change shouldBe expectedP2Delta
     }
 
     @Test
@@ -289,7 +278,7 @@ class PerformanceBasedRankingCalculatorImplTest {
         val delta64 = result64.response.ratingChanges["P1"]?.change?.toDouble() ?: 0.0
 
         val ratio = delta60 / delta64
-        assertEquals(5.0, ratio, 0.01, "6-0 should give 5× more change than 6-4")
+        ratio shouldBe (5.0 plusOrMinus 0.01)
     }
 
     @Test
@@ -327,9 +316,9 @@ class PerformanceBasedRankingCalculatorImplTest {
         // Expected: (8.3%-3.3%)/8.3% = 0.6
         // Upset: (3.3%/8.3%)×2.0 = 0.8
         // Ratio: 0.8/0.6 = 1.33
-        assertTrue(upsetDelta > expectedDelta, "Upset should give more change than expected win")
+        upsetDelta shouldBeGreaterThan expectedDelta
         val ratio = upsetDelta / expectedDelta
-        assertEquals(1.33, ratio, 0.05, "Upset/Expected ratio with normalized gaps")
+        ratio shouldBe (1.33 plusOrMinus 0.05)
     }
 
     // ========================================
@@ -347,11 +336,11 @@ class PerformanceBasedRankingCalculatorImplTest {
 
             val startEntry = result.audit.find { it.message.contains("Calculating ranking") }
 
-            assertTrue(startEntry != null, "Audit should contain calculation start entry")
-            assertEquals("John Doe", startEntry!!.context["player1"])
-            assertEquals("4.5", startEntry!!.context["player1Rating"])
-            assertEquals("Jane Smith", startEntry!!.context["player2"])
-            assertEquals("4.0", startEntry!!.context["player2Rating"])
+            startEntry shouldNotBe null
+            startEntry!!.context["player1"] shouldBe "John Doe"
+            startEntry.context["player1Rating"] shouldBe "4.5"
+            startEntry.context["player2"] shouldBe "Jane Smith"
+            startEntry.context["player2Rating"] shouldBe "4.0"
         }
 
         @Test
@@ -362,10 +351,10 @@ class PerformanceBasedRankingCalculatorImplTest {
 
             val matchResultEntry = result.audit.find { it.message.contains("Match result") }
 
-            assertTrue(matchResultEntry != null, "Audit should contain match result entry")
-            assertTrue(matchResultEntry!!.context.containsKey("winnerId"))
-            assertTrue(matchResultEntry!!.context.containsKey("winnerDominanceFactor"))
-            assertTrue(matchResultEntry!!.context.containsKey("loserDominanceFactor"))
+            matchResultEntry shouldNotBe null
+            matchResultEntry!!.context shouldContainKey "winnerId"
+            matchResultEntry.context shouldContainKey "winnerDominanceFactor"
+            matchResultEntry.context shouldContainKey "loserDominanceFactor"
         }
 
         @Test
@@ -376,14 +365,14 @@ class PerformanceBasedRankingCalculatorImplTest {
 
             val rankingAdjustmentEntry = result.audit.find { it.message.contains("Ranking Adjustment Calculation") }
 
-            assertTrue(rankingAdjustmentEntry != null, "Audit should contain ranking adjustment entry")
-            assertTrue(rankingAdjustmentEntry!!.context.containsKey("player1RankingAdjustment"))
-            assertTrue(rankingAdjustmentEntry!!.context.containsKey("player2RankingAdjustment"))
+            rankingAdjustmentEntry shouldNotBe null
+            rankingAdjustmentEntry!!.context shouldContainKey "player1RankingAdjustment"
+            rankingAdjustmentEntry.context shouldContainKey "player2RankingAdjustment"
 
             // Ranking adjustments should be opposite (zero-sum before clamping)
-            val adjustment1 = (rankingAdjustmentEntry!!.context["player1RankingAdjustment"] as String).toDouble()
-            val adjustment2 = (rankingAdjustmentEntry!!.context["player2RankingAdjustment"] as String).toDouble()
-            assertEquals(0.0, adjustment1 + adjustment2, 0.0001)
+            val adjustment1 = (rankingAdjustmentEntry.context["player1RankingAdjustment"] as String).toDouble()
+            val adjustment2 = (rankingAdjustmentEntry.context["player2RankingAdjustment"] as String).toDouble()
+            (adjustment1 + adjustment2) shouldBe (0.0 plusOrMinus 0.0001)
         }
 
         @Test
@@ -394,19 +383,14 @@ class PerformanceBasedRankingCalculatorImplTest {
 
             val ratingChangesEntry = result.audit.find { it.message.contains("Rating changes") }
 
-            assertTrue(ratingChangesEntry != null, "Audit should contain rating changes entry")
-            assertTrue(ratingChangesEntry!!.context.containsKey("player1Change"))
-            assertTrue(ratingChangesEntry!!.context.containsKey("player2Change"))
+            ratingChangesEntry shouldNotBe null
+            ratingChangesEntry!!.context shouldContainKey "player1Change"
+            ratingChangesEntry.context shouldContainKey "player2Change"
 
             // Changes should be opposite (zero-sum)
-            val change1 = (ratingChangesEntry!!.context["player1Change"] as String).toDouble()
-            val change2 = (ratingChangesEntry!!.context["player2Change"] as String).toDouble()
-            assertEquals(
-                0.0,
-                change1 + change2,
-                0.0001,
-                "Rating changes should be zero-sum before clamping",
-            )
+            val change1 = (ratingChangesEntry.context["player1Change"] as String).toDouble()
+            val change2 = (ratingChangesEntry.context["player2Change"] as String).toDouble()
+            (change1 + change2) shouldBe (0.0 plusOrMinus 0.0001)
         }
 
         @Test
@@ -417,14 +401,14 @@ class PerformanceBasedRankingCalculatorImplTest {
 
             val ntrpChanges = result.audit.filter { it.message.contains("NTRP change") }
 
-            assertEquals(2, ntrpChanges.size, "Should have NTRP change entries for both players")
+            ntrpChanges.size shouldBe 2
 
             ntrpChanges.forEach { entry ->
-                assertEquals("NTRP", entry.context["system"])
-                assertTrue(entry.context.containsKey("original"))
-                assertTrue(entry.context.containsKey("change"))
-                assertTrue(entry.context.containsKey("newValue"))
-                assertTrue(entry.context.containsKey("clamped"))
+                entry.context["system"] shouldBe "NTRP"
+                entry.context shouldContainKey "original"
+                entry.context shouldContainKey "change"
+                entry.context shouldContainKey "newValue"
+                entry.context shouldContainKey "clamped"
             }
         }
 
@@ -436,12 +420,12 @@ class PerformanceBasedRankingCalculatorImplTest {
 
             val utrChanges = result.audit.filter { it.message.contains("UTR change") }
 
-            assertEquals(2, utrChanges.size, "Should have UTR change entries for both players")
+            utrChanges.size shouldBe 2
 
             utrChanges.forEach { entry ->
-                assertEquals("UTR", entry.context["system"])
-                assertTrue(entry.context.containsKey("original"))
-                assertTrue(entry.context.containsKey("change"))
+                entry.context["system"] shouldBe "UTR"
+                entry.context shouldContainKey "original"
+                entry.context shouldContainKey "change"
             }
         }
 
@@ -458,18 +442,15 @@ class PerformanceBasedRankingCalculatorImplTest {
             val rankingAdjustmentIndex = messages.indexOfFirst { it.contains("Ranking Adjustment Calculation") }
             val ratingChangesIndex = messages.indexOfFirst { it.contains("Rating changes") }
 
-            assertTrue(calculatingIndex >= 0, "Should have 'Calculating ranking' entry")
-            assertTrue(matchResultIndex >= 0, "Should have 'Match result' entry")
-            assertTrue(rankingAdjustmentIndex >= 0, "Should have 'Ranking Adjustment Calculation' entry")
-            assertTrue(ratingChangesIndex >= 0, "Should have 'Rating changes' entry")
+            calculatingIndex shouldBeGreaterThanOrEqualTo 0
+            matchResultIndex shouldBeGreaterThanOrEqualTo 0
+            rankingAdjustmentIndex shouldBeGreaterThanOrEqualTo 0
+            ratingChangesIndex shouldBeGreaterThanOrEqualTo 0
 
             // Verify order
-            assertTrue(calculatingIndex < matchResultIndex, "Calculation start should come before match result")
-            assertTrue(matchResultIndex < rankingAdjustmentIndex, "Match result should come before ranking adjustment")
-            assertTrue(
-                rankingAdjustmentIndex < ratingChangesIndex,
-                "Ranking adjustment should come before rating changes",
-            )
+            calculatingIndex shouldBeLessThan matchResultIndex
+            matchResultIndex shouldBeLessThan rankingAdjustmentIndex
+            rankingAdjustmentIndex shouldBeLessThan ratingChangesIndex
         }
 
         @Test
@@ -480,10 +461,7 @@ class PerformanceBasedRankingCalculatorImplTest {
 
             result.audit.forEach { entry ->
                 entry.context.values.forEach { value ->
-                    assertTrue(
-                        value is String || value is Number,
-                        "Context value should be String or Number, got ${value::class.simpleName}",
-                    )
+                    (value is String || value is Number) shouldBe true
                 }
             }
         }
@@ -649,16 +627,16 @@ class PerformanceBasedRankingCalculatorImplTest {
 
                 ntrpChanges.forEach { entry ->
                     // Should have smoothing context
-                    assertTrue(entry.context.containsKey("smoothingEnabled"))
-                    assertTrue(entry.context.containsKey("smoothingFactor"))
-                    assertTrue(entry.context.containsKey("smoothed"))
+                    entry.context shouldContainKey "smoothingEnabled"
+                    entry.context shouldContainKey "smoothingFactor"
+                    entry.context shouldContainKey "smoothed"
 
                     // Should show smoothing is enabled
                     entry.context["smoothingEnabled"] shouldBe "true"
                     entry.context["smoothingFactor"] shouldBe 0.5
 
                     // Message should mention smoothing
-                    assertTrue(entry.message.contains("smoothed"))
+                    entry.message.contains("smoothed") shouldBe true
                 }
             }
         }
@@ -769,7 +747,7 @@ class PerformanceBasedRankingCalculatorImplTest {
                 val p1NewRating = result.response.ratingChanges["P1"]!!.newRating.value.toDouble()
 
                 // Should not exceed 7.0 even with smoothing
-                assertTrue(p1NewRating <= 7.0)
+                p1NewRating shouldBeLessThanOrEqualTo 7.0
             }
 
             @Test
@@ -789,7 +767,7 @@ class PerformanceBasedRankingCalculatorImplTest {
                 val p1NewRating = result.response.ratingChanges["P1"]!!.newRating.value.toDouble()
 
                 // Should not go below 1.0 even with smoothing
-                assertTrue(p1NewRating >= 1.0)
+                p1NewRating shouldBeGreaterThanOrEqualTo 1.0
             }
 
             @Test

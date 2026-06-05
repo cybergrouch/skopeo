@@ -10,8 +10,8 @@ import io.ktor.http.contentType
 import io.ktor.server.testing.testApplication
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import org.junit.jupiter.api.Test
 import org.lange.tennis.levelr.module
-import kotlin.test.Test
 
 /**
  * Snapshot tests that validate exact JSON payloads for successful requests.
