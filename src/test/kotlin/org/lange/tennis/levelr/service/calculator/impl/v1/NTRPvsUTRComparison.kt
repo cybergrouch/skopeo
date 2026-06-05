@@ -78,14 +78,15 @@ class NTRPvsUTRComparison {
             scenarios.map { scenario ->
                 val ntrpResult =
                     calculator.calculate(
-                        createRequest(
-                            scenario.ntrpP1,
-                            scenario.ntrpP2,
-                            RatingSystem.NTRP,
-                            scenario.p1Games,
-                            scenario.p2Games,
-                            scenario.winner,
-                        ),
+                        request =
+                            createRequest(
+                                p1Rating = scenario.ntrpP1,
+                                p2Rating = scenario.ntrpP2,
+                                system = RatingSystem.NTRP,
+                                p1Games = scenario.p1Games,
+                                p2Games = scenario.p2Games,
+                                winner = scenario.winner,
+                            ),
                     )
                 val ntrpP1Delta = ntrpResult.response.ratingChanges["P1"]?.change?.toDoubleOrNull() ?: 0.0
                 val ntrpP2Delta = ntrpResult.response.ratingChanges["P2"]?.change?.toDoubleOrNull() ?: 0.0
@@ -94,14 +95,15 @@ class NTRPvsUTRComparison {
 
                 val utrResult =
                     calculator.calculate(
-                        createRequest(
-                            scenario.utrP1,
-                            scenario.utrP2,
-                            RatingSystem.UTR,
-                            scenario.p1Games,
-                            scenario.p2Games,
-                            scenario.winner,
-                        ),
+                        request =
+                            createRequest(
+                                p1Rating = scenario.utrP1,
+                                p2Rating = scenario.utrP2,
+                                system = RatingSystem.UTR,
+                                p1Games = scenario.p1Games,
+                                p2Games = scenario.p2Games,
+                                winner = scenario.winner,
+                            ),
                     )
                 val utrP1Delta = utrResult.response.ratingChanges["P1"]?.change?.toDoubleOrNull() ?: 0.0
                 val utrP2Delta = utrResult.response.ratingChanges["P2"]?.change?.toDoubleOrNull() ?: 0.0
@@ -112,8 +114,17 @@ class NTRPvsUTRComparison {
                 val matches = Math.abs(ratio - 2.5) < 0.01 || (ntrpP1Delta == 0.0 && utrP1Delta == 0.0)
 
                 ScenarioResult(
-                    scenario, ntrpP1Delta, ntrpP2Delta, ntrpP1New, ntrpP2New,
-                    utrP1Delta, utrP2Delta, utrP1New, utrP2New, ratio, matches,
+                    scenario = scenario,
+                    ntrpP1Delta = ntrpP1Delta,
+                    ntrpP2Delta = ntrpP2Delta,
+                    ntrpP1New = ntrpP1New,
+                    ntrpP2New = ntrpP2New,
+                    utrP1Delta = utrP1Delta,
+                    utrP2Delta = utrP2Delta,
+                    utrP1New = utrP1New,
+                    utrP2New = utrP2New,
+                    ratio = ratio,
+                    matches = matches,
                 )
             }
 
@@ -135,9 +146,9 @@ class NTRPvsUTRComparison {
                 ntrpP1DeltaWidth + 3 + ntrpP2DeltaWidth + 3 + utrP1DeltaWidth + 3 + utrP2DeltaWidth + 3 +
                 ratioWidth + 3 + matchWidth
 
-        output.appendLine("=".repeat(totalWidth))
+        output.appendLine("=".repeat(n = totalWidth))
         output.appendLine("NTRP vs UTR COMPARISON")
-        output.appendLine("=".repeat(totalWidth))
+        output.appendLine("=".repeat(n = totalWidth))
         output.appendLine()
         output.appendLine("Demonstrates 2.5× scaling relationship:")
         output.appendLine("  K_NTRP = 0.16")
@@ -145,7 +156,7 @@ class NTRPvsUTRComparison {
         output.appendLine()
         output.appendLine("Therefore: UTR_delta = NTRP_delta × 2.5")
         output.appendLine()
-        output.appendLine("=".repeat(totalWidth))
+        output.appendLine("=".repeat(n = totalWidth))
         output.appendLine()
 
         // Header
@@ -167,7 +178,7 @@ class NTRPvsUTRComparison {
                 "Match",
             ),
         )
-        output.appendLine("-".repeat(totalWidth))
+        output.appendLine("-".repeat(n = totalWidth))
 
         results.forEach { result ->
             val scenario = result.scenario
@@ -196,7 +207,7 @@ class NTRPvsUTRComparison {
         }
 
         output.appendLine()
-        output.appendLine("=".repeat(totalWidth))
+        output.appendLine("=".repeat(n = totalWidth))
         output.appendLine()
         output.appendLine("ANALYSIS:")
         output.appendLine()
@@ -218,7 +229,7 @@ class NTRPvsUTRComparison {
 
         val outputStr = output.toString()
         println(outputStr)
-        File("/tmp/ntrp_vs_utr_comparison.txt").writeText(outputStr)
+        File("/tmp/ntrp_vs_utr_comparison.txt").writeText(text = outputStr)
         println("\nResults written to /tmp/ntrp_vs_utr_comparison.txt")
     }
 }
