@@ -264,11 +264,49 @@ Tennis Levelr uses a **performance-based rating system** with normalized gaps to
 - NTRP: K = 0.16 (typical changes ±0.032 to ±0.160)
 - UTR: K = 0.4 (2.5× larger, proportional to range)
 
+### Rating Smoothing (Optional)
+
+Tennis Levelr supports **USTA NTRP Dynamic-style rating smoothing** to create more stable and predictable ratings:
+
+**What is smoothing?**
+- Blends calculated rating changes with previous ratings
+- Reduces volatility from single exceptional/poor performances
+- Provides gradual convergence toward true skill level
+
+**Smoothing Factors:**
+- **0.5** - USTA standard (recommended default, 50% of change applied)
+- **0.3** - Conservative (30% applied, for established players)
+- **0.7** - Aggressive (70% applied, for newer players)
+- **1.0** - Full change (no smoothing, equivalent to disabled)
+
+**Example Impact** (4.0 NTRP players, 6-0 score):
+```
+Without smoothing: +0.160 / -0.160
+With 0.3 factor:   +0.048 / -0.048  (30% applied)
+With 0.5 factor:   +0.080 / -0.080  (50% applied - USTA style)
+With 0.7 factor:   +0.112 / -0.112  (70% applied)
+```
+
+**Usage:**
+```json
+{
+  "players": { ... },
+  "matchScore": { ... },
+  "options": {
+    "smoothingEnabled": true,
+    "smoothingFactor": 0.5
+  }
+}
+```
+
+See **[RATING_SMOOTHING.md](docs/RATING_SMOOTHING.md)** for complete documentation with examples and best practices.
+
 ### Rating Boundaries
 - **NTRP**: 1.0 (beginner) to 7.0 (world-class)
 - **UTR**: 1.0+ (no upper limit, but 16+ is pro level)
 
 ### Want More Details?
+- **[RATING_SMOOTHING.md](docs/RATING_SMOOTHING.md)** - Complete rating smoothing guide with examples and best practices
 - **[ALGORITHM_BEHAVIOR.md](docs/ALGORITHM_BEHAVIOR.md)** - Complete algorithm explanation with formulas, edge cases, and technical details
 
 ## Documentation
@@ -281,7 +319,15 @@ Comprehensive documentation is available in the `docs/` directory:
   - Data models and validation rules
   - Examples and error codes
 
-- **[ALGORITHM_BEHAVIOR.md](docs/ALGORITHM_BEHAVIOR.md)** - Complete algorithm behavior guide (NEW)
+- **[RATING_SMOOTHING.md](docs/RATING_SMOOTHING.md)** - Rating smoothing algorithm (NEW)
+  - USTA NTRP Dynamic-style smoothing explained
+  - Mathematical formulas and examples
+  - Smoothing factor recommendations (0.3, 0.5, 0.7)
+  - Usage guide and best practices
+  - UTR vs NTRP smoothing behavior
+  - Performance and backward compatibility
+
+- **[ALGORITHM_BEHAVIOR.md](docs/ALGORITHM_BEHAVIOR.md)** - Complete algorithm behavior guide
   - Performance-based Elo system overview
   - Five adjustment cases explained with examples
   - Edge cases and special handling
@@ -301,7 +347,7 @@ Comprehensive documentation is available in the `docs/` directory:
   - Usage examples
 
 - **[TESTING_STRATEGY.md](docs/TESTING_STRATEGY.md)** - Testing pyramid and strategy
-  - Test organization (79 tests including 12 edge case tests)
+  - Test organization (89 tests including smoothing tests)
   - Unit vs integration tests
   - Pure function testing
   - Coverage goals and best practices

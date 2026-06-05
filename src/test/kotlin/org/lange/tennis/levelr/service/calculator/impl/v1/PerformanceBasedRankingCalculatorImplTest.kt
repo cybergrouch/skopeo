@@ -1,5 +1,7 @@
 package org.lange.tennis.levelr.service.calculator.impl.v1
 
+import io.kotest.matchers.doubles.shouldBeBetween
+import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
@@ -12,6 +14,7 @@ import org.lange.tennis.levelr.dto.RankingCalculationRequest
 import org.lange.tennis.levelr.model.MatchScore
 import org.lange.tennis.levelr.model.PlayerProfile
 import org.lange.tennis.levelr.model.Rating
+import org.lange.tennis.levelr.model.RatingCalculationOptions
 import org.lange.tennis.levelr.model.RatingSystem
 import org.lange.tennis.levelr.model.SetScore
 import java.util.stream.Stream
@@ -83,7 +86,16 @@ class PerformanceBasedRankingCalculatorImplTest {
         p1Games: Int,
         p2Games: Int,
         winner: String,
+        smoothingEnabled: Boolean = false,
+        smoothingFactor: Double = 0.5,
     ): RankingCalculationRequest {
+        val options =
+            if (smoothingEnabled) {
+                RatingCalculationOptions(smoothingEnabled = true, smoothingFactor = smoothingFactor)
+            } else {
+                null
+            }
+
         return RankingCalculationRequest(
             players =
                 mapOf(
@@ -110,6 +122,7 @@ class PerformanceBasedRankingCalculatorImplTest {
                             ),
                         ),
                 ),
+            options = options,
         )
     }
 
@@ -119,7 +132,16 @@ class PerformanceBasedRankingCalculatorImplTest {
         p1Games: Int,
         p2Games: Int,
         winner: String,
+        smoothingEnabled: Boolean = false,
+        smoothingFactor: Double = 0.5,
     ): RankingCalculationRequest {
+        val options =
+            if (smoothingEnabled) {
+                RatingCalculationOptions(smoothingEnabled = true, smoothingFactor = smoothingFactor)
+            } else {
+                null
+            }
+
         return RankingCalculationRequest(
             players =
                 mapOf(
@@ -146,6 +168,7 @@ class PerformanceBasedRankingCalculatorImplTest {
                             ),
                         ),
                 ),
+            options = options,
         )
     }
 
@@ -163,6 +186,9 @@ class PerformanceBasedRankingCalculatorImplTest {
         expectedP2Delta: String,
         description: String,
     ) {
+        // Get the full scenario to access smoothing parameters
+        val fullScenario = TestScenarios.allScenarios.find { it.id == scenario }!!
+
         val result =
             calculator.calculate(
                 request =
@@ -172,6 +198,8 @@ class PerformanceBasedRankingCalculatorImplTest {
                         p1Games = p1Games,
                         p2Games = p2Games,
                         winner = winner,
+                        smoothingEnabled = fullScenario.smoothingEnabled,
+                        smoothingFactor = fullScenario.smoothingFactor,
                     ),
             )
 
@@ -201,6 +229,9 @@ class PerformanceBasedRankingCalculatorImplTest {
         expectedP2Delta: String,
         description: String,
     ) {
+        // Get the full scenario to access smoothing parameters
+        val fullScenario = TestScenarios.allScenarios.find { it.id == scenario }!!
+
         val result =
             calculator.calculate(
                 request =
@@ -210,6 +241,8 @@ class PerformanceBasedRankingCalculatorImplTest {
                         p1Games = p1Games,
                         p2Games = p2Games,
                         winner = winner,
+                        smoothingEnabled = fullScenario.smoothingEnabled,
+                        smoothingFactor = fullScenario.smoothingFactor,
                     ),
             )
 
@@ -453,6 +486,418 @@ class PerformanceBasedRankingCalculatorImplTest {
                     )
                 }
             }
+        }
+    }
+
+    // ========================================
+    // Rating Smoothing Tests
+    // ========================================
+
+    @Nested
+    @DisplayName("Rating Smoothing Tests")
+    inner class RatingSmoothingTests {
+        @Nested
+        @DisplayName("NTRP Smoothing")
+        inner class NTRPSmoothing {
+            @Test
+            @DisplayName("Without smoothing applies full change")
+            fun testWithoutSmoothing() {
+                val request =
+                    createNTRPRequest(
+                        p1Rating = "4.0",
+                        p2Rating = "4.0",
+                        p1Games = 6,
+                        p2Games = 0,
+                        options = RatingCalculationOptions(smoothingEnabled = false),
+                    )
+
+                val result = calculator.calculate(request = request)
+
+                val p1NewRating = result.response.ratingChanges["P1"]!!.newRating.value.toDouble()
+                val p1OldRating = 4.0
+                val p1Change = result.response.ratingChanges["P1"]!!.change.toDouble()
+
+                // Without smoothing: new = old + change
+                p1NewRating shouldBe (p1OldRating + p1Change)
+            }
+
+            @Test
+            @DisplayName("With smoothing (0.5) applies half change")
+            fun testWithSmoothingHalf() {
+                // Run without smoothing first to know the full change
+                val requestNoSmoothing =
+                    createNTRPRequest(
+                        p1Rating = "4.0",
+                        p2Rating = "4.0",
+                        p1Games = 6,
+                        p2Games = 0,
+                        options = RatingCalculationOptions(smoothingEnabled = false),
+                    )
+                val resultNoSmoothing = calculator.calculate(request = requestNoSmoothing)
+                val fullChange = resultNoSmoothing.response.ratingChanges["P1"]!!.change.toDouble()
+
+                // Now run with smoothing
+                val requestWithSmoothing =
+                    createNTRPRequest(
+                        p1Rating = "4.0",
+                        p2Rating = "4.0",
+                        p1Games = 6,
+                        p2Games = 0,
+                        options = RatingCalculationOptions(smoothingEnabled = true, smoothingFactor = 0.5),
+                    )
+                val resultWithSmoothing = calculator.calculate(request = requestWithSmoothing)
+                val smoothedChange = resultWithSmoothing.response.ratingChanges["P1"]!!.change.toDouble()
+
+                // With smoothing factor 0.5: change should be approximately half
+                smoothedChange.shouldBeBetween(fullChange * 0.45, fullChange * 0.55, 0.0)
+            }
+
+            @Test
+            @DisplayName("With aggressive smoothing (0.7) applies 70% of change")
+            fun testWithAggressiveSmoothing() {
+                val requestNoSmoothing =
+                    createNTRPRequest(
+                        p1Rating = "4.0",
+                        p2Rating = "4.0",
+                        p1Games = 6,
+                        p2Games = 0,
+                        options = RatingCalculationOptions(smoothingEnabled = false),
+                    )
+                val resultNoSmoothing = calculator.calculate(request = requestNoSmoothing)
+                val fullChange = resultNoSmoothing.response.ratingChanges["P1"]!!.change.toDouble()
+
+                val requestWithSmoothing =
+                    createNTRPRequest(
+                        p1Rating = "4.0",
+                        p2Rating = "4.0",
+                        p1Games = 6,
+                        p2Games = 0,
+                        options = RatingCalculationOptions(smoothingEnabled = true, smoothingFactor = 0.7),
+                    )
+                val resultWithSmoothing = calculator.calculate(request = requestWithSmoothing)
+                val smoothedChange = resultWithSmoothing.response.ratingChanges["P1"]!!.change.toDouble()
+
+                // Should be approximately 70% of full change
+                smoothedChange.shouldBeBetween(fullChange * 0.65, fullChange * 0.75, 0.0)
+            }
+
+            @Test
+            @DisplayName("With conservative smoothing (0.3) applies 30% of change")
+            fun testWithConservativeSmoothing() {
+                val requestNoSmoothing =
+                    createNTRPRequest(
+                        p1Rating = "4.0",
+                        p2Rating = "4.0",
+                        p1Games = 6,
+                        p2Games = 0,
+                        options = RatingCalculationOptions(smoothingEnabled = false),
+                    )
+                val resultNoSmoothing = calculator.calculate(request = requestNoSmoothing)
+                val fullChange = resultNoSmoothing.response.ratingChanges["P1"]!!.change.toDouble()
+
+                val requestWithSmoothing =
+                    createNTRPRequest(
+                        p1Rating = "4.0",
+                        p2Rating = "4.0",
+                        p1Games = 6,
+                        p2Games = 0,
+                        options = RatingCalculationOptions(smoothingEnabled = true, smoothingFactor = 0.3),
+                    )
+                val resultWithSmoothing = calculator.calculate(request = requestWithSmoothing)
+                val smoothedChange = resultWithSmoothing.response.ratingChanges["P1"]!!.change.toDouble()
+
+                // Should be approximately 30% of full change
+                smoothedChange.shouldBeBetween(fullChange * 0.25, fullChange * 0.35, 0.0)
+            }
+
+            @Test
+            @DisplayName("Smoothing preserves zero-sum property before clamping")
+            fun testSmoothingPreservesZeroSum() {
+                val request =
+                    createNTRPRequest(
+                        p1Rating = "4.0",
+                        p2Rating = "4.0",
+                        p1Games = 6,
+                        p2Games = 4,
+                        options = RatingCalculationOptions(smoothingEnabled = true, smoothingFactor = 0.5),
+                    )
+
+                val result = calculator.calculate(request = request)
+
+                val p1Change = result.response.ratingChanges["P1"]!!.change.toDouble()
+                val p2Change = result.response.ratingChanges["P2"]!!.change.toDouble()
+
+                // Should still be zero-sum (within floating point precision)
+                (p1Change + p2Change).shouldBeBetween(-0.000001, 0.000001, 0.0)
+            }
+
+            @Test
+            @DisplayName("Audit trail includes smoothing information")
+            fun testAuditTrailIncludesSmoothing() {
+                val request =
+                    createNTRPRequest(
+                        p1Rating = "4.0",
+                        p2Rating = "4.0",
+                        p1Games = 6,
+                        p2Games = 0,
+                        options = RatingCalculationOptions(smoothingEnabled = true, smoothingFactor = 0.5),
+                    )
+
+                val result = calculator.calculate(request = request)
+
+                val ntrpChanges = result.audit.filter { it.message.contains("NTRP change") }
+
+                ntrpChanges.forEach { entry ->
+                    // Should have smoothing context
+                    assertTrue(entry.context.containsKey("smoothingEnabled"))
+                    assertTrue(entry.context.containsKey("smoothingFactor"))
+                    assertTrue(entry.context.containsKey("smoothed"))
+
+                    // Should show smoothing is enabled
+                    entry.context["smoothingEnabled"] shouldBe "true"
+                    entry.context["smoothingFactor"] shouldBe 0.5
+
+                    // Message should mention smoothing
+                    assertTrue(entry.message.contains("smoothed"))
+                }
+            }
+        }
+
+        @Nested
+        @DisplayName("UTR Smoothing")
+        inner class UTRSmoothing {
+            @Test
+            @DisplayName("Without smoothing applies full change")
+            fun testWithoutSmoothing() {
+                val request =
+                    createUTRRequest(
+                        p1Rating = "10.0",
+                        p2Rating = "10.0",
+                        p1Games = 6,
+                        p2Games = 0,
+                        options = RatingCalculationOptions(smoothingEnabled = false),
+                    )
+
+                val result = calculator.calculate(request = request)
+
+                val p1NewRating = result.response.ratingChanges["P1"]!!.newRating.value.toDouble()
+                val p1OldRating = 10.0
+                val p1Change = result.response.ratingChanges["P1"]!!.change.toDouble()
+
+                // Without smoothing: new = old + change
+                p1NewRating shouldBe (p1OldRating + p1Change)
+            }
+
+            @Test
+            @DisplayName("With smoothing (0.5) applies half change")
+            fun testWithSmoothingHalf() {
+                val requestNoSmoothing =
+                    createUTRRequest(
+                        p1Rating = "10.0",
+                        p2Rating = "10.0",
+                        p1Games = 6,
+                        p2Games = 0,
+                        options = RatingCalculationOptions(smoothingEnabled = false),
+                    )
+                val resultNoSmoothing = calculator.calculate(request = requestNoSmoothing)
+                val fullChange = resultNoSmoothing.response.ratingChanges["P1"]!!.change.toDouble()
+
+                val requestWithSmoothing =
+                    createUTRRequest(
+                        p1Rating = "10.0",
+                        p2Rating = "10.0",
+                        p1Games = 6,
+                        p2Games = 0,
+                        options = RatingCalculationOptions(smoothingEnabled = true, smoothingFactor = 0.5),
+                    )
+                val resultWithSmoothing = calculator.calculate(request = requestWithSmoothing)
+                val smoothedChange = resultWithSmoothing.response.ratingChanges["P1"]!!.change.toDouble()
+
+                // With smoothing factor 0.5: change should be approximately half
+                smoothedChange.shouldBeBetween(fullChange * 0.45, fullChange * 0.55, 0.0)
+            }
+
+            @Test
+            @DisplayName("UTR scaling preserved with smoothing")
+            fun testUTRScalingPreserved() {
+                // Test that UTR changes are still 2.5× NTRP changes even with smoothing
+                val ntrpRequest =
+                    createNTRPRequest(
+                        p1Rating = "4.0",
+                        p2Rating = "4.0",
+                        p1Games = 6,
+                        p2Games = 0,
+                        options = RatingCalculationOptions(smoothingEnabled = true, smoothingFactor = 0.5),
+                    )
+                val ntrpResult = calculator.calculate(request = ntrpRequest)
+                val ntrpChange = ntrpResult.response.ratingChanges["P1"]!!.change.toDouble()
+
+                val utrRequest =
+                    createUTRRequest(
+                        p1Rating = "10.0",
+                        p2Rating = "10.0",
+                        p1Games = 6,
+                        p2Games = 0,
+                        options = RatingCalculationOptions(smoothingEnabled = true, smoothingFactor = 0.5),
+                    )
+                val utrResult = calculator.calculate(request = utrRequest)
+                val utrChange = utrResult.response.ratingChanges["P1"]!!.change.toDouble()
+
+                // UTR should be approximately 2.5× NTRP
+                val ratio = utrChange / ntrpChange
+                ratio.shouldBeBetween(2.45, 2.55, 0.0)
+            }
+        }
+
+        @Nested
+        @DisplayName("Edge Cases")
+        inner class EdgeCases {
+            @Test
+            @DisplayName("Smoothing works at boundary (7.0 NTRP)")
+            fun testSmoothingAtMaxBoundary() {
+                val request =
+                    createNTRPRequest(
+                        p1Rating = "6.8",
+                        p2Rating = "4.0",
+                        p1Games = 6,
+                        p2Games = 0,
+                        options = RatingCalculationOptions(smoothingEnabled = true, smoothingFactor = 0.5),
+                    )
+
+                val result = calculator.calculate(request = request)
+
+                val p1NewRating = result.response.ratingChanges["P1"]!!.newRating.value.toDouble()
+
+                // Should not exceed 7.0 even with smoothing
+                assertTrue(p1NewRating <= 7.0)
+            }
+
+            @Test
+            @DisplayName("Smoothing works at boundary (1.0 NTRP)")
+            fun testSmoothingAtMinBoundary() {
+                val request =
+                    createNTRPRequest(
+                        p1Rating = "4.0",
+                        p2Rating = "1.2",
+                        p1Games = 0,
+                        p2Games = 6,
+                        options = RatingCalculationOptions(smoothingEnabled = true, smoothingFactor = 0.5),
+                    )
+
+                val result = calculator.calculate(request = request)
+
+                val p1NewRating = result.response.ratingChanges["P1"]!!.newRating.value.toDouble()
+
+                // Should not go below 1.0 even with smoothing
+                assertTrue(p1NewRating >= 1.0)
+            }
+
+            @Test
+            @DisplayName("Smoothing factor 1.0 equals no smoothing")
+            fun testSmoothingFactorOne() {
+                val requestNoSmoothing =
+                    createNTRPRequest(
+                        p1Rating = "4.0",
+                        p2Rating = "4.0",
+                        p1Games = 6,
+                        p2Games = 0,
+                        options = RatingCalculationOptions(smoothingEnabled = false),
+                    )
+                val resultNoSmoothing = calculator.calculate(request = requestNoSmoothing)
+
+                val requestFullSmoothing =
+                    createNTRPRequest(
+                        p1Rating = "4.0",
+                        p2Rating = "4.0",
+                        p1Games = 6,
+                        p2Games = 0,
+                        options = RatingCalculationOptions(smoothingEnabled = true, smoothingFactor = 1.0),
+                    )
+                val resultFullSmoothing = calculator.calculate(request = requestFullSmoothing)
+
+                // Should produce identical results
+                val changeNoSmoothing = resultNoSmoothing.response.ratingChanges["P1"]!!.change
+                val changeFullSmoothing = resultFullSmoothing.response.ratingChanges["P1"]!!.change
+
+                changeNoSmoothing shouldBe changeFullSmoothing
+            }
+        }
+
+        // Helper methods for smoothing tests
+        private fun createNTRPRequest(
+            p1Rating: String,
+            p2Rating: String,
+            p1Games: Int,
+            p2Games: Int,
+            options: RatingCalculationOptions? = null,
+        ): RankingCalculationRequest {
+            val player1 =
+                PlayerProfile(
+                    playerId = "P1",
+                    name = "Player 1",
+                    rating = Rating(value = p1Rating, system = RatingSystem.NTRP),
+                )
+            val player2 =
+                PlayerProfile(
+                    playerId = "P2",
+                    name = "Player 2",
+                    rating = Rating(value = p2Rating, system = RatingSystem.NTRP),
+                )
+
+            val winner = if (p1Games > p2Games) "P1" else "P2"
+
+            return RankingCalculationRequest(
+                players = mapOf("P1" to player1, "P2" to player2),
+                matchScore =
+                    MatchScore(
+                        sets =
+                            listOf(
+                                SetScore(
+                                    games = mapOf("P1" to p1Games, "P2" to p2Games),
+                                    winner = winner,
+                                ),
+                            ),
+                    ),
+                options = options,
+            )
+        }
+
+        private fun createUTRRequest(
+            p1Rating: String,
+            p2Rating: String,
+            p1Games: Int,
+            p2Games: Int,
+            options: RatingCalculationOptions? = null,
+        ): RankingCalculationRequest {
+            val player1 =
+                PlayerProfile(
+                    playerId = "P1",
+                    name = "Player 1",
+                    rating = Rating(value = p1Rating, system = RatingSystem.UTR),
+                )
+            val player2 =
+                PlayerProfile(
+                    playerId = "P2",
+                    name = "Player 2",
+                    rating = Rating(value = p2Rating, system = RatingSystem.UTR),
+                )
+
+            val winner = if (p1Games > p2Games) "P1" else "P2"
+
+            return RankingCalculationRequest(
+                players = mapOf("P1" to player1, "P2" to player2),
+                matchScore =
+                    MatchScore(
+                        sets =
+                            listOf(
+                                SetScore(
+                                    games = mapOf("P1" to p1Games, "P2" to p2Games),
+                                    winner = winner,
+                                ),
+                            ),
+                    ),
+                options = options,
+            )
         }
     }
 

@@ -29,6 +29,61 @@ import java.math.BigDecimal
  * - Dynamic max change capped at ratingDiff/3 (takes 3 upsets to close gap)
  * - 6-0 paradox fixed (shutouts properly rewarded)
  * - Upset multiplier for unexpected results
+ * - **Optional USTA NTRP Dynamic-style rating smoothing**
+ *
+ * ## Rating Smoothing
+ *
+ * Rating smoothing (inspired by USTA NTRP Dynamic Algorithm) creates more stable ratings
+ * by blending the calculated new rating with the previous rating:
+ *
+ * ```
+ * calculatedRating = previousRating + rawChange
+ * smoothedRating = (calculatedRating × factor) + (previousRating × (1 - factor))
+ * finalChange = smoothedRating - previousRating
+ * ```
+ *
+ * This is mathematically equivalent to:
+ * ```
+ * smoothedChange = rawChange × smoothingFactor
+ * ```
+ *
+ * ### Smoothing Factor Values:
+ * - **0.0**: No change (rating never moves)
+ * - **0.3**: Conservative (30% of calculated change applied)
+ * - **0.5**: USTA NTRP Dynamic style (50% - standard averaging)
+ * - **0.7**: Aggressive (70% of calculated change applied)
+ * - **1.0**: Full change (equivalent to smoothing disabled)
+ *
+ * ### Benefits:
+ * - **Stability**: Prevents wild swings from single matches
+ * - **Convergence**: Gradual movement toward true skill level
+ * - **Noise reduction**: Dampens impact of outlier performances
+ * - **Player experience**: Ratings feel more predictable and fair
+ *
+ * ### Usage:
+ * ```kotlin
+ * val request = RankingCalculationRequest(
+ *     players = mapOf(...),
+ *     matchScore = MatchScore(...),
+ *     options = RatingCalculationOptions(
+ *         smoothingEnabled = true,
+ *         smoothingFactor = 0.5  // USTA style
+ *     )
+ * )
+ * ```
+ *
+ * ### Example Impact:
+ * Equal 4.0 NTRP players, 6-0 score:
+ * - Without smoothing: +0.160 / -0.160
+ * - With 0.3 smoothing: +0.048 / -0.048 (30% applied)
+ * - With 0.5 smoothing: +0.080 / -0.080 (50% applied)
+ * - With 0.7 smoothing: +0.112 / -0.112 (70% applied)
+ *
+ * ### Important Notes:
+ * - Smoothing is applied BEFORE boundary clamping (1.0-7.0 NTRP, 1.0-16.0 UTR)
+ * - Zero-sum property is preserved: sum of changes remains zero before clamping
+ * - UTR and NTRP both support smoothing with 2.5× K-factor scaling maintained
+ * - Default: smoothing disabled for backward compatibility
  *
  * All internal calculations use BigDecimal with 6 decimal places precision
  * to ensure accurate and predictable results.
@@ -60,8 +115,14 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
         // 8.3% ≈ 1/12 of range, representing a "half-level" skill difference
         //   - NTRP: 8.3% × 6.0 = 0.5 points (e.g., 4.0 vs 4.5)
         //   - UTR: 8.3% × 15.0 = 1.25 points (e.g., 10.0 vs 11.25)
-        // Matches within this threshold produce full performance-based changes
-        // Matches beyond this threshold (expected outcomes) produce reduced/zero changes
+        //
+        // How this affects changes:
+        //   - Gap < 8.3%: Full performance-based changes (competitive match)
+        //   - Gap > 8.3%: Reduced changes (expected outcome has less information value)
+        //   - Gap >> 8.3%: Near-zero changes (outcome was highly predictable)
+        //
+        // The threshold acts as a transition point: matches closer than this are treated
+        // as skill-revealing, while wider gaps indicate the result was expected.
         private val COMPETITIVE_THRESHOLD_PCT = "0.083".bd
     }
 
@@ -135,8 +196,9 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
             )
 
             // Apply rating changes with system-specific constraints
-            val player1NewRating = applyRatingChange(rating = player1.rating, change = player1Change, audit = audit)
-            val player2NewRating = applyRatingChange(rating = player2.rating, change = player2Change, audit = audit)
+            val options = request.options ?: org.lange.tennis.levelr.model.RatingCalculationOptions()
+            val player1NewRating = applyRatingChange(rating = player1.rating, change = player1Change, options = options, audit = audit)
+            val player2NewRating = applyRatingChange(rating = player2.rating, change = player2Change, options = options, audit = audit)
 
             // Calculate percent changes
             val player1PercentChange = calculatePercentChange(player1.rating.value.bd, player1NewRating.value.bd)
@@ -255,6 +317,12 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
             matchScore: MatchScore,
             ratingScale: BigDecimal,
         ): BigDecimal {
+            // Dominance factor measures match closeness: (games_won - games_lost) / total_games
+            // Range: -1.0 (shutout loss) to +1.0 (shutout win)
+            // Examples:
+            //   - 6-0: (6-0)/6 = 1.0 (complete dominance)
+            //   - 6-4: (6-4)/10 = 0.2 (competitive, slight edge)
+            //   - 7-5: (7-5)/12 = 0.167 (very competitive)
             val dominance = matchScore.calculateDominanceFactor(playerId = this.playerId)
             val dominanceMagnitude = dominance.abs()
             val ratingAdvantage = this.rating.value.bd - opponent.rating.value.bd
@@ -269,36 +337,74 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
                 }
 
             // Normalize rating gap as percentage of range
+            // This ensures fair treatment across rating systems with different scales:
+            //   - 0.5 NTRP gap → 0.5/6.0 = 8.3% normalized
+            //   - 1.25 UTR gap → 1.25/15.0 = 8.3% normalized
+            // Both produce identical scale factors → consistent K-factor ratio (2.5×)
             val normalizedGap = absAdvantage.divideBy(ratingRange)
 
             // Pluggable constants
             val thresholdPct = COMPETITIVE_THRESHOLD_PCT
-            // Upset multiplier doubles the impact of unexpected results
-            // A 2.0 multiplier ensures upsets produce significant rating changes
-            // compared to expected outcomes, reflecting that upsets indicate
-            // rating inaccuracy that should be corrected more aggressively
+
+            // Upset multiplier: Why 2.0?
+            // When an underdog wins, it provides strong evidence that ratings are inaccurate.
+            // A multiplier of 2.0 ensures upsets produce 2× the impact of expected outcomes,
+            // allowing ratings to converge faster toward true skill levels.
+            //
+            // Example with 0.5 NTRP gap (8.3% normalized):
+            //   - If favorite wins: scale ≈ 0.0 (near threshold), minimal change
+            //   - If underdog wins: scale = (0.083 / 0.083) × 2.0 = 2.0, doubled change
+            //
+            // This creates asymmetry: surprising results move ratings more than predictable ones.
             val upsetMultiplier = "2.0".bd
 
             // Calculate scale based on upset vs competitive/expected scenario
+            //
+            // Two cases determine how much ratings should change:
+            //
+            // Case 1: UPSET (underdog wins OR favorite loses)
+            //   Formula: scale = (normalizedGap / threshold) × upsetMultiplier
+            //   Example: 0.5 NTRP underdog wins (8.3% gap)
+            //     scale = (0.083 / 0.083) × 2.0 = 2.0
+            //   Larger gaps = bigger surprises = larger changes
+            //
+            // Case 2: EXPECTED/COMPETITIVE (favorite wins OR even match)
+            //   Formula: scale = max(0, (threshold - normalizedGap) / threshold)
+            //   Example 1: Equal players (0% gap)
+            //     scale = (0.083 - 0.0) / 0.083 = 1.0 (full change)
+            //   Example 2: 0.5 NTRP favorite wins (8.3% gap)
+            //     scale = (0.083 - 0.083) / 0.083 = 0.0 (no change, as expected)
+            //   Example 3: 1.0 NTRP favorite wins (16.7% gap)
+            //     scale = max(0, negative) = 0.0 (no change, highly expected)
+            //   Larger gaps = more expected = smaller changes (approaching zero)
             val scale =
                 if ((isWinner && ratingAdvantage < ZERO) || (!isWinner && ratingAdvantage > ZERO)) {
                     // Upset: underdog wins OR favorite loses
-                    // Use gap-based scaling with upset multiplier
                     normalizedGap.divideBy(thresholdPct) * upsetMultiplier
                 } else {
                     // Competitive or expected outcome
-                    // Use advantage factor that decreases as gap increases
                     (thresholdPct - normalizedGap).divideBy(thresholdPct).max(ZERO)
                 }
 
             val sign = if (isWinner) ONE else -ONE
+
+            // Final formula: change = K × dominance × scale × sign
+            // Where:
+            //   K = K-factor (0.16 for NTRP, 0.4 for UTR)
+            //   dominance = games won / games played (0.0 to 1.0)
+            //   scale = upset_factor OR competitive_factor (calculated above)
+            //   sign = +1 for winner, -1 for loser (ensures zero-sum before clamping)
             return ratingScale * dominanceMagnitude * scale * sign
         }
 
+        // K-factor scales proportionally by rating range to maintain consistent volatility
+        // UTR has a wider range (15.0) than NTRP (6.0), so K_UTR = K_NTRP × (15.0/6.0) = K_NTRP × 2.5
+        // This ensures that a 1-point UTR gap produces the same % change as a 0.4-point NTRP gap
+        // Example: 1.0 UTR = 1.0/15.0 = 6.67% of range ≈ 0.4 NTRP = 0.4/6.0 = 6.67% of range
         val ratingScale =
             when (ratingSystem) {
                 RatingSystem.NTRP -> K_FACTOR_NTRP
-                RatingSystem.UTR -> K_FACTOR_NTRP * UTR_RANGE.divideBy(divisor = NTRP_RANGE)
+                RatingSystem.UTR -> K_FACTOR_NTRP * UTR_RANGE.divideBy(divisor = NTRP_RANGE) // Result: 0.16 × 2.5 = 0.4
             }
 
         // Calculate base Elo changes
@@ -336,47 +442,97 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
     private fun applyRatingChange(
         rating: Rating,
         change: BigDecimal,
+        options: org.lange.tennis.levelr.model.RatingCalculationOptions,
         audit: AuditTrail,
     ): Rating =
         when (rating.system) {
-            RatingSystem.NTRP -> applyNTRPChange(rating = rating, change = change, audit = audit)
-            RatingSystem.UTR -> applyUTRChange(rating = rating, change = change, audit = audit)
+            RatingSystem.NTRP -> applyNTRPChange(rating = rating, change = change, options = options, audit = audit)
+            RatingSystem.UTR -> applyUTRChange(rating = rating, change = change, options = options, audit = audit)
         }
 
     /**
      * Apply rating change for NTRP (continuous values, range 1.0-7.0).
-     * Rounds to 2 decimal places for NTRP display.
+     *
+     * Supports USTA NTRP Dynamic-style rating smoothing when enabled via options.
+     * Smoothing averages the calculated new rating with the previous rating for stability.
+     *
+     * ## Smoothing Formula:
+     * ```
+     * calculated = previous + rawChange
+     * smoothed = (calculated × factor) + (previous × (1 - factor))
+     * ```
+     *
+     * This can be simplified to:
+     * ```
+     * smoothed = previous + (rawChange × factor)
+     * ```
+     *
+     * ## Example (4.0 NTRP, +0.160 raw change):
+     * - Factor 0.0: smoothed = 4.0 + (0.160 × 0.0) = 4.000 (no change)
+     * - Factor 0.3: smoothed = 4.0 + (0.160 × 0.3) = 4.048 (conservative)
+     * - Factor 0.5: smoothed = 4.0 + (0.160 × 0.5) = 4.080 (USTA style)
+     * - Factor 0.7: smoothed = 4.0 + (0.160 × 0.7) = 4.112 (aggressive)
+     * - Factor 1.0: smoothed = 4.0 + (0.160 × 1.0) = 4.160 (full change)
+     *
+     * ## Process Order:
+     * 1. Calculate raw rating change using performance-based formula
+     * 2. Apply smoothing (if enabled) to dampen the change
+     * 3. Clamp to valid NTRP range (1.0-7.0)
+     *
+     * Note: Zero-sum property is maintained through step 2, but may break at step 3
+     * if boundary clamping affects one player differently than the other.
      */
     private fun applyNTRPChange(
         rating: Rating,
         change: BigDecimal,
+        options: org.lange.tennis.levelr.model.RatingCalculationOptions,
         audit: AuditTrail,
     ): Rating {
         val originalValue = rating.value.bd
-        val newValue = originalValue + change
+        val calculatedValue = originalValue + change
+
+        // Apply smoothing if enabled (USTA NTRP Dynamic style)
+        // Formula: smoothed = (calculated × factor) + (previous × (1 - factor))
+        // This reduces rating volatility by blending old and new ratings
+        val smoothedValue =
+            if (options.smoothingEnabled) {
+                val factor = options.smoothingFactor.bd
+                (calculatedValue * factor) + (originalValue * (ONE - factor))
+            } else {
+                calculatedValue
+            }
 
         // Clamp to valid NTRP range (no rounding - keep 6 decimal precision)
         val clamped =
-            if (newValue < NTRP_MIN) {
+            if (smoothedValue < NTRP_MIN) {
                 NTRP_MIN
-            } else if (newValue > NTRP_MAX) {
+            } else if (smoothedValue > NTRP_MAX) {
                 NTRP_MAX
             } else {
-                newValue
+                smoothedValue
             }
 
         audit.add(
             AuditEntry(
                 message =
-                    "NTRP change: ${rating.value} + ${change.toStringPrecise()} = " +
-                        "${newValue.toStringPrecise()} -> clamped ${clamped.toStringPrecise()}",
+                    buildString {
+                        append("NTRP change: ${rating.value} + ${change.toStringPrecise()} = ")
+                        append("${calculatedValue.toStringPrecise()}")
+                        if (options.smoothingEnabled) {
+                            append(" -> smoothed ${smoothedValue.toStringPrecise()} (factor=${options.smoothingFactor})")
+                        }
+                        append(" -> clamped ${clamped.toStringPrecise()}")
+                    },
                 context =
                     mapOf(
                         "system" to "NTRP",
                         "original" to rating.value,
                         "change" to change.toStringPrecise(),
-                        "newValue" to newValue.toStringPrecise(),
+                        "newValue" to calculatedValue.toStringPrecise(),
                         "clamped" to clamped.toStringPrecise(),
+                        "smoothingEnabled" to options.smoothingEnabled.toString(),
+                        "smoothingFactor" to options.smoothingFactor,
+                        "smoothed" to if (options.smoothingEnabled) smoothedValue.toStringPrecise() else "N/A",
                     ),
             ),
         )
@@ -388,38 +544,86 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
 
     /**
      * Apply rating change for UTR (decimal values allowed, minimum 1.0).
-     * Rounds to 1 decimal place for UTR display.
+     *
+     * Supports USTA NTRP Dynamic-style rating smoothing when enabled via options.
+     * Smoothing averages the calculated new rating with the previous rating for stability.
+     *
+     * ## UTR Smoothing Behavior:
+     * UTR uses the same smoothing formula as NTRP, but with 2.5× larger K-factor:
+     * - K_NTRP = 0.16
+     * - K_UTR = 0.40 (2.5× larger due to wider rating range: 15.0 vs 6.0)
+     *
+     * This means UTR ratings change 2.5× faster than NTRP, even with smoothing:
+     * ```
+     * UTR_change = NTRP_change × 2.5
+     * ```
+     *
+     * ## Example (10.0 UTR, +0.400 raw change):
+     * - Factor 0.0: smoothed = 10.0 + (0.400 × 0.0) = 10.000
+     * - Factor 0.3: smoothed = 10.0 + (0.400 × 0.3) = 10.120
+     * - Factor 0.5: smoothed = 10.0 + (0.400 × 0.5) = 10.200
+     * - Factor 0.7: smoothed = 10.0 + (0.400 × 0.7) = 10.280
+     * - Factor 1.0: smoothed = 10.0 + (0.400 × 1.0) = 10.400
+     *
+     * Compare to equivalent NTRP (4.0, +0.160 raw change):
+     * - Factor 0.5: NTRP = 4.080, UTR = 10.200
+     * - Ratio: 10.200 / 4.080 ≈ 2.5× (but both use same % of range)
+     *
+     * ## Process Order:
+     * 1. Calculate raw rating change (2.5× larger than NTRP)
+     * 2. Apply smoothing (if enabled)
+     * 3. Clamp to valid UTR range (1.0-16.0)
      */
     private fun applyUTRChange(
         rating: Rating,
         change: BigDecimal,
+        options: org.lange.tennis.levelr.model.RatingCalculationOptions,
         audit: AuditTrail,
     ): Rating {
         val originalValue = rating.value.bd
-        val newValue = originalValue + change
+        val calculatedValue = originalValue + change
+
+        // Apply smoothing if enabled (USTA NTRP Dynamic style)
+        // UTR uses same formula as NTRP but with 2.5× larger changes
+        val smoothedValue =
+            if (options.smoothingEnabled) {
+                val factor = options.smoothingFactor.bd
+                (calculatedValue * factor) + (originalValue * (ONE - factor))
+            } else {
+                calculatedValue
+            }
 
         // Clamp to valid UTR range (no rounding - keep 6 decimal precision)
         val clamped =
-            if (newValue < UTR_MIN) {
+            if (smoothedValue < UTR_MIN) {
                 UTR_MIN
-            } else if (newValue > UTR_MAX) {
+            } else if (smoothedValue > UTR_MAX) {
                 UTR_MAX
             } else {
-                newValue
+                smoothedValue
             }
 
         audit.add(
             AuditEntry(
                 message =
-                    "UTR change: ${rating.value} + ${change.toStringPrecise()} = " +
-                        "${newValue.toStringPrecise()} -> clamped ${clamped.toStringPrecise()}",
+                    buildString {
+                        append("UTR change: ${rating.value} + ${change.toStringPrecise()} = ")
+                        append("${calculatedValue.toStringPrecise()}")
+                        if (options.smoothingEnabled) {
+                            append(" -> smoothed ${smoothedValue.toStringPrecise()} (factor=${options.smoothingFactor})")
+                        }
+                        append(" -> clamped ${clamped.toStringPrecise()}")
+                    },
                 context =
                     mapOf(
                         "system" to "UTR",
                         "original" to rating.value,
                         "change" to change.toStringPrecise(),
-                        "newValue" to newValue.toStringPrecise(),
+                        "newValue" to calculatedValue.toStringPrecise(),
                         "clamped" to clamped.toStringPrecise(),
+                        "smoothingEnabled" to options.smoothingEnabled.toString(),
+                        "smoothingFactor" to options.smoothingFactor,
+                        "smoothed" to if (options.smoothingEnabled) smoothedValue.toStringPrecise() else "N/A",
                     ),
             ),
         )

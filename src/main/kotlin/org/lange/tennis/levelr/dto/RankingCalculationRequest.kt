@@ -3,12 +3,14 @@ package org.lange.tennis.levelr.dto
 import kotlinx.serialization.Serializable
 import org.lange.tennis.levelr.model.MatchScore
 import org.lange.tennis.levelr.model.PlayerProfile
+import org.lange.tennis.levelr.model.RatingCalculationOptions
 
 @Serializable
 data class RankingCalculationRequest(
     val players: Map<String, PlayerProfile>,
     val matchScore: MatchScore,
     val matchDate: String? = null,
+    val options: RatingCalculationOptions? = null,
 ) {
     init {
         require(players.size == 2) { "Exactly 2 players required for singles match, got ${players.size}" }

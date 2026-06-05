@@ -5,6 +5,7 @@ import org.lange.tennis.levelr.dto.RankingCalculationRequest
 import org.lange.tennis.levelr.model.MatchScore
 import org.lange.tennis.levelr.model.PlayerProfile
 import org.lange.tennis.levelr.model.Rating
+import org.lange.tennis.levelr.model.RatingCalculationOptions
 import org.lange.tennis.levelr.model.RatingSystem
 import org.lange.tennis.levelr.model.SetScore
 import java.io.File
@@ -25,7 +26,16 @@ class NTRPvsUTRComparison {
         p1Games: Int,
         p2Games: Int,
         winner: String,
+        smoothingEnabled: Boolean = false,
+        smoothingFactor: Double = 0.5,
     ): RankingCalculationRequest {
+        val options =
+            if (smoothingEnabled) {
+                RatingCalculationOptions(smoothingEnabled = true, smoothingFactor = smoothingFactor)
+            } else {
+                null
+            }
+
         return RankingCalculationRequest(
             players =
                 mapOf(
@@ -52,6 +62,7 @@ class NTRPvsUTRComparison {
                             ),
                         ),
                 ),
+            options = options,
         )
     }
 
@@ -86,6 +97,8 @@ class NTRPvsUTRComparison {
                                 p1Games = scenario.p1Games,
                                 p2Games = scenario.p2Games,
                                 winner = scenario.winner,
+                                smoothingEnabled = scenario.smoothingEnabled,
+                                smoothingFactor = scenario.smoothingFactor,
                             ),
                     )
                 val ntrpP1Delta = ntrpResult.response.ratingChanges["P1"]?.change?.toDoubleOrNull() ?: 0.0
@@ -103,6 +116,8 @@ class NTRPvsUTRComparison {
                                 p1Games = scenario.p1Games,
                                 p2Games = scenario.p2Games,
                                 winner = scenario.winner,
+                                smoothingEnabled = scenario.smoothingEnabled,
+                                smoothingFactor = scenario.smoothingFactor,
                             ),
                     )
                 val utrP1Delta = utrResult.response.ratingChanges["P1"]?.change?.toDoubleOrNull() ?: 0.0
