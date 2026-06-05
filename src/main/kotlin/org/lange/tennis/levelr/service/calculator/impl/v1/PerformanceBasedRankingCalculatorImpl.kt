@@ -49,12 +49,19 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
         private val UTR_RANGE = "15.0".bd // Practical range (1.0-16.0 for professional level)
 
         // K-factor for NTRP (base calibration)
-        // K=0.16 gives typical changes of ±0.08 to ±0.16 for normal NTRP matches
-        // With dominance factor and upset multiplier, max typical change is ~0.5 rating points
+        // K=0.16 chosen to produce typical changes of:
+        //   - Equal players, close match (6-4): ±0.032
+        //   - Equal players, dominant match (6-0): ±0.160
+        //   - Moderate upset (0.5 gap reversed): ±0.321
+        // This ensures gradual convergence without excessive volatility
         private val K_FACTOR_NTRP = "0.16".bd
 
         // Competitive threshold as percentage of rating range (8.3% for all systems)
-        // This ensures proportionally equivalent gaps produce equivalent competitive factors
+        // 8.3% ≈ 1/12 of range, representing a "half-level" skill difference
+        //   - NTRP: 8.3% × 6.0 = 0.5 points (e.g., 4.0 vs 4.5)
+        //   - UTR: 8.3% × 15.0 = 1.25 points (e.g., 10.0 vs 11.25)
+        // Matches within this threshold produce full performance-based changes
+        // Matches beyond this threshold (expected outcomes) produce reduced/zero changes
         private val COMPETITIVE_THRESHOLD_PCT = "0.083".bd
     }
 
@@ -266,6 +273,10 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
 
             // Pluggable constants
             val thresholdPct = COMPETITIVE_THRESHOLD_PCT
+            // Upset multiplier doubles the impact of unexpected results
+            // A 2.0 multiplier ensures upsets produce significant rating changes
+            // compared to expected outcomes, reflecting that upsets indicate
+            // rating inaccuracy that should be corrected more aggressively
             val upsetMultiplier = "2.0".bd
 
             // Calculate scale based on upset vs competitive/expected scenario
