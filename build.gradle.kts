@@ -3,6 +3,7 @@ plugins {
     kotlin("plugin.serialization") version "2.2.21"
     application
     id("org.jlleitschuh.gradle.ktlint") version "12.1.0"
+    id("io.gitlab.arturbosch.detekt") version "1.23.8"
     jacoco
 }
 
@@ -66,6 +67,23 @@ ktlint {
     android.set(false)
     outputToConsole.set(true)
     ignoreFailures.set(false)
+}
+
+// detekt configuration
+detekt {
+    buildUponDefaultConfig = true
+    allRules = false
+    config.setFrom(files("$projectDir/detekt.yml"))
+}
+
+tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
+    reports {
+        html.required.set(true)
+        xml.required.set(true)
+        txt.required.set(true)
+        sarif.required.set(true)
+        md.required.set(true)
+    }
 }
 
 // Install Git pre-commit hook that runs ktlint format
