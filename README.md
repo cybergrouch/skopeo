@@ -190,51 +190,79 @@ See [docs/API_DOCUMENTATION.md](docs/API_DOCUMENTATION.md) for detailed API spec
 
 ## How Ratings Are Calculated
 
-Tennis Levelr uses a **performance-based Elo rating system** that goes beyond simple win/loss to consider **how dominantly** you won and whether you **exceeded expectations**.
+Tennis Levelr uses a **performance-based rating system** with normalized gaps to ensure fair calculations across different rating systems. The algorithm considers **how dominantly** you won and whether the match was an **upset** or **expected outcome**.
 
 ### Quick Guide for Players
 
 **What affects your rating?**
 1. **The result** - Win or lose
 2. **Your opponent's rating** - Beating stronger players gains more points
-3. **How dominant** - 6-0 wins count more than 7-6 wins
-4. **Expectations** - Exceeding predictions boosts your rating
+3. **How dominant** - 6-0 wins count much more than 7-6 wins
+4. **Rating gap** - Competitive matches (within threshold) produce larger changes
+5. **Upsets** - Unexpected wins produce significant rating changes
 
-**Five scenarios:**
+**Two main scenarios:**
 
-1. **Equal match** (ratings within 0.01): Standard Elo with dominance boost
-2. **Upset win**: Underdog gains capped points (prevents single-match jumps)
-3. **Met expectations**: Both ratings stay the same (you performed as predicted)
-4. **Underperformed**: Favorite *loses* rating despite winning (didn't meet expectations)
-5. **Overperformed**: Gains capped to prevent excessive jumps
+1. **Competitive or Expected Win**: Rating changes decrease as gap increases
+   - Equal players (no gap): Maximum performance-based change
+   - Small gap (within 8.3% of range): Moderate change based on gap size
+   - At threshold (0.5 NTRP, 1.25 UTR): Zero change
+   - Beyond threshold (expected outcome): Zero change
+
+2. **Upset Win**: Underdog wins against favorite
+   - Larger gap = larger rating change
+   - Upset multiplier (2×) applied
+   - Change proportional to gap size
 
 ### Examples
 
 **Scenario 1: Close match between equals**
-- You (5.0) vs Opponent (5.0)
-- You win 7-5: Gain ~0.11 points
-- Close win = moderate rating gain
+- You (5.0 NTRP) vs Opponent (5.0 NTRP)
+- You win 6-4: Gain ~0.032 points
+- Equal ratings = full performance-based change
 
-**Scenario 2: Upset victory**
-- You (3.0) vs Opponent (6.0)
-- You win 6-4: Gain capped at 1.0 point (rating gap / 3)
-- Same gain whether you win 6-0 or 7-6
+**Scenario 2: Dominant match between equals**
+- You (5.0 NTRP) vs Opponent (5.0 NTRP)
+- You win 6-0: Gain ~0.160 points
+- Dominance factor amplifies the change (shutout = 5× larger than 6-4)
 
-**Scenario 3: Dominant win**
-- You (5.0) vs Opponent (4.0)
-- You win 6-1, 6-0: Gain capped at 0.33 points
-- Very dominant, but single matches can't close large gaps
+**Scenario 3: Small gap, expected win**
+- You (4.5 NTRP) vs Opponent (4.0 NTRP) [gap = 0.5, at threshold]
+- You win 6-3: Gain 0.0 points
+- Met expectations exactly, ratings are already accurate
 
-**Scenario 4: Weak win (underperformance)**
-- You (4.5) vs Opponent (4.0)
-- You barely win 7-6, 3-6, 7-5
-- You *lose* 0.05 points (failed to meet expectations)
-- Opponent *gains* 0.05 points despite losing!
+**Scenario 4: Upset victory**
+- You (3.0 NTRP) vs Opponent (4.0 NTRP) [gap = 1.0]
+- You win 6-2: Gain ~0.32 points
+- Upset with decent dominance = significant change
 
-**Scenario 5: Mismatch**
-- You (6.0) vs Opponent (1.0)
-- You win 6-0, 6-0
-- Both ratings unchanged (massive mismatches don't inform ratings)
+**Scenario 5: Large gap mismatch**
+- You (6.0 NTRP) vs Opponent (1.0 NTRP) [gap = 5.0]
+- You win 6-0, 6-0: Gain 0.0 points
+- Heavily favored player winning as expected = no change
+
+**Scenario 6: Close match near threshold**
+- You (4.3 NTRP) vs Opponent (4.0 NTRP) [gap = 0.3]
+- You win 7-5: Gain ~0.011 points
+- Within competitive threshold but close match = small change
+
+### Key Concepts
+
+**Competitive Threshold**: 8.3% of rating range (~1/12)
+- NTRP: 0.5 points (e.g., 4.0 vs 4.5)
+- UTR: 1.25 points (e.g., 10.0 vs 11.25)
+- Matches within this threshold produce performance-based changes
+- Matches beyond this threshold (expected outcomes) produce zero change
+
+**Dominance Factor**: Based on game margin, not ratio
+- Formula: (games won - games lost) / (games won + games lost)
+- 6-0 = 1.0 dominance (maximum)
+- 6-4 = 0.2 dominance
+- 7-6 = 0.077 dominance (very close)
+
+**K-Factor Scaling**:
+- NTRP: K = 0.16 (typical changes ±0.032 to ±0.160)
+- UTR: K = 0.4 (2.5× larger, proportional to range)
 
 ### Rating Boundaries
 - **NTRP**: 1.0 (beginner) to 7.0 (world-class)
@@ -242,7 +270,6 @@ Tennis Levelr uses a **performance-based Elo rating system** that goes beyond si
 
 ### Want More Details?
 - **[ALGORITHM_BEHAVIOR.md](docs/ALGORITHM_BEHAVIOR.md)** - Complete algorithm explanation with formulas, edge cases, and technical details
-- **[RANKING_ALGORITHM.md](docs/RANKING_ALGORITHM.md)** - Original algorithm design document
 
 ## Documentation
 

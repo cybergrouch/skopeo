@@ -1,5 +1,23 @@
 # Tennis Ranking Algorithm Documentation
 
+> **⚠️ DEPRECATED - Historical Document**
+>
+> This document describes an **older version** of the ranking algorithm that is **no longer implemented**.
+>
+> **For current algorithm documentation, see:**
+> - **[ALGORITHM_BEHAVIOR.md](ALGORITHM_BEHAVIOR.md)** - Complete current algorithm specification
+>
+> **Key differences between old (this doc) and current algorithm:**
+> - **K-factor**: Old used K=32, current uses K=0.16 (NTRP) and K=0.4 (UTR)
+> - **Dominance**: Old used ratio (won/lost) with 2.5 cap, current uses normalized margin (won-lost)/(won+lost)
+> - **Expected score**: Old used Elo 400 scale factor, current uses normalized gap competitive threshold (8.3%)
+> - **Rating changes**: Old could produce 20-40 point swings, current produces 0.01-0.50 point changes
+> - **Formula**: Old used traditional Elo, current uses two-path system (upset vs competitive)
+>
+> This document is preserved for historical reference only.
+
+---
+
 ## Overview
 
 Tennis Levelr uses an **Elo-based rating system** adapted for tennis match scoring. The algorithm calculates rating changes based on match outcomes, considering both the rating differential between players and the dominance of the victory.
