@@ -1,7 +1,9 @@
 package org.lange.tennis.levelr.service.calculator.impl.v1
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
@@ -17,16 +19,16 @@ import java.util.stream.Stream
 /**
  * Comprehensive test suite for PerformanceBasedRankingCalculatorImpl.
  *
- * Uses parameterized tests for easy verification of expected deltas.
- * All test data is defined in testScenarios() method for easy review and tuning.
+ * Rating Delta Tests (Parameterized):
+ * - Uses parameterized tests for easy verification of expected deltas
+ * - All test data defined in testScenarios() method for easy review and tuning
+ * - Covers: expected wins, upsets, competitive matches, equal players, various score margins
  *
- * Tests cover:
- * - Expected wins (higher-rated beats lower-rated)
- * - Upsets (lower-rated beats higher-rated)
- * - Competitive matches (small rating gaps)
- * - Equal players (same rating)
- * - Various score margins (6-0, 6-4, 7-5)
- * - Large rating gaps
+ * Audit Trail Tests (Nested):
+ * - Verifies audit trail structure and content
+ * - Tests calculation start, match result, ranking adjustments, rating changes
+ * - Validates zero-sum property and audit entry order
+ * - Covers both NTRP and UTR rating systems
  */
 class PerformanceBasedRankingCalculatorImplTest {
     private val calculator = PerformanceBasedRankingCalculatorImpl()
@@ -156,5 +158,228 @@ class PerformanceBasedRankingCalculatorImplTest {
 
         val ratio = upsetDelta / expectedDelta
         assertEquals(2.0, ratio, 0.01, "Upset should give 2× more change than expected win")
+    }
+
+    // ========================================
+    // Audit Trail Tests
+    // ========================================
+
+    @Nested
+    @DisplayName("Audit Trail")
+    inner class AuditTrailTests {
+        @Test
+        @DisplayName("Contains calculation start with player info")
+        fun testAuditTrailContainsCalculationStart() {
+            val request = createAuditTestRequest()
+            val result = calculator.calculate(request)
+
+            val startEntry = result.audit.find { it.message.contains("Calculating ranking") }
+
+            assertTrue(startEntry != null, "Audit should contain calculation start entry")
+            assertEquals("John Doe", startEntry!!.context["player1"])
+            assertEquals("4.5", startEntry!!.context["player1Rating"])
+            assertEquals("Jane Smith", startEntry!!.context["player2"])
+            assertEquals("4.0", startEntry!!.context["player2Rating"])
+        }
+
+        @Test
+        @DisplayName("Contains match result with dominance factors")
+        fun testAuditTrailContainsMatchResult() {
+            val request = createAuditTestRequest()
+            val result = calculator.calculate(request)
+
+            val matchResultEntry = result.audit.find { it.message.contains("Match result") }
+
+            assertTrue(matchResultEntry != null, "Audit should contain match result entry")
+            assertTrue(matchResultEntry!!.context.containsKey("winnerId"))
+            assertTrue(matchResultEntry!!.context.containsKey("winnerDominanceFactor"))
+            assertTrue(matchResultEntry!!.context.containsKey("loserDominanceFactor"))
+        }
+
+        @Test
+        @DisplayName("Contains ranking adjustment calculation (zero-sum)")
+        fun testAuditTrailContainsRankingAdjustment() {
+            val request = createAuditTestRequest()
+            val result = calculator.calculate(request)
+
+            val rankingAdjustmentEntry = result.audit.find { it.message.contains("Ranking Adjustment Calculation") }
+
+            assertTrue(rankingAdjustmentEntry != null, "Audit should contain ranking adjustment entry")
+            assertTrue(rankingAdjustmentEntry!!.context.containsKey("player1RankingAdjustment"))
+            assertTrue(rankingAdjustmentEntry!!.context.containsKey("player2RankingAdjustment"))
+
+            // Ranking adjustments should be opposite (zero-sum before clamping)
+            val adjustment1 = (rankingAdjustmentEntry!!.context["player1RankingAdjustment"] as String).toDouble()
+            val adjustment2 = (rankingAdjustmentEntry!!.context["player2RankingAdjustment"] as String).toDouble()
+            assertEquals(0.0, adjustment1 + adjustment2, 0.0001)
+        }
+
+        @Test
+        @DisplayName("Contains rating changes (zero-sum)")
+        fun testAuditTrailContainsRatingChanges() {
+            val request = createAuditTestRequest()
+            val result = calculator.calculate(request)
+
+            val ratingChangesEntry = result.audit.find { it.message.contains("Rating changes") }
+
+            assertTrue(ratingChangesEntry != null, "Audit should contain rating changes entry")
+            assertTrue(ratingChangesEntry!!.context.containsKey("player1Change"))
+            assertTrue(ratingChangesEntry!!.context.containsKey("player2Change"))
+
+            // Changes should be opposite (zero-sum)
+            val change1 = (ratingChangesEntry!!.context["player1Change"] as String).toDouble()
+            val change2 = (ratingChangesEntry!!.context["player2Change"] as String).toDouble()
+            assertEquals(
+                0.0,
+                change1 + change2,
+                0.0001,
+                "Rating changes should be zero-sum before clamping",
+            )
+        }
+
+        @Test
+        @DisplayName("Contains NTRP system-specific changes")
+        fun testAuditTrailContainsSystemSpecificChanges() {
+            val request = createAuditTestRequest()
+            val result = calculator.calculate(request)
+
+            val ntrpChanges = result.audit.filter { it.message.contains("NTRP change") }
+
+            assertEquals(2, ntrpChanges.size, "Should have NTRP change entries for both players")
+
+            ntrpChanges.forEach { entry ->
+                assertEquals("NTRP", entry.context["system"])
+                assertTrue(entry.context.containsKey("original"))
+                assertTrue(entry.context.containsKey("change"))
+                assertTrue(entry.context.containsKey("newValue"))
+                assertTrue(entry.context.containsKey("clamped"))
+            }
+        }
+
+        @Test
+        @DisplayName("Contains UTR system-specific changes")
+        fun testAuditTrailForUTRMatch() {
+            val request = createUTRAuditTestRequest()
+            val result = calculator.calculate(request)
+
+            val utrChanges = result.audit.filter { it.message.contains("UTR change") }
+
+            assertEquals(2, utrChanges.size, "Should have UTR change entries for both players")
+
+            utrChanges.forEach { entry ->
+                assertEquals("UTR", entry.context["system"])
+                assertTrue(entry.context.containsKey("original"))
+                assertTrue(entry.context.containsKey("change"))
+            }
+        }
+
+        @Test
+        @DisplayName("Audit entries are in correct order")
+        fun testAuditTrailOrder() {
+            val request = createAuditTestRequest()
+            val result = calculator.calculate(request)
+
+            val messages = result.audit.map { it.message }
+
+            val calculatingIndex = messages.indexOfFirst { it.contains("Calculating ranking") }
+            val matchResultIndex = messages.indexOfFirst { it.contains("Match result") }
+            val rankingAdjustmentIndex = messages.indexOfFirst { it.contains("Ranking Adjustment Calculation") }
+            val ratingChangesIndex = messages.indexOfFirst { it.contains("Rating changes") }
+
+            assertTrue(calculatingIndex >= 0, "Should have 'Calculating ranking' entry")
+            assertTrue(matchResultIndex >= 0, "Should have 'Match result' entry")
+            assertTrue(rankingAdjustmentIndex >= 0, "Should have 'Ranking Adjustment Calculation' entry")
+            assertTrue(ratingChangesIndex >= 0, "Should have 'Rating changes' entry")
+
+            // Verify order
+            assertTrue(calculatingIndex < matchResultIndex, "Calculation start should come before match result")
+            assertTrue(matchResultIndex < rankingAdjustmentIndex, "Match result should come before ranking adjustment")
+            assertTrue(
+                rankingAdjustmentIndex < ratingChangesIndex,
+                "Ranking adjustment should come before rating changes",
+            )
+        }
+
+        @Test
+        @DisplayName("Audit context data is valid")
+        fun testAuditContextData() {
+            val request = createAuditTestRequest()
+            val result = calculator.calculate(request)
+
+            result.audit.forEach { entry ->
+                entry.context.values.forEach { value ->
+                    assertTrue(
+                        value is String || value is Number,
+                        "Context value should be String or Number, got ${value::class.simpleName}",
+                    )
+                }
+            }
+        }
+    }
+
+    // ========================================
+    // Helper Methods
+    // ========================================
+
+    private fun createAuditTestRequest(): RankingCalculationRequest {
+        val player1 =
+            PlayerProfile(
+                playerId = "P123",
+                name = "John Doe",
+                rating = Rating(value = "4.5", system = RatingSystem.NTRP),
+            )
+
+        val player2 =
+            PlayerProfile(
+                playerId = "P456",
+                name = "Jane Smith",
+                rating = Rating(value = "4.0", system = RatingSystem.NTRP),
+            )
+
+        val sets =
+            listOf(
+                SetScore(
+                    games = mapOf("P123" to 6, "P456" to 4),
+                    winner = "P123",
+                ),
+                SetScore(
+                    games = mapOf("P123" to 6, "P456" to 3),
+                    winner = "P123",
+                ),
+            )
+
+        return RankingCalculationRequest(
+            players = mapOf("P123" to player1, "P456" to player2),
+            matchScore = MatchScore(sets = sets),
+        )
+    }
+
+    private fun createUTRAuditTestRequest(): RankingCalculationRequest {
+        val player1 =
+            PlayerProfile(
+                playerId = "P789",
+                name = "Mike Wilson",
+                rating = Rating(value = "8.5", system = RatingSystem.UTR),
+            )
+
+        val player2 =
+            PlayerProfile(
+                playerId = "P101",
+                name = "Sarah Lee",
+                rating = Rating(value = "8.2", system = RatingSystem.UTR),
+            )
+
+        val sets =
+            listOf(
+                SetScore(
+                    games = mapOf("P789" to 6, "P101" to 4),
+                    winner = "P789",
+                ),
+            )
+
+        return RankingCalculationRequest(
+            players = mapOf("P789" to player1, "P101" to player2),
+            matchScore = MatchScore(sets = sets),
+        )
     }
 }
