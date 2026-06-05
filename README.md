@@ -172,6 +172,7 @@ All utility scripts are located in the `scripts/` directory:
 | `curl-examples.sh` | Display cURL command examples and usage |
 | `docker-build.sh` | Build and tag Docker images for deployment |
 | `format-code.sh` | Auto-format all Kotlin code with ktlint |
+| `check-coverage.sh` | Run tests and verify 85% coverage threshold |
 
 See `scripts/README.md` for detailed documentation.
 
@@ -383,7 +384,10 @@ Total:                  79 tests in ~6 seconds
 # Run specific test class
 ./gradlew test --tests "RankingCalculatorUnitTest"
 
-# Verify coverage thresholds
+# Check coverage against 85% threshold
+./scripts/check-coverage.sh
+
+# Verify coverage thresholds (Gradle task)
 ./gradlew jacocoTestCoverageVerification
 
 # View coverage report

@@ -106,6 +106,81 @@ To run the container:
 
 ### 🎨 Code Quality
 
+#### `check-coverage.sh`
+Run code coverage analysis and verify 85% threshold.
+- Executes all tests with JaCoCo instrumentation
+- Generates coverage reports (HTML, XML, CSV)
+- Parses coverage metrics for instructions, branches, lines
+- Checks if coverage meets 85% threshold
+- Displays detailed coverage breakdown
+- Exits with success/failure status
+
+**Usage:**
+```bash
+./scripts/check-coverage.sh
+```
+
+**Sample Output:**
+```
+==========================================
+  Code Coverage Check
+==========================================
+
+Threshold: 85%
+Project: /Users/lange/Repositories/kotlin/tennis_levelr
+
+Step 1: Running tests with coverage...
+✓ Tests completed successfully
+
+Step 2: Checking for coverage reports...
+✓ Coverage reports generated
+  - HTML: build/reports/jacoco/test/html/index.html
+  - XML:  build/reports/jacoco/test/jacocoTestReport.xml
+  - CSV:  build/reports/jacoco/test/jacocoTestReport.csv
+
+Step 3: Parsing coverage metrics...
+
+Coverage Breakdown:
+─────────────────────────────────────────
+  Instructions:    71.42%
+  Branches:        71.42%
+  Lines:           71.42%
+  Complexity:      71.42%
+  Methods:         71.42%
+  Classes:         71.42%
+─────────────────────────────────────────
+
+Step 4: Checking coverage against threshold (85%)...
+✗ Line coverage: 71.42% < 85%
+✗ Branch coverage: 71.42% < 85%
+
+==========================================
+  Summary
+==========================================
+
+✗ FAILED: Coverage below 85% threshold
+
+View detailed report:
+  open build/reports/jacoco/test/html/index.html
+
+To improve coverage:
+  1. Add unit tests for uncovered code
+  2. Add integration tests for API endpoints
+  3. Add edge case tests for boundary conditions
+```
+
+**When to use:**
+- Before merging pull requests
+- As part of CI/CD pipeline
+- To verify test coverage goals
+- After adding new features
+
+**Exit codes:**
+- `0`: Coverage meets or exceeds 85% threshold
+- `1`: Coverage below threshold or tests failed
+
+---
+
 #### `format-code.sh`
 Auto-format all Kotlin code using ktlint.
 - Applies opinionated formatting rules
