@@ -598,7 +598,7 @@ object TestScenarios {
                 winner = "P1",
                 expectedNtrpP1Delta = "0.321286",
                 expectedNtrpP2Delta = "-0.321286",
-                expectedUtrP1Delta = "0.803214", // 1.606429 × 0.5 ≈ 0.803214 (actual calculation)
+                expectedUtrP1Delta = "0.803214",
                 expectedUtrP2Delta = "-0.803214",
                 smoothingEnabled = true,
                 smoothingFactor = 0.5,
@@ -631,9 +631,9 @@ object TestScenarios {
                 p1Games = 6,
                 p2Games = 0,
                 winner = "P1",
-                expectedNtrpP1Delta = "0.063935", // 0.127871 × 0.5 ≈ 0.063935 (actual calculation)
+                expectedNtrpP1Delta = "0.063935",
                 expectedNtrpP2Delta = "-0.063935",
-                expectedUtrP1Delta = "0.159839", // 0.319677 × 0.5 ≈ 0.159839
+                expectedUtrP1Delta = "0.159839",
                 expectedUtrP2Delta = "-0.159839",
                 smoothingEnabled = true,
                 smoothingFactor = 0.5,
@@ -648,9 +648,9 @@ object TestScenarios {
                 p1Games = 6,
                 p2Games = 4,
                 winner = "P1",
-                expectedNtrpP1Delta = "0.017902", // 0.025574 × 0.7 ≈ 0.017902 (actual calculation)
+                expectedNtrpP1Delta = "0.017902",
                 expectedNtrpP2Delta = "-0.017902",
-                expectedUtrP1Delta = "0.044755", // 0.063936 × 0.7 ≈ 0.044755 (actual calculation)
+                expectedUtrP1Delta = "0.044755",
                 expectedUtrP2Delta = "-0.044755",
                 smoothingEnabled = true,
                 smoothingFactor = 0.7,
@@ -668,7 +668,7 @@ object TestScenarios {
                 winner = "P1",
                 expectedNtrpP1Delta = "0.321286",
                 expectedNtrpP2Delta = "-0.321286",
-                expectedUtrP1Delta = "0.803214", // 1.606429 × 0.5 ≈ 0.803214 (actual calculation)
+                expectedUtrP1Delta = "0.803214",
                 expectedUtrP2Delta = "-0.803214",
                 smoothingEnabled = true,
                 smoothingFactor = 0.5,
