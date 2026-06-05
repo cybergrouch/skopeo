@@ -52,6 +52,10 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
         // K=0.16 gives typical changes of ±0.08 to ±0.16 for normal NTRP matches
         // With dominance factor and upset multiplier, max typical change is ~0.5 rating points
         private val K_FACTOR_NTRP = "0.16".bd
+
+        // Competitive threshold as percentage of rating range (8.3% for all systems)
+        // This ensures proportionally equivalent gaps produce equivalent competitive factors
+        private val COMPETITIVE_THRESHOLD_PCT = "0.083".bd
     }
 
     /**
@@ -214,21 +218,26 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
             ) / ratingScale
 
         /**
-         * Calculate rating adjustment using simplified formula.
+         * Calculate rating adjustment using simplified formula with normalized gaps.
          *
          * Formula: K × dominance × scale × sign
          *
          * where:
+         *   normalized_gap = rating_gap / rating_range
          *   scale = upset_factor (if upset) OR competitive_factor (otherwise)
-         *   upset_factor = (rating_gap / threshold) × upset_multiplier
-         *   competitive_factor = max(0, (threshold - rating_gap) / threshold)
+         *   upset_factor = (normalized_gap / threshold_pct) × upset_multiplier
+         *   competitive_factor = max(0, (threshold_pct - normalized_gap) / threshold_pct)
          *
          * Pluggable constants:
-         *   - threshold: competitive range (1.0 for NTRP)
+         *   - threshold_pct: 8.3% of rating range (same for all systems)
          *   - upset_multiplier: bonus for upsets (2.0)
          *
-         * This simplified approach reduces from 5 branches to 2 while maintaining
-         * the same behavior for all scenarios, including proper handling of:
+         * Rating gaps are normalized by rating range to ensure proportional fairness:
+         *   - 0.5 NTRP gap = 0.5/6.0 = 8.3% of range
+         *   - 1.25 UTR gap = 1.25/15.0 = 8.3% of range
+         *   - Both produce identical competitive factors → consistent 2.5× K-factor scaling
+         *
+         * This approach reduces from 5 branches to 2 while maintaining proper handling of:
          *   - Expected wins (higher beats lower with large gap) → minimal change
          *   - Upsets (underdog wins) → significant change with upset multiplier
          *   - Competitive matches (gap ≤ threshold) → performance-based change
@@ -245,8 +254,18 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
             val absAdvantage = ratingAdvantage.abs()
             val isWinner = matchScore.winner == this.playerId
 
+            // Get rating range for normalization
+            val ratingRange =
+                when (ratingSystem) {
+                    RatingSystem.NTRP -> NTRP_RANGE
+                    RatingSystem.UTR -> UTR_RANGE
+                }
+
+            // Normalize rating gap as percentage of range
+            val normalizedGap = absAdvantage.divideBy(ratingRange)
+
             // Pluggable constants
-            val threshold = "1.0".bd
+            val thresholdPct = COMPETITIVE_THRESHOLD_PCT
             val upsetMultiplier = "2.0".bd
 
             // Calculate scale based on upset vs competitive/expected scenario
@@ -254,11 +273,11 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
                 if ((isWinner && ratingAdvantage < ZERO) || (!isWinner && ratingAdvantage > ZERO)) {
                     // Upset: underdog wins OR favorite loses
                     // Use gap-based scaling with upset multiplier
-                    absAdvantage.divideBy(threshold) * upsetMultiplier
+                    normalizedGap.divideBy(thresholdPct) * upsetMultiplier
                 } else {
                     // Competitive or expected outcome
                     // Use advantage factor that decreases as gap increases
-                    (threshold - absAdvantage).divideBy(threshold).max(ZERO)
+                    (thresholdPct - normalizedGap).divideBy(thresholdPct).max(ZERO)
                 }
 
             val sign = if (isWinner) ONE else -ONE
