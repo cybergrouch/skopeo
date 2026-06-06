@@ -18,14 +18,15 @@ class OpenAPIIntegrationTest {
                 module()
             }
 
-            val response = client.get("/openapi")
+            val response = client.get("/openapi.yaml")
 
             assertEquals(HttpStatusCode.OK, response.status)
-            // OpenAPI endpoint returns HTML by default with Ktor's StaticHtml2Codegen
-            assertTrue(response.contentType()?.match(ContentType.Text.Html) == true)
+            // OpenAPI YAML file should be served as plain text
+            assertTrue(response.contentType()?.match(ContentType.Text.Plain) == true)
 
             val body = response.bodyAsText()
             // Verify it contains OpenAPI spec content
+            assertTrue(body.contains("openapi: 3.0.0"), "Response should contain OpenAPI version")
             assertTrue(body.contains("Tennis Levelr API"), "Response should contain API title")
             assertTrue(body.contains("/api/v1/calculate-ranking"), "Response should contain the API endpoint")
         }

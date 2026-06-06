@@ -1,5 +1,6 @@
 package org.lange.tennis.levelr
 
+import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
@@ -10,7 +11,6 @@ import io.ktor.server.metrics.micrometer.MicrometerMetrics
 import io.ktor.server.netty.Netty
 import io.ktor.server.plugins.calllogging.CallLogging
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.server.plugins.openapi.openAPI
 import io.ktor.server.plugins.swagger.swaggerUI
 import io.ktor.server.request.httpMethod
 import io.ktor.server.request.uri
@@ -80,13 +80,19 @@ fun Application.configurePlugins() {
 
 fun Application.configureOpenAPI() {
     routing {
-        // Serve OpenAPI specification
-        openAPI(path = "openapi", swaggerFile = "openapi/documentation.yaml")
+        // Serve raw OpenAPI specification file
+        get("/openapi.yaml") {
+            logger.debug { "OpenAPI YAML specification requested" }
+            val yamlContent =
+                this::class.java.classLoader.getResource("openapi/documentation.yaml")?.readText()
+                    ?: throw IllegalStateException("OpenAPI specification file not found")
+            call.respondText(yamlContent, ContentType.Text.Plain)
+        }
 
-        // Serve Swagger UI
+        // Serve Swagger UI (interactive API documentation)
         swaggerUI(path = "swagger", swaggerFile = "openapi/documentation.yaml")
     }
-    logger.info { "OpenAPI documentation available at /openapi and /swagger" }
+    logger.info { "API documentation available at /swagger (Swagger UI) and /openapi.yaml (raw spec)" }
 }
 
 fun Application.configureRouting() {
