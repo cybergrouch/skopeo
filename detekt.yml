@@ -429,7 +429,30 @@ style:
   ForbiddenComment:
     active: false
   ForbiddenImport:
-    active: false
+    active: true
+    imports:
+      - value: 'kotlin.test.assertEquals'
+        reason: 'Use Kotest assertions instead: actual shouldBe expected'
+      - value: 'kotlin.test.assertTrue'
+        reason: 'Use Kotest assertions instead: condition shouldBe true or use specific matchers like shouldContain'
+      - value: 'kotlin.test.assertFalse'
+        reason: 'Use Kotest assertions instead: condition shouldBe false'
+      - value: 'kotlin.test.assertNotNull'
+        reason: 'Use Kotest assertions instead: value shouldNotBe null'
+      - value: 'kotlin.test.assertNull'
+        reason: 'Use Kotest assertions instead: value shouldBe null'
+      - value: 'kotlin.test.assertNotEquals'
+        reason: 'Use Kotest assertions instead: actual shouldNotBe expected'
+      - value: 'kotlin.test.assertSame'
+        reason: 'Use Kotest assertions instead: actual shouldBeSameInstanceAs expected'
+      - value: 'kotlin.test.assertNotSame'
+        reason: 'Use Kotest assertions instead: actual shouldNotBeSameInstanceAs expected'
+      - value: 'kotlin.test.assertFailsWith'
+        reason: 'Use Kotest assertions instead: shouldThrow<ExceptionType> { block }'
+      - value: 'org.junit.jupiter.api.Assertions.*'
+        reason: 'Use Kotest assertions instead of JUnit assertions'
+      - value: 'org.junit.Assert.*'
+        reason: 'Use Kotest assertions instead of JUnit assertions'
   ForbiddenMethodCall:
     active: false
   ForbiddenSuppress:

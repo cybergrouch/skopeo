@@ -1,12 +1,13 @@
 package org.lange.tennis.levelr
 
+import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
+import io.kotest.matchers.string.shouldContain
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.testing.testApplication
 import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 class TennisLevelrApplicationTests {
     @Test
@@ -17,8 +18,8 @@ class TennisLevelrApplicationTests {
             }
 
             val response = client.get("/")
-            assertEquals(HttpStatusCode.OK, response.status)
-            assertEquals("Tennis Levelr API", response.bodyAsText())
+            response.status shouldBe HttpStatusCode.OK
+            response.bodyAsText() shouldBe "Tennis Levelr API"
         }
 
     @Test
@@ -31,10 +32,10 @@ class TennisLevelrApplicationTests {
             val response = client.get("/health")
             val body = response.bodyAsText()
 
-            assertEquals(HttpStatusCode.OK, response.status)
-            assertTrue(body.contains("\"status\":\"UP\""), "Health response should contain status UP")
-            assertTrue(body.contains("\"service\":\"Tennis Levelr API\""), "Health response should contain service name")
-            assertTrue(body.contains("\"version\":\"0.0.1-SNAPSHOT\""), "Health response should contain version")
+            response.status shouldBe HttpStatusCode.OK
+            body shouldContain "\"status\":\"UP\""
+            body shouldContain "\"service\":\"Tennis Levelr API\""
+            body shouldContain "\"version\":\"0.0.1-SNAPSHOT\""
         }
 
     @Test
@@ -47,11 +48,8 @@ class TennisLevelrApplicationTests {
             val response = client.get("/metrics")
             val body = response.bodyAsText()
 
-            assertEquals(HttpStatusCode.OK, response.status)
-            assertTrue(body.isNotEmpty(), "Metrics response should not be empty")
-            assertTrue(
-                body.contains("jvm") || body.contains("http"),
-                "Metrics should contain JVM or HTTP metrics",
-            )
+            response.status shouldBe HttpStatusCode.OK
+            body shouldNotBe ""
+            (body.contains("jvm") || body.contains("http")) shouldBe true
         }
 }
