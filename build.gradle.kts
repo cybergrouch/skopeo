@@ -34,6 +34,10 @@ dependencies {
     implementation("io.ktor:ktor-server-content-negotiation-jvm:$ktorVersion")
     implementation("io.ktor:ktor-serialization-kotlinx-json-jvm:$ktorVersion")
 
+    // OpenAPI and Swagger UI support
+    implementation("io.ktor:ktor-server-openapi:$ktorVersion")
+    implementation("io.ktor:ktor-server-swagger:$ktorVersion")
+
     // Logging
     implementation("ch.qos.logback:logback-classic:1.5.16")
     implementation("io.github.microutils:kotlin-logging-jvm:3.0.5")

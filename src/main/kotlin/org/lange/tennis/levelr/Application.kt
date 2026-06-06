@@ -10,6 +10,8 @@ import io.ktor.server.metrics.micrometer.MicrometerMetrics
 import io.ktor.server.netty.Netty
 import io.ktor.server.plugins.calllogging.CallLogging
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.server.plugins.openapi.openAPI
+import io.ktor.server.plugins.swagger.swaggerUI
 import io.ktor.server.request.httpMethod
 import io.ktor.server.request.uri
 import io.ktor.server.response.respond
@@ -33,6 +35,7 @@ fun main() {
 fun Application.module() {
     configureMonitoring()
     configurePlugins()
+    configureOpenAPI()
     configureRouting()
     configureRankingRoutes()
     logger.info { "Tennis Levelr API started successfully on port 8080" }
@@ -73,6 +76,17 @@ fun Application.configurePlugins() {
         json()
     }
     logger.info { "Content negotiation configured with JSON support" }
+}
+
+fun Application.configureOpenAPI() {
+    routing {
+        // Serve OpenAPI specification
+        openAPI(path = "openapi", swaggerFile = "openapi/documentation.yaml")
+
+        // Serve Swagger UI
+        swaggerUI(path = "swagger", swaggerFile = "openapi/documentation.yaml")
+    }
+    logger.info { "OpenAPI documentation available at /openapi and /swagger" }
 }
 
 fun Application.configureRouting() {

@@ -57,6 +57,11 @@ spring.log
 *.sqlite
 *.h2.db
 
+# OpenAPI/Swagger generated files
+docs/.swagger-codegen/
+docs/.swagger-codegen-ignore
+docs/index.html
+
 # Claude Code
 .claude/
 

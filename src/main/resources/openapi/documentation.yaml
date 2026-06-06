@@ -1,0 +1,234 @@
+openapi: 3.0.0
+info:
+  title: Tennis Levelr API
+  version: 1.0.0
+  description: Performance-based tennis ranking calculation API supporting NTRP and UTR rating systems
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+
+tags:
+  - name: Rankings
+    description: Rating calculation endpoints
+
+paths:
+  /api/v1/calculate-ranking:
+    post:
+      summary: Calculate ranking changes
+      description: |
+        Calculates rating changes for players based on match results.
+        Supports both NTRP (National Tennis Rating Program) and UTR (Universal Tennis Rating) systems.
+
+        The algorithm uses a performance-based Elo calculation that considers:
+        - Current player ratings and rating difference
+        - Match score and game margins
+        - Dominance factor (games won ratio)
+        - Expected vs actual performance
+
+        Returns updated ratings with published levels and percentage changes.
+      tags:
+        - Rankings
+      requestBody:
+        required: true
+        description: Match details and player ratings
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RankingCalculationRequest'
+            example:
+              players:
+                P1:
+                  playerId: "P1"
+                  name: "Player 1"
+                  rating:
+                    value: "4.5"
+                    system: "NTRP"
+                P2:
+                  playerId: "P2"
+                  name: "Player 2"
+                  rating:
+                    value: "4.0"
+                    system: "NTRP"
+              matchScore:
+                sets:
+                  - games:
+                      P1: 6
+                      P2: 2
+                    winner: "P1"
+      responses:
+        '200':
+          description: Successfully calculated rating changes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RankingCalculationResponse'
+        '400':
+          description: Invalid request (validation error or malformed JSON)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    RankingCalculationRequest:
+      type: object
+      required:
+        - players
+        - matchScore
+      properties:
+        players:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/PlayerProfile'
+        matchScore:
+          $ref: '#/components/schemas/MatchScore'
+        options:
+          $ref: '#/components/schemas/RatingCalculationOptions'
+
+    RankingCalculationResponse:
+      type: object
+      required:
+        - ratingChanges
+      properties:
+        ratingChanges:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/RatingChange'
+
+    PlayerProfile:
+      type: object
+      required:
+        - playerId
+        - name
+        - rating
+      properties:
+        playerId:
+          type: string
+        name:
+          type: string
+        rating:
+          $ref: '#/components/schemas/Rating'
+
+    Rating:
+      type: object
+      required:
+        - value
+        - system
+      properties:
+        value:
+          type: string
+          description: The numeric rating value (e.g., "4.5", "10.123456")
+        system:
+          $ref: '#/components/schemas/RatingSystem'
+        publishedLevel:
+          $ref: '#/components/schemas/Level'
+          description: The published level (optional in request, always present in response)
+
+    Level:
+      type: object
+      required:
+        - value
+        - minRating
+        - maxRating
+        - system
+      properties:
+        value:
+          type: string
+          description: The published level value (e.g., "4.5" for NTRP, "10.0" for UTR)
+        minRating:
+          type: string
+          description: Minimum rating for this level (inclusive)
+        maxRating:
+          type: string
+          description: Maximum rating for this level (exclusive)
+        system:
+          $ref: '#/components/schemas/RatingSystem'
+
+    RatingSystem:
+      type: string
+      enum:
+        - NTRP
+        - UTR
+      description: |
+        Rating system:
+        - NTRP: National Tennis Rating Program (1.0 - 7.0 range)
+        - UTR: Universal Tennis Rating (1.0 - 16.0 range)
+
+    MatchScore:
+      type: object
+      required:
+        - sets
+      properties:
+        sets:
+          type: array
+          items:
+            $ref: '#/components/schemas/SetScore'
+
+    SetScore:
+      type: object
+      required:
+        - games
+        - winner
+      properties:
+        games:
+          type: object
+          additionalProperties:
+            type: integer
+        winner:
+          type: string
+        tiebreak:
+          type: object
+          additionalProperties:
+            type: integer
+
+    RatingCalculationOptions:
+      type: object
+      properties:
+        smoothingEnabled:
+          type: boolean
+          default: false
+        smoothingFactor:
+          type: number
+          format: double
+          default: 0.5
+
+    RatingChange:
+      type: object
+      required:
+        - change
+        - previousRating
+        - newRating
+        - percentChange
+        - levelChanged
+      properties:
+        change:
+          type: string
+          description: The absolute rating change (e.g., "+0.123456" or "-0.045678")
+        previousRating:
+          $ref: '#/components/schemas/Rating'
+          description: The player's rating before the match
+        newRating:
+          $ref: '#/components/schemas/Rating'
+          description: The player's rating after the match (includes updated publishedLevel)
+        percentChange:
+          type: string
+          description: The percentage change in rating (e.g., "+2.75%")
+        levelChanged:
+          type: boolean
+          description: Whether the player's published level changed (e.g., 4.0 → 4.5)
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
