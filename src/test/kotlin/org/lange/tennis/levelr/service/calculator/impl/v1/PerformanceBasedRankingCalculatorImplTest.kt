@@ -108,13 +108,13 @@ class PerformanceBasedRankingCalculatorImplTest {
                         PlayerProfile(
                             playerId = "P1",
                             name = "Player 1",
-                            rating = Rating(value = p1Rating, system = RatingSystem.NTRP),
+                            rating = Rating.fromValue(value = p1Rating, system = RatingSystem.NTRP),
                         ),
                     "P2" to
                         PlayerProfile(
                             playerId = "P2",
                             name = "Player 2",
-                            rating = Rating(value = p2Rating, system = RatingSystem.NTRP),
+                            rating = Rating.fromValue(value = p2Rating, system = RatingSystem.NTRP),
                         ),
                 ),
             matchScore =
@@ -154,13 +154,13 @@ class PerformanceBasedRankingCalculatorImplTest {
                         PlayerProfile(
                             playerId = "P1",
                             name = "Player 1",
-                            rating = Rating(value = p1Rating, system = RatingSystem.UTR),
+                            rating = Rating.fromValue(value = p1Rating, system = RatingSystem.UTR),
                         ),
                     "P2" to
                         PlayerProfile(
                             playerId = "P2",
                             name = "Player 2",
-                            rating = Rating(value = p2Rating, system = RatingSystem.UTR),
+                            rating = Rating.fromValue(value = p2Rating, system = RatingSystem.UTR),
                         ),
                 ),
             matchScore =
@@ -813,13 +813,13 @@ class PerformanceBasedRankingCalculatorImplTest {
                 PlayerProfile(
                     playerId = "P1",
                     name = "Player 1",
-                    rating = Rating(value = p1Rating, system = RatingSystem.NTRP),
+                    rating = Rating.fromValue(value = p1Rating, system = RatingSystem.NTRP),
                 )
             val player2 =
                 PlayerProfile(
                     playerId = "P2",
                     name = "Player 2",
-                    rating = Rating(value = p2Rating, system = RatingSystem.NTRP),
+                    rating = Rating.fromValue(value = p2Rating, system = RatingSystem.NTRP),
                 )
 
             val winner = if (p1Games > p2Games) "P1" else "P2"
@@ -851,13 +851,13 @@ class PerformanceBasedRankingCalculatorImplTest {
                 PlayerProfile(
                     playerId = "P1",
                     name = "Player 1",
-                    rating = Rating(value = p1Rating, system = RatingSystem.UTR),
+                    rating = Rating.fromValue(value = p1Rating, system = RatingSystem.UTR),
                 )
             val player2 =
                 PlayerProfile(
                     playerId = "P2",
                     name = "Player 2",
-                    rating = Rating(value = p2Rating, system = RatingSystem.UTR),
+                    rating = Rating.fromValue(value = p2Rating, system = RatingSystem.UTR),
                 )
 
             val winner = if (p1Games > p2Games) "P1" else "P2"
@@ -888,14 +888,14 @@ class PerformanceBasedRankingCalculatorImplTest {
             PlayerProfile(
                 playerId = "P123",
                 name = "John Doe",
-                rating = Rating(value = "4.5", system = RatingSystem.NTRP),
+                rating = Rating.fromValue(value = "4.5", system = RatingSystem.NTRP),
             )
 
         val player2 =
             PlayerProfile(
                 playerId = "P456",
                 name = "Jane Smith",
-                rating = Rating(value = "4.0", system = RatingSystem.NTRP),
+                rating = Rating.fromValue(value = "4.0", system = RatingSystem.NTRP),
             )
 
         val sets =
@@ -921,14 +921,14 @@ class PerformanceBasedRankingCalculatorImplTest {
             PlayerProfile(
                 playerId = "P789",
                 name = "Mike Wilson",
-                rating = Rating(value = "8.5", system = RatingSystem.UTR),
+                rating = Rating.fromValue(value = "8.5", system = RatingSystem.UTR),
             )
 
         val player2 =
             PlayerProfile(
                 playerId = "P101",
                 name = "Sarah Lee",
-                rating = Rating(value = "8.2", system = RatingSystem.UTR),
+                rating = Rating.fromValue(value = "8.2", system = RatingSystem.UTR),
             )
 
         val sets =

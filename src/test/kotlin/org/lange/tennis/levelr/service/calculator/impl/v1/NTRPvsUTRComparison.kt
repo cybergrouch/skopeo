@@ -43,13 +43,13 @@ class NTRPvsUTRComparison {
                         PlayerProfile(
                             playerId = "P1",
                             name = "Player 1",
-                            rating = Rating(value = p1Rating, system = system),
+                            rating = Rating.fromValue(value = p1Rating, system = system),
                         ),
                     "P2" to
                         PlayerProfile(
                             playerId = "P2",
                             name = "Player 2",
-                            rating = Rating(value = p2Rating, system = system),
+                            rating = Rating.fromValue(value = p2Rating, system = system),
                         ),
                 ),
             matchScore =
@@ -77,10 +77,16 @@ class NTRPvsUTRComparison {
             val ntrpP2Delta: Double,
             val ntrpP1New: Double,
             val ntrpP2New: Double,
+            val ntrpP1Level: String,
+            val ntrpP2Level: String,
+            val ntrpLevelChanged: Boolean,
             val utrP1Delta: Double,
             val utrP2Delta: Double,
             val utrP1New: Double,
             val utrP2New: Double,
+            val utrP1Level: String,
+            val utrP2Level: String,
+            val utrLevelChanged: Boolean,
             val ratio: Double,
             val matches: Boolean,
         )
@@ -105,6 +111,11 @@ class NTRPvsUTRComparison {
                 val ntrpP2Delta = ntrpResult.response.ratingChanges["P2"]?.change?.toDoubleOrNull() ?: 0.0
                 val ntrpP1New = scenario.ntrpP1.toDouble() + ntrpP1Delta
                 val ntrpP2New = scenario.ntrpP2.toDouble() + ntrpP2Delta
+                val ntrpP1Level = ntrpResult.response.ratingChanges["P1"]?.newRating?.publishedLevel?.value ?: ""
+                val ntrpP2Level = ntrpResult.response.ratingChanges["P2"]?.newRating?.publishedLevel?.value ?: ""
+                val ntrpLevelChanged =
+                    ntrpResult.response.ratingChanges["P1"]?.levelChanged ?: false ||
+                        ntrpResult.response.ratingChanges["P2"]?.levelChanged ?: false
 
                 val utrResult =
                     calculator.calculate(
@@ -124,6 +135,11 @@ class NTRPvsUTRComparison {
                 val utrP2Delta = utrResult.response.ratingChanges["P2"]?.change?.toDoubleOrNull() ?: 0.0
                 val utrP1New = scenario.utrP1.toDouble() + utrP1Delta
                 val utrP2New = scenario.utrP2.toDouble() + utrP2Delta
+                val utrP1Level = utrResult.response.ratingChanges["P1"]?.newRating?.publishedLevel?.value ?: ""
+                val utrP2Level = utrResult.response.ratingChanges["P2"]?.newRating?.publishedLevel?.value ?: ""
+                val utrLevelChanged =
+                    utrResult.response.ratingChanges["P1"]?.levelChanged ?: false ||
+                        utrResult.response.ratingChanges["P2"]?.levelChanged ?: false
 
                 val ratio = if (ntrpP1Delta != 0.0) utrP1Delta / ntrpP1Delta else 0.0
                 val matches = Math.abs(ratio - 2.5) < 0.01 || (ntrpP1Delta == 0.0 && utrP1Delta == 0.0)
@@ -134,31 +150,55 @@ class NTRPvsUTRComparison {
                     ntrpP2Delta = ntrpP2Delta,
                     ntrpP1New = ntrpP1New,
                     ntrpP2New = ntrpP2New,
+                    ntrpP1Level = ntrpP1Level,
+                    ntrpP2Level = ntrpP2Level,
+                    ntrpLevelChanged = ntrpLevelChanged,
                     utrP1Delta = utrP1Delta,
                     utrP2Delta = utrP2Delta,
                     utrP1New = utrP1New,
                     utrP2New = utrP2New,
+                    utrP1Level = utrP1Level,
+                    utrP2Level = utrP2Level,
+                    utrLevelChanged = utrLevelChanged,
                     ratio = ratio,
                     matches = matches,
                 )
             }
 
-        // Calculate column widths
-        val idWidth = maxOf(2, results.maxOf { it.scenario.id.length })
-        val descWidth = maxOf(11, results.maxOf { it.scenario.description.length })
-        val ntrpRatingsWidth = maxOf(10, results.maxOf { "${it.scenario.ntrpP1} vs ${it.scenario.ntrpP2}".length })
-        val utrRatingsWidth = maxOf(9, results.maxOf { "${it.scenario.utrP1} vs ${it.scenario.utrP2}".length })
-        val scoreWidth = maxOf(5, results.maxOf { "${it.scenario.p1Games}-${it.scenario.p2Games}".length })
-        val ntrpP1DeltaWidth = maxOf(16, results.maxOf { String.format("%+.6f (%.6f)", it.ntrpP1Delta, it.ntrpP1New).length })
-        val ntrpP2DeltaWidth = maxOf(16, results.maxOf { String.format("%+.6f (%.6f)", it.ntrpP2Delta, it.ntrpP2New).length })
-        val utrP1DeltaWidth = maxOf(15, results.maxOf { String.format("%+.6f (%.6f)", it.utrP1Delta, it.utrP1New).length })
-        val utrP2DeltaWidth = maxOf(15, results.maxOf { String.format("%+.6f (%.6f)", it.utrP2Delta, it.utrP2New).length })
-        val ratioWidth = maxOf(8, results.maxOf { String.format("%.2f", it.ratio).length })
-        val matchWidth = 5
+        // Calculate column widths (ensuring headers fit)
+        val idWidth = maxOf("ID".length, results.maxOfOrNull { it.scenario.id.length } ?: 2)
+        val descWidth = maxOf("Description".length, results.maxOfOrNull { it.scenario.description.length } ?: 11)
+        val ntrpRatingsWidth =
+            maxOf("NTRP P1-P2".length, results.maxOfOrNull { "${it.scenario.ntrpP1} vs ${it.scenario.ntrpP2}".length } ?: 10)
+        val utrRatingsWidth = maxOf("UTR P1-P2".length, results.maxOfOrNull { "${it.scenario.utrP1} vs ${it.scenario.utrP2}".length } ?: 9)
+        val scoreWidth = maxOf("Score".length, 5)
+        val ntrpP1DeltaWidth = maxOf("NTRP P1 Δ (New)".length, 23)
+        val ntrpP2DeltaWidth = maxOf("NTRP P2 Δ (New)".length, 23)
+        val ntrpLevelWidth =
+            maxOf(
+                "NTRP Level".length,
+                results.maxOfOrNull {
+                    val base = "${it.ntrpP1Level} vs ${it.ntrpP2Level}".length
+                    if (it.ntrpLevelChanged) base + 2 else base // Account for " ⚡"
+                } ?: 10,
+            )
+        val utrP1DeltaWidth = maxOf("UTR P1 Δ (New)".length, 23)
+        val utrP2DeltaWidth = maxOf("UTR P2 Δ (New)".length, 23)
+        val utrLevelWidth =
+            maxOf(
+                "UTR Level".length,
+                results.maxOfOrNull {
+                    val base = "${it.utrP1Level} vs ${it.utrP2Level}".length
+                    if (it.utrLevelChanged) base + 2 else base // Account for " ⚡"
+                } ?: 9,
+            )
+        val ratioWidth = maxOf("UTR/NTRP".length, 8)
+        val matchWidth = maxOf("Match".length, 5)
 
         val totalWidth =
             idWidth + 3 + descWidth + 3 + ntrpRatingsWidth + 3 + utrRatingsWidth + 3 + scoreWidth + 3 +
-                ntrpP1DeltaWidth + 3 + ntrpP2DeltaWidth + 3 + utrP1DeltaWidth + 3 + utrP2DeltaWidth + 3 +
+                ntrpP1DeltaWidth + 3 + ntrpP2DeltaWidth + 3 + ntrpLevelWidth + 3 +
+                utrP1DeltaWidth + 3 + utrP2DeltaWidth + 3 + utrLevelWidth + 3 +
                 ratioWidth + 3 + matchWidth
 
         output.appendLine("=".repeat(n = totalWidth))
@@ -178,8 +218,8 @@ class NTRPvsUTRComparison {
         output.appendLine(
             String.format(
                 "%-${idWidth}s | %-${descWidth}s | %-${ntrpRatingsWidth}s | %-${utrRatingsWidth}s | " +
-                    "%-${scoreWidth}s | %${ntrpP1DeltaWidth}s | %${ntrpP2DeltaWidth}s | " +
-                    "%${utrP1DeltaWidth}s | %${utrP2DeltaWidth}s | %${ratioWidth}s | %${matchWidth}s",
+                    "%-${scoreWidth}s | %${ntrpP1DeltaWidth}s | %${ntrpP2DeltaWidth}s | %-${ntrpLevelWidth}s | " +
+                    "%${utrP1DeltaWidth}s | %${utrP2DeltaWidth}s | %-${utrLevelWidth}s | %${ratioWidth}s | %${matchWidth}s",
                 "ID",
                 "Description",
                 "NTRP P1-P2",
@@ -187,8 +227,10 @@ class NTRPvsUTRComparison {
                 "Score",
                 "NTRP P1 Δ (New)",
                 "NTRP P2 Δ (New)",
+                "NTRP Level",
                 "UTR P1 Δ (New)",
                 "UTR P2 Δ (New)",
+                "UTR Level",
                 "UTR/NTRP",
                 "Match",
             ),
@@ -200,12 +242,14 @@ class NTRPvsUTRComparison {
             val ntrpRatings = "${scenario.ntrpP1} vs ${scenario.ntrpP2}"
             val utrRatings = "${scenario.utrP1} vs ${scenario.utrP2}"
             val score = "${scenario.p1Games}-${scenario.p2Games}"
+            val ntrpLevels = "${result.ntrpP1Level} vs ${result.ntrpP2Level}${if (result.ntrpLevelChanged) " ⚡" else ""}"
+            val utrLevels = "${result.utrP1Level} vs ${result.utrP2Level}${if (result.utrLevelChanged) " ⚡" else ""}"
 
             output.appendLine(
                 String.format(
                     "%-${idWidth}s | %-${descWidth}s | %-${ntrpRatingsWidth}s | %-${utrRatingsWidth}s | " +
-                        "%-${scoreWidth}s | %${ntrpP1DeltaWidth}s | %${ntrpP2DeltaWidth}s | " +
-                        "%${utrP1DeltaWidth}s | %${utrP2DeltaWidth}s | %${ratioWidth}s | %${matchWidth}s",
+                        "%-${scoreWidth}s | %${ntrpP1DeltaWidth}s | %${ntrpP2DeltaWidth}s | %-${ntrpLevelWidth}s | " +
+                        "%${utrP1DeltaWidth}s | %${utrP2DeltaWidth}s | %-${utrLevelWidth}s | %${ratioWidth}s | %${matchWidth}s",
                     scenario.id,
                     scenario.description,
                     ntrpRatings,
@@ -213,8 +257,10 @@ class NTRPvsUTRComparison {
                     score,
                     String.format("%+.6f (%.6f)", result.ntrpP1Delta, result.ntrpP1New),
                     String.format("%+.6f (%.6f)", result.ntrpP2Delta, result.ntrpP2New),
+                    ntrpLevels,
                     String.format("%+.6f (%.6f)", result.utrP1Delta, result.utrP1New),
                     String.format("%+.6f (%.6f)", result.utrP2Delta, result.utrP2New),
+                    utrLevels,
                     String.format("%.2f", result.ratio),
                     if (result.matches) "✓" else "✗",
                 ),

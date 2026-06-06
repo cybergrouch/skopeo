@@ -204,6 +204,10 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
             val player1PercentChange = calculatePercentChange(player1.rating.value.bd, player1NewRating.value.bd)
             val player2PercentChange = calculatePercentChange(player2.rating.value.bd, player2NewRating.value.bd)
 
+            // Determine if published levels changed (v1: levels are embedded in Rating objects)
+            val player1LevelChanged = player1.rating.publishedLevel.value != player1NewRating.publishedLevel.value
+            val player2LevelChanged = player2.rating.publishedLevel.value != player2NewRating.publishedLevel.value
+
             val ratingChanges =
                 mapOf(
                     player1Id to
@@ -212,6 +216,7 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
                             previousRating = player1.rating,
                             newRating = player1NewRating,
                             percentChange = player1PercentChange,
+                            levelChanged = player1LevelChanged,
                         ),
                     player2Id to
                         RatingChange(
@@ -219,6 +224,7 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
                             previousRating = player2.rating,
                             newRating = player2NewRating,
                             percentChange = player2PercentChange,
+                            levelChanged = player2LevelChanged,
                         ),
                 )
 
@@ -537,8 +543,9 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
             ),
         )
 
-        return rating.copy(
+        return Rating.fromValue(
             value = clamped.toStringPrecise(),
+            system = rating.system,
         )
     }
 
@@ -628,8 +635,9 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
             ),
         )
 
-        return rating.copy(
+        return Rating.fromValue(
             value = clamped.toStringPrecise(),
+            system = rating.system,
         )
     }
 
