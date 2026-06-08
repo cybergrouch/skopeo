@@ -145,16 +145,17 @@ Tennis Levelr's evolution from a **stateless rating calculator** to a **comprehe
 | 11 | UTR Integration | 🟡 NICE-TO-HAVE | Not Started | #8, External API | Sync with official UTR ratings for cross-validation |
 | 12 | Dynamic Rating Confidence | 🟡 NICE-TO-HAVE | Not Started | #8 | Time-based confidence score for ratings (accounts for player inactivity) |
 | **POST-MVP FEATURES (FUTURE ENHANCEMENTS)** |
-| 13 | Tournament Management | 🟢 FUTURE | Not Started | #8, #10 | Create and manage tournaments with brackets |
-| 14 | League/Season Support | 🟢 FUTURE | Not Started | #8 | Seasonal ratings with resets and historical tracking |
-| 15 | Mobile Apps | 🟢 FUTURE | Not Started | All APIs | iOS/Android apps for match recording |
-| 16 | Social Features | 🟢 FUTURE | Not Started | #5 | Friend lists, challenge system, activity feed |
-| 17 | Advanced Analytics | 🟢 FUTURE | Not Started | #8 | Predictive modeling, strength of schedule, trend analysis |
-| 18 | Admin Dashboard | 🟢 FUTURE | Not Started | All | Management interface for verification, disputes, cleanup |
-| 19 | Email Notifications | 🟢 FUTURE | Not Started | #7, #13 | Match confirmations, rating changes, tournament invites |
-| 20 | Multi-language Support | 🟢 FUTURE | Not Started | All | Tagalog, English, other Philippine languages |
-| 21 | Payment Integration 🇵🇭 | 🟢 FUTURE | Not Started | #13 | GCash, PayMaya for tournament fees and membership |
-| 22 | SMS Verification 🇵🇭 | 🟢 FUTURE | Not Started | #5 | Phone number verification for Philippine users |
+| 13 | Doubles Support | 🟢 FUTURE | Not Started | #7, #8 | Support for doubles matches (2v2) with team ratings |
+| 14 | Tournament Management | 🟢 FUTURE | Not Started | #8, #10 | Create and manage tournaments with brackets |
+| 15 | League/Season Support | 🟢 FUTURE | Not Started | #8 | Seasonal ratings with resets and historical tracking |
+| 16 | Mobile Apps | 🟢 FUTURE | Not Started | All APIs | iOS/Android apps for match recording |
+| 17 | Social Features | 🟢 FUTURE | Not Started | #5 | Friend lists, challenge system, activity feed |
+| 18 | Advanced Analytics | 🟢 FUTURE | Not Started | #8 | Predictive modeling, strength of schedule, trend analysis |
+| 19 | Admin Dashboard | 🟢 FUTURE | Not Started | All | Management interface for verification, disputes, cleanup |
+| 20 | Email Notifications | 🟢 FUTURE | Not Started | #7, #14 | Match confirmations, rating changes, tournament invites |
+| 21 | Multi-language Support | 🟢 FUTURE | Not Started | All | Tagalog, English, other Philippine languages |
+| 22 | Payment Integration 🇵🇭 | 🟢 FUTURE | Not Started | #14 | GCash, PayMaya for tournament fees and membership |
+| 23 | SMS Verification 🇵🇭 | 🟢 FUTURE | Not Started | #5 | Phone number verification for Philippine users |
 
 **Priority Legend:**
 - 🔴 **CRITICAL**: Required for MVP launch
@@ -522,16 +523,147 @@ ALTER TABLE player_statistics ADD COLUMN:
 
 These features will be considered after MVP and nice-to-have features are implemented:
 
-- **Tournament Management** (#13): Create and manage tournaments with brackets
-- **League/Season Support** (#14): Seasonal ratings with resets
-- **Mobile Apps** (#15): iOS/Android apps for match recording
-- **Social Features** (#16): Friend lists, challenge system, activity feed
-- **Advanced Analytics** (#17): Predictive modeling, strength of schedule, trend analysis
-- **Admin Dashboard** (#18): Management interface for verification, disputes, data cleanup
-- **Email Notifications** (#19): Match confirmations, rating changes, tournament invites
-- **Multi-language Support** (#20): Tagalog, English, other Philippine languages
-- **Payment Integration** (#21) 🇵🇭: Tournament fees, membership dues (GCash, PayMaya)
-- **SMS Verification** (#22) 🇵🇭: Phone number verification for Philippine users
+#### 1. **Doubles Support** (#13) 🎾
+Support for doubles matches (2 vs 2) with team-based rating calculations.
+
+**⚠️ Design Implications for Current Match Model**
+
+This feature has **critical implications** for how matches are currently represented in the database. To support doubles in the future, the match tracking system (#7) should be designed with flexibility in mind.
+
+**Core Features**:
+- ✅ **Match Type Support**
+  - Singles (1v1) - current implementation
+  - Doubles (2v2) - future support
+  - Mixed Doubles (male + female pairs)
+- ✅ **Team Formation**
+  - Two players form a team
+  - Team selection during match creation
+  - Partner history tracking
+- ✅ **Doubles Rating System**
+  - Separate doubles rating per player (distinct from singles)
+  - Team rating calculation (average of partners or combined formula)
+  - Partner chemistry factor (optional enhancement)
+- ✅ **Match Results**
+  - Team 1 vs Team 2 scoring
+  - Individual player statistics within team context
+  - Win/loss records for both individual and team
+
+**Rating Calculation Approaches**:
+
+*Option 1: Individual Doubles Ratings*
+```
+Each player has:
+- Singles rating (independent)
+- Doubles rating (independent)
+
+Match outcome affects each player's doubles rating individually
+Team rating = average of both partners' doubles ratings
+```
+
+*Option 2: Team-Based Ratings*
+```
+Rating assigned to player pairs (teams)
+Players can have different ratings with different partners
+More complex but accounts for partner chemistry
+```
+
+**Recommended Approach**: Option 1 (Individual Doubles Ratings)
+- Simpler to implement and understand
+- Players maintain consistent doubles rating regardless of partner
+- Similar to how USTA and UTR handle doubles
+- Easier migration path from singles-only system
+
+**Database Schema Implications** (Design Considerations for #7):
+
+**Current Match Model** (Singles-focused):
+```sql
+matches
+  - player1_id (FK)
+  - player2_id (FK)
+  - winner_id (FK)
+```
+
+**Recommended Future-Proof Design**:
+```sql
+matches
+  - id (UUID)
+  - match_type (Enum: SINGLES|DOUBLES|MIXED_DOUBLES)
+  - match_date (Date)
+  - location, surface, etc.
+
+match_participants
+  - match_id (FK → matches.id)
+  - player_id (FK → players.id)
+  - team_number (Integer: 1 or 2)
+  - position (Integer: 1 or 2, for doubles only)
+  - is_winner (Boolean)
+
+-- This design supports:
+-- Singles: 2 participants (team_number = 1 or 2, position = 1)
+-- Doubles: 4 participants (team_number = 1 or 2, position = 1 or 2)
+```
+
+**Rating Storage Implications**:
+```sql
+players
+  - current_rating_ntrp_singles (Decimal)
+  - current_rating_ntrp_doubles (Decimal)
+  - current_rating_utr_singles (Decimal)
+  - current_rating_utr_doubles (Decimal)
+
+ratings_history
+  - rating_type (Enum: SINGLES|DOUBLES)
+  -- existing columns
+```
+
+**Migration Path**:
+1. **Phase 1** (MVP): Build singles-only with flexible schema
+2. **Phase 2** (Future): Add doubles support without breaking changes
+3. Existing singles matches remain valid
+4. New match_type field defaults to SINGLES for backward compatibility
+
+**UI/UX Considerations**:
+- Match creation: Select "Singles" or "Doubles"
+- For doubles: Select 4 players instead of 2
+- Leaderboards: Separate tabs for Singles and Doubles rankings
+- Player profiles: Show both singles and doubles ratings
+
+**Statistics Tracking**:
+- Separate win/loss records for singles and doubles
+- Partner statistics (most common partners, win rate with each)
+- Performance comparison (singles vs doubles rating differential)
+
+**Use Cases**:
+- Tournament directors can run both singles and doubles events
+- Players track their performance in both formats
+- Clubs can organize doubles leagues
+- Partner matching based on compatible ratings
+
+**Benefits**:
+- Complete tennis experience (singles + doubles)
+- More engagement opportunities for players
+- Aligns with real-world tennis tournaments
+- Separate skill tracking for different game formats
+
+**Implementation Priority**: Future (after MVP)
+- MVP focuses on singles to validate core rating algorithm
+- Doubles adds complexity that should come after singles is proven
+- However, match model should be designed with doubles in mind
+
+---
+
+**Other Post-MVP Features**:
+
+- **Tournament Management** (#14): Create and manage tournaments with brackets
+- **League/Season Support** (#15): Seasonal ratings with resets
+- **Mobile Apps** (#16): iOS/Android apps for match recording
+- **Social Features** (#17): Friend lists, challenge system, activity feed
+- **Advanced Analytics** (#18): Predictive modeling, strength of schedule, trend analysis
+- **Admin Dashboard** (#19): Management interface for verification, disputes, data cleanup
+- **Email Notifications** (#20): Match confirmations, rating changes, tournament invites
+- **Multi-language Support** (#21): Tagalog, English, other Philippine languages
+- **Payment Integration** (#22) 🇵🇭: Tournament fees, membership dues (GCash, PayMaya)
+- **SMS Verification** (#23) 🇵🇭: Phone number verification for Philippine users
 
 ## Technology Stack
 
