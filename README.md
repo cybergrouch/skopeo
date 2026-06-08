@@ -120,11 +120,48 @@ The current version (v0.1) is **stateless** and does not persist:
 
 These limitations will be addressed in the MVP roadmap below.
 
-## Roadmap to MVP (Minimum Viable Product)
+## Product Roadmap
 
-To reach MVP status, Tennis Levelr needs to evolve from a **stateless rating calculator** to a **complete player ranking system** with persistence. The following features are required:
+Tennis Levelr's evolution from a **stateless rating calculator** to a **comprehensive player ranking platform** with advanced features for the Philippine tennis community.
 
-### 🎯 MVP Feature Set
+### Feature Overview Table
+
+| # | Feature | Priority | Status | Dependencies | Description |
+|---|---------|----------|--------|--------------|-------------|
+| **CORE SYSTEM (IMPLEMENTED)** |
+| 1 | Rating Calculation Engine | ✅ DONE | Implemented | None | Performance-based Elo calculator with NTRP/UTR support |
+| 2 | REST API | ✅ DONE | Implemented | #1 | HTTP API with JSON serialization |
+| 3 | API Documentation | ✅ DONE | Implemented | #2 | Swagger UI + OpenAPI 3.0 spec |
+| 4 | Quality Assurance | ✅ DONE | Implemented | All | 69 tests, coverage, code quality tools |
+| **MVP REQUIREMENTS (REQUIRED FOR PRODUCTION)** |
+| 5 | Player Profile Management | 🔴 CRITICAL | Not Started | Database | CRUD operations for player profiles with photos |
+| 6 | Player Identity Verification (KYC) 🇵🇭 | 🔴 CRITICAL | Not Started | #5 | Philippine government ID validation (Passport, DL, UMID, SSS, GSIS, National ID) |
+| 6a | Social Media Verification | 🟡 NICE-TO-HAVE | Not Started | #6 | Automated verification via social media accounts (Facebook, Instagram, Twitter) |
+| 7 | Match Tracking System | 🔴 CRITICAL | Not Started | #5, Database | CRUD for matches with score validation and audit trail |
+| 8 | Player Ranking System | 🔴 CRITICAL | Not Started | #5, #7, #1 | Dynamic rankings, leaderboards, statistics, rating history |
+| 9 | System Integration | 🔴 CRITICAL | Not Started | #5-#8 | Real-time updates across all MVP components |
+| **NICE-TO-HAVE FEATURES (ENHANCE MVP)** |
+| 10 | Seeding Generation | 🟡 NICE-TO-HAVE | Not Started | #8 | Auto-generate tournament seedings from current rankings |
+| 11 | UTR Integration | 🟡 NICE-TO-HAVE | Not Started | #8, External API | Sync with official UTR ratings for cross-validation |
+| 12 | Dynamic Rating Confidence | 🟡 NICE-TO-HAVE | Not Started | #8 | Time-based confidence score for ratings (accounts for player inactivity) |
+| **POST-MVP FEATURES (FUTURE ENHANCEMENTS)** |
+| 13 | Tournament Management | 🟢 FUTURE | Not Started | #8, #10 | Create and manage tournaments with brackets |
+| 14 | League/Season Support | 🟢 FUTURE | Not Started | #8 | Seasonal ratings with resets and historical tracking |
+| 15 | Mobile Apps | 🟢 FUTURE | Not Started | All APIs | iOS/Android apps for match recording |
+| 16 | Social Features | 🟢 FUTURE | Not Started | #5 | Friend lists, challenge system, activity feed |
+| 17 | Advanced Analytics | 🟢 FUTURE | Not Started | #8 | Predictive modeling, strength of schedule, trend analysis |
+| 18 | Admin Dashboard | 🟢 FUTURE | Not Started | All | Management interface for verification, disputes, cleanup |
+| 19 | Email Notifications | 🟢 FUTURE | Not Started | #7, #13 | Match confirmations, rating changes, tournament invites |
+| 20 | Multi-language Support | 🟢 FUTURE | Not Started | All | Tagalog, English, other Philippine languages |
+| 21 | Payment Integration 🇵🇭 | 🟢 FUTURE | Not Started | #13 | GCash, PayMaya for tournament fees and membership |
+| 22 | SMS Verification 🇵🇭 | 🟢 FUTURE | Not Started | #5 | Phone number verification for Philippine users |
+
+**Priority Legend:**
+- 🔴 **CRITICAL**: Required for MVP launch
+- 🟡 **NICE-TO-HAVE**: Enhances MVP, recommended before full production
+- 🟢 **FUTURE**: Post-MVP enhancements
+
+### 🎯 MVP Feature Set (Detailed)
 
 #### 1. **Player Profile Management** (PRIORITY: HIGH)
 Complete player lifecycle management with identity verification.
@@ -299,7 +336,7 @@ player_statistics
   - updated_at (Timestamp)
 ```
 
-#### 4. **System Integration** (PRIORITY: HIGH)
+#### 4. **System Integration** (PRIORITY: CRITICAL)
 All MVP components working together.
 
 **Key Integration Points**:
@@ -308,20 +345,193 @@ All MVP components working together.
 - Player verification status affects tournament eligibility
 - Statistics update in real-time with match results
 
-### 🔮 Post-MVP Features (Future)
+### 🟡 Nice-to-Have Features (Recommended Before Full Production)
 
-These features will be considered after MVP is achieved:
+#### 5. **Seeding Generation** (PRIORITY: NICE-TO-HAVE)
+Automated tournament seeding based on current dynamic rankings.
 
-- **Tournament Management**: Create and manage tournaments with brackets
-- **League/Season Support**: Seasonal ratings with resets
-- **Mobile App**: iOS/Android apps for match recording
-- **Social Features**: Friend lists, challenge system, activity feed
-- **Advanced Analytics**: Predictive modeling, strength of schedule, trend analysis
-- **Admin Dashboard**: Management interface for verification, disputes, data cleanup
-- **Email Notifications**: Match confirmations, rating changes, tournament invites
-- **Multi-language Support**: Tagalog, English, other Philippine languages
-- **Payment Integration**: Tournament fees, membership dues (GCash, PayMaya)
-- **SMS Verification**: Phone number verification for Philippine users
+**Core Features**:
+- ✅ **Automatic Seeding Lists**
+  - Generate ordered seeding list from player rankings
+  - Support for different tournament formats (single elimination, round-robin, etc.)
+  - Configurable seeding rules (strict rating order, geographic distribution, etc.)
+- ✅ **Real-time Updates**
+  - Seedings reflect latest rating changes
+  - Re-seeding capabilities for late registrations
+  - Handle tie-breaking scenarios (equal ratings)
+- ✅ **Export Capabilities**
+  - PDF export for tournament directors
+  - CSV export for tournament software integration
+  - Bracket visualization with seeded positions
+
+**Use Cases**:
+- Tournament directors can instantly generate fair seedings
+- Eliminates manual ranking lookups and calculations
+- Ensures competitive balance in tournament draws
+- Reduces seeding disputes with transparent algorithm
+
+**Algorithm Considerations**:
+```
+Seeding Order:
+1. Sort by dynamic rating (descending)
+2. For ties: use confidence value (higher confidence = better seed)
+3. For still tied: use total matches played (more matches = better seed)
+4. For still tied: use win percentage
+5. Last resort: random assignment
+```
+
+#### 6a. **Social Media Verification** (Sub-feature of KYC)
+Automated player verification through social media account validation.
+
+**Core Features**:
+- ✅ **Supported Platforms**
+  - Facebook (most popular in Philippines)
+  - Instagram (photo verification)
+  - Twitter/X (identity confirmation)
+  - LinkedIn (professional players)
+- ✅ **Verification Methods**
+  - OAuth integration for account ownership proof
+  - Profile data matching (name, photo, location)
+  - Account age and activity verification
+  - Friend/follower count thresholds (anti-fake account)
+- ✅ **Verification Levels**
+  - Basic: Account ownership confirmed
+  - Standard: Profile data matches player profile
+  - Enhanced: Multiple platforms verified + high activity
+
+**Benefits**:
+- Complements government ID verification
+- Faster verification for casual players
+- Additional fraud prevention layer
+- Community trust building
+
+**Privacy Considerations**:
+- Players opt-in to social media verification
+- Only public profile data accessed
+- No posting capabilities requested
+- Clear data usage policy
+
+#### 7. **UTR Integration** (PRIORITY: NICE-TO-HAVE)
+Integration with Universal Tennis Rating (UTR) official system.
+
+**Core Features**:
+- ✅ **UTR API Integration**
+  - Fetch official UTR ratings for registered players
+  - Periodic sync (daily/weekly) to keep ratings current
+  - Player matching by name, birthdate, location
+- ✅ **Cross-Validation**
+  - Compare Tennis Levelr UTR vs Official UTR
+  - Highlight significant discrepancies (>0.5 difference)
+  - Use official UTR as baseline for new players
+- ✅ **Hybrid Rating Display**
+  - Show both Tennis Levelr rating and Official UTR
+  - Indicate last sync date
+  - Allow players to choose which rating to use for tournaments
+- ✅ **Rating Conversion**
+  - Map official UTR to NTRP equivalent
+  - Help players understand their level across systems
+
+**Use Cases**:
+- Players with official UTR can import their rating
+- Tournament directors can verify player levels
+- Cross-system validation increases rating credibility
+- Appeals process can reference official UTR
+
+**API Requirements**:
+- UTR API key and subscription
+- Player consent for data sharing
+- Rate limiting handling
+- Fallback when API unavailable
+
+**Database Schema Addition**:
+```
+utr_sync_history
+  - player_id (FK → players.id)
+  - official_utr_rating (Decimal)
+  - tennis_levelr_utr (Decimal)
+  - rating_difference (Decimal)
+  - sync_date (Timestamp)
+  - match_confidence (Enum: HIGH|MEDIUM|LOW)
+```
+
+#### 8. **Dynamic Rating Confidence Value** (PRIORITY: NICE-TO-HAVE)
+Time-based confidence scoring for dynamic ratings to account for player inactivity.
+
+**Core Features**:
+- ✅ **Confidence Score Calculation**
+  - Formula: `confidence = base_confidence × activity_factor × recency_factor`
+  - Base confidence: Based on number of matches (minimum 10 for 100%)
+  - Activity factor: Matches in last 90 days vs total matches
+  - Recency factor: Time since last match (decays over time)
+- ✅ **Confidence Levels**
+  - 🟢 **HIGH** (90-100%): Active player, rating is reliable
+    - 10+ matches, last match within 30 days
+  - 🟡 **MEDIUM** (70-89%): Moderately active, rating mostly reliable
+    - 5-9 matches or last match 31-90 days ago
+  - 🟠 **LOW** (50-69%): Inactive player, rating uncertain
+    - <5 matches or last match 91-180 days ago
+  - 🔴 **VERY LOW** (<50%): Highly inactive, rating unreliable
+    - Last match >180 days ago
+- ✅ **Confidence Decay Algorithm**
+  ```
+  recency_factor = 1.0 - (days_since_last_match / 365)
+  min_recency_factor = 0.3  // Never goes below 30%
+
+  activity_factor = min(matches_last_90_days / 5, 1.0)
+  // 5+ matches in 90 days = 100% activity factor
+
+  base_confidence = min(total_matches / 10, 1.0)
+  // 10+ lifetime matches = 100% base confidence
+
+  final_confidence = base_confidence × activity_factor × max(recency_factor, 0.3)
+  ```
+
+**Visual Indicators**:
+- Display confidence badge next to rating
+- Color-coded confidence levels in leaderboards
+- Tooltip with last match date and match count
+- Warning for low-confidence ratings in seeding
+
+**Use Cases**:
+- Tournament directors can see which ratings are current
+- Returning players after long absence have lower confidence
+- Helps identify players who need re-rating matches
+- Fairer seeding by considering rating reliability
+
+**Impact on Seeding**:
+- In tie-breaking scenarios, higher confidence wins
+- Low confidence ratings can trigger "provisional" status
+- Suggested: require 1-2 re-rating matches for <50% confidence
+
+**Database Schema Addition**:
+```
+ALTER TABLE player_statistics ADD COLUMN:
+  - rating_confidence (Decimal) // 0.0 to 1.0
+  - confidence_level (Enum: VERY_LOW|LOW|MEDIUM|HIGH)
+  - last_confidence_update (Timestamp)
+  - matches_last_90_days (Integer)
+```
+
+**Benefits**:
+- More accurate tournament seedings
+- Identifies stale ratings
+- Encourages player activity
+- Transparent rating reliability
+
+### 🔮 Post-MVP Features (Future Enhancements)
+
+These features will be considered after MVP and nice-to-have features are implemented:
+
+- **Tournament Management** (#13): Create and manage tournaments with brackets
+- **League/Season Support** (#14): Seasonal ratings with resets
+- **Mobile Apps** (#15): iOS/Android apps for match recording
+- **Social Features** (#16): Friend lists, challenge system, activity feed
+- **Advanced Analytics** (#17): Predictive modeling, strength of schedule, trend analysis
+- **Admin Dashboard** (#18): Management interface for verification, disputes, data cleanup
+- **Email Notifications** (#19): Match confirmations, rating changes, tournament invites
+- **Multi-language Support** (#20): Tagalog, English, other Philippine languages
+- **Payment Integration** (#21) 🇵🇭: Tournament fees, membership dues (GCash, PayMaya)
+- **SMS Verification** (#22) 🇵🇭: Phone number verification for Philippine users
 
 ## Technology Stack
 
