@@ -2,6 +2,13 @@ package org.lange.tennis.levelr.model
 
 import kotlinx.serialization.Serializable
 
+/**
+ * Represents the score of a set in a tennis match.
+ *
+ * @property games Map of team ID to games won in this set
+ * @property winner Team ID of the set winner
+ * @property tiebreak Optional tiebreak score if the set went to a tiebreak
+ */
 @Serializable
 data class SetScore(
     val games: Map<String, Int>,
@@ -9,8 +16,8 @@ data class SetScore(
     val tiebreak: TiebreakScore? = null,
 ) {
     init {
-        require(games.size == 2) { "Set must have exactly 2 players" }
-        require(winner in games.keys) { "Winner must be one of the players in the set" }
+        require(games.size == 2) { "Set must have exactly 2 teams" }
+        require(winner in games.keys) { "Winner must be one of the teams in the set" }
 
         val winnerGames = games[winner] ?: 0
         val loserGames = games.values.first { it != winnerGames }

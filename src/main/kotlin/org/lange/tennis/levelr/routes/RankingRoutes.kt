@@ -27,7 +27,7 @@ fun Application.configureRankingRoutes() {
                 val request = call.receive<RankingCalculationRequest>()
 
                 logger.info {
-                    "Processing ranking calculation for players: ${request.players.keys.joinToString()}"
+                    "Processing ranking calculation for teams: ${request.teams.keys.joinToString()}"
                 }
 
                 // Calculate ranking using Elo-based algorithm (pure function)

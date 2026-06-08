@@ -22,6 +22,8 @@ import org.lange.tennis.levelr.model.Rating
 import org.lange.tennis.levelr.model.RatingCalculationOptions
 import org.lange.tennis.levelr.model.RatingSystem
 import org.lange.tennis.levelr.model.SetScore
+import org.lange.tennis.levelr.model.Team
+import org.lange.tennis.levelr.model.TeamType
 import java.util.stream.Stream
 
 /**
@@ -90,44 +92,28 @@ class PerformanceBasedRankingCalculatorImplTest {
         p2Rating: String,
         p1Games: Int,
         p2Games: Int,
+        // "P1"/"P2" (player ID) or "T1"/"T2" (team ID)
         winner: String,
         smoothingEnabled: Boolean = false,
         smoothingFactor: Double = 0.5,
     ): RankingCalculationRequest {
-        val options =
-            if (smoothingEnabled) {
-                RatingCalculationOptions(smoothingEnabled = true, smoothingFactor = smoothingFactor)
-            } else {
-                null
+        // Map player ID to team ID (pass through if already a team ID)
+        val teamWinner =
+            when (winner) {
+                "P1" -> "T1"
+                "P2" -> "T2"
+                else -> winner // Already a team ID
             }
 
-        return RankingCalculationRequest(
-            players =
-                mapOf(
-                    "P1" to
-                        PlayerProfile(
-                            playerId = "P1",
-                            name = "Player 1",
-                            rating = Rating.fromValue(value = p1Rating, system = RatingSystem.NTRP),
-                        ),
-                    "P2" to
-                        PlayerProfile(
-                            playerId = "P2",
-                            name = "Player 2",
-                            rating = Rating.fromValue(value = p2Rating, system = RatingSystem.NTRP),
-                        ),
-                ),
-            matchScore =
-                MatchScore(
-                    sets =
-                        listOf(
-                            SetScore(
-                                games = mapOf("P1" to p1Games, "P2" to p2Games),
-                                winner = winner,
-                            ),
-                        ),
-                ),
-            options = options,
+        return createSinglesRequest(
+            p1Rating = p1Rating,
+            p2Rating = p2Rating,
+            system = RatingSystem.NTRP,
+            p1Games = p1Games,
+            p2Games = p2Games,
+            winner = teamWinner,
+            smoothingEnabled = smoothingEnabled,
+            smoothingFactor = smoothingFactor,
         )
     }
 
@@ -136,44 +122,28 @@ class PerformanceBasedRankingCalculatorImplTest {
         p2Rating: String,
         p1Games: Int,
         p2Games: Int,
+        // "P1"/"P2" (player ID) or "T1"/"T2" (team ID)
         winner: String,
         smoothingEnabled: Boolean = false,
         smoothingFactor: Double = 0.5,
     ): RankingCalculationRequest {
-        val options =
-            if (smoothingEnabled) {
-                RatingCalculationOptions(smoothingEnabled = true, smoothingFactor = smoothingFactor)
-            } else {
-                null
+        // Map player ID to team ID (pass through if already a team ID)
+        val teamWinner =
+            when (winner) {
+                "P1" -> "T1"
+                "P2" -> "T2"
+                else -> winner // Already a team ID
             }
 
-        return RankingCalculationRequest(
-            players =
-                mapOf(
-                    "P1" to
-                        PlayerProfile(
-                            playerId = "P1",
-                            name = "Player 1",
-                            rating = Rating.fromValue(value = p1Rating, system = RatingSystem.UTR),
-                        ),
-                    "P2" to
-                        PlayerProfile(
-                            playerId = "P2",
-                            name = "Player 2",
-                            rating = Rating.fromValue(value = p2Rating, system = RatingSystem.UTR),
-                        ),
-                ),
-            matchScore =
-                MatchScore(
-                    sets =
-                        listOf(
-                            SetScore(
-                                games = mapOf("P1" to p1Games, "P2" to p2Games),
-                                winner = winner,
-                            ),
-                        ),
-                ),
-            options = options,
+        return createSinglesRequest(
+            p1Rating = p1Rating,
+            p2Rating = p2Rating,
+            system = RatingSystem.UTR,
+            p1Games = p1Games,
+            p2Games = p2Games,
+            winner = teamWinner,
+            smoothingEnabled = smoothingEnabled,
+            smoothingFactor = smoothingFactor,
         )
     }
 
@@ -809,34 +779,16 @@ class PerformanceBasedRankingCalculatorImplTest {
             p2Games: Int,
             options: RatingCalculationOptions? = null,
         ): RankingCalculationRequest {
-            val player1 =
-                PlayerProfile(
-                    playerId = "P1",
-                    name = "Player 1",
-                    rating = Rating.fromValue(value = p1Rating, system = RatingSystem.NTRP),
-                )
-            val player2 =
-                PlayerProfile(
-                    playerId = "P2",
-                    name = "Player 2",
-                    rating = Rating.fromValue(value = p2Rating, system = RatingSystem.NTRP),
-                )
-
-            val winner = if (p1Games > p2Games) "P1" else "P2"
-
-            return RankingCalculationRequest(
-                players = mapOf("P1" to player1, "P2" to player2),
-                matchScore =
-                    MatchScore(
-                        sets =
-                            listOf(
-                                SetScore(
-                                    games = mapOf("P1" to p1Games, "P2" to p2Games),
-                                    winner = winner,
-                                ),
-                            ),
-                    ),
-                options = options,
+            val winner = if (p1Games > p2Games) "T1" else "T2"
+            return createSinglesRequest(
+                p1Rating = p1Rating,
+                p2Rating = p2Rating,
+                system = RatingSystem.NTRP,
+                p1Games = p1Games,
+                p2Games = p2Games,
+                winner = winner,
+                smoothingEnabled = options?.smoothingEnabled ?: false,
+                smoothingFactor = options?.smoothingFactor ?: 0.5,
             )
         }
 
@@ -847,34 +799,16 @@ class PerformanceBasedRankingCalculatorImplTest {
             p2Games: Int,
             options: RatingCalculationOptions? = null,
         ): RankingCalculationRequest {
-            val player1 =
-                PlayerProfile(
-                    playerId = "P1",
-                    name = "Player 1",
-                    rating = Rating.fromValue(value = p1Rating, system = RatingSystem.UTR),
-                )
-            val player2 =
-                PlayerProfile(
-                    playerId = "P2",
-                    name = "Player 2",
-                    rating = Rating.fromValue(value = p2Rating, system = RatingSystem.UTR),
-                )
-
-            val winner = if (p1Games > p2Games) "P1" else "P2"
-
-            return RankingCalculationRequest(
-                players = mapOf("P1" to player1, "P2" to player2),
-                matchScore =
-                    MatchScore(
-                        sets =
-                            listOf(
-                                SetScore(
-                                    games = mapOf("P1" to p1Games, "P2" to p2Games),
-                                    winner = winner,
-                                ),
-                            ),
-                    ),
-                options = options,
+            val winner = if (p1Games > p2Games) "T1" else "T2"
+            return createSinglesRequest(
+                p1Rating = p1Rating,
+                p2Rating = p2Rating,
+                system = RatingSystem.UTR,
+                p1Games = p1Games,
+                p2Games = p2Games,
+                winner = winner,
+                smoothingEnabled = options?.smoothingEnabled ?: false,
+                smoothingFactor = options?.smoothingFactor ?: 0.5,
             )
         }
     }
@@ -898,20 +832,36 @@ class PerformanceBasedRankingCalculatorImplTest {
                 rating = Rating.fromValue(value = "4.0", system = RatingSystem.NTRP),
             )
 
+        val team1 =
+            Team(
+                teamId = "T1",
+                name = player1.name,
+                players = listOf(player1),
+                teamType = TeamType.SINGLES,
+            )
+
+        val team2 =
+            Team(
+                teamId = "T2",
+                name = player2.name,
+                players = listOf(player2),
+                teamType = TeamType.SINGLES,
+            )
+
         val sets =
             listOf(
                 SetScore(
-                    games = mapOf("P123" to 6, "P456" to 4),
-                    winner = "P123",
+                    games = mapOf("T1" to 6, "T2" to 4),
+                    winner = "T1",
                 ),
                 SetScore(
-                    games = mapOf("P123" to 6, "P456" to 3),
-                    winner = "P123",
+                    games = mapOf("T1" to 6, "T2" to 3),
+                    winner = "T1",
                 ),
             )
 
         return RankingCalculationRequest(
-            players = mapOf("P123" to player1, "P456" to player2),
+            teams = mapOf("T1" to team1, "T2" to team2),
             matchScore = MatchScore(sets = sets),
         )
     }
@@ -931,16 +881,32 @@ class PerformanceBasedRankingCalculatorImplTest {
                 rating = Rating.fromValue(value = "8.2", system = RatingSystem.UTR),
             )
 
+        val team1 =
+            Team(
+                teamId = "T1",
+                name = player1.name,
+                players = listOf(player1),
+                teamType = TeamType.SINGLES,
+            )
+
+        val team2 =
+            Team(
+                teamId = "T2",
+                name = player2.name,
+                players = listOf(player2),
+                teamType = TeamType.SINGLES,
+            )
+
         val sets =
             listOf(
                 SetScore(
-                    games = mapOf("P789" to 6, "P101" to 4),
-                    winner = "P789",
+                    games = mapOf("T1" to 6, "T2" to 4),
+                    winner = "T1",
                 ),
             )
 
         return RankingCalculationRequest(
-            players = mapOf("P789" to player1, "P101" to player2),
+            teams = mapOf("T1" to team1, "T2" to team2),
             matchScore = MatchScore(sets = sets),
         )
     }

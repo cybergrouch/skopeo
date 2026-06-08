@@ -133,24 +133,33 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
     override fun calculate(request: RankingCalculationRequest): RankingCalculationResult {
         val audit = AuditTrail()
 
-        val playerIds = request.players.keys.toList()
-        val player1Id = playerIds[0]
-        val player2Id = playerIds[1]
+        // Extract teams and players
+        val teamIds = request.teams.keys.toList()
+        val team1Id = teamIds[0]
+        val team2Id = teamIds[1]
+        val team1 = request.teams[team1Id]!!
+        val team2 = request.teams[team2Id]!!
 
-        val player1 = request.players[player1Id]!!
-        val player2 = request.players[player2Id]!!
+        // For singles: extract the single player from each team
+        val player1 = team1.getSinglePlayer()
+        val player2 = team2.getSinglePlayer()
+        val player1Id = player1.playerId
+        val player2Id = player2.playerId
 
         audit.add(
             AuditEntry(
                 message =
-                    "Calculating ranking for ${player1.name} (${player1.rating.value}) vs " +
-                        "${player2.name} (${player2.rating.value})",
+                    "Calculating ranking for ${team1.name} (${player1.name}, ${player1.rating.value}) vs " +
+                        "${team2.name} (${player2.name}, ${player2.rating.value})",
                 context =
                     mapOf(
+                        "team1" to team1.name,
+                        "team2" to team2.name,
                         "player1" to player1.name,
                         "player1Rating" to player1.rating.value,
                         "player2" to player2.name,
                         "player2Rating" to player2.rating.value,
+                        "ratingSystem" to player1.rating.system.name,
                     ),
             ),
         )
@@ -163,11 +172,11 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
                     context =
                         mapOf(
                             "winnerId" to winner,
-                            "winnerScore" to totalGamesWon(playerId = winner),
+                            "winnerScore" to totalGamesWon(teamId = winner),
                             "loserId" to loser,
-                            "loserScore" to totalGamesWon(playerId = loser),
-                            "winnerDominanceFactor" to calculateDominanceFactor(playerId = winner),
-                            "loserDominanceFactor" to calculateDominanceFactor(playerId = loser),
+                            "loserScore" to totalGamesWon(teamId = loser),
+                            "winnerDominanceFactor" to calculateDominanceFactor(teamId = winner),
+                            "loserDominanceFactor" to calculateDominanceFactor(teamId = loser),
                         ),
                 ),
             )
@@ -180,6 +189,8 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
                     ratingSystem = player1.rating.system,
                     matchScore = request.matchScore,
                     audit = audit,
+                    player1TeamId = team1Id,
+                    player2TeamId = team2Id,
                 )
 
             audit.add(
@@ -228,17 +239,31 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
                         ),
                 )
 
-            // Create updated player profiles
+            // Build updated player profiles
+            val updatedPlayer1 = player1.copy(rating = player1NewRating)
+            val updatedPlayer2 = player2.copy(rating = player2NewRating)
+
             val updatedPlayers =
                 mapOf(
-                    player1Id to player1.copy(rating = player1NewRating),
-                    player2Id to player2.copy(rating = player2NewRating),
+                    player1Id to updatedPlayer1,
+                    player2Id to updatedPlayer2,
+                )
+
+            // Build updated teams with updated players
+            val updatedTeam1 = team1.copy(players = listOf(updatedPlayer1))
+            val updatedTeam2 = team2.copy(players = listOf(updatedPlayer2))
+
+            val updatedTeams =
+                mapOf(
+                    team1Id to updatedTeam1,
+                    team2Id to updatedTeam2,
                 )
 
             val response =
                 RankingCalculationResponse(
                     ratingChanges = ratingChanges,
                     players = updatedPlayers,
+                    teams = updatedTeams,
                 )
 
             return RankingCalculationResult(
@@ -276,6 +301,8 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
         matchScore: MatchScore,
         ratingSystem: RatingSystem,
         audit: AuditTrail,
+        player1TeamId: String,
+        player2TeamId: String,
     ): Pair<BigDecimal, BigDecimal> {
         fun PlayerProfile.getRatingDifference(
             opponent: PlayerProfile,
@@ -322,6 +349,7 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
             opponent: PlayerProfile,
             matchScore: MatchScore,
             ratingScale: BigDecimal,
+            teamId: String,
         ): BigDecimal {
             // Dominance factor measures match closeness: (games_won - games_lost) / total_games
             // Range: -1.0 (shutout loss) to +1.0 (shutout win)
@@ -329,11 +357,11 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
             //   - 6-0: (6-0)/6 = 1.0 (complete dominance)
             //   - 6-4: (6-4)/10 = 0.2 (competitive, slight edge)
             //   - 7-5: (7-5)/12 = 0.167 (very competitive)
-            val dominance = matchScore.calculateDominanceFactor(playerId = this.playerId)
+            val dominance = matchScore.calculateDominanceFactor(teamId = teamId)
             val dominanceMagnitude = dominance.abs()
             val ratingAdvantage = this.rating.value.bd - opponent.rating.value.bd
             val absAdvantage = ratingAdvantage.abs()
-            val isWinner = matchScore.winner == this.playerId
+            val isWinner = matchScore.winner == teamId
 
             // Get rating range for normalization
             val ratingRange =
@@ -419,12 +447,14 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
                 opponent = player2,
                 matchScore = matchScore,
                 ratingScale = ratingScale,
+                teamId = player1TeamId,
             )
         val player2RankingAdjustment =
             player2.calculateRankingAdjustment(
                 opponent = player1,
                 matchScore = matchScore,
                 ratingScale = ratingScale,
+                teamId = player2TeamId,
             )
 
         audit.add(

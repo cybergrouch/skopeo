@@ -56,32 +56,42 @@ class RankingCalculationPayloadTest {
             val requestJson =
                 """
                 {
-                  "players": {
-                    "P1": {
-                      "playerId": "P1",
+                  "teams": {
+                    "T1": {
+                      "teamId": "T1",
                       "name": "Alice",
-                      "rating": {
-                        "value": "4.5",
-                        "system": "NTRP"
-                      }
+                      "players": [{
+                        "playerId": "P1",
+                        "name": "Alice",
+                        "rating": {
+                          "value": "4.5",
+                          "system": "NTRP"
+                        }
+                      }],
+                      "teamType": "SINGLES"
                     },
-                    "P2": {
-                      "playerId": "P2",
+                    "T2": {
+                      "teamId": "T2",
                       "name": "Bob",
-                      "rating": {
-                        "value": "4.0",
-                        "system": "NTRP"
-                      }
+                      "players": [{
+                        "playerId": "P2",
+                        "name": "Bob",
+                        "rating": {
+                          "value": "4.0",
+                          "system": "NTRP"
+                        }
+                      }],
+                      "teamType": "SINGLES"
                     }
                   },
                   "matchScore": {
                     "sets": [
                       {
                         "games": {
-                          "P1": 6,
-                          "P2": 3
+                          "T1": 6,
+                          "T2": 3
                         },
-                        "winner": "P1"
+                        "winner": "T1"
                       }
                     ]
                   }
@@ -182,6 +192,46 @@ class RankingCalculationPayloadTest {
                         }
                       }
                     }
+                  },
+                  "teams": {
+                    "T1": {
+                      "teamId": "T1",
+                      "name": "Alice",
+                      "players": [{
+                        "playerId": "P1",
+                        "name": "Alice",
+                        "rating": {
+                          "value": "4.500000",
+                          "system": "NTRP",
+                          "publishedLevel": {
+                            "value": "4.5",
+                            "minRating": "4.5",
+                            "maxRating": "5.0",
+                            "system": "NTRP"
+                          }
+                        }
+                      }],
+                      "teamType": "SINGLES"
+                    },
+                    "T2": {
+                      "teamId": "T2",
+                      "name": "Bob",
+                      "players": [{
+                        "playerId": "P2",
+                        "name": "Bob",
+                        "rating": {
+                          "value": "4.000000",
+                          "system": "NTRP",
+                          "publishedLevel": {
+                            "value": "4.0",
+                            "minRating": "4.0",
+                            "maxRating": "4.5",
+                            "system": "NTRP"
+                          }
+                        }
+                      }],
+                      "teamType": "SINGLES"
+                    }
                   }
                 }
                 """
@@ -199,32 +249,42 @@ class RankingCalculationPayloadTest {
             val requestJson =
                 """
                 {
-                  "players": {
-                    "P1": {
-                      "playerId": "P1",
+                  "teams": {
+                    "T1": {
+                      "teamId": "T1",
                       "name": "Player One",
-                      "rating": {
-                        "value": "5.0",
-                        "system": "NTRP"
-                      }
+                      "players": [{
+                        "playerId": "P1",
+                        "name": "Player One",
+                        "rating": {
+                          "value": "5.0",
+                          "system": "NTRP"
+                        }
+                      }],
+                      "teamType": "SINGLES"
                     },
-                    "P2": {
-                      "playerId": "P2",
+                    "T2": {
+                      "teamId": "T2",
                       "name": "Player Two",
-                      "rating": {
-                        "value": "5.0",
-                        "system": "NTRP"
-                      }
+                      "players": [{
+                        "playerId": "P2",
+                        "name": "Player Two",
+                        "rating": {
+                          "value": "5.0",
+                          "system": "NTRP"
+                        }
+                      }],
+                      "teamType": "SINGLES"
                     }
                   },
                   "matchScore": {
                     "sets": [
                       {
                         "games": {
-                          "P1": 6,
-                          "P2": 4
+                          "T1": 6,
+                          "T2": 4
                         },
-                        "winner": "P1"
+                        "winner": "T1"
                       }
                     ]
                   }
@@ -325,6 +385,46 @@ class RankingCalculationPayloadTest {
                         }
                       }
                     }
+                  },
+                  "teams": {
+                    "T1": {
+                      "teamId": "T1",
+                      "name": "Player One",
+                      "players": [{
+                        "playerId": "P1",
+                        "name": "Player One",
+                        "rating": {
+                          "value": "5.032000",
+                          "system": "NTRP",
+                          "publishedLevel": {
+                            "value": "5.0",
+                            "minRating": "5.0",
+                            "maxRating": "5.5",
+                            "system": "NTRP"
+                          }
+                        }
+                      }],
+                      "teamType": "SINGLES"
+                    },
+                    "T2": {
+                      "teamId": "T2",
+                      "name": "Player Two",
+                      "players": [{
+                        "playerId": "P2",
+                        "name": "Player Two",
+                        "rating": {
+                          "value": "4.968000",
+                          "system": "NTRP",
+                          "publishedLevel": {
+                            "value": "4.5",
+                            "minRating": "4.5",
+                            "maxRating": "5.0",
+                            "system": "NTRP"
+                          }
+                        }
+                      }],
+                      "teamType": "SINGLES"
+                    }
                   }
                 }
                 """
@@ -342,39 +442,49 @@ class RankingCalculationPayloadTest {
             val requestJson =
                 """
                 {
-                  "players": {
-                    "WINNER": {
-                      "playerId": "WINNER",
+                  "teams": {
+                    "T1": {
+                      "teamId": "T1",
                       "name": "Dominant Player",
-                      "rating": {
-                        "value": "4.0",
-                        "system": "NTRP"
-                      }
+                      "players": [{
+                        "playerId": "WINNER",
+                        "name": "Dominant Player",
+                        "rating": {
+                          "value": "4.0",
+                          "system": "NTRP"
+                        }
+                      }],
+                      "teamType": "SINGLES"
                     },
-                    "LOSER": {
-                      "playerId": "LOSER",
+                    "T2": {
+                      "teamId": "T2",
                       "name": "Weaker Player",
-                      "rating": {
-                        "value": "3.5",
-                        "system": "NTRP"
-                      }
+                      "players": [{
+                        "playerId": "LOSER",
+                        "name": "Weaker Player",
+                        "rating": {
+                          "value": "3.5",
+                          "system": "NTRP"
+                        }
+                      }],
+                      "teamType": "SINGLES"
                     }
                   },
                   "matchScore": {
                     "sets": [
                       {
                         "games": {
-                          "WINNER": 6,
-                          "LOSER": 0
+                          "T1": 6,
+                          "T2": 0
                         },
-                        "winner": "WINNER"
+                        "winner": "T1"
                       },
                       {
                         "games": {
-                          "WINNER": 6,
-                          "LOSER": 1
+                          "T1": 6,
+                          "T2": 1
                         },
-                        "winner": "WINNER"
+                        "winner": "T1"
                       }
                     ]
                   }
@@ -475,6 +585,46 @@ class RankingCalculationPayloadTest {
                         }
                       }
                     }
+                  },
+                  "teams": {
+                    "T1": {
+                      "teamId": "T1",
+                      "name": "Dominant Player",
+                      "players": [{
+                        "playerId": "WINNER",
+                        "name": "Dominant Player",
+                        "rating": {
+                          "value": "4.000000",
+                          "system": "NTRP",
+                          "publishedLevel": {
+                            "value": "4.0",
+                            "minRating": "4.0",
+                            "maxRating": "4.5",
+                            "system": "NTRP"
+                          }
+                        }
+                      }],
+                      "teamType": "SINGLES"
+                    },
+                    "T2": {
+                      "teamId": "T2",
+                      "name": "Weaker Player",
+                      "players": [{
+                        "playerId": "LOSER",
+                        "name": "Weaker Player",
+                        "rating": {
+                          "value": "3.500000",
+                          "system": "NTRP",
+                          "publishedLevel": {
+                            "value": "3.5",
+                            "minRating": "3.5",
+                            "maxRating": "4.0",
+                            "system": "NTRP"
+                          }
+                        }
+                      }],
+                      "teamType": "SINGLES"
+                    }
                   }
                 }
                 """
@@ -492,32 +642,42 @@ class RankingCalculationPayloadTest {
             val requestJson =
                 """
                 {
-                  "players": {
-                    "P1": {
-                      "playerId": "P1",
+                  "teams": {
+                    "T1": {
+                      "teamId": "T1",
                       "name": "Beginner",
-                      "rating": {
-                        "value": "1.0",
-                        "system": "NTRP"
-                      }
+                      "players": [{
+                        "playerId": "P1",
+                        "name": "Beginner",
+                        "rating": {
+                          "value": "1.0",
+                          "system": "NTRP"
+                        }
+                      }],
+                      "teamType": "SINGLES"
                     },
-                    "P2": {
-                      "playerId": "P2",
+                    "T2": {
+                      "teamId": "T2",
                       "name": "Intermediate",
-                      "rating": {
-                        "value": "3.0",
-                        "system": "NTRP"
-                      }
+                      "players": [{
+                        "playerId": "P2",
+                        "name": "Intermediate",
+                        "rating": {
+                          "value": "3.0",
+                          "system": "NTRP"
+                        }
+                      }],
+                      "teamType": "SINGLES"
                     }
                   },
                   "matchScore": {
                     "sets": [
                       {
                         "games": {
-                          "P1": 0,
-                          "P2": 6
+                          "T1": 0,
+                          "T2": 6
                         },
-                        "winner": "P2"
+                        "winner": "T2"
                       }
                     ]
                   }
@@ -621,6 +781,46 @@ class RankingCalculationPayloadTest {
                         }
                       }
                     }
+                  },
+                  "teams": {
+                    "T1": {
+                      "teamId": "T1",
+                      "name": "Beginner",
+                      "players": [{
+                        "playerId": "P1",
+                        "name": "Beginner",
+                        "rating": {
+                          "value": "1.000000",
+                          "system": "NTRP",
+                          "publishedLevel": {
+                            "value": "1.0",
+                            "minRating": "1.0",
+                            "maxRating": "1.5",
+                            "system": "NTRP"
+                          }
+                        }
+                      }],
+                      "teamType": "SINGLES"
+                    },
+                    "T2": {
+                      "teamId": "T2",
+                      "name": "Intermediate",
+                      "players": [{
+                        "playerId": "P2",
+                        "name": "Intermediate",
+                        "rating": {
+                          "value": "3.000000",
+                          "system": "NTRP",
+                          "publishedLevel": {
+                            "value": "3.0",
+                            "minRating": "3.0",
+                            "maxRating": "3.5",
+                            "system": "NTRP"
+                          }
+                        }
+                      }],
+                      "teamType": "SINGLES"
+                    }
                   }
                 }
                 """
@@ -638,32 +838,42 @@ class RankingCalculationPayloadTest {
             val requestJson =
                 """
                 {
-                  "players": {
-                    "P1": {
-                      "playerId": "P1",
+                  "teams": {
+                    "T1": {
+                      "teamId": "T1",
                       "name": "Expert",
-                      "rating": {
-                        "value": "7.0",
-                        "system": "NTRP"
-                      }
+                      "players": [{
+                        "playerId": "P1",
+                        "name": "Expert",
+                        "rating": {
+                          "value": "7.0",
+                          "system": "NTRP"
+                        }
+                      }],
+                      "teamType": "SINGLES"
                     },
-                    "P2": {
-                      "playerId": "P2",
+                    "T2": {
+                      "teamId": "T2",
                       "name": "Advanced",
-                      "rating": {
-                        "value": "6.0",
-                        "system": "NTRP"
-                      }
+                      "players": [{
+                        "playerId": "P2",
+                        "name": "Advanced",
+                        "rating": {
+                          "value": "6.0",
+                          "system": "NTRP"
+                        }
+                      }],
+                      "teamType": "SINGLES"
                     }
                   },
                   "matchScore": {
                     "sets": [
                       {
                         "games": {
-                          "P1": 6,
-                          "P2": 0
+                          "T1": 6,
+                          "T2": 0
                         },
-                        "winner": "P1"
+                        "winner": "T1"
                       }
                     ]
                   }
@@ -767,6 +977,46 @@ class RankingCalculationPayloadTest {
                         }
                       }
                     }
+                  },
+                  "teams": {
+                    "T1": {
+                      "teamId": "T1",
+                      "name": "Expert",
+                      "players": [{
+                        "playerId": "P1",
+                        "name": "Expert",
+                        "rating": {
+                          "value": "7.000000",
+                          "system": "NTRP",
+                          "publishedLevel": {
+                            "value": "7.0",
+                            "minRating": "7.0",
+                            "maxRating": null,
+                            "system": "NTRP"
+                          }
+                        }
+                      }],
+                      "teamType": "SINGLES"
+                    },
+                    "T2": {
+                      "teamId": "T2",
+                      "name": "Advanced",
+                      "players": [{
+                        "playerId": "P2",
+                        "name": "Advanced",
+                        "rating": {
+                          "value": "6.000000",
+                          "system": "NTRP",
+                          "publishedLevel": {
+                            "value": "6.0",
+                            "minRating": "6.0",
+                            "maxRating": "6.5",
+                            "system": "NTRP"
+                          }
+                        }
+                      }],
+                      "teamType": "SINGLES"
+                    }
                   }
                 }
                 """
@@ -788,32 +1038,42 @@ class RankingCalculationPayloadTest {
             val requestJson =
                 """
                 {
-                  "players": {
-                    "P100": {
-                      "playerId": "P100",
+                  "teams": {
+                    "T1": {
+                      "teamId": "T1",
                       "name": "Pro Player",
-                      "rating": {
-                        "value": "12.5",
-                        "system": "UTR"
-                      }
+                      "players": [{
+                        "playerId": "P100",
+                        "name": "Pro Player",
+                        "rating": {
+                          "value": "12.5",
+                          "system": "UTR"
+                        }
+                      }],
+                      "teamType": "SINGLES"
                     },
-                    "P200": {
-                      "playerId": "P200",
+                    "T2": {
+                      "teamId": "T2",
                       "name": "Amateur",
-                      "rating": {
-                        "value": "8.0",
-                        "system": "UTR"
-                      }
+                      "players": [{
+                        "playerId": "P200",
+                        "name": "Amateur",
+                        "rating": {
+                          "value": "8.0",
+                          "system": "UTR"
+                        }
+                      }],
+                      "teamType": "SINGLES"
                     }
                   },
                   "matchScore": {
                     "sets": [
                       {
                         "games": {
-                          "P100": 6,
-                          "P200": 2
+                          "T1": 6,
+                          "T2": 2
                         },
-                        "winner": "P100"
+                        "winner": "T1"
                       }
                     ]
                   }
@@ -914,6 +1174,46 @@ class RankingCalculationPayloadTest {
                         }
                       }
                     }
+                  },
+                  "teams": {
+                    "T1": {
+                      "teamId": "T1",
+                      "name": "Pro Player",
+                      "players": [{
+                        "playerId": "P100",
+                        "name": "Pro Player",
+                        "rating": {
+                          "value": "12.500000",
+                          "system": "UTR",
+                          "publishedLevel": {
+                            "value": "12.0",
+                            "minRating": "12.0",
+                            "maxRating": "13.0",
+                            "system": "UTR"
+                          }
+                        }
+                      }],
+                      "teamType": "SINGLES"
+                    },
+                    "T2": {
+                      "teamId": "T2",
+                      "name": "Amateur",
+                      "players": [{
+                        "playerId": "P200",
+                        "name": "Amateur",
+                        "rating": {
+                          "value": "8.000000",
+                          "system": "UTR",
+                          "publishedLevel": {
+                            "value": "8.0",
+                            "minRating": "8.0",
+                            "maxRating": "9.0",
+                            "system": "UTR"
+                          }
+                        }
+                      }],
+                      "teamType": "SINGLES"
+                    }
                   }
                 }
                 """
@@ -931,39 +1231,49 @@ class RankingCalculationPayloadTest {
             val requestJson =
                 """
                 {
-                  "players": {
-                    "PA": {
-                      "playerId": "PA",
+                  "teams": {
+                    "T1": {
+                      "teamId": "T1",
                       "name": "Alex",
-                      "rating": {
-                        "value": "10.0",
-                        "system": "UTR"
-                      }
+                      "players": [{
+                        "playerId": "PA",
+                        "name": "Alex",
+                        "rating": {
+                          "value": "10.0",
+                          "system": "UTR"
+                        }
+                      }],
+                      "teamType": "SINGLES"
                     },
-                    "PB": {
-                      "playerId": "PB",
+                    "T2": {
+                      "teamId": "T2",
                       "name": "Blake",
-                      "rating": {
-                        "value": "9.8",
-                        "system": "UTR"
-                      }
+                      "players": [{
+                        "playerId": "PB",
+                        "name": "Blake",
+                        "rating": {
+                          "value": "9.8",
+                          "system": "UTR"
+                        }
+                      }],
+                      "teamType": "SINGLES"
                     }
                   },
                   "matchScore": {
                     "sets": [
                       {
                         "games": {
-                          "PA": 7,
-                          "PB": 6
+                          "T1": 7,
+                          "T2": 6
                         },
                         "tiebreak": {
                           "points": {
-                            "PA": 7,
-                            "PB": 5
+                            "T1": 7,
+                            "T2": 5
                           },
-                          "winner": "PA"
+                          "winner": "T1"
                         },
-                        "winner": "PA"
+                        "winner": "T1"
                       }
                     ]
                   }
@@ -1063,6 +1373,46 @@ class RankingCalculationPayloadTest {
                           "system": "UTR"
                         }
                       }
+                    }
+                  },
+                  "teams": {
+                    "T1": {
+                      "teamId": "T1",
+                      "name": "Alex",
+                      "players": [{
+                        "playerId": "PA",
+                        "name": "Alex",
+                        "rating": {
+                          "value": "10.025826",
+                          "system": "UTR",
+                          "publishedLevel": {
+                            "value": "10.0",
+                            "minRating": "10.0",
+                            "maxRating": "11.0",
+                            "system": "UTR"
+                          }
+                        }
+                      }],
+                      "teamType": "SINGLES"
+                    },
+                    "T2": {
+                      "teamId": "T2",
+                      "name": "Blake",
+                      "players": [{
+                        "playerId": "PB",
+                        "name": "Blake",
+                        "rating": {
+                          "value": "9.774174",
+                          "system": "UTR",
+                          "publishedLevel": {
+                            "value": "9.0",
+                            "minRating": "9.0",
+                            "maxRating": "10.0",
+                            "system": "UTR"
+                          }
+                        }
+                      }],
+                      "teamType": "SINGLES"
                     }
                   }
                 }

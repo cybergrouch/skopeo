@@ -1,13 +1,7 @@
 package org.lange.tennis.levelr.service.calculator.impl.v1
 
 import org.junit.jupiter.api.Test
-import org.lange.tennis.levelr.dto.RankingCalculationRequest
-import org.lange.tennis.levelr.model.MatchScore
-import org.lange.tennis.levelr.model.PlayerProfile
-import org.lange.tennis.levelr.model.Rating
-import org.lange.tennis.levelr.model.RatingCalculationOptions
 import org.lange.tennis.levelr.model.RatingSystem
-import org.lange.tennis.levelr.model.SetScore
 import java.io.File
 
 /**
@@ -18,53 +12,6 @@ import java.io.File
 class NTRPvsUTRComparison {
     private val calculator = PerformanceBasedRankingCalculatorImpl()
     private val scenarios = TestScenarios.allScenarios
-
-    private fun createRequest(
-        p1Rating: String,
-        p2Rating: String,
-        system: RatingSystem,
-        p1Games: Int,
-        p2Games: Int,
-        winner: String,
-        smoothingEnabled: Boolean = false,
-        smoothingFactor: Double = 0.5,
-    ): RankingCalculationRequest {
-        val options =
-            if (smoothingEnabled) {
-                RatingCalculationOptions(smoothingEnabled = true, smoothingFactor = smoothingFactor)
-            } else {
-                null
-            }
-
-        return RankingCalculationRequest(
-            players =
-                mapOf(
-                    "P1" to
-                        PlayerProfile(
-                            playerId = "P1",
-                            name = "Player 1",
-                            rating = Rating.fromValue(value = p1Rating, system = system),
-                        ),
-                    "P2" to
-                        PlayerProfile(
-                            playerId = "P2",
-                            name = "Player 2",
-                            rating = Rating.fromValue(value = p2Rating, system = system),
-                        ),
-                ),
-            matchScore =
-                MatchScore(
-                    sets =
-                        listOf(
-                            SetScore(
-                                games = mapOf("P1" to p1Games, "P2" to p2Games),
-                                winner = winner,
-                            ),
-                        ),
-                ),
-            options = options,
-        )
-    }
 
     @Test
     fun compareNTRPvsUTR() {
@@ -96,7 +43,7 @@ class NTRPvsUTRComparison {
                 val ntrpResult =
                     calculator.calculate(
                         request =
-                            createRequest(
+                            createSinglesRequest(
                                 p1Rating = scenario.ntrpP1,
                                 p2Rating = scenario.ntrpP2,
                                 system = RatingSystem.NTRP,
@@ -120,7 +67,7 @@ class NTRPvsUTRComparison {
                 val utrResult =
                     calculator.calculate(
                         request =
-                            createRequest(
+                            createSinglesRequest(
                                 p1Rating = scenario.utrP1,
                                 p2Rating = scenario.utrP2,
                                 system = RatingSystem.UTR,

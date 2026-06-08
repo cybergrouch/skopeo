@@ -37,25 +37,33 @@ paths:
             schema:
               $ref: '#/components/schemas/RankingCalculationRequest'
             example:
-              players:
-                P1:
-                  playerId: "P1"
+              teams:
+                T1:
+                  teamId: "T1"
                   name: "Player 1"
-                  rating:
-                    value: "4.5"
-                    system: "NTRP"
-                P2:
-                  playerId: "P2"
+                  players:
+                    - playerId: "P1"
+                      name: "Player 1"
+                      rating:
+                        value: "4.5"
+                        system: "NTRP"
+                  teamType: "SINGLES"
+                T2:
+                  teamId: "T2"
                   name: "Player 2"
-                  rating:
-                    value: "4.0"
-                    system: "NTRP"
+                  players:
+                    - playerId: "P2"
+                      name: "Player 2"
+                      rating:
+                        value: "4.0"
+                        system: "NTRP"
+                  teamType: "SINGLES"
               matchScore:
                 sets:
                   - games:
-                      P1: 6
-                      P2: 2
-                    winner: "P1"
+                      T1: 6
+                      T2: 2
+                    winner: "T1"
       responses:
         '200':
           description: Successfully calculated rating changes
@@ -81,13 +89,14 @@ components:
     RankingCalculationRequest:
       type: object
       required:
-        - players
+        - teams
         - matchScore
       properties:
-        players:
+        teams:
           type: object
           additionalProperties:
-            $ref: '#/components/schemas/PlayerProfile'
+            $ref: '#/components/schemas/Team'
+          description: Map of team IDs to Team objects (exactly 2 teams required)
         matchScore:
           $ref: '#/components/schemas/MatchScore'
         options:
@@ -97,11 +106,24 @@ components:
       type: object
       required:
         - ratingChanges
+        - players
+        - teams
       properties:
         ratingChanges:
           type: object
           additionalProperties:
             $ref: '#/components/schemas/RatingChange'
+          description: Map of player IDs to rating changes
+        players:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/PlayerProfile'
+          description: Map of player IDs to updated player profiles
+        teams:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/Team'
+          description: Map of team IDs to updated teams with updated players
 
     PlayerProfile:
       type: object
@@ -116,6 +138,47 @@ components:
           type: string
         rating:
           $ref: '#/components/schemas/Rating'
+
+    Team:
+      type: object
+      required:
+        - teamId
+        - name
+        - players
+      properties:
+        teamId:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: Unique identifier for this team in the match context
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Team name (for singles - player name, for doubles - "Player1/Player2")
+        players:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlayerProfile'
+          minItems: 1
+          maxItems: 2
+          description: List of players in this team (1 for singles, 2 for doubles)
+        teamType:
+          $ref: '#/components/schemas/TeamType'
+          default: SINGLES
+          description: Type of team (SINGLES, DOUBLES, or MIXED_DOUBLES)
+
+    TeamType:
+      type: string
+      enum:
+        - SINGLES
+        - DOUBLES
+        - MIXED_DOUBLES
+      description: |
+        Team type:
+        - SINGLES: 1 player per team
+        - DOUBLES: 2 players per team
+        - MIXED_DOUBLES: 2 players per team (male + female)
 
     Rating:
       type: object
