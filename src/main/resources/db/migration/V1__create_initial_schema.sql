@@ -1,4 +1,4 @@
--- Tennis Levelr MVP Schema - Phase 1
+-- Skopeo MVP Schema - Phase 1
 -- This migration creates the core tables for:
 -- - Player Profile Management with Philippine KYC
 -- - Match Tracking (singles only initially)

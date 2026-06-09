@@ -20,7 +20,7 @@
 
 ## Overview
 
-Tennis Levelr uses an **Elo-based rating system** adapted for tennis match scoring. The algorithm calculates rating changes based on match outcomes, considering both the rating differential between players and the dominance of the victory.
+Skopeo uses an **Elo-based rating system** adapted for tennis match scoring. The algorithm calculates rating changes based on match outcomes, considering both the rating differential between players and the dominance of the victory.
 
 **Key Features:**
 - Dynamic rating adjustments based on expected vs actual performance
@@ -104,7 +104,7 @@ Our implementation enhances the traditional Elo system with tennis-specific feat
 - Only considers outcome (win/loss)
 - Designed for chess (discrete moves, long games)
 
-**Tennis Elo (Tennis Levelr):**
+**Tennis Elo (Skopeo):**
 - Win = 1 point, Loss = 0 points (same)
 - **Adds dominance factor** based on games won (6-0, 6-0 vs 7-6, 7-6)
 - **System-specific constraints** (NTRP 1.0-7.0 range, UTR 1.0+ range)
@@ -267,7 +267,7 @@ The algorithm analyzes the match to determine:
 2. **Total Games Won**: Sum of games across all sets for each player
 3. **Dominance Factor**: Ratio of winner's games to loser's games
 
-**Code Location:** `RankingCalculator.analyzeMatchResult()` in `src/main/kotlin/org/lange/tennis/levelr/service/RankingCalculator.kt:94`
+**Code Location:** `RankingCalculator.analyzeMatchResult()` in `src/main/kotlin/org/skopeo/service/RankingCalculator.kt:94`
 
 ### Rating Change Application
 
@@ -535,7 +535,7 @@ Player B: 10.2 - 17.75 = -7.55 → clamped to 1.0
 
 ### Algorithm Tests
 
-**Location:** `src/test/kotlin/org/lange/tennis/levelr/RankingAlgorithmTest.kt`
+**Location:** `src/test/kotlin/org/skopeo/RankingAlgorithmTest.kt`
 
 **Test Coverage:**
 - Winners gain rating, losers lose rating ✅
@@ -636,4 +636,4 @@ function applySystemConstraints(rating, system):
 
 **Version:** 1.0
 **Last Updated:** 2024-01-15
-**Algorithm Implementation:** `../src/main/kotlin/org/lange/tennis/levelr/service/calculator/RankingCalculator.kt`
+**Algorithm Implementation:** `../src/main/kotlin/org/skopeo/service/calculator/RankingCalculator.kt`

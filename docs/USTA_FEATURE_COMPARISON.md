@@ -1,6 +1,6 @@
 # USTA NTRP Dynamic Feature Comparison
 
-> **Purpose**: Track USTA NTRP Dynamic features that Tennis Levelr does NOT currently implement.
+> **Purpose**: Track USTA NTRP Dynamic features that Skopeo does NOT currently implement.
 > This document serves as a reference for future enhancements and helps understand the differences
 > between our implementation and USTA's comprehensive rating system.
 
@@ -10,7 +10,7 @@
 
 ## Feature Status Summary
 
-| Feature | USTA | Tennis Levelr | Priority | Complexity |
+| Feature | USTA | Skopeo | Priority | Complexity |
 |---------|------|---------------|----------|------------|
 | [Match Type Weighting](#1-match-type-weighting) | ✅ | ❌ | 🔴 High | Medium |
 | [Doubles Support](#2-doubles-support) | ✅ | ❌ | 🟡 Medium | High |

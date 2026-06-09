@@ -1,11 +1,11 @@
-# Multi-stage Dockerfile for Tennis Levelr API
+# Multi-stage Dockerfile for Skopeo API
 # Stage 1: Build stage with full JDK and Gradle
 # Stage 2: Runtime stage with JRE only
 
 # ============================================================================
 # Stage 1: Build
 # ============================================================================
-FROM eclipse-temurin:17-jdk-alpine AS builder
+FROM eclipse-temurin:21-jdk AS builder
 
 WORKDIR /build
 
@@ -27,8 +27,8 @@ RUN ./gradlew clean installDist --no-daemon
 # ============================================================================
 FROM eclipse-temurin:17-jre-alpine
 
-LABEL maintainer="Tennis Levelr Team"
-LABEL description="Tennis Levelr API - Dynamic tennis ranking calculation service"
+LABEL maintainer="Skopeo Team"
+LABEL description="Skopeo API - Dynamic tennis ranking calculation service"
 LABEL version="1.0"
 
 WORKDIR /app
@@ -37,7 +37,7 @@ WORKDIR /app
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
 # Copy the application distribution from build stage
-COPY --from=builder /build/build/install/tennis_levlr .
+COPY --from=builder /build/build/install/skopeo .
 
 # Change ownership to non-root user
 RUN chown -R appuser:appgroup /app
@@ -53,4 +53,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
 
 # Run the application using the startup script
-ENTRYPOINT ["/app/bin/tennis_levlr"]
+ENTRYPOINT ["/app/bin/skopeo"]

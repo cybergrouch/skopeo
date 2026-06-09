@@ -1,6 +1,6 @@
 # Database Setup Guide
 
-This guide explains how to set up and manage the PostgreSQL database for Tennis Levelr.
+This guide explains how to set up and manage the PostgreSQL database for Skopeo.
 
 ## Quick Start (Local Development)
 
@@ -18,7 +18,7 @@ docker compose --profile tools up postgres pgadmin -d
 
 This will:
 - Start PostgreSQL 15 on `localhost:5432`
-- Create database `tennis_levelr`
+- Create database `SkopeoDb`
 - Use credentials: `postgres/postgres`
 - Optionally start pgAdmin on `http://localhost:5050`
 
@@ -39,7 +39,7 @@ Check that migrations ran successfully:
 
 ```bash
 # Connect to PostgreSQL
-docker exec -it tennis_levelr_db psql -U postgres -d tennis_levelr
+docker exec -it SkopeoDb_db psql -U postgres -d SkopeoDb
 
 # List all tables
 \dt
@@ -72,7 +72,7 @@ The application reads database configuration from environment variables or `appl
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DATABASE_URL` | `jdbc:postgresql://localhost:5432/tennis_levelr` | JDBC connection URL |
+| `DATABASE_URL` | `jdbc:postgresql://localhost:5432/SkopeoDb` | JDBC connection URL |
 | `DATABASE_USER` | `postgres` | Database username |
 | `DATABASE_PASSWORD` | `postgres` | Database password |
 
@@ -161,16 +161,16 @@ docker compose --profile tools up pgadmin -d
 ```
 
 Access at: `http://localhost:5050`
-- Email: `admin@tennislevelr.com`
+- Email: `admin@skopeo.com`
 - Password: `admin`
 
 **Add Server Connection:**
 1. Right-click "Servers" → "Register" → "Server"
-2. Name: `Tennis Levelr Local`
+2. Name: `Skopeo Local`
 3. Connection tab:
    - Host: `postgres` (container name)
    - Port: `5432`
-   - Database: `tennis_levelr`
+   - Database: `SkopeoDb`
    - Username: `postgres`
    - Password: `postgres`
 
@@ -180,10 +180,10 @@ Connect to PostgreSQL directly:
 
 ```bash
 # Using Docker exec
-docker exec -it tennis_levelr_db psql -U postgres -d tennis_levelr
+docker exec -it SkopeoDb_db psql -U postgres -d SkopeoDb
 
 # Or if PostgreSQL is installed locally
-psql -h localhost -U postgres -d tennis_levelr
+psql -h localhost -U postgres -d SkopeoDb
 ```
 
 **Useful psql Commands:**
@@ -218,7 +218,7 @@ Any PostgreSQL-compatible GUI client can connect using:
 ```
 Host: localhost
 Port: 5432
-Database: tennis_levelr
+Database: SkopeoDb
 Username: postgres
 Password: postgres
 ```
@@ -326,7 +326,7 @@ LIMIT 64;
 
 3. Check logs:
    ```bash
-   docker logs tennis_levelr_db
+   docker logs SkopeoDb_db
    ```
 
 ### Migration Failed Error
@@ -373,7 +373,7 @@ postgres:
 Then update `DATABASE_URL` in `application.yaml`:
 ```yaml
 database:
-  url: jdbc:postgresql://localhost:5433/tennis_levelr
+  url: jdbc:postgresql://localhost:5433/SkopeoDb
 ```
 
 ### Reset Database Completely
@@ -385,7 +385,7 @@ To start fresh with a clean database:
 docker compose down
 
 # Remove PostgreSQL volume (deletes all data)
-docker volume rm tennis_levelr_postgres_data
+docker volume rm SkopeoDb_postgres_data
 
 # Start fresh
 docker compose up postgres -d
@@ -415,7 +415,7 @@ docker compose up postgres -d
 Set these in your production environment:
 
 ```bash
-export DATABASE_URL="jdbc:postgresql://prod-db-host:5432/tennis_levelr"
+export DATABASE_URL="jdbc:postgresql://prod-db-host:5432/SkopeoDb"
 export DATABASE_USER="prod_user"
 export DATABASE_PASSWORD="<strong-password>"
 ```
@@ -437,27 +437,27 @@ For production deployments:
 
 ```bash
 # Backup entire database
-docker exec tennis_levelr_db pg_dump -U postgres tennis_levelr > backup.sql
+docker exec SkopeoDb_db pg_dump -U postgres SkopeoDb > backup.sql
 
 # Backup with compression
-docker exec tennis_levelr_db pg_dump -U postgres tennis_levelr | gzip > backup.sql.gz
+docker exec SkopeoDb_db pg_dump -U postgres SkopeoDb | gzip > backup.sql.gz
 
 # Backup specific tables only
-docker exec tennis_levelr_db pg_dump -U postgres -t players -t player_ratings tennis_levelr > players_backup.sql
+docker exec SkopeoDb_db pg_dump -U postgres -t players -t player_ratings SkopeoDb > players_backup.sql
 ```
 
 ### Restore Database
 
 ```bash
 # Restore from backup
-cat backup.sql | docker exec -i tennis_levelr_db psql -U postgres -d tennis_levelr
+cat backup.sql | docker exec -i SkopeoDb_db psql -U postgres -d SkopeoDb
 
 # Restore from compressed backup
-gunzip -c backup.sql.gz | docker exec -i tennis_levelr_db psql -U postgres -d tennis_levelr
+gunzip -c backup.sql.gz | docker exec -i SkopeoDb_db psql -U postgres -d SkopeoDb
 
 # Create new database and restore
-docker exec tennis_levelr_db psql -U postgres -c "CREATE DATABASE tennis_levelr_restored;"
-cat backup.sql | docker exec -i tennis_levelr_db psql -U postgres -d tennis_levelr_restored
+docker exec SkopeoDb_db psql -U postgres -c "CREATE DATABASE SkopeoDb_restored;"
+cat backup.sql | docker exec -i SkopeoDb_db psql -U postgres -d SkopeoDb_restored
 ```
 
 ---

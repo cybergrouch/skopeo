@@ -1,17 +1,17 @@
-# Tennis Levelr
+# Skopeo
 
 A Ktor API for dynamic calculation of tennis rankings based on match results.
 
 ## Overview
 
-Tennis Levelr provides real-time ranking calculations for tennis players using either NTRP (National Tennis Rating Program) or UTR (Universal Tennis Rating) systems. The API calculates updated rankings for both players based on match outcomes, deriving expected results from the difference in their current rankings.
+Skopeo provides real-time ranking calculations for tennis players using either NTRP (National Tennis Rating Program) or UTR (Universal Tennis Rating) systems. The API calculates updated rankings for both players based on match outcomes, deriving expected results from the difference in their current rankings.
 
 ## Features
 
 ### ✅ Implemented Features (v0.1)
 
 #### 1. **Rating Calculation Engine** (Core)
-The heart of the Tennis Levelr system - a sophisticated performance-based rating calculator.
+The heart of the Skopeo system - a sophisticated performance-based rating calculator.
 
 - **Dynamic Rating Calculation**: Real-time calculation of updated player ratings based on match results
 - **Elo-Based Algorithm**: Advanced ranking system that considers:
@@ -122,7 +122,7 @@ These limitations will be addressed in the MVP roadmap below.
 
 ## Product Roadmap
 
-Tennis Levelr's evolution from a **stateless rating calculator** to a **comprehensive player ranking platform** with advanced features for the Philippine tennis community.
+Skopeo's evolution from a **stateless rating calculator** to a **comprehensive player ranking platform** with advanced features for the Philippine tennis community.
 
 ### Feature Overview Table
 
@@ -421,11 +421,11 @@ Integration with Universal Tennis Rating (UTR) official system.
   - Periodic sync (daily/weekly) to keep ratings current
   - Player matching by name, birthdate, location
 - ✅ **Cross-Validation**
-  - Compare Tennis Levelr UTR vs Official UTR
+  - Compare Skopeo UTR vs Official UTR
   - Highlight significant discrepancies (>0.5 difference)
   - Use official UTR as baseline for new players
 - ✅ **Hybrid Rating Display**
-  - Show both Tennis Levelr rating and Official UTR
+  - Show both Skopeo rating and Official UTR
   - Indicate last sync date
   - Allow players to choose which rating to use for tournaments
 - ✅ **Rating Conversion**
@@ -449,7 +449,7 @@ Integration with Universal Tennis Rating (UTR) official system.
 utr_sync_history
   - player_id (FK → players.id)
   - official_utr_rating (Decimal)
-  - tennis_levelr_utr (Decimal)
+  - skopeo_utr (Decimal)
   - rating_difference (Decimal)
   - sync_date (Timestamp)
   - match_confidence (Enum: HIGH|MEDIUM|LOW)
@@ -720,16 +720,16 @@ docker-compose up
 #### Option 2: Using Docker directly
 ```bash
 # Build the image
-docker build -t tennis-levelr .
+docker build -t skopeo .
 
 # Run the container
-docker run -d -p 8080:8080 --name tennis-levelr tennis-levelr
+docker run -d -p 8080:8080 --name skopeo skopeo
 
 # View logs
-docker logs -f tennis-levelr
+docker logs -f skopeo
 
 # Stop the container
-docker stop tennis-levelr
+docker stop skopeo
 ```
 
 #### Option 3: Using the helper script
@@ -738,7 +738,7 @@ docker stop tennis-levelr
 ./scripts/docker-build.sh 1.0.0
 
 # Run with Docker
-docker run -d -p 8080:8080 tennis-levelr:1.0.0
+docker run -d -p 8080:8080 skopeo:1.0.0
 ```
 
 See [docs/DOCKER_DEPLOYMENT.md](docs/DOCKER_DEPLOYMENT.md) for comprehensive Docker deployment guide.
@@ -816,7 +816,7 @@ See `scripts/README.md` for detailed documentation.
 
 | Method | Endpoint | Description | Response |
 |--------|----------|-------------|----------|
-| GET | `/` | Root endpoint | `Tennis Levelr API` |
+| GET | `/` | Root endpoint | `Skopeo API` |
 | GET | `/health` | Health check | JSON with status and version |
 | GET | `/metrics` | Prometheus metrics | Metrics in Prometheus format |
 | GET | `/swagger` | Swagger UI | Interactive API documentation |
@@ -831,7 +831,7 @@ See `scripts/README.md` for detailed documentation.
 
 ## How Ratings Are Calculated
 
-Tennis Levelr uses a **performance-based rating system** with normalized gaps to ensure fair calculations across different rating systems. The algorithm considers **how dominantly** you won and whether the match was an **upset** or **expected outcome**.
+Skopeo uses a **performance-based rating system** with normalized gaps to ensure fair calculations across different rating systems. The algorithm considers **how dominantly** you won and whether the match was an **upset** or **expected outcome**.
 
 ### Quick Guide for Players
 
@@ -907,7 +907,7 @@ Tennis Levelr uses a **performance-based rating system** with normalized gaps to
 
 ### Rating Smoothing (Optional)
 
-Tennis Levelr supports **USTA NTRP Dynamic-style rating smoothing** to create more stable and predictable ratings:
+Skopeo supports **USTA NTRP Dynamic-style rating smoothing** to create more stable and predictable ratings:
 
 **What is smoothing?**
 - Blends calculated rating changes with previous ratings
@@ -999,9 +999,15 @@ Comprehensive documentation is available in the `docs/` directory:
   - Current metrics (~79% lines, ~75% branches)
   - CI/CD integration
 
+- **[JVM_COMPATIBILITY.md](docs/JVM_COMPATIBILITY.md)** - JVM version strategy
+  - Build failure investigation (detekt vs Java 25+)
+  - Gradle daemon pinned to Java 21 LTS and why
+  - GCP/AWS Java runtime support survey
+  - Upgrade path when detekt 2.0 ships
+
 ## Testing
 
-Tennis Levelr uses a comprehensive testing strategy with **69 tests** across unit, integration, and edge case layers:
+Skopeo uses a comprehensive testing strategy with **69 tests** across unit, integration, and edge case layers:
 
 ### Test Distribution
 
@@ -1025,7 +1031,7 @@ Total:                  69 tests in ~6 seconds
 ./gradlew test
 
 # Run unit tests only (fast)
-./gradlew test --tests "org.lange.tennis.levelr.service.*"
+./gradlew test --tests "org.skopeo.service.*"
 
 # Run specific test class
 ./gradlew test --tests "RankingCalculatorUnitTest"

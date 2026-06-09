@@ -1,0 +1,60 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>CognitiveComplexMethod:NTRPvsUTRComparison.kt$NTRPvsUTRComparison$@Test fun compareNTRPvsUTR()</ID>
+    <ID>ComplexCondition:PerformanceBasedRankingCalculatorImpl.kt$PerformanceBasedRankingCalculatorImpl$(isWinner &amp;&amp; ratingAdvantage &lt; ZERO) || (!isWinner &amp;&amp; ratingAdvantage &gt; ZERO)</ID>
+    <ID>CyclomaticComplexMethod:NTRPvsUTRComparison.kt$NTRPvsUTRComparison$@Test fun compareNTRPvsUTR()</ID>
+    <ID>CyclomaticComplexMethod:Rating.kt$RatingSerializer$override fun deserialize(decoder: Decoder): Rating</ID>
+    <ID>ImplicitDefaultLocale:NTRPvsUTRComparison.kt$NTRPvsUTRComparison$String.format("%+.6f (%.6f)", result.ntrpP1Delta, result.ntrpP1New)</ID>
+    <ID>ImplicitDefaultLocale:NTRPvsUTRComparison.kt$NTRPvsUTRComparison$String.format("%+.6f (%.6f)", result.ntrpP2Delta, result.ntrpP2New)</ID>
+    <ID>ImplicitDefaultLocale:NTRPvsUTRComparison.kt$NTRPvsUTRComparison$String.format("%+.6f (%.6f)", result.utrP1Delta, result.utrP1New)</ID>
+    <ID>ImplicitDefaultLocale:NTRPvsUTRComparison.kt$NTRPvsUTRComparison$String.format("%+.6f (%.6f)", result.utrP2Delta, result.utrP2New)</ID>
+    <ID>ImplicitDefaultLocale:NTRPvsUTRComparison.kt$NTRPvsUTRComparison$String.format("%.2f", result.ratio)</ID>
+    <ID>LargeClass:RankingCalculationPayloadTest.kt$RankingCalculationPayloadTest</ID>
+    <ID>LargeClass:TestScenarios.kt$TestScenarios</ID>
+    <ID>LongMethod:NTRPvsUTRComparison.kt$NTRPvsUTRComparison$@Test fun compareNTRPvsUTR()</ID>
+    <ID>LongMethod:PerformanceBasedRankingCalculatorImpl.kt$PerformanceBasedRankingCalculatorImpl$override fun calculate(request: RankingCalculationRequest): RankingCalculationResult</ID>
+    <ID>LongMethod:RankingCalculationPayloadTest.kt$RankingCalculationPayloadTest$@Test fun testNTRP_BasicMatch_ExactPayload()</ID>
+    <ID>LongMethod:RankingCalculationPayloadTest.kt$RankingCalculationPayloadTest$@Test fun testNTRP_DominantWin_ExactPayload()</ID>
+    <ID>LongMethod:RankingCalculationPayloadTest.kt$RankingCalculationPayloadTest$@Test fun testNTRP_EqualRatings_ExactPayload()</ID>
+    <ID>LongMethod:RankingCalculationPayloadTest.kt$RankingCalculationPayloadTest$@Test fun testNTRP_MaximumBoundary_ExactPayload()</ID>
+    <ID>LongMethod:RankingCalculationPayloadTest.kt$RankingCalculationPayloadTest$@Test fun testNTRP_MinimumBoundary_ExactPayload()</ID>
+    <ID>LongMethod:RankingCalculationPayloadTest.kt$RankingCalculationPayloadTest$@Test fun testUTR_BasicMatch_ExactPayload()</ID>
+    <ID>LongMethod:RankingCalculationPayloadTest.kt$RankingCalculationPayloadTest$@Test fun testUTR_Tiebreak_ExactPayload()</ID>
+    <ID>LongParameterList:DatabaseConfig.kt$DatabaseConfig$( url: String, driver: String, user: String, password: String, maximumPoolSize: Int, minimumIdle: Int, connectionTimeout: Long, idleTimeout: Long, maxLifetime: Long, )</ID>
+    <ID>LongParameterList:PerformanceBasedRankingCalculatorImpl.kt$PerformanceBasedRankingCalculatorImpl$( player1: PlayerProfile, player2: PlayerProfile, matchScore: MatchScore, ratingSystem: RatingSystem, audit: AuditTrail, player1TeamId: String, player2TeamId: String, )</ID>
+    <ID>LongParameterList:PerformanceBasedRankingCalculatorImplTest.kt$PerformanceBasedRankingCalculatorImplTest$( scenario: String, p1Rating: String, p2Rating: String, p1Games: Int, p2Games: Int, winner: String, expectedP1Delta: String, expectedP2Delta: String, description: String, )</ID>
+    <ID>LongParameterList:TeamTestHelpers.kt$( p1Rating: String, p2Rating: String, system: RatingSystem, p1Games: Int, p2Games: Int, // "T1" or "T2" winner: String, smoothingEnabled: Boolean = false, smoothingFactor: Double = 0.5, )</ID>
+    <ID>MagicNumber:DatabaseConfig.kt$DatabaseConfig$10</ID>
+    <ID>MagicNumber:DatabaseConfig.kt$DatabaseConfig$1800000</ID>
+    <ID>MagicNumber:DatabaseConfig.kt$DatabaseConfig$30000</ID>
+    <ID>MagicNumber:DatabaseConfig.kt$DatabaseConfig$5000</ID>
+    <ID>MagicNumber:DatabaseConfig.kt$DatabaseConfig$600000</ID>
+    <ID>MagicNumber:Level.kt$Level$11.0</ID>
+    <ID>MagicNumber:Level.kt$Level$3.0</ID>
+    <ID>MagicNumber:Level.kt$Level$4.0</ID>
+    <ID>MagicNumber:Level.kt$Level$5.0</ID>
+    <ID>MagicNumber:Level.kt$Level$6.0</ID>
+    <ID>MagicNumber:Level.kt$Level$7.0</ID>
+    <ID>MagicNumber:Level.kt$Level$9.0</ID>
+    <ID>MagicNumber:MatchScore.kt$MatchScore$5</ID>
+    <ID>MagicNumber:PlayerProfile.kt$PlayerProfile$100</ID>
+    <ID>MagicNumber:PlayerProfile.kt$PlayerProfile$50</ID>
+    <ID>MagicNumber:Rating.kt$Rating$16.0</ID>
+    <ID>MagicNumber:Rating.kt$Rating$7.0</ID>
+    <ID>MagicNumber:SetScore.kt$SetScore$6</ID>
+    <ID>MagicNumber:SetScore.kt$SetScore$7</ID>
+    <ID>MagicNumber:Team.kt$Team$100</ID>
+    <ID>MagicNumber:Team.kt$Team$50</ID>
+    <ID>MagicNumber:TiebreakScore.kt$TiebreakScore$7</ID>
+    <ID>ReturnCount:Level.kt$Level.Companion$fun isWithinLevel( rating: Rating, level: Level, ): Boolean</ID>
+    <ID>TooGenericExceptionCaught:DatabaseConfig.kt$DatabaseConfig$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:RankingRoutes.kt$e: Exception</ID>
+    <ID>TopLevelPropertyNaming:Application.kt$private val logger = KotlinLogging.logger {}</ID>
+    <ID>TopLevelPropertyNaming:DatabaseConfig.kt$private val logger = KotlinLogging.logger {}</ID>
+    <ID>TopLevelPropertyNaming:RankingRoutes.kt$private val logger = KotlinLogging.logger {}</ID>
+    <ID>UnusedParameter:PerformanceBasedRankingCalculatorImplTest.kt$PerformanceBasedRankingCalculatorImplTest$description: String</ID>
+    <ID>UseCheckOrError:Application.kt$throw IllegalStateException("OpenAPI specification file not found")</ID>
+  </CurrentIssues>
+</SmellBaseline>

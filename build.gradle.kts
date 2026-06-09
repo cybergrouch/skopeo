@@ -8,12 +8,12 @@ plugins {
     jacoco
 }
 
-group = "org.lange.tennis.levelr"
+group = "org.skopeo"
 version = "0.0.1-SNAPSHOT"
-description = "tennis_levelr"
+description = "Skopeo - Performance-based tennis rating system"
 
 application {
-    mainClass.set("org.lange.tennis.levelr.ApplicationKt")
+    mainClass.set("org.skopeo.ApplicationKt")
 }
 
 val ktorVersion = "3.0.3"
@@ -38,6 +38,7 @@ dependencies {
     implementation("io.ktor:ktor-server-netty-jvm:$ktorVersion")
     implementation("io.ktor:ktor-server-content-negotiation-jvm:$ktorVersion")
     implementation("io.ktor:ktor-serialization-kotlinx-json-jvm:$ktorVersion")
+    implementation("io.ktor:ktor-server-config-yaml:$ktorVersion")
 
     // Swagger UI for interactive API documentation
     implementation("io.ktor:ktor-server-swagger:$ktorVersion")
@@ -98,6 +99,7 @@ detekt {
     buildUponDefaultConfig = true
     allRules = false
     config.setFrom(files("$projectDir/detekt.yml"))
+    baseline = file("$projectDir/detekt-baseline.xml")
 }
 
 tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
@@ -200,6 +202,8 @@ tasks.jacocoTestReport {
                         "**/dto/**",
                         "**/model/**",
                         "**/*Application*.*",
+                        // Database wiring requires a live PostgreSQL instance
+                        "**/config/**",
                         // Kotlin file-level functions
                         "**/*Kt.class",
                     )
@@ -244,6 +248,7 @@ tasks.jacocoTestCoverageVerification {
                         "**/dto/**",
                         "**/model/**",
                         "**/*Application*.*",
+                        "**/config/**",
                         "**/*Kt.class",
                     )
                 }
@@ -264,7 +269,7 @@ tasks.test {
 
 // Flyway configuration for database migrations
 flyway {
-    url = System.getenv("DATABASE_URL") ?: "jdbc:postgresql://localhost:5432/tennis_levelr"
+    url = System.getenv("DATABASE_URL") ?: "jdbc:postgresql://localhost:5432/SkopeoDb"
     user = System.getenv("DATABASE_USER") ?: "postgres"
     password = System.getenv("DATABASE_PASSWORD") ?: "postgres"
     locations = arrayOf("classpath:db/migration")

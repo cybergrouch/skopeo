@@ -2,7 +2,7 @@
 
 ## Overview
 
-Tennis Levelr implements **USTA NTRP Dynamic-style rating smoothing**, a technique that creates more stable and predictable rating changes by blending calculated ratings with previous ratings.
+Skopeo implements **USTA NTRP Dynamic-style rating smoothing**, a technique that creates more stable and predictable rating changes by blending calculated ratings with previous ratings.
 
 ## Why Smoothing?
 
@@ -136,8 +136,8 @@ Smoothing maintains this proportional relationship.
 ### Kotlin
 
 ```kotlin
-import org.lange.tennis.levelr.dto.RankingCalculationRequest
-import org.lange.tennis.levelr.model.RatingCalculationOptions
+import org.skopeo.dto.RankingCalculationRequest
+import org.skopeo.model.RatingCalculationOptions
 
 val request = RankingCalculationRequest(
     players = mapOf(
@@ -339,7 +339,7 @@ Test scenarios also included in `TestScenarios.kt` (SM1-SM6).
 
 - **USTA NTRP Dynamic Algorithm**: Inspired the smoothing approach
 - **Elo Rating System**: Foundation for base rating calculations
-- **Tennis Levelr Documentation**: [RatingCalculationOptions.kt](../src/main/kotlin/org/lange/tennis/levelr/model/RatingCalculationOptions.kt)
+- **Skopeo Documentation**: [RatingCalculationOptions.kt](../src/main/kotlin/org/skopeo/model/RatingCalculationOptions.kt)
 
 ## Summary
 

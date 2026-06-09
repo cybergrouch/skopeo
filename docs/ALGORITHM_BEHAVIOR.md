@@ -2,7 +2,7 @@
 
 ## Overview
 
-Tennis Levelr uses a **performance-based Elo rating system** with normalized gaps to calculate rating changes after matches. Unlike standard Elo (which only considers win/loss), this algorithm accounts for **how dominantly** a player won and whether the result represents an **upset** or meets **expectations**.
+Skopeo uses a **performance-based Elo rating system** with normalized gaps to calculate rating changes after matches. Unlike standard Elo (which only considers win/loss), this algorithm accounts for **how dominantly** a player won and whether the result represents an **upset** or meets **expectations**.
 
 ## Core Principles
 
@@ -429,7 +429,7 @@ This is intentional for simplicity but could be refined.
 
 ### File Location
 
-`src/main/kotlin/org/lange/tennis/levelr/service/calculator/impl/v1/PerformanceBasedRankingCalculatorImpl.kt`
+`src/main/kotlin/org/skopeo/service/calculator/impl/v1/PerformanceBasedRankingCalculatorImpl.kt`
 
 ### Key Methods
 

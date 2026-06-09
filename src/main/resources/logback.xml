@@ -9,10 +9,10 @@
 
     <!-- File appender for all logs -->
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>logs/tennis-levelr.log</file>
+        <file>logs/skopeo.log</file>
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
             <!-- Daily rollover -->
-            <fileNamePattern>logs/tennis-levelr.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <fileNamePattern>logs/skopeo.%d{yyyy-MM-dd}.log</fileNamePattern>
             <!-- Keep 30 days of history -->
             <maxHistory>30</maxHistory>
             <!-- Total size cap of 1GB -->
@@ -25,12 +25,12 @@
 
     <!-- File appender for errors only -->
     <appender name="ERROR_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>logs/tennis-levelr-error.log</file>
+        <file>logs/skopeo-error.log</file>
         <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
             <level>ERROR</level>
         </filter>
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <fileNamePattern>logs/tennis-levelr-error.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <fileNamePattern>logs/skopeo-error.%d{yyyy-MM-dd}.log</fileNamePattern>
             <maxHistory>90</maxHistory>
         </rollingPolicy>
         <encoder>
@@ -39,7 +39,7 @@
     </appender>
 
     <!-- Application logger -->
-    <logger name="org.lange.tennis.levelr" level="INFO" />
+    <logger name="org.skopeo" level="INFO" />
 
     <!-- Ktor loggers -->
     <logger name="io.ktor" level="INFO" />

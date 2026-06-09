@@ -2,7 +2,7 @@
 
 ## Overview
 
-This guide covers deploying Tennis Levelr API using Docker containers. The application is packaged as a Docker image using a multi-stage build for optimal size and security.
+This guide covers deploying Skopeo API using Docker containers. The application is packaged as a Docker image using a multi-stage build for optimal size and security.
 
 **Image Details:**
 - Base: Alpine Linux with OpenJDK 17 JRE
@@ -19,20 +19,20 @@ This guide covers deploying Tennis Levelr API using Docker containers. The appli
 
 ```bash
 # Build the image
-docker build -t tennis-levelr .
+docker build -t skopeo .
 
 # Run the container
-docker run -d -p 8080:8080 --name tennis-levelr tennis-levelr
+docker run -d -p 8080:8080 --name skopeo skopeo
 
 # Test the API
 curl http://localhost:8080/health
 
 # View logs
-docker logs tennis-levelr
+docker logs skopeo
 
 # Stop the container
-docker stop tennis-levelr
-docker rm tennis-levelr
+docker stop skopeo
+docker rm skopeo
 ```
 
 ### Using Docker Compose
@@ -55,19 +55,19 @@ docker-compose down
 ### Basic Build
 
 ```bash
-docker build -t tennis-levelr .
+docker build -t skopeo .
 ```
 
 ### Build with Version Tag
 
 ```bash
-docker build -t tennis-levelr:1.0.0 .
+docker build -t skopeo:1.0.0 .
 ```
 
 ### Build with No Cache (Clean Build)
 
 ```bash
-docker build --no-cache -t tennis-levelr .
+docker build --no-cache -t skopeo .
 ```
 
 ### Using the Helper Script
@@ -111,13 +111,13 @@ The Dockerfile uses a **multi-stage build**:
 ### Basic Run
 
 ```bash
-docker run -d -p 8080:8080 --name tennis-levelr tennis-levelr
+docker run -d -p 8080:8080 --name skopeo skopeo
 ```
 
 ### With Custom Port Mapping
 
 ```bash
-docker run -d -p 9000:8080 --name tennis-levelr tennis-levelr
+docker run -d -p 9000:8080 --name skopeo skopeo
 # API available at http://localhost:9000
 ```
 
@@ -126,8 +126,8 @@ docker run -d -p 9000:8080 --name tennis-levelr tennis-levelr
 ```bash
 docker run -d -p 8080:8080 \
   -e JAVA_OPTS="-Xmx1g -Xms512m" \
-  --name tennis-levelr \
-  tennis-levelr
+  --name skopeo \
+  skopeo
 ```
 
 ### With Custom Logging
@@ -135,14 +135,14 @@ docker run -d -p 8080:8080 \
 ```bash
 docker run -d -p 8080:8080 \
   -e JAVA_OPTS="-Dlogback.configurationFile=/app/logback-custom.xml" \
-  --name tennis-levelr \
-  tennis-levelr
+  --name skopeo \
+  skopeo
 ```
 
 ### Interactive Mode (See Startup Logs)
 
 ```bash
-docker run -it -p 8080:8080 --name tennis-levelr tennis-levelr
+docker run -it -p 8080:8080 --name skopeo skopeo
 # Press Ctrl+C to stop
 ```
 
@@ -151,8 +151,8 @@ docker run -it -p 8080:8080 --name tennis-levelr tennis-levelr
 ```bash
 docker run -d -p 8080:8080 \
   -v $(pwd)/logs:/app/logs \
-  --name tennis-levelr \
-  tennis-levelr
+  --name skopeo \
+  skopeo
 ```
 
 ---
@@ -165,12 +165,12 @@ The `docker-compose.yml` file provides a complete service definition:
 
 ```yaml
 services:
-  tennis-levelr:
+  skopeo:
     build:
       context: .
       dockerfile: Dockerfile
-    image: tennis-levelr:latest
-    container_name: tennis-levelr
+    image: skopeo:latest
+    container_name: skopeo
     ports:
       - "8080:8080"
     environment:
@@ -235,13 +235,13 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
 
 ```bash
 # View health status
-docker inspect --format='{{.State.Health.Status}}' tennis-levelr
+docker inspect --format='{{.State.Health.Status}}' skopeo
 
 # View last 5 health check results
-docker inspect --format='{{json .State.Health}}' tennis-levelr | jq
+docker inspect --format='{{json .State.Health}}' skopeo | jq
 
 # Watch health status
-watch -n 1 'docker inspect --format="{{.State.Health.Status}}" tennis-levelr'
+watch -n 1 'docker inspect --format="{{.State.Health.Status}}" skopeo'
 ```
 
 **Health States:**
@@ -256,7 +256,7 @@ watch -n 1 'docker inspect --format="{{.State.Health.Status}}" tennis-levelr'
 curl http://localhost:8080/health
 
 # From inside container
-docker exec tennis-levelr wget -O- http://localhost:8080/health
+docker exec skopeo wget -O- http://localhost:8080/health
 ```
 
 ---
@@ -267,20 +267,20 @@ docker exec tennis-levelr wget -O- http://localhost:8080/health
 
 ```bash
 # View all logs
-docker logs tennis-levelr
+docker logs skopeo
 
 # Follow logs (live tail)
-docker logs -f tennis-levelr
+docker logs -f skopeo
 
 # View last 100 lines
-docker logs --tail=100 tennis-levelr
+docker logs --tail=100 skopeo
 
 # View logs with timestamps
-docker logs -t tennis-levelr
+docker logs -t skopeo
 
 # View logs since specific time
-docker logs --since=10m tennis-levelr
-docker logs --since=2024-01-15T10:00:00 tennis-levelr
+docker logs --since=10m skopeo
+docker logs --since=2024-01-15T10:00:00 skopeo
 ```
 
 ### Log Configuration
@@ -289,7 +289,7 @@ docker logs --since=2024-01-15T10:00:00 tennis-levelr
 
 **Log Format:**
 ```
-2024-01-15 10:30:45.123 [main] INFO  o.l.t.l.TennisLevelrApplication - Starting application
+2024-01-15 10:30:45.123 [main] INFO  o.l.t.l.SkopeoApplication - Starting application
 ```
 
 **To Enable File Logging:**
@@ -300,8 +300,8 @@ Create custom logback configuration and mount it:
 docker run -d -p 8080:8080 \
   -v $(pwd)/logback-file.xml:/app/config/logback.xml \
   -e JAVA_OPTS="-Dlogback.configurationFile=/app/config/logback.xml" \
-  --name tennis-levelr \
-  tennis-levelr
+  --name skopeo \
+  skopeo
 ```
 
 ---
@@ -343,7 +343,7 @@ Use the existing test script:
 
 ```bash
 # Ensure container is running
-docker ps | grep tennis-levelr
+docker ps | grep skopeo
 
 # Run API tests
 ./scripts/test-api.sh
@@ -392,8 +392,8 @@ curl -X POST http://localhost:8080/api/v1/calculate-ranking \
 
 1. **Use Specific Version Tags**
    ```bash
-   docker build -t tennis-levelr:1.0.0 .
-   docker run -d -p 8080:8080 tennis-levelr:1.0.0
+   docker build -t skopeo:1.0.0 .
+   docker run -d -p 8080:8080 skopeo:1.0.0
    ```
 
 2. **Set Resource Limits**
@@ -401,16 +401,16 @@ curl -X POST http://localhost:8080/api/v1/calculate-ranking \
    docker run -d -p 8080:8080 \
      --memory="512m" \
      --cpus="1.0" \
-     --name tennis-levelr \
-     tennis-levelr:1.0.0
+     --name skopeo \
+     skopeo:1.0.0
    ```
 
 3. **Use Restart Policy**
    ```bash
    docker run -d -p 8080:8080 \
      --restart=unless-stopped \
-     --name tennis-levelr \
-     tennis-levelr:1.0.0
+     --name skopeo \
+     skopeo:1.0.0
    ```
 
 4. **Configure Health Checks**
@@ -426,8 +426,8 @@ curl -X POST http://localhost:8080/api/v1/calculate-ranking \
    docker run -d -p 8080:8080 \
      --read-only \
      --tmpfs /tmp \
-     --name tennis-levelr \
-     tennis-levelr:1.0.0
+     --name skopeo \
+     skopeo:1.0.0
    ```
 
 ### Security Checklist
@@ -453,22 +453,22 @@ Create `k8s/deployment.yaml`:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: tennis-levelr
+  name: skopeo
   labels:
-    app: tennis-levelr
+    app: skopeo
 spec:
   replicas: 3
   selector:
     matchLabels:
-      app: tennis-levelr
+      app: skopeo
   template:
     metadata:
       labels:
-        app: tennis-levelr
+        app: skopeo
     spec:
       containers:
-      - name: tennis-levelr
-        image: tennis-levelr:1.0.0
+      - name: skopeo
+        image: skopeo:1.0.0
         ports:
         - containerPort: 8080
           name: http
@@ -498,10 +498,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: tennis-levelr
+  name: skopeo
 spec:
   selector:
-    app: tennis-levelr
+    app: skopeo
   ports:
   - port: 80
     targetPort: 8080
@@ -519,10 +519,10 @@ kubectl get pods
 kubectl get services
 
 # View logs
-kubectl logs -f deployment/tennis-levelr
+kubectl logs -f deployment/skopeo
 
 # Test the service
-kubectl port-forward svc/tennis-levelr 8080:80
+kubectl port-forward svc/skopeo 8080:80
 curl http://localhost:8080/health
 ```
 
@@ -534,25 +534,25 @@ curl http://localhost:8080/health
 
 **Check logs:**
 ```bash
-docker logs tennis-levelr
+docker logs skopeo
 ```
 
 **Common issues:**
 - Port 8080 already in use
   ```bash
   lsof -i :8080
-  docker run -d -p 9000:8080 tennis-levelr  # Use different port
+  docker run -d -p 9000:8080 skopeo  # Use different port
   ```
 - Memory issues
   ```bash
-  docker run -d -p 8080:8080 -e JAVA_OPTS="-Xmx256m" tennis-levelr
+  docker run -d -p 8080:8080 -e JAVA_OPTS="-Xmx256m" skopeo
   ```
 
 ### Health Check Failing
 
 **Check endpoint manually:**
 ```bash
-docker exec tennis-levelr wget -O- http://localhost:8080/health
+docker exec skopeo wget -O- http://localhost:8080/health
 ```
 
 **Increase start period:**
@@ -566,29 +566,29 @@ healthcheck:
 
 **Check image size:**
 ```bash
-docker images | grep tennis-levelr
+docker images | grep skopeo
 ```
 
 **Optimize:**
 - Ensure multi-stage build is used
 - Check .dockerignore is in place
-- Use `docker image inspect tennis-levelr` to see layer sizes
+- Use `docker image inspect skopeo` to see layer sizes
 
 ### Cannot Connect to Container
 
 **Verify container is running:**
 ```bash
-docker ps | grep tennis-levelr
+docker ps | grep skopeo
 ```
 
 **Check port mapping:**
 ```bash
-docker port tennis-levelr
+docker port skopeo
 ```
 
 **Test from inside container:**
 ```bash
-docker exec tennis-levelr wget -O- http://localhost:8080/health
+docker exec skopeo wget -O- http://localhost:8080/health
 ```
 
 **Check firewall:**
@@ -624,8 +624,8 @@ docker run -d -p 8080:8080 \
   --memory="512m" \
   --memory-swap="512m" \
   --cpus="1.0" \
-  --name tennis-levelr \
-  tennis-levelr
+  --name skopeo \
+  skopeo
 ```
 
 ---
@@ -636,27 +636,27 @@ docker run -d -p 8080:8080 \
 
 ```bash
 # Inspect container
-docker inspect tennis-levelr
+docker inspect skopeo
 
 # View resource usage
-docker stats tennis-levelr
+docker stats skopeo
 
 # View processes
-docker top tennis-levelr
+docker top skopeo
 ```
 
 ### Updating the Application
 
 ```bash
 # Build new version
-docker build -t tennis-levelr:1.1.0 .
+docker build -t skopeo:1.1.0 .
 
 # Stop old container
-docker stop tennis-levelr
-docker rm tennis-levelr
+docker stop skopeo
+docker rm skopeo
 
 # Start new container
-docker run -d -p 8080:8080 --name tennis-levelr tennis-levelr:1.1.0
+docker run -d -p 8080:8080 --name skopeo skopeo:1.1.0
 ```
 
 ### Cleanup
@@ -688,19 +688,19 @@ docker system prune -a
 **Quick Commands:**
 ```bash
 # Build
-docker build -t tennis-levelr .
+docker build -t skopeo .
 
 # Run
-docker run -d -p 8080:8080 --name tennis-levelr tennis-levelr
+docker run -d -p 8080:8080 --name skopeo skopeo
 
 # Test
 curl http://localhost:8080/health
 
 # Logs
-docker logs -f tennis-levelr
+docker logs -f skopeo
 
 # Stop
-docker stop tennis-levelr && docker rm tennis-levelr
+docker stop skopeo && docker rm skopeo
 ```
 
 **Or use Docker Compose:**

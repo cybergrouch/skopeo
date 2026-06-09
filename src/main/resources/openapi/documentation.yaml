@@ -1,6 +1,6 @@
 openapi: 3.0.0
 info:
-  title: Tennis Levelr API
+  title: Skopeo API
   version: 1.0.0
   description: Performance-based tennis ranking calculation API supporting NTRP and UTR rating systems
 

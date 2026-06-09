@@ -1,6 +1,6 @@
-# Tennis Levelr Database Schema
+# Skopeo Database Schema
 
-This document describes the database schema for the Tennis Levelr MVP and future enhancements.
+This document describes the database schema for the Skopeo MVP and future enhancements.
 
 ## Design Principles
 

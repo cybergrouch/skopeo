@@ -1,8 +1,8 @@
-# Tennis Levelr API Documentation
+# Skopeo API Documentation
 
 ## Overview
 
-Tennis Levelr provides a REST API for calculating updated tennis player rankings based on match results. The API supports both NTRP (National Tennis Rating Program) and UTR (Universal Tennis Rating) systems.
+Skopeo provides a REST API for calculating updated tennis player rankings based on match results. The API supports both NTRP (National Tennis Rating Program) and UTR (Universal Tennis Rating) systems.
 
 **Base URL:** `http://localhost:8080`
 
@@ -21,7 +21,7 @@ Check API health status.
 ```json
 {
   "status": "UP",
-  "service": "Tennis Levelr API",
+  "service": "Skopeo API",
   "version": "0.0.1-SNAPSHOT"
 }
 ```

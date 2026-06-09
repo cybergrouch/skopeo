@@ -1,4 +1,4 @@
-# Tennis Levelr API - Data Model Proposal
+# Skopeo API - Data Model Proposal
 
 ## Overview
 
@@ -555,7 +555,7 @@ Response: RankingCalculationResponse
 ## Sample Implementation Structure
 
 ```
-src/main/kotlin/org/lange/tennis/levelr/
+src/main/kotlin/org/skopeo/
 ├── model/
 │   ├── RatingSystem.kt
 │   ├── PlayerProfile.kt

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Tennis Levelr employs a comprehensive testing strategy that balances speed, isolation, and confidence. The testing approach is designed around the principle of **pure functions and dependency injection**, which enables extensive unit testing without mocking.
+Skopeo employs a comprehensive testing strategy that balances speed, isolation, and confidence. The testing approach is designed around the principle of **pure functions and dependency injection**, which enables extensive unit testing without mocking.
 
 ---
 
@@ -43,7 +43,7 @@ Tennis Levelr employs a comprehensive testing strategy that balances speed, isol
 
 ### 1. Unit Tests (40 tests)
 
-**Location:** `src/test/kotlin/org/lange/tennis/levelr/service/`
+**Location:** `src/test/kotlin/org/skopeo/service/`
 
 Tests pure business logic in complete isolation - no infrastructure, no HTTP, no JSON.
 
@@ -197,7 +197,7 @@ fun demonstrateSimpleAPI() {
 
 ### 2. Integration Tests (30 tests)
 
-**Location:** `src/test/kotlin/org/lange/tennis/levelr/`
+**Location:** `src/test/kotlin/org/skopeo/`
 
 Tests the full HTTP API stack including routing, serialization, and validation.
 
@@ -389,7 +389,7 @@ fun testRejectsInvalidJSON() = testApplication {
 ### Directory Structure
 
 ```
-src/test/kotlin/org/lange/tennis/levelr/
+src/test/kotlin/org/skopeo/
 ├── service/                              # Unit tests
 │   ├── RankingCalculatorUnitTest.kt     # Core algorithm tests
 │   ├── RankingCalculatorAuditTest.kt    # Audit trail tests
@@ -397,7 +397,7 @@ src/test/kotlin/org/lange/tennis/levelr/
 ├── RankingCalculationApiTest.kt         # Integration tests
 ├── RankingCalculationExtendedTest.kt    # Extended integration
 ├── RankingAlgorithmTest.kt              # Algorithm integration
-└── TennisLevelrApplicationTests.kt      # Application tests
+└── SkopeoApplicationTests.kt      # Application tests
 ```
 
 ### Naming Conventions
@@ -647,7 +647,7 @@ See [CODE_COVERAGE.md](./CODE_COVERAGE.md) for detailed coverage documentation.
 ### Fast Feedback (Unit Tests Only)
 
 ```bash
-./gradlew test --tests "org.lange.tennis.levelr.service.*"
+./gradlew test --tests "org.skopeo.service.*"
 ```
 
 ---
@@ -741,7 +741,7 @@ jobs:
 
 ## Summary
 
-Tennis Levelr uses a **test-first, pure-function-focused** testing strategy:
+Skopeo uses a **test-first, pure-function-focused** testing strategy:
 
 1. **57% Unit Tests** - Fast, isolated, comprehensive
 2. **43% Integration Tests** - API contracts, HTTP layer

@@ -1,6 +1,6 @@
 # Logging and Metrics
 
-This document describes the logging and metrics implementation in Tennis Levelr.
+This document describes the logging and metrics implementation in Skopeo.
 
 ## Overview
 
@@ -31,14 +31,14 @@ Logs are written to three destinations:
    - Colored output for better readability
    - Format: `HH:mm:ss.SSS [thread] LEVEL logger - message`
 
-2. **Application Log File** (`logs/tennis-levelr.log`)
+2. **Application Log File** (`logs/skopeo.log`)
    - All log levels
    - Daily rotation
    - Keeps 30 days of history
    - Max total size: 1GB
    - Format: `yyyy-MM-dd HH:mm:ss.SSS [thread] LEVEL logger - message`
 
-3. **Error Log File** (`logs/tennis-levelr-error.log`)
+3. **Error Log File** (`logs/skopeo-error.log`)
    - ERROR level only
    - Daily rotation
    - Keeps 90 days of history
@@ -50,10 +50,10 @@ All log files are stored in the `logs/` directory at the project root:
 
 ```
 logs/
-├── tennis-levelr.log              # Current day all logs
-├── tennis-levelr.2024-01-15.log   # Previous day logs
-├── tennis-levelr-error.log        # Current day errors
-└── tennis-levelr-error.2024-01-15.log  # Previous day errors
+├── skopeo.log              # Current day all logs
+├── skopeo.2024-01-15.log   # Previous day logs
+├── skopeo-error.log        # Current day errors
+└── skopeo-error.2024-01-15.log  # Previous day errors
 ```
 
 ### Using Logging in Code
@@ -101,7 +101,7 @@ Logging is configured in `src/main/resources/logback.xml`. You can:
 **Example: Enable debug logging for your package:**
 
 ```xml
-<logger name="org.lange.tennis.levelr" level="DEBUG" />
+<logger name="org.skopeo" level="DEBUG" />
 ```
 
 ## Metrics
@@ -169,7 +169,7 @@ To scrape these metrics with Prometheus, add to your `prometheus.yml`:
 
 ```yaml
 scrape_configs:
-  - job_name: 'tennis-levelr'
+  - job_name: 'skopeo'
     static_configs:
       - targets: ['localhost:8080']
     metrics_path: '/metrics'
@@ -180,7 +180,7 @@ scrape_configs:
 
 1. Add Prometheus as a data source in Grafana
 2. Import a JVM dashboard (recommended: Dashboard ID 4701)
-3. Create custom dashboards for Tennis Levelr specific metrics
+3. Create custom dashboards for Skopeo specific metrics
 
 ### Custom Metrics
 
@@ -215,7 +215,7 @@ The `/health` endpoint returns application health status:
 ```json
 {
   "status": "UP",
-  "service": "Tennis Levelr API",
+  "service": "Skopeo API",
   "version": "0.0.1-SNAPSHOT"
 }
 ```
@@ -237,7 +237,7 @@ The `/health` endpoint returns application health status:
 
 1. **Set log level to INFO or WARN** in production
    ```xml
-   <logger name="org.lange.tennis.levelr" level="INFO" />
+   <logger name="org.skopeo" level="INFO" />
    ```
 
 2. **Monitor disk space** for log files

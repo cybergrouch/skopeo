@@ -181,7 +181,7 @@ When a new developer clones the repository:
 
 ```bash
 git clone <repository>
-cd tennis_levelr
+cd SkopeoDb
 ./gradlew installGitHooks  # Install the hook
 ```
 

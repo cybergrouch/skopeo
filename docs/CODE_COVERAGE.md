@@ -2,7 +2,7 @@
 
 ## Overview
 
-Tennis Levelr uses **JaCoCo (Java Code Coverage)** to measure test coverage of production code. Coverage reports are automatically generated after running tests.
+Skopeo uses **JaCoCo (Java Code Coverage)** to measure test coverage of production code. Coverage reports are automatically generated after running tests.
 
 **Current Coverage:** ~79% line coverage, ~75% branch coverage
 
@@ -362,9 +362,9 @@ Classes         | 2      | 18      | 20     | 90%
 
 Shows coverage by package:
 ```
-org.lange.tennis.levelr.service     95%  🟢
-org.lange.tennis.levelr.routes      60%  🟡
-org.lange.tennis.levelr.model       N/A  (excluded)
+org.skopeo.service     95%  🟢
+org.skopeo.routes      60%  🟡
+org.skopeo.model       N/A  (excluded)
 ```
 
 ### Class View

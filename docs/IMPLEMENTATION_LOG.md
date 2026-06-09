@@ -1,4 +1,4 @@
-# Tennis Levelr Implementation Log
+# Skopeo Implementation Log
 
 This document tracks major implementation milestones and architectural decisions.
 
@@ -8,7 +8,7 @@ This document tracks major implementation milestones and architectural decisions
 
 ### What Was Implemented
 
-Successfully set up the complete database infrastructure for Tennis Levelr MVP with PostgreSQL, Flyway migrations, and Exposed ORM.
+Successfully set up the complete database infrastructure for Skopeo MVP with PostgreSQL, Flyway migrations, and Exposed ORM.
 
 ### Components Added
 
@@ -136,7 +136,7 @@ docker compose up postgres -d
 docker compose --profile tools up pgadmin -d
 
 # Connect to database
-docker exec -it tennis_levelr_db psql -U postgres -d tennis_levelr
+docker exec -it SkopeoDb_db psql -U postgres -d SkopeoDb
 
 # Manual migration management
 ./gradlew flywayInfo     # Show migration status
@@ -147,7 +147,7 @@ docker exec -it tennis_levelr_db psql -U postgres -d tennis_levelr
 ### Files Created
 
 **Main Code:**
-- `src/main/kotlin/org/lange/tennis/levelr/config/DatabaseConfig.kt`
+- `src/main/kotlin/org/skopeo/config/DatabaseConfig.kt`
 - `src/main/resources/db/migration/V1__create_initial_schema.sql`
 
 **Documentation:**
@@ -160,7 +160,7 @@ docker exec -it tennis_levelr_db psql -U postgres -d tennis_levelr
 - `src/main/resources/application.yaml` - Database configuration
 - `docker-compose.yml` - PostgreSQL and pgAdmin services
 - `.gitignore` - Exclude database backups
-- `src/main/kotlin/org/lange/tennis/levelr/Application.kt` - Database initialization
+- `src/main/kotlin/org/skopeo/Application.kt` - Database initialization
 
 ### Dependencies Added
 

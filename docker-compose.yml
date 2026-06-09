@@ -1,9 +1,9 @@
 services:
   postgres:
     image: postgres:15-alpine
-    container_name: tennis_levelr_db
+    container_name: scopeo_db
     environment:
-      POSTGRES_DB: tennis_levelr
+      POSTGRES_DB: SkopeoDb
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
@@ -16,19 +16,19 @@ services:
       timeout: 5s
       retries: 5
 
-  tennis-levelr:
+  skopeo:
     build:
       context: .
       dockerfile: Dockerfile
-    image: tennis-levelr:latest
-    container_name: tennis-levelr
+    image: skopeo:latest
+    container_name: skopeo
     ports:
       - "8080:8080"
     environment:
       # JVM memory settings (adjust based on your needs)
       - JAVA_OPTS=-Xmx512m -Xms256m
       # Database connection
-      - DATABASE_URL=jdbc:postgresql://postgres:5432/tennis_levelr
+      - DATABASE_URL=jdbc:postgresql://postgres:5432/SkopeoDb
       - DATABASE_USER=postgres
       - DATABASE_PASSWORD=postgres
     restart: unless-stopped
@@ -50,9 +50,9 @@ services:
   # Optional: pgAdmin for database management
   pgadmin:
     image: dpage/pgadmin4:latest
-    container_name: tennis_levelr_pgadmin
+    container_name: scopeo_pgadmin
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@tennislevelr.com
+      PGADMIN_DEFAULT_EMAIL: admin@skopeo.com
       PGADMIN_DEFAULT_PASSWORD: admin
       PGADMIN_CONFIG_SERVER_MODE: 'False'
     ports:
