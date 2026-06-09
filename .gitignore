@@ -52,10 +52,13 @@ logs/
 *.log
 spring.log
 
-# Database files (for future persistence)
+# Database files
 *.db
 *.sqlite
 *.h2.db
+*.sql.gz
+backup*.sql
+*_backup.sql
 
 # OpenAPI/Swagger generated files
 docs/.swagger-codegen/

@@ -21,6 +21,7 @@ import io.ktor.server.routing.routing
 import io.micrometer.prometheus.PrometheusConfig
 import io.micrometer.prometheus.PrometheusMeterRegistry
 import mu.KotlinLogging
+import org.lange.tennis.levelr.config.DatabaseConfig
 import org.lange.tennis.levelr.routes.configureRankingRoutes
 import org.slf4j.event.Level
 
@@ -33,6 +34,15 @@ fun main() {
 }
 
 fun Application.module() {
+    // Initialize database connection and run migrations
+    DatabaseConfig.init(this)
+
+    // Set up shutdown hook to close database connection
+    monitor.subscribe(io.ktor.server.application.ApplicationStopped) {
+        logger.info { "Application stopping, closing database connections..." }
+        DatabaseConfig.close()
+    }
+
     configureMonitoring()
     configurePlugins()
     configureOpenAPI()

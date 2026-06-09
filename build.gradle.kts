@@ -4,6 +4,7 @@ plugins {
     application
     id("org.jlleitschuh.gradle.ktlint") version "12.1.0"
     id("io.gitlab.arturbosch.detekt") version "1.23.8"
+    id("org.flywaydb.flyway") version "10.17.0"
     jacoco
 }
 
@@ -16,6 +17,10 @@ application {
 }
 
 val ktorVersion = "3.0.3"
+val exposedVersion = "0.54.0"
+val postgresVersion = "42.7.4"
+val flywayVersion = "10.17.0"
+val hikariVersion = "5.1.0"
 
 java {
     toolchain {
@@ -36,6 +41,22 @@ dependencies {
 
     // Swagger UI for interactive API documentation
     implementation("io.ktor:ktor-server-swagger:$ktorVersion")
+
+    // Database - PostgreSQL
+    implementation("org.postgresql:postgresql:$postgresVersion")
+
+    // Database - Flyway migrations
+    implementation("org.flywaydb:flyway-core:$flywayVersion")
+    implementation("org.flywaydb:flyway-database-postgresql:$flywayVersion")
+
+    // Database - Exposed ORM
+    implementation("org.jetbrains.exposed:exposed-core:$exposedVersion")
+    implementation("org.jetbrains.exposed:exposed-dao:$exposedVersion")
+    implementation("org.jetbrains.exposed:exposed-jdbc:$exposedVersion")
+    implementation("org.jetbrains.exposed:exposed-java-time:$exposedVersion")
+
+    // Database - Connection pooling
+    implementation("com.zaxxer:HikariCP:$hikariVersion")
 
     // Logging
     implementation("ch.qos.logback:logback-classic:1.5.16")
@@ -239,4 +260,13 @@ tasks.check {
 // Automatically generate coverage report after tests
 tasks.test {
     finalizedBy(tasks.jacocoTestReport) // Report is always generated after tests run
+}
+
+// Flyway configuration for database migrations
+flyway {
+    url = System.getenv("DATABASE_URL") ?: "jdbc:postgresql://localhost:5432/tennis_levelr"
+    user = System.getenv("DATABASE_USER") ?: "postgres"
+    password = System.getenv("DATABASE_PASSWORD") ?: "postgres"
+    locations = arrayOf("classpath:db/migration")
+    cleanDisabled = false
 }
