@@ -948,7 +948,7 @@ See **[RATING_SMOOTHING.md](docs/RATING_SMOOTHING.md)** for complete documentati
 
 ### Want More Details?
 - **[RATING_SMOOTHING.md](docs/RATING_SMOOTHING.md)** - Complete rating smoothing guide with examples and best practices
-- **[ALGORITHM_BEHAVIOR.md](docs/ALGORITHM_BEHAVIOR.md)** - Complete algorithm explanation with formulas, edge cases, and technical details
+- **[RATING_CALCULATION_ALGORITHM.md](docs/RATING_CALCULATION_ALGORITHM.md)** - Complete algorithm explanation with formulas, edge cases, and technical details
 
 ## Documentation
 
@@ -968,7 +968,7 @@ Comprehensive documentation is available in the `docs/` directory:
   - UTR vs NTRP smoothing behavior
   - Performance and backward compatibility
 
-- **[ALGORITHM_BEHAVIOR.md](docs/ALGORITHM_BEHAVIOR.md)** - Complete algorithm behavior guide
+- **[RATING_CALCULATION_ALGORITHM.md](docs/RATING_CALCULATION_ALGORITHM.md)** - Complete algorithm behavior guide
   - Performance-based Elo system overview
   - Five adjustment cases explained with examples
   - Edge cases and special handling

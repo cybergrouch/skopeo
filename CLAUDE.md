@@ -43,7 +43,7 @@ Helper scripts in `scripts/`: `start-server.sh`, `stop-server.sh`, `test-api.sh`
 
 **Database**: `config/DatabaseConfig.kt` wires HikariCP + Flyway migrations + Exposed on startup. `Application.module(initDatabase: Boolean)` allows tests to skip DB init — integration tests call `module(initDatabase = false)`. Config is read from `src/main/resources/application.yaml` (env vars `DATABASE_URL`, `DATABASE_USER`, `DATABASE_PASSWORD`).
 
-**Algorithm behavior** (details in `docs/ALGORITHM_BEHAVIOR.md`): rating changes depend on dominance (game margin), the rating gap vs a competitive threshold (8.3% of system range; expected wins beyond it yield zero change), a 2× upset multiplier, and optional USTA-style smoothing via `options.smoothingFactor`.
+**Algorithm behavior** (details in `docs/RATING_CALCULATION_ALGORITHM.md`): rating changes depend on dominance (game margin), the rating gap vs a competitive threshold (8.3% of system range; expected wins beyond it yield zero change), a 2× upset multiplier, and optional USTA-style smoothing via `options.smoothingFactor`.
 
 ## Code Style Enforcement
 

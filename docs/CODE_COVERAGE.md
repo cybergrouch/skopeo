@@ -578,7 +578,7 @@ fun testBusinessBehavior() {
 
 - [TESTING_STRATEGY.md](./TESTING_STRATEGY.md) - Testing approach
 - [API_DOCUMENTATION.md](./API_DOCUMENTATION.md) - API specs
-- [ALGORITHM_BEHAVIOR.md](./ALGORITHM_BEHAVIOR.md) - Algorithm details
+- [RATING_CALCULATION_ALGORITHM.md](./RATING_CALCULATION_ALGORITHM.md) - Algorithm details
 
 ---
 

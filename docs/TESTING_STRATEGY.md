@@ -559,7 +559,7 @@ Total: **123 tests** providing confidence in both business logic and API contrac
 ## Related Documentation
 
 - [AUDIT_TRAIL.md](./AUDIT_TRAIL.md) - Audit trail design and testing
-- [ALGORITHM_BEHAVIOR.md](./ALGORITHM_BEHAVIOR.md) - Algorithm implementation
+- [RATING_CALCULATION_ALGORITHM.md](./RATING_CALCULATION_ALGORITHM.md) - Algorithm implementation
 - [API_DOCUMENTATION.md](./API_DOCUMENTATION.md) - API specifications
 
 ---

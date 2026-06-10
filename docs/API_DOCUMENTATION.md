@@ -253,7 +253,7 @@ curl -X POST http://localhost:8080/api/v1/calculate-ranking \
 }
 ```
 
-*Note: Uses Elo-based ranking algorithm. See [ALGORITHM_BEHAVIOR.md](./ALGORITHM_BEHAVIOR.md) for details.*
+*Note: Uses Elo-based ranking algorithm. See [RATING_CALCULATION_ALGORITHM.md](./RATING_CALCULATION_ALGORITHM.md) for details.*
 
 ### Example 2: UTR Match with Tiebreak
 
