@@ -236,10 +236,10 @@ components:
             $ref: '#/components/schemas/SetScore'
         winnerTeamId:
           type: string
-          description: Team ID of the match winner. Derived from the set scores when omitted.
+          description: Team ID of the match winner. Defaults to the team that won the most sets when omitted.
         loserTeamId:
           type: string
-          description: Team ID of the match loser. Derived from the winner when omitted; must differ from the winner and be one of the teams.
+          description: Team ID of the match loser. Defaults to the team that lost the most sets when omitted; must differ from the winner and be one of the teams.
         matchFormat:
           type: string
           enum: [BEST_OF_THREE, BEST_OF_FIVE, SINGLE_SET, ADVANTAGE_SET]

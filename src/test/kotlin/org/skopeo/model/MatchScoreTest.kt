@@ -124,6 +124,60 @@ class MatchScoreTest {
         }
 
         @Test
+        @DisplayName("Winner defaults to the team that won the most sets")
+        fun testWinnerDerivedFromSetMajority() {
+            // T1 wins sets 1 and 3, T2 wins set 2: winner must be T1 even though
+            // T2 is the lexicographically larger team ID
+            val match = MatchScore(sets = setsOf(6 to 3, 2 to 6, 6 to 4))
+
+            match.winnerTeamId shouldBe "T1"
+            match.loserTeamId shouldBe "T2"
+        }
+
+        @Test
+        @DisplayName("Loser derives correctly when the 2-1 winner has the larger team ID")
+        fun testLoserDerivedWhenWinnerDroppedFirstSet() {
+            // T2 wins the match 2 sets to 1 after losing the first set; with a
+            // lexicographic per-set-loser derivation this used to collide with the winner
+            val match = MatchScore(sets = setsOf(6 to 3, 2 to 6, 4 to 6), winnerTeamId = "T2")
+
+            match.winnerTeamId shouldBe "T2"
+            match.loserTeamId shouldBe "T1"
+        }
+
+        @Test
+        @DisplayName("Stated winner that contradicts the set majority is rejected")
+        fun testContradictoryWinnerRejected() {
+            // T1 won 2 of 3 sets, but the payload claims T2 won the match; the
+            // derived loser (most sets lost) is also T2, so validation rejects it
+            val exception =
+                shouldThrow<IllegalArgumentException> {
+                    MatchScore(sets = setsOf(6 to 3, 2 to 6, 6 to 4), winnerTeamId = "T2")
+                }
+
+            exception.message shouldContain "must differ from the winner"
+        }
+
+        @Test
+        @DisplayName("Payload with sets only derives winner and loser from the set majority")
+        fun testPayloadWithSetsOnlyDerivesFromSetMajority() {
+            // 2-1 split: T1 wins sets 1 and 3
+            val json =
+                """
+                {"sets":[
+                  {"games":{"T1":6,"T2":3}},
+                  {"games":{"T1":2,"T2":6}},
+                  {"games":{"T1":6,"T2":4}}
+                ]}
+                """.trimIndent()
+
+            val match = Json.decodeFromString<MatchScore>(string = json)
+
+            match.winnerTeamId shouldBe "T1"
+            match.loserTeamId shouldBe "T2"
+        }
+
+        @Test
         @DisplayName("Explicit loser is accepted when consistent")
         fun testExplicitLoserAccepted() {
             val match = MatchScore(sets = setsOf(6 to 4), winnerTeamId = "T1", loserTeamId = "T2")

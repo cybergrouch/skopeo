@@ -12,17 +12,20 @@ import java.math.BigDecimal
  * kept in a database).
  *
  * @property sets List of set scores
- * @property winnerTeamId Team ID of the match winner
- * @property loserTeamId Team ID of the match loser; derived from the first set's
- *   winner/loser when omitted (the team that is not the match winner), so payloads
- *   may state it explicitly or leave it out
+ * @property winnerTeamId Team ID of the match winner; defaults to the team that won
+ *   the most sets when omitted (tennis has no draws, so a valid match always has a
+ *   strict set majority)
+ * @property loserTeamId Team ID of the match loser; defaults to the team that lost
+ *   the most sets when omitted, so payloads may state both explicitly or leave them out.
+ *   A stated winner that contradicts the set majority therefore collides with the
+ *   derived loser and is rejected
  * @property matchFormat Format of the match (best of 3 or 5)
  */
 @Serializable
 data class MatchScore(
     val sets: List<SetScore>,
-    val winnerTeamId: String = sets.maxOf { it.winnerTeamId },
-    val loserTeamId: String = sets.maxOf { it.loserTeamId },
+    val winnerTeamId: String = sets.groupingBy { it.winnerTeamId }.eachCount().maxBy { it.value }.key,
+    val loserTeamId: String = sets.groupingBy { it.loserTeamId }.eachCount().maxBy { it.value }.key,
     val matchFormat: MatchFormat = MatchFormat.BEST_OF_THREE,
 ) {
     init {
