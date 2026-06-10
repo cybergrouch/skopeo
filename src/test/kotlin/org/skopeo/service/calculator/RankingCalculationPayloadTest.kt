@@ -22,7 +22,7 @@ import org.skopeo.module
  * - NTRP tests: testNTRP_* (5 tests)
  * - UTR tests: testUTR_* (2 tests)
  *
- * For validation/error cases, see RankingCalculationApiTest.
+ * For validation/error cases, see RankingCalculationApiErrorTest.
  *
  * Uses Kotest assertions for improved readability.
  */

@@ -403,11 +403,11 @@ This is intentional for simplicity but could be refined.
 ### Test Coverage
 
 - **Unit tests**: PerformanceBasedRankingCalculatorImplTest (24 NTRP + 24 UTR scenarios)
-- **API tests**: RankingCalculationApiTest (boundary conditions, system tests)
+- **API tests**: RankingCalculationApiErrorTest (boundary conditions, system tests)
 - **Payload tests**: RankingCalculationPayloadTest (exact value verification)
 - **Comparison tests**: NTRPvsUTRComparison (2.5× K-factor validation)
 
-**Total**: 70+ tests covering all scenarios and edge cases
+**Total**: 123 tests covering all scenarios and edge cases
 
 ### Edge Cases Tested
 

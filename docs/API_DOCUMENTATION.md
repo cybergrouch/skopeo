@@ -253,7 +253,7 @@ curl -X POST http://localhost:8080/api/v1/calculate-ranking \
 }
 ```
 
-*Note: Uses Elo-based ranking algorithm. See [RANKING_ALGORITHM.md](./RANKING_ALGORITHM.md) for details.*
+*Note: Uses Elo-based ranking algorithm. See [ALGORITHM_BEHAVIOR.md](./ALGORITHM_BEHAVIOR.md) for details.*
 
 ### Example 2: UTR Match with Tiebreak
 
@@ -411,14 +411,10 @@ http POST :8080/api/v1/calculate-ranking < test-data.json
 
 ## Current Limitations
 
-1. **Algorithm Tuning**: Elo-based algorithm may produce large rating swings
-   - K-factor of 32 may be aggressive for single matches
-   - Consider K=16-24 for more stable ratings
-   - See [RANKING_ALGORITHM.md](./RANKING_ALGORITHM.md) for tuning details
-2. **No Persistence**: Match results and player profiles are not stored
-3. **No Authentication**: API is open without authentication
-4. **No Rate Limiting**: Unlimited requests allowed
-5. **Single-System Matches Only**: Cannot process matches between NTRP and UTR players
+1. **No Persistence**: Match results and player profiles are not stored
+2. **No Authentication**: API is open without authentication
+3. **No Rate Limiting**: Unlimited requests allowed
+4. **Single-System Matches Only**: Cannot process matches between NTRP and UTR players
 
 ---
 
@@ -430,13 +426,14 @@ http POST :8080/api/v1/calculate-ranking < test-data.json
 - ✅ Comprehensive test suite
 - ✅ API documentation
 
-### Phase 2: Ranking Algorithm (Next)
-- Implement Elo-based algorithm
-- Support for NTRP-specific calculations
-- Support for UTR-specific calculations
-- Algorithm selection based on rating system
+### Phase 2: Ranking Algorithm ✅
+- ✅ Performance-based Elo algorithm (K=0.16 NTRP, K=0.4 UTR)
+- ✅ NTRP-specific and UTR-specific calculations
+- ✅ Algorithm selection based on rating system
+- ✅ Optional rating smoothing (see [RATING_SMOOTHING.md](./RATING_SMOOTHING.md))
 
-### Phase 3: Persistence
+### Phase 3: Persistence (In Progress)
+- ✅ Database infrastructure (PostgreSQL, Flyway, Exposed)
 - Store player profiles
 - Store match results
 - Historical ranking tracking

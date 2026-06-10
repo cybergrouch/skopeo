@@ -16,12 +16,12 @@ Skopeo employs a comprehensive testing strategy that balances speed, isolation, 
        /        \      - External dependencies
       / Integration\   - Slowest, broadest
      /------------\
-    /              \   Integration Tests (30 tests)
+    /              \   Integration Tests (16 tests)
    / API/HTTP Layer \  - Test HTTP endpoints
   /------------------\ - JSON serialization
  /                    \ - Route handling
 /     Unit Tests       \
-/----------------------\ Unit Tests (40 tests)
+/----------------------\ Unit Tests (107 tests)
                          - Pure function testing
                          - Business logic
                          - Fast, isolated
@@ -32,265 +32,62 @@ Skopeo employs a comprehensive testing strategy that balances speed, isolation, 
 
 | Layer | Tests | Percentage | Avg Speed | Purpose |
 |-------|-------|------------|-----------|---------|
-| Unit | 40 | 57% | ~500ms | Algorithm correctness, pure logic |
-| Integration | 30 | 43% | ~5000ms | API contracts, HTTP layer |
+| Unit | 107 | 87% | fast | Algorithm correctness, pure logic |
+| Integration | 16 | 13% | slower | API contracts, HTTP layer |
 | E2E | 0 | 0% | N/A | Not yet implemented |
-| **Total** | **70** | **100%** | **~5500ms** | Full coverage |
+| **Total** | **123** | **100%** | ~6s | Full coverage |
 
 ---
 
 ## Test Categories
 
-### 1. Unit Tests (40 tests)
+### 1. Unit Tests (107 tests)
 
-**Location:** `src/test/kotlin/org/skopeo/service/`
+**Location:** `src/test/kotlin/org/skopeo/service/calculator/impl/`
 
 Tests pure business logic in complete isolation - no infrastructure, no HTTP, no JSON.
 
-#### 1.1 RankingCalculatorUnitTest (26 tests)
+#### 1.1 PerformanceBasedRankingCalculatorImplTest (106 tests)
 
-**File:** `RankingCalculatorUnitTest.kt`
+**File:** `impl/v1/PerformanceBasedRankingCalculatorImplTest.kt`
 
 **Purpose:** Test the core ranking calculation algorithm
 
-**Tests:**
-- NTRP-specific behavior (4 tests)
-  - Boundary enforcement (1.0-7.0)
-  - Rounding to 2 decimal places
-  - Rating gain/loss mechanics
+Covers, largely via parameterized scenarios (see `TestScenarios.kt`):
+- NTRP and UTR rating delta calculations
+- Boundary enforcement (NTRP 1.0-7.0, UTR >= 1.0)
+- Dominance, upset, and tiebreak handling
+- Rating smoothing (nested suites: NTRP Smoothing, UTR Smoothing, Edge Cases)
+- Audit trail content and structure (nested suite: Audit Trail)
 
-- UTR-specific behavior (4 tests)
-  - Minimum enforcement (1.0+)
-  - No maximum limit
-  - Rounding to 1 decimal place
-  - Rating gain/loss mechanics
+#### 1.2 NTRPvsUTRComparison (1 test)
 
-- Dominance factor (2 tests)
-  - Dominant vs close wins
-  - Multi-set match handling
+**File:** `impl/v1/NTRPvsUTRComparison.kt`
 
-- Elo expected scores (2 tests)
-  - Higher rated player advantage
-  - Equal ratings = 50/50
+**Purpose:** Compare how the two rating systems respond to the same match
 
-- Upset scenarios (2 tests)
-  - Underdog victories
-  - Expected outcomes
-
-- Pure function properties (2 tests)
-  - Determinism (same input = same output)
-  - No side effects (immutability)
-
-- Audit trail integration (2 tests)
-  - Audit completeness
-  - Structured context data
-
-- Response structure (3 tests)
-  - Player data correctness
-  - Rating change calculations
-  - Percent change accuracy
-
-**Example:**
-```kotlin
-@Test
-fun testNTRP_RespectsBoundaries_Max() {
-    val calculator = RankingCalculator()  // No dependencies!
-
-    val request = createRequest(
-        player1Rating = 7.0,  // At max
-        player2Rating = 6.5,
-        system = RatingSystem.NTRP,
-        sets = listOf(SetScore(mapOf("P1" to 6, "P2" to 0), "P1"))
-    )
-
-    val result = calculator.calculate(request)
-
-    assertTrue(result.response.players["P1"]!!.rating.value <= 7.0)
-}
-```
+Support files (no tests of their own): `TestScenarios.kt`, `TeamTestHelpers.kt`, `RankingTestCase.kt`.
 
 **Key Characteristics:**
-- ✅ No Ktor test application
-- ✅ No HTTP layer
-- ✅ No JSON serialization
-- ✅ Direct object creation
-- ✅ Fast execution (~500ms for all 26 tests)
-- ✅ Easy to write and maintain
+- ✅ No Ktor test application, HTTP layer, or JSON serialization
+- ✅ Direct object creation, fast execution
+- ✅ Pure function testing without mocking
 
 ---
 
-#### 1.2 RankingCalculatorAuditTest (10 tests)
-
-**File:** `RankingCalculatorAuditTest.kt`
-
-**Purpose:** Verify audit trail functionality
-
-**Tests:**
-- Audit content verification (4 tests)
-  - Calculation start message
-  - Match result analysis
-  - Expected score calculations
-  - Rating change details
-
-- Audit structure (3 tests)
-  - Entry ordering
-  - Level distribution (INFO vs DEBUG)
-  - Context data validity
-
-- System-specific audits (2 tests)
-  - NTRP change tracking
-  - UTR change tracking
-
-- Audit metadata (1 test)
-  - Zero-sum rating changes
-
-**Example:**
-```kotlin
-@Test
-fun testAuditTrailContainsExpectedScores() {
-    val result = calculator.calculate(request)
-
-    val expectedEntry = result.audit.find {
-        it.message.contains("Expected scores")
-    }
-
-    assertNotNull(expectedEntry)
-    assertEquals(0.5, expectedEntry!!.context["expectedPlayer1"], 0.01)
-}
-```
-
-**Key Benefits:**
-- Tests audit trail without logging infrastructure
-- Verifies structured context data
-- Ensures audit completeness
-- Tests ordering and levels
-
----
-
-#### 1.3 AuditTrailSimpleExample (4 tests)
-
-**File:** `AuditTrailSimpleExample.kt`
-
-**Purpose:** Demonstrate and validate the AuditTrail API
-
-**Tests:**
-- Simple API usage
-- AuditEntry as data
-- Filtering by level
-- Context data access
-
-**Example:**
-```kotlin
-@Test
-fun demonstrateSimpleAPI() {
-    val audit = AuditTrail()
-
-    audit.add(AuditEntry(INFO, "Starting"))
-    audit.add(AuditEntry(DEBUG, "Step 1", mapOf("value" to 42)))
-
-    val entries = audit.getEntries()
-    assertEquals(2, entries.size)
-}
-```
-
----
-
-### 2. Integration Tests (30 tests)
+### 2. Integration Tests (16 tests)
 
 **Location:** `src/test/kotlin/org/skopeo/`
 
 Tests the full HTTP API stack including routing, serialization, and validation.
+All boot the application with `module(initDatabase = false)` - no database required.
 
-#### 2.1 RankingCalculationApiTest (10 tests)
-
-**File:** `RankingCalculationApiTest.kt`
-
-**Purpose:** Test core API functionality
-
-**Tests:**
-- Valid requests (2 tests)
-  - Simple NTRP match
-  - UTR match with tiebreak
-
-- Invalid ratings (2 tests)
-  - Out of range values
-  - Continuous values (now valid)
-
-- Data integrity (3 tests)
-  - Mismatched player IDs
-  - Different rating systems
-  - Invalid set scores
-
-**Example:**
-```kotlin
-@Test
-fun testValidRankingCalculation() = testApplication {
-    application { module() }
-
-    val response = client.post("/api/v1/calculate-ranking") {
-        contentType(ContentType.Application.Json)
-        setBody("""{ ... }""")
-    }
-
-    assertEquals(HttpStatusCode.OK, response.status)
-}
-```
-
-**Key Characteristics:**
-- ✅ Tests full HTTP stack
-- ✅ Tests JSON serialization/deserialization
-- ✅ Tests Ktor routing
-- ✅ Tests validation at API boundary
-- ⚠️ Slower than unit tests
-
----
-
-#### 2.2 RankingCalculationExtendedTest (11 tests)
-
-**File:** `RankingCalculationExtendedTest.kt`
-
-**Purpose:** Extended edge case testing
-
-**Tests:**
-- Multi-set matches (1 test)
-- Boundary ratings (3 tests)
-  - Minimum NTRP/UTR
-  - Maximum NTRP
-  - High UTR values
-
-- Validation edge cases (5 tests)
-  - Empty player names
-  - Empty player IDs
-  - Too many/few players
-  - Invalid winners
-
-- Optional features (1 test)
-  - Match date handling
-
----
-
-#### 2.3 RankingAlgorithmTest (9 tests)
-
-**File:** `RankingAlgorithmTest.kt`
-
-**Purpose:** Algorithm behavior through HTTP API
-
-**Tests:**
-- Rating changes (2 tests)
-  - NTRP winner gains rating
-  - UTR winner gains rating
-
-- Upsets (1 test)
-  - Lower-rated player wins
-
-- Match dominance (2 tests)
-  - Dominant vs close wins
-
-- Boundaries (3 tests)
-  - NTRP max/min enforcement
-  - UTR minimum enforcement
-
-**Note:** These tests duplicate some unit test coverage but verify the full stack works end-to-end.
+| Class | Tests | Purpose |
+|-------|-------|---------|
+| `SkopeoApplicationTests` | 3 | Root, health, and metrics endpoints |
+| `OpenAPIIntegrationTest` | 2 | `/openapi.yaml` spec and Swagger UI |
+| `routes/RankingCalculationApiErrorTest` | 4 | API-level success and error responses |
+| `service/calculator/RankingCalculationPayloadTest` | 7 | Exact JSON payload snapshot tests |
 
 ---
 
@@ -390,24 +187,26 @@ fun testRejectsInvalidJSON() = testApplication {
 
 ```
 src/test/kotlin/org/skopeo/
-├── service/                              # Unit tests
-│   ├── RankingCalculatorUnitTest.kt     # Core algorithm tests
-│   ├── RankingCalculatorAuditTest.kt    # Audit trail tests
-│   └── AuditTrailSimpleExample.kt       # API examples
-├── RankingCalculationApiTest.kt         # Integration tests
-├── RankingCalculationExtendedTest.kt    # Extended integration
-├── RankingAlgorithmTest.kt              # Algorithm integration
-└── SkopeoApplicationTests.kt      # Application tests
+├── service/calculator/
+│   ├── impl/v1/
+│   │   ├── PerformanceBasedRankingCalculatorImplTest.kt  # Core algorithm tests
+│   │   ├── NTRPvsUTRComparison.kt                        # System comparison
+│   │   ├── TestScenarios.kt                              # Parameterized scenarios
+│   │   └── TeamTestHelpers.kt                            # Test helpers
+│   ├── impl/RankingTestCase.kt                           # Test case model
+│   └── RankingCalculationPayloadTest.kt                  # Payload snapshot tests
+├── routes/RankingCalculationApiErrorTest.kt              # API integration tests
+├── OpenAPIIntegrationTest.kt                             # OpenAPI/Swagger tests
+└── SkopeoApplicationTests.kt                             # Application tests
 ```
 
 ### Naming Conventions
 
 | Type | Pattern | Example |
 |------|---------|---------|
-| Unit Tests | `*UnitTest.kt` | `RankingCalculatorUnitTest.kt` |
-| Integration Tests | `*ApiTest.kt` or `*Test.kt` | `RankingCalculationApiTest.kt` |
-| Test Methods | `test<What><Scenario>()` | `testNTRP_RespectsBoundaries_Max()` |
-| Helper Methods | `create*()` or `assert*()` | `createRequest()`, `assertErrorResponse()` |
+| Test Classes | `*Test.kt` | `RankingCalculationPayloadTest.kt` |
+| Test Methods | `test<What>_<Scenario>()` | `testNTRP_BasicMatch_ExactPayload()` |
+| Helper Methods | `create*()` or `assert*()` | `createRequest()` |
 
 ---
 
@@ -430,7 +229,7 @@ fun test() {
 ```kotlin
 @Test
 fun test() {
-    val calculator = RankingCalculator()  // No dependencies!
+    val calculator = PerformanceBasedRankingCalculatorImpl()  // No dependencies!
     val result = calculator.calculate(request)
 
     // Test the result
@@ -508,7 +307,7 @@ fun testNTRP_RespectsBoundaries_Min() {
 fun test() {
     // Arrange: Setup test data
     val request = createRequest(...)
-    val calculator = RankingCalculator()
+    val calculator = PerformanceBasedRankingCalculatorImpl()
 
     // Act: Execute the behavior
     val result = calculator.calculate(request)
@@ -579,7 +378,7 @@ class RankingCalculator {
 // Testing is trivial
 @Test
 fun test() {
-    val calculator = RankingCalculator()  // No setup!
+    val calculator = PerformanceBasedRankingCalculatorImpl()  // No setup!
     val result = calculator.calculate(request)
     // Test logic - clean and simple!
 }
@@ -620,13 +419,13 @@ fun test() {
 ### Specific Test Class
 
 ```bash
-./gradlew test --tests "RankingCalculatorUnitTest"
+./gradlew test --tests "*.PerformanceBasedRankingCalculatorImplTest"
 ```
 
 ### Specific Test Method
 
 ```bash
-./gradlew test --tests "RankingCalculatorUnitTest.testNTRP_RespectsBoundaries_Max"
+./gradlew test --tests "*.PerformanceBasedRankingCalculatorImplTest" --tests "*.testNTRP*"
 ```
 
 ### With Coverage Report
@@ -753,14 +552,14 @@ The pure function design of `RankingCalculator` enables extensive unit testing w
 - Better coverage
 - Easier maintenance
 
-Total: **70 tests** providing confidence in both business logic and API contracts.
+Total: **123 tests** providing confidence in both business logic and API contracts.
 
 ---
 
 ## Related Documentation
 
 - [AUDIT_TRAIL.md](./AUDIT_TRAIL.md) - Audit trail design and testing
-- [RANKING_ALGORITHM.md](./RANKING_ALGORITHM.md) - Algorithm implementation
+- [ALGORITHM_BEHAVIOR.md](./ALGORITHM_BEHAVIOR.md) - Algorithm implementation
 - [API_DOCUMENTATION.md](./API_DOCUMENTATION.md) - API specifications
 
 ---

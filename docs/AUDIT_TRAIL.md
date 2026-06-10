@@ -117,7 +117,7 @@ result.audit.forEach { entry ->
 call.respond(HttpStatusCode.OK, result.response)
 ```
 
-### In Tests (RankingCalculatorAuditTest.kt)
+### In Tests (PerformanceBasedRankingCalculatorImplTest.kt, Audit Trail suite)
 
 Tests can verify audit information without any logging infrastructure:
 
@@ -547,7 +547,7 @@ Potential improvements to the audit trail system:
 
 ## Related Documentation
 
-- [RANKING_ALGORITHM.md](./RANKING_ALGORITHM.md) - Algorithm implementation details
+- [ALGORITHM_BEHAVIOR.md](./ALGORITHM_BEHAVIOR.md) - Algorithm implementation details
 - [API_DOCUMENTATION.md](./API_DOCUMENTATION.md) - API endpoint specifications
 
 ---

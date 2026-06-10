@@ -7,7 +7,7 @@ This document describes the logging and metrics implementation in Skopeo.
 The application uses a comprehensive logging and monitoring setup:
 
 - **kotlin-logging**: Kotlin-idiomatic logging wrapper
-- **Logback**: Backend logging framework with file rotation
+- **Logback**: Backend logging framework (console/stdout output)
 - **Ktor CallLogging**: Automatic HTTP request/response logging
 - **Micrometer + Prometheus**: Performance metrics collection
 
@@ -25,36 +25,13 @@ The application uses the following log levels:
 
 ### Log Output
 
-Logs are written to three destinations:
+Logs are written to the **console (stdout)** only, in the format
+`yyyy-MM-dd HH:mm:ss.SSS [thread] LEVEL logger - message`.
 
-1. **Console** (stdout)
-   - Colored output for better readability
-   - Format: `HH:mm:ss.SSS [thread] LEVEL logger - message`
-
-2. **Application Log File** (`logs/skopeo.log`)
-   - All log levels
-   - Daily rotation
-   - Keeps 30 days of history
-   - Max total size: 1GB
-   - Format: `yyyy-MM-dd HH:mm:ss.SSS [thread] LEVEL logger - message`
-
-3. **Error Log File** (`logs/skopeo-error.log`)
-   - ERROR level only
-   - Daily rotation
-   - Keeps 90 days of history
-   - Same format as application log
-
-### Log Files Location
-
-All log files are stored in the `logs/` directory at the project root:
-
-```
-logs/
-├── skopeo.log              # Current day all logs
-├── skopeo.2024-01-15.log   # Previous day logs
-├── skopeo-error.log        # Current day errors
-└── skopeo-error.2024-01-15.log  # Previous day errors
-```
+This is intentional: the application is deployed as a container, and container
+platforms (Cloud Run, ECS, Kubernetes) collect stdout and ship it to their
+logging backends. File appenders inside a container are invisible to the
+platform and lose data when the container is replaced.
 
 ### Using Logging in Code
 
@@ -95,7 +72,6 @@ Logging is configured in `src/main/resources/logback.xml`. You can:
 
 - Change log levels per package
 - Modify log format patterns
-- Adjust file rotation policies
 - Add custom appenders
 
 **Example: Enable debug logging for your package:**
@@ -226,7 +202,6 @@ The `/health` endpoint returns application health status:
 - Use lazy evaluation with `logger.info { }` syntax
 - Avoid expensive operations in log messages
 - Use appropriate log levels (don't log everything at INFO)
-- Log files are automatically rotated to prevent disk space issues
 
 ### Metrics
 - Metrics have minimal overhead (<1% CPU)
@@ -240,9 +215,8 @@ The `/health` endpoint returns application health status:
    <logger name="org.skopeo" level="INFO" />
    ```
 
-2. **Monitor disk space** for log files
-   - Logback will automatically clean up old logs
-   - Default retention: 30 days (app logs), 90 days (error logs)
+2. **Rely on the platform's log collection** (Cloud Logging, CloudWatch)
+   - Logs go to stdout; retention and search are handled by the platform
 
 3. **Set up Prometheus + Grafana** for metrics visualization
 
@@ -256,10 +230,9 @@ The `/health` endpoint returns application health status:
 
 ## Troubleshooting
 
-### Logs not appearing in files
-- Check that the `logs/` directory exists and is writable
+### Logs not appearing
 - Verify logback.xml is in `src/main/resources/`
-- Check for errors in console output
+- Check for logback configuration errors at the top of console output
 
 ### Metrics endpoint returns empty
 - Ensure Micrometer dependencies are included

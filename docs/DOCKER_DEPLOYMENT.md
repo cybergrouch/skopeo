@@ -289,7 +289,7 @@ docker logs --since=2024-01-15T10:00:00 skopeo
 
 **Log Format:**
 ```
-2024-01-15 10:30:45.123 [main] INFO  o.l.t.l.SkopeoApplication - Starting application
+2024-01-15 10:30:45.123 [main] INFO  org.skopeo.Application - Starting application
 ```
 
 **To Enable File Logging:**
@@ -679,7 +679,7 @@ docker system prune -a
 - [API Documentation](./API_DOCUMENTATION.md)
 - [Testing Strategy](./TESTING_STRATEGY.md)
 - [Code Coverage](./CODE_COVERAGE.md)
-- [Ranking Algorithm](./RANKING_ALGORITHM.md)
+- [Algorithm Behavior](./ALGORITHM_BEHAVIOR.md)
 
 ---
 

@@ -56,7 +56,7 @@ Interactive and machine-readable API documentation.
 #### 4. **Quality Assurance**
 Comprehensive testing and code quality infrastructure.
 
-- **Test Suite**: 69 automated tests
+- **Test Suite**: 123 automated tests
   - Unit tests for business logic
   - Integration tests for API contracts
   - Edge case tests for algorithm validation
@@ -132,7 +132,7 @@ Skopeo's evolution from a **stateless rating calculator** to a **comprehensive p
 | 1 | Rating Calculation Engine | ✅ DONE | Implemented | None | Performance-based Elo calculator with NTRP/UTR support |
 | 2 | REST API | ✅ DONE | Implemented | #1 | HTTP API with JSON serialization |
 | 3 | API Documentation | ✅ DONE | Implemented | #2 | Swagger UI + OpenAPI 3.0 spec |
-| 4 | Quality Assurance | ✅ DONE | Implemented | All | 69 tests, coverage, code quality tools |
+| 4 | Quality Assurance | ✅ DONE | Implemented | All | 123 tests, coverage, code quality tools |
 | **MVP REQUIREMENTS (REQUIRED FOR PRODUCTION)** |
 | 5 | Player Profile Management | 🔴 CRITICAL | Not Started | Database | CRUD operations for player profiles with photos |
 | 6 | Player Identity Verification (KYC) 🇵🇭 | 🔴 CRITICAL | Not Started | #5 | Philippine government ID validation (Passport, DL, UMID, SSS, GSIS, National ID) |
@@ -975,12 +975,6 @@ Comprehensive documentation is available in the `docs/` directory:
   - Magic constant explanations
   - Known limitations and test coverage
 
-- **[RANKING_ALGORITHM.md](docs/RANKING_ALGORITHM.md)** - Original algorithm design
-  - Elo-based system explanation
-  - Mathematical formulas
-  - Parameter tuning guidelines
-  - Examples and limitations
-
 - **[AUDIT_TRAIL.md](docs/AUDIT_TRAIL.md)** - Audit trail design
   - Monadic pattern explanation
   - Pure function benefits
@@ -988,7 +982,7 @@ Comprehensive documentation is available in the `docs/` directory:
   - Usage examples
 
 - **[TESTING_STRATEGY.md](docs/TESTING_STRATEGY.md)** - Testing pyramid and strategy
-  - Test organization (89 tests including smoothing tests)
+  - Test organization and pyramid
   - Unit vs integration tests
   - Pure function testing
   - Coverage goals and best practices
@@ -1007,15 +1001,14 @@ Comprehensive documentation is available in the `docs/` directory:
 
 ## Testing
 
-Skopeo uses a comprehensive testing strategy with **69 tests** across unit, integration, and edge case layers:
+Skopeo uses a comprehensive testing strategy with **123 tests** across unit and integration layers:
 
 ### Test Distribution
 
 ```
-Unit Tests (38):        55% - Fast, isolated, pure function testing
-Integration Tests (21): 30% - API contracts, HTTP layer
-Edge Case Tests (10):   15% - Algorithm behavior validation
-Total:                  69 tests in ~6 seconds
+Unit Tests (107):       87% - Fast, isolated, pure function testing
+Integration Tests (16): 13% - API contracts, HTTP layer
+Total:                  123 tests in ~6 seconds
 ```
 
 **Test Quality**:
@@ -1034,7 +1027,7 @@ Total:                  69 tests in ~6 seconds
 ./gradlew test --tests "org.skopeo.service.*"
 
 # Run specific test class
-./gradlew test --tests "RankingCalculatorUnitTest"
+./gradlew test --tests "*.PerformanceBasedRankingCalculatorImplTest"
 
 # Check coverage against 85% threshold
 ./scripts/check-coverage.sh

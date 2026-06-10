@@ -7,37 +7,6 @@
         </encoder>
     </appender>
 
-    <!-- File appender for all logs -->
-    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>logs/skopeo.log</file>
-        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <!-- Daily rollover -->
-            <fileNamePattern>logs/skopeo.%d{yyyy-MM-dd}.log</fileNamePattern>
-            <!-- Keep 30 days of history -->
-            <maxHistory>30</maxHistory>
-            <!-- Total size cap of 1GB -->
-            <totalSizeCap>1GB</totalSizeCap>
-        </rollingPolicy>
-        <encoder>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
-        </encoder>
-    </appender>
-
-    <!-- File appender for errors only -->
-    <appender name="ERROR_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>logs/skopeo-error.log</file>
-        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
-            <level>ERROR</level>
-        </filter>
-        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <fileNamePattern>logs/skopeo-error.%d{yyyy-MM-dd}.log</fileNamePattern>
-            <maxHistory>90</maxHistory>
-        </rollingPolicy>
-        <encoder>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
-        </encoder>
-    </appender>
-
     <!-- Application logger -->
     <logger name="org.skopeo" level="INFO" />
 
@@ -48,8 +17,7 @@
     <!-- Netty logger (reduce noise) -->
     <logger name="io.netty" level="WARN" />
 
-    <!-- Root logger - Console only by default (Docker-friendly) -->
-    <!-- For file logging, override with: -Dlogback.configurationFile=logback-file.xml -->
+    <!-- Console only: containers and cloud platforms collect stdout -->
     <root level="INFO">
         <appender-ref ref="CONSOLE" />
     </root>
