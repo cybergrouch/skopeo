@@ -2,18 +2,18 @@
 <SmellBaseline>
   <ManuallySuppressedIssues/>
   <CurrentIssues>
-    <ID>CognitiveComplexMethod:NTRPvsUTRComparison.kt$NTRPvsUTRComparison$@Test fun compareNTRPvsUTR()</ID>
+    <ID>CognitiveComplexMethod:RatingChangeReport.kt$RatingChangeReport$@Test fun generateRatingChangeReport()</ID>
     <ID>ComplexCondition:PerformanceBasedRankingCalculatorImpl.kt$PerformanceBasedRankingCalculatorImpl$(isWinner &amp;&amp; ratingAdvantage &lt; ZERO) || (!isWinner &amp;&amp; ratingAdvantage &gt; ZERO)</ID>
-    <ID>CyclomaticComplexMethod:NTRPvsUTRComparison.kt$NTRPvsUTRComparison$@Test fun compareNTRPvsUTR()</ID>
+    <ID>CyclomaticComplexMethod:RatingChangeReport.kt$RatingChangeReport$@Test fun generateRatingChangeReport()</ID>
     <ID>CyclomaticComplexMethod:Rating.kt$RatingSerializer$override fun deserialize(decoder: Decoder): Rating</ID>
-    <ID>ImplicitDefaultLocale:NTRPvsUTRComparison.kt$NTRPvsUTRComparison$String.format("%+.6f (%.6f)", result.ntrpP1Delta, result.ntrpP1New)</ID>
-    <ID>ImplicitDefaultLocale:NTRPvsUTRComparison.kt$NTRPvsUTRComparison$String.format("%+.6f (%.6f)", result.ntrpP2Delta, result.ntrpP2New)</ID>
-    <ID>ImplicitDefaultLocale:NTRPvsUTRComparison.kt$NTRPvsUTRComparison$String.format("%+.6f (%.6f)", result.utrP1Delta, result.utrP1New)</ID>
-    <ID>ImplicitDefaultLocale:NTRPvsUTRComparison.kt$NTRPvsUTRComparison$String.format("%+.6f (%.6f)", result.utrP2Delta, result.utrP2New)</ID>
-    <ID>ImplicitDefaultLocale:NTRPvsUTRComparison.kt$NTRPvsUTRComparison$String.format("%.2f", result.ratio)</ID>
+    <ID>ImplicitDefaultLocale:RatingChangeReport.kt$RatingChangeReport$String.format("%+.6f (%.6f)", result.ntrpP1Delta, result.ntrpP1New)</ID>
+    <ID>ImplicitDefaultLocale:RatingChangeReport.kt$RatingChangeReport$String.format("%+.6f (%.6f)", result.ntrpP2Delta, result.ntrpP2New)</ID>
+    <ID>ImplicitDefaultLocale:RatingChangeReport.kt$RatingChangeReport$String.format("%+.6f (%.6f)", result.utrP1Delta, result.utrP1New)</ID>
+    <ID>ImplicitDefaultLocale:RatingChangeReport.kt$RatingChangeReport$String.format("%+.6f (%.6f)", result.utrP2Delta, result.utrP2New)</ID>
+    <ID>ImplicitDefaultLocale:RatingChangeReport.kt$RatingChangeReport$String.format("%.2f", result.ratio)</ID>
     <ID>LargeClass:RankingCalculationPayloadTest.kt$RankingCalculationPayloadTest</ID>
     <ID>LargeClass:TestScenarios.kt$TestScenarios</ID>
-    <ID>LongMethod:NTRPvsUTRComparison.kt$NTRPvsUTRComparison$@Test fun compareNTRPvsUTR()</ID>
+    <ID>LongMethod:RatingChangeReport.kt$RatingChangeReport$@Test fun generateRatingChangeReport()</ID>
     <ID>LongMethod:PerformanceBasedRankingCalculatorImpl.kt$PerformanceBasedRankingCalculatorImpl$override fun calculate(request: RankingCalculationRequest): RankingCalculationResult</ID>
     <ID>LongMethod:RankingCalculationPayloadTest.kt$RankingCalculationPayloadTest$@Test fun testNTRP_BasicMatch_ExactPayload()</ID>
     <ID>LongMethod:RankingCalculationPayloadTest.kt$RankingCalculationPayloadTest$@Test fun testNTRP_DominantWin_ExactPayload()</ID>

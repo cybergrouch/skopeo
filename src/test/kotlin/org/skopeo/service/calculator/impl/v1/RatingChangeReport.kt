@@ -5,16 +5,24 @@ import org.skopeo.model.RatingSystem
 import java.io.File
 
 /**
- * Comparison test showing NTRP vs UTR behavior side-by-side.
- * Demonstrates that UTR changes are 2.5× larger than NTRP (K_UTR = 0.4, K_NTRP = 0.16).
- * Uses shared test scenarios from TestScenarios.kt.
+ * Generates the full rating-change table for all match-outcome scenarios,
+ * in both NTRP and UTR, side by side.
+ *
+ * This is the "big picture" view of the current algorithm: one row per scenario
+ * showing the actual rating deltas produced. As a by-product it also verifies the
+ * K-factor scaling between the systems (K_UTR = 0.4 = 2.5 × K_NTRP = 0.16).
+ *
+ * Uses shared test scenarios from TestScenarios.kt. The table is printed to stdout
+ * and written to /tmp/rating_change_report.txt; it is also embedded in
+ * docs/RATING_CALCULATION_ALGORITHM.md — regenerate it there when the algorithm
+ * or the scenarios change.
  */
-class NTRPvsUTRComparison {
+class RatingChangeReport {
     private val calculator = PerformanceBasedRankingCalculatorImpl()
     private val scenarios = TestScenarios.allScenarios
 
     @Test
-    fun compareNTRPvsUTR() {
+    fun generateRatingChangeReport() {
         val output = StringBuilder()
 
         // Pre-calculate all values to determine column widths
@@ -149,14 +157,17 @@ class NTRPvsUTRComparison {
                 ratioWidth + 3 + matchWidth
 
         output.appendLine("=".repeat(n = totalWidth))
-        output.appendLine("NTRP vs UTR COMPARISON")
+        output.appendLine("RATING CHANGE REPORT (NTRP and UTR)")
         output.appendLine("=".repeat(n = totalWidth))
         output.appendLine()
-        output.appendLine("Demonstrates 2.5× scaling relationship:")
-        output.appendLine("  K_NTRP = 0.16")
-        output.appendLine("  K_UTR  = 0.4 (2.5× NTRP)")
+        output.appendLine("Constants used (PerformanceBasedRankingCalculatorImpl):")
+        output.appendLine("  K_NTRP                    = 0.16")
+        output.appendLine("  K_UTR                     = 0.4 (= 0.16 × 15.0/6.0 = 2.5× NTRP)")
+        output.appendLine("  COMPETITIVE_THRESHOLD_PCT = 0.083 (8.3% of range = 0.5 NTRP / 1.25 UTR points)")
+        output.appendLine("  Upset multiplier          = 2.0")
+        output.appendLine("  Rating ranges             = NTRP 1.0-7.0 (6.0), UTR 1.0-16.0 (15.0)")
         output.appendLine()
-        output.appendLine("Therefore: UTR_delta = NTRP_delta × 2.5")
+        output.appendLine("Expected scaling: UTR_delta = NTRP_delta × 2.5")
         output.appendLine()
         output.appendLine("=".repeat(n = totalWidth))
         output.appendLine()
@@ -219,25 +230,14 @@ class NTRPvsUTRComparison {
         output.appendLine()
         output.appendLine("ANALYSIS:")
         output.appendLine()
-        output.appendLine("✓ All ratios = 2.5 (or both = 0), confirming correct K-factor scaling")
+        output.appendLine("✓ All ratios = 2.5 (or both deltas = 0), confirming correct K-factor scaling")
         output.appendLine("✓ Formula behaves consistently across both rating systems")
-        output.appendLine("✓ Threshold (1.0) applies equally in absolute terms for both systems")
-        output.appendLine()
-        output.appendLine("Why same threshold works:")
-        output.appendLine("  - NTRP diff of 0.5 is significant (1/12 of range)")
-        output.appendLine("  - UTR diff of 0.5 is smaller (1/30 of range)")
-        output.appendLine("  - BUT: Absolute skill difference matters, not relative to scale")
-        output.appendLine("  - A 0.5-point rating gap represents similar skill difference in both systems")
-        output.appendLine()
-        output.appendLine("Alternative: Proportional thresholds")
-        output.appendLine("  - NTRP threshold could be 0.5 (1/12 of 6.0 range)")
-        output.appendLine("  - UTR threshold could be 1.25 (1/12 of 15.0 range)")
-        output.appendLine("  - This would make thresholds proportional to rating system range")
-        output.appendLine("  - Current choice (threshold=1.0 for both) is simpler and reasonable")
+        output.appendLine("✓ Threshold is proportional to range (8.3%): 0.5 NTRP points = 1.25 UTR points")
+        output.appendLine("  so equivalent gaps produce equivalent scale factors in both systems")
 
         val outputStr = output.toString()
         println(outputStr)
-        File("/tmp/ntrp_vs_utr_comparison.txt").writeText(text = outputStr)
-        println("\nResults written to /tmp/ntrp_vs_utr_comparison.txt")
+        File("/tmp/rating_change_report.txt").writeText(text = outputStr)
+        println("\nResults written to /tmp/rating_change_report.txt")
     }
 }

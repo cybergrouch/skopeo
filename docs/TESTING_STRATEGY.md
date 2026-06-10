@@ -60,11 +60,11 @@ Covers, largely via parameterized scenarios (see `TestScenarios.kt`):
 - Rating smoothing (nested suites: NTRP Smoothing, UTR Smoothing, Edge Cases)
 - Audit trail content and structure (nested suite: Audit Trail)
 
-#### 1.2 NTRPvsUTRComparison (1 test)
+#### 1.2 RatingChangeReport (1 test)
 
-**File:** `impl/v1/NTRPvsUTRComparison.kt`
+**File:** `impl/v1/RatingChangeReport.kt`
 
-**Purpose:** Compare how the two rating systems respond to the same match
+**Purpose:** Generate the full rating-change table for all match-outcome scenarios in both NTRP and UTR (embedded in RATING_CALCULATION_ALGORITHM.md) and verify the 2.5× K-factor scaling
 
 Support files (no tests of their own): `TestScenarios.kt`, `TeamTestHelpers.kt`, `RankingTestCase.kt`.
 
@@ -190,7 +190,7 @@ src/test/kotlin/org/skopeo/
 ├── service/calculator/
 │   ├── impl/v1/
 │   │   ├── PerformanceBasedRankingCalculatorImplTest.kt  # Core algorithm tests
-│   │   ├── NTRPvsUTRComparison.kt                        # System comparison
+│   │   ├── RatingChangeReport.kt                         # Rating-change table for both systems
 │   │   ├── TestScenarios.kt                              # Parameterized scenarios
 │   │   └── TeamTestHelpers.kt                            # Test helpers
 │   ├── impl/RankingTestCase.kt                           # Test case model

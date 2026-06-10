@@ -2,7 +2,7 @@ package org.skopeo.service.calculator.impl.v1
 
 /**
  * Shared test scenarios for NTRP and UTR rating calculations.
- * Used by both PerformanceBasedRankingCalculatorImplTest and NTRPvsUTRComparison.
+ * Used by both PerformanceBasedRankingCalculatorImplTest and RatingChangeReport.
  */
 data class RatingScenario(
     val id: String,
