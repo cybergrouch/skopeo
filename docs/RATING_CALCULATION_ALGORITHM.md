@@ -421,79 +421,94 @@ Exactly 2.5× the NTRP change from Example 1 (0.032 × 2.5 = 0.080) — same fra
 
 ### The complete picture — every test scenario
 
-The table below is the output of the `RatingChangeReport` test (`src/test/kotlin/.../impl/v1/RatingChangeReport.kt`), which runs all shared scenarios from `TestScenarios.kt` through the calculator in **both** rating systems. It is the big picture of what the current algorithm actually does across rating levels, gaps, scores, and smoothing settings.
+The table below is the output of the `RatingChangeReport` test (`src/test/kotlin/.../impl/v1/RatingChangeReport.kt`), which runs all shared scenarios from `TestScenarios.kt` through the calculator. It is the big picture of what the current algorithm actually does across rating levels, gaps, scores, and smoothing settings. The table shows **NTRP only**; the UTR results are identical except every delta is exactly 2.5× larger (see [§3.3](#33-the-k-factors-016-and-04)) and are included in the generated report.
 
 **Constants in effect** (from `PerformanceBasedRankingCalculatorImpl`):
 
 ```
 K_NTRP                    = 0.16
-K_UTR                     = 0.4    (= 0.16 × 15.0/6.0 = 2.5 × K_NTRP)
-COMPETITIVE_THRESHOLD_PCT = 0.083  (8.3% of range = 0.5 NTRP / 1.25 UTR points)
+COMPETITIVE_THRESHOLD_PCT = 0.083  (8.3% of range = 0.5 NTRP points)
 Upset multiplier          = 2.0
-Rating ranges             = NTRP 1.0–7.0 (6.0), UTR 1.0–16.0 (15.0)
+Rating range              = NTRP 1.0–7.0 (6.0)
 Smoothing                 = off unless the scenario says otherwise (SM rows)
 ```
 
-How to read the table: P1 is always the match winner. **Δ (new)** is P1's rating change and resulting rating; the loser's change is the exact negative (zero-sum — no scenario hits a boundary). **⚡** marks a published-level change in that system. **UTR/NTRP** is the delta ratio, expected to be 2.5 everywhere; "—" means both deltas are zero (fully expected result).
+How to read the table: P1 is always the match winner. Each player's column shows their rating change and resulting rating, so the zero-sum property is directly visible — P2's change is the exact negative of P1's (no scenario hits a rating boundary). **⚡** marks a published-level change for at least one player.
 
-| ID | Scenario | NTRP P1 vs P2 | UTR P1 vs P2 | Score | NTRP Δ (new) | UTR Δ (new) | UTR/NTRP |
-|---|---|---|---|---|---|---|---|
-| S1 | Low: Equal players, dominant | 2.5 vs 2.5 | 5.0 vs 5.0 | 6-0 | +0.160000 (2.660000) ⚡ | +0.400000 (5.400000) ⚡ | 2.50 |
-| S2 | Low: Equal players, close | 2.5 vs 2.5 | 5.0 vs 5.0 | 6-4 | +0.032000 (2.532000) ⚡ | +0.080000 (5.080000) ⚡ | 2.50 |
-| S3 | Low: Below threshold, 0.1 gap | 2.6 vs 2.5 | 5.25 vs 5.0 | 6-0 | +0.127871 (2.727871) ⚡ | +0.319677 (5.569677) ⚡ | 2.50 |
-| S4 | Low: 0.5 gap, expected win | 3.0 vs 2.5 | 6.25 vs 5.0 | 6-0 | +0.000000 (3.000000) | +0.000000 (6.250000) | — |
-| S5 | Low: 0.5 gap, expected win | 3.0 vs 2.5 | 6.25 vs 5.0 | 6-4 | +0.000000 (3.000000) | +0.000000 (6.250000) | — |
-| S6 | Low: Below threshold, 0.1 gap | 3.1 vs 3.0 | 6.5 vs 6.25 | 6-0 | +0.127871 (3.227871) ⚡ | +0.319677 (6.819677) ⚡ | 2.50 |
-| S7 | Low: 1.0 gap, expected win | 3.5 vs 2.5 | 7.5 vs 5.0 | 6-0 | +0.000000 (3.500000) | +0.000000 (7.500000) | — |
-| S8 | Low: 1.0 gap, upset | 2.5 vs 3.5 | 5.0 vs 7.5 | 6-0 | +0.642572 (3.142572) ⚡ | +1.606429 (6.606429) ⚡ | 2.50 |
-| S9 | Low: Below threshold, 0.1 gap | 3.6 vs 3.5 | 7.75 vs 7.5 | 6-0 | +0.127871 (3.727871) ⚡ | +0.319677 (8.069677) ⚡ | 2.50 |
-| S10 | Low: 1.5 gap, expected win | 4.0 vs 2.5 | 8.75 vs 5.0 | 6-0 | +0.000000 (4.000000) | +0.000000 (8.750000) | — |
-| S11 | Low: Below threshold, 0.1 gap | 4.1 vs 4.0 | 9.0 vs 8.75 | 6-0 | +0.127871 (4.227871) ⚡ | +0.319677 (9.319677) | 2.50 |
-| S12 | Mid: 2.0 gap, big upset | 2.5 vs 4.5 | 5.0 vs 10.0 | 6-0 | +1.285139 (3.785139) ⚡ | +3.212848 (8.212848) ⚡ | 2.50 |
-| S13 | Mid: Expected win, dominant | 4.5 vs 4.0 | 10.0 vs 8.75 | 6-0 | +0.000000 (4.500000) | +0.000000 (10.000000) | — |
-| S14 | Mid: Expected win, close | 4.5 vs 4.0 | 10.0 vs 8.75 | 6-4 | +0.000000 (4.500000) | +0.000000 (10.000000) | — |
-| S15 | Mid: Upset, dominant | 4.0 vs 4.5 | 8.75 vs 10.0 | 6-0 | +0.321284 (4.321284) ⚡ | +0.803210 (9.553210) ⚡ | 2.50 |
-| S16 | Mid: Upset, close | 4.0 vs 4.5 | 8.75 vs 10.0 | 6-4 | +0.064257 (4.064257) ⚡ | +0.160642 (8.910642) ⚡ | 2.50 |
-| S17 | Mid: Competitive, dominant | 4.5 vs 4.3 | 10.0 vs 9.5 | 6-0 | +0.095744 (4.595744) | +0.239359 (10.239359) | 2.50 |
-| S18 | Mid: Competitive, close | 4.5 vs 4.3 | 10.0 vs 9.5 | 6-4 | +0.019149 (4.519149) | +0.047872 (10.047872) | 2.50 |
-| S19 | Mid: Equal players, dominant | 4.5 vs 4.5 | 10.0 vs 10.0 | 6-0 | +0.160000 (4.660000) ⚡ | +0.400000 (10.400000) ⚡ | 2.50 |
-| S20 | Mid: Equal players, close | 4.5 vs 4.5 | 10.0 vs 10.0 | 6-4 | +0.032000 (4.532000) ⚡ | +0.080000 (10.080000) ⚡ | 2.50 |
-| S21 | Mid: Below threshold, 0.1 gap | 4.6 vs 4.5 | 10.25 vs 10.0 | 6-0 | +0.127871 (4.727871) ⚡ | +0.319677 (10.569677) ⚡ | 2.50 |
-| S22 | High: Large gap, expected win | 5.0 vs 4.0 | 12.5 vs 10.0 | 6-0 | +0.000000 (5.000000) | +0.000000 (12.500000) | — |
-| S23 | High: Large gap, big upset | 4.0 vs 5.0 | 10.0 vs 12.5 | 6-0 | +0.642572 (4.642572) ⚡ | +1.606429 (11.606429) ⚡ | 2.50 |
-| S24 | High: Below threshold, 0.1 gap | 5.1 vs 5.0 | 12.75 vs 12.5 | 6-0 | +0.127871 (5.227871) ⚡ | +0.319677 (13.069677) ⚡ | 2.50 |
-| SM1 | Smoothing 0.3: Equal, dominant | 4.0 vs 4.0 | 10.0 vs 10.0 | 6-0 | +0.048000 (4.048000) ⚡ | +0.120000 (10.120000) ⚡ | 2.50 |
-| SM2 | Smoothing 0.5: Equal, dominant | 4.0 vs 4.0 | 10.0 vs 10.0 | 6-0 | +0.080000 (4.080000) ⚡ | +0.200000 (10.200000) ⚡ | 2.50 |
-| SM3 | Smoothing 0.7: Equal, dominant | 4.0 vs 4.0 | 10.0 vs 10.0 | 6-0 | +0.112000 (4.112000) ⚡ | +0.280000 (10.280000) ⚡ | 2.50 |
-| SM4 | Smoothing 0.3: Equal, close | 4.0 vs 4.0 | 10.0 vs 10.0 | 6-4 | +0.009600 (4.009600) ⚡ | +0.024000 (10.024000) ⚡ | 2.50 |
-| SM5 | Smoothing 0.5: Equal, close | 4.0 vs 4.0 | 10.0 vs 10.0 | 6-4 | +0.016000 (4.016000) ⚡ | +0.040000 (10.040000) ⚡ | 2.50 |
-| SM6 | Smoothing 0.5: Upset | 4.0 vs 4.5 | 10.0 vs 11.25 | 6-0 | +0.160642 (4.160642) ⚡ | +0.401605 (10.401605) ⚡ | 2.50 |
-| SM7 | Smoothing 0.5: Expected win at threshold | 4.5 vs 4.0 | 10.0 vs 8.75 | 6-0 | +0.000000 (4.500000) | +0.000000 (10.000000) | — |
-| SM8 | Smoothing 0.5: Competitive gap, dominant | 4.5 vs 4.3 | 10.0 vs 9.5 | 6-0 | +0.047872 (4.547872) | +0.119680 (10.119680) | 2.50 |
-| SM9 | Smoothing 0.3: Competitive gap, close | 4.5 vs 4.3 | 10.0 vs 9.5 | 6-4 | +0.005745 (4.505745) | +0.014362 (10.014362) | 2.50 |
-| SM10 | Smoothing 0.3: Small upset | 4.0 vs 4.5 | 8.75 vs 10.0 | 6-4 | +0.019277 (4.019277) ⚡ | +0.048193 (8.798193) ⚡ | 2.50 |
-| SM11 | Smoothing 0.7: Medium upset | 4.0 vs 4.5 | 8.75 vs 10.0 | 6-0 | +0.224899 (4.224899) ⚡ | +0.562247 (9.312247) ⚡ | 2.50 |
-| SM12 | Smoothing 0.5: Large upset (1.0 gap) | 2.5 vs 3.5 | 5.0 vs 7.5 | 6-0 | +0.321286 (2.821286) ⚡ | +0.803214 (5.803214) ⚡ | 2.50 |
-| SM13 | Smoothing 0.3: Huge upset (2.0 gap) | 2.5 vs 4.5 | 5.0 vs 10.0 | 6-0 | +0.385542 (2.885542) ⚡ | +0.963854 (5.963854) ⚡ | 2.50 |
-| SM14 | Smoothing 0.5: Small gap (0.1), dominant | 4.1 vs 4.0 | 9.0 vs 8.75 | 6-0 | +0.063935 (4.163935) ⚡ | +0.159839 (9.159839) | 2.50 |
-| SM15 | Smoothing 0.7: Small gap (0.1), close | 4.6 vs 4.5 | 10.25 vs 10.0 | 6-4 | +0.017902 (4.617902) ⚡ | +0.044755 (10.294755) ⚡ | 2.50 |
-| SM16 | Smoothing 0.5: High rating upset | 4.0 vs 5.0 | 10.0 vs 12.5 | 6-0 | +0.321286 (4.321286) ⚡ | +0.803214 (10.803214) ⚡ | 2.50 |
-| SM17 | Smoothing 0.3: Low rating levels | 2.6 vs 2.5 | 5.25 vs 5.0 | 6-0 | +0.038361 (2.638361) ⚡ | +0.095903 (5.345903) ⚡ | 2.50 |
-| SM18 | Smoothing 0.7: High rating levels | 5.1 vs 5.0 | 12.75 vs 12.5 | 6-0 | +0.089510 (5.189510) ⚡ | +0.223774 (12.973774) | 2.50 |
+| ID | Scenario | NTRP P1 vs P2 | Score | P1 Δ (new) | P2 Δ (new) | Level |
+|---|---|---|---|---|---|---|
+| S1 | Low: Equal players, dominant | 2.5 vs 2.5 | 6-0 | +0.160000 (2.660000) | -0.160000 (2.340000) | ⚡ |
+| S2 | Low: Equal players, close | 2.5 vs 2.5 | 6-4 | +0.032000 (2.532000) | -0.032000 (2.468000) | ⚡ |
+| S3 | Low: Below threshold, 0.1 gap | 2.6 vs 2.5 | 6-0 | +0.127871 (2.727871) | -0.127871 (2.372129) | ⚡ |
+| S4 | Low: 0.5 gap, expected win | 3.0 vs 2.5 | 6-0 | +0.000000 (3.000000) | +0.000000 (2.500000) |  |
+| S5 | Low: 0.5 gap, expected win | 3.0 vs 2.5 | 6-4 | +0.000000 (3.000000) | +0.000000 (2.500000) |  |
+| S6 | Low: Below threshold, 0.1 gap | 3.1 vs 3.0 | 6-0 | +0.127871 (3.227871) | -0.127871 (2.872129) | ⚡ |
+| S7 | Low: 1.0 gap, expected win | 3.5 vs 2.5 | 6-0 | +0.000000 (3.500000) | +0.000000 (2.500000) |  |
+| S8 | Low: 1.0 gap, upset | 2.5 vs 3.5 | 6-0 | +0.642572 (3.142572) | -0.642572 (2.857428) | ⚡ |
+| S9 | Low: Below threshold, 0.1 gap | 3.6 vs 3.5 | 6-0 | +0.127871 (3.727871) | -0.127871 (3.372129) | ⚡ |
+| S10 | Low: 1.5 gap, expected win | 4.0 vs 2.5 | 6-0 | +0.000000 (4.000000) | +0.000000 (2.500000) |  |
+| S11 | Low: Below threshold, 0.1 gap | 4.1 vs 4.0 | 6-0 | +0.127871 (4.227871) | -0.127871 (3.872129) | ⚡ |
+| S12 | Mid: 2.0 gap, big upset | 2.5 vs 4.5 | 6-0 | +1.285139 (3.785139) | -1.285139 (3.214861) | ⚡ |
+| S13 | Mid: Expected win, dominant | 4.5 vs 4.0 | 6-0 | +0.000000 (4.500000) | +0.000000 (4.000000) |  |
+| S14 | Mid: Expected win, close | 4.5 vs 4.0 | 6-4 | +0.000000 (4.500000) | +0.000000 (4.000000) |  |
+| S15 | Mid: Upset, dominant | 4.0 vs 4.5 | 6-0 | +0.321284 (4.321284) | -0.321284 (4.178716) | ⚡ |
+| S16 | Mid: Upset, close | 4.0 vs 4.5 | 6-4 | +0.064257 (4.064257) | -0.064257 (4.435743) | ⚡ |
+| S17 | Mid: Competitive, dominant | 4.5 vs 4.3 | 6-0 | +0.095744 (4.595744) | -0.095744 (4.204256) |  |
+| S18 | Mid: Competitive, close | 4.5 vs 4.3 | 6-4 | +0.019149 (4.519149) | -0.019149 (4.280851) |  |
+| S19 | Mid: Equal players, dominant | 4.5 vs 4.5 | 6-0 | +0.160000 (4.660000) | -0.160000 (4.340000) | ⚡ |
+| S20 | Mid: Equal players, close | 4.5 vs 4.5 | 6-4 | +0.032000 (4.532000) | -0.032000 (4.468000) | ⚡ |
+| S21 | Mid: Below threshold, 0.1 gap | 4.6 vs 4.5 | 6-0 | +0.127871 (4.727871) | -0.127871 (4.372129) | ⚡ |
+| S22 | High: Large gap, expected win | 5.0 vs 4.0 | 6-0 | +0.000000 (5.000000) | +0.000000 (4.000000) |  |
+| S23 | High: Large gap, big upset | 4.0 vs 5.0 | 6-0 | +0.642572 (4.642572) | -0.642572 (4.357428) | ⚡ |
+| S24 | High: Below threshold, 0.1 gap | 5.1 vs 5.0 | 6-0 | +0.127871 (5.227871) | -0.127871 (4.872129) | ⚡ |
+| SM1 | Smoothing 0.3: Equal, dominant | 4.0 vs 4.0 | 6-0 | +0.048000 (4.048000) | -0.048000 (3.952000) | ⚡ |
+| SM2 | Smoothing 0.5: Equal, dominant | 4.0 vs 4.0 | 6-0 | +0.080000 (4.080000) | -0.080000 (3.920000) | ⚡ |
+| SM3 | Smoothing 0.7: Equal, dominant | 4.0 vs 4.0 | 6-0 | +0.112000 (4.112000) | -0.112000 (3.888000) | ⚡ |
+| SM4 | Smoothing 0.3: Equal, close | 4.0 vs 4.0 | 6-4 | +0.009600 (4.009600) | -0.009600 (3.990400) | ⚡ |
+| SM5 | Smoothing 0.5: Equal, close | 4.0 vs 4.0 | 6-4 | +0.016000 (4.016000) | -0.016000 (3.984000) | ⚡ |
+| SM6 | Smoothing 0.5: Upset | 4.0 vs 4.5 | 6-0 | +0.160642 (4.160642) | -0.160642 (4.339358) | ⚡ |
+| SM7 | Smoothing 0.5: Expected win at threshold | 4.5 vs 4.0 | 6-0 | +0.000000 (4.500000) | +0.000000 (4.000000) |  |
+| SM8 | Smoothing 0.5: Competitive gap, dominant | 4.5 vs 4.3 | 6-0 | +0.047872 (4.547872) | -0.047872 (4.252128) |  |
+| SM9 | Smoothing 0.3: Competitive gap, close | 4.5 vs 4.3 | 6-4 | +0.005745 (4.505745) | -0.005745 (4.294255) |  |
+| SM10 | Smoothing 0.3: Small upset | 4.0 vs 4.5 | 6-4 | +0.019277 (4.019277) | -0.019277 (4.480723) | ⚡ |
+| SM11 | Smoothing 0.7: Medium upset | 4.0 vs 4.5 | 6-0 | +0.224899 (4.224899) | -0.224899 (4.275101) | ⚡ |
+| SM12 | Smoothing 0.5: Large upset (1.0 gap) | 2.5 vs 3.5 | 6-0 | +0.321286 (2.821286) | -0.321286 (3.178714) | ⚡ |
+| SM13 | Smoothing 0.3: Huge upset (2.0 gap) | 2.5 vs 4.5 | 6-0 | +0.385542 (2.885542) | -0.385542 (4.114458) | ⚡ |
+| SM14 | Smoothing 0.5: Small gap (0.1), dominant | 4.1 vs 4.0 | 6-0 | +0.063935 (4.163935) | -0.063935 (3.936065) | ⚡ |
+| SM15 | Smoothing 0.7: Small gap (0.1), close | 4.6 vs 4.5 | 6-4 | +0.017902 (4.617902) | -0.017902 (4.482098) | ⚡ |
+| SM16 | Smoothing 0.5: High rating upset | 4.0 vs 5.0 | 6-0 | +0.321286 (4.321286) | -0.321286 (4.678714) | ⚡ |
+| SM17 | Smoothing 0.3: Low rating levels | 2.6 vs 2.5 | 6-0 | +0.038361 (2.638361) | -0.038361 (2.461639) | ⚡ |
+| SM18 | Smoothing 0.7: High rating levels | 5.1 vs 5.0 | 6-0 | +0.089510 (5.189510) | -0.089510 (4.910490) | ⚡ |
 
 Patterns the table makes visible at a glance:
 
-- **Expected wins are free** — every favorite-wins-at-or-beyond-threshold row (S4, S5, S7, S10, S13, S14, S22, SM7) is exactly zero, regardless of score.
-- **Upsets dominate the magnitude scale** — the largest single change (S12: +1.285 NTRP for a 2.0-gap shutout upset) is 8× the largest equal-players change (±0.160).
-- **The 2.5× ratio holds in every non-zero row**, confirming the K-factor derivation in [§3.3](#33-the-k-factors-016-and-04).
-- **Smoothing scales rows proportionally** — SM2 (factor 0.5) is exactly half of S19's unsmoothed +0.160.
+- **Expected wins are free** — every favorite-wins-at-or-beyond-threshold row (S4, S5, S7, S10, S13, S14, S22, SM7) is exactly zero for both players, regardless of score.
+- **Upsets dominate the magnitude scale** — the largest single change (S12: ±1.285 for a 2.0-gap shutout upset) is 8× the largest equal-players change (±0.160).
+- **Zero-sum holds in every row** — P1's gain and P2's loss mirror exactly before clamping.
+- **Smoothing scales rows proportionally** — SM2 (factor 0.5) is exactly half of S19's unsmoothed ±0.160.
 
-To regenerate after changing the algorithm or scenarios:
+The UTR runs (every delta 2.5× the NTRP value) are verified by the same test. To regenerate the full report, including the UTR columns and published levels:
 
 ```bash
 ./gradlew test --tests "*.RatingChangeReport"
-# full fixed-width report (incl. published levels) written to /tmp/rating_change_report.txt
+# full fixed-width report (both systems, incl. published levels) written to /tmp/rating_change_report.txt
 ```
+
+### Exhaustive matchup matrix
+
+For the truly complete picture, the `NtrpMatchupMatrixReport` test sweeps **every possible NTRP matchup at every legal set score**: all 13 published levels (1.0–7.0 in 0.5 steps) crossed with themselves and with all 7 single-set scores — 1,183 cells, each verified against the master formula computed from first principles (including boundary clamping at the 1.0/7.0 edges):
+
+```bash
+./gradlew test --tests "*.NtrpMatchupMatrixReport"
+# one 13×13 delta matrix per set score written to /tmp/ntrp_matchup_matrix.txt
+```
+
+What the matrices show at a glance:
+
+- **The diagonal** (equal players) carries the pure performance-based change: K × dominance (e.g. +0.160 for 6-0, +0.012 for 7-6).
+- **Above the diagonal** (favorite wins) is *entirely zero*: published levels are 0.5 apart, which is exactly the competitive threshold, so every favorite win between distinct levels is fully expected. Non-zero competitive-path changes only occur for gaps below 0.5 — i.e. between unpublished intermediate ratings.
+- **Below the diagonal** (upsets) deltas grow linearly with the gap, up to +3.855 for a 1.0-rated player blanking a 7.0 (before any smoothing).
+- **The corners** are the only cells where zero-sum breaks (marked `*`): at 1.0 vs 1.0 the loser is clamped at the floor; at 7.0 vs 7.0 the winner is clamped at the ceiling.
 
 ---
 
@@ -534,7 +549,7 @@ Key methods in the calculator:
 2. `calculateRatingAdjustments(...)` — the master formula and two-path scale selection.
 3. `applyRatingChange(...)` → `applyNTRPChange` / `applyUTRChange` — smoothing and boundary clamping.
 
-Test coverage: `PerformanceBasedRankingCalculatorImplTest` (24 NTRP + 24 UTR scenarios), `MatchScoreTest` (per-set dominance averaging), `RatingChangeReport` (generates the [§6 rating-change table](#the-complete-picture--every-test-scenario) and verifies the 2.5× K ratio), `RankingCalculationPayloadTest` (exact values), `RankingCalculationApiErrorTest` (boundaries). The calculator is a pure function returning result + audit trail, so all of this is tested without mocks.
+Test coverage: `PerformanceBasedRankingCalculatorImplTest` (24 NTRP + 24 UTR scenarios), `MatchScoreTest` (per-set dominance averaging), `RatingChangeReport` (generates the [§6 rating-change table](#the-complete-picture--every-test-scenario) and verifies the 2.5× K ratio), `NtrpMatchupMatrixReport` (all 1,183 level×score combinations verified against the formula, see [§6](#exhaustive-matchup-matrix)), `RankingCalculationPayloadTest` (exact values), `RankingCalculationApiErrorTest` (boundaries). The calculator is a pure function returning result + audit trail, so all of this is tested without mocks.
 
 ---
 

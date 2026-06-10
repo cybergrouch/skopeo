@@ -24,6 +24,23 @@ data class RatingScenario(
 
 object TestScenarios {
     /**
+     * All NTRP published levels in 0.5 steps: 1.0, 1.5, ..., 7.0 (13 levels).
+     * Crossing this list with itself yields every possible NTRP matchup.
+     */
+    val allNtrpLevels: List<String> =
+        (0..12).map { step ->
+            val tenths = 10 + step * 5
+            "${tenths / 10}.${tenths % 10}"
+        }
+
+    /**
+     * All legal single-set scores from the winner's perspective
+     * (7-6 implies a tiebreak, attached automatically by createSinglesRequest).
+     */
+    val allSingleSetScores: List<Pair<Int, Int>> =
+        listOf(6 to 0, 6 to 1, 6 to 2, 6 to 3, 6 to 4, 7 to 5, 7 to 6)
+
+    /**
      * All test scenarios covering various rating levels and match outcomes.
      * Scenarios are sorted by rating level (low to high).
      *

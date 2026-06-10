@@ -9,6 +9,7 @@ import org.skopeo.model.RatingSystem
 import org.skopeo.model.SetScore
 import org.skopeo.model.Team
 import org.skopeo.model.TeamType
+import org.skopeo.model.TiebreakScore
 
 /**
  * Helper function to create a singles match request with team-based structure.
@@ -79,9 +80,34 @@ fun createSinglesRequest(
                         SetScore(
                             games = mapOf("T1" to p1Games, "T2" to p2Games),
                             winnerTeamId = winner,
+                            tiebreak = tiebreakFor(p1Games = p1Games, p2Games = p2Games, winner = winner),
                         ),
                     ),
             ),
         options = options,
+    )
+}
+
+/**
+ * 7-6 sets are only legal with a tiebreak; build an informational one (7-5 points)
+ * won by the set winner. Returns null for all other scores.
+ */
+private fun tiebreakFor(
+    p1Games: Int,
+    p2Games: Int,
+    winner: String,
+): TiebreakScore? {
+    if (setOf(p1Games, p2Games) != setOf(7, 6)) {
+        return null
+    }
+    val winnerPoints = 7
+    val loserPoints = 5
+    return TiebreakScore(
+        points =
+            mapOf(
+                "T1" to (if (p1Games > p2Games) winnerPoints else loserPoints),
+                "T2" to (if (p2Games > p1Games) winnerPoints else loserPoints),
+            ),
+        winnerTeamId = winner,
     )
 }
