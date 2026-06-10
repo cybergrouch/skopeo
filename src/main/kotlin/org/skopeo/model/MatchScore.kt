@@ -13,17 +13,17 @@ import java.math.BigDecimal
  *
  * @property sets List of set scores
  * @property winnerTeamId Team ID of the match winner
- * @property matchFormat Format of the match (best of 3 or 5)
  * @property loserTeamId Team ID of the match loser; derived from the first set's
  *   winner/loser when omitted (the team that is not the match winner), so payloads
  *   may state it explicitly or leave it out
+ * @property matchFormat Format of the match (best of 3 or 5)
  */
 @Serializable
 data class MatchScore(
     val sets: List<SetScore>,
     val winnerTeamId: String = sets.maxOf { it.winnerTeamId },
+    val loserTeamId: String = sets.maxOf { it.loserTeamId },
     val matchFormat: MatchFormat = MatchFormat.BEST_OF_THREE,
-    val loserTeamId: String = sets.first().let { if (it.winnerTeamId == winnerTeamId) it.loserTeamId else it.winnerTeamId },
 ) {
     init {
         require(sets.isNotEmpty()) { "Match must have at least 1 set" }
