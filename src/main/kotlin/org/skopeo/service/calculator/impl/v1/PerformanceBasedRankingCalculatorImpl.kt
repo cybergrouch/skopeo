@@ -10,7 +10,6 @@ import org.skopeo.model.RatingSystem
 import org.skopeo.model.calculateDominanceFactor
 import org.skopeo.model.loser
 import org.skopeo.model.matchScore
-import org.skopeo.model.totalGamesWon
 import org.skopeo.service.calculator.AuditEntry
 import org.skopeo.service.calculator.AuditTrail
 import org.skopeo.service.calculator.RankingCalculationResult
@@ -172,9 +171,8 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
                     context =
                         mapOf(
                             "winnerId" to winner,
-                            "winnerScore" to totalGamesWon(teamId = winner),
                             "loserId" to loser,
-                            "loserScore" to totalGamesWon(teamId = loser),
+                            "score" to matchScore,
                             "winnerDominanceFactor" to calculateDominanceFactor(teamId = winner),
                             "loserDominanceFactor" to calculateDominanceFactor(teamId = loser),
                         ),
@@ -304,21 +302,6 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
         player1TeamId: String,
         player2TeamId: String,
     ): Pair<BigDecimal, BigDecimal> {
-        fun PlayerProfile.getRatingDifference(
-            opponent: PlayerProfile,
-            ratingScale: BigDecimal,
-        ): BigDecimal = (this.rating.value.bd - opponent.rating.value.bd).min(ratingScale)
-
-        fun calculateDominanceFactor(
-            player: PlayerProfile,
-            opponent: PlayerProfile,
-            ratingScale: BigDecimal,
-        ): BigDecimal =
-            player.getRatingDifference(
-                opponent = opponent,
-                ratingScale = ratingScale,
-            ) / ratingScale
-
         /**
          * Calculate rating adjustment using simplified formula with normalized gaps.
          *
@@ -351,12 +334,14 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
             ratingScale: BigDecimal,
             teamId: String,
         ): BigDecimal {
-            // Dominance factor measures match closeness: (games_won - games_lost) / total_games
+            // Dominance factor measures match closeness as the average of per-set efficiency:
+            // each set contributes (games_won - games_lost) / (games_won + games_lost),
+            // and the match dominance is the mean across sets.
             // Range: -1.0 (shutout loss) to +1.0 (shutout win)
             // Examples:
             //   - 6-0: (6-0)/6 = 1.0 (complete dominance)
             //   - 6-4: (6-4)/10 = 0.2 (competitive, slight edge)
-            //   - 7-5: (7-5)/12 = 0.167 (very competitive)
+            //   - 6-0, 3-6, 6-2: (1.0 - 0.333 + 0.5)/3 = 0.389 (sets averaged)
             val dominance = matchScore.calculateDominanceFactor(teamId = teamId)
             val dominanceMagnitude = dominance.abs()
             val ratingAdvantage = this.rating.value.bd - opponent.rating.value.bd
@@ -392,43 +377,52 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
             // This creates asymmetry: surprising results move ratings more than predictable ones.
             val upsetMultiplier = "2.0".bd
 
-            // Calculate scale based on upset vs competitive/expected scenario
-            //
-            // Two cases determine how much ratings should change:
-            //
-            // Case 1: UPSET (underdog wins OR favorite loses)
-            //   Formula: scale = (normalizedGap / threshold) × upsetMultiplier
-            //   Example: 0.5 NTRP underdog wins (8.3% gap)
-            //     scale = (0.083 / 0.083) × 2.0 = 2.0
-            //   Larger gaps = bigger surprises = larger changes
-            //
-            // Case 2: EXPECTED/COMPETITIVE (favorite wins OR even match)
-            //   Formula: scale = max(0, (threshold - normalizedGap) / threshold)
-            //   Example 1: Equal players (0% gap)
-            //     scale = (0.083 - 0.0) / 0.083 = 1.0 (full change)
-            //   Example 2: 0.5 NTRP favorite wins (8.3% gap)
-            //     scale = (0.083 - 0.083) / 0.083 = 0.0 (no change, as expected)
-            //   Example 3: 1.0 NTRP favorite wins (16.7% gap)
-            //     scale = max(0, negative) = 0.0 (no change, highly expected)
-            //   Larger gaps = more expected = smaller changes (approaching zero)
+            val isUpset = (isWinner && ratingAdvantage < ZERO) || (!isWinner && ratingAdvantage > ZERO)
             val scale =
-                if ((isWinner && ratingAdvantage < ZERO) || (!isWinner && ratingAdvantage > ZERO)) {
-                    // Upset: underdog wins OR favorite loses
-                    normalizedGap.divideBy(thresholdPct) * upsetMultiplier
-                } else {
-                    // Competitive or expected outcome
-                    (thresholdPct - normalizedGap).divideBy(thresholdPct).max(ZERO)
-                }
+                calculateScale(
+                    isUpset = isUpset,
+                    normalizedGap = normalizedGap,
+                    thresholdPct = thresholdPct,
+                    upsetMultiplier = upsetMultiplier,
+                )
 
             val sign = if (isWinner) ONE else -ONE
+            val signLabel = if (isWinner) "+1" else "-1"
 
             // Final formula: change = K × dominance × scale × sign
             // Where:
             //   K = K-factor (0.16 for NTRP, 0.4 for UTR)
-            //   dominance = games won / games played (0.0 to 1.0)
+            //   dominance = average per-set (gamesWon − gamesLost)/(gamesWon + gamesLost), magnitude 0.0 to 1.0
             //   scale = upset_factor OR competitive_factor (calculated above)
             //   sign = +1 for winner, -1 for loser (ensures zero-sum before clamping)
-            return ratingScale * dominanceMagnitude * scale * sign
+            val change = ratingScale * dominanceMagnitude * scale * sign
+
+            // Log every factor that contributed to the change, so the audit trail
+            // can reconstruct the full calculation: change = K × dominance × scale × sign
+            audit.add(
+                AuditEntry(
+                    message =
+                        "Adjustment factors - ${this.name}: change = K × dominance × scale × sign = " +
+                            "${ratingScale.toStringPrecise()} × ${dominanceMagnitude.toStringPrecise()} × " +
+                            "${scale.toStringPrecise()} × $signLabel = ${change.toStringPrecise()}",
+                    context =
+                        mapOf(
+                            "playerId" to this.playerId,
+                            "kFactor" to ratingScale.toStringPrecise(),
+                            "dominance" to dominance.toStringPrecise(),
+                            "ratingGap" to absAdvantage.toStringPrecise(),
+                            "normalizedGap" to normalizedGap.toStringPrecise(),
+                            "competitiveThresholdPct" to thresholdPct.toStringPrecise(),
+                            "isUpset" to isUpset.toString(),
+                            "upsetMultiplier" to upsetMultiplier.toStringPrecise(),
+                            "scale" to scale.toStringPrecise(),
+                            "sign" to signLabel,
+                            "change" to change.toStringPrecise(),
+                        ),
+                ),
+            )
+
+            return change
         }
 
         // K-factor scales proportionally by rating range to maintain consistent volatility
@@ -471,6 +465,39 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
 
         return player1RankingAdjustment to player2RankingAdjustment
     }
+
+    /**
+     * Calculate the scale factor based on upset vs competitive/expected scenario.
+     *
+     * Two cases determine how much ratings should change:
+     *
+     * Case 1: UPSET (underdog wins OR favorite loses)
+     *   Formula: scale = (normalizedGap / threshold) × upsetMultiplier
+     *   Example: 0.5 NTRP underdog wins (8.3% gap)
+     *     scale = (0.083 / 0.083) × 2.0 = 2.0
+     *   Larger gaps = bigger surprises = larger changes
+     *
+     * Case 2: EXPECTED/COMPETITIVE (favorite wins OR even match)
+     *   Formula: scale = max(0, (threshold - normalizedGap) / threshold)
+     *   Example 1: Equal players (0% gap)
+     *     scale = (0.083 - 0.0) / 0.083 = 1.0 (full change)
+     *   Example 2: 0.5 NTRP favorite wins (8.3% gap)
+     *     scale = (0.083 - 0.083) / 0.083 = 0.0 (no change, as expected)
+     *   Example 3: 1.0 NTRP favorite wins (16.7% gap)
+     *     scale = max(0, negative) = 0.0 (no change, highly expected)
+     *   Larger gaps = more expected = smaller changes (approaching zero)
+     */
+    private fun calculateScale(
+        isUpset: Boolean,
+        normalizedGap: BigDecimal,
+        thresholdPct: BigDecimal,
+        upsetMultiplier: BigDecimal,
+    ): BigDecimal =
+        if (isUpset) {
+            normalizedGap.divideBy(divisor = thresholdPct) * upsetMultiplier
+        } else {
+            (thresholdPct - normalizedGap).divideBy(divisor = thresholdPct).max(ZERO)
+        }
 
     /**
      * Apply rating change with system-specific constraints.

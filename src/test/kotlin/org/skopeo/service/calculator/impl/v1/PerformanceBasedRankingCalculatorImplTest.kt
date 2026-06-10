@@ -25,6 +25,7 @@ import org.skopeo.model.SetScore
 import org.skopeo.model.Team
 import org.skopeo.model.TeamType
 import java.util.stream.Stream
+import kotlin.math.abs
 
 /**
  * Comprehensive test suite for PerformanceBasedRankingCalculatorImpl.
@@ -434,6 +435,107 @@ class PerformanceBasedRankingCalculatorImplTest {
                     (value is String || value is Number) shouldBe true
                 }
             }
+        }
+
+        @Test
+        @DisplayName("Contains adjustment factors for both players")
+        fun testAuditTrailContainsAdjustmentFactors() {
+            val request = createAuditTestRequest()
+            val result = calculator.calculate(request)
+
+            val factorEntries = result.audit.filter { it.message.contains("Adjustment factors") }
+
+            factorEntries.size shouldBe 2
+
+            factorEntries.forEach { entry ->
+                entry.context shouldContainKey "playerId"
+                entry.context shouldContainKey "kFactor"
+                entry.context shouldContainKey "dominance"
+                entry.context shouldContainKey "ratingGap"
+                entry.context shouldContainKey "normalizedGap"
+                entry.context shouldContainKey "competitiveThresholdPct"
+                entry.context shouldContainKey "isUpset"
+                entry.context shouldContainKey "upsetMultiplier"
+                entry.context shouldContainKey "scale"
+                entry.context shouldContainKey "sign"
+                entry.context shouldContainKey "change"
+            }
+        }
+
+        @Test
+        @DisplayName("Adjustment factors reproduce the master formula: change = K × |dominance| × scale × sign")
+        fun testAdjustmentFactorsReproduceChange() {
+            val request = createAuditTestRequest()
+            val result = calculator.calculate(request)
+
+            val factorEntries = result.audit.filter { it.message.contains("Adjustment factors") }
+
+            factorEntries.forEach { entry ->
+                val k = (entry.context["kFactor"] as String).toDouble()
+                val dominance = (entry.context["dominance"] as String).toDouble()
+                val scale = (entry.context["scale"] as String).toDouble()
+                val sign = if (entry.context["sign"] == "+1") 1.0 else -1.0
+                val change = (entry.context["change"] as String).toDouble()
+
+                (k * abs(dominance) * scale * sign) shouldBe (change plusOrMinus 0.000001)
+            }
+        }
+
+        @Test
+        @DisplayName("Adjustment factors for expected win: no upset, zero scale beyond threshold")
+        fun testAdjustmentFactorsForExpectedWin() {
+            // 4.5 vs 4.0 NTRP favorite wins 6-4, 6-3: gap normalizes just past the threshold → scale 0
+            val request = createAuditTestRequest()
+            val result = calculator.calculate(request)
+
+            val winnerEntry =
+                result.audit.first { it.message.contains("Adjustment factors") && it.context["sign"] == "+1" }
+
+            winnerEntry.context["playerId"] shouldBe "P123"
+            winnerEntry.context["kFactor"] shouldBe "0.160000"
+            winnerEntry.context["dominance"] shouldBe "0.266667"
+            winnerEntry.context["ratingGap"] shouldBe "0.500000"
+            winnerEntry.context["normalizedGap"] shouldBe "0.083333"
+            winnerEntry.context["competitiveThresholdPct"] shouldBe "0.083000"
+            winnerEntry.context["isUpset"] shouldBe "false"
+            winnerEntry.context["scale"] shouldBe "0.000000"
+            winnerEntry.context["change"] shouldBe "0.000000"
+        }
+
+        @Test
+        @DisplayName("Adjustment factors for an upset: upset flag and multiplier applied")
+        fun testAdjustmentFactorsForUpset() {
+            // 2.5 underdog beats 3.5 favorite 6-0 (1.0 gap)
+            val request =
+                createSinglesRequest(
+                    p1Rating = "2.5",
+                    p2Rating = "3.5",
+                    system = RatingSystem.NTRP,
+                    p1Games = 6,
+                    p2Games = 0,
+                    winner = "T1",
+                )
+            val result = calculator.calculate(request)
+
+            val factorEntries = result.audit.filter { it.message.contains("Adjustment factors") }
+
+            factorEntries.size shouldBe 2
+
+            factorEntries.forEach { entry ->
+                entry.context["isUpset"] shouldBe "true"
+                entry.context["upsetMultiplier"] shouldBe "2.000000"
+                entry.context["normalizedGap"] shouldBe "0.166667"
+                entry.context["scale"] shouldBe "4.016072"
+            }
+
+            val winnerEntry = factorEntries.first { it.context["sign"] == "+1" }
+            winnerEntry.context["playerId"] shouldBe "P1"
+            winnerEntry.context["dominance"] shouldBe "1.000000"
+            winnerEntry.context["change"] shouldBe "0.642572"
+
+            val loserEntry = factorEntries.first { it.context["sign"] == "-1" }
+            loserEntry.context["dominance"] shouldBe "-1.000000"
+            loserEntry.context["change"] shouldBe "-0.642572"
         }
     }
 

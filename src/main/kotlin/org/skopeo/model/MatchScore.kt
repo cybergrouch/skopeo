@@ -2,6 +2,7 @@ package org.skopeo.model
 
 import kotlinx.serialization.Serializable
 import org.skopeo.service.calculator.impl.bd
+import org.skopeo.service.calculator.impl.divideBy
 import java.math.BigDecimal
 
 /**
@@ -29,16 +30,23 @@ data class MatchScore(
     }
 }
 
-internal fun MatchScore.totalGamesWon(teamId: String): Int = sets.sumOf { it.games[teamId] ?: 0 }
-
 internal val MatchScore.loser: String get() = sets.first().games.keys.first { it != this.winner }
 
+/**
+ * Match dominance is the average of per-set dominance, where each set's dominance
+ * is the efficiency formula (gamesWon − gamesLost) / (gamesWon + gamesLost).
+ *
+ * Games are deliberately NOT pooled across sets: a game's weight depends on whether
+ * its set was won or lost, so pooling would let games from different sets offset
+ * each other incorrectly. Averaging keeps the single-set base case identical
+ * (one set's dominance is just that set's efficiency).
+ */
 internal fun MatchScore.calculateDominanceFactor(teamId: String): BigDecimal =
-    sets.flatMap { it.games.keys }.distinct().take(2).let { teams ->
-        val gamesWonByTeam = this.totalGamesWon(teamId)
-        val gamesWonByOpponent = teams.filter { it != teamId }.firstNotNullOfOrNull { this.totalGamesWon(it) } ?: 0
-        return (gamesWonByTeam - gamesWonByOpponent).bd / (gamesWonByTeam + gamesWonByOpponent).bd
-    }
+    sets.sumOf { set ->
+        val gamesWon = set.games[teamId] ?: 0
+        val gamesLost = set.games.filterKeys { it != teamId }.values.sum()
+        (gamesWon - gamesLost).bd.divideBy(divisor = (gamesWon + gamesLost).bd)
+    }.divideBy(divisor = sets.size.bd)
 
 internal val MatchScore.matchScore: String get() =
     sets.map {

@@ -896,10 +896,12 @@ Skopeo uses a **performance-based rating system** with normalized gaps to ensure
 - Matches beyond this threshold (expected outcomes) produce zero change
 
 **Dominance Factor**: Based on game margin, not ratio
-- Formula: (games won - games lost) / (games won + games lost)
+- Per-set formula: (games won - games lost) / (games won + games lost)
+- Match dominance = average of the per-set dominances (a lost set counts as a negative term)
 - 6-0 = 1.0 dominance (maximum)
 - 6-4 = 0.2 dominance
 - 7-6 = 0.077 dominance (very close)
+- 6-0, 3-6, 6-2 = (1.0 - 0.333 + 0.5) / 3 = 0.389 dominance
 
 **K-Factor Scaling**:
 - NTRP: K = 0.16 (typical changes ±0.032 to ±0.160)

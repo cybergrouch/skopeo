@@ -165,24 +165,35 @@ AuditEntry(
 ```kotlin
 AuditEntry(
     level = DEBUG,
-    message = "Match result - Winner: {winnerId}, Score: {score}, Sets: {sets}",
+    message = "Match result - Winner: {winnerId}, Score: {score}",
     context = {
         "winnerId": String,
-        "winnerScore": Double,
-        "setsWon": Int,
-        "dominanceFactor": Double
+        "loserId": String,
+        "score": String,                    // per-set score string, e.g. "6-4 6-3"
+        "winnerDominanceFactor": BigDecimal,
+        "loserDominanceFactor": BigDecimal
     }
 )
 ```
 
-### 3. Expected Scores (DEBUG)
+### 3. Adjustment Factors (one entry per player)
+Logs every term of the master formula `change = K × dominance × scale × sign`, so the full calculation can be reconstructed from the audit trail alone:
+
 ```kotlin
 AuditEntry(
-    level = DEBUG,
-    message = "Expected scores - Player1: {expected1}, Player2: {expected2}",
+    message = "Adjustment factors - {player}: change = K × dominance × scale × sign = {K} × {dominance} × {scale} × {sign} = {change}",
     context = {
-        "expectedPlayer1": Double,
-        "expectedPlayer2": Double
+        "playerId": String,
+        "kFactor": String,                  // 0.160000 (NTRP) or 0.400000 (UTR)
+        "dominance": String,                // signed per-set average; negative for the loser
+        "ratingGap": String,                // |rating1 - rating2|
+        "normalizedGap": String,            // ratingGap / ratingRange
+        "competitiveThresholdPct": String,  // 0.083000
+        "isUpset": String,                  // "true" / "false"
+        "upsetMultiplier": String,          // 2.000000
+        "scale": String,                    // upset or competitive factor
+        "sign": String,                     // "+1" / "-1"
+        "change": String                    // the raw change before smoothing/clamping
     }
 )
 ```

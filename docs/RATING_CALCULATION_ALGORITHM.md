@@ -65,25 +65,27 @@ A larger K means faster convergence toward true skill but noisier ratings; a sma
 
 ### 2.2 `dominance` — how convincingly
 
-The **[dominance factor](#dominance-factor)** measures match closeness from total games won and lost:
+The **[dominance factor](#dominance-factor)** measures match closeness. Per set, it is the standard **[efficiency formula](#efficiency-formula)** — *net successes divided by total attempts* — applied to games:
 
 ```
-dominance = (gamesWon − gamesLost) / (gamesWon + gamesLost)
+setDominance = (gamesWon − gamesLost) / (gamesWon + gamesLost) = netGamesWon / totalGames
 ```
 
-This is the standard **[efficiency formula](#efficiency-formula)** — *net successes divided by total attempts* — applied to games:
+Read it as: **how many games of net advantage the player earned per game played in that set**. Winning exactly half the games yields zero efficiency (a perfectly even set); winning every game yields 1.0 (maximum efficiency, a shutout).
+
+For the match, dominance is the **average of the per-set dominances**:
 
 ```
-dominance = netGamesWon / totalGames
+dominance = (setDominance₁ + setDominance₂ + … + setDominanceₙ) / n
 ```
 
-Read it as: **how many games of net advantage the player earned per game played**. Winning exactly half the games yields zero efficiency (a perfectly even match); winning every game yields 1.0 (maximum efficiency, a shutout).
+Why average sets rather than pool game totals across the match? Because **a game's weight depends on whether its set was won or lost** — sets are the structural unit of tennis, and games from different sets are not interchangeable. Pooling totals would let games from a lost set silently offset games from a won set. Averaging keeps each set's efficiency intact, and the base case is exact: a one-set match's dominance is simply that set's efficiency.
 
 Properties that fall out of this definition for free:
 
 - **Naturally bounded** to [−1, +1] — no artificial cap needed, shutouts cause no division-by-zero.
-- **Symmetric**: the loser's dominance is exactly the negative of the winner's. (The formula uses the magnitude; `sign` carries direction.)
-- **Multi-set aware**: games are totalled across all sets, so a 6-0, 6-0 sweep (12/12 games) scores 1.0 while a 7-6, 6-7, 7-6 marathon (20/39 games) scores 0.026.
+- **Symmetric**: the loser's dominance is exactly the negative of the winner's, set by set and therefore for the match. (The formula uses the magnitude; `sign` carries direction.)
+- **Set-structure aware**: a 6-0, 6-0 sweep averages (1.0 + 1.0)/2 = 1.0, while a 7-6, 6-7, 7-6 marathon averages (0.077 − 0.077 + 0.077)/3 = 0.026 — dropping a set drags the average down.
 
 Pre-computed values for every common tennis score are in [§4](#4-dominance-factor-tables).
 
@@ -230,9 +232,11 @@ When an underdog wins, both ratings are demonstrably wrong, and the evidence is 
 
 ## 4. Dominance Factor Tables
 
-All values from `dominance = (W − L) / (W + L)`, games totalled across sets, winner's perspective.
+All values from the winner's perspective: per set `setDominance = (W − L) / (W + L)`, and the match dominance is the average across sets.
 
 ### Single set
+
+A one-set match's dominance is just that set's efficiency:
 
 | Score | (W−L)/(W+L) | Dominance |
 |---|---|---|
@@ -246,33 +250,33 @@ All values from `dominance = (W − L) / (W + L)`, games totalled across sets, w
 
 ### Straight-sets matches (best of 3)
 
-Dominance for every combination of the seven standard set scores (symmetric — set order doesn't matter):
+Match dominance = average of the two set dominances, for every combination of the seven standard set scores (symmetric — set order doesn't matter):
 
 | | 6-0 | 6-1 | 6-2 | 6-3 | 6-4 | 7-5 | 7-6 |
 |---|---|---|---|---|---|---|---|
-| **6-0** | 1.000 | 0.846 | 0.714 | 0.600 | 0.500 | 0.444 | 0.368 |
-| **6-1** | 0.846 | 0.714 | 0.600 | 0.500 | 0.412 | 0.368 | 0.300 |
-| **6-2** | 0.714 | 0.600 | 0.500 | 0.412 | 0.333 | 0.300 | 0.238 |
-| **6-3** | 0.600 | 0.500 | 0.412 | 0.333 | 0.263 | 0.238 | 0.182 |
-| **6-4** | 0.500 | 0.412 | 0.333 | 0.263 | 0.200 | 0.182 | 0.130 |
-| **7-5** | 0.444 | 0.368 | 0.300 | 0.238 | 0.182 | 0.167 | 0.120 |
-| **7-6** | 0.368 | 0.300 | 0.238 | 0.182 | 0.130 | 0.120 | 0.077 |
+| **6-0** | 1.000 | 0.857 | 0.750 | 0.667 | 0.600 | 0.583 | 0.538 |
+| **6-1** | 0.857 | 0.714 | 0.607 | 0.524 | 0.457 | 0.440 | 0.396 |
+| **6-2** | 0.750 | 0.607 | 0.500 | 0.417 | 0.350 | 0.333 | 0.288 |
+| **6-3** | 0.667 | 0.524 | 0.417 | 0.333 | 0.267 | 0.250 | 0.205 |
+| **6-4** | 0.600 | 0.457 | 0.350 | 0.267 | 0.200 | 0.183 | 0.138 |
+| **7-5** | 0.583 | 0.440 | 0.333 | 0.250 | 0.183 | 0.167 | 0.122 |
+| **7-6** | 0.538 | 0.396 | 0.288 | 0.205 | 0.138 | 0.122 | 0.077 |
 
-Example reading: a 6-3, 7-5 win → games 13–8 → (13−8)/21 = **0.238**.
+Example reading: a 6-3, 7-5 win → (0.333 + 0.167) / 2 = **0.250**. Identical sets average to the single-set value (the diagonal matches the single-set table).
 
 ### Three-set matches (representative scenarios)
 
-Dropping a set costs games, so three-setters always score below the equivalent straight-sets win:
+A lost set contributes its dominance as a negative term, dragging the average down — three-setters always score below the equivalent straight-sets win:
 
-| Score | Games | Dominance |
+| Score | Per-set dominance | Average |
 |---|---|---|
-| 6-0, 0-6, 6-0 | 12–6 | 0.333 |
-| 6-0, 3-6, 6-2 | 15–8 | 0.304 |
-| 6-2, 3-6, 6-3 | 15–11 | 0.154 |
-| 6-4, 4-6, 6-4 | 16–14 | 0.067 |
-| 7-6, 6-7, 7-6 | 20–19 | 0.026 |
+| 6-0, 0-6, 6-0 | +1.000, −1.000, +1.000 | 0.333 |
+| 6-0, 3-6, 6-2 | +1.000, −0.333, +0.500 | 0.389 |
+| 6-2, 3-6, 6-3 | +0.500, −0.333, +0.333 | 0.167 |
+| 6-4, 4-6, 6-4 | +0.200, −0.200, +0.200 | 0.067 |
+| 7-6, 6-7, 7-6 | +0.077, −0.077, +0.077 | 0.026 |
 
-Note that 6-0, 0-6, 6-0 (dominance 0.333) is treated identically to a single 6-3 set — the algorithm sees only game totals, not set structure ([known limitation](#7-edge-cases-and-known-limitations)).
+Note that every set carries equal weight in the average — a deciding third set counts the same as the first ([known limitation](#7-edge-cases-and-known-limitations)).
 
 ### Quick reference: change between equal players
 
@@ -384,7 +388,7 @@ P1 (6.0 NTRP) vs P2 (3.0 NTRP); P1 wins 6-0, 6-0.
 
 ```
 normalizedGap = 3.0 / 6.0                       = 0.5
-dominance     = (12−0) / (12+0)                 = 1.0    (maximum)
+dominance     = (1.0 + 1.0) / 2                 = 1.0    (two shutout sets averaged — maximum)
 scale (A)     = max(0, (0.083 − 0.5) / 0.083)   = 0.0
 change        = 0.16 × 1.0 × 0.0 × (+1)         = 0.0
 
@@ -508,7 +512,7 @@ To regenerate after changing the algorithm or scenarios:
 2. **No time decay** — a six-month-old match weighs the same as yesterday's.
 3. **No score validation in the calculator** — it trusts the model layer (`MatchScore`/`SetScore` validation) to reject illegal scores like 8-0.
 4. **Tiebreak points ignored** — only game counts matter.
-5. **Set structure ignored** — 6-0, 0-6, 6-0 is identical to a 6-3 set (same game totals); no weighting for deciding sets.
+5. **Sets weigh equally** — match dominance averages per-set dominance with no extra weight for deciding sets; a clutch third-set win counts the same as the first set.
 6. **Fixed upset multiplier** — 2.0 regardless of gap size or score; the gap's magnitude enters only linearly through scale.
 
 Possible future refinements (historical weighting, time decay, set-depth weighting, surface adjustments, graduated upset multiplier) are intentionally out of scope for v1.
@@ -530,7 +534,7 @@ Key methods in the calculator:
 2. `calculateRatingAdjustments(...)` — the master formula and two-path scale selection.
 3. `applyRatingChange(...)` → `applyNTRPChange` / `applyUTRChange` — smoothing and boundary clamping.
 
-Test coverage: `PerformanceBasedRankingCalculatorImplTest` (24 NTRP + 24 UTR scenarios), `RatingChangeReport` (generates the [§6 rating-change table](#the-complete-picture--every-test-scenario) and verifies the 2.5× K ratio), `RankingCalculationPayloadTest` (exact values), `RankingCalculationApiErrorTest` (boundaries). The calculator is a pure function returning result + audit trail, so all of this is tested without mocks.
+Test coverage: `PerformanceBasedRankingCalculatorImplTest` (24 NTRP + 24 UTR scenarios), `MatchScoreTest` (per-set dominance averaging), `RatingChangeReport` (generates the [§6 rating-change table](#the-complete-picture--every-test-scenario) and verifies the 2.5× K ratio), `RankingCalculationPayloadTest` (exact values), `RankingCalculationApiErrorTest` (boundaries). The calculator is a pure function returning result + audit trail, so all of this is tested without mocks.
 
 ---
 
@@ -555,7 +559,7 @@ The rating gap expressed as a fraction of the rating range: `normalizedGap = gap
 The normalized gap (8.3% of range ≈ 1/12, i.e. 0.5 NTRP or 1.25 UTR points) beyond which a favorite's win is treated as fully expected and produces zero change. Anchored to one NTRP **half-level** — the smallest published skill increment. It is the counterpart concept to the rating gap: the gap measures how far apart two players are; the threshold defines how far apart they can be while their match still counts as competitive. See [§3.2](#32-the-competitive-threshold-83--05-ntrp--125-utr).
 
 #### Dominance factor
-Match closeness measured from game totals: `(gamesWon − gamesLost) / (gamesWon + gamesLost)` — the [efficiency formula](#efficiency-formula) applied to games. Ranges 0 (perfectly even) to 1.0 (shutout) for the winner. See [§2.2](#22-dominance--how-convincingly) and the [tables in §4](#4-dominance-factor-tables).
+Match closeness, computed per set as `(gamesWon − gamesLost) / (gamesWon + gamesLost)` — the [efficiency formula](#efficiency-formula) applied to games — and averaged across sets for the match. Ranges 0 (perfectly even) to 1.0 (shutout) for the winner; a lost set enters the average as a negative term. See [§2.2](#22-dominance--how-convincingly) and the [tables in §4](#4-dominance-factor-tables).
 
 #### Efficiency formula
 The general statistic *net successes divided by total attempts*: `(successes − failures) / attempts`. The dominance factor is exactly this formula with games as the unit — net games won per game played.
@@ -596,6 +600,6 @@ The discrete, public-facing rating bucket (NTRP in 0.5 steps, UTR in 1.0 steps) 
 
 ---
 
-**Document Version**: 3.0 (top-down restructure, renamed from ALGORITHM_BEHAVIOR.md)
+**Document Version**: 3.1 (per-set dominance averaging; previously 3.0: top-down restructure, renamed from ALGORITHM_BEHAVIOR.md)
 **Last Updated**: 2026-06-10
-**Algorithm Version**: Performance-Based Elo v2.0 (Normalized Gap Implementation)
+**Algorithm Version**: Performance-Based Elo v2.1 (Normalized Gap + Per-Set Dominance Averaging)
