@@ -78,7 +78,7 @@ fun createSinglesRequest(
                     listOf(
                         SetScore(
                             games = mapOf("T1" to p1Games, "T2" to p2Games),
-                            winner = winner,
+                            winnerTeamId = winner,
                         ),
                     ),
             ),

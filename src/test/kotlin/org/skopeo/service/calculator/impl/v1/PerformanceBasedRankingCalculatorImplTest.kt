@@ -323,7 +323,7 @@ class PerformanceBasedRankingCalculatorImplTest {
             val matchResultEntry = result.audit.find { it.message.contains("Match result") }
 
             matchResultEntry shouldNotBe null
-            matchResultEntry!!.context shouldContainKey "winnerId"
+            matchResultEntry!!.context shouldContainKey "winnerTeamId"
             matchResultEntry.context shouldContainKey "winnerDominanceFactor"
             matchResultEntry.context shouldContainKey "loserDominanceFactor"
         }
@@ -954,11 +954,11 @@ class PerformanceBasedRankingCalculatorImplTest {
             listOf(
                 SetScore(
                     games = mapOf("T1" to 6, "T2" to 4),
-                    winner = "T1",
+                    winnerTeamId = "T1",
                 ),
                 SetScore(
                     games = mapOf("T1" to 6, "T2" to 3),
-                    winner = "T1",
+                    winnerTeamId = "T1",
                 ),
             )
 
@@ -1003,7 +1003,7 @@ class PerformanceBasedRankingCalculatorImplTest {
             listOf(
                 SetScore(
                     games = mapOf("T1" to 6, "T2" to 4),
-                    winner = "T1",
+                    winnerTeamId = "T1",
                 ),
             )
 

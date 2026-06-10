@@ -2,6 +2,7 @@ package org.skopeo.routes
 
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
+import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.post
@@ -52,6 +53,9 @@ fun Application.configureRankingRoutes() {
                     HttpStatusCode.BadRequest,
                     mapOf("error" to "Invalid JSON", "message" to (e.message ?: "Invalid request format")),
                 )
+            } catch (e: BadRequestException) {
+                logger.warn(e) { "Invalid request body in ranking calculation request" }
+                call.respond(HttpStatusCode.BadRequest, badRequestErrorBody(e = e))
             } catch (e: Exception) {
                 logger.error(e) { "Error processing ranking calculation request" }
                 call.respond(
@@ -61,4 +65,17 @@ fun Application.configureRankingRoutes() {
             }
         }
     }
+}
+
+/**
+ * Build the error body for a request that failed while being deserialized.
+ *
+ * Ktor wraps exceptions thrown during body deserialization (JSON syntax errors and
+ * DTO init-block validation) in [BadRequestException]; unwrap to the root cause so
+ * the client sees the actual validation message.
+ */
+private fun badRequestErrorBody(e: BadRequestException): Map<String, String> {
+    val rootCause = generateSequence<Throwable>(e) { it.cause }.last()
+    val error = if (rootCause is kotlinx.serialization.SerializationException) "Invalid JSON" else "Validation error"
+    return mapOf("error" to error, "message" to (rootCause.message ?: "Invalid request"))
 }

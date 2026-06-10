@@ -504,7 +504,7 @@ To regenerate after changing the algorithm or scenarios:
 - **Shutouts** — `dominance = (6−0)/(6+0) = 1.0` with no division-by-zero; the normalized definition needs no special case.
 - **Near-equal ratings** — gaps of e.g. 0.005 produce `normalizedGap ≈ 0`, `scale ≈ 1.0`: effectively treated as equals, continuously (there is no explicit equality branch).
 - **Player at a boundary** — clamping absorbs the change for that player only ([§5.2](#52-boundary-clamping)).
-- **Tiebreak sets** — a 7-6 set contributes 7 vs 6 games like any other; the tiebreak's internal points (7-5, 10-8) are not used.
+- **Tiebreak sets** — a 7-6 set contributes 7 vs 6 games like any other; the `TiebreakScore` object is informational (it documents the tiebreak points, e.g. 7-5 or 10-8, and must be won by the set winner) and its points are never included in the dominance calculation.
 
 ### Known limitations
 

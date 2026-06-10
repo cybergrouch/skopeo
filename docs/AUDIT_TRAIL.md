@@ -165,10 +165,10 @@ AuditEntry(
 ```kotlin
 AuditEntry(
     level = DEBUG,
-    message = "Match result - Winner: {winnerId}, Score: {score}",
+    message = "Match result - Winner: {winnerTeamId}, Score: {score}",
     context = {
-        "winnerId": String,
-        "loserId": String,
+        "winnerTeamId": String,
+        "loserTeamId": String,
         "score": String,                    // per-set score string, e.g. "6-4 6-3"
         "winnerDominanceFactor": BigDecimal,
         "loserDominanceFactor": BigDecimal

@@ -61,12 +61,12 @@ Calculate updated player rankings based on match results.
         "games": {
           "<playerId>": number
         },
-        "winner": "string",
+        "winnerTeamId": "string",
         "tiebreak": {
           "points": {
             "<playerId>": number
           },
-          "winner": "string"
+          "winnerTeamId": "string"
         }
       }
     ],
@@ -214,8 +214,8 @@ curl -X POST http://localhost:8080/api/v1/calculate-ranking \
   },
   "matchScore": {
     "sets": [
-      {"games": {"P123": 6, "P456": 4}, "winner": "P123"},
-      {"games": {"P123": 6, "P456": 3}, "winner": "P123"}
+      {"games": {"P123": 6, "P456": 4}, "winnerTeamId": "P123"},
+      {"games": {"P123": 6, "P456": 3}, "winnerTeamId": "P123"}
     ]
   }
 }'
@@ -280,17 +280,17 @@ curl -X POST http://localhost:8080/api/v1/calculate-ranking \
         "games": {"P789": 7, "P101": 6},
         "tiebreak": {
           "points": {"P789": 7, "P101": 5},
-          "winner": "P789"
+          "winnerTeamId": "P789"
         },
-        "winner": "P789"
+        "winnerTeamId": "P789"
       },
       {
         "games": {"P789": 4, "P101": 6},
-        "winner": "P101"
+        "winnerTeamId": "P101"
       },
       {
         "games": {"P789": 6, "P101": 3},
-        "winner": "P789"
+        "winnerTeamId": "P789"
       }
     ]
   },

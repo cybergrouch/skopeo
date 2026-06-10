@@ -8,7 +8,6 @@ import org.skopeo.model.PlayerProfile
 import org.skopeo.model.Rating
 import org.skopeo.model.RatingSystem
 import org.skopeo.model.calculateDominanceFactor
-import org.skopeo.model.loser
 import org.skopeo.model.matchScore
 import org.skopeo.service.calculator.AuditEntry
 import org.skopeo.service.calculator.AuditTrail
@@ -167,14 +166,14 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
             audit.add(
                 AuditEntry(
                     message =
-                        "Match result - Winner: $winner, Score: $matchScore",
+                        "Match result - Winner: $winnerTeamId, Score: $matchScore",
                     context =
                         mapOf(
-                            "winnerId" to winner,
-                            "loserId" to loser,
+                            "winnerTeamId" to winnerTeamId,
+                            "loserTeamId" to loserTeamId,
                             "score" to matchScore,
-                            "winnerDominanceFactor" to calculateDominanceFactor(teamId = winner),
-                            "loserDominanceFactor" to calculateDominanceFactor(teamId = loser),
+                            "winnerDominanceFactor" to calculateDominanceFactor(teamId = winnerTeamId),
+                            "loserDominanceFactor" to calculateDominanceFactor(teamId = loserTeamId),
                         ),
                 ),
             )
@@ -346,7 +345,7 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
             val dominanceMagnitude = dominance.abs()
             val ratingAdvantage = this.rating.value.bd - opponent.rating.value.bd
             val absAdvantage = ratingAdvantage.abs()
-            val isWinner = matchScore.winner == teamId
+            val isWinner = matchScore.winnerTeamId == teamId
 
             // Get rating range for normalization
             val ratingRange =

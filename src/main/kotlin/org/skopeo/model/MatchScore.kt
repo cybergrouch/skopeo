@@ -8,15 +8,22 @@ import java.math.BigDecimal
 /**
  * Represents the score of a tennis match.
  *
+ * Winner and loser are team IDs (resolved further to player IDs once ratings are
+ * kept in a database).
+ *
  * @property sets List of set scores
- * @property winner Team ID of the match winner
+ * @property winnerTeamId Team ID of the match winner
  * @property matchFormat Format of the match (best of 3 or 5)
+ * @property loserTeamId Team ID of the match loser; derived from the first set's
+ *   winner/loser when omitted (the team that is not the match winner), so payloads
+ *   may state it explicitly or leave it out
  */
 @Serializable
 data class MatchScore(
     val sets: List<SetScore>,
-    val winner: String = sets.maxOf { it.winner },
+    val winnerTeamId: String = sets.maxOf { it.winnerTeamId },
     val matchFormat: MatchFormat = MatchFormat.BEST_OF_THREE,
+    val loserTeamId: String = sets.first().let { if (it.winnerTeamId == winnerTeamId) it.loserTeamId else it.winnerTeamId },
 ) {
     init {
         require(sets.isNotEmpty()) { "Match must have at least 1 set" }
@@ -27,10 +34,12 @@ data class MatchScore(
         require(sets.all { it.games.keys == teamIds }) {
             "All sets must have the same teams"
         }
+
+        require(winnerTeamId in teamIds) { "Match winner '$winnerTeamId' must be one of the teams: $teamIds" }
+        require(loserTeamId in teamIds) { "Match loser '$loserTeamId' must be one of the teams: $teamIds" }
+        require(loserTeamId != winnerTeamId) { "Match loser '$loserTeamId' must differ from the winner '$winnerTeamId'" }
     }
 }
-
-internal val MatchScore.loser: String get() = sets.first().games.keys.first { it != this.winner }
 
 /**
  * Match dominance is the average of per-set dominance, where each set's dominance
@@ -50,7 +59,7 @@ internal fun MatchScore.calculateDominanceFactor(teamId: String): BigDecimal =
 
 internal val MatchScore.matchScore: String get() =
     sets.map {
-        val gamesWonByWinner = it.games[winner] ?: 0
-        val gamesWonByLoser = it.games[loser] ?: 0
+        val gamesWonByWinner = it.games[winnerTeamId] ?: 0
+        val gamesWonByLoser = it.games[loserTeamId] ?: 0
         "$gamesWonByWinner-$gamesWonByLoser"
     }.joinToString(" ")

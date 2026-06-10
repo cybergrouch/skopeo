@@ -40,8 +40,8 @@ data class RankingCalculationRequest(
                     "Set games reference invalid team ID '$id', valid IDs: $teamIds"
                 }
             }
-            require(set.winner in teamIds) {
-                "Set winner '${set.winner}' is not a valid team ID, valid IDs: $teamIds"
+            require(set.winnerTeamId in teamIds) {
+                "Set winner '${set.winnerTeamId}' is not a valid team ID, valid IDs: $teamIds"
             }
             set.tiebreak?.let { tb ->
                 tb.points.keys.forEach { id ->
@@ -49,8 +49,8 @@ data class RankingCalculationRequest(
                         "Tiebreak points reference invalid team ID '$id', valid IDs: $teamIds"
                     }
                 }
-                require(tb.winner in teamIds) {
-                    "Tiebreak winner '${tb.winner}' is not a valid team ID, valid IDs: $teamIds"
+                require(tb.winnerTeamId in teamIds) {
+                    "Tiebreak winner '${tb.winnerTeamId}' is not a valid team ID, valid IDs: $teamIds"
                 }
             }
         }

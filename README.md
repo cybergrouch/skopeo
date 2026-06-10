@@ -88,7 +88,7 @@ Comprehensive testing and code quality infrastructure.
   },
   "matchScore": {
     "sets": [
-      { "games": { "P1": 6, "P2": 2 }, "winner": "P1" }
+      { "games": { "P1": 6, "P2": 2 }, "winnerTeamId": "P1" }
     ]
   }
 }

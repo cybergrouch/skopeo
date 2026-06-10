@@ -63,7 +63,7 @@ paths:
                   - games:
                       T1: 6
                       T2: 2
-                    winner: "T1"
+                    winnerTeamId: "T1"
       responses:
         '200':
           description: Successfully calculated rating changes
@@ -234,23 +234,55 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SetScore'
+        winnerTeamId:
+          type: string
+          description: Team ID of the match winner. Derived from the set scores when omitted.
+        loserTeamId:
+          type: string
+          description: Team ID of the match loser. Derived from the winner when omitted; must differ from the winner and be one of the teams.
+        matchFormat:
+          type: string
+          enum: [BEST_OF_THREE, BEST_OF_FIVE, SINGLE_SET, ADVANTAGE_SET]
+          default: BEST_OF_THREE
 
     SetScore:
       type: object
       required:
         - games
-        - winner
       properties:
         games:
           type: object
           additionalProperties:
             type: integer
-        winner:
+        winnerTeamId:
           type: string
+          description: Team ID of the set winner. Defaults to the team with the most games when omitted.
+        loserTeamId:
+          type: string
+          description: Team ID of the set loser. Defaults to the team with the fewest games when omitted; must differ from the winner.
         tiebreak:
+          $ref: '#/components/schemas/TiebreakScore'
+
+    TiebreakScore:
+      type: object
+      required:
+        - points
+      description: |
+        Informational only: documents how many points the tiebreak was (e.g. 7-5).
+        The tiebreak is part of the set score, so its winner must be the set winner.
+        Tiebreak points are not included in the dominance calculation of the match —
+        only games count.
+      properties:
+        points:
           type: object
           additionalProperties:
             type: integer
+        winnerTeamId:
+          type: string
+          description: Team ID of the tiebreak winner. Defaults to the team with the most points when omitted.
+        loserTeamId:
+          type: string
+          description: Team ID of the tiebreak loser. Defaults to the team with the fewest points when omitted; must differ from the winner.
 
     RatingCalculationOptions:
       type: object

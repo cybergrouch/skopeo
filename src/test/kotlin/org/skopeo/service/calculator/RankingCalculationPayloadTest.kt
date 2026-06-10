@@ -91,7 +91,7 @@ class RankingCalculationPayloadTest {
                           "T1": 6,
                           "T2": 3
                         },
-                        "winner": "T1"
+                        "winnerTeamId": "T1"
                       }
                     ]
                   }
@@ -284,7 +284,7 @@ class RankingCalculationPayloadTest {
                           "T1": 6,
                           "T2": 4
                         },
-                        "winner": "T1"
+                        "winnerTeamId": "T1"
                       }
                     ]
                   }
@@ -477,14 +477,14 @@ class RankingCalculationPayloadTest {
                           "T1": 6,
                           "T2": 0
                         },
-                        "winner": "T1"
+                        "winnerTeamId": "T1"
                       },
                       {
                         "games": {
                           "T1": 6,
                           "T2": 1
                         },
-                        "winner": "T1"
+                        "winnerTeamId": "T1"
                       }
                     ]
                   }
@@ -677,7 +677,7 @@ class RankingCalculationPayloadTest {
                           "T1": 0,
                           "T2": 6
                         },
-                        "winner": "T2"
+                        "winnerTeamId": "T2"
                       }
                     ]
                   }
@@ -873,7 +873,7 @@ class RankingCalculationPayloadTest {
                           "T1": 6,
                           "T2": 0
                         },
-                        "winner": "T1"
+                        "winnerTeamId": "T1"
                       }
                     ]
                   }
@@ -1073,7 +1073,7 @@ class RankingCalculationPayloadTest {
                           "T1": 6,
                           "T2": 2
                         },
-                        "winner": "T1"
+                        "winnerTeamId": "T1"
                       }
                     ]
                   }
@@ -1271,9 +1271,9 @@ class RankingCalculationPayloadTest {
                             "T1": 7,
                             "T2": 5
                           },
-                          "winner": "T1"
+                          "winnerTeamId": "T1"
                         },
-                        "winner": "T1"
+                        "winnerTeamId": "T1"
                       }
                     ]
                   }

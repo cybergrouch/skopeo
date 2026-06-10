@@ -49,7 +49,7 @@ RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/v1/calculate-ranki
           "P123": 6,
           "P456": 4
         },
-        "winner": "P123"
+        "winnerTeamId": "P123"
       }
     ]
   }
@@ -104,9 +104,9 @@ RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/v1/calculate-ranki
             "P789": 7,
             "P101": 5
           },
-          "winner": "P789"
+          "winnerTeamId": "P789"
         },
-        "winner": "P789"
+        "winnerTeamId": "P789"
       }
     ]
   }
@@ -156,7 +156,7 @@ RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/v1/calculate-ranki
           "P123": 6,
           "P456": 4
         },
-        "winner": "P123"
+        "winnerTeamId": "P123"
       }
     ]
   }
@@ -205,7 +205,7 @@ RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/v1/calculate-ranki
           "P123": 6,
           "P456": 4
         },
-        "winner": "P123"
+        "winnerTeamId": "P123"
       }
     ]
   }

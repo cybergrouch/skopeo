@@ -1,6 +1,9 @@
 package org.skopeo.model
 
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
+import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
@@ -14,16 +17,16 @@ class MatchScoreTest {
                 setGames.map { (t1Games, t2Games) ->
                     SetScore(
                         games = mapOf("T1" to t1Games, "T2" to t2Games),
-                        winner = if (t1Games > t2Games) "T1" else "T2",
+                        winnerTeamId = if (t1Games > t2Games) "T1" else "T2",
                         tiebreak =
                             if (setOf(t1Games, t2Games) == setOf(7, 6)) {
-                                TiebreakScore(points = mapOf("T1" to 7, "T2" to 5), winner = if (t1Games > t2Games) "T1" else "T2")
+                                TiebreakScore(points = mapOf("T1" to 7, "T2" to 5), winnerTeamId = if (t1Games > t2Games) "T1" else "T2")
                             } else {
                                 null
                             },
                     )
                 },
-            winner = "T1",
+            winnerTeamId = "T1",
         )
 
     @Nested
@@ -89,6 +92,108 @@ class MatchScoreTest {
         fun testMultiSetLoserSymmetry() {
             val match = matchOf(6 to 0, 3 to 6, 6 to 2)
             match.calculateDominanceFactor(teamId = "T2").toStringPrecise() shouldBe "-0.388889"
+        }
+    }
+
+    @Nested
+    @DisplayName("Winner and loser constructor properties")
+    inner class WinnerAndLoser {
+        private fun setsOf(vararg setGames: Pair<Int, Int>): List<SetScore> =
+            setGames.map { (t1Games, t2Games) ->
+                SetScore(
+                    games = mapOf("T1" to t1Games, "T2" to t2Games),
+                    winnerTeamId = if (t1Games > t2Games) "T1" else "T2",
+                )
+            }
+
+        @Test
+        @DisplayName("Loser defaults to the team that is not the winner")
+        fun testLoserDerivedFromWinner() {
+            val match = MatchScore(sets = setsOf(6 to 4), winnerTeamId = "T1")
+
+            match.loserTeamId shouldBe "T2"
+        }
+
+        @Test
+        @DisplayName("Loser is derived correctly when the match winner lost the first set")
+        fun testLoserDerivedInSplitSetMatch() {
+            // T2 takes the first set; match winner is still T1
+            val match = MatchScore(sets = setsOf(3 to 6, 6 to 2, 6 to 4), winnerTeamId = "T1")
+
+            match.loserTeamId shouldBe "T2"
+        }
+
+        @Test
+        @DisplayName("Explicit loser is accepted when consistent")
+        fun testExplicitLoserAccepted() {
+            val match = MatchScore(sets = setsOf(6 to 4), winnerTeamId = "T1", loserTeamId = "T2")
+
+            match.loserTeamId shouldBe "T2"
+        }
+
+        @Test
+        @DisplayName("Loser equal to winner is rejected")
+        fun testLoserEqualToWinnerRejected() {
+            val exception =
+                shouldThrow<IllegalArgumentException> {
+                    MatchScore(sets = setsOf(6 to 4), winnerTeamId = "T1", loserTeamId = "T1")
+                }
+
+            exception.message shouldContain "must differ from the winner"
+        }
+
+        @Test
+        @DisplayName("Loser that is not one of the teams is rejected")
+        fun testUnknownLoserRejected() {
+            val exception =
+                shouldThrow<IllegalArgumentException> {
+                    MatchScore(sets = setsOf(6 to 4), winnerTeamId = "T1", loserTeamId = "T3")
+                }
+
+            exception.message shouldContain "must be one of the teams"
+        }
+
+        @Test
+        @DisplayName("Winner that is not one of the teams is rejected")
+        fun testUnknownWinnerRejected() {
+            val exception =
+                shouldThrow<IllegalArgumentException> {
+                    MatchScore(sets = setsOf(6 to 4), winnerTeamId = "T3")
+                }
+
+            exception.message shouldContain "Match winner 'T3'"
+        }
+
+        @Test
+        @DisplayName("Payload without loser derives it during deserialization")
+        fun testPayloadWithoutLoser() {
+            val json = """{"sets":[{"games":{"T1":6,"T2":4},"winnerTeamId":"T1"}],"winnerTeamId":"T1"}"""
+
+            val match = Json.decodeFromString<MatchScore>(string = json)
+
+            match.winnerTeamId shouldBe "T1"
+            match.loserTeamId shouldBe "T2"
+        }
+
+        @Test
+        @DisplayName("Payload may state both winner and loser explicitly")
+        fun testPayloadWithExplicitWinnerAndLoser() {
+            val json = """{"sets":[{"games":{"T1":3,"T2":6},"winnerTeamId":"T2"}],"winnerTeamId":"T2","loserTeamId":"T1"}"""
+
+            val match = Json.decodeFromString<MatchScore>(string = json)
+
+            match.winnerTeamId shouldBe "T2"
+            match.loserTeamId shouldBe "T1"
+        }
+
+        @Test
+        @DisplayName("Payload with inconsistent loser is rejected during deserialization")
+        fun testPayloadWithInconsistentLoserRejected() {
+            val json = """{"sets":[{"games":{"T1":6,"T2":4},"winnerTeamId":"T1"}],"winnerTeamId":"T1","loserTeamId":"T1"}"""
+
+            shouldThrow<IllegalArgumentException> {
+                Json.decodeFromString<MatchScore>(string = json)
+            }
         }
     }
 }

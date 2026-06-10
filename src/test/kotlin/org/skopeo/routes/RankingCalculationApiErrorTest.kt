@@ -45,7 +45,7 @@ class RankingCalculationApiErrorTest {
                     }
                   },
                   "matchScore": {
-                    "sets": [{"games": {"T1": 6, "T2": 4}, "winner": "T1"}]
+                    "sets": [{"games": {"T1": 6, "T2": 4}, "winnerTeamId": "T1"}]
                   }
                 }
                 """
@@ -88,7 +88,7 @@ class RankingCalculationApiErrorTest {
                     }
                   },
                   "matchScore": {
-                    "sets": [{"games": {"T1": 6, "T2": 2}, "winner": "T1"}]
+                    "sets": [{"games": {"T1": 6, "T2": 2}, "winnerTeamId": "T1"}]
                   }
                 }
                 """
@@ -104,6 +104,91 @@ class RankingCalculationApiErrorTest {
             body shouldContain "ratingChanges"
             body shouldContain "players"
             body shouldContain "teams"
+        }
+
+    @Test
+    fun testSuccessfulRequestWithExplicitWinnerAndLoser() =
+        testApplication {
+            application {
+                module(initDatabase = false)
+            }
+
+            val requestJson =
+                """
+                {
+                  "teams": {
+                    "T1": {
+                      "teamId": "T1",
+                      "name": "Player 1",
+                      "players": [{"playerId": "P1", "name": "Player 1", "rating": {"value": "4.5", "system": "NTRP"}}],
+                      "teamType": "SINGLES"
+                    },
+                    "T2": {
+                      "teamId": "T2",
+                      "name": "Player 2",
+                      "players": [{"playerId": "P2", "name": "Player 2", "rating": {"value": "4.0", "system": "NTRP"}}],
+                      "teamType": "SINGLES"
+                    }
+                  },
+                  "matchScore": {
+                    "sets": [{"games": {"T1": 6, "T2": 4}, "winnerTeamId": "T1"}],
+                    "winnerTeamId": "T1",
+                    "loserTeamId": "T2"
+                  }
+                }
+                """
+
+            val response =
+                client.post("/api/v1/calculate-ranking") {
+                    contentType(ContentType.Application.Json)
+                    setBody(requestJson.trimIndent())
+                }
+
+            response.status shouldBe HttpStatusCode.OK
+            val body = response.bodyAsText()
+            body shouldContain "ratingChanges"
+        }
+
+    @Test
+    fun testErrorResponse_LoserSameAsWinner() =
+        testApplication {
+            application {
+                module(initDatabase = false)
+            }
+
+            val requestJson =
+                """
+                {
+                  "teams": {
+                    "T1": {
+                      "teamId": "T1",
+                      "name": "Player 1",
+                      "players": [{"playerId": "P1", "name": "Player 1", "rating": {"value": "4.5", "system": "NTRP"}}],
+                      "teamType": "SINGLES"
+                    },
+                    "T2": {
+                      "teamId": "T2",
+                      "name": "Player 2",
+                      "players": [{"playerId": "P2", "name": "Player 2", "rating": {"value": "4.0", "system": "NTRP"}}],
+                      "teamType": "SINGLES"
+                    }
+                  },
+                  "matchScore": {
+                    "sets": [{"games": {"T1": 6, "T2": 4}, "winnerTeamId": "T1"}],
+                    "winnerTeamId": "T1",
+                    "loserTeamId": "T1"
+                  }
+                }
+                """
+
+            val response =
+                client.post("/api/v1/calculate-ranking") {
+                    contentType(ContentType.Application.Json)
+                    setBody(requestJson.trimIndent())
+                }
+
+            response.status shouldBe HttpStatusCode.BadRequest
+            response.bodyAsText() shouldContain "must differ from the winner"
         }
 
     @Test
