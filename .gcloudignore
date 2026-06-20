@@ -1,0 +1,44 @@
+# Files NOT uploaded to Cloud Build when deploying the API with
+#   gcloud run deploy --source .
+#
+# An explicit .gcloudignore replaces gcloud's .gitignore-derived defaults,
+# so build artifacts are listed here too. Do NOT exclude the Dockerfile,
+# the Gradle wrapper/build files, or src/ — Cloud Build needs them.
+
+# Build outputs
+build/
+.gradle/
+*.jar
+*.class
+
+# Frontend — deployed separately to Firebase Hosting, not part of the API image
+web/
+node_modules/
+
+# Docs, presentation, scripts — not needed to build the API
+docs/
+presentation/
+scripts/
+*.md
+
+# VCS & CI
+.git/
+.github/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+# Logs & temp
+logs/
+*.log
+tmp/
+temp/
+
+# Local env / secrets
+.env
+.env.local
+*.pem
+*.key

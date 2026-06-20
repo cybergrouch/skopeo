@@ -83,3 +83,6 @@ Icon
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+# Pitch deck — kept local (contains personal contact details)
+presentation/

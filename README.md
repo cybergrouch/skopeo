@@ -1001,6 +1001,21 @@ Comprehensive documentation is available in the `docs/` directory:
   - GCP/AWS Java runtime support survey
   - Upgrade path when detekt 2.0 ships
 
+- **[DEPLOYMENT_GCP.md](docs/DEPLOYMENT_GCP.md)** - Cloud deployment guide
+  - Platform decision: GCP (Cloud Run + Cloud SQL) vs AWS, with costs
+  - Step-by-step deployment of the API and PostgreSQL
+  - Day-2 operations, scaling path, and teardown
+
+- **[WEB_UI_ARCHITECTURE.md](docs/WEB_UI_ARCHITECTURE.md)** - Web UI decisions & roadmap
+  - Decoupled frontend, monorepo `web/` layout
+  - SPA vs SSR analysis; recommended tech stack (SPA + PWA + Capacitor path)
+  - Authentication approach (token-based via Firebase Auth, verified at the API)
+
+- **[CICD.md](docs/CICD.md)** - CI/CD plan (GitHub Actions)
+  - Phase 1: CI gate (`./gradlew check`) + branch protection for the PR workflow
+  - Phase 2: keyless Cloud Run deploys via Workload Identity Federation
+  - Phase 3: web UI CI/CD (Firebase Hosting, path-filtered)
+
 ## Testing
 
 Skopeo uses a comprehensive testing strategy with **123 tests** across unit and integration layers:

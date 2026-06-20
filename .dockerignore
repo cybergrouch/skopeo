@@ -1,5 +1,5 @@
-# Docker ignore file for Tennis Levelr
-# Excludes unnecessary files from Docker build context
+# Docker ignore file for Skopeo
+# Excludes unnecessary files from the API Docker build context
 
 # Build outputs
 build/
@@ -36,6 +36,13 @@ LICENSE
 
 # Scripts (not needed in container)
 scripts/
+
+# Frontend (deployed separately to Firebase Hosting)
+web/
+node_modules/
+
+# Presentation assets (not part of the API)
+presentation/
 
 # Logs
 logs/
