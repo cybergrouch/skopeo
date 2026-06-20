@@ -1,6 +1,8 @@
 package org.skopeo
 
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
@@ -10,6 +12,7 @@ import io.ktor.server.metrics.micrometer.MicrometerMetrics
 import io.ktor.server.netty.EngineMain
 import io.ktor.server.plugins.calllogging.CallLogging
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.server.plugins.cors.routing.CORS
 import io.ktor.server.plugins.swagger.swaggerUI
 import io.ktor.server.request.httpMethod
 import io.ktor.server.request.uri
@@ -45,6 +48,7 @@ fun Application.module(initDatabase: Boolean = true) {
 
     configureMonitoring()
     configurePlugins()
+    configureCORS()
     configureOpenAPI()
     configureRouting()
     configureRankingRoutes()
@@ -86,6 +90,34 @@ fun Application.configurePlugins() {
         json()
     }
     logger.info { "Content negotiation configured with JSON support" }
+}
+
+/**
+ * Cross-Origin Resource Sharing for the decoupled web UI.
+ *
+ * The UI is deployed separately (a static SPA), so browser calls to this API are
+ * cross-origin and require explicit CORS allowances. Token-based auth (Authorization
+ * header) means credentials/cookies are not needed, so allowCredentials stays off.
+ *
+ * Add the deployed web UI origin (e.g. the Firebase Hosting domain) when it is known.
+ */
+fun Application.configureCORS() {
+    install(CORS) {
+        // Local development: Vite dev server default origin
+        allowHost(host = "localhost:5173", schemes = listOf("http", "https"))
+        // TODO: add the deployed web UI origin, e.g.:
+        // allowHost(host = "skopeo-web.web.app", schemes = listOf("https"))
+
+        allowMethod(HttpMethod.Get)
+        allowMethod(HttpMethod.Post)
+        allowMethod(HttpMethod.Put)
+        allowMethod(HttpMethod.Delete)
+        allowMethod(HttpMethod.Options)
+
+        allowHeader(HttpHeaders.ContentType)
+        allowHeader(HttpHeaders.Authorization)
+    }
+    logger.info { "CORS configured for web UI origins" }
 }
 
 fun Application.configureOpenAPI() {
