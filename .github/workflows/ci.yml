@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Cancel superseded runs on the same ref (e.g. new push to a PR)
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Install BOTH JDK 17 and 21. The last entry (21) becomes JAVA_HOME, so
+      # Gradle's daemon — and detekt — run on 21. This is required: detekt 1.23.8
+      # crashes on JDK 25+, which is why gradle/gradle-daemon-jvm.properties pins
+      # the daemon to 21. The project still compiles with the Java 17 toolchain,
+      # discovered via org.gradle.java.installations.fromEnv in gradle.properties.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: |
+            17
+            21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build, lint, detekt, test, verify coverage
+        run: ./gradlew check
