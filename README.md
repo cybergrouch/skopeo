@@ -1011,6 +1011,11 @@ Comprehensive documentation is available in the `docs/` directory:
   - SPA vs SSR analysis; recommended tech stack (SPA + PWA + Capacitor path)
   - Authentication approach (token-based via Firebase Auth, verified at the API)
 
+- **[CICD.md](docs/CICD.md)** - CI/CD plan (GitHub Actions)
+  - Phase 1: CI gate (`./gradlew check`) + branch protection for the PR workflow
+  - Phase 2: keyless Cloud Run deploys via Workload Identity Federation
+  - Phase 3: web UI CI/CD (Firebase Hosting, path-filtered)
+
 ## Testing
 
 Skopeo uses a comprehensive testing strategy with **123 tests** across unit and integration layers:
