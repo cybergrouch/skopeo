@@ -3,7 +3,7 @@
 # Step 5: confirm the auth gate on `GET /api/v1/users/me` rejects missing/invalid
 # tokens (each should return HTTP 401). Needs no token — it tests the negative paths.
 #
-# Usage: ./scripts/checkAuthRejects.sh [base_url]   (default: http://localhost:8080)
+# Usage: ./scripts/firebase-integration/checkAuthRejects.sh [base_url]   (default: http://localhost:8080)
 
 set -uo pipefail
 

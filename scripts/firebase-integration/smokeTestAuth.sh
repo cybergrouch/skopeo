@@ -4,14 +4,14 @@
 # `GET /api/v1/users/me` probe with it — chaining createFirebaseToken.sh and
 # callUsersMe.sh. A HTTP 200 with your identity proves the auth path end to end.
 #
-# Usage: ./scripts/smokeTestAuth.sh <WEB_API_KEY> [email] [password] [base_url]
+# Usage: ./scripts/firebase-integration/smokeTestAuth.sh <WEB_API_KEY> [email] [password] [base_url]
 #   WEB_API_KEY   Firebase Web API Key (starts with "AIza...") — REQUIRED.
 #   email         Sign-in email    (default: test@skopeo.dev)
 #   password      Sign-in password (default: Test12345)
 #   base_url      API base URL     (default: http://localhost:8080)
 #
 # Example:
-#   ./scripts/smokeTestAuth.sh AIzaSyD...XYZ
+#   ./scripts/firebase-integration/smokeTestAuth.sh AIzaSyD...XYZ
 
 set -uo pipefail
 

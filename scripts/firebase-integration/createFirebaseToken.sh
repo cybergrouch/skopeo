@@ -3,7 +3,7 @@
 # Mint a Firebase ID token via the Email/Password sign-in REST API, for testing
 # authenticated endpoints (e.g. `GET /api/v1/users/me`). Prints the raw idToken.
 #
-# Usage: ./scripts/createFirebaseToken.sh <WEB_API_KEY> [email] [password]
+# Usage: ./scripts/firebase-integration/createFirebaseToken.sh <WEB_API_KEY> [email] [password]
 #   WEB_API_KEY   Firebase Web API Key (starts with "AIza...") — REQUIRED.
 #                 Firebase console -> Project settings -> General (Web API Key),
 #                 or the apiKey field in your Web app config.
@@ -11,7 +11,7 @@
 #   password      Sign-in password (default: Test12345)
 #
 # Example:
-#   TOKEN="$(./scripts/createFirebaseToken.sh AIzaSyD...XYZ)"
+#   TOKEN="$(./scripts/firebase-integration/createFirebaseToken.sh AIzaSyD...XYZ)"
 #   curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/users/me | jq
 
 set -euo pipefail

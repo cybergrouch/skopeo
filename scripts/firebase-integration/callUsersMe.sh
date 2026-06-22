@@ -3,13 +3,13 @@
 # Call the authenticated `GET /api/v1/users/me` probe with a Firebase ID token,
 # to smoke-test that the API verifies the token and returns the identity.
 #
-# Usage: ./scripts/callUsersMe.sh <FIREBASE_ID_TOKEN> [base_url]
+# Usage: ./scripts/firebase-integration/callUsersMe.sh <FIREBASE_ID_TOKEN> [base_url]
 #   FIREBASE_ID_TOKEN  A Firebase ID token — REQUIRED.
-#                      Mint one with: ./scripts/createFirebaseToken.sh <WEB_API_KEY>
+#                      Mint one with: ./scripts/firebase-integration/createFirebaseToken.sh <WEB_API_KEY>
 #   base_url           API base URL (default: http://localhost:8080)
 #
 # Example (pipe the two scripts together):
-#   ./scripts/callUsersMe.sh "$(./scripts/createFirebaseToken.sh AIzaSyD...XYZ)"
+#   ./scripts/firebase-integration/callUsersMe.sh "$(./scripts/firebase-integration/createFirebaseToken.sh AIzaSyD...XYZ)"
 
 set -euo pipefail
 
@@ -19,7 +19,7 @@ BASE_URL="${2:-http://localhost:8080}"
 if [[ -z "$TOKEN" ]]; then
   echo "Error: missing Firebase ID token." >&2
   echo "Usage: $0 <FIREBASE_ID_TOKEN> [base_url]" >&2
-  echo "  Mint a token first: ./scripts/createFirebaseToken.sh <WEB_API_KEY>" >&2
+  echo "  Mint a token first: ./scripts/firebase-integration/createFirebaseToken.sh <WEB_API_KEY>" >&2
   exit 1
 fi
 
