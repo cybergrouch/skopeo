@@ -90,3 +90,54 @@ new/uncertain ratings converge faster:
 This stays compatible with the current API: the seed source and confidence are attributes of
 `user_ratings` (the columns exist), and elevated/confidence-driven K is internal to the
 calculator — no breaking changes to the endpoints above.
+
+### Prior art — how established systems handle uncertainty
+
+The common thread across these systems: **scale each update by the rating's uncertainty, flag
+unverified inputs, and limit how much a noisy newcomer perturbs everyone else.**
+
+- **Elo (provisional period).** A larger K-factor while few games have been played, shrinking as
+  the record grows. FIDE uses `K = 40` for a player's first 30 rated games (and juniors below a
+  cutoff), `K = 20` thereafter, and `K = 10` once rated ≥ 2400; the USCF uses an effective K that
+  decreases with games played. Mechanism: **K large early → fast convergence → smaller later.**
+
+- **Glicko / Glicko-2 (Glickman).** The principled version of the above: each rating carries a
+  **Rating Deviation (RD)** — an explicit uncertainty, defaulting to ~350 for a new player. The
+  size of each update scales with the player's *and* the opponent's RD; RD shrinks with play and
+  grows during inactivity. Glicko-2 adds a **volatility** term for how erratic results are.
+  Mechanism: **uncertainty is a stored number that drives swing size and self-reduces** — exactly
+  the `confidence_score`-driven K we'd generalize to.
+
+- **UTR (Universal Tennis Rating).** Each rating has a **reliability** (0–100%) derived from the
+  count and recency of recent results (roughly the last ~30 matches within 12 months). Low
+  reliability → the rating moves more; and **results against low-reliability opponents are
+  discounted** when rating others. New players get an estimate that's refined by play.
+  Mechanism: reliability gates **both** a player's own swing size **and** their influence on the
+  pool.
+
+- **USTA NTRP.** New players enter **self-rated** (flagged `S`) using published NTRP guidelines.
+  A dynamic in-season rating (NTRP-D) updates per match; a year-end computer rating (`C`)
+  consolidates it. Mis-self-rates are corrected via appeals, benchmarking, and dynamic/
+  "three-strikes" disqualification. Mechanism: **flagged self-rate + dynamic correction +
+  human/benchmark review.**
+
+### K-factor calibration (proposal — keep for a later item)
+
+Today the calibration anchor is `K = 0.16` for NTRP (`0.40` for UTR = `0.16 × 2.5`); see
+[`RATING_CALCULATION_ALGORITHM.md`](RATING_CALCULATION_ALGORITHM.md) §3.3. A shutout between
+equals moves a rating by the full `±0.160`, which may be **too large a step** for an established
+player.
+
+Proposal to evaluate later: because ratings are computed to 6 decimal places, there's room to
+**shrink the established-player K by an order of magnitude — `0.16 → 0.016`** (and UTR
+`0.40 → 0.040`), giving steadier, finer movement once a rating is trustworthy. Then reuse the
+old value as the **provisional K-factor `0.16` (~10× the new baseline)** so unverified/new
+ratings still converge aggressively. This dovetails with the confidence-driven-K idea above:
+`0.016` is the low-uncertainty floor, `0.16` the high-uncertainty ceiling, with
+`confidence_score` interpolating between them.
+
+Caveat: K is the calibration anchor for the whole algorithm — changing it shifts every derived
+per-match delta and the worked tables in `RATING_CALCULATION_ALGORITHM.md` (§3.3, dominance and
+threshold tables). So this is a **calibration exercise**, not a one-line constant change: re-derive
+the expected per-match changes, re-validate convergence speed, and refresh the documented tables
+and the `NTRPvsUTRComparison` outputs.
