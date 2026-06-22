@@ -1,12 +1,13 @@
 package org.skopeo.service.contact
 
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.matchers.booleans.shouldBeFalse
+import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.dto.contact.ContactCreateRequest
-import org.skopeo.dto.contact.ContactUpdateRequest
 import org.skopeo.dto.contact.VerificationRequest
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
@@ -72,24 +73,42 @@ class ContactServiceTest {
     )
 
     @Test
-    fun `owner can create, list, get, update and delete own contacts`() {
+    fun `owner can create, list, get and disable own contacts`() {
         val owner = provisionUser("owner")
 
         val created = service.create(token = token("owner"), userId = owner.id, request = email())
         service.list(token = token("owner"), userId = owner.id).single().id shouldBe created.id
         service.get(token = token("owner"), userId = owner.id, contactId = created.id).id shouldBe created.id
 
-        val updated =
-            service.update(
-                token = token("owner"),
-                userId = owner.id,
-                contactId = created.id,
-                request = ContactUpdateRequest(value = "b@example.com", isPrimary = true),
-            )
-        updated.value shouldBe "b@example.com"
+        val disabled = service.setActive(token = token("owner"), userId = owner.id, contactId = created.id, active = false)
+        disabled.isActive.shouldBeFalse()
+    }
 
-        service.delete(token = token("owner"), userId = owner.id, contactId = created.id)
-        shouldThrow<ContactNotFoundException> { service.get(token = token("owner"), userId = owner.id, contactId = created.id) }
+    @Test
+    fun `disabling lets a new contact of the same type be added, re-enabling then conflicts`() {
+        val owner = provisionUser("owner")
+        val first = service.create(token = token("owner"), userId = owner.id, request = email("first@example.com"))
+
+        service.setActive(token = token("owner"), userId = owner.id, contactId = first.id, active = false)
+        val second = service.create(token = token("owner"), userId = owner.id, request = email("second@example.com"))
+
+        // Re-enabling the first now collides with the active second.
+        shouldThrow<ContactConflictException> {
+            service.setActive(token = token("owner"), userId = owner.id, contactId = first.id, active = true)
+        }
+        second.isActive.shouldBeTrue()
+    }
+
+    @Test
+    fun `a disabled contact cannot be verified`() {
+        val owner = provisionUser("owner")
+        provisionUser("root", capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val contact = service.create(token = token("owner"), userId = owner.id, request = email())
+        service.setActive(token = token("owner"), userId = owner.id, contactId = contact.id, active = false)
+
+        shouldThrow<IllegalArgumentException> {
+            verify(adminUid = "root", userId = owner.id, contactId = contact.id)
+        }
     }
 
     @Test
@@ -167,29 +186,6 @@ class ContactServiceTest {
 
         revoked.status shouldBe VerificationStatus.PENDING
         revoked.method.shouldBe(null)
-    }
-
-    @Test
-    fun `editing a verified contact resets it to PENDING`() {
-        val owner = provisionUser("owner")
-        provisionUser("root", capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
-        val contact = service.create(token = token("owner"), userId = owner.id, request = email())
-        service.setVerification(
-            token = token("root"),
-            userId = owner.id,
-            contactId = contact.id,
-            request = VerificationRequest(status = "VERIFIED"),
-        )
-
-        val edited =
-            service.update(
-                token = token("owner"),
-                userId = owner.id,
-                contactId = contact.id,
-                request = ContactUpdateRequest(value = "changed@example.com", isPrimary = true),
-            )
-
-        edited.status shouldBe VerificationStatus.PENDING
     }
 
     @Test

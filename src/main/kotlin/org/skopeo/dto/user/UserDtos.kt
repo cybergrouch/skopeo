@@ -26,6 +26,7 @@ data class ContactDto(
     val status: String,
     val method: String? = null,
     val isPrimary: Boolean = false,
+    val isActive: Boolean = true,
 )
 
 @Serializable
@@ -97,6 +98,7 @@ fun User.toResponse(): UserResponse =
                     status = it.status.name,
                     method = it.method?.name,
                     isPrimary = it.isPrimary,
+                    isActive = it.isActive,
                 )
             },
         identities =

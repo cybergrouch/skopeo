@@ -11,11 +11,10 @@ data class ContactCreateRequest(
     val isPrimary: Boolean = true,
 )
 
-/** Body for `PATCH /api/v1/users/{userId}/contacts/{id}` — change the address (resets verification). */
+/** Body for `PUT /api/v1/users/{userId}/contacts/{id}/state` — enable or disable a contact. */
 @Serializable
-data class ContactUpdateRequest(
-    val value: String,
-    val isPrimary: Boolean = true,
+data class ContactStateRequest(
+    val isActive: Boolean,
 )
 
 /**
@@ -38,8 +37,10 @@ data class ContactResponse(
     val status: String,
     val method: String? = null,
     val isPrimary: Boolean,
+    val isActive: Boolean,
     val verifiedAt: String? = null,
     val verifiedBy: String? = null,
+    val disabledAt: String? = null,
 )
 
 fun Contact.toResponse(): ContactResponse =
@@ -52,6 +53,8 @@ fun Contact.toResponse(): ContactResponse =
         status = status.name,
         method = method?.name,
         isPrimary = isPrimary,
+        isActive = isActive,
         verifiedAt = verifiedAt?.toString(),
         verifiedBy = verifiedBy?.toString(),
+        disabledAt = disabledAt?.toString(),
     )

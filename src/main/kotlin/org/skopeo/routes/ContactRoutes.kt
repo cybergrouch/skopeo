@@ -7,16 +7,14 @@ import io.ktor.server.auth.authenticate
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
-import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
-import io.ktor.server.routing.patch
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.contact.ContactCreateRequest
-import org.skopeo.dto.contact.ContactUpdateRequest
+import org.skopeo.dto.contact.ContactStateRequest
 import org.skopeo.dto.contact.VerificationRequest
 import org.skopeo.dto.contact.toResponse
 import org.skopeo.service.contact.ContactService
@@ -32,6 +30,7 @@ fun Application.configureContactRoutes(service: ContactService = ContactService(
             route("/api/v1/users/{userId}/contacts") {
                 listAndCreate(service)
                 byId(service)
+                state(service)
                 verification(service)
             }
         }
@@ -61,18 +60,20 @@ private fun Route.byId(service: ContactService) {
             call.respond(status = HttpStatusCode.OK, message = contact.toResponse())
         }
     }
-    patch("/{id}") {
+}
+
+private fun Route.state(service: ContactService) {
+    put("/{id}/state") {
         respondMappingErrors {
-            val request = call.receive<ContactUpdateRequest>()
+            val request = call.receive<ContactStateRequest>()
             val contact =
-                service.update(token = verifiedToken(), userId = uuidParam("userId"), contactId = uuidParam("id"), request = request)
+                service.setActive(
+                    token = verifiedToken(),
+                    userId = uuidParam("userId"),
+                    contactId = uuidParam("id"),
+                    active = request.isActive,
+                )
             call.respond(status = HttpStatusCode.OK, message = contact.toResponse())
-        }
-    }
-    delete("/{id}") {
-        respondMappingErrors {
-            service.delete(token = verifiedToken(), userId = uuidParam("userId"), contactId = uuidParam("id"))
-            call.respond(status = HttpStatusCode.NoContent, message = "")
         }
     }
 }

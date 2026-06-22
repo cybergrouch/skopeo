@@ -1,8 +1,6 @@
 package org.skopeo.repository
 
 import org.jetbrains.exposed.sql.ResultRow
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -59,21 +57,17 @@ class ContactRepository {
             loadById(id.value)
         }
 
-    /** Change the address. Any prior verification is invalidated — status resets to PENDING. */
-    fun updateValue(
+    /** Enable or disable a contact (the append-only alternative to editing). */
+    fun setActive(
         id: UUID,
-        value: String,
-        isPrimary: Boolean,
+        active: Boolean,
+        disabledAt: LocalDateTime?,
     ): Contact? =
         transaction {
             val updated =
                 ContactInformationTable.update({ ContactInformationTable.id eq id }) {
-                    it[ContactInformationTable.value] = value
-                    it[ContactInformationTable.isPrimary] = isPrimary
-                    it[verificationStatus] = VerificationStatus.PENDING.name
-                    it[verificationMethod] = null
-                    it[verifiedAt] = null
-                    it[verifiedBy] = null
+                    it[isActive] = active
+                    it[ContactInformationTable.disabledAt] = disabledAt
                 }
             if (updated == 0) null else loadById(id)
         }
@@ -104,11 +98,6 @@ class ContactRepository {
             if (updated == 0) null else loadById(id)
         }
 
-    fun delete(id: UUID): Boolean =
-        transaction {
-            ContactInformationTable.deleteWhere { ContactInformationTable.id eq id } > 0
-        }
-
     private fun loadById(id: UUID): Contact =
         ContactInformationTable
             .selectAll()
@@ -128,6 +117,8 @@ internal fun ResultRow.toContact(): Contact =
         status = VerificationStatus.valueOf(this[ContactInformationTable.verificationStatus]),
         method = this[ContactInformationTable.verificationMethod]?.let(VerificationMethod::valueOf),
         isPrimary = this[ContactInformationTable.isPrimary],
+        isActive = this[ContactInformationTable.isActive],
         verifiedAt = this[ContactInformationTable.verifiedAt],
         verifiedBy = this[ContactInformationTable.verifiedBy]?.value,
+        disabledAt = this[ContactInformationTable.disabledAt],
     )

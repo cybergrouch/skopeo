@@ -56,6 +56,7 @@ class ContactRepositoryTest {
 
         contact.type shouldBe ContactType.PHONE
         contact.status shouldBe VerificationStatus.PENDING
+        contact.isActive.shouldBeTrue()
         contact.verifiedAt.shouldBeNull()
         contacts.listByUser(userId).single().id shouldBe contact.id
         contacts.findById(contact.id).shouldNotBeNull()
@@ -101,48 +102,40 @@ class ContactRepositoryTest {
     }
 
     @Test
-    fun `updateValue changes the address and resets verification`() {
+    fun `setActive disables then re-enables a contact`() {
         val userId = newUser("u3")
-        val contact = contacts.create(userId = userId, type = ContactType.EMAIL, value = "old@example.com", isPrimary = true)
-        contacts.setVerification(
-            id = contact.id,
-            status = VerificationStatus.VERIFIED,
-            method = VerificationMethod.ADMIN_OVERRIDE,
-            verifiedBy = userId,
-            verifiedAt = LocalDateTime.now(),
-        )
+        val contact = contacts.create(userId = userId, type = ContactType.EMAIL, value = "u3@example.com", isPrimary = true)
 
-        val updated = contacts.updateValue(id = contact.id, value = "new@example.com", isPrimary = true)
+        val disabled = contacts.setActive(id = contact.id, active = false, disabledAt = LocalDateTime.now())
+        disabled.shouldNotBeNull()
+        disabled.isActive.shouldBeFalse()
+        disabled.disabledAt.shouldNotBeNull()
 
-        updated.shouldNotBeNull()
-        updated.value shouldBe "new@example.com"
-        updated.status shouldBe VerificationStatus.PENDING
-        updated.verifiedAt.shouldBeNull()
+        val reenabled = contacts.setActive(id = contact.id, active = true, disabledAt = null)
+        reenabled.shouldNotBeNull()
+        reenabled.isActive.shouldBeTrue()
+        reenabled.disabledAt.shouldBeNull()
     }
 
     @Test
-    fun `updateValue and delete report absence`() {
-        contacts.updateValue(id = UUID.randomUUID(), value = "x@example.com", isPrimary = true).shouldBeNull()
-        contacts.delete(UUID.randomUUID()).shouldBeFalse()
+    fun `setActive reports absence`() {
+        contacts.setActive(id = UUID.randomUUID(), active = false, disabledAt = LocalDateTime.now()).shouldBeNull()
     }
 
     @Test
-    fun `delete removes the contact`() {
-        val userId = newUser("u4")
-        val contact = contacts.create(userId = userId, type = ContactType.EMAIL, value = "u4@example.com", isPrimary = true)
-
-        contacts.delete(contact.id).shouldBeTrue()
-        contacts.findById(contact.id).shouldBeNull()
-    }
-
-    @Test
-    fun `one contact per type is enforced`() {
+    fun `only one active contact per type is allowed, but disabled history accumulates`() {
         val userId = newUser("u5")
-        contacts.create(userId = userId, type = ContactType.EMAIL, value = "first@example.com", isPrimary = true)
+        val first = contacts.create(userId = userId, type = ContactType.EMAIL, value = "first@example.com", isPrimary = true)
 
+        // A second active email collides with the first.
         shouldThrow<ExposedSQLException> {
             contacts.create(userId = userId, type = ContactType.EMAIL, value = "second@example.com", isPrimary = true)
         }
+
+        // Disable the first, and a new active email is accepted; both rows remain as history.
+        contacts.setActive(id = first.id, active = false, disabledAt = LocalDateTime.now())
+        contacts.create(userId = userId, type = ContactType.EMAIL, value = "second@example.com", isPrimary = true)
+        contacts.listByUser(userId).size shouldBe 2
     }
 
     @Test
@@ -169,5 +162,18 @@ class ContactRepositoryTest {
                 verifiedAt = LocalDateTime.now(),
             )
         }
+
+        // Disabling the first holder releases the value: the second can now be verified.
+        contacts.setActive(id = first.id, active = false, disabledAt = LocalDateTime.now())
+        val nowVerified =
+            contacts.setVerification(
+                id = second.id,
+                status = VerificationStatus.VERIFIED,
+                method = VerificationMethod.ADMIN_OVERRIDE,
+                verifiedBy = userB,
+                verifiedAt = LocalDateTime.now(),
+            )
+        nowVerified.shouldNotBeNull()
+        nowVerified.status shouldBe VerificationStatus.VERIFIED
     }
 }

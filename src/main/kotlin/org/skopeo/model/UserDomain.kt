@@ -38,7 +38,11 @@ data class ContactInfo(
     val isPrimary: Boolean = false,
 )
 
-/** A contact as stored — the addressable sub-resource, with its id and verification audit fields. */
+/**
+ * A contact as stored — the addressable sub-resource. Values are immutable: a contact is
+ * disabled ([isActive] = false) rather than edited, and a new one is added, so the table
+ * keeps the full history of a profile's contacts.
+ */
 data class Contact(
     val id: UUID,
     val userId: UUID,
@@ -48,8 +52,10 @@ data class Contact(
     val status: VerificationStatus,
     val method: VerificationMethod? = null,
     val isPrimary: Boolean = false,
+    val isActive: Boolean = true,
     val verifiedAt: LocalDateTime? = null,
     val verifiedBy: UUID? = null,
+    val disabledAt: LocalDateTime? = null,
 )
 
 data class UserIdentity(

@@ -4,10 +4,8 @@ import io.kotest.matchers.shouldBe
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
-import io.ktor.client.request.patch
 import io.ktor.client.request.post
 import io.ktor.client.request.put
 import io.ktor.client.request.setBody
@@ -24,7 +22,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.dto.contact.ContactCreateRequest
 import org.skopeo.dto.contact.ContactResponse
-import org.skopeo.dto.contact.ContactUpdateRequest
+import org.skopeo.dto.contact.ContactStateRequest
 import org.skopeo.dto.contact.VerificationRequest
 import org.skopeo.dto.user.CreateUserRequest
 import org.skopeo.dto.user.NameDto
@@ -130,35 +128,30 @@ class ContactApiIntegrationTest {
         }
 
     @Test
-    fun `duplicate type conflicts and editing the value resets verification`() =
+    fun `a second active contact conflicts, but disabling then adding works`() =
         withApp { client ->
-            val adminToken = seedAdminToken()
             val userToken = TestFirebaseAuth.mintToken(uid = "fb-2")
             val user = client.provisionSelf(userToken)
             val contact = client.addPhone(token = userToken, userId = user.id).body<ContactResponse>()
 
-            // Second phone for the same user → one-per-type conflict.
+            // Second active phone for the same user → one-active-per-type conflict.
             client.addPhone(token = userToken, userId = user.id).status shouldBe HttpStatusCode.Conflict
 
-            // Verify it, then edit the value → status falls back to PENDING.
-            client.put("/api/v1/users/${user.id}/contacts/${contact.id}/verification") {
-                header(HttpHeaders.Authorization, "Bearer $adminToken")
-                contentType(ContentType.Application.Json)
-                setBody(VerificationRequest(status = "VERIFIED"))
-            }.status shouldBe HttpStatusCode.OK
-
-            val edited =
-                client.patch("/api/v1/users/${user.id}/contacts/${contact.id}") {
+            // Disable the first, then a new phone is accepted.
+            val disabled =
+                client.put("/api/v1/users/${user.id}/contacts/${contact.id}/state") {
                     header(HttpHeaders.Authorization, "Bearer $userToken")
                     contentType(ContentType.Application.Json)
-                    setBody(ContactUpdateRequest(value = "+639180000000", isPrimary = true))
+                    setBody(ContactStateRequest(isActive = false))
                 }
-            edited.status shouldBe HttpStatusCode.OK
-            edited.body<ContactResponse>().status shouldBe "PENDING"
+            disabled.status shouldBe HttpStatusCode.OK
+            disabled.body<ContactResponse>().isActive shouldBe false
+
+            client.addPhone(token = userToken, userId = user.id).status shouldBe HttpStatusCode.Created
         }
 
     @Test
-    fun `owner lists and deletes their contacts`() =
+    fun `owner lists and disables their contacts`() =
         withApp { client ->
             val userToken = TestFirebaseAuth.mintToken(uid = "fb-3")
             val user = client.provisionSelf(userToken)
@@ -168,8 +161,10 @@ class ContactApiIntegrationTest {
                 header(HttpHeaders.Authorization, "Bearer $userToken")
             }.status shouldBe HttpStatusCode.OK
 
-            client.delete("/api/v1/users/${user.id}/contacts/${contact.id}") {
+            client.put("/api/v1/users/${user.id}/contacts/${contact.id}/state") {
                 header(HttpHeaders.Authorization, "Bearer $userToken")
-            }.status shouldBe HttpStatusCode.NoContent
+                contentType(ContentType.Application.Json)
+                setBody(ContactStateRequest(isActive = false))
+            }.status shouldBe HttpStatusCode.OK
         }
 }

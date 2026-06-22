@@ -2,7 +2,6 @@ package org.skopeo.service.contact
 
 import org.jetbrains.exposed.exceptions.ExposedSQLException
 import org.skopeo.dto.contact.ContactCreateRequest
-import org.skopeo.dto.contact.ContactUpdateRequest
 import org.skopeo.dto.contact.VerificationRequest
 import org.skopeo.model.Capability
 import org.skopeo.model.Contact
@@ -61,27 +60,22 @@ class ContactService(
         }
     }
 
-    fun update(
+    /**
+     * Enable or disable a contact — the append-only alternative to editing. Enabling a
+     * contact while another of the same type is already active is a conflict (409).
+     */
+    fun setActive(
         token: VerifiedFirebaseToken,
         userId: UUID,
         contactId: UUID,
-        request: ContactUpdateRequest,
+        active: Boolean,
     ): Contact {
         locate(userId = userId, contactId = contactId)
         requireUserAccess(token = token, userId = userId)
-        return conflictAware(message = "That value is already in use") {
-            contacts.updateValue(id = contactId, value = request.value, isPrimary = request.isPrimary)
+        val disabledAt = if (active) null else LocalDateTime.now()
+        return conflictAware(message = "Another active contact of that type already exists") {
+            contacts.setActive(id = contactId, active = active, disabledAt = disabledAt)
         } ?: throw ContactNotFoundException(contactId)
-    }
-
-    fun delete(
-        token: VerifiedFirebaseToken,
-        userId: UUID,
-        contactId: UUID,
-    ) {
-        locate(userId = userId, contactId = contactId)
-        requireUserAccess(token = token, userId = userId)
-        contacts.delete(contactId)
     }
 
     /** The ADMINISTRATOR-only verification action; records who verified and when. */
@@ -91,8 +85,9 @@ class ContactService(
         contactId: UUID,
         request: VerificationRequest,
     ): Contact {
-        locate(userId = userId, contactId = contactId)
+        val contact = locate(userId = userId, contactId = contactId)
         val adminId = requireAdmin(token)
+        require(contact.isActive) { "Cannot change verification of a disabled contact" }
         val status = parseStatus(request.status)
         val method =
             if (status == VerificationStatus.VERIFIED) {

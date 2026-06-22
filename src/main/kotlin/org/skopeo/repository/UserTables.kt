@@ -55,6 +55,8 @@ internal object ContactInformationTable : UUIDTable("contact_information") {
     val verificationMethod = varchar("verification_method", CODE_MAX).nullable()
     val verifiedAt = datetime("verified_at").nullable()
     val verifiedBy = reference("verified_by", UsersTable, onDelete = ReferenceOption.SET_NULL).nullable()
+    val isActive = bool("is_active").default(true)
+    val disabledAt = datetime("disabled_at").nullable()
 }
 
 internal object UserCapabilitiesTable : UUIDTable("user_capabilities") {
