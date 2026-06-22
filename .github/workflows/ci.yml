@@ -54,6 +54,8 @@ jobs:
           reporter: java-junit
           list-suites: all
           list-tests: all
+          # Publish as a drillable "Test Report" check run (not just the run summary).
+          use-actions-summary: 'false'
 
       # Upload coverage to Codecov, which annotates uncovered changed lines inline on the
       # PR diff and reports patch (changed-lines) coverage. Non-blocking — the real gate is
