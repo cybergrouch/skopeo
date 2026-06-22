@@ -19,6 +19,8 @@ tags:
     description: Append-only user names; the display name is a DISPLAY-typed name
   - name: Capabilities
     description: User roles (admin-only); append-only grants with audit
+  - name: Ratings
+    description: Player ratings & assessment; initial ratings are administrator-set
 
 paths:
   /api/v1/calculate-ranking:
@@ -661,6 +663,132 @@ paths:
         '409':
           description: Revoking PLAYER or the last ADMINISTRATOR
 
+  /api/v1/users/pending-assessment:
+    get:
+      summary: List users pending an initial rating (ADMINISTRATOR only)
+      tags:
+        - Ratings
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: Active users with no rating on record
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PendingAssessmentResponse'
+        '403':
+          description: Caller is not an ADMINISTRATOR
+
+  /api/v1/users/{userId}/ratings:
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      summary: Get a user's current ratings
+      description: Self-or-ADMINISTRATOR. Returns the user's NTRP/UTR ratings.
+      tags:
+        - Ratings
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The user's ratings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserRatingResponse'
+        '403':
+          description: Forbidden
+        '404':
+          description: No such user
+
+  /api/v1/users/{userId}/ratings/{system}:
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: system
+        in: path
+        required: true
+        schema:
+          type: string
+          enum: [NTRP, UTR]
+    put:
+      summary: Set or adjust a user's rating (ADMINISTRATOR only)
+      description: |
+        The initial assessment, or a later adjustment. Validates the system range
+        (NTRP 1.0–7.0, UTR 1.0–16.0) and derives the published level.
+      tags:
+        - Ratings
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetRatingRequest'
+      responses:
+        '200':
+          description: The updated rating
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserRatingResponse'
+        '400':
+          description: Invalid rating value/confidence or unknown system
+        '403':
+          description: Caller is not an ADMINISTRATOR
+        '404':
+          description: No such user
+
+  /api/v1/users/{userId}/rating-history:
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: system
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [NTRP, UTR]
+    get:
+      summary: Get a user's rating history
+      description: Self-or-ADMINISTRATOR. Optionally filter by system.
+      tags:
+        - Ratings
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: Rating-change history (most recent first)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RatingHistoryResponse'
+        '403':
+          description: Forbidden
+        '404':
+          description: No such user
+
 components:
   securitySchemes:
     firebaseAuth:
@@ -1253,4 +1381,105 @@ components:
         revokedAt:
           type: string
           format: date-time
+          nullable: true
+
+    SetRatingRequest:
+      type: object
+      required:
+        - value
+      properties:
+        value:
+          type: string
+          description: Rating value (NTRP 1.0–7.0, UTR 1.0–16.0).
+        confidence:
+          type: string
+          nullable: true
+          description: 0–1; defaults to 0.50.
+
+    UserRatingResponse:
+      type: object
+      required:
+        - system
+        - value
+        - confidence
+        - matchesPlayed
+      properties:
+        system:
+          type: string
+          enum: [NTRP, UTR]
+        value:
+          type: string
+        level:
+          type: string
+          nullable: true
+        confidence:
+          type: string
+        matchesPlayed:
+          type: integer
+        lastMatchDate:
+          type: string
+          format: date
+          nullable: true
+
+    RatingHistoryResponse:
+      type: object
+      required:
+        - id
+        - system
+        - previousRating
+        - newRating
+        - ratingChange
+        - levelChanged
+        - smoothingApplied
+        - calculatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        matchId:
+          type: string
+          format: uuid
+          nullable: true
+        system:
+          type: string
+          enum: [NTRP, UTR]
+        previousRating:
+          type: string
+        newRating:
+          type: string
+        ratingChange:
+          type: string
+        percentChange:
+          type: string
+          nullable: true
+        previousLevel:
+          type: string
+          nullable: true
+        newLevel:
+          type: string
+          nullable: true
+        levelChanged:
+          type: boolean
+        dominanceFactor:
+          type: string
+          nullable: true
+        smoothingApplied:
+          type: boolean
+        smoothingFactor:
+          type: string
+          nullable: true
+        calculatedAt:
+          type: string
+          format: date-time
+
+    PendingAssessmentResponse:
+      type: object
+      required:
+        - userId
+      properties:
+        userId:
+          type: string
+          format: uuid
+        displayName:
+          type: string
           nullable: true

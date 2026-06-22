@@ -31,6 +31,7 @@ import org.skopeo.routes.configureCapabilityRoutes
 import org.skopeo.routes.configureContactRoutes
 import org.skopeo.routes.configureNameRoutes
 import org.skopeo.routes.configureRankingRoutes
+import org.skopeo.routes.configureRatingRoutes
 import org.skopeo.routes.configureUserRoutes
 import org.slf4j.event.Level
 
@@ -67,6 +68,7 @@ fun Application.module(
     configureContactRoutes()
     configureNameRoutes()
     configureCapabilityRoutes()
+    configureRatingRoutes()
     logger.info { "Skopeo API started successfully on port 8080" }
 }
 
