@@ -44,7 +44,7 @@ class ContactRepositoryTest {
             ProvisionUserCommand(
                 firebaseUid = uid,
                 identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                names = listOf(UserName(type = NameType.FIRST, value = "Test", isPrimary = true)),
+                names = listOf(UserName(type = NameType.FIRST, value = "Test")),
             ),
         ).id
 

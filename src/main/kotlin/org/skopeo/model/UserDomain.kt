@@ -7,8 +7,11 @@ import java.util.UUID
 /** Authorization roles granted to a user (broad for now; devolvable to fine-grained capabilities later). */
 enum class Capability { PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR }
 
-/** Name variants a user may carry (Filipino nicknames vs legal names; KYC matching). */
-enum class NameType { FIRST, MIDDLE, LAST, SUFFIX, NICKNAME, PREFERRED, FULL, GOVERNMENT }
+/**
+ * Name variants a user may carry (Filipino nicknames vs legal names; KYC matching).
+ * DISPLAY is the single active name shown in the UI — see [Name].
+ */
+enum class NameType { FIRST, MIDDLE, LAST, SUFFIX, NICKNAME, PREFERRED, FULL, GOVERNMENT, DISPLAY }
 
 enum class ContactType { EMAIL, PHONE }
 
@@ -22,10 +25,24 @@ enum class VerificationMethod { OAUTH_PROVIDER, EMAIL_LINK, SMS_OTP, WHATSAPP_OT
 /** Authentication provider a user signs in with (brokered by Firebase). */
 enum class AuthProvider { GOOGLE, FACEBOOK, PASSWORD }
 
+/** A name to be written (provisioning input); identity is assigned by the database. */
 data class UserName(
     val type: NameType,
     val value: String,
-    val isPrimary: Boolean = false,
+)
+
+/**
+ * A name as stored — the addressable sub-resource. Values are immutable: a name is disabled
+ * ([isActive] = false) rather than edited, and a new one added, so the table keeps the full
+ * history of a profile's names. The display name is the single active name of type DISPLAY.
+ */
+data class Name(
+    val id: UUID,
+    val userId: UUID,
+    val type: NameType,
+    val value: String,
+    val isActive: Boolean = true,
+    val disabledAt: LocalDateTime? = null,
 )
 
 /** A contact to be written (provisioning input); identity is assigned by the database. */
@@ -75,7 +92,7 @@ data class User(
     val country: String,
     val kycVerified: Boolean,
     val isActive: Boolean,
-    val names: List<UserName>,
+    val names: List<Name>,
     val contacts: List<Contact>,
     val identities: List<UserIdentity>,
     val capabilities: Set<Capability>,

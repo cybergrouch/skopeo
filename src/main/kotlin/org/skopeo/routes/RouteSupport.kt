@@ -9,10 +9,9 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.RoutingContext
 import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
-import org.skopeo.service.contact.ContactConflictException
-import org.skopeo.service.contact.ContactNotFoundException
+import org.skopeo.service.ConflictException
+import org.skopeo.service.ResourceNotFoundException
 import org.skopeo.service.user.ForbiddenException
-import org.skopeo.service.user.UserNotFoundException
 import org.skopeo.service.user.VerifiedFirebaseToken
 import java.util.UUID
 
@@ -59,16 +58,13 @@ internal fun RoutingContext.uuidParam(name: String): UUID {
 internal suspend fun RoutingContext.respondMappingErrors(block: suspend () -> Unit) {
     try {
         block()
-    } catch (e: UserNotFoundException) {
-        logger.info { e.message }
-        call.respond(HttpStatusCode.NotFound, errorBody(error = "Not found", message = e.message))
-    } catch (e: ContactNotFoundException) {
+    } catch (e: ResourceNotFoundException) {
         logger.info { e.message }
         call.respond(HttpStatusCode.NotFound, errorBody(error = "Not found", message = e.message))
     } catch (e: ForbiddenException) {
         logger.warn { "Access denied: ${e.message}" }
         call.respond(HttpStatusCode.Forbidden, errorBody(error = "Forbidden", message = e.message))
-    } catch (e: ContactConflictException) {
+    } catch (e: ConflictException) {
         logger.warn { "Conflict: ${e.message}" }
         call.respond(HttpStatusCode.Conflict, errorBody(error = "Conflict", message = e.message))
     } catch (e: IllegalArgumentException) {

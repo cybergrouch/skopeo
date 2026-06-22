@@ -224,6 +224,7 @@ tasks.jacocoTestReport {
                         "**/Security*.*",
                         "**/routes/UserRoutes*.*",
                         "**/routes/ContactRoutes*.*",
+                        "**/routes/NameRoutes*.*",
                         "**/routes/RouteSupport*.*",
                     )
                 }
@@ -272,6 +273,7 @@ tasks.jacocoTestCoverageVerification {
                         "**/Security*.*",
                         "**/routes/UserRoutes*.*",
                         "**/routes/ContactRoutes*.*",
+                        "**/routes/NameRoutes*.*",
                         "**/routes/RouteSupport*.*",
                     )
                 }

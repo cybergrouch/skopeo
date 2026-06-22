@@ -9,12 +9,11 @@ import org.jetbrains.exposed.sql.update
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.Contact
-import org.skopeo.model.NameType
+import org.skopeo.model.Name
 import org.skopeo.model.ProfilePatch
 import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
-import org.skopeo.model.UserName
 import java.util.UUID
 
 /**
@@ -40,7 +39,6 @@ class UserRepository {
                     it[UserNamesTable.userId] = userId
                     it[UserNamesTable.nameType] = name.type.name
                     it[UserNamesTable.value] = name.value
-                    it[UserNamesTable.isPrimary] = name.isPrimary
                 }
             }
 
@@ -136,17 +134,11 @@ class UserRepository {
     }
 }
 
-private fun namesOf(id: UUID): List<UserName> =
+private fun namesOf(id: UUID): List<Name> =
     UserNamesTable
         .selectAll()
         .where { UserNamesTable.userId eq id }
-        .map {
-            UserName(
-                type = NameType.valueOf(it[UserNamesTable.nameType]),
-                value = it[UserNamesTable.value],
-                isPrimary = it[UserNamesTable.isPrimary],
-            )
-        }
+        .map { it.toName() }
 
 private fun contactsOf(id: UUID): List<Contact> =
     ContactInformationTable
@@ -174,7 +166,7 @@ private fun capabilitiesOf(id: UUID): Set<Capability> =
         .toSet()
 
 private fun ResultRow.toUser(
-    names: List<UserName>,
+    names: List<Name>,
     contacts: List<Contact>,
     identities: List<UserIdentity>,
     capabilities: Set<Capability>,
