@@ -9,8 +9,9 @@ ktor:
 
 firebase:
   # Firebase project id — the issuer/audience anchor for verifying ID tokens.
-  # Set FIREBASE_PROJECT_ID in real environments; the default only suits local dev.
-  projectId: "$FIREBASE_PROJECT_ID:skopeo-dev"
+  # Defaults to the GCP project (skopeo-prod); override per-environment with
+  # FIREBASE_PROJECT_ID. (A project id is public, not a secret.)
+  projectId: "$FIREBASE_PROJECT_ID:skopeo-prod"
 
 database:
   url: "$DATABASE_URL:jdbc:postgresql://localhost:5432/SkopeoDb"
