@@ -81,6 +81,16 @@ org.gradle.java.installations.fromEnv=JAVA_HOME_17_X64,JAVA_HOME_21_X64
 
 (Harmless locally — Gradle ignores env vars that aren't set.) Without this, CI can fail to locate the 17 toolchain even though it works on your machine.
 
+### 1d. CI reporting (test results + coverage)
+
+After `./gradlew check`, three reporting steps surface results in the GitHub UI:
+
+- **Coverage summary** — `scripts/coverage-summary.py` parses the JaCoCo XML and writes an overall line/branch table (with the 75%/70% thresholds) plus a per-package breakdown to the run **Summary** page. Runs `if: always()` so coverage shows even when only the coverage gate fails. (Also runs locally: `python3 scripts/coverage-summary.py`.)
+- **Test report** — `mikepenz/action-junit-report` publishes a **Test Report** check run from the JUnit XML, with failures annotated on the PR diff. Needs `checks: write`.
+- **Coverage HTML on Pages** — on `main` pushes only, the JaCoCo HTML report (source melded with coverage) is deployed to **GitHub Pages** at `https://<owner>.github.io/<repo>/`. A `build` step stages it with `actions/upload-pages-artifact`; a separate `deploy-coverage` job publishes it with `actions/deploy-pages` (own `pages` concurrency group, `cancel-in-progress: false`). Needs `pages: write` + `id-token: write`.
+
+**One-time setup:** enable Pages in **GitHub → Settings → Pages → Source: GitHub Actions** before merging to `main`, otherwise the first `deploy-coverage` job will fail (the `build` job still passes). PR builds get the inline summary + the test-report check; the Pages site reflects the latest `main` build.
+
 ### 1b. Branch protection (the actual PR enforcement)
 
 In **GitHub → Settings → Branches → Add rule** for `main`:
