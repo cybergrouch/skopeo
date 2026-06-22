@@ -1,40 +1,43 @@
 # Skopeo Database Schema
 
-This document describes the database schema for the Skopeo MVP and future enhancements.
+This document describes the Skopeo database schema (migration `V1__create_initial_schema.sql`) and planned future enhancements.
+
+> **Status.** The schema is defined in a single clean migration (`V1`); nothing has been applied to a persistent database yet, so the design is still free to evolve. Sections marked _Future_ (social-media verification, tournaments, seeding) are aspirational and not yet migrated.
 
 ## Design Principles
 
-1. **Team-Based Match Model**: Matches are between teams (not players directly) to support both singles and doubles
-2. **Historical Rating Tracking**: All rating changes are preserved for audit and confidence calculations
-3. **Future-Proof**: Schema supports upcoming features (doubles, social verification, UTR integration)
-4. **Philippine-Specific KYC**: Built-in support for Philippine government ID validation
+1. **Unified users**: Everyone — players, hosts, club owners, administrators — is a `users` row. What a user may *do* is governed by `user_capabilities`, not by which table they live in.
+2. **Identity & contact separation**: Authentication providers (`user_identities`), names (`user_names`), and contacts (`contact_information`) live in dedicated tables rather than as columns on `users`.
+3. **Per-contact verification**: Each email/phone carries its own `verification_status`; OAuth-sourced contacts are trusted immediately, manual ones are verified via link/OTP.
+4. **Team-Based Match Model**: Matches are between teams (not users directly) to support both singles and doubles.
+5. **Historical Rating Tracking**: All rating changes are preserved for audit and confidence calculations.
+6. **Philippine-Specific KYC**: Built-in support for Philippine government ID validation.
 
 ## Entity Relationship Diagram
 
 ```mermaid
 erDiagram
-    %% Core Player Management
-    PLAYERS ||--o{ PLAYER_KYC : "has"
-    PLAYERS ||--o{ PLAYER_SOCIAL_MEDIA : "has"
-    PLAYERS ||--o{ PLAYER_RATINGS : "has"
-    PLAYERS ||--o{ PLAYER_RATING_HISTORY : "has"
-    PLAYERS ||--o{ TEAM_PLAYERS : "member of"
+    %% User management
+    USERS ||--o{ USER_NAMES : "has many"
+    USERS ||--o{ USER_IDENTITIES : "authenticates via"
+    USERS ||--o{ CONTACT_INFORMATION : "has (1 email, 1 phone)"
+    USERS ||--o{ USER_CAPABILITIES : "is granted"
+    USERS ||--o{ USER_KYC : "verifies via"
+    USERS ||--o{ USER_RATINGS : "has"
+    USERS ||--o{ USER_RATING_HISTORY : "has"
+    USERS ||--o{ TEAM_USERS : "member of"
 
-    %% Teams and Matches
-    TEAMS ||--o{ TEAM_PLAYERS : "composed of"
-    TEAMS ||--o{ MATCHES : "team1"
-    TEAMS ||--o{ MATCHES : "team2"
-
-    %% Match Structure
+    %% Teams and matches
+    TEAMS ||--o{ TEAM_USERS : "composed of"
+    TEAMS ||--o{ MATCHES : "team1 / team2 / winner"
     MATCHES ||--o{ MATCH_SETS : "contains"
     MATCH_SETS ||--o| MATCH_SET_TIEBREAKS : "has"
-    MATCHES ||--o{ PLAYER_RATING_HISTORY : "generates"
+    MATCHES ||--o{ USER_RATING_HISTORY : "generates"
 
-    PLAYERS {
+    USERS {
         uuid id PK
-        string email UK "unique, not null"
-        string name "not null"
-        string phone
+        string firebase_uid UK "Firebase Auth UID (auth anchor); nullable"
+        string photo_url "from provider or upload"
         date date_of_birth
         string gender "M/F/Other"
         string city
@@ -46,65 +49,87 @@ erDiagram
         timestamp updated_at
     }
 
-    PLAYER_KYC {
+    USER_NAMES {
         uuid id PK
-        uuid player_id FK "not null"
+        uuid user_id FK "not null"
+        string name_type "FIRST, MIDDLE, LAST, SUFFIX, NICKNAME, PREFERRED, FULL, GOVERNMENT"
+        string value "not null"
+        boolean is_primary "the display name (one per user)"
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    USER_IDENTITIES {
+        uuid id PK
+        uuid user_id FK "not null"
+        string provider "GOOGLE, FACEBOOK, PASSWORD"
+        string provider_uid "provider subject id (via Firebase)"
+        boolean is_primary
+        timestamp created_at
+    }
+
+    CONTACT_INFORMATION {
+        uuid id PK
+        uuid user_id FK "not null"
+        string contact_type "EMAIL, PHONE"
+        string value "the email or phone number"
+        boolean is_primary
+        string source "GOOGLE, FACEBOOK, MANUAL"
+        string verification_status "PENDING, VERIFIED, FAILED"
+        string verification_method "OAUTH_PROVIDER, EMAIL_LINK, SMS_OTP, WHATSAPP_OTP, VIBER_OTP"
+        timestamp verified_at
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    USER_CAPABILITIES {
+        uuid id PK
+        uuid user_id FK "not null"
+        string capability "PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR"
+        uuid granted_by FK "user who granted it (nullable)"
+        timestamp granted_at
+    }
+
+    USER_KYC {
+        uuid id PK
+        uuid user_id FK "not null"
         string id_type "PASSPORT, DRIVERS_LICENSE, UMID, SSS, GSIS, NATIONAL_ID"
         string id_number UK "unique per type"
-        string full_name "as per ID"
+        string full_name "as printed on the ID"
         date expiry_date
         string verification_status "PENDING, VERIFIED, REJECTED"
-        string verification_notes
-        string document_url "encrypted storage path"
+        string document_url "storage path"
         timestamp verified_at
         uuid verified_by FK "admin user id"
         timestamp created_at
         timestamp updated_at
     }
 
-    PLAYER_SOCIAL_MEDIA {
+    USER_RATINGS {
         uuid id PK
-        uuid player_id FK "not null"
-        string platform "FACEBOOK, INSTAGRAM, TWITTER, LINKEDIN"
-        string profile_url
-        string username
-        boolean verified "default: false"
-        timestamp verified_at
-        string verification_token
-        timestamp created_at
-        timestamp updated_at
-    }
-
-    PLAYER_RATINGS {
-        uuid id PK
-        uuid player_id FK "not null, unique per system"
+        uuid user_id FK "not null, unique per system"
         string rating_system "NTRP, UTR"
-        decimal current_rating "precision: 10,6"
-        string current_level "published level"
+        decimal current_rating "precision 10,6"
+        string current_level
         decimal confidence_score "0.0-1.0, decays over time"
-        integer matches_played "total matches for this rating"
+        integer matches_played
         date last_match_date
-        decimal utr_rating "for cross-reference"
+        decimal utr_rating
         timestamp utr_last_synced
         timestamp created_at
         timestamp updated_at
     }
 
-    PLAYER_RATING_HISTORY {
+    USER_RATING_HISTORY {
         uuid id PK
-        uuid player_id FK "not null"
+        uuid user_id FK "not null"
         uuid match_id FK
         string rating_system "NTRP, UTR"
         decimal previous_rating
         decimal new_rating
         decimal rating_change
-        decimal percent_change
-        string previous_level
-        string new_level
-        boolean level_changed
         decimal dominance_factor "match performance metric"
         boolean smoothing_applied
-        decimal smoothing_factor
         timestamp calculated_at
     }
 
@@ -112,17 +137,17 @@ erDiagram
         uuid id PK
         string name "not null"
         string team_type "SINGLES, DOUBLES, MIXED_DOUBLES"
-        boolean is_temporary "true for ad-hoc teams"
-        string rating_system "NTRP, UTR - must match player systems"
+        boolean is_temporary
+        string rating_system "NTRP, UTR"
         timestamp created_at
         timestamp updated_at
     }
 
-    TEAM_PLAYERS {
+    TEAM_USERS {
         uuid id PK
         uuid team_id FK "not null"
-        uuid player_id FK "not null"
-        integer position "1 or 2, for doubles player order"
+        uuid user_id FK "not null"
+        integer position "1 or 2, for doubles order"
         timestamp joined_at
         timestamp left_at
     }
@@ -137,10 +162,8 @@ erDiagram
         string rating_system "NTRP, UTR"
         date match_date "not null"
         string venue
-        string tournament_name
-        string match_round
         string status "SCHEDULED, IN_PROGRESS, COMPLETED, CANCELLED"
-        jsonb metadata "flexible field for additional data"
+        jsonb metadata
         timestamp created_at
         timestamp updated_at
     }
@@ -149,9 +172,9 @@ erDiagram
         uuid id PK
         uuid match_id FK "not null"
         integer set_number "1-5"
-        integer team1_games "not null"
-        integer team2_games "not null"
-        uuid winner_team_id FK "not null"
+        integer team1_games
+        integer team2_games
+        uuid winner_team_id FK
         boolean has_tiebreak
         timestamp created_at
     }
@@ -159,492 +182,208 @@ erDiagram
     MATCH_SET_TIEBREAKS {
         uuid id PK
         uuid match_set_id FK "not null, unique"
-        integer team1_points "not null"
-        integer team2_points "not null"
-        uuid winner_team_id FK "not null"
+        integer team1_points
+        integer team2_points
+        uuid winner_team_id FK
         timestamp created_at
     }
 ```
 
+## User Management & Signup
+
+The design behind `users` + `user_names` + `user_identities` + `contact_information` + `user_capabilities`.
+
+### Signup flows — all brokered by Firebase Auth
+
+Three signup flows are supported: **Google**, **Facebook**, and **manual** (email/password). All three go through **Firebase Authentication** (the auth decision in [WEB_UI_ARCHITECTURE.md §6](WEB_UI_ARCHITECTURE.md)), so the API never implements raw OAuth:
+
+1. The client signs in with the Firebase SDK (`GoogleAuthProvider`, `FacebookAuthProvider`, or email/password).
+2. Firebase returns a signed **ID token (JWT)** plus profile claims (`uid`, `email`, `name`, `picture`, `firebase.sign_in_provider`).
+3. The Ktor API verifies the JWT (`ktor-server-auth-jwt`) and, on the **first** sign-in for an unknown `uid`, provisions in one transaction: the `users` row (`firebase_uid`, `photo_url`), the name rows (`user_names`), the identity (`user_identities`), the email (`contact_information`, `source = GOOGLE|FACEBOOK`, `VERIFIED`), and a default `PLAYER` capability. Idempotent via the `firebase_uid` and `uq_identity_provider_uid` unique constraints.
+
+### What the providers actually supply
+
+| Field | Google | Facebook | Manual |
+|---|---|---|---|
+| First / last name | ✅ `given_name`/`family_name` | ✅ `first_name`/`last_name` | ✅ entered |
+| Email | ✅ verified | ⚠️ only if the email permission was granted | entered, **unverified** |
+| Profile picture | ✅ | ✅ | optional upload |
+| **Phone** | ❌ not exposed | ❌ not exposed | entered, **unverified** |
+
+- **Phone is effectively always manual** — neither Google nor Facebook returns a phone number, so it's a post-signup entry that always needs verification.
+- **Facebook email isn't guaranteed** (phone-only accounts, or the user denies the email scope) — handle the missing-email case.
+
+### Names (`user_names`)
+
+Filipinos are commonly known by a nickname distinct from their legal/government name, so names are **multiple per user**, typed (`FIRST`, `MIDDLE`, `LAST`, `SUFFIX`, `NICKNAME`, `PREFERRED`, `FULL`, `GOVERNMENT`). Exactly one row is `is_primary` (the display name shown in the UI). The `GOVERNMENT` name is what you'd match against a KYC record (`user_kyc.full_name` holds the name as printed on the ID). The app must ensure at least one name exists at signup (the DB can't require a child row).
+
+### Contacts (`contact_information`)
+
+**Policy: one email + one phone per user** (`uq_contact_one_per_type`), each with its own verification:
+- `source IN (GOOGLE, FACEBOOK)` → inserted `VERIFIED` (method `OAUTH_PROVIDER`).
+- `source = MANUAL` email → Firebase's email-verification link drives `PENDING` → `VERIFIED` (method `EMAIL_LINK`).
+- Phone → OTP (method `SMS_OTP` / `WHATSAPP_OTP` / `VIBER_OTP`).
+- **Changing** an email/phone later = update the row (re-enters `PENDING`, re-verify). To support "verify the new phone before retiring the old one", relax `uq_contact_one_per_type` to `WHERE is_primary`.
+- A globally-unique rule (`uq_contact_verified_value`) ensures no two users share the same **verified** email/phone.
+
+### Phone verification channel analysis
+
+Phone verification is **contact verification, not authentication** — separate from Firebase login. Firebase's own phone auth is **SMS only**, so WhatsApp/Viber need a separate integration.
+
+- **WhatsApp via Meta directly is impractical for a pilot** — Meta's WhatsApp Cloud API authentication templates are eligibility-gated (a "Scaling Path" plus ~2,000 business-initiated conversations/day per number) ([Meta authentication templates](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/authentication-templates/authentication-templates/)). Use a **CPaaS Verify API** (Twilio Verify, Infobip, Vonage, Bird) running OTP on pre-approved shared infrastructure (~$0.014–0.022 per OTP) ([WhatsApp OTP guide 2026](https://ozonetel.com/otp-via-whatsapp/)).
+- **WhatsApp is the wrong _default_ channel for the Philippines** — PH penetration is **Messenger ~95%, Viber ~71%, WhatsApp ~40%** ([Infobip — messaging apps by country](https://www.infobip.com/blog/most-popular-messaging-apps-by-country)); Viber is the #1 *business* messaging app in PH ([NoypiGeeks](https://www.noypigeeks.com/tech-news/viber-whatsapp-business-messaging-ph/)). WhatsApp alone would exclude ~60% of users.
+- **Recommendation:** build verification **channel-agnostic** behind a CPaaS Verify API (one interface over SMS + Viber + WhatsApp), default to **SMS** with optional Viber/WhatsApp and SMS fallback. The `verification_method` enum already models all channels.
+
+### Authorization (`user_capabilities`)
+
+A user is granted one or more broad **capabilities**: `PLAYER`, `HOST`, `CLUB_OWNER`, `ADMINISTRATOR` (many per user, no duplicates). New signups default to `PLAYER`; admins grant the rest, recorded with `granted_by` for audit. This is intentionally coarse for now — when fine-grained permissions are needed, add a capability catalog + role→capability mapping without touching `users`; this table becomes the role-assignment layer.
+
 ## Table Descriptions
 
-### Core Tables
+### Core user tables
 
-#### `PLAYERS`
-Stores player profile information.
+- **`users`** — one row per person. `firebase_uid` is the auth anchor (the verified JWT's `uid`), nullable+unique so an admin-provisioned user can exist before claiming a login. Indexes: PK `id`, unique `firebase_uid`, `created_at`, `is_active`.
+- **`user_names`** — typed names, one `is_primary` display name (partial unique `uq_user_primary_name`).
+- **`user_identities`** — linked auth providers; unique `(provider, provider_uid)`.
+- **`contact_information`** — emails/phones; one per type per user (`uq_contact_one_per_type`), one verified owner globally (`uq_contact_verified_value`).
+- **`user_capabilities`** — role grants; unique `(user_id, capability)`.
+- **`user_kyc`** — Philippine government IDs. ID types: `PASSPORT`, `DRIVERS_LICENSE`, `UMID`, `SSS`, `GSIS`, `NATIONAL_ID`. Workflow: upload → `PENDING` → admin review → `VERIFIED`/`REJECTED`; on verify, `users.kyc_verified` is set. `verified_by` FKs to the admin `users` row.
 
-**Key Fields:**
-- `email`: Unique identifier for authentication
-- `kyc_verified`: Whether Philippine government ID has been verified
-- `is_active`: Soft delete flag
+### Rating tables
 
-**Indexes:**
-- Primary: `id`
-- Unique: `email`
-- Index: `created_at`, `is_active`
+- **`user_ratings`** — current rating per user per system (NTRP/UTR), one row each (`uq_user_rating_system`); `confidence_score` decays with `last_match_date`.
+- **`user_rating_history`** — immutable audit trail of every rating change (with `dominance_factor`, smoothing flags, `calculated_at`).
 
----
+### Match structure
 
-#### `PLAYER_KYC`
-Philippine-specific government ID verification.
-
-**Supported ID Types:**
-- `PASSPORT`: Philippine Passport
-- `DRIVERS_LICENSE`: LTO Driver's License
-- `UMID`: Unified Multi-Purpose ID
-- `SSS`: Social Security System ID
-- `GSIS`: Government Service Insurance System ID
-- `NATIONAL_ID`: Philippine National ID (PhilSys)
-
-**Verification Workflow:**
-1. Player uploads ID document → `PENDING`
-2. Admin reviews → `VERIFIED` or `REJECTED`
-3. `players.kyc_verified` flag updated on verification
-
-**Indexes:**
-- Primary: `id`
-- Foreign: `player_id`
-- Unique: `(id_type, id_number)` - prevent duplicate IDs
-- Index: `verification_status`
-
----
-
-#### `PLAYER_SOCIAL_MEDIA`
-Social media account verification for additional identity confirmation.
-
-**Supported Platforms:**
-- Facebook, Instagram, Twitter (X), LinkedIn
-
-**Future Enhancement:**
-- Automated verification via OAuth tokens
-- Social graph analysis for fraud detection
-
-**Indexes:**
-- Primary: `id`
-- Foreign: `player_id`
-- Unique: `(player_id, platform)` - one account per platform
-
----
-
-#### `PLAYER_RATINGS`
-Current rating state for each player in each rating system.
-
-**Key Features:**
-- One record per player per rating system (NTRP/UTR)
-- `confidence_score`: Decays over time based on `last_match_date`
-- `utr_rating`: Cached UTR value for cross-validation
-
-**Confidence Score Algorithm:**
-```
-confidence = 1.0 - (days_since_last_match / 365)
-confidence = max(0.0, confidence)
-```
-
-**Indexes:**
-- Primary: `id`
-- Foreign: `player_id`
-- Unique: `(player_id, rating_system)`
-- Index: `last_match_date` (for confidence calculation)
-
----
-
-#### `PLAYER_RATING_HISTORY`
-Immutable audit trail of all rating changes.
-
-**Purpose:**
-- Historical analysis and reporting
-- Rating confidence calculations
-- Dispute resolution
-- Algorithm tuning
-
-**Key Fields:**
-- `dominance_factor`: Match performance metric from calculator
-- `smoothing_applied`: Whether USTA-style smoothing was used
-- `calculated_at`: Timestamp of calculation (not match date)
-
-**Indexes:**
-- Primary: `id`
-- Foreign: `player_id`, `match_id`
-- Index: `(player_id, calculated_at)` - for player rating history queries
-- Index: `rating_system` - for system-specific reports
-
----
-
-### Match Structure
-
-#### `TEAMS`
-Represents match participants (singles or doubles teams).
-
-**Team Types:**
-- `SINGLES`: 1 player (current MVP)
-- `DOUBLES`: 2 players (same gender)
-- `MIXED_DOUBLES`: 2 players (male + female)
-
-**Temporary vs Permanent:**
-- `is_temporary = true`: Ad-hoc team for a single match
-- `is_temporary = false`: Established doubles partnership
-
-**Constraints:**
-- SINGLES teams must have exactly 1 player
-- DOUBLES/MIXED_DOUBLES teams must have exactly 2 players
-- All players in a team must use the same rating system
-
-**Indexes:**
-- Primary: `id`
-- Index: `team_type`, `is_temporary`
-
----
-
-#### `TEAM_PLAYERS`
-Junction table for team membership.
-
-**Key Fields:**
-- `position`: For doubles, indicates player order (1 = primary, 2 = secondary)
-- `left_at`: Supports team roster changes over time
-
-**Constraints:**
-- Current active members: `left_at IS NULL`
-- Historical tracking: `left_at IS NOT NULL`
-
-**Indexes:**
-- Primary: `id`
-- Foreign: `team_id`, `player_id`
-- Unique: `(team_id, player_id, joined_at)` - prevent duplicate memberships
-- Index: `left_at IS NULL` - for current team rosters
-
----
-
-#### `MATCHES`
-Match records between two teams.
-
-**Key Fields:**
-- `match_type`: Must match team types
-- `rating_system`: All participants must use this system
-- `status`: Workflow support (future: live scoring)
-- `metadata`: JSON field for extensibility (e.g., court number, weather conditions)
-
-**Business Rules:**
-- `team1_id != team2_id`
-- `winner_team_id IN (team1_id, team2_id)`
-- Both teams must use the same rating system
-
-**Indexes:**
-- Primary: `id`
-- Foreign: `team1_id`, `team2_id`, `winner_team_id`
-- Index: `match_date`, `status`, `rating_system`
-- Index: `(team1_id, match_date)`, `(team2_id, match_date)` - for player match history
-
----
-
-#### `MATCH_SETS`
-Set-by-set scoring.
-
-**Validation Rules:**
-- Winner must have 6+ games
-- Must win by 2 games (except tiebreak sets)
-- Tiebreak sets: 7-6 or 6-7 only
-
-**Indexes:**
-- Primary: `id`
-- Foreign: `match_id`, `winner_team_id`
-- Index: `(match_id, set_number)` - for set ordering
-
----
-
-#### `MATCH_SET_TIEBREAKS`
-Optional tiebreak details.
-
-**Validation Rules:**
-- Winner must have 7+ points
-- Must win by 2 points
-
-**Indexes:**
-- Primary: `id`
-- Foreign: `match_set_id` (unique - one tiebreak per set)
-- Foreign: `winner_team_id`
-
----
+- **`teams`** — match participants (SINGLES = 1 user, DOUBLES/MIXED = 2); `is_temporary` distinguishes ad-hoc from established partnerships.
+- **`team_users`** — team membership junction; `position` (1/2) for doubles order; `left_at` tracks roster history.
+- **`matches`** — between two teams; `winner_team_id ∈ {team1, team2}`, `team1 ≠ team2`, all participants share one `rating_system`.
+- **`match_sets`** / **`match_set_tiebreaks`** — set-by-set scoring and optional tiebreak detail.
 
 ## Data Integrity Constraints
 
-### Foreign Key Constraints
+### Foreign keys
 
 ```sql
--- Player relationships
-ALTER TABLE player_kyc ADD CONSTRAINT fk_player_kyc_player
-    FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE;
+-- User cluster
+ALTER TABLE user_names         ADD CONSTRAINT fk_user_names_user            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+ALTER TABLE user_identities    ADD CONSTRAINT fk_user_identities_user       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+ALTER TABLE contact_information ADD CONSTRAINT fk_contact_user              FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+ALTER TABLE user_capabilities  ADD CONSTRAINT fk_user_capabilities_user     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+ALTER TABLE user_capabilities  ADD CONSTRAINT fk_user_capabilities_granted_by FOREIGN KEY (granted_by) REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE user_kyc           ADD CONSTRAINT fk_user_kyc_user              FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+ALTER TABLE user_kyc           ADD CONSTRAINT fk_user_kyc_verified_by       FOREIGN KEY (verified_by) REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE user_ratings       ADD CONSTRAINT fk_user_ratings_user          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+ALTER TABLE user_rating_history ADD CONSTRAINT fk_rating_history_user       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+ALTER TABLE user_rating_history ADD CONSTRAINT fk_rating_history_match      FOREIGN KEY (match_id) REFERENCES matches(id) ON DELETE SET NULL;
 
-ALTER TABLE player_social_media ADD CONSTRAINT fk_player_social_player
-    FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE;
-
-ALTER TABLE player_ratings ADD CONSTRAINT fk_player_ratings_player
-    FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE;
-
-ALTER TABLE player_rating_history ADD CONSTRAINT fk_rating_history_player
-    FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE;
-
-ALTER TABLE player_rating_history ADD CONSTRAINT fk_rating_history_match
-    FOREIGN KEY (match_id) REFERENCES matches(id) ON DELETE SET NULL;
-
--- Team relationships
-ALTER TABLE team_players ADD CONSTRAINT fk_team_players_team
-    FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE;
-
-ALTER TABLE team_players ADD CONSTRAINT fk_team_players_player
-    FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE;
-
--- Match relationships
-ALTER TABLE matches ADD CONSTRAINT fk_matches_team1
-    FOREIGN KEY (team1_id) REFERENCES teams(id) ON DELETE RESTRICT;
-
-ALTER TABLE matches ADD CONSTRAINT fk_matches_team2
-    FOREIGN KEY (team2_id) REFERENCES teams(id) ON DELETE RESTRICT;
-
-ALTER TABLE matches ADD CONSTRAINT fk_matches_winner
-    FOREIGN KEY (winner_team_id) REFERENCES teams(id) ON DELETE RESTRICT;
-
-ALTER TABLE match_sets ADD CONSTRAINT fk_match_sets_match
-    FOREIGN KEY (match_id) REFERENCES matches(id) ON DELETE CASCADE;
-
-ALTER TABLE match_sets ADD CONSTRAINT fk_match_sets_winner
-    FOREIGN KEY (winner_team_id) REFERENCES teams(id) ON DELETE RESTRICT;
-
-ALTER TABLE match_set_tiebreaks ADD CONSTRAINT fk_tiebreaks_set
-    FOREIGN KEY (match_set_id) REFERENCES match_sets(id) ON DELETE CASCADE;
-
-ALTER TABLE match_set_tiebreaks ADD CONSTRAINT fk_tiebreaks_winner
-    FOREIGN KEY (winner_team_id) REFERENCES teams(id) ON DELETE RESTRICT;
+-- Team & match cluster
+ALTER TABLE team_users ADD CONSTRAINT fk_team_users_team FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE;
+ALTER TABLE team_users ADD CONSTRAINT fk_team_users_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+ALTER TABLE matches ADD CONSTRAINT fk_matches_team1  FOREIGN KEY (team1_id)       REFERENCES teams(id) ON DELETE RESTRICT;
+ALTER TABLE matches ADD CONSTRAINT fk_matches_team2  FOREIGN KEY (team2_id)       REFERENCES teams(id) ON DELETE RESTRICT;
+ALTER TABLE matches ADD CONSTRAINT fk_matches_winner FOREIGN KEY (winner_team_id) REFERENCES teams(id) ON DELETE RESTRICT;
+ALTER TABLE match_sets ADD CONSTRAINT fk_match_sets_match  FOREIGN KEY (match_id) REFERENCES matches(id) ON DELETE CASCADE;
+ALTER TABLE match_sets ADD CONSTRAINT fk_match_sets_winner FOREIGN KEY (winner_team_id) REFERENCES teams(id) ON DELETE RESTRICT;
+ALTER TABLE match_set_tiebreaks ADD CONSTRAINT fk_tiebreaks_set    FOREIGN KEY (match_set_id)   REFERENCES match_sets(id) ON DELETE CASCADE;
+ALTER TABLE match_set_tiebreaks ADD CONSTRAINT fk_tiebreaks_winner FOREIGN KEY (winner_team_id) REFERENCES teams(id) ON DELETE RESTRICT;
 ```
 
-### Check Constraints
+### Check & uniqueness constraints (highlights)
 
 ```sql
--- Player validation
-ALTER TABLE players ADD CONSTRAINT chk_players_email
-    CHECK (email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$');
+ALTER TABLE users ADD CONSTRAINT chk_users_gender CHECK (gender IN ('M', 'F', 'Other'));
 
-ALTER TABLE players ADD CONSTRAINT chk_players_gender
-    CHECK (gender IN ('M', 'F', 'Other'));
+ALTER TABLE user_names ADD CONSTRAINT chk_name_type
+    CHECK (name_type IN ('FIRST','MIDDLE','LAST','SUFFIX','NICKNAME','PREFERRED','FULL','GOVERNMENT'));
+CREATE UNIQUE INDEX uq_user_primary_name ON user_names(user_id) WHERE is_primary;
 
--- KYC validation
-ALTER TABLE player_kyc ADD CONSTRAINT chk_kyc_id_type
-    CHECK (id_type IN ('PASSPORT', 'DRIVERS_LICENSE', 'UMID', 'SSS', 'GSIS', 'NATIONAL_ID'));
+ALTER TABLE user_identities ADD CONSTRAINT chk_identity_provider CHECK (provider IN ('GOOGLE','FACEBOOK','PASSWORD'));
+ALTER TABLE user_identities ADD CONSTRAINT uq_identity_provider_uid UNIQUE (provider, provider_uid);
 
-ALTER TABLE player_kyc ADD CONSTRAINT chk_kyc_status
-    CHECK (verification_status IN ('PENDING', 'VERIFIED', 'REJECTED'));
+ALTER TABLE contact_information ADD CONSTRAINT chk_contact_type   CHECK (contact_type IN ('EMAIL','PHONE'));
+ALTER TABLE contact_information ADD CONSTRAINT chk_contact_source CHECK (source IN ('GOOGLE','FACEBOOK','MANUAL'));
+ALTER TABLE contact_information ADD CONSTRAINT chk_contact_status CHECK (verification_status IN ('PENDING','VERIFIED','FAILED'));
+ALTER TABLE contact_information ADD CONSTRAINT chk_contact_method
+    CHECK (verification_method IS NULL OR verification_method IN ('OAUTH_PROVIDER','EMAIL_LINK','SMS_OTP','WHATSAPP_OTP','VIBER_OTP'));
+CREATE UNIQUE INDEX uq_contact_one_per_type   ON contact_information(user_id, contact_type);
+CREATE UNIQUE INDEX uq_contact_verified_value ON contact_information(contact_type, value) WHERE verification_status = 'VERIFIED';
 
--- Social media validation
-ALTER TABLE player_social_media ADD CONSTRAINT chk_social_platform
-    CHECK (platform IN ('FACEBOOK', 'INSTAGRAM', 'TWITTER', 'LINKEDIN'));
+ALTER TABLE user_capabilities ADD CONSTRAINT chk_capability CHECK (capability IN ('PLAYER','HOST','CLUB_OWNER','ADMINISTRATOR'));
+ALTER TABLE user_capabilities ADD CONSTRAINT uq_user_capability UNIQUE (user_id, capability);
 
--- Rating validation
-ALTER TABLE player_ratings ADD CONSTRAINT chk_rating_system
-    CHECK (rating_system IN ('NTRP', 'UTR'));
-
-ALTER TABLE player_ratings ADD CONSTRAINT chk_rating_range_ntrp
-    CHECK (rating_system != 'NTRP' OR (current_rating >= 1.0 AND current_rating <= 7.0));
-
-ALTER TABLE player_ratings ADD CONSTRAINT chk_rating_range_utr
-    CHECK (rating_system != 'UTR' OR (current_rating >= 1.0 AND current_rating <= 16.0));
-
-ALTER TABLE player_ratings ADD CONSTRAINT chk_confidence_range
-    CHECK (confidence_score >= 0.0 AND confidence_score <= 1.0);
-
--- Team validation
-ALTER TABLE teams ADD CONSTRAINT chk_team_type
-    CHECK (team_type IN ('SINGLES', 'DOUBLES', 'MIXED_DOUBLES'));
-
-ALTER TABLE team_players ADD CONSTRAINT chk_team_position
-    CHECK (position IN (1, 2));
-
--- Match validation
-ALTER TABLE matches ADD CONSTRAINT chk_match_type
-    CHECK (match_type IN ('SINGLES', 'DOUBLES', 'MIXED_DOUBLES'));
-
-ALTER TABLE matches ADD CONSTRAINT chk_match_format
-    CHECK (match_format IN ('BEST_OF_THREE', 'BEST_OF_FIVE'));
-
-ALTER TABLE matches ADD CONSTRAINT chk_match_status
-    CHECK (status IN ('SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'));
-
-ALTER TABLE matches ADD CONSTRAINT chk_match_teams_different
-    CHECK (team1_id != team2_id);
-
--- Set validation
-ALTER TABLE match_sets ADD CONSTRAINT chk_set_number
-    CHECK (set_number BETWEEN 1 AND 5);
-
-ALTER TABLE match_sets ADD CONSTRAINT chk_set_games_positive
-    CHECK (team1_games >= 0 AND team2_games >= 0);
-
--- Tiebreak validation
-ALTER TABLE match_set_tiebreaks ADD CONSTRAINT chk_tiebreak_points_positive
-    CHECK (team1_points >= 0 AND team2_points >= 0);
+-- Ratings, teams, matches: NTRP 1.0-7.0 / UTR 1.0-16.0 range checks, team/match type enums,
+-- winner-in-match, team1!=team2, etc. (see V1 migration for the full list)
 ```
-
----
-
-## Future Enhancements
-
-### Seeding Generation (Feature #10)
-**Required Changes:**
-- Add `seeding_rank` to `players` table (calculated field)
-- Create `TOURNAMENTS` table
-- Create `TOURNAMENT_DRAWS` table with seeding positions
-
-### UTR Integration (Feature #12)
-**Required Changes:**
-- Add `utr_player_id` to `players` table
-- Add `utr_last_synced` timestamp
-- Create scheduled job to sync UTR ratings
-
-### Dynamic Rating Confidence (Feature #14)
-**Already Supported:**
-- `player_ratings.confidence_score` field exists
-- `player_ratings.last_match_date` for decay calculation
-- `player_rating_history` for trend analysis
-
-### Match Statistics (Future)
-**Potential Tables:**
-- `MATCH_STATISTICS`: Aces, double faults, winners, unforced errors
-- `POINT_BY_POINT`: Granular point tracking for analytics
-
----
-
-## Migration Strategy
-
-### Phase 1: Core Tables (MVP)
-1. `players`
-2. `player_kyc`
-3. `teams`
-4. `team_players`
-5. `matches`
-6. `match_sets`
-7. `match_set_tiebreaks`
-8. `player_ratings`
-9. `player_rating_history`
-
-### Phase 2: Enhanced Features
-10. `player_social_media`
-11. Add UTR integration fields
-12. Add confidence scoring
-
-### Phase 3: Tournament Management
-13. `tournaments`
-14. `tournament_draws`
-15. `seeding_ranks`
-
----
 
 ## Sample Queries
 
-### Get Player's Current Ratings
+### A user's display name + current ratings
+
 ```sql
 SELECT
-    p.name,
-    pr.rating_system,
-    pr.current_rating,
-    pr.current_level,
-    pr.confidence_score,
-    pr.matches_played,
-    pr.last_match_date,
-    CASE
-        WHEN pr.last_match_date > CURRENT_DATE - INTERVAL '30 days' THEN 'Active'
-        WHEN pr.last_match_date > CURRENT_DATE - INTERVAL '90 days' THEN 'Moderate'
-        ELSE 'Inactive'
-    END as activity_status
-FROM players p
-JOIN player_ratings pr ON p.id = pr.player_id
-WHERE p.email = 'player@example.com';
+    n.value AS display_name,
+    r.rating_system,
+    r.current_rating,
+    r.current_level,
+    r.confidence_score,
+    r.last_match_date
+FROM users u
+JOIN user_names n   ON n.user_id = u.id AND n.is_primary
+JOIN user_ratings r ON r.user_id = u.id
+WHERE u.id = '<user-uuid>';
 ```
 
-### Get Player's Match History
+### Find a user by verified email
+
 ```sql
-SELECT
-    m.match_date,
-    t1.name as team1_name,
-    t2.name as team2_name,
-    CASE WHEN m.winner_team_id = t1.id THEN t1.name ELSE t2.name END as winner,
-    STRING_AGG(
-        ms.team1_games || '-' || ms.team2_games,
-        ', ' ORDER BY ms.set_number
-    ) as score,
-    prh.rating_change,
-    prh.new_rating
-FROM matches m
-JOIN teams t1 ON m.team1_id = t1.id
-JOIN teams t2 ON m.team2_id = t2.id
-JOIN match_sets ms ON m.id = ms.match_id
-JOIN team_players tp ON tp.team_id IN (t1.id, t2.id)
-JOIN player_rating_history prh ON prh.match_id = m.id AND prh.player_id = tp.player_id
-WHERE tp.player_id = '<player-uuid>'
-    AND tp.left_at IS NULL
-GROUP BY m.id, m.match_date, t1.name, t2.name, m.winner_team_id, prh.rating_change, prh.new_rating
-ORDER BY m.match_date DESC;
+SELECT u.*
+FROM users u
+JOIN contact_information c ON c.user_id = u.id
+WHERE c.contact_type = 'EMAIL'
+  AND c.value = 'user@example.com'
+  AND c.verification_status = 'VERIFIED';
 ```
 
-### Get Top-Ranked Players (Seeding List)
+### A user's capabilities
+
+```sql
+SELECT capability FROM user_capabilities WHERE user_id = '<user-uuid>';
+```
+
+### Seeding list (top NTRP, active)
+
 ```sql
 SELECT
-    p.name,
-    pr.current_rating,
-    pr.current_level,
-    pr.matches_played,
-    pr.confidence_score,
-    pr.last_match_date,
-    ROW_NUMBER() OVER (ORDER BY pr.current_rating DESC, pr.confidence_score DESC) as seed
-FROM players p
-JOIN player_ratings pr ON p.id = pr.player_id
-WHERE pr.rating_system = 'NTRP'
-    AND p.is_active = true
-    AND pr.last_match_date > CURRENT_DATE - INTERVAL '180 days'
-ORDER BY pr.current_rating DESC, pr.confidence_score DESC
+    n.value AS name,
+    r.current_rating,
+    r.confidence_score,
+    ROW_NUMBER() OVER (ORDER BY r.current_rating DESC, r.confidence_score DESC) AS seed
+FROM users u
+JOIN user_names n   ON n.user_id = u.id AND n.is_primary
+JOIN user_ratings r ON r.user_id = u.id
+WHERE r.rating_system = 'NTRP'
+  AND u.is_active
+  AND r.last_match_date > CURRENT_DATE - INTERVAL '180 days'
+ORDER BY r.current_rating DESC, r.confidence_score DESC
 LIMIT 64;
 ```
 
-### Calculate Rating Confidence Decay
-```sql
-UPDATE player_ratings
-SET confidence_score = GREATEST(
-    0.0,
-    1.0 - (EXTRACT(EPOCH FROM (CURRENT_DATE - last_match_date)) / (365.0 * 86400.0))
-)
-WHERE last_match_date < CURRENT_DATE;
-```
+## Future Enhancements
 
----
+- **Fine-grained authorization** — a capability catalog + role→capability mapping layered over `user_capabilities`.
+- **Social-media verification** — a `user_social_media` table (Facebook/Instagram/etc.) for additional identity confirmation.
+- **Tournaments & seeding** — `tournaments`, `tournament_draws` tables; persisted seeding ranks.
+- **UTR integration** — sync official UTR ratings into `user_ratings.utr_rating`.
+- **Doubles** — already supported by the team model (`teams` / `team_users` with 2 users).
 
-## Technology Recommendations
+## Technology
 
-### Database Engine
-**PostgreSQL 15+**
-- Native UUID support
-- JSON/JSONB for flexible metadata
-- Advanced indexing (GiST, GIN)
-- Excellent performance for complex queries
-- ACID compliance for rating calculations
+- **PostgreSQL 15+** (UUID, JSONB, partial indexes), **Exposed** ORM, **HikariCP** pooling, **Flyway** migrations (run at app startup via `flyway-core`).
 
-### ORM Options
-**For Kotlin:**
-- **Exposed** (JetBrains) - Type-safe SQL DSL
-- **jOOQ** - SQL-first, code generation
-- **Hibernate/JPA** - Traditional ORM
+## Sources
 
-### Connection Pooling
-- **HikariCP** - Fast, reliable connection pooling
-
-### Migration Tool
-- **Flyway** - Version-controlled database migrations
-- **Liquibase** - Alternative with more features
-
----
-
-## Next Steps
-
-1. **Review & Approve** this schema design
-2. **Set up PostgreSQL** database instance
-3. **Create Flyway migrations** for Phase 1 tables
-4. **Implement data access layer** with Exposed or jOOQ
-5. **Create repository interfaces** for each entity
-6. **Write integration tests** for data access layer
-7. **Implement API endpoints** for CRUD operations
+- [Meta WhatsApp authentication templates](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/authentication-templates/authentication-templates/) · [WhatsApp OTP guide 2026](https://ozonetel.com/otp-via-whatsapp/)
+- [Infobip — most popular messaging apps by country](https://www.infobip.com/blog/most-popular-messaging-apps-by-country) · [NoypiGeeks — Viber #1 business messaging in PH](https://www.noypigeeks.com/tech-news/viber-whatsapp-business-messaging-ph/)
+- Related: [WEB_UI_ARCHITECTURE.md](WEB_UI_ARCHITECTURE.md) (auth) · [RATING_CALCULATION_ALGORITHM.md](RATING_CALCULATION_ALGORITHM.md)

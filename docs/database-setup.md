@@ -94,7 +94,19 @@ database:
 
 ## Database Migrations
 
-Migrations are managed by [Flyway](https://flywaydb.org/) and run automatically on application startup.
+Migrations are managed by [Flyway](https://flywaydb.org/) (the `flyway-core` library, run automatically on application startup via `DatabaseConfig.init`).
+
+> **Note:** only the Flyway *Gradle plugin* was removed (it broke on Gradle 9 and is unmaintained). The Flyway engine itself — versioned migrations, history tracking, startup application — is fully in place. Manual/ad-hoc runs use the Flyway CLI Docker image (see [Running Migrations](#running-migrations)).
+
+### Why Flyway (and not Liquibase)
+
+Flyway is **SQL-first**: each migration is a plain, versioned `V__*.sql` file containing the exact SQL that runs. Liquibase is changelog-based (XML/YAML/JSON/SQL) with a database-agnostic abstraction layer. For Skopeo, Flyway is the better fit:
+
+- **Single database, Postgres-specific DDL.** The schema leans on Postgres features — partial unique indexes (e.g. `… WHERE verification_status = 'VERIFIED'`), `JSONB`, triggers, regex `CHECK`s, `uuid-ossp`. These are trivial in raw SQL but awkward in Liquibase's abstract changelogs. Liquibase's main advantage — cross-database portability — gives us nothing while we're committed to Postgres and *want* its features.
+- **The SQL is the source of truth and runs anywhere.** Migrations can be applied straight through `psql` or the Flyway CLI with no tooling translation — exactly how new migrations are validated here.
+- **Low overhead for a solo dev / pilot.** "Write SQL, version it, apply forward" is the simplest model.
+
+**When we'd reconsider Liquibase:** if we later need automatic rollbacks/down-migrations (Flyway's `undo` is a paid feature; Liquibase OSS includes rollback), must support multiple database engines, or want richer change-tracking (contexts, preconditions, diff-based generation). For now, forward-only migrations on a single Postgres are the right call.
 
 ### Migration Files
 
@@ -106,22 +118,25 @@ Example:
 - `V1__create_initial_schema.sql` - Initial schema
 - `V2__add_social_media_table.sql` - Add social media verification
 
-### Running Migrations Manually
+### Running Migrations
 
-Use Gradle tasks for manual migration management:
+**Normally nothing is run manually** — the app applies migrations at startup via
+`flyway-core` (`DatabaseConfig.init`), so `./gradlew run`, `docker-compose up`, and
+Cloud Run deploys all migrate automatically.
+
+> The Flyway **Gradle plugin** is intentionally not used (it depends on
+> `JavaPluginConvention`, removed in Gradle 9, and is unmaintained). For manual/ad-hoc
+> runs use the **Flyway CLI Docker image** — no local install, version-pinned:
 
 ```bash
-# Show migration info
-./gradlew flywayInfo
+docker run --rm \
+  -v "$(pwd)/src/main/resources/db/migration:/flyway/sql:ro" \
+  flyway/flyway:10 \
+  -url="jdbc:postgresql://host.docker.internal:5432/SkopeoDb" \
+  -user=postgres -password=postgres \
+  info        # or: migrate | validate | clean
 
-# Run pending migrations
-./gradlew flywayMigrate
-
-# Validate applied migrations
-./gradlew flywayValidate
-
-# Clean database (CAUTION: Deletes all data!)
-./gradlew flywayClean
+# Against Cloud SQL: run the Cloud SQL Auth Proxy and point -url at it.
 ```
 
 ### Creating New Migrations
@@ -129,7 +144,7 @@ Use Gradle tasks for manual migration management:
 1. Create a new file in `src/main/resources/db/migration/`
 2. Follow naming convention: `V{next_version}__{description}.sql`
 3. Write SQL DDL statements
-4. Test with `./gradlew flywayMigrate`
+4. Test by starting the app (it migrates on startup) or with the Flyway CLI Docker `migrate` command above
 
 Example:
 
@@ -333,27 +348,12 @@ LIMIT 64;
 
 **Problem:** Flyway migration fails on startup
 
-**Solution:**
-1. Check Flyway status:
-   ```bash
-   ./gradlew flywayInfo
-   ```
+**Solution** (using the Flyway CLI Docker image — see [Running Migrations](#running-migrations) for the full `docker run` invocation; substitute the final word):
 
-2. If migration is marked as failed, repair it:
-   ```bash
-   ./gradlew flywayRepair
-   ```
-
-3. Re-run migration:
-   ```bash
-   ./gradlew flywayMigrate
-   ```
-
-4. For development, you can clean and start fresh (CAUTION: Deletes all data):
-   ```bash
-   ./gradlew flywayClean
-   ./gradlew flywayMigrate
-   ```
+1. Check status: `... info`
+2. If a migration is marked failed, repair the history: `... repair`
+3. Re-run: `... migrate`
+4. For development, clean and start fresh — **CAUTION: deletes all data**: `... clean` then `... migrate`. (Locally you can instead just drop/recreate the dev database, e.g. `docker exec skopeo_db psql -U postgres -c 'DROP DATABASE SkopeoDb' -c 'CREATE DATABASE SkopeoDb'`, then restart the app.)
 
 ### Port 5432 Already in Use
 
