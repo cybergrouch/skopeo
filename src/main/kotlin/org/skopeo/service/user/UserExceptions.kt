@@ -8,5 +8,7 @@ class UserNotFoundException(
     id: UUID,
 ) : ResourceNotFoundException("User $id not found")
 
-/** Caller is neither the target user nor an ADMINISTRATOR — routes map this to 403. */
-class ForbiddenException : RuntimeException("Access is not permitted")
+/** Caller is not allowed to perform the action (e.g. not the target user, not an ADMINISTRATOR) — 403. */
+class ForbiddenException(
+    message: String = "Access is not permitted",
+) : RuntimeException(message)

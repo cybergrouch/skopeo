@@ -64,4 +64,8 @@ internal object UserCapabilitiesTable : UUIDTable("user_capabilities") {
     val userId = reference("user_id", UsersTable, onDelete = ReferenceOption.CASCADE)
     val capability = varchar("capability", CODE_MAX)
     val grantedBy = reference("granted_by", UsersTable, onDelete = ReferenceOption.SET_NULL).nullable()
+    val grantedAt = datetime("granted_at").nullable()
+    val isActive = bool("is_active").default(true)
+    val revokedAt = datetime("revoked_at").nullable()
+    val revokedBy = reference("revoked_by", UsersTable, onDelete = ReferenceOption.SET_NULL).nullable()
 }

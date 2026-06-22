@@ -17,6 +17,8 @@ tags:
     description: Email/phone management; verification is an ADMINISTRATOR action
   - name: Names
     description: Append-only user names; the display name is a DISPLAY-typed name
+  - name: Capabilities
+    description: User roles (admin-only); append-only grants with audit
 
 paths:
   /api/v1/calculate-ranking:
@@ -563,6 +565,101 @@ paths:
           description: No such name
         '409':
           description: Re-enabling a former display name conflicts with the current one
+
+  /api/v1/users/{userId}/capabilities:
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      summary: List a user's capabilities (ADMINISTRATOR only)
+      description: Includes revoked history. The whole capability API is admin-only.
+      tags:
+        - Capabilities
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The user's capability grants
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CapabilityResponse'
+        '403':
+          description: Caller is not an ADMINISTRATOR
+        '404':
+          description: No such user
+    post:
+      summary: Grant a capability (ADMINISTRATOR only)
+      description: Idempotent — 201 when newly granted, 200 if already held. Records granted_by.
+      tags:
+        - Capabilities
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CapabilityGrantRequest'
+      responses:
+        '201':
+          description: Capability granted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilityResponse'
+        '200':
+          description: Capability already held (idempotent)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilityResponse'
+        '400':
+          description: Invalid capability
+        '403':
+          description: Caller is not an ADMINISTRATOR
+        '404':
+          description: No such user
+
+  /api/v1/users/{userId}/capabilities/{capability}:
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: capability
+        in: path
+        required: true
+        schema:
+          type: string
+          enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR]
+    delete:
+      summary: Revoke a capability (ADMINISTRATOR only)
+      description: |
+        Disables the active grant (kept as history). Guardrails: PLAYER cannot be revoked; the
+        last ADMINISTRATOR cannot be revoked; an admin cannot revoke their own ADMINISTRATOR
+        while others remain.
+      tags:
+        - Capabilities
+      security:
+        - firebaseAuth: []
+      responses:
+        '204':
+          description: Capability revoked
+        '403':
+          description: Caller is not an ADMINISTRATOR, or revoking own ADMINISTRATOR
+        '404':
+          description: No such user, or the capability is not currently held
+        '409':
+          description: Revoking PLAYER or the last ADMINISTRATOR
 
 components:
   securitySchemes:
@@ -1117,6 +1214,43 @@ components:
         isActive:
           type: boolean
         disabledAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    CapabilityGrantRequest:
+      type: object
+      required:
+        - capability
+      properties:
+        capability:
+          type: string
+          enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR]
+
+    CapabilityResponse:
+      type: object
+      required:
+        - capability
+        - isActive
+      properties:
+        capability:
+          type: string
+          enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR]
+        isActive:
+          type: boolean
+        grantedBy:
+          type: string
+          format: uuid
+          nullable: true
+        grantedAt:
+          type: string
+          format: date-time
+          nullable: true
+        revokedBy:
+          type: string
+          format: uuid
+          nullable: true
+        revokedAt:
           type: string
           format: date-time
           nullable: true
