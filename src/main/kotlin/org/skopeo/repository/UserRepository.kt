@@ -8,17 +8,13 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
-import org.skopeo.model.ContactInfo
-import org.skopeo.model.ContactSource
-import org.skopeo.model.ContactType
+import org.skopeo.model.Contact
 import org.skopeo.model.NameType
 import org.skopeo.model.ProfilePatch
 import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
-import org.skopeo.model.VerificationMethod
-import org.skopeo.model.VerificationStatus
 import java.util.UUID
 
 /**
@@ -152,20 +148,11 @@ private fun namesOf(id: UUID): List<UserName> =
             )
         }
 
-private fun contactsOf(id: UUID): List<ContactInfo> =
+private fun contactsOf(id: UUID): List<Contact> =
     ContactInformationTable
         .selectAll()
         .where { ContactInformationTable.userId eq id }
-        .map {
-            ContactInfo(
-                type = ContactType.valueOf(it[ContactInformationTable.contactType]),
-                value = it[ContactInformationTable.value],
-                source = ContactSource.valueOf(it[ContactInformationTable.contactSource]),
-                status = VerificationStatus.valueOf(it[ContactInformationTable.verificationStatus]),
-                method = it[ContactInformationTable.verificationMethod]?.let(VerificationMethod::valueOf),
-                isPrimary = it[ContactInformationTable.isPrimary],
-            )
-        }
+        .map { it.toContact() }
 
 private fun identitiesOf(id: UUID): List<UserIdentity> =
     UserIdentitiesTable
@@ -188,7 +175,7 @@ private fun capabilitiesOf(id: UUID): Set<Capability> =
 
 private fun ResultRow.toUser(
     names: List<UserName>,
-    contacts: List<ContactInfo>,
+    contacts: List<Contact>,
     identities: List<UserIdentity>,
     capabilities: Set<Capability>,
 ): User =
