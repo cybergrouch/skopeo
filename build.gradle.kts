@@ -78,6 +78,10 @@ dependencies {
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
     testImplementation("io.kotest:kotest-assertions-core:5.8.0")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+
+    // Integration tests against a real PostgreSQL (applies the Flyway migration)
+    testImplementation("org.testcontainers:postgresql:1.20.4")
+    testImplementation("org.testcontainers:junit-jupiter:1.20.4")
 }
 
 kotlin {
@@ -88,6 +92,11 @@ kotlin {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+    // Testcontainers' bundled docker-java defaults to Docker API v1.43, but Docker
+    // Engine 25+ requires a minimum of v1.44 and rejects older calls with HTTP 400.
+    // Pin the negotiated version so Testcontainers can reach the daemon (the value
+    // sits within range for both local Docker Desktop and CI runners).
+    systemProperty("api.version", "1.44")
 }
 
 // ktlint configuration
