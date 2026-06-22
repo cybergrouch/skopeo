@@ -83,13 +83,13 @@ org.gradle.java.installations.fromEnv=JAVA_HOME_17_X64,JAVA_HOME_21_X64
 
 ### 1d. CI reporting (test results + coverage)
 
-After `./gradlew check`, three reporting steps surface results in the GitHub UI:
+After `./gradlew check`, three reporting steps surface results in the GitHub UI — focused on the PR's own changes:
 
 - **Coverage summary** — `scripts/coverage-summary.py` parses the JaCoCo XML and writes an overall line/branch table (with the 75%/70% thresholds) plus a per-package breakdown to the run **Summary** page. Runs `if: always()` so coverage shows even when only the coverage gate fails. (Also runs locally: `python3 scripts/coverage-summary.py`.)
-- **Test report** — `mikepenz/action-junit-report` publishes a **Test Report** check run from the JUnit XML, with failures annotated on the PR diff. Needs `checks: write`.
-- **Coverage HTML on Pages** — on `main` pushes only, the JaCoCo HTML report (source melded with coverage) is deployed to **GitHub Pages** at `https://<owner>.github.io/<repo>/`. A `build` step stages it with `actions/upload-pages-artifact`; a separate `deploy-coverage` job publishes it with `actions/deploy-pages` (own `pages` concurrency group, `cancel-in-progress: false`). Needs `pages: write` + `id-token: write`.
+- **Test report (drillable)** — `dorny/test-reporter` publishes a **Test Report** check run from the JUnit XML: expandable per-suite/per-test results, with failures expanded (stack trace) and annotated on the source line. Needs `checks: write`. _(JUnit XML has no source line for passing tests, so the exhaustive per-test view with captured output is Gradle's HTML report under `build/reports/tests/test/`.)_
+- **Diff coverage on the PR** — `codecov/codecov-action` uploads the JaCoCo XML to **Codecov**, which comments **patch (changed-lines) coverage** on the PR and **annotates uncovered changed lines inline in the “Files changed” tab**, with a hosted per-file drill-down. Codecov statuses are **informational** (see `codecov.yml`); the authoritative gate stays `./gradlew check`.
 
-**One-time setup:** enable Pages in **GitHub → Settings → Pages → Source: GitHub Actions** before merging to `main`, otherwise the first `deploy-coverage` job will fail (the `build` job still passes). PR builds get the inline summary + the test-report check; the Pages site reflects the latest `main` build.
+**One-time setup (Codecov):** sign in at [codecov.io](https://codecov.io) with GitHub and enable `cybergrouch/skopeo` (installs the Codecov GitHub App that posts the PR comment + inline annotations). The repo is public so uploads work tokenless, but adding a `CODECOV_TOKEN` repo secret is recommended for reliability. Until the repo is enabled on Codecov, the upload step still runs (non-blocking) but no comment/annotations appear.
 
 ### 1b. Branch protection (the actual PR enforcement)
 
