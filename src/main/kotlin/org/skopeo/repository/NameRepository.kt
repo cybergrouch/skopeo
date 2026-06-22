@@ -14,7 +14,8 @@ import java.util.UUID
 /**
  * Row-level persistence for individual [Name]s. Names are append-only: created here, never
  * edited; a name is retired by disabling it ([setActive]). A user may hold many active
- * names, with at most one active primary (the display name) enforced by the DB.
+ * names; the display name is the single active name of type DISPLAY — adding a new DISPLAY
+ * name atomically disables the previous one, so exactly one stays active.
  */
 class NameRepository {
     fun listByUser(userId: UUID): List<Name> =
@@ -34,21 +35,19 @@ class NameRepository {
                 ?.toName()
         }
 
-    /** Add a name. When [primary] is set, the current active primary (if any) is demoted first. */
+    /** Add a name. Adding a DISPLAY name disables the current active display name first. */
     fun create(
         userId: UUID,
         type: NameType,
         value: String,
-        primary: Boolean,
     ): Name =
         transaction {
-            if (primary) demoteActivePrimary(userId)
+            if (type == NameType.DISPLAY) disableActiveDisplay(userId)
             val id =
                 UserNamesTable.insertAndGetId {
                     it[UserNamesTable.userId] = userId
                     it[nameType] = type.name
                     it[UserNamesTable.value] = value
-                    it[isPrimary] = primary
                 }
             loadById(id.value)
         }
@@ -67,21 +66,16 @@ class NameRepository {
             if (updated == 0) null else loadById(id)
         }
 
-    /** Whether the user has any active name (used to auto-mark the first one primary). */
-    fun hasActiveName(userId: UUID): Boolean =
-        transaction {
-            UserNamesTable
-                .selectAll()
-                .where { (UserNamesTable.userId eq userId) and UserNamesTable.isActive }
-                .limit(1)
-                .any()
-        }
-
-    private fun demoteActivePrimary(userId: UUID) {
+    private fun disableActiveDisplay(userId: UUID) {
         UserNamesTable.update(
-            { (UserNamesTable.userId eq userId) and UserNamesTable.isActive and UserNamesTable.isPrimary },
+            {
+                (UserNamesTable.userId eq userId) and
+                    UserNamesTable.isActive and
+                    (UserNamesTable.nameType eq NameType.DISPLAY.name)
+            },
         ) {
-            it[isPrimary] = false
+            it[isActive] = false
+            it[disabledAt] = LocalDateTime.now()
         }
     }
 
@@ -100,7 +94,6 @@ internal fun ResultRow.toName(): Name =
         userId = this[UserNamesTable.userId].value,
         type = NameType.valueOf(this[UserNamesTable.nameType]),
         value = this[UserNamesTable.value],
-        isPrimary = this[UserNamesTable.isPrimary],
         isActive = this[UserNamesTable.isActive],
         disabledAt = this[UserNamesTable.disabledAt],
     )

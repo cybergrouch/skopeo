@@ -1,7 +1,6 @@
 package org.skopeo.service.user
 
 import org.skopeo.dto.user.CreateUserRequest
-import org.skopeo.dto.user.NameDto
 import org.skopeo.dto.user.ProfileRequest
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.ContactInfo
@@ -50,33 +49,24 @@ internal fun parseDateOfBirth(value: String?): LocalDate? {
     }
 }
 
-private fun NameDto.toUserName(): UserName =
-    UserName(
-        type = parseNameType(type),
-        value = value,
-        isPrimary = isPrimary,
-    )
-
-private fun parseNameType(value: String): NameType =
-    try {
-        NameType.valueOf(value)
-    } catch (e: IllegalArgumentException) {
-        throw IllegalArgumentException("Unknown name type '$value'", e)
-    }
-
-private fun resolveNames(
+/**
+ * The display name at sign-up comes from the request (manual input) or, failing that, the
+ * verified token's name (Google/Facebook). A user must have one.
+ */
+private fun displayName(
     token: VerifiedFirebaseToken,
     request: CreateUserRequest,
 ): List<UserName> {
-    if (request.names.isNotEmpty()) return request.names.map { it.toUserName() }
-    // OAuth providers only give a display name; record it as a FULL name.
-    return token.name?.let { listOf(UserName(type = NameType.FULL, value = it, isPrimary = true)) } ?: emptyList()
+    val value =
+        request.displayName ?: token.name
+            ?: throw IllegalArgumentException("A display name is required")
+    return listOf(UserName(type = NameType.DISPLAY, value = value))
 }
 
 /**
  * Merge the verified token (authoritative identity) with the client-supplied profile
  * into a [ProvisionUserCommand]. Throws [IllegalArgumentException] on invalid input
- * (bad gender, malformed date, unknown name type) so the route can answer 400.
+ * (missing display name, bad gender, malformed date) so the route can answer 400.
  */
 internal fun buildProvisionCommand(
     token: VerifiedFirebaseToken,
@@ -107,7 +97,7 @@ internal fun buildProvisionCommand(
     return ProvisionUserCommand(
         firebaseUid = token.uid,
         identity = UserIdentity(provider = provider, providerUid = token.providerUid, isPrimary = true),
-        names = resolveNames(token = token, request = request),
+        names = displayName(token = token, request = request),
         photoUrl = token.picture,
         email = email,
         phone = phone,

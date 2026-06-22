@@ -3,12 +3,11 @@ package org.skopeo.dto.name
 import kotlinx.serialization.Serializable
 import org.skopeo.model.Name
 
-/** Body for `POST /api/v1/users/{userId}/names` — add a name. */
+/** Body for `POST /api/v1/users/{userId}/names` — add a name (type DISPLAY replaces the display name). */
 @Serializable
 data class NameCreateRequest(
     val type: String,
     val value: String,
-    val isPrimary: Boolean = false,
 )
 
 /** Body for `PUT /api/v1/users/{userId}/names/{id}/state` — enable or disable a name. */
@@ -23,7 +22,6 @@ data class NameResponse(
     val userId: String,
     val type: String,
     val value: String,
-    val isPrimary: Boolean,
     val isActive: Boolean,
     val disabledAt: String? = null,
 )
@@ -34,7 +32,6 @@ fun Name.toResponse(): NameResponse =
         userId = userId.toString(),
         type = type.name,
         value = value,
-        isPrimary = isPrimary,
         isActive = isActive,
         disabledAt = disabledAt?.toString(),
     )

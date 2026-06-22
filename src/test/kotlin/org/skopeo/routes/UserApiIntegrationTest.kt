@@ -23,7 +23,6 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.dto.user.CreateUserRequest
-import org.skopeo.dto.user.NameDto
 import org.skopeo.dto.user.ProfileRequest
 import org.skopeo.dto.user.UserResponse
 import org.skopeo.module
@@ -51,7 +50,7 @@ class UserApiIntegrationTest {
 
     private fun ApplicationTestBuilder.jsonClient(): HttpClient = createClient { install(ContentNegotiation) { json() } }
 
-    private val defaultBody = CreateUserRequest(names = listOf(NameDto(type = "FIRST", value = "Juan", isPrimary = true)))
+    private val defaultBody = CreateUserRequest(displayName = "Juan")
 
     private suspend fun HttpClient.createUser(
         token: String,
@@ -165,6 +164,6 @@ class UserApiIntegrationTest {
         withApp { client ->
             val token = TestFirebaseAuth.mintToken(uid = "fb-5")
 
-            client.createUser(token, CreateUserRequest(gender = "X")).status shouldBe HttpStatusCode.BadRequest
+            client.createUser(token, CreateUserRequest(displayName = "Juan", gender = "X")).status shouldBe HttpStatusCode.BadRequest
         }
 }

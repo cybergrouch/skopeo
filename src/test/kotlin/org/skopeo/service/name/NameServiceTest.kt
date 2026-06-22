@@ -2,7 +2,6 @@ package org.skopeo.service.name
 
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.booleans.shouldBeFalse
-import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
@@ -10,9 +9,11 @@ import org.junit.jupiter.api.Test
 import org.skopeo.dto.name.NameCreateRequest
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
+import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
+import org.skopeo.model.UserName
 import org.skopeo.repository.NameRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.user.ForbiddenException
@@ -38,6 +39,7 @@ class NameServiceTest {
         PostgresTestDatabase.truncate()
     }
 
+    /** Provision a user with one DISPLAY name (as the API would). */
     private fun provisionUser(
         uid: String,
         capabilities: Set<Capability> = setOf(Capability.PLAYER),
@@ -46,41 +48,19 @@ class NameServiceTest {
             ProvisionUserCommand(
                 firebaseUid = uid,
                 identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                names = emptyList(),
+                names = listOf(UserName(type = NameType.DISPLAY, value = "Display $uid")),
                 capabilities = capabilities,
             ),
         )
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
-    private fun nickname(value: String) = NameCreateRequest(type = "NICKNAME", value = value, isPrimary = false)
+    private fun nickname(value: String) = NameCreateRequest(type = "NICKNAME", value = value)
 
-    @Test
-    fun `the first name is auto-primary, later non-primary names are not`() {
-        val owner = provisionUser("owner")
-
-        val first = service.create(token = token("owner"), userId = owner.id, request = nickname("JB"))
-        first.isPrimary.shouldBeTrue()
-
-        val second = service.create(token = token("owner"), userId = owner.id, request = nickname("Boy"))
-        second.isPrimary.shouldBeFalse()
-    }
-
-    @Test
-    fun `an explicit primary demotes the previous one`() {
-        val owner = provisionUser("owner")
-        val first = service.create(token = token("owner"), userId = owner.id, request = nickname("JB"))
-
-        val second =
-            service.create(
-                token = token("owner"),
-                userId = owner.id,
-                request = NameCreateRequest(type = "PREFERRED", value = "Johnny", isPrimary = true),
-            )
-
-        second.isPrimary.shouldBeTrue()
-        service.get(token = token("owner"), userId = owner.id, nameId = first.id).isPrimary.shouldBeFalse()
-    }
+    private fun displayNameOf(
+        uid: String,
+        userId: UUID,
+    ) = service.list(token = token(uid), userId = userId).single { it.type == NameType.DISPLAY && it.isActive }
 
     @Test
     fun `multiple names of the same type are allowed`() {
@@ -88,37 +68,55 @@ class NameServiceTest {
         service.create(token = token("owner"), userId = owner.id, request = nickname("JB"))
         service.create(token = token("owner"), userId = owner.id, request = nickname("Boy"))
 
-        service.list(token = token("owner"), userId = owner.id).size shouldBe 2
+        service.list(token = token("owner"), userId = owner.id).count { it.type == NameType.NICKNAME } shouldBe 2
     }
 
     @Test
-    fun `owner can disable a name`() {
+    fun `posting a new display name replaces the previous one`() {
         val owner = provisionUser("owner")
-        val name = service.create(token = token("owner"), userId = owner.id, request = nickname("JB"))
+        val original = displayNameOf("owner", owner.id)
 
-        val disabled = service.setActive(token = token("owner"), userId = owner.id, nameId = name.id, active = false)
-        disabled.isActive.shouldBeFalse()
-    }
-
-    @Test
-    fun `re-enabling a former primary into an occupied slot is a conflict`() {
-        val owner = provisionUser("owner")
-        val first =
+        val replacement =
             service.create(
                 token = token("owner"),
                 userId = owner.id,
-                request = NameCreateRequest(type = "FIRST", value = "Juan", isPrimary = true),
+                request = NameCreateRequest(type = "DISPLAY", value = "Johnny"),
             )
-        service.setActive(token = token("owner"), userId = owner.id, nameId = first.id, active = false)
-        service.create(
-            token = token("owner"),
-            userId = owner.id,
-            request = NameCreateRequest(type = "PREFERRED", value = "Johnny", isPrimary = true),
-        )
 
-        shouldThrow<NameConflictException> {
-            service.setActive(token = token("owner"), userId = owner.id, nameId = first.id, active = true)
+        replacement.value shouldBe "Johnny"
+        // exactly one active display, and the old one is retained as disabled history
+        displayNameOf("owner", owner.id).id shouldBe replacement.id
+        service.get(token = token("owner"), userId = owner.id, nameId = original.id).isActive.shouldBeFalse()
+    }
+
+    @Test
+    fun `the display name cannot be disabled`() {
+        val owner = provisionUser("owner")
+        val display = displayNameOf("owner", owner.id)
+
+        shouldThrow<IllegalArgumentException> {
+            service.setActive(token = token("owner"), userId = owner.id, nameId = display.id, active = false)
         }
+    }
+
+    @Test
+    fun `re-enabling a former display name conflicts with the current one`() {
+        val owner = provisionUser("owner")
+        val original = displayNameOf("owner", owner.id)
+        service.create(token = token("owner"), userId = owner.id, request = NameCreateRequest(type = "DISPLAY", value = "Johnny"))
+
+        // `original` is now disabled history; re-enabling it collides with the active display.
+        shouldThrow<NameConflictException> {
+            service.setActive(token = token("owner"), userId = owner.id, nameId = original.id, active = true)
+        }
+    }
+
+    @Test
+    fun `owner can disable a non-display name`() {
+        val owner = provisionUser("owner")
+        val name = service.create(token = token("owner"), userId = owner.id, request = nickname("JB"))
+
+        service.setActive(token = token("owner"), userId = owner.id, nameId = name.id, active = false).isActive.shouldBeFalse()
     }
 
     @Test

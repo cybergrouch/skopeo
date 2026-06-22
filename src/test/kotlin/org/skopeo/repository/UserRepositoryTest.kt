@@ -55,7 +55,7 @@ class UserRepositoryTest {
         identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = "google-sub-123", isPrimary = true),
         names =
             listOf(
-                UserName(type = NameType.FIRST, value = "Juan", isPrimary = true),
+                UserName(type = NameType.FIRST, value = "Juan"),
                 UserName(type = NameType.LAST, value = "dela Cruz"),
                 UserName(type = NameType.NICKNAME, value = "Johnny"),
             ),

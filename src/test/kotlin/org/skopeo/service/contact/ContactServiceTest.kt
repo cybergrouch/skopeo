@@ -51,7 +51,7 @@ class ContactServiceTest {
             ProvisionUserCommand(
                 firebaseUid = uid,
                 identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                names = listOf(UserName(type = NameType.FIRST, value = "N", isPrimary = true)),
+                names = listOf(UserName(type = NameType.FIRST, value = "N")),
                 capabilities = capabilities,
             ),
         )

@@ -7,8 +7,11 @@ import java.util.UUID
 /** Authorization roles granted to a user (broad for now; devolvable to fine-grained capabilities later). */
 enum class Capability { PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR }
 
-/** Name variants a user may carry (Filipino nicknames vs legal names; KYC matching). */
-enum class NameType { FIRST, MIDDLE, LAST, SUFFIX, NICKNAME, PREFERRED, FULL, GOVERNMENT }
+/**
+ * Name variants a user may carry (Filipino nicknames vs legal names; KYC matching).
+ * DISPLAY is the single active name shown in the UI — see [Name].
+ */
+enum class NameType { FIRST, MIDDLE, LAST, SUFFIX, NICKNAME, PREFERRED, FULL, GOVERNMENT, DISPLAY }
 
 enum class ContactType { EMAIL, PHONE }
 
@@ -26,20 +29,18 @@ enum class AuthProvider { GOOGLE, FACEBOOK, PASSWORD }
 data class UserName(
     val type: NameType,
     val value: String,
-    val isPrimary: Boolean = false,
 )
 
 /**
  * A name as stored — the addressable sub-resource. Values are immutable: a name is disabled
  * ([isActive] = false) rather than edited, and a new one added, so the table keeps the full
- * history of a profile's names. [isPrimary] marks the single active display name.
+ * history of a profile's names. The display name is the single active name of type DISPLAY.
  */
 data class Name(
     val id: UUID,
     val userId: UUID,
     val type: NameType,
     val value: String,
-    val isPrimary: Boolean = false,
     val isActive: Boolean = true,
     val disabledAt: LocalDateTime? = null,
 )

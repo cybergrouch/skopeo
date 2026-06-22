@@ -9,7 +9,6 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.dto.user.CreateUserRequest
-import org.skopeo.dto.user.NameDto
 import org.skopeo.model.Capability
 import org.skopeo.model.ProfilePatch
 import org.skopeo.model.ProvisionUserCommand
@@ -52,7 +51,7 @@ class UserServiceTest {
         providerUid = uid,
     )
 
-    private val request = CreateUserRequest(names = listOf(NameDto(type = "FIRST", value = "Juan", isPrimary = true)))
+    private val request = CreateUserRequest(displayName = "Juan")
 
     @Test
     fun `provision creates a player then is idempotent`() {
@@ -97,7 +96,7 @@ class UserServiceTest {
             ProvisionUserCommand(
                 firebaseUid = "root",
                 identity = UserIdentity(provider = org.skopeo.model.AuthProvider.GOOGLE, providerUid = "root", isPrimary = true),
-                names = listOf(UserName(type = org.skopeo.model.NameType.FIRST, value = "Root", isPrimary = true)),
+                names = listOf(UserName(type = org.skopeo.model.NameType.FIRST, value = "Root")),
                 capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
             ),
         )
@@ -108,7 +107,11 @@ class UserServiceTest {
 
     @Test
     fun `patch updates provided fields, replace clears omitted ones`() {
-        val user = service.provision(token = token(uid = "p1"), request = CreateUserRequest(gender = "M", city = "Manila")).user
+        val user =
+            service.provision(
+                token = token(uid = "p1"),
+                request = CreateUserRequest(displayName = "Juan", gender = "M", city = "Manila"),
+            ).user
 
         val patched = service.patchProfile(token = token(uid = "p1"), id = user.id, patch = ProfilePatch(city = "Cebu"))
         patched.city shouldBe "Cebu"

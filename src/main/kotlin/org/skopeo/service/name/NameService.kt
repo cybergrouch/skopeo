@@ -19,7 +19,8 @@ private const val PG_UNIQUE_VIOLATION = "23505"
 /**
  * Manage a user's names. Names are append-only — added, then disabled rather than edited or
  * deleted — and every operation is self-or-ADMINISTRATOR. A user may hold many active names;
- * exactly one active name is the primary (display) name.
+ * the display name is the single active name of type DISPLAY. Posting a new DISPLAY name
+ * replaces the current one; the display name cannot be disabled (only replaced).
  */
 class NameService(
     private val names: NameRepository = NameRepository(),
@@ -44,7 +45,7 @@ class NameService(
         return name
     }
 
-    /** The first active name is automatically primary; an explicit primary demotes the previous one. */
+    /** Add a name. A DISPLAY name replaces the current display name (the old becomes history). */
     fun create(
         token: VerifiedFirebaseToken,
         userId: UUID,
@@ -53,21 +54,24 @@ class NameService(
         requireUserExists(userId)
         requireUserAccess(token = token, userId = userId)
         val type = parseType(request.type)
-        val primary = request.isPrimary || !names.hasActiveName(userId)
-        return conflictAware {
-            names.create(userId = userId, type = type, value = request.value, primary = primary)
-        }
+        return names.create(userId = userId, type = type, value = request.value)
     }
 
-    /** Enable or disable a name (the append-only alternative to editing). */
+    /**
+     * Enable or disable a name. The display name cannot be disabled (replace it by posting a
+     * new DISPLAY name); re-enabling a former display name conflicts with the current one.
+     */
     fun setActive(
         token: VerifiedFirebaseToken,
         userId: UUID,
         nameId: UUID,
         active: Boolean,
     ): Name {
-        locate(userId = userId, nameId = nameId)
+        val target = locate(userId = userId, nameId = nameId)
         requireUserAccess(token = token, userId = userId)
+        require(active || target.type != NameType.DISPLAY) {
+            "Cannot disable the display name; add a new display name to replace it"
+        }
         val disabledAt = if (active) null else LocalDateTime.now()
         return conflictAware {
             names.setActive(id = nameId, active = active, disabledAt = disabledAt)
@@ -109,7 +113,7 @@ class NameService(
             block()
         } catch (e: ExposedSQLException) {
             if (isUniqueViolation(e)) {
-                throw NameConflictException("Another active primary name already exists")
+                throw NameConflictException("A different active display name already exists")
             } else {
                 throw e
             }

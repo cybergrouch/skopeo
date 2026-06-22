@@ -16,7 +16,7 @@ tags:
   - name: Contacts
     description: Email/phone management; verification is an ADMINISTRATOR action
   - name: Names
-    description: Append-only user names; one active primary (display) name
+    description: Append-only user names; the display name is a DISPLAY-typed name
 
 paths:
   /api/v1/calculate-ranking:
@@ -458,10 +458,10 @@ paths:
     post:
       summary: Add a name
       description: |
-        Append-only. The first active name becomes primary automatically; isPrimary=true
-        promotes the new name and demotes the previous primary. Self-or-ADMINISTRATOR. Values
-        are immutable; to change a name, disable it (via /state) and add a new one. Multiple
-        names of the same type are allowed.
+        Append-only. Self-or-ADMINISTRATOR. Multiple names of the same type are allowed.
+        A DISPLAY name replaces the user's current display name (the old one becomes disabled
+        history). Values are immutable; to change other names, disable (via /state) and add a
+        new one.
       tags:
         - Names
       security:
@@ -536,8 +536,8 @@ paths:
       summary: Enable or disable a name
       description: |
         Name values are immutable — instead of editing, disable a name and add a new one.
-        Self-or-ADMINISTRATOR. Re-enabling a former primary while another active primary
-        exists is a conflict.
+        Self-or-ADMINISTRATOR. The display name cannot be disabled (replace it by posting a
+        new DISPLAY name); re-enabling a former display name conflicts with the current one.
       tags:
         - Names
       security:
@@ -556,13 +556,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/NameResponse'
         '400':
-          description: Invalid body or malformed id
+          description: Invalid body, malformed id, or attempting to disable the display name
         '403':
           description: Forbidden
         '404':
           description: No such name
         '409':
-          description: Another active primary name already exists
+          description: Re-enabling a former display name conflicts with the current one
 
 components:
   securitySchemes:
@@ -817,22 +817,18 @@ components:
     NameDto:
       type: object
       required:
+        - id
         - type
         - value
       properties:
         id:
           type: string
           format: uuid
-          nullable: true
-          description: Present on responses; omitted in the create-user request.
         type:
           type: string
-          enum: [FIRST, MIDDLE, LAST, SUFFIX, NICKNAME, PREFERRED, FULL, GOVERNMENT]
+          enum: [FIRST, MIDDLE, LAST, SUFFIX, NICKNAME, PREFERRED, FULL, GOVERNMENT, DISPLAY]
         value:
           type: string
-        isPrimary:
-          type: boolean
-          default: false
         isActive:
           type: boolean
           default: true
@@ -887,12 +883,13 @@ components:
       type: object
       description: |
         Profile details the client supplies. Identity and email come from the verified
-        token and are ignored if present here.
+        token and are ignored if present here. displayName is the single name shown in the
+        UI; if omitted, the token's name (Google/Facebook) is used. Structured names
+        (FIRST/LAST/nicknames) are added later via the names API.
       properties:
-        names:
-          type: array
-          items:
-            $ref: '#/components/schemas/NameDto'
+        displayName:
+          type: string
+          nullable: true
         phone:
           type: string
           nullable: true
@@ -1084,12 +1081,10 @@ components:
       properties:
         type:
           type: string
-          enum: [FIRST, MIDDLE, LAST, SUFFIX, NICKNAME, PREFERRED, FULL, GOVERNMENT]
+          description: A DISPLAY name replaces the user's current display name.
+          enum: [FIRST, MIDDLE, LAST, SUFFIX, NICKNAME, PREFERRED, FULL, GOVERNMENT, DISPLAY]
         value:
           type: string
-        isPrimary:
-          type: boolean
-          default: false
 
     NameStateRequest:
       type: object
@@ -1106,7 +1101,6 @@ components:
         - userId
         - type
         - value
-        - isPrimary
         - isActive
       properties:
         id:
@@ -1117,11 +1111,9 @@ components:
           format: uuid
         type:
           type: string
-          enum: [FIRST, MIDDLE, LAST, SUFFIX, NICKNAME, PREFERRED, FULL, GOVERNMENT]
+          enum: [FIRST, MIDDLE, LAST, SUFFIX, NICKNAME, PREFERRED, FULL, GOVERNMENT, DISPLAY]
         value:
           type: string
-        isPrimary:
-          type: boolean
         isActive:
           type: boolean
         disabledAt:

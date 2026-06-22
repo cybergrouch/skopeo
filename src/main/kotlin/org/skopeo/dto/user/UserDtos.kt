@@ -12,11 +12,9 @@ import org.skopeo.model.User
  */
 @Serializable
 data class NameDto(
-    // id is null on input (create request) and populated on output (user response).
-    val id: String? = null,
+    val id: String,
     val type: String,
     val value: String,
-    val isPrimary: Boolean = false,
     val isActive: Boolean = true,
 )
 
@@ -39,10 +37,16 @@ data class IdentityDto(
     val isPrimary: Boolean = false,
 )
 
-/** Body for `POST /api/v1/users` — the convergence point of every sign-up flow. */
+/**
+ * Body for `POST /api/v1/users` — the convergence point of every sign-up flow.
+ *
+ * [displayName] is the single name shown in the UI; if omitted, the verified token's name
+ * (from Google/Facebook) is used. Structured names (FIRST/LAST/nicknames) are added later
+ * via the names API.
+ */
 @Serializable
 data class CreateUserRequest(
-    val names: List<NameDto> = emptyList(),
+    val displayName: String? = null,
     val phone: String? = null,
     val dateOfBirth: String? = null,
     val gender: String? = null,
@@ -96,7 +100,6 @@ fun User.toResponse(): UserResponse =
                     id = it.id.toString(),
                     type = it.type.name,
                     value = it.value,
-                    isPrimary = it.isPrimary,
                     isActive = it.isActive,
                 )
             },

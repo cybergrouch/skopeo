@@ -48,11 +48,10 @@ class NameRepositoryTest {
     fun `create stores an active name`() {
         val userId = newUser("u1")
 
-        val name = names.create(userId = userId, type = NameType.NICKNAME, value = "Johnny", primary = false)
+        val name = names.create(userId = userId, type = NameType.NICKNAME, value = "Johnny")
 
         name.type shouldBe NameType.NICKNAME
         name.isActive.shouldBeTrue()
-        name.isPrimary.shouldBeFalse()
         names.listByUser(userId).single().id shouldBe name.id
         names.findById(name.id).shouldNotBeNull()
     }
@@ -63,38 +62,37 @@ class NameRepositoryTest {
     }
 
     @Test
-    fun `creating a new primary demotes the previous one`() {
+    fun `adding a DISPLAY name disables the previous active display`() {
         val userId = newUser("u2")
-        val first = names.create(userId = userId, type = NameType.FIRST, value = "Juan", primary = true)
+        val first = names.create(userId = userId, type = NameType.DISPLAY, value = "Juan")
 
-        val second = names.create(userId = userId, type = NameType.PREFERRED, value = "Johnny", primary = true)
+        val second = names.create(userId = userId, type = NameType.DISPLAY, value = "Johnny")
 
-        names.findById(first.id)!!.isPrimary.shouldBeFalse()
-        second.isPrimary.shouldBeTrue()
+        names.findById(first.id)!!.isActive.shouldBeFalse()
+        second.isActive.shouldBeTrue()
+        names.listByUser(userId).count { it.type == NameType.DISPLAY && it.isActive } shouldBe 1
     }
 
     @Test
-    fun `multiple names of the same type are allowed`() {
+    fun `multiple names of the same non-display type are allowed`() {
         val userId = newUser("u3")
-        names.create(userId = userId, type = NameType.NICKNAME, value = "JB", primary = false)
-        names.create(userId = userId, type = NameType.NICKNAME, value = "Boy", primary = false)
+        names.create(userId = userId, type = NameType.NICKNAME, value = "JB")
+        names.create(userId = userId, type = NameType.NICKNAME, value = "Boy")
 
         names.listByUser(userId).size shouldBe 2
     }
 
     @Test
-    fun `setActive disables then re-enables, and hasActiveName tracks it`() {
+    fun `setActive disables then re-enables a name`() {
         val userId = newUser("u4")
-        val name = names.create(userId = userId, type = NameType.FIRST, value = "Juan", primary = false)
+        val name = names.create(userId = userId, type = NameType.NICKNAME, value = "JB")
 
         val disabled = names.setActive(id = name.id, active = false, disabledAt = LocalDateTime.now())
         disabled.shouldNotBeNull()
         disabled.isActive.shouldBeFalse()
         disabled.disabledAt.shouldNotBeNull()
-        names.hasActiveName(userId).shouldBeFalse()
 
-        names.setActive(id = name.id, active = true, disabledAt = null)
-        names.hasActiveName(userId).shouldBeTrue()
+        names.setActive(id = name.id, active = true, disabledAt = null)!!.isActive.shouldBeTrue()
     }
 
     @Test
@@ -103,13 +101,11 @@ class NameRepositoryTest {
     }
 
     @Test
-    fun `re-enabling a former primary collides with the current active primary`() {
+    fun `re-enabling a former display name collides with the current one`() {
         val userId = newUser("u5")
-        val first = names.create(userId = userId, type = NameType.FIRST, value = "Juan", primary = true)
-        names.setActive(id = first.id, active = false, disabledAt = LocalDateTime.now())
-        names.create(userId = userId, type = NameType.PREFERRED, value = "Johnny", primary = true)
+        val first = names.create(userId = userId, type = NameType.DISPLAY, value = "Juan")
+        names.create(userId = userId, type = NameType.DISPLAY, value = "Johnny") // disables `first`
 
-        // first is still flagged primary; re-enabling it would make two active primaries.
         shouldThrow<ExposedSQLException> {
             names.setActive(id = first.id, active = true, disabledAt = null)
         }

@@ -24,15 +24,15 @@ import org.skopeo.dto.name.NameCreateRequest
 import org.skopeo.dto.name.NameResponse
 import org.skopeo.dto.name.NameStateRequest
 import org.skopeo.dto.user.CreateUserRequest
-import org.skopeo.dto.user.NameDto
 import org.skopeo.dto.user.UserResponse
 import org.skopeo.module
 import org.skopeo.testsupport.PostgresTestDatabase
 import org.skopeo.testsupport.TestFirebaseAuth
 
 /**
- * End-to-end exercise of the user-name API: append-only adds, enable/disable, multiple names
- * of a type, and self-access enforcement — over the real Firebase JWT auth path.
+ * End-to-end exercise of the user-name API: append-only adds, multiple names of a type,
+ * replacing the display name, the display name being undisable-able, and self-access — over
+ * the real Firebase JWT auth path.
  */
 class NameApiIntegrationTest {
     companion object {
@@ -60,7 +60,7 @@ class NameApiIntegrationTest {
         post("/api/v1/users") {
             header(HttpHeaders.Authorization, "Bearer $token")
             contentType(ContentType.Application.Json)
-            setBody(CreateUserRequest(names = listOf(NameDto(type = "FIRST", value = "Juan", isPrimary = true))))
+            setBody(CreateUserRequest(displayName = "Juan"))
         }.body()
 
     private suspend fun HttpClient.addName(
@@ -74,35 +74,53 @@ class NameApiIntegrationTest {
             setBody(request)
         }
 
+    private suspend fun HttpClient.listNames(
+        token: String,
+        userId: String,
+    ): List<NameResponse> =
+        get("/api/v1/users/$userId/names") {
+            header(HttpHeaders.Authorization, "Bearer $token")
+        }.body()
+
     @Test
-    fun `add names (incl multiple of a type), promote a primary, and disable`() =
+    fun `add multiple names of a type and replace the display name`() =
         withApp { client ->
             val token = TestFirebaseAuth.mintToken(uid = "fb-1")
             val user = client.provisionSelf(token)
+
+            // Provisioning created one DISPLAY name.
+            client.listNames(token, user.id).single().let {
+                it.type shouldBe "DISPLAY"
+                it.value shouldBe "Juan"
+            }
 
             // Two nicknames of the same type are both accepted.
             client.addName(token, user.id, NameCreateRequest(type = "NICKNAME", value = "JB")).status shouldBe HttpStatusCode.Created
             client.addName(token, user.id, NameCreateRequest(type = "NICKNAME", value = "Boy")).status shouldBe HttpStatusCode.Created
 
-            // Promote a preferred name to primary.
-            val preferred =
-                client
-                    .addName(token, user.id, NameCreateRequest(type = "PREFERRED", value = "Johnny", isPrimary = true))
-                    .body<NameResponse>()
-            preferred.isPrimary shouldBe true
+            // Posting a new DISPLAY name replaces the old one.
+            val newDisplay =
+                client.addName(token, user.id, NameCreateRequest(type = "DISPLAY", value = "Johnny")).body<NameResponse>()
+            newDisplay.value shouldBe "Johnny"
 
-            val all = client.get("/api/v1/users/${user.id}/names") { header(HttpHeaders.Authorization, "Bearer $token") }
-            all.status shouldBe HttpStatusCode.OK
+            val all = client.listNames(token, user.id)
+            all.count { it.type == "DISPLAY" && it.isActive } shouldBe 1
+            all.single { it.type == "DISPLAY" && it.isActive }.value shouldBe "Johnny"
+            all.count { it.type == "DISPLAY" && !it.isActive } shouldBe 1 // the old "Juan" kept as history
+        }
 
-            // Disable the preferred name.
-            val disabled =
-                client.put("/api/v1/users/${user.id}/names/${preferred.id}/state") {
-                    header(HttpHeaders.Authorization, "Bearer $token")
-                    contentType(ContentType.Application.Json)
-                    setBody(NameStateRequest(isActive = false))
-                }
-            disabled.status shouldBe HttpStatusCode.OK
-            disabled.body<NameResponse>().isActive shouldBe false
+    @Test
+    fun `the display name cannot be disabled`() =
+        withApp { client ->
+            val token = TestFirebaseAuth.mintToken(uid = "fb-2")
+            val user = client.provisionSelf(token)
+            val display = client.listNames(token, user.id).single { it.type == "DISPLAY" }
+
+            client.put("/api/v1/users/${user.id}/names/${display.id}/state") {
+                header(HttpHeaders.Authorization, "Bearer $token")
+                contentType(ContentType.Application.Json)
+                setBody(NameStateRequest(isActive = false))
+            }.status shouldBe HttpStatusCode.BadRequest
         }
 
     @Test

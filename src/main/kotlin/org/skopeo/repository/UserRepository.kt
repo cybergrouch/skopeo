@@ -39,7 +39,6 @@ class UserRepository {
                     it[UserNamesTable.userId] = userId
                     it[UserNamesTable.nameType] = name.type.name
                     it[UserNamesTable.value] = name.value
-                    it[UserNamesTable.isPrimary] = name.isPrimary
                 }
             }
 

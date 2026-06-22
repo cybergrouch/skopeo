@@ -25,7 +25,6 @@ import org.skopeo.dto.contact.ContactResponse
 import org.skopeo.dto.contact.ContactStateRequest
 import org.skopeo.dto.contact.VerificationRequest
 import org.skopeo.dto.user.CreateUserRequest
-import org.skopeo.dto.user.NameDto
 import org.skopeo.dto.user.UserResponse
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
@@ -70,7 +69,7 @@ class ContactApiIntegrationTest {
             ProvisionUserCommand(
                 firebaseUid = uid,
                 identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
-                names = listOf(UserName(type = NameType.FIRST, value = "Admin", isPrimary = true)),
+                names = listOf(UserName(type = NameType.FIRST, value = "Admin")),
                 capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
             ),
         )
@@ -81,7 +80,7 @@ class ContactApiIntegrationTest {
         post("/api/v1/users") {
             header(HttpHeaders.Authorization, "Bearer $token")
             contentType(ContentType.Application.Json)
-            setBody(CreateUserRequest(names = listOf(NameDto(type = "FIRST", value = "Juan", isPrimary = true))))
+            setBody(CreateUserRequest(displayName = "Juan"))
         }.body()
 
     private suspend fun HttpClient.addPhone(

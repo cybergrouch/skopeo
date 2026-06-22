@@ -4,7 +4,6 @@ import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import org.skopeo.dto.user.CreateUserRequest
-import org.skopeo.dto.user.NameDto
 import org.skopeo.dto.user.ProfileRequest
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.ContactSource
@@ -76,9 +75,9 @@ class TokenMappingTest {
             it.status shouldBe VerificationStatus.VERIFIED
             it.method shouldBe VerificationMethod.OAUTH_PROVIDER
         }
-        // No structured names supplied → the token display name is stored as a FULL name.
+        // No display name supplied → the token name becomes the single DISPLAY name.
         command.names.single().let {
-            it.type shouldBe NameType.FULL
+            it.type shouldBe NameType.DISPLAY
             it.value shouldBe "Ana"
         }
     }
@@ -87,7 +86,7 @@ class TokenMappingTest {
     fun `unverified email is PENDING with no method`() {
         val command =
             buildProvisionCommand(
-                token = token(email = "b@example.com", emailVerified = false),
+                token = token(email = "b@example.com", emailVerified = false, name = "Bea"),
                 request = CreateUserRequest(),
             )
 
@@ -96,18 +95,17 @@ class TokenMappingTest {
     }
 
     @Test
-    fun `request names and phone are carried through`() {
+    fun `the request display name overrides the token name, and phone is carried through`() {
         val command =
             buildProvisionCommand(
-                token = token(name = "ignored-display-name"),
-                request =
-                    CreateUserRequest(
-                        names = listOf(NameDto(type = "FIRST", value = "Juan", isPrimary = true)),
-                        phone = "+639170000000",
-                    ),
+                token = token(name = "from-provider"),
+                request = CreateUserRequest(displayName = "Juan", phone = "+639170000000"),
             )
 
-        command.names.single().type shouldBe NameType.FIRST
+        command.names.single().let {
+            it.type shouldBe NameType.DISPLAY
+            it.value shouldBe "Juan"
+        }
         command.phone!!.let {
             it.type shouldBe ContactType.PHONE
             it.source shouldBe ContactSource.MANUAL
@@ -116,15 +114,16 @@ class TokenMappingTest {
     }
 
     @Test
-    fun `rejects invalid name type, gender, and date`() {
+    fun `rejects a missing display name, bad gender, and bad date`() {
+        // No request display name and no token name.
         shouldThrow<IllegalArgumentException> {
-            buildProvisionCommand(token = token(), request = CreateUserRequest(names = listOf(NameDto(type = "BOGUS", value = "x"))))
+            buildProvisionCommand(token = token(name = null), request = CreateUserRequest())
         }
         shouldThrow<IllegalArgumentException> {
-            buildProvisionCommand(token = token(), request = CreateUserRequest(gender = "X"))
+            buildProvisionCommand(token = token(), request = CreateUserRequest(displayName = "Juan", gender = "X"))
         }
         shouldThrow<IllegalArgumentException> {
-            buildProvisionCommand(token = token(), request = CreateUserRequest(dateOfBirth = "31-12-1990"))
+            buildProvisionCommand(token = token(), request = CreateUserRequest(displayName = "Juan", dateOfBirth = "31-12-1990"))
         }
     }
 
