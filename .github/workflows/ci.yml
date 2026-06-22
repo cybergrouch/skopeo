@@ -36,3 +36,9 @@ jobs:
 
       - name: Build, lint, detekt, test, verify coverage
         run: ./gradlew check
+
+      # Surface coverage on the run summary page, even if `check` failed (the JaCoCo
+      # report is still generated when only the coverage gate fails).
+      - name: Coverage summary
+        if: always()
+        run: python3 scripts/coverage-summary.py >> "$GITHUB_STEP_SUMMARY"
