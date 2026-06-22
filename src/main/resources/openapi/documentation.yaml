@@ -13,6 +13,8 @@ tags:
     description: Rating calculation endpoints
   - name: Users
     description: User management — provisioning and profile CRUD (Firebase-authenticated)
+  - name: Contacts
+    description: Email/phone management; verification is an ADMINISTRATOR action
 
 paths:
   /api/v1/calculate-ranking:
@@ -241,6 +243,179 @@ paths:
           description: Forbidden
         '404':
           description: No such user
+
+  /api/v1/users/{userId}/contacts:
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      summary: List a user's contacts
+      tags:
+        - Contacts
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The user's contacts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ContactResponse'
+        '403':
+          description: Forbidden
+        '404':
+          description: No such user
+    post:
+      summary: Add an email or phone
+      description: Created as MANUAL/PENDING. Self-or-ADMINISTRATOR.
+      tags:
+        - Contacts
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContactCreateRequest'
+      responses:
+        '201':
+          description: Contact created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactResponse'
+        '400':
+          description: Invalid body
+        '403':
+          description: Forbidden
+        '404':
+          description: No such user
+        '409':
+          description: A contact of that type already exists for the user
+
+  /api/v1/users/{userId}/contacts/{id}:
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      summary: Get a contact
+      tags:
+        - Contacts
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The contact
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactResponse'
+        '403':
+          description: Forbidden
+        '404':
+          description: No such contact
+    patch:
+      summary: Change a contact's address
+      description: Updates value/isPrimary. Resets verification to PENDING. Self-or-ADMINISTRATOR.
+      tags:
+        - Contacts
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContactUpdateRequest'
+      responses:
+        '200':
+          description: Updated contact
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactResponse'
+        '400':
+          description: Invalid body or malformed id
+        '403':
+          description: Forbidden
+        '404':
+          description: No such contact
+    delete:
+      summary: Delete a contact
+      tags:
+        - Contacts
+      security:
+        - firebaseAuth: []
+      responses:
+        '204':
+          description: Contact deleted
+        '403':
+          description: Forbidden
+        '404':
+          description: No such contact
+
+  /api/v1/users/{userId}/contacts/{id}/verification:
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    put:
+      summary: Set a contact's verification state (ADMINISTRATOR only)
+      description: |
+        Manual stand-in for automated OTP. Only an ADMINISTRATOR may call this. A VERIFIED
+        status stamps verifiedAt/verifiedBy and the method (default ADMIN_OVERRIDE); any
+        other status clears those audit fields.
+      tags:
+        - Contacts
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerificationRequest'
+      responses:
+        '200':
+          description: Updated contact
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactResponse'
+        '400':
+          description: Invalid body
+        '403':
+          description: Caller is not an ADMINISTRATOR
+        '404':
+          description: No such contact
+        '409':
+          description: This value is already verified for another account
 
 components:
   securitySchemes:
@@ -510,11 +685,15 @@ components:
     ContactDto:
       type: object
       required:
+        - id
         - type
         - value
         - source
         - status
       properties:
+        id:
+          type: string
+          format: uuid
         type:
           type: string
           enum: [EMAIL, PHONE]
@@ -529,7 +708,7 @@ components:
         method:
           type: string
           nullable: true
-          enum: [OAUTH_PROVIDER, EMAIL_LINK, SMS_OTP, WHATSAPP_OTP, VIBER_OTP]
+          enum: [OAUTH_PROVIDER, EMAIL_LINK, SMS_OTP, WHATSAPP_OTP, VIBER_OTP, ADMIN_OVERRIDE]
         isPrimary:
           type: boolean
 
@@ -652,3 +831,86 @@ components:
           items:
             type: string
             enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR]
+
+    ContactCreateRequest:
+      type: object
+      required:
+        - type
+        - value
+      properties:
+        type:
+          type: string
+          enum: [EMAIL, PHONE]
+        value:
+          type: string
+        isPrimary:
+          type: boolean
+          default: true
+
+    ContactUpdateRequest:
+      type: object
+      required:
+        - value
+      properties:
+        value:
+          type: string
+        isPrimary:
+          type: boolean
+          default: true
+
+    VerificationRequest:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [PENDING, VERIFIED, FAILED]
+        method:
+          type: string
+          nullable: true
+          description: Defaults to ADMIN_OVERRIDE when status is VERIFIED.
+          enum: [OAUTH_PROVIDER, EMAIL_LINK, SMS_OTP, WHATSAPP_OTP, VIBER_OTP, ADMIN_OVERRIDE]
+
+    ContactResponse:
+      type: object
+      required:
+        - id
+        - userId
+        - type
+        - value
+        - source
+        - status
+        - isPrimary
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [EMAIL, PHONE]
+        value:
+          type: string
+        source:
+          type: string
+          enum: [GOOGLE, FACEBOOK, MANUAL]
+        status:
+          type: string
+          enum: [PENDING, VERIFIED, FAILED]
+        method:
+          type: string
+          nullable: true
+          enum: [OAUTH_PROVIDER, EMAIL_LINK, SMS_OTP, WHATSAPP_OTP, VIBER_OTP, ADMIN_OVERRIDE]
+        isPrimary:
+          type: boolean
+        verifiedAt:
+          type: string
+          format: date-time
+          nullable: true
+        verifiedBy:
+          type: string
+          format: uuid
+          nullable: true

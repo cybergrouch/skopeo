@@ -1,6 +1,7 @@
 package org.skopeo.model
 
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.util.UUID
 
 /** Authorization roles granted to a user (broad for now; devolvable to fine-grained capabilities later). */
@@ -16,7 +17,7 @@ enum class ContactSource { GOOGLE, FACEBOOK, MANUAL }
 
 enum class VerificationStatus { PENDING, VERIFIED, FAILED }
 
-enum class VerificationMethod { OAUTH_PROVIDER, EMAIL_LINK, SMS_OTP, WHATSAPP_OTP, VIBER_OTP }
+enum class VerificationMethod { OAUTH_PROVIDER, EMAIL_LINK, SMS_OTP, WHATSAPP_OTP, VIBER_OTP, ADMIN_OVERRIDE }
 
 /** Authentication provider a user signs in with (brokered by Firebase). */
 enum class AuthProvider { GOOGLE, FACEBOOK, PASSWORD }
@@ -27,6 +28,7 @@ data class UserName(
     val isPrimary: Boolean = false,
 )
 
+/** A contact to be written (provisioning input); identity is assigned by the database. */
 data class ContactInfo(
     val type: ContactType,
     val value: String,
@@ -34,6 +36,20 @@ data class ContactInfo(
     val status: VerificationStatus,
     val method: VerificationMethod? = null,
     val isPrimary: Boolean = false,
+)
+
+/** A contact as stored — the addressable sub-resource, with its id and verification audit fields. */
+data class Contact(
+    val id: UUID,
+    val userId: UUID,
+    val type: ContactType,
+    val value: String,
+    val source: ContactSource,
+    val status: VerificationStatus,
+    val method: VerificationMethod? = null,
+    val isPrimary: Boolean = false,
+    val verifiedAt: LocalDateTime? = null,
+    val verifiedBy: UUID? = null,
 )
 
 data class UserIdentity(
@@ -54,7 +70,7 @@ data class User(
     val kycVerified: Boolean,
     val isActive: Boolean,
     val names: List<UserName>,
-    val contacts: List<ContactInfo>,
+    val contacts: List<Contact>,
     val identities: List<UserIdentity>,
     val capabilities: Set<Capability>,
 )

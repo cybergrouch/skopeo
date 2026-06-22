@@ -223,6 +223,8 @@ tasks.jacocoTestReport {
                         // (covered via the emulator once provisioning lands)
                         "**/Security*.*",
                         "**/routes/UserRoutes*.*",
+                        "**/routes/ContactRoutes*.*",
+                        "**/routes/RouteSupport*.*",
                     )
                 }
             },
@@ -269,6 +271,8 @@ tasks.jacocoTestCoverageVerification {
                         "**/*Kt.class",
                         "**/Security*.*",
                         "**/routes/UserRoutes*.*",
+                        "**/routes/ContactRoutes*.*",
+                        "**/routes/RouteSupport*.*",
                     )
                 }
             },

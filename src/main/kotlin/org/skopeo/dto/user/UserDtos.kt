@@ -19,6 +19,7 @@ data class NameDto(
 
 @Serializable
 data class ContactDto(
+    val id: String,
     val type: String,
     val value: String,
     val source: String,
@@ -89,6 +90,7 @@ fun User.toResponse(): UserResponse =
         contacts =
             contacts.map {
                 ContactDto(
+                    id = it.id.toString(),
                     type = it.type.name,
                     value = it.value,
                     source = it.source.name,
