@@ -1,6 +1,7 @@
 package org.skopeo.repository
 
 import org.jetbrains.exposed.sql.ResultRow
+import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.selectAll
@@ -161,7 +162,7 @@ private fun identitiesOf(id: UUID): List<UserIdentity> =
 private fun capabilitiesOf(id: UUID): Set<Capability> =
     UserCapabilitiesTable
         .selectAll()
-        .where { UserCapabilitiesTable.userId eq id }
+        .where { (UserCapabilitiesTable.userId eq id) and UserCapabilitiesTable.isActive }
         .map { Capability.valueOf(it[UserCapabilitiesTable.capability]) }
         .toSet()
 

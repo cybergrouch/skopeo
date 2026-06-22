@@ -8,6 +8,21 @@ import java.util.UUID
 enum class Capability { PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR }
 
 /**
+ * An append-only grant of a [Capability] to a user. A grant is active until revoked; the
+ * audit fields record who granted/revoked it and when. Re-granting after a revoke is a new row.
+ */
+data class CapabilityGrant(
+    val id: UUID,
+    val userId: UUID,
+    val capability: Capability,
+    val isActive: Boolean = true,
+    val grantedBy: UUID? = null,
+    val grantedAt: LocalDateTime? = null,
+    val revokedBy: UUID? = null,
+    val revokedAt: LocalDateTime? = null,
+)
+
+/**
  * Name variants a user may carry (Filipino nicknames vs legal names; KYC matching).
  * DISPLAY is the single active name shown in the UI — see [Name].
  */
