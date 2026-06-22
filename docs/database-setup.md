@@ -94,7 +94,19 @@ database:
 
 ## Database Migrations
 
-Migrations are managed by [Flyway](https://flywaydb.org/) and run automatically on application startup.
+Migrations are managed by [Flyway](https://flywaydb.org/) (the `flyway-core` library, run automatically on application startup via `DatabaseConfig.init`).
+
+> **Note:** only the Flyway *Gradle plugin* was removed (it broke on Gradle 9 and is unmaintained). The Flyway engine itself — versioned migrations, history tracking, startup application — is fully in place. Manual/ad-hoc runs use the Flyway CLI Docker image (see [Running Migrations](#running-migrations)).
+
+### Why Flyway (and not Liquibase)
+
+Flyway is **SQL-first**: each migration is a plain, versioned `V__*.sql` file containing the exact SQL that runs. Liquibase is changelog-based (XML/YAML/JSON/SQL) with a database-agnostic abstraction layer. For Skopeo, Flyway is the better fit:
+
+- **Single database, Postgres-specific DDL.** The schema leans on Postgres features — partial unique indexes (e.g. `… WHERE verification_status = 'VERIFIED'`), `JSONB`, triggers, regex `CHECK`s, `uuid-ossp`. These are trivial in raw SQL but awkward in Liquibase's abstract changelogs. Liquibase's main advantage — cross-database portability — gives us nothing while we're committed to Postgres and *want* its features.
+- **The SQL is the source of truth and runs anywhere.** Migrations can be applied straight through `psql` or the Flyway CLI with no tooling translation — exactly how new migrations are validated here.
+- **Low overhead for a solo dev / pilot.** "Write SQL, version it, apply forward" is the simplest model.
+
+**When we'd reconsider Liquibase:** if we later need automatic rollbacks/down-migrations (Flyway's `undo` is a paid feature; Liquibase OSS includes rollback), must support multiple database engines, or want richer change-tracking (contexts, preconditions, diff-based generation). For now, forward-only migrations on a single Postgres are the right call.
 
 ### Migration Files
 
