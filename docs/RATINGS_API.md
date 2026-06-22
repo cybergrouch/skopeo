@@ -141,3 +141,34 @@ per-match delta and the worked tables in `RATING_CALCULATION_ALGORITHM.md` (§3.
 threshold tables). So this is a **calibration exercise**, not a one-line constant change: re-derive
 the expected per-match changes, re-validate convergence speed, and refresh the documented tables
 and the `NTRPvsUTRComparison` outputs.
+
+### Convergence-based graduation (proposal — keep for a later item)
+
+An alternative/companion to tuning K: keep a provisional rating and **detect when it has
+converged** by watching the per-match delta sequence, graduating to "established" once movement
+stabilizes.
+
+- **Sound basis.** A mis-seeded rating yields systematically same-signed, decaying deltas (all
+  gains if underrated, all losses if overrated); as it nears truth the deltas shrink and start
+  alternating sign around zero. That trend is a real convergence signal — the hand-rolled
+  analogue of Glicko's shrinking Rating Deviation.
+- **Fix the threshold.** Graduation should *not* be "|delta| < K". K is the *maximum* single-match
+  move; typical competitive deltas are already 0.03–0.16 (below K), and a mis-seeded player
+  upsetting stronger opponents can swing up to ~2K. So "fell below K" only means "no longer
+  producing upset-sized swings" — a first milestone, not convergence. Graduate on a tighter
+  signal: the **drift** (mean of recent deltas) within ε of zero, with **ε ≪ K**, and/or deltas
+  alternating sign — equivalent to "RD below a cutoff."
+- **Avoid the extrapolation jump.** Curve-fitting the limit `r∞` from 3–5 noisy results is
+  statistically fragile (over-fits noise, can overshoot to a confidently-wrong value) and injects
+  a rating not earned by results. It's also just a brittle way to get the acceleration that a
+  higher provisional K / RD provides robustly. Prefer letting results move the rating and use the
+  delta analysis only to decide *when* to graduate.
+- **Sample size & opponents.** 3–5 matches is too few given tennis variance — expect ~5–15, or
+  gate on an uncertainty estimate rather than a fixed count, and only count matches against
+  reliable, varied opponents.
+
+**Synthesis of the last three sections.** Treat these as two separate jobs:
+*acceleration* (how fast the rating moves toward truth) is best handled data-driven — a higher
+provisional / confidence-driven K (or Glicko RD); *graduation* (when to call it established) is
+best handled by the convergence/drift threshold above. The curve-fit "jump" tries to do both at
+once and is the part to drop.
