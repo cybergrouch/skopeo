@@ -1,4 +1,7 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: 2026 Lange Pantoja
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 
 # =============================================================================
 # check-coverage.sh - Run code coverage and verify 85% threshold

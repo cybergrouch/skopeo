@@ -1,4 +1,7 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: 2026 Lange Pantoja
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 
 # Tennis Levelr - Ranking API Test Script
 

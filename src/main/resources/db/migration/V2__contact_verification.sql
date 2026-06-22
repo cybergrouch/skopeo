@@ -1,3 +1,6 @@
+-- SPDX-FileCopyrightText: 2026 Lange Pantoja
+-- SPDX-License-Identifier: AGPL-3.0-or-later
+
 -- Contact-information verification management (admin-driven).
 --
 -- Automated OTP verification is deferred; for now an ADMINISTRATOR marks an email or

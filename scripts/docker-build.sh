@@ -1,4 +1,7 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: 2026 Lange Pantoja
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 # Docker build helper script for Tennis Levelr
 # Usage: ./scripts/docker-build.sh [version]
 # Example: ./scripts/docker-build.sh 1.0.0

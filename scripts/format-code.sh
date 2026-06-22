@@ -1,4 +1,7 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: 2026 Lange Pantoja
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 # Code formatting script for Tennis Levelr
 # Auto-formats all Kotlin code using ktlint
 
