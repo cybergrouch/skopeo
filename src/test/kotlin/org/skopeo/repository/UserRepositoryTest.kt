@@ -5,9 +5,6 @@ import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
-import org.flywaydb.core.Flyway
-import org.jetbrains.exposed.sql.Database
-import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -24,10 +21,7 @@ import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.model.VerificationMethod
 import org.skopeo.model.VerificationStatus
-import org.testcontainers.containers.PostgreSQLContainer
-import org.testcontainers.junit.jupiter.Container
-import org.testcontainers.junit.jupiter.Testcontainers
-import org.testcontainers.utility.DockerImageName
+import org.skopeo.testsupport.PostgresTestDatabase
 import java.time.LocalDate
 import java.util.UUID
 
@@ -37,31 +31,12 @@ import java.util.UUID
  * schema's constraints (one-contact-per-type, globally-unique verified value,
  * unique firebase_uid) are all validated end-to-end.
  */
-@Testcontainers
 class UserRepositoryTest {
     companion object {
-        @Container
-        @JvmStatic
-        private val postgres =
-            PostgreSQLContainer(DockerImageName.parse("postgres:16-alpine"))
-                .withDatabaseName("skopeo_test")
-
         @BeforeAll
         @JvmStatic
         fun migrateAndConnect() {
-            Flyway
-                .configure()
-                .dataSource(postgres.jdbcUrl, postgres.username, postgres.password)
-                .locations("classpath:db/migration")
-                .load()
-                .migrate()
-
-            Database.connect(
-                url = postgres.jdbcUrl,
-                driver = "org.postgresql.Driver",
-                user = postgres.username,
-                password = postgres.password,
-            )
+            PostgresTestDatabase.start()
         }
     }
 
@@ -69,7 +44,7 @@ class UserRepositoryTest {
 
     @BeforeEach
     fun resetTables() {
-        transaction { exec("TRUNCATE users CASCADE") }
+        PostgresTestDatabase.truncate()
     }
 
     private fun googleSignup(
@@ -174,6 +149,22 @@ class UserRepositoryTest {
     @Test
     fun `updateProfile returns null for an unknown id`() {
         repository.updateProfile(UUID.randomUUID(), ProfilePatch(city = "Davao")).shouldBe(null)
+    }
+
+    @Test
+    fun `replaceProfile overwrites all mutable fields, clearing omitted ones`() {
+        val created = repository.provision(googleSignup()) // gender = M, city = Manila
+
+        val replaced = repository.replaceProfile(created.id, ProfilePatch(city = "Iloilo"))
+
+        replaced.shouldNotBeNull()
+        replaced.city shouldBe "Iloilo"
+        replaced.gender.shouldBe(null) // omitted from the replacement → cleared
+    }
+
+    @Test
+    fun `replaceProfile returns null for an unknown id`() {
+        repository.replaceProfile(UUID.randomUUID(), ProfilePatch(city = "Davao")).shouldBe(null)
     }
 
     @Test
