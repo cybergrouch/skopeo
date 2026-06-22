@@ -15,6 +15,8 @@ tags:
     description: User management — provisioning and profile CRUD (Firebase-authenticated)
   - name: Contacts
     description: Email/phone management; verification is an ADMINISTRATOR action
+  - name: Names
+    description: Append-only user names; one active primary (display) name
 
 paths:
   /api/v1/calculate-ranking:
@@ -426,6 +428,142 @@ paths:
         '409':
           description: This value is already verified for another account
 
+  /api/v1/users/{userId}/names:
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      summary: List a user's names
+      tags:
+        - Names
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The user's names (incl. disabled history)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/NameResponse'
+        '403':
+          description: Forbidden
+        '404':
+          description: No such user
+    post:
+      summary: Add a name
+      description: |
+        Append-only. The first active name becomes primary automatically; isPrimary=true
+        promotes the new name and demotes the previous primary. Self-or-ADMINISTRATOR. Values
+        are immutable; to change a name, disable it (via /state) and add a new one. Multiple
+        names of the same type are allowed.
+      tags:
+        - Names
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NameCreateRequest'
+      responses:
+        '201':
+          description: Name created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NameResponse'
+        '400':
+          description: Invalid body
+        '403':
+          description: Forbidden
+        '404':
+          description: No such user
+
+  /api/v1/users/{userId}/names/{id}:
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      summary: Get a name
+      tags:
+        - Names
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The name
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NameResponse'
+        '403':
+          description: Forbidden
+        '404':
+          description: No such name
+
+  /api/v1/users/{userId}/names/{id}/state:
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    put:
+      summary: Enable or disable a name
+      description: |
+        Name values are immutable — instead of editing, disable a name and add a new one.
+        Self-or-ADMINISTRATOR. Re-enabling a former primary while another active primary
+        exists is a conflict.
+      tags:
+        - Names
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NameStateRequest'
+      responses:
+        '200':
+          description: Updated name
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NameResponse'
+        '400':
+          description: Invalid body or malformed id
+        '403':
+          description: Forbidden
+        '404':
+          description: No such name
+        '409':
+          description: Another active primary name already exists
+
 components:
   securitySchemes:
     firebaseAuth:
@@ -682,6 +820,11 @@ components:
         - type
         - value
       properties:
+        id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Present on responses; omitted in the create-user request.
         type:
           type: string
           enum: [FIRST, MIDDLE, LAST, SUFFIX, NICKNAME, PREFERRED, FULL, GOVERNMENT]
@@ -690,6 +833,9 @@ components:
         isPrimary:
           type: boolean
           default: false
+        isActive:
+          type: boolean
+          default: true
 
     ContactDto:
       type: object
@@ -925,6 +1071,59 @@ components:
           type: string
           format: uuid
           nullable: true
+        disabledAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    NameCreateRequest:
+      type: object
+      required:
+        - type
+        - value
+      properties:
+        type:
+          type: string
+          enum: [FIRST, MIDDLE, LAST, SUFFIX, NICKNAME, PREFERRED, FULL, GOVERNMENT]
+        value:
+          type: string
+        isPrimary:
+          type: boolean
+          default: false
+
+    NameStateRequest:
+      type: object
+      required:
+        - isActive
+      properties:
+        isActive:
+          type: boolean
+
+    NameResponse:
+      type: object
+      required:
+        - id
+        - userId
+        - type
+        - value
+        - isPrimary
+        - isActive
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [FIRST, MIDDLE, LAST, SUFFIX, NICKNAME, PREFERRED, FULL, GOVERNMENT]
+        value:
+          type: string
+        isPrimary:
+          type: boolean
+        isActive:
+          type: boolean
         disabledAt:
           type: string
           format: date-time

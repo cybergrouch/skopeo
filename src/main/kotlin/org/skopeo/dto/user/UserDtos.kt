@@ -12,9 +12,12 @@ import org.skopeo.model.User
  */
 @Serializable
 data class NameDto(
+    // id is null on input (create request) and populated on output (user response).
+    val id: String? = null,
     val type: String,
     val value: String,
     val isPrimary: Boolean = false,
+    val isActive: Boolean = true,
 )
 
 @Serializable
@@ -87,7 +90,16 @@ fun User.toResponse(): UserResponse =
         country = country,
         kycVerified = kycVerified,
         isActive = isActive,
-        names = names.map { NameDto(type = it.type.name, value = it.value, isPrimary = it.isPrimary) },
+        names =
+            names.map {
+                NameDto(
+                    id = it.id.toString(),
+                    type = it.type.name,
+                    value = it.value,
+                    isPrimary = it.isPrimary,
+                    isActive = it.isActive,
+                )
+            },
         contacts =
             contacts.map {
                 ContactDto(

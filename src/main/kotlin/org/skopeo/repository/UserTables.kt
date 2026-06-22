@@ -36,6 +36,8 @@ internal object UserNamesTable : UUIDTable("user_names") {
     val nameType = varchar("name_type", CODE_MAX)
     val value = varchar("value", VALUE_MAX)
     val isPrimary = bool("is_primary").default(false)
+    val isActive = bool("is_active").default(true)
+    val disabledAt = datetime("disabled_at").nullable()
 }
 
 internal object UserIdentitiesTable : UUIDTable("user_identities") {

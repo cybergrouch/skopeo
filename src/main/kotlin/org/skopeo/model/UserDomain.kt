@@ -22,10 +22,26 @@ enum class VerificationMethod { OAUTH_PROVIDER, EMAIL_LINK, SMS_OTP, WHATSAPP_OT
 /** Authentication provider a user signs in with (brokered by Firebase). */
 enum class AuthProvider { GOOGLE, FACEBOOK, PASSWORD }
 
+/** A name to be written (provisioning input); identity is assigned by the database. */
 data class UserName(
     val type: NameType,
     val value: String,
     val isPrimary: Boolean = false,
+)
+
+/**
+ * A name as stored — the addressable sub-resource. Values are immutable: a name is disabled
+ * ([isActive] = false) rather than edited, and a new one added, so the table keeps the full
+ * history of a profile's names. [isPrimary] marks the single active display name.
+ */
+data class Name(
+    val id: UUID,
+    val userId: UUID,
+    val type: NameType,
+    val value: String,
+    val isPrimary: Boolean = false,
+    val isActive: Boolean = true,
+    val disabledAt: LocalDateTime? = null,
 )
 
 /** A contact to be written (provisioning input); identity is assigned by the database. */
@@ -75,7 +91,7 @@ data class User(
     val country: String,
     val kycVerified: Boolean,
     val isActive: Boolean,
-    val names: List<UserName>,
+    val names: List<Name>,
     val contacts: List<Contact>,
     val identities: List<UserIdentity>,
     val capabilities: Set<Capability>,
