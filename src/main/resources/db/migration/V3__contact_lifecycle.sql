@@ -1,3 +1,6 @@
+-- SPDX-FileCopyrightText: 2026 Lange Pantoja
+-- SPDX-License-Identifier: AGPL-3.0-or-later
+
 -- Append-only contact lifecycle.
 --
 -- Contact values are immutable: instead of editing, a contact is disabled and a new one

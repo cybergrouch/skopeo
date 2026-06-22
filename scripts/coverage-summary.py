@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Lange Pantoja
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Render the JaCoCo XML report as GitHub-flavored markdown.
 
 Prints an overall line/branch coverage table plus a per-package breakdown to stdout.

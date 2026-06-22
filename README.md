@@ -1119,7 +1119,10 @@ Once installed, the hook will:
 
 Copyright (C) 2026 Lange Pantoja
 
-Skopeo is licensed under the **GNU Affero General Public License v3.0** (AGPL-3.0).
-You may use, modify, and distribute it under those terms; in particular, if you run a
-modified version as a network service, you must make the corresponding source available
-to its users. See [LICENSE](LICENSE) for the full text.
+Skopeo is licensed under the **GNU Affero General Public License v3.0 or later**
+(`AGPL-3.0-or-later`). You may use, modify, and distribute it under those terms; in
+particular, if you run a modified version as a network service, you must make the
+corresponding source available to its users. See [LICENSE](LICENSE) for the full text.
+
+Source files carry [SPDX](https://spdx.dev) headers
+(`SPDX-License-Identifier: AGPL-3.0-or-later`).

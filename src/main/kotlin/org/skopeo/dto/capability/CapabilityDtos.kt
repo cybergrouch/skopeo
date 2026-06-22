@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Lange Pantoja
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 package org.skopeo.dto.capability
 
 import kotlinx.serialization.Serializable

@@ -1,4 +1,7 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: 2026 Lange Pantoja
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 
 # Tennis Levelr API - cURL Examples
 # Collection of useful cURL commands for testing
