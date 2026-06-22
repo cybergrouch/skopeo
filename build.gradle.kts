@@ -4,7 +4,6 @@ plugins {
     application
     id("org.jlleitschuh.gradle.ktlint") version "12.1.0"
     id("io.gitlab.arturbosch.detekt") version "1.23.8"
-    id("org.flywaydb.flyway") version "10.17.0"
     jacoco
 }
 
@@ -268,11 +267,9 @@ tasks.test {
     finalizedBy(tasks.jacocoTestReport) // Report is always generated after tests run
 }
 
-// Flyway configuration for database migrations
-flyway {
-    url = System.getenv("DATABASE_URL") ?: "jdbc:postgresql://localhost:5432/SkopeoDb"
-    user = System.getenv("DATABASE_USER") ?: "postgres"
-    password = System.getenv("DATABASE_PASSWORD") ?: "postgres"
-    locations = arrayOf("classpath:db/migration")
-    cleanDisabled = false
-}
+// Database migrations:
+// - Runtime: the app runs Flyway (flyway-core) on startup via DatabaseConfig.init,
+//   so migrations apply automatically on `./gradlew run`, in Docker, and on Cloud Run.
+// - Manual/ad-hoc: use the Flyway CLI Docker image (see docs/database-setup.md).
+// The official Flyway *Gradle plugin* is intentionally NOT used — it relies on
+// JavaPluginConvention, removed in Gradle 9, and is effectively unmaintained.

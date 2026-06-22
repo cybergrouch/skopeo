@@ -106,22 +106,25 @@ Example:
 - `V1__create_initial_schema.sql` - Initial schema
 - `V2__add_social_media_table.sql` - Add social media verification
 
-### Running Migrations Manually
+### Running Migrations
 
-Use Gradle tasks for manual migration management:
+**Normally nothing is run manually** — the app applies migrations at startup via
+`flyway-core` (`DatabaseConfig.init`), so `./gradlew run`, `docker-compose up`, and
+Cloud Run deploys all migrate automatically.
+
+> The Flyway **Gradle plugin** is intentionally not used (it depends on
+> `JavaPluginConvention`, removed in Gradle 9, and is unmaintained). For manual/ad-hoc
+> runs use the **Flyway CLI Docker image** — no local install, version-pinned:
 
 ```bash
-# Show migration info
-./gradlew flywayInfo
+docker run --rm \
+  -v "$(pwd)/src/main/resources/db/migration:/flyway/sql:ro" \
+  flyway/flyway:10 \
+  -url="jdbc:postgresql://host.docker.internal:5432/SkopeoDb" \
+  -user=postgres -password=postgres \
+  info        # or: migrate | validate | clean
 
-# Run pending migrations
-./gradlew flywayMigrate
-
-# Validate applied migrations
-./gradlew flywayValidate
-
-# Clean database (CAUTION: Deletes all data!)
-./gradlew flywayClean
+# Against Cloud SQL: run the Cloud SQL Auth Proxy and point -url at it.
 ```
 
 ### Creating New Migrations
@@ -129,7 +132,7 @@ Use Gradle tasks for manual migration management:
 1. Create a new file in `src/main/resources/db/migration/`
 2. Follow naming convention: `V{next_version}__{description}.sql`
 3. Write SQL DDL statements
-4. Test with `./gradlew flywayMigrate`
+4. Test by starting the app (it migrates on startup) or with the Flyway CLI Docker `migrate` command above
 
 Example:
 
@@ -333,27 +336,12 @@ LIMIT 64;
 
 **Problem:** Flyway migration fails on startup
 
-**Solution:**
-1. Check Flyway status:
-   ```bash
-   ./gradlew flywayInfo
-   ```
+**Solution** (using the Flyway CLI Docker image — see [Running Migrations](#running-migrations) for the full `docker run` invocation; substitute the final word):
 
-2. If migration is marked as failed, repair it:
-   ```bash
-   ./gradlew flywayRepair
-   ```
-
-3. Re-run migration:
-   ```bash
-   ./gradlew flywayMigrate
-   ```
-
-4. For development, you can clean and start fresh (CAUTION: Deletes all data):
-   ```bash
-   ./gradlew flywayClean
-   ./gradlew flywayMigrate
-   ```
+1. Check status: `... info`
+2. If a migration is marked failed, repair the history: `... repair`
+3. Re-run: `... migrate`
+4. For development, clean and start fresh — **CAUTION: deletes all data**: `... clean` then `... migrate`. (Locally you can instead just drop/recreate the dev database, e.g. `docker exec skopeo_db psql -U postgres -c 'DROP DATABASE SkopeoDb' -c 'CREATE DATABASE SkopeoDb'`, then restart the app.)
 
 ### Port 5432 Already in Use
 
