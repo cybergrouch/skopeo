@@ -35,7 +35,10 @@ fun main(args: Array<String>) {
     EngineMain.main(args)
 }
 
-fun Application.module(initDatabase: Boolean = true) {
+fun Application.module(
+    initDatabase: Boolean = true,
+    firebaseAuth: FirebaseAuthSettings? = null,
+) {
     if (initDatabase) {
         // Initialize database connection and run migrations
         DatabaseConfig.init(this)
@@ -50,7 +53,7 @@ fun Application.module(initDatabase: Boolean = true) {
     configureMonitoring()
     configurePlugins()
     configureCORS()
-    configureSecurity()
+    configureSecurity(firebaseAuth)
     configureOpenAPI()
     configureRouting()
     configureRankingRoutes()

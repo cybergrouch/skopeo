@@ -103,6 +103,22 @@ class UserRepository {
             if (updated == 0) null else loadAggregate(id)
         }
 
+    /** Full replacement of the mutable profile fields (PUT semantics): null clears the column. */
+    fun replaceProfile(
+        id: UUID,
+        patch: ProfilePatch,
+    ): User? =
+        transaction {
+            val updated =
+                UsersTable.update({ UsersTable.id eq id }) {
+                    it[photoUrl] = patch.photoUrl
+                    it[dateOfBirth] = patch.dateOfBirth
+                    it[gender] = patch.gender
+                    it[city] = patch.city
+                }
+            if (updated == 0) null else loadAggregate(id)
+        }
+
     /** Soft-delete: flip is_active to false. Returns false if no such user. */
     fun deactivate(id: UUID): Boolean =
         transaction {
