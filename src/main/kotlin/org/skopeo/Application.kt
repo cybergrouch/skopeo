@@ -25,6 +25,7 @@ import io.micrometer.prometheus.PrometheusMeterRegistry
 import mu.KotlinLogging
 import org.skopeo.config.DatabaseConfig
 import org.skopeo.routes.configureRankingRoutes
+import org.skopeo.routes.configureUserRoutes
 import org.slf4j.event.Level
 
 private val logger = KotlinLogging.logger {}
@@ -49,9 +50,11 @@ fun Application.module(initDatabase: Boolean = true) {
     configureMonitoring()
     configurePlugins()
     configureCORS()
+    configureSecurity()
     configureOpenAPI()
     configureRouting()
     configureRankingRoutes()
+    configureUserRoutes()
     logger.info { "Skopeo API started successfully on port 8080" }
 }
 
