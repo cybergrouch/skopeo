@@ -8,6 +8,9 @@ on:
 
 permissions:
   contents: read
+  checks: write # publish the JUnit test-report check run
+  pages: write # deploy the JaCoCo HTML report to GitHub Pages
+  id-token: write # authenticate the Pages deployment
 
 # Cancel superseded runs on the same ref (e.g. new push to a PR)
 concurrency:
@@ -42,3 +45,37 @@ jobs:
       - name: Coverage summary
         if: always()
         run: python3 scripts/coverage-summary.py >> "$GITHUB_STEP_SUMMARY"
+
+      # Per-test results as a "Test Report" check run, with failures annotated on the diff.
+      - name: Publish test report
+        uses: mikepenz/action-junit-report@v4
+        if: always()
+        with:
+          report_paths: '**/build/test-results/test/TEST-*.xml'
+          check_name: Test Report
+          detailed_summary: true
+
+      # Stage the JaCoCo HTML (source melded with coverage) for Pages — main only,
+      # and only on a successful build (implicit success() since no status function here).
+      - name: Upload coverage report for Pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/reports/jacoco/test/html
+
+  # Publish the JaCoCo HTML report to GitHub Pages (latest main build).
+  # Requires Pages to be enabled with "GitHub Actions" as the source in repo settings.
+  deploy-coverage:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
