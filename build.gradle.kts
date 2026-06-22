@@ -37,6 +37,10 @@ dependencies {
     implementation("io.ktor:ktor-server-netty-jvm:$ktorVersion")
     implementation("io.ktor:ktor-server-content-negotiation-jvm:$ktorVersion")
     implementation("io.ktor:ktor-server-cors-jvm:$ktorVersion")
+
+    // Authentication — verify Firebase-issued JWTs against Google's public keys
+    implementation("io.ktor:ktor-server-auth-jvm:$ktorVersion")
+    implementation("io.ktor:ktor-server-auth-jwt-jvm:$ktorVersion")
     implementation("io.ktor:ktor-serialization-kotlinx-json-jvm:$ktorVersion")
     implementation("io.ktor:ktor-server-config-yaml:$ktorVersion")
 
@@ -206,6 +210,10 @@ tasks.jacocoTestReport {
                         "**/config/**",
                         // Kotlin file-level functions
                         "**/*Kt.class",
+                        // Auth & route wiring — happy path needs a Firebase token
+                        // (covered via the emulator once provisioning lands)
+                        "**/Security*.*",
+                        "**/routes/UserRoutes*.*",
                     )
                 }
             },
@@ -250,6 +258,8 @@ tasks.jacocoTestCoverageVerification {
                         "**/*Application*.*",
                         "**/config/**",
                         "**/*Kt.class",
+                        "**/Security*.*",
+                        "**/routes/UserRoutes*.*",
                     )
                 }
             },
