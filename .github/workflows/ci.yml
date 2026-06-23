@@ -20,6 +20,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        # Full history (not the default shallow depth-1) so Codecov can walk the
+        # commit ancestry to the base commit and compute diff coverage. A shallow
+        # clone is what triggers Codecov's "Missing Base Commit" warning on PRs.
+        with:
+          fetch-depth: 0
 
       # Install BOTH JDK 17 and 21. The last entry (21) becomes JAVA_HOME, so
       # Gradle's daemon — and detekt — run on 21. This is required: detekt 1.23.8
