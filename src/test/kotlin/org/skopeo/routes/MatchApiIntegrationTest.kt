@@ -157,6 +157,65 @@ class MatchApiIntegrationTest {
         }
 
     @Test
+    fun `oversight views are scoped - a host sees only their own fixtures, an admin sees all`() =
+        withApp { client ->
+            val adminToken = seedStaff("admin", setOf(Capability.ADMINISTRATOR))
+            val host1 = seedStaff("host1", setOf(Capability.HOST))
+            val host2 = seedStaff("host2", setOf(Capability.HOST))
+            val players =
+                (1..4).map { n ->
+                    val p = client.provisionSelf(TestFirebaseAuth.mintToken("p$n"))
+                    client.rate(adminToken, p.id)
+                    p
+                }
+
+            val matchA = client.createFixture(host1, players[0].id, players[1].id).body<MatchResponse>()
+            val matchB = client.createFixture(host2, players[2].id, players[3].id).body<MatchResponse>()
+
+            suspend fun awaitingResults(token: String): List<String> =
+                client
+                    .get("/api/v1/matches?filter=awaiting-results") {
+                        header(HttpHeaders.Authorization, "Bearer $token")
+                    }.body<List<MatchResponse>>()
+                    .map { it.id }
+
+            awaitingResults(host1) shouldBe listOf(matchA.id)
+            awaitingResults(host2) shouldBe listOf(matchB.id)
+            awaitingResults(adminToken).toSet() shouldBe setOf(matchA.id, matchB.id)
+
+            // Complete A → it moves to pending-calculation, still scoped to its host.
+            client.post("/api/v1/matches/${matchA.id}/result") {
+                header(HttpHeaders.Authorization, "Bearer $host1")
+                contentType(ContentType.Application.Json)
+                setBody(MatchResultRequest(listOf(SetScoreRequest(6, 4), SetScoreRequest(6, 2))))
+            }
+
+            suspend fun pendingCalculation(token: String): List<String> =
+                client
+                    .get("/api/v1/matches?filter=pending-calculation") {
+                        header(HttpHeaders.Authorization, "Bearer $token")
+                    }.body<List<MatchResponse>>()
+                    .map { it.id }
+
+            pendingCalculation(host1) shouldBe listOf(matchA.id)
+            pendingCalculation(host2) shouldBe emptyList()
+            pendingCalculation(adminToken) shouldBe listOf(matchA.id)
+        }
+
+    @Test
+    fun `a non-staff user cannot list oversight views`() =
+        withApp { client ->
+            seedStaff("admin", setOf(Capability.ADMINISTRATOR))
+            val player = TestFirebaseAuth.mintToken("p1")
+            client.provisionSelf(player)
+
+            client
+                .get("/api/v1/matches?filter=awaiting-results") {
+                    header(HttpHeaders.Authorization, "Bearer $player")
+                }.status shouldBe HttpStatusCode.Forbidden
+        }
+
+    @Test
     fun `a non-staff user cannot create a fixture`() =
         withApp { client ->
             val adminToken = seedStaff("admin", setOf(Capability.ADMINISTRATOR))

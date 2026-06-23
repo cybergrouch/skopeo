@@ -21,6 +21,7 @@ import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.user.CreateUserRequest
 import org.skopeo.dto.user.ProfileRequest
 import org.skopeo.dto.user.toResponse
+import org.skopeo.dto.user.toSummary
 import org.skopeo.service.user.UserService
 import org.skopeo.service.user.toProfilePatch
 
@@ -33,10 +34,23 @@ fun Application.configureUserRoutes(service: UserService = UserService()) {
     routing {
         authenticate(FIREBASE_AUTH) {
             route("/api/v1/users") {
+                searchUsers(service)
                 createUser(service)
                 currentUser(service)
                 userById(service)
             }
+        }
+    }
+}
+
+private fun Route.searchUsers(service: UserService) {
+    get {
+        respondMappingErrors {
+            val query =
+                call.request.queryParameters["query"]
+                    ?: throw IllegalArgumentException("query parameter is required")
+            val results = service.search(token = verifiedToken(), query = query)
+            call.respond(status = HttpStatusCode.OK, message = results.map { it.toSummary() })
         }
     }
 }

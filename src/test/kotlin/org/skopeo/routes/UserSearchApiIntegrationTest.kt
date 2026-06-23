@@ -1,0 +1,143 @@
+// SPDX-FileCopyrightText: 2026 Lange Pantoja
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+package org.skopeo.routes
+
+import io.kotest.matchers.shouldBe
+import io.ktor.client.HttpClient
+import io.ktor.client.call.body
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.request.get
+import io.ktor.client.request.header
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.contentType
+import io.ktor.serialization.kotlinx.json.json
+import io.ktor.server.testing.ApplicationTestBuilder
+import io.ktor.server.testing.testApplication
+import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.skopeo.dto.user.CreateUserRequest
+import org.skopeo.dto.user.UserResponse
+import org.skopeo.dto.user.UserSummaryResponse
+import org.skopeo.model.AuthProvider
+import org.skopeo.model.Capability
+import org.skopeo.model.NameType
+import org.skopeo.model.ProvisionUserCommand
+import org.skopeo.model.UserIdentity
+import org.skopeo.model.UserName
+import org.skopeo.module
+import org.skopeo.repository.UserRepository
+import org.skopeo.testsupport.PostgresTestDatabase
+import org.skopeo.testsupport.TestFirebaseAuth
+
+/**
+ * End-to-end exercise of user search: staff (HOST/ADMINISTRATOR) can find users by name
+ * (case-insensitive, partial); a plain player is refused; a missing query is a 400.
+ */
+class UserSearchApiIntegrationTest {
+    companion object {
+        @BeforeAll
+        @JvmStatic
+        fun connect() {
+            PostgresTestDatabase.start()
+        }
+    }
+
+    @BeforeEach
+    fun reset() {
+        PostgresTestDatabase.truncate()
+    }
+
+    private fun ApplicationTestBuilder.jsonClient(): HttpClient = createClient { install(ContentNegotiation) { json() } }
+
+    private fun withApp(block: suspend (HttpClient) -> Unit) =
+        testApplication {
+            application { module(initDatabase = false, firebaseAuth = TestFirebaseAuth.settings) }
+            block(jsonClient())
+        }
+
+    private fun seedStaff(
+        uid: String,
+        roles: Set<Capability>,
+    ): String {
+        UserRepository().provision(
+            ProvisionUserCommand(
+                firebaseUid = uid,
+                identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
+                names = listOf(UserName(type = NameType.DISPLAY, value = uid)),
+                capabilities = roles + Capability.PLAYER,
+            ),
+        )
+        return TestFirebaseAuth.mintToken(uid = uid)
+    }
+
+    private suspend fun HttpClient.provisionNamed(
+        uid: String,
+        displayName: String,
+    ): UserResponse =
+        post("/api/v1/users") {
+            header(HttpHeaders.Authorization, "Bearer ${TestFirebaseAuth.mintToken(uid)}")
+            contentType(ContentType.Application.Json)
+            setBody(CreateUserRequest(displayName = displayName))
+        }.body()
+
+    private suspend fun HttpClient.search(
+        token: String,
+        query: String?,
+    ) = get("/api/v1/users${if (query == null) "" else "?query=$query"}") {
+        header(HttpHeaders.Authorization, "Bearer $token")
+    }
+
+    @Test
+    fun `a host finds users by partial, case-insensitive name`() =
+        withApp { client ->
+            val host = seedStaff("host", setOf(Capability.HOST))
+            client.provisionNamed("u1", "Alice")
+            client.provisionNamed("u2", "Alicia")
+            client.provisionNamed("u3", "Bob")
+
+            val results = client.search(host, "ALI").body<List<UserSummaryResponse>>()
+
+            results.map { it.displayName }.toSet() shouldBe setOf("Alice", "Alicia")
+        }
+
+    @Test
+    fun `an admin can search too`() =
+        withApp { client ->
+            val admin = seedStaff("admin", setOf(Capability.ADMINISTRATOR))
+            client.provisionNamed("u1", "Charlie")
+
+            val response = client.search(admin, "char")
+            response.status shouldBe HttpStatusCode.OK
+            response.body<List<UserSummaryResponse>>().single().displayName shouldBe "Charlie"
+        }
+
+    @Test
+    fun `a plain player cannot search`() =
+        withApp { client ->
+            seedStaff("admin", setOf(Capability.ADMINISTRATOR))
+            val player = TestFirebaseAuth.mintToken("p1")
+            client.provisionNamed("p1", "Player One")
+
+            client.search(player, "player").status shouldBe HttpStatusCode.Forbidden
+        }
+
+    @Test
+    fun `a missing query is a 400`() =
+        withApp { client ->
+            val host = seedStaff("host", setOf(Capability.HOST))
+            client.search(host, null).status shouldBe HttpStatusCode.BadRequest
+        }
+
+    @Test
+    fun `a blank query is a 400`() =
+        withApp { client ->
+            val host = seedStaff("host", setOf(Capability.HOST))
+            client.search(host, "%20").status shouldBe HttpStatusCode.BadRequest
+        }
+}

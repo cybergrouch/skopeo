@@ -121,26 +121,28 @@ class MatchService(
         return match
     }
 
+    /**
+     * Oversight lists for staff. An ADMINISTRATOR sees every match in the view; a HOST sees only
+     * the fixtures they created (so they can find their own matches awaiting results).
+     */
     fun query(
         token: VerifiedFirebaseToken,
         view: MatchQuery,
     ): List<Match> {
-        requireAdmin(token)
+        val caller = staffCaller(token)
+        val scopedTo = if (caller.capabilities.contains(Capability.ADMINISTRATOR)) null else caller.id
         return when (view) {
-            MatchQuery.PENDING_CALCULATION -> matches.listPendingCalculation()
-            MatchQuery.AWAITING_RESULTS -> matches.listAwaitingResults(LocalDate.now())
+            MatchQuery.PENDING_CALCULATION -> matches.listPendingCalculation(createdBy = scopedTo)
+            MatchQuery.AWAITING_RESULTS -> matches.listAwaitingResults(asOf = LocalDate.now(), createdBy = scopedTo)
         }
     }
 
-    private fun requireStaff(token: VerifiedFirebaseToken): UUID {
+    private fun requireStaff(token: VerifiedFirebaseToken): UUID = staffCaller(token).id
+
+    private fun staffCaller(token: VerifiedFirebaseToken): User {
         val caller = users.findByFirebaseUid(token.uid)
         if (caller == null || caller.capabilities.none { it in STAFF_ROLES }) throw ForbiddenException()
-        return caller.id
-    }
-
-    private fun requireAdmin(token: VerifiedFirebaseToken) {
-        val caller = users.findByFirebaseUid(token.uid)
-        if (caller == null || !caller.capabilities.contains(Capability.ADMINISTRATOR)) throw ForbiddenException()
+        return caller
     }
 
     private fun resolveRatedParticipants(

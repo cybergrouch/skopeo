@@ -97,6 +97,42 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/users:
+    get:
+      summary: Search users by name (HOST/ADMINISTRATOR only)
+      description: |
+        Case-insensitive, partial match on any of a user's names. Used by the staff
+        player-picker (fixture creation) and admin role-grants. Returns a slim summary
+        (no contacts/identities). Results are capped server-side.
+      tags:
+        - Users
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Name fragment to search for.
+      responses:
+        '200':
+          description: Matching users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserSummaryResponse'
+        '400':
+          description: Missing or blank query
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid Firebase token
+        '403':
+          description: Caller is not HOST or ADMINISTRATOR
     post:
       summary: Provision the authenticated user
       description: |
@@ -820,7 +856,10 @@ paths:
 
   /api/v1/matches:
     get:
-      summary: List match fixtures by oversight view (ADMINISTRATOR only)
+      summary: List match fixtures by oversight view (HOST/ADMINISTRATOR)
+      description: |
+        An ADMINISTRATOR sees every match in the view; a HOST sees only the fixtures
+        they created (so they can find their own matches awaiting results).
       tags:
         - Matches
       security:
@@ -1340,6 +1379,25 @@ components:
         city:
           type: string
           nullable: true
+
+    UserSummaryResponse:
+      type: object
+      description: Slim user shape for search results (player picker, role grants).
+      required:
+        - id
+        - capabilities
+      properties:
+        id:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+          nullable: true
+        capabilities:
+          type: array
+          items:
+            type: string
+            enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR]
 
     UserResponse:
       type: object

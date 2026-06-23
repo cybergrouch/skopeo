@@ -201,7 +201,7 @@ class MatchServiceTest {
     }
 
     @Test
-    fun `oversight queries are admin-only`() {
+    fun `oversight queries are staff-only, and a host is scoped to their own fixtures`() {
         provisionUser("root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         provisionUser("host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val p1 = provisionUser("p1", rated = true)
@@ -210,8 +210,13 @@ class MatchServiceTest {
         service.uploadResult(token("host"), completed.id, straightSets())
         val overdue = service.createFixture(token("host"), fixtureRequest(p1.id, p2.id, date = "2020-01-01"))
 
+        // Admin sees every match in the view.
         service.query(token("root"), MatchQuery.PENDING_CALCULATION).map { it.id } shouldContain completed.id
         service.query(token("root"), MatchQuery.AWAITING_RESULTS).map { it.id } shouldContain overdue.id
-        shouldThrow<ForbiddenException> { service.query(token("host"), MatchQuery.PENDING_CALCULATION) }
+        // The host that created them can see their own.
+        service.query(token("host"), MatchQuery.PENDING_CALCULATION).map { it.id } shouldContain completed.id
+        service.query(token("host"), MatchQuery.AWAITING_RESULTS).map { it.id } shouldContain overdue.id
+        // A non-staff player is refused.
+        shouldThrow<ForbiddenException> { service.query(token("p1"), MatchQuery.PENDING_CALCULATION) }
     }
 }

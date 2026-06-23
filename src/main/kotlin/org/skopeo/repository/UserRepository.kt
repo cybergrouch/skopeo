@@ -7,6 +7,7 @@ import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.insertAndGetId
+import org.jetbrains.exposed.sql.lowerCase
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
@@ -19,6 +20,8 @@ import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import java.util.UUID
+
+private const val SEARCH_LIMIT = 20
 
 /**
  * Persistence for the user aggregate (users + names + identities + contacts +
@@ -76,6 +79,27 @@ class UserRepository {
         }
 
     fun findById(id: UUID): User? = transaction { loadAggregate(id) }
+
+    /**
+     * Active users whose name (any type) contains [query] (case-insensitive), capped at [limit].
+     * Backs the staff player-picker and admin role-grant lookups.
+     */
+    fun searchByName(
+        query: String,
+        limit: Int = SEARCH_LIMIT,
+    ): List<User> =
+        transaction {
+            val pattern = "%${query.lowercase()}%"
+            UserNamesTable
+                .selectAll()
+                .where { (UserNamesTable.value.lowerCase() like pattern) and UserNamesTable.isActive }
+                .map { it[UserNamesTable.userId].value }
+                .distinct()
+                .mapNotNull { loadAggregate(it) }
+                .filter { it.isActive }
+                .sortedBy { it.id.toString() }
+                .take(limit)
+        }
 
     fun findByFirebaseUid(firebaseUid: String): User? =
         transaction {
