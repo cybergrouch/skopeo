@@ -73,7 +73,7 @@ class UserRepositoryTest {
                 isPrimary = true,
             ),
         city = "Manila",
-        gender = "M",
+        sex = "Male",
     )
 
     @Test
@@ -85,7 +85,7 @@ class UserRepositoryTest {
         created.isActive.shouldBeTrue()
         created.kycVerified.shouldBeFalse()
         created.city shouldBe "Manila"
-        created.gender shouldBe "M"
+        created.sex shouldBe "Male"
         created.names.map { it.value }.shouldContainExactlyInAnyOrder("Juan", "dela Cruz", "Johnny")
         created.identities.single().provider shouldBe AuthProvider.GOOGLE
         created.contacts.single().let {
@@ -146,7 +146,7 @@ class UserRepositoryTest {
         updated.shouldNotBeNull()
         updated.city shouldBe "Cebu"
         updated.dateOfBirth shouldBe LocalDate.of(1990, 1, 2)
-        updated.gender shouldBe "M" // untouched
+        updated.sex shouldBe "Male" // untouched
     }
 
     @Test
@@ -156,13 +156,13 @@ class UserRepositoryTest {
 
     @Test
     fun `replaceProfile overwrites all mutable fields, clearing omitted ones`() {
-        val created = repository.provision(googleSignup()) // gender = M, city = Manila
+        val created = repository.provision(googleSignup()) // sex = Male, city = Manila
 
         val replaced = repository.replaceProfile(created.id, ProfilePatch(city = "Iloilo"))
 
         replaced.shouldNotBeNull()
         replaced.city shouldBe "Iloilo"
-        replaced.gender.shouldBe(null) // omitted from the replacement → cleared
+        replaced.sex.shouldBe(null) // omitted from the replacement → cleared
     }
 
     @Test

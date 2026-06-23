@@ -45,7 +45,7 @@ class UserRepository {
                     it[UsersTable.firebaseUid] = command.firebaseUid
                     it[UsersTable.photoUrl] = command.photoUrl
                     it[UsersTable.dateOfBirth] = command.dateOfBirth
-                    it[UsersTable.gender] = command.gender
+                    it[UsersTable.sex] = command.sex
                     it[UsersTable.city] = command.city
                     it[UsersTable.country] = command.country ?: "PH"
                 }
@@ -137,7 +137,7 @@ class UserRepository {
                 UsersTable.update({ UsersTable.id eq id }) {
                     patch.photoUrl?.let { value -> it[UsersTable.photoUrl] = value }
                     patch.dateOfBirth?.let { value -> it[UsersTable.dateOfBirth] = value }
-                    patch.gender?.let { value -> it[UsersTable.gender] = value }
+                    patch.sex?.let { value -> it[UsersTable.sex] = value }
                     patch.city?.let { value -> it[UsersTable.city] = value }
                 }
             if (updated == 0) null else loadAggregate(id)
@@ -153,7 +153,7 @@ class UserRepository {
                 UsersTable.update({ UsersTable.id eq id }) {
                     it[photoUrl] = patch.photoUrl
                     it[dateOfBirth] = patch.dateOfBirth
-                    it[gender] = patch.gender
+                    it[sex] = patch.sex
                     it[city] = patch.city
                 }
             if (updated == 0) null else loadAggregate(id)
@@ -222,7 +222,7 @@ private fun ResultRow.toUser(
         firebaseUid = this[UsersTable.firebaseUid],
         photoUrl = this[UsersTable.photoUrl],
         dateOfBirth = this[UsersTable.dateOfBirth],
-        gender = this[UsersTable.gender],
+        sex = this[UsersTable.sex],
         city = this[UsersTable.city],
         country = this[UsersTable.country],
         kycVerified = this[UsersTable.kycVerified],

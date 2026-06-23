@@ -50,10 +50,10 @@ class TokenMappingTest {
     }
 
     @Test
-    fun `validates gender`() {
-        validatedGender("M") shouldBe "M"
-        validatedGender(null).shouldBeNull()
-        shouldThrow<IllegalArgumentException> { validatedGender("X") }
+    fun `validates sex`() {
+        validatedSex("Male") shouldBe "Male"
+        validatedSex(null).shouldBeNull()
+        shouldThrow<IllegalArgumentException> { validatedSex("X") }
     }
 
     @Test
@@ -117,13 +117,13 @@ class TokenMappingTest {
     }
 
     @Test
-    fun `rejects a missing display name, bad gender, and bad date`() {
+    fun `rejects a missing display name, bad sex, and bad date`() {
         // No request display name and no token name.
         shouldThrow<IllegalArgumentException> {
             buildProvisionCommand(token = token(name = null), request = CreateUserRequest())
         }
         shouldThrow<IllegalArgumentException> {
-            buildProvisionCommand(token = token(), request = CreateUserRequest(displayName = "Juan", gender = "X"))
+            buildProvisionCommand(token = token(), request = CreateUserRequest(displayName = "Juan", sex = "X"))
         }
         shouldThrow<IllegalArgumentException> {
             buildProvisionCommand(token = token(), request = CreateUserRequest(displayName = "Juan", dateOfBirth = "31-12-1990"))
@@ -132,9 +132,9 @@ class TokenMappingTest {
 
     @Test
     fun `toProfilePatch parses and validates`() {
-        val patch = ProfileRequest(photoUrl = "p", dateOfBirth = "2000-01-01", gender = "F", city = "Cebu").toProfilePatch()
+        val patch = ProfileRequest(photoUrl = "p", dateOfBirth = "2000-01-01", sex = "Female", city = "Cebu").toProfilePatch()
         patch.dateOfBirth shouldBe LocalDate.of(2000, 1, 1)
-        patch.gender shouldBe "F"
-        shouldThrow<IllegalArgumentException> { ProfileRequest(gender = "Z").toProfilePatch() }
+        patch.sex shouldBe "Female"
+        shouldThrow<IllegalArgumentException> { ProfileRequest(sex = "Z").toProfilePatch() }
     }
 }

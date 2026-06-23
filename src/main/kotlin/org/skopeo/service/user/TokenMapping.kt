@@ -19,7 +19,7 @@ import org.skopeo.model.VerificationStatus
 import java.time.LocalDate
 import java.time.format.DateTimeParseException
 
-private val ALLOWED_GENDERS = setOf("M", "F", "Other")
+private val ALLOWED_SEXES = setOf("Male", "Female")
 
 /** Firebase sign-in provider strings → our [AuthProvider]; anything else is treated as a password login. */
 internal fun authProviderOf(signInProvider: String?): AuthProvider =
@@ -37,9 +37,9 @@ internal fun contactSourceOf(provider: AuthProvider): ContactSource =
         AuthProvider.PASSWORD -> ContactSource.MANUAL
     }
 
-internal fun validatedGender(value: String?): String? {
+internal fun validatedSex(value: String?): String? {
     if (value == null) return null
-    require(value in ALLOWED_GENDERS) { "Invalid gender '$value'; expected one of $ALLOWED_GENDERS" }
+    require(value in ALLOWED_SEXES) { "Invalid sex '$value'; expected one of $ALLOWED_SEXES" }
     return value
 }
 
@@ -69,7 +69,7 @@ private fun displayName(
 /**
  * Merge the verified token (authoritative identity) with the client-supplied profile
  * into a [ProvisionUserCommand]. Throws [IllegalArgumentException] on invalid input
- * (missing display name, bad gender, malformed date) so the route can answer 400.
+ * (missing display name, bad sex, malformed date) so the route can answer 400.
  */
 internal fun buildProvisionCommand(
     token: VerifiedFirebaseToken,
@@ -105,7 +105,7 @@ internal fun buildProvisionCommand(
         email = email,
         phone = phone,
         dateOfBirth = parseDateOfBirth(request.dateOfBirth),
-        gender = validatedGender(request.gender),
+        sex = validatedSex(request.sex),
         city = request.city,
         country = request.country,
     )
@@ -115,6 +115,6 @@ internal fun ProfileRequest.toProfilePatch(): ProfilePatch =
     ProfilePatch(
         photoUrl = photoUrl,
         dateOfBirth = parseDateOfBirth(dateOfBirth),
-        gender = validatedGender(gender),
+        sex = validatedSex(sex),
         city = city,
     )

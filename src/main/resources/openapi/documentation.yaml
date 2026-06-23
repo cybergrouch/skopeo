@@ -258,7 +258,7 @@ paths:
           description: No such user
     put:
       summary: Replace a user's mutable profile fields
-      description: Replaces photoUrl/dateOfBirth/gender/city wholesale — omitted fields are cleared. Self-or-ADMINISTRATOR only.
+      description: Replaces photoUrl/dateOfBirth/sex/city wholesale — omitted fields are cleared. Self-or-ADMINISTRATOR only.
       tags:
         - Users
       security:
@@ -1356,10 +1356,10 @@ components:
           format: date
           nullable: true
           description: ISO-8601 (yyyy-MM-dd)
-        gender:
+        sex:
           type: string
           nullable: true
-          enum: [M, F, Other]
+          enum: [Male, Female]
         city:
           type: string
           nullable: true
@@ -1381,10 +1381,10 @@ components:
           type: string
           format: date
           nullable: true
-        gender:
+        sex:
           type: string
           nullable: true
-          enum: [M, F, Other]
+          enum: [Male, Female]
         city:
           type: string
           nullable: true
@@ -1433,7 +1433,7 @@ components:
           type: string
           format: date
           nullable: true
-        gender:
+        sex:
           type: string
           nullable: true
         city:

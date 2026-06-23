@@ -167,6 +167,6 @@ class UserApiIntegrationTest {
         withApp { client ->
             val token = TestFirebaseAuth.mintToken(uid = "fb-5")
 
-            client.createUser(token, CreateUserRequest(displayName = "Juan", gender = "X")).status shouldBe HttpStatusCode.BadRequest
+            client.createUser(token, CreateUserRequest(displayName = "Juan", sex = "X")).status shouldBe HttpStatusCode.BadRequest
         }
 }
