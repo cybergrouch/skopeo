@@ -63,7 +63,7 @@ class NameApiIntegrationTest {
         post("/api/v1/users") {
             header(HttpHeaders.Authorization, "Bearer $token")
             contentType(ContentType.Application.Json)
-            setBody(CreateUserRequest(displayName = "Juan"))
+            setBody(CreateUserRequest(displayName = "Juan", dateOfBirth = "2000-01-01", sex = "Male"))
         }.body()
 
     private suspend fun HttpClient.addName(

@@ -68,7 +68,7 @@ class TokenMappingTest {
         val command =
             buildProvisionCommand(
                 token = token(email = "a@example.com", emailVerified = true, name = "Ana", signInProvider = "google.com"),
-                request = CreateUserRequest(),
+                request = CreateUserRequest(dateOfBirth = "2000-01-01", sex = "Male"),
             )
 
         command.identity.provider shouldBe AuthProvider.GOOGLE
@@ -90,7 +90,7 @@ class TokenMappingTest {
         val command =
             buildProvisionCommand(
                 token = token(email = "b@example.com", emailVerified = false, name = "Bea"),
-                request = CreateUserRequest(),
+                request = CreateUserRequest(dateOfBirth = "2000-01-01", sex = "Male"),
             )
 
         command.email!!.status shouldBe VerificationStatus.PENDING
@@ -102,7 +102,7 @@ class TokenMappingTest {
         val command =
             buildProvisionCommand(
                 token = token(name = "from-provider"),
-                request = CreateUserRequest(displayName = "Juan", phone = "+639170000000"),
+                request = CreateUserRequest(displayName = "Juan", phone = "+639170000000", dateOfBirth = "2000-01-01", sex = "Male"),
             )
 
         command.names.single().let {
@@ -120,13 +120,16 @@ class TokenMappingTest {
     fun `rejects a missing display name, bad sex, and bad date`() {
         // No request display name and no token name.
         shouldThrow<IllegalArgumentException> {
-            buildProvisionCommand(token = token(name = null), request = CreateUserRequest())
+            buildProvisionCommand(token = token(name = null), request = CreateUserRequest(dateOfBirth = "2000-01-01", sex = "Male"))
         }
         shouldThrow<IllegalArgumentException> {
-            buildProvisionCommand(token = token(), request = CreateUserRequest(displayName = "Juan", sex = "X"))
+            buildProvisionCommand(token = token(), request = CreateUserRequest(displayName = "Juan", sex = "X", dateOfBirth = "2000-01-01"))
         }
         shouldThrow<IllegalArgumentException> {
-            buildProvisionCommand(token = token(), request = CreateUserRequest(displayName = "Juan", dateOfBirth = "31-12-1990"))
+            buildProvisionCommand(
+                token = token(),
+                request = CreateUserRequest(displayName = "Juan", dateOfBirth = "31-12-1990", sex = "Male"),
+            )
         }
     }
 

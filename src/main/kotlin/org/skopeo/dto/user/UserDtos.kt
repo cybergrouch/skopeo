@@ -44,16 +44,16 @@ data class IdentityDto(
 /**
  * Body for `POST /api/v1/users` — the convergence point of every sign-up flow.
  *
- * [displayName] is the single name shown in the UI; if omitted, the verified token's name
- * (from Google/Facebook) is used. Structured names (FIRST/LAST/nicknames) are added later
- * via the names API.
+ * [dateOfBirth] (ISO yyyy-MM-dd) and [sex] (Male/Female) are required: every member supplies
+ * them at sign-up because they drive tournament-category eligibility. [displayName] is the
+ * single name shown in the UI; if omitted, the verified token's name (Google/Facebook) is used.
  */
 @Serializable
 data class CreateUserRequest(
+    val dateOfBirth: String,
+    val sex: String,
     val displayName: String? = null,
     val phone: String? = null,
-    val dateOfBirth: String? = null,
-    val sex: String? = null,
     val city: String? = null,
     val country: String? = null,
 )

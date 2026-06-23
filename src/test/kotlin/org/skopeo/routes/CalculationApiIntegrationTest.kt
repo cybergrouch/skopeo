@@ -85,7 +85,7 @@ class CalculationApiIntegrationTest {
         post("/api/v1/users") {
             header(HttpHeaders.Authorization, "Bearer $token")
             contentType(ContentType.Application.Json)
-            setBody(CreateUserRequest(displayName = "Player"))
+            setBody(CreateUserRequest(displayName = "Player", dateOfBirth = "2000-01-01", sex = "Male"))
         }.body()
 
     private suspend fun HttpClient.rate(
