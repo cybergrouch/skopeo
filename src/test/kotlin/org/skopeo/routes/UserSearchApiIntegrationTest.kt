@@ -179,6 +179,21 @@ class UserSearchApiIntegrationTest {
         }
 
     @Test
+    fun `an unprovisioned caller is forbidden`() =
+        withApp { client ->
+            // A valid token whose uid was never provisioned — no caller record at all.
+            client.lookup(TestFirebaseAuth.mintToken("ghost"), "name=alice").status shouldBe
+                HttpStatusCode.Forbidden
+        }
+
+    @Test
+    fun `an empty ids list is a 400`() =
+        withApp { client ->
+            val host = seedStaff("host", setOf(Capability.HOST))
+            client.lookup(host, "ids=").status shouldBe HttpStatusCode.BadRequest
+        }
+
+    @Test
     fun `neither name nor ids is a 400`() =
         withApp { client ->
             val host = seedStaff("host", setOf(Capability.HOST))
