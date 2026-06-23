@@ -52,8 +52,23 @@ two oversight views. (Teams are created per-match as temporary teams.)
 derivation) → `repository/MatchRepository.kt` (Exposed over teams/team_users/matches/match_sets/
 tiebreaks). The existing stateless `/calculate-ranking` remains as a what-if preview.
 
-## Next — PR2b (calculation trigger)
-`POST /api/v1/ratings/calculations { "dryRun": true }` (ADMIN): process pending matches
-oldest→newest by `completed_at` against an in-memory rating snapshot (reusing the calculator);
-`dryRun` defaults true (preview, no writes), explicit `false` commits ratings + history +
-`rated_at` in one transaction.
+## Rating calculation trigger (PR2b)
+
+Recording results never moves ratings — an administrator triggers the calculation deliberately:
+
+`POST /api/v1/ratings/calculations` (ADMINISTRATOR), body `{ "dryRun": true }`.
+
+- Gathers the matches **pending calculation** (active, `COMPLETED`, `rated_at IS NULL`) and
+  processes them **oldest→newest by `completed_at`** against an in-memory `(user, system) → rating`
+  snapshot — seeded from stored ratings and **carried forward** so the chain is correct (match N
+  uses the rating match N-1 produced). Each match reuses the existing `RankingCalculator`.
+- **`dryRun` defaults to `true`** (an empty/absent body is a dry run): returns the full per-match,
+  per-player preview (`previousRating`/`newRating`/`change`/`percentChange`/level) with **zero
+  writes**. Only an explicit `{"dryRun": false}` commits.
+- **Commit** (`dryRun: false`) persists in one transaction: updates `user_ratings` (new
+  rating/level, `matches_played++`, `last_match_date`), appends `user_rating_history` (with
+  `match_id`), and stamps each match `rated_at`/`rated_by`. **Idempotent** — a re-run finds nothing
+  pending. SINGLES only for now (the calculator's scope).
+
+Layering: `service/rating/RatingCalculationService.kt` orchestrates; `RatingRepository` gains the
+match-driven write + history append, `MatchRepository` the `markRated` stamp.
