@@ -5,9 +5,11 @@ package org.skopeo.repository
 
 import org.jetbrains.exposed.sql.CustomFunction
 import org.jetbrains.exposed.sql.FloatColumnType
+import org.jetbrains.exposed.sql.Op
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.sql.exists
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.lowerCase
@@ -20,10 +22,12 @@ import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.Contact
 import org.skopeo.model.Name
+import org.skopeo.model.NumericRange
 import org.skopeo.model.ProfilePatch
 import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
+import org.skopeo.model.UserSearchQuery
 import java.util.UUID
 
 private const val SEARCH_LIMIT = 20
@@ -93,30 +97,28 @@ class UserRepository {
     fun findAllByIds(ids: List<UUID>): List<User> = transaction { ids.distinct().mapNotNull { loadAggregate(it) } }
 
     /**
-     * Active users matching [query] across any of their names (case-insensitive), ranked by
-     * trigram similarity so misspellings still match (e.g. "Alyce" → "Alice"); a substring
-     * match is also included. Deduplicated by user (one profile may have several names) and
-     * capped at [limit]. Backs the staff player-picker and admin role-grant lookups.
+     * Active users matching every supplied facet of [query] (AND): a fuzzy name match (trigram
+     * similarity, so "Alyce" finds "Alice", plus substring) across any of a profile's names; an
+     * exact [UserSearchQuery.sex]; a date-of-birth window (from an age range); and an NTRP rating
+     * range. Querying the users table keeps results one-per-profile; capped at [SEARCH_LIMIT].
      */
-    fun searchByName(
-        query: String,
-        limit: Int = SEARCH_LIMIT,
-    ): List<User> =
+    fun search(query: UserSearchQuery): List<User> =
         transaction {
-            val normalized = query.lowercase()
-            val nameLower = UserNamesTable.value.lowerCase()
-            val proximity = CustomFunction("SIMILARITY", FloatColumnType(), nameLower, stringParam(normalized))
-            UserNamesTable
+            val conditions =
+                buildList {
+                    add(Op.build { UsersTable.isActive eq true })
+                    query.sex?.let { sex -> add(Op.build { UsersTable.sex eq sex }) }
+                    query.dobMin?.let { min -> add(Op.build { UsersTable.dateOfBirth greaterEq min }) }
+                    query.dobMax?.let { max -> add(Op.build { UsersTable.dateOfBirth lessEq max }) }
+                    query.name?.let { name -> add(nameMatches(name)) }
+                    query.rating?.let { range -> add(ratingMatches(range)) }
+                }
+            UsersTable
                 .selectAll()
-                .where {
-                    UserNamesTable.isActive and
-                        ((nameLower like "%$normalized%") or (proximity greaterEq SIMILARITY_THRESHOLD))
-                }.orderBy(proximity to SortOrder.DESC)
-                .map { it[UserNamesTable.userId].value }
-                .distinct()
-                .take(limit)
-                .mapNotNull { loadAggregate(it) }
-                .filter { it.isActive }
+                .where { conditions.reduce { acc, op -> acc and op } }
+                .orderBy(UsersTable.id to SortOrder.ASC)
+                .limit(SEARCH_LIMIT)
+                .map { loadAggregate(it[UsersTable.id].value)!! }
         }
 
     fun findByFirebaseUid(firebaseUid: String): User? =
@@ -179,6 +181,45 @@ class UserRepository {
         )
     }
 }
+
+/** Correlated EXISTS: the user has an active name fuzzily matching [name]. */
+private fun nameMatches(name: String): Op<Boolean> {
+    val normalized = name.lowercase()
+    val nameLower = UserNamesTable.value.lowerCase()
+    val proximity = CustomFunction("SIMILARITY", FloatColumnType(), nameLower, stringParam(normalized))
+    return exists(
+        UserNamesTable.selectAll().where {
+            (UserNamesTable.userId eq UsersTable.id) and UserNamesTable.isActive and
+                ((nameLower like "%$normalized%") or (proximity greaterEq SIMILARITY_THRESHOLD))
+        },
+    )
+}
+
+/** Correlated EXISTS: the user has an NTRP rating within [range] (inclusive/exclusive per bound). */
+private fun ratingMatches(range: NumericRange): Op<Boolean> =
+    exists(
+        UserRatingsTable.selectAll().where {
+            var op: Op<Boolean> =
+                (UserRatingsTable.userId eq UsersTable.id) and (UserRatingsTable.ratingSystem eq "NTRP")
+            range.lower?.let { bound ->
+                op = op and
+                    if (bound.inclusive) {
+                        UserRatingsTable.currentRating greaterEq bound.value
+                    } else {
+                        UserRatingsTable.currentRating greater bound.value
+                    }
+            }
+            range.upper?.let { bound ->
+                op = op and
+                    if (bound.inclusive) {
+                        UserRatingsTable.currentRating lessEq bound.value
+                    } else {
+                        UserRatingsTable.currentRating less bound.value
+                    }
+            }
+            op
+        },
+    )
 
 private fun namesOf(id: UUID): List<Name> =
     UserNamesTable

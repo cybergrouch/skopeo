@@ -98,14 +98,18 @@ paths:
 
   /api/v1/users:
     get:
-      summary: Look up users by name or id (HOST/ADMINISTRATOR only)
+      summary: Look up users by id, or search by name/sex/age/rating (HOST/ADMINISTRATOR only)
       description: |
-        Two mutually-exclusive lookups (provide exactly one):
-          - `name` — case-insensitive, partial match on any of a user's names
-            (the staff player-picker and admin role-grants).
-          - `ids` — comma-separated UUIDs to resolve known ids to display names
-            (match rosters, rating history, calculation previews).
-        Returns a slim summary (no contacts/identities). Name results are capped server-side.
+        Two modes:
+          - **Id resolution** — `ids` (comma-separated UUIDs) resolves known ids to summaries
+            (match rosters, rating history, calculation previews). Exclusive: it cannot be
+            combined with the search filters below.
+          - **Search** — any combination of `name`, `sex`, `age`, `rating` (AND-combined; at
+            least one required). `name` is a fuzzy, partial match across all of a profile's
+            names. `age` and `rating` are interval strings: `[` / `]` inclusive, `(` / `)`
+            exclusive, an empty side is unbounded — e.g. `(3.0,4.0)`, `[3.0,4.0)`, `(20,30]`,
+            `[3.0,)`. Rating filters the NTRP rating.
+        Returns slim summaries (no contacts/identities); capped server-side.
       tags:
         - Users
       security:
@@ -116,13 +120,32 @@ paths:
           required: false
           schema:
             type: string
-          description: Name fragment to search for (mutually exclusive with `ids`).
+          description: Fuzzy name fragment (search mode).
+        - name: sex
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [Male, Female]
+          description: Exact sex filter (search mode).
+        - name: age
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 'Age interval of whole numbers, e.g. "(20,30]" (search mode).'
+        - name: rating
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 'NTRP rating interval, e.g. "[3.0,4.0)" (search mode).'
         - name: ids
           in: query
           required: false
           schema:
             type: string
-          description: Comma-separated user UUIDs to resolve (mutually exclusive with `name`).
+          description: Comma-separated UUIDs to resolve (exclusive; not combinable with filters).
       responses:
         '200':
           description: Matching users
@@ -1391,7 +1414,7 @@ components:
 
     UserSummaryResponse:
       type: object
-      description: Slim user shape for search results (player picker, role grants).
+      description: Slim user shape for search results (player picker, role grants, research).
       required:
         - id
         - capabilities
@@ -1401,6 +1424,14 @@ components:
           format: uuid
         displayName:
           type: string
+          nullable: true
+        sex:
+          type: string
+          nullable: true
+          enum: [Male, Female]
+        dateOfBirth:
+          type: string
+          format: date
           nullable: true
         capabilities:
           type: array

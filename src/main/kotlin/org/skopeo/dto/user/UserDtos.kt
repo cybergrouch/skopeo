@@ -127,11 +127,13 @@ fun User.toResponse(): UserResponse =
         capabilities = capabilities.map { it.name }.sorted(),
     )
 
-/** Slim user shape for search results (player picker, role grants) — no contacts/identities. */
+/** Slim user shape for search results (player picker, role grants, research) — no contacts. */
 @Serializable
 data class UserSummaryResponse(
     val id: String,
     val displayName: String?,
+    val sex: String?,
+    val dateOfBirth: String?,
     val capabilities: List<String>,
 )
 
@@ -139,5 +141,7 @@ fun User.toSummary(): UserSummaryResponse =
     UserSummaryResponse(
         id = id.toString(),
         displayName = names.firstOrNull { it.type == NameType.DISPLAY && it.isActive }?.value,
+        sex = sex,
+        dateOfBirth = dateOfBirth?.toString(),
         capabilities = capabilities.map { it.name }.sorted(),
     )

@@ -5,9 +5,13 @@ package org.skopeo.service.user
 
 import org.skopeo.dto.user.CreateUserRequest
 import org.skopeo.model.Capability
+import org.skopeo.model.NumericRange
 import org.skopeo.model.ProfilePatch
 import org.skopeo.model.User
+import org.skopeo.model.UserSearchQuery
+import org.skopeo.model.ageRangeToDob
 import org.skopeo.repository.UserRepository
+import java.time.LocalDate
 import java.util.UUID
 
 private val STAFF_ROLES = setOf(Capability.HOST, Capability.ADMINISTRATOR)
@@ -21,18 +25,36 @@ class UserService(
     private val repository: UserRepository = UserRepository(),
 ) {
     /**
-     * Search users by name fragment for the staff player-picker and admin role-grants —
-     * HOST/ADMINISTRATOR only (it exposes other users). [name] must be non-blank; results are
-     * capped by the repository.
+     * Staff search (HOST/ADMINISTRATOR) backing the player-picker, role-grants, and player
+     * research. Any combination of facets is allowed and AND-combined; at least one is required.
+     * [name] is a fuzzy match; [sex] is Male/Female; [age]/[rating] are interval strings
+     * ("[3.0,4.0)", "(20,30]") — age maps to a date-of-birth window, rating filters NTRP.
      */
-    fun searchByName(
+    fun search(
         token: VerifiedFirebaseToken,
-        name: String,
+        name: String?,
+        sex: String?,
+        age: String?,
+        rating: String?,
     ): List<User> {
         requireStaff(token)
-        val term = name.trim()
-        require(term.isNotEmpty()) { "name must not be blank" }
-        return repository.searchByName(term)
+        val nameTerm = name?.trim()?.takeIf { it.isNotEmpty() }
+        val sexValue = validatedSex(sex)
+        val ageRange = age?.let { NumericRange.parse(it) }
+        val ratingRange = rating?.let { NumericRange.parse(it) }
+        require(nameTerm != null || sexValue != null || ageRange != null || ratingRange != null) {
+            "at least one filter (name, sex, age, rating) is required"
+        }
+        val dob = ageRange?.let { ageRangeToDob(it, LocalDate.now()) }
+        return repository.search(
+            UserSearchQuery(
+                name = nameTerm,
+                sex = sexValue,
+                dobMin = dob?.min,
+                dobMax = dob?.max,
+                rating = ratingRange,
+            ),
+        )
     }
 
     /**
