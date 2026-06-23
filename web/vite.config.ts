@@ -1,9 +1,9 @@
 import { fileURLToPath, URL } from 'node:url'
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
-// https://vite.dev/config/
+// https://vite.dev/config/ (extended with Vitest's test config)
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
@@ -19,6 +19,30 @@ export default defineConfig({
         target: 'http://localhost:8080',
         changeOrigin: true,
       },
+    },
+  },
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
+    css: false,
+    // JUnit XML feeds the drillable "Web Test Report" check in CI (dorny);
+    // the default reporter keeps console output readable locally.
+    reporters: ['default', 'junit'],
+    outputFile: { junit: './test-results/junit.xml' },
+    coverage: {
+      provider: 'v8',
+      reportsDirectory: './coverage',
+      reporter: ['text', 'lcov'],
+      // Mirror the backend: exclude generated/config/entry glue from coverage.
+      include: ['src/**/*.{ts,tsx}'],
+      exclude: [
+        'src/api/generated/**',
+        'src/test/**',
+        'src/main.tsx',
+        'src/vite-env.d.ts',
+        '**/*.d.ts',
+      ],
     },
   },
 })

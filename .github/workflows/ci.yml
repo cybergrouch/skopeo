@@ -70,6 +70,7 @@ jobs:
         if: always()
         with:
           files: build/reports/jacoco/test/jacocoTestReport.xml
+          flags: backend
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
@@ -83,6 +84,9 @@ jobs:
         working-directory: web
     steps:
       - uses: actions/checkout@v7
+        # Full history so Codecov can diff frontend coverage against the base.
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v5
         with:
@@ -99,5 +103,32 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Test (JUnit report + coverage)
+        run: npm run test:ci
+
       - name: Build
         run: npm run build
+
+      # Drillable per-test report as a "Web Test Report" check (mirrors the API's
+      # Test Report); failures expand with their assertion and source location.
+      - name: Web test report
+        uses: dorny/test-reporter@v3
+        if: always()
+        with:
+          name: Web Test Report
+          path: web/test-results/junit.xml
+          reporter: jest-junit
+          list-suites: all
+          list-tests: all
+          use-actions-summary: 'false'
+
+      # Frontend coverage to Codecov under the `frontend` flag; merged with the
+      # backend upload into one commit report (comment waits for both — see codecov.yml).
+      - name: Upload web coverage to Codecov
+        uses: codecov/codecov-action@v7
+        if: always()
+        with:
+          files: web/coverage/lcov.info
+          flags: frontend
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false

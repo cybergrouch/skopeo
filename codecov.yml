@@ -3,6 +3,10 @@
 # The authoritative coverage gate is JaCoCo in `./gradlew check` (75% line / 70% branch),
 # so Codecov's own statuses are informational — they annotate the PR and report patch
 # (changed-lines) coverage without blocking the merge.
+#
+# Two independent uploads land on each commit: the `backend` (JaCoCo) and `frontend`
+# (Vitest lcov) jobs. Codecov merges them into one commit report; flags let each be
+# viewed separately and combined.
 coverage:
   status:
     project:
@@ -12,7 +16,31 @@ coverage:
       default:
         informational: true
 
-# Comment on PRs with the diff/patch coverage and the affected files.
+flags:
+  backend:
+    paths:
+      - src/main
+    carryforward: true
+  frontend:
+    paths:
+      - web/src
+    carryforward: true
+
+# Per-area breakdown in the Codecov dashboard.
+component_management:
+  individual_components:
+    - component_id: backend
+      name: Backend (API)
+      paths:
+        - src/main/**
+    - component_id: frontend
+      name: Frontend (web)
+      paths:
+        - web/src/**
+
+# Comment on PRs with diff/patch coverage and the per-flag breakdown. Wait for both
+# uploads (backend + frontend) so the comment shows both areas, not whichever finished first.
 comment:
-  layout: "condensed_header, diff, files"
+  layout: "condensed_header, diff, flags, components, files"
   require_changes: false
+  after_n_builds: 2

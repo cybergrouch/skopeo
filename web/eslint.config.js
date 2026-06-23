@@ -7,8 +7,9 @@ import pluginQuery from '@tanstack/eslint-plugin-query'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  // dist = build output, src/api/generated = orval-generated client.
-  globalIgnores(['dist', 'src/api/generated']),
+  // dist = build output, src/api/generated = orval-generated client,
+  // coverage/test-results = test artifacts.
+  globalIgnores(['dist', 'src/api/generated', 'coverage', 'test-results']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
