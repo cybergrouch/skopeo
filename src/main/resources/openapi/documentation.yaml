@@ -665,6 +665,33 @@ paths:
         '409':
           description: Revoking PLAYER or the last ADMINISTRATOR
 
+  /api/v1/ratings/calculations:
+    post:
+      summary: Trigger the rating calculation (ADMINISTRATOR only)
+      description: |
+        Processes matches pending calculation oldest→newest, carrying ratings forward. dryRun
+        defaults to true (an empty body is a dry run) and previews with no writes; an explicit
+        false commits ratings, history, and rated_at.
+      tags:
+        - Ratings
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CalculationRequest'
+      responses:
+        '200':
+          description: The calculation outcome (preview or committed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalculationResponse'
+        '403':
+          description: Caller is not an ADMINISTRATOR
+
   /api/v1/users/pending-assessment:
     get:
       summary: List users pending an initial rating (ADMINISTRATOR only)
@@ -1823,3 +1850,79 @@ components:
           type: string
           format: uuid
           nullable: true
+
+    CalculationRequest:
+      type: object
+      properties:
+        dryRun:
+          type: boolean
+          default: true
+          description: Defaults to true (preview only); set false to commit.
+
+    PlayerChangeResponse:
+      type: object
+      required:
+        - userId
+        - system
+        - previousRating
+        - newRating
+        - change
+        - percentChange
+        - levelChanged
+      properties:
+        userId:
+          type: string
+          format: uuid
+        system:
+          type: string
+          enum: [NTRP, UTR]
+        previousRating:
+          type: string
+        newRating:
+          type: string
+        change:
+          type: string
+        percentChange:
+          type: string
+        previousLevel:
+          type: string
+          nullable: true
+        newLevel:
+          type: string
+          nullable: true
+        levelChanged:
+          type: boolean
+
+    MatchCalculationResponse:
+      type: object
+      required:
+        - matchId
+        - matchDate
+        - changes
+      properties:
+        matchId:
+          type: string
+          format: uuid
+        matchDate:
+          type: string
+          format: date
+        changes:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlayerChangeResponse'
+
+    CalculationResponse:
+      type: object
+      required:
+        - dryRun
+        - matchesProcessed
+        - matches
+      properties:
+        dryRun:
+          type: boolean
+        matchesProcessed:
+          type: integer
+        matches:
+          type: array
+          items:
+            $ref: '#/components/schemas/MatchCalculationResponse'

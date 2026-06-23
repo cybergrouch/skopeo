@@ -50,3 +50,18 @@ data class PendingAssessment(
     val userId: UUID,
     val displayName: String?,
 )
+
+/** A rating-history row to append when the calculation trigger commits a match. */
+data class RatingHistoryWrite(
+    val userId: UUID,
+    val matchId: UUID,
+    val system: RatingSystem,
+    val previousRating: BigDecimal,
+    val newRating: BigDecimal,
+    val ratingChange: BigDecimal,
+    val percentChange: BigDecimal?,
+    val previousLevel: String?,
+    val newLevel: String?,
+    val levelChanged: Boolean,
+    val calculatedAt: LocalDateTime,
+)

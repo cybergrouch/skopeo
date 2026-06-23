@@ -102,6 +102,20 @@ class MatchRepository {
 
     fun findById(matchId: UUID): Match? = transaction { loadMatch(matchId) }
 
+    /** Stamp a match as rating-calculated (the calculation trigger committing it). */
+    fun markRated(
+        matchId: UUID,
+        ratedAt: LocalDateTime,
+        ratedBy: UUID,
+    ) {
+        transaction {
+            MatchesTable.update({ MatchesTable.id eq matchId }) {
+                it[MatchesTable.ratedAt] = ratedAt
+                it[MatchesTable.ratedBy] = ratedBy
+            }
+        }
+    }
+
     /** Active, completed, not-yet-rated matches, oldest completion first (calculation order). */
     fun listPendingCalculation(): List<Match> =
         transaction {
@@ -173,33 +187,33 @@ class MatchRepository {
             recordedBy = row[MatchesTable.recordedBy]?.value,
         )
     }
-
-    private fun sideOf(teamId: UUID): MatchSide =
-        MatchSide(
-            teamId = teamId,
-            userIds =
-                TeamUsersTable
-                    .selectAll()
-                    .where { TeamUsersTable.teamId eq teamId }
-                    .orderBy(TeamUsersTable.position to SortOrder.ASC)
-                    .map { it[TeamUsersTable.userId].value },
-        )
-
-    private fun setsOf(matchId: UUID): List<MatchSetResult> =
-        MatchSetsTable
-            .selectAll()
-            .where { MatchSetsTable.matchId eq matchId }
-            .orderBy(MatchSetsTable.setNumber to SortOrder.ASC)
-            .map { setRow ->
-                val setId = setRow[MatchSetsTable.id].value
-                val tb = MatchSetTiebreaksTable.selectAll().where { MatchSetTiebreaksTable.matchSetId eq setId }.singleOrNull()
-                MatchSetResult(
-                    setNumber = setRow[MatchSetsTable.setNumber],
-                    team1Games = setRow[MatchSetsTable.team1Games],
-                    team2Games = setRow[MatchSetsTable.team2Games],
-                    winnerTeamId = setRow[MatchSetsTable.winnerTeamId].value,
-                    tiebreakTeam1Points = tb?.get(MatchSetTiebreaksTable.team1Points),
-                    tiebreakTeam2Points = tb?.get(MatchSetTiebreaksTable.team2Points),
-                )
-            }
 }
+
+private fun sideOf(teamId: UUID): MatchSide =
+    MatchSide(
+        teamId = teamId,
+        userIds =
+            TeamUsersTable
+                .selectAll()
+                .where { TeamUsersTable.teamId eq teamId }
+                .orderBy(TeamUsersTable.position to SortOrder.ASC)
+                .map { it[TeamUsersTable.userId].value },
+    )
+
+private fun setsOf(matchId: UUID): List<MatchSetResult> =
+    MatchSetsTable
+        .selectAll()
+        .where { MatchSetsTable.matchId eq matchId }
+        .orderBy(MatchSetsTable.setNumber to SortOrder.ASC)
+        .map { setRow ->
+            val setId = setRow[MatchSetsTable.id].value
+            val tb = MatchSetTiebreaksTable.selectAll().where { MatchSetTiebreaksTable.matchSetId eq setId }.singleOrNull()
+            MatchSetResult(
+                setNumber = setRow[MatchSetsTable.setNumber],
+                team1Games = setRow[MatchSetsTable.team1Games],
+                team2Games = setRow[MatchSetsTable.team2Games],
+                winnerTeamId = setRow[MatchSetsTable.winnerTeamId].value,
+                tiebreakTeam1Points = tb?.get(MatchSetTiebreaksTable.team1Points),
+                tiebreakTeam2Points = tb?.get(MatchSetTiebreaksTable.team2Points),
+            )
+        }

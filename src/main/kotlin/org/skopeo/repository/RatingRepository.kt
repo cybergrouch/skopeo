@@ -5,15 +5,18 @@ package org.skopeo.repository
 
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
+import org.jetbrains.exposed.sql.SqlExpressionBuilder
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.model.RatingHistoryEntry
+import org.skopeo.model.RatingHistoryWrite
 import org.skopeo.model.RatingSystem
 import org.skopeo.model.UserRating
 import java.math.BigDecimal
+import java.time.LocalDate
 import java.util.UUID
 
 /**
@@ -91,6 +94,44 @@ class RatingRepository {
                 .map { it[UsersTable.id].value }
                 .filterNot { it in rated }
         }
+
+    /** Apply a match-driven rating update: set the new rating/level, bump matches played + last match date. */
+    fun applyMatchRating(
+        userId: UUID,
+        system: RatingSystem,
+        newRating: BigDecimal,
+        newLevel: String?,
+        matchDate: LocalDate,
+    ) {
+        transaction {
+            UserRatingsTable.update(
+                { (UserRatingsTable.userId eq userId) and (UserRatingsTable.ratingSystem eq system.name) },
+            ) {
+                with(SqlExpressionBuilder) { it[matchesPlayed] = matchesPlayed + 1 }
+                it[currentRating] = newRating
+                it[currentLevel] = newLevel
+                it[lastMatchDate] = matchDate
+            }
+        }
+    }
+
+    fun appendHistory(write: RatingHistoryWrite) {
+        transaction {
+            UserRatingHistoryTable.insert {
+                it[userId] = write.userId
+                it[matchId] = write.matchId
+                it[ratingSystem] = write.system.name
+                it[previousRating] = write.previousRating
+                it[newRating] = write.newRating
+                it[ratingChange] = write.ratingChange
+                it[percentChange] = write.percentChange
+                it[previousLevel] = write.previousLevel
+                it[newLevel] = write.newLevel
+                it[levelChanged] = write.levelChanged
+                it[calculatedAt] = write.calculatedAt
+            }
+        }
+    }
 
     private fun ratingRow(
         userId: UUID,
