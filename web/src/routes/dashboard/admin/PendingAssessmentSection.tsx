@@ -13,19 +13,17 @@ import { Label } from '@/components/ui/label'
 import {
   getGetApiV1UsersPendingAssessmentQueryKey,
   useGetApiV1UsersPendingAssessment,
-  usePutApiV1UsersUserIdRatingsSystem,
+  usePutApiV1UsersUserIdRatings,
 } from '@/api/generated/ratings/ratings'
 import type { PendingAssessmentResponse } from '@/api/generated/model'
 
-const SYSTEMS = ['NTRP', 'UTR'] as const
 
 function PendingRow({ user }: { user: PendingAssessmentResponse }) {
   const queryClient = useQueryClient()
-  const [system, setSystem] = useState<(typeof SYSTEMS)[number]>('NTRP')
   const [value, setValue] = useState('')
   const [error, setError] = useState<string | null>(null)
 
-  const setRating = usePutApiV1UsersUserIdRatingsSystem({
+  const setRating = usePutApiV1UsersUserIdRatings({
     mutation: {
       onSuccess: () =>
         queryClient.invalidateQueries({
@@ -38,7 +36,7 @@ function PendingRow({ user }: { user: PendingAssessmentResponse }) {
     event.preventDefault()
     setError(null)
     try {
-      await setRating.mutateAsync({ userId: user.userId, system, data: { value } })
+      await setRating.mutateAsync({ userId: user.userId, data: { value } })
     } catch {
       setError('Could not set the rating. Check the value and try again.')
     }
@@ -50,25 +48,6 @@ function PendingRow({ user }: { user: PendingAssessmentResponse }) {
         {user.displayName ?? user.userId}
       </div>
       <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-2">
-        <div className="space-y-1">
-          <Label htmlFor={`system-${user.userId}`} className="text-xs">
-            System
-          </Label>
-          <select
-            id={`system-${user.userId}`}
-            value={system}
-            onChange={(e) =>
-              setSystem(e.target.value as (typeof SYSTEMS)[number])
-            }
-            className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
-          >
-            {SYSTEMS.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </div>
         <div className="space-y-1">
           <Label htmlFor={`value-${user.userId}`} className="text-xs">
             Rating

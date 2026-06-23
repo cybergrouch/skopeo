@@ -154,7 +154,6 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
                         "player1Rating" to player1.rating.value,
                         "player2" to player2.name,
                         "player2Rating" to player2.rating.value,
-                        "ratingSystem" to player1.rating.system.name,
                     ),
             ),
         )
@@ -579,10 +578,7 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
             ),
         )
 
-        return Rating.fromValue(
-            value = clamped.toStringPrecise(),
-            system = rating.system,
-        )
+        return Rating.fromValue(value = clamped.toStringPrecise())
     }
 
     /**

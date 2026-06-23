@@ -6,25 +6,24 @@ package org.skopeo.repository
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.SqlExpressionBuilder
-import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.model.RatingHistoryEntry
 import org.skopeo.model.RatingHistoryWrite
-import org.skopeo.model.RatingSystem
 import org.skopeo.model.UserRating
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.util.UUID
 
 /**
- * Persistence for current ratings and rating history. Initial ratings are admin-set
- * (no auto-seed); [setRating] upserts the per-(user, system) row. History is read here and
- * written by the match flow.
+ * Persistence for the user's (single, NTRP) current rating and rating history. Initial ratings
+ * are admin-set (no auto-seed); [setRating] upserts the row. History is read here and written
+ * by the match flow.
  */
 class RatingRepository {
+    /** The user's ratings as a list (0 or 1) — the API surfaces a collection. */
     fun findByUser(userId: UUID): List<UserRating> =
         transaction {
             UserRatingsTable
@@ -33,54 +32,39 @@ class RatingRepository {
                 .map { it.toUserRating() }
         }
 
-    fun findByUserAndSystem(
-        userId: UUID,
-        system: RatingSystem,
-    ): UserRating? = transaction { ratingRow(userId, system)?.toUserRating() }
+    fun findCurrentRating(userId: UUID): UserRating? = transaction { ratingRow(userId)?.toUserRating() }
 
-    /** Insert or update the user's rating in a system (admin assessment). */
+    /** Insert or update the user's rating (admin assessment). */
     fun setRating(
         userId: UUID,
-        system: RatingSystem,
         rating: BigDecimal,
         level: String?,
         confidence: BigDecimal,
     ): UserRating =
         transaction {
-            if (ratingRow(userId, system) == null) {
+            if (ratingRow(userId) == null) {
                 UserRatingsTable.insert {
                     it[UserRatingsTable.userId] = userId
-                    it[ratingSystem] = system.name
                     it[currentRating] = rating
                     it[currentLevel] = level
                     it[confidenceScore] = confidence
                 }
             } else {
-                UserRatingsTable.update(
-                    { (UserRatingsTable.userId eq userId) and (UserRatingsTable.ratingSystem eq system.name) },
-                ) {
+                UserRatingsTable.update({ UserRatingsTable.userId eq userId }) {
                     it[currentRating] = rating
                     it[currentLevel] = level
                     it[confidenceScore] = confidence
                 }
             }
-            ratingRow(userId, system)!!.toUserRating()
+            ratingRow(userId)!!.toUserRating()
         }
 
-    fun historyByUser(
-        userId: UUID,
-        system: RatingSystem?,
-    ): List<RatingHistoryEntry> =
+    fun historyByUser(userId: UUID): List<RatingHistoryEntry> =
         transaction {
             UserRatingHistoryTable
                 .selectAll()
-                .where {
-                    if (system == null) {
-                        UserRatingHistoryTable.userId eq userId
-                    } else {
-                        (UserRatingHistoryTable.userId eq userId) and (UserRatingHistoryTable.ratingSystem eq system.name)
-                    }
-                }.orderBy(UserRatingHistoryTable.calculatedAt to SortOrder.DESC)
+                .where { UserRatingHistoryTable.userId eq userId }
+                .orderBy(UserRatingHistoryTable.calculatedAt to SortOrder.DESC)
                 .map { it.toRatingHistory() }
         }
 
@@ -98,15 +82,12 @@ class RatingRepository {
     /** Apply a match-driven rating update: set the new rating/level, bump matches played + last match date. */
     fun applyMatchRating(
         userId: UUID,
-        system: RatingSystem,
         newRating: BigDecimal,
         newLevel: String?,
         matchDate: LocalDate,
     ) {
         transaction {
-            UserRatingsTable.update(
-                { (UserRatingsTable.userId eq userId) and (UserRatingsTable.ratingSystem eq system.name) },
-            ) {
+            UserRatingsTable.update({ UserRatingsTable.userId eq userId }) {
                 with(SqlExpressionBuilder) { it[matchesPlayed] = matchesPlayed + 1 }
                 it[currentRating] = newRating
                 it[currentLevel] = newLevel
@@ -120,7 +101,6 @@ class RatingRepository {
             UserRatingHistoryTable.insert {
                 it[userId] = write.userId
                 it[matchId] = write.matchId
-                it[ratingSystem] = write.system.name
                 it[previousRating] = write.previousRating
                 it[newRating] = write.newRating
                 it[ratingChange] = write.ratingChange
@@ -133,20 +113,16 @@ class RatingRepository {
         }
     }
 
-    private fun ratingRow(
-        userId: UUID,
-        system: RatingSystem,
-    ): ResultRow? =
+    private fun ratingRow(userId: UUID): ResultRow? =
         UserRatingsTable
             .selectAll()
-            .where { (UserRatingsTable.userId eq userId) and (UserRatingsTable.ratingSystem eq system.name) }
+            .where { UserRatingsTable.userId eq userId }
             .singleOrNull()
 }
 
 internal fun ResultRow.toUserRating(): UserRating =
     UserRating(
         userId = this[UserRatingsTable.userId].value,
-        system = RatingSystem.valueOf(this[UserRatingsTable.ratingSystem]),
         currentRating = this[UserRatingsTable.currentRating],
         currentLevel = this[UserRatingsTable.currentLevel],
         confidence = this[UserRatingsTable.confidenceScore],
@@ -159,7 +135,6 @@ internal fun ResultRow.toRatingHistory(): RatingHistoryEntry =
         id = this[UserRatingHistoryTable.id].value,
         userId = this[UserRatingHistoryTable.userId].value,
         matchId = this[UserRatingHistoryTable.matchId],
-        system = RatingSystem.valueOf(this[UserRatingHistoryTable.ratingSystem]),
         previousRating = this[UserRatingHistoryTable.previousRating],
         newRating = this[UserRatingHistoryTable.newRating],
         ratingChange = this[UserRatingHistoryTable.ratingChange],

@@ -8,7 +8,7 @@ import org.skopeo.model.PendingAssessment
 import org.skopeo.model.RatingHistoryEntry
 import org.skopeo.model.UserRating
 
-/** Body for `PUT /api/v1/users/{userId}/ratings/{system}` — an administrator sets/adjusts a rating. */
+/** Body for `PUT /api/v1/users/{userId}/ratings` — an administrator sets/adjusts a rating. */
 @Serializable
 data class SetRatingRequest(
     val value: String,
@@ -17,7 +17,6 @@ data class SetRatingRequest(
 
 @Serializable
 data class UserRatingResponse(
-    val system: String,
     val value: String,
     val level: String? = null,
     val confidence: String,
@@ -29,7 +28,6 @@ data class UserRatingResponse(
 data class RatingHistoryResponse(
     val id: String,
     val matchId: String? = null,
-    val system: String,
     val previousRating: String,
     val newRating: String,
     val ratingChange: String,
@@ -51,7 +49,6 @@ data class PendingAssessmentResponse(
 
 fun UserRating.toResponse(): UserRatingResponse =
     UserRatingResponse(
-        system = system.name,
         value = currentRating.toPlainString(),
         level = currentLevel,
         confidence = confidence.toPlainString(),
@@ -63,7 +60,6 @@ fun RatingHistoryEntry.toResponse(): RatingHistoryResponse =
     RatingHistoryResponse(
         id = id.toString(),
         matchId = matchId?.toString(),
-        system = system.name,
         previousRating = previousRating.toPlainString(),
         newRating = newRating.toPlainString(),
         ratingChange = ratingChange.toPlainString(),

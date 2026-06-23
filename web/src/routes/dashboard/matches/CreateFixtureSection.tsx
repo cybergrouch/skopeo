@@ -18,7 +18,6 @@ import {
 import { GetApiV1MatchesFilter } from '@/api/generated/model'
 import type { UserSummaryResponse } from '@/api/generated/model'
 
-const SYSTEMS = ['NTRP', 'UTR'] as const
 const FORMATS = ['BEST_OF_THREE', 'BEST_OF_FIVE'] as const
 const AWAITING = { filter: GetApiV1MatchesFilter['awaiting-results'] }
 
@@ -43,7 +42,6 @@ export function CreateFixtureSection() {
   const queryClient = useQueryClient()
   const [player1, setPlayer1] = useState<UserSummaryResponse | null>(null)
   const [player2, setPlayer2] = useState<UserSummaryResponse | null>(null)
-  const [system, setSystem] = useState<(typeof SYSTEMS)[number]>('NTRP')
   const [format, setFormat] = useState<(typeof FORMATS)[number]>('BEST_OF_THREE')
   const [date, setDate] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -70,7 +68,6 @@ export function CreateFixtureSection() {
     try {
       await create.mutateAsync({
         data: {
-          ratingSystem: system,
           matchType: 'SINGLES',
           matchFormat: format,
           matchDate: date,
@@ -79,7 +76,7 @@ export function CreateFixtureSection() {
         },
       })
     } catch {
-      setError('Could not create the fixture. Both players need a rating in the chosen system.')
+      setError('Could not create the fixture. Both players need a rating.')
     }
   }
 
@@ -114,21 +111,6 @@ export function CreateFixtureSection() {
           )}
 
           <div className="flex flex-wrap gap-3">
-            <div className="space-y-1">
-              <Label htmlFor="system">System</Label>
-              <select
-                id="system"
-                value={system}
-                onChange={(e) => setSystem(e.target.value as (typeof SYSTEMS)[number])}
-                className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
-              >
-                {SYSTEMS.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </div>
             <div className="space-y-1">
               <Label htmlFor="format">Format</Label>
               <select

@@ -13,7 +13,6 @@ import org.skopeo.model.MatchQuery
 import org.skopeo.model.MatchSetResult
 import org.skopeo.model.MatchStatus
 import org.skopeo.model.NameType
-import org.skopeo.model.RatingSystem
 import org.skopeo.model.TeamType
 import org.skopeo.model.User
 import org.skopeo.repository.MatchRepository
@@ -46,7 +45,6 @@ class MatchService(
         request: CreateFixtureRequest,
     ): Match {
         val createdBy = requireStaff(token)
-        val system = parseEnum(request.ratingSystem) { RatingSystem.valueOf(it) }
         val type = parseEnum(request.matchType) { TeamType.valueOf(it) }
         val format = parseEnum(request.matchFormat) { MatchFormat.valueOf(it) }
         require(format in ALLOWED_FORMATS) { "matchFormat must be BEST_OF_THREE or BEST_OF_FIVE" }
@@ -54,12 +52,11 @@ class MatchService(
         val team1Ids = request.team1.map(::parseUuid)
         val team2Ids = request.team2.map(::parseUuid)
         validateComposition(type = type, team1 = team1Ids, team2 = team2Ids)
-        val team1Users = resolveRatedParticipants(team1Ids, system)
-        val team2Users = resolveRatedParticipants(team2Ids, system)
+        val team1Users = resolveRatedParticipants(team1Ids)
+        val team2Users = resolveRatedParticipants(team2Ids)
 
         return matches.createFixture(
             CreateFixtureCommand(
-                ratingSystem = system,
                 matchType = type,
                 matchFormat = format,
                 matchDate = matchDate,
@@ -145,15 +142,12 @@ class MatchService(
         return caller
     }
 
-    private fun resolveRatedParticipants(
-        ids: List<UUID>,
-        system: RatingSystem,
-    ): List<User> =
+    private fun resolveRatedParticipants(ids: List<UUID>): List<User> =
         ids.map { id ->
             val user = users.findById(id) ?: throw IllegalArgumentException("Unknown user $id")
             require(user.isActive) { "User $id is not active" }
-            requireNotNull(ratings.findByUserAndSystem(id, system)) {
-                "User $id has no $system rating yet (pending assessment)"
+            requireNotNull(ratings.findCurrentRating(id)) {
+                "User $id has no rating yet (pending assessment)"
             }
             user
         }

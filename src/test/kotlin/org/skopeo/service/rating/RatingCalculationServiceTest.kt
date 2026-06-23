@@ -19,7 +19,6 @@ import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
-import org.skopeo.model.RatingSystem
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
@@ -67,7 +66,7 @@ class RatingCalculationServiceTest {
                     capabilities = roles,
                 ),
             )
-        if (rated) ratings.setRating(user.id, RatingSystem.NTRP, BigDecimal("4.0"), "4.0", BigDecimal("0.50"))
+        if (rated) ratings.setRating(user.id, BigDecimal("4.0"), "4.0", BigDecimal("0.50"))
         return user
     }
 
@@ -83,7 +82,6 @@ class RatingCalculationServiceTest {
             matchService.createFixture(
                 token(admin),
                 CreateFixtureRequest(
-                    ratingSystem = "NTRP",
                     matchType = "SINGLES",
                     matchFormat = "BEST_OF_THREE",
                     matchDate = "2026-01-01",
@@ -111,7 +109,7 @@ class RatingCalculationServiceTest {
             (it.newRating > BigDecimal("4.000000")).shouldBeTrue() // winner gains
         }
         // nothing persisted
-        ratings.findByUserAndSystem(p1.id, RatingSystem.NTRP)!!.currentRating shouldBe BigDecimal("4.000000")
+        ratings.findCurrentRating(p1.id)!!.currentRating shouldBe BigDecimal("4.000000")
         matchRepo.findById(matchId)!!.ratedAt.shouldBeNull()
         matchRepo.listPendingCalculation().size shouldBe 1
     }
@@ -126,11 +124,11 @@ class RatingCalculationServiceTest {
         val committed = calc.calculate(token("root"), dryRun = false)
         committed.dryRun.shouldBeFalse()
 
-        ratings.findByUserAndSystem(p1.id, RatingSystem.NTRP)!!.let {
+        ratings.findCurrentRating(p1.id)!!.let {
             (it.currentRating > BigDecimal("4.000000")).shouldBeTrue()
             it.matchesPlayed shouldBe 1
         }
-        ratings.historyByUser(p1.id, RatingSystem.NTRP).single().matchId shouldBe matchId
+        ratings.historyByUser(p1.id).single().matchId shouldBe matchId
         matchRepo.findById(matchId)!!.ratedAt.shouldNotBeNull()
         matchRepo.listPendingCalculation().shouldBe(emptyList())
 

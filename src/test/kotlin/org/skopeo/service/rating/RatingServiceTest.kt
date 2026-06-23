@@ -12,7 +12,6 @@ import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
-import org.skopeo.model.RatingSystem
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
@@ -63,14 +62,14 @@ class RatingServiceTest {
         admin("root")
         val player = provisionUser("player")
 
-        val rating = service.setRating(token("root"), player.id, RatingSystem.NTRP, "4.3", null)
+        val rating = service.setRating(token("root"), player.id, "4.3", null)
 
         rating.currentRating.toPlainString() shouldBe "4.300000" // stored as NUMERIC(10,6)
         rating.currentLevel shouldBe "4.0" // NTRP rounds down to the 0.5 level
         rating.confidence.toPlainString() shouldBe "0.50" // default
 
         // An explicit confidence is honored.
-        val adjusted = service.setRating(token("root"), player.id, RatingSystem.NTRP, "4.5", "0.70")
+        val adjusted = service.setRating(token("root"), player.id, "4.5", "0.70")
         adjusted.confidence.toPlainString() shouldBe "0.70"
     }
 
@@ -79,8 +78,8 @@ class RatingServiceTest {
         admin("root")
         val player = provisionUser("player")
 
-        shouldThrow<ForbiddenException> { service.setRating(token("player"), player.id, RatingSystem.NTRP, "4.0", null) }
-        shouldThrow<ForbiddenException> { service.setRating(token("ghost"), player.id, RatingSystem.NTRP, "4.0", null) }
+        shouldThrow<ForbiddenException> { service.setRating(token("player"), player.id, "4.0", null) }
+        shouldThrow<ForbiddenException> { service.setRating(token("ghost"), player.id, "4.0", null) }
     }
 
     @Test
@@ -88,8 +87,8 @@ class RatingServiceTest {
         admin("root")
         val player = provisionUser("player")
 
-        shouldThrow<IllegalArgumentException> { service.setRating(token("root"), player.id, RatingSystem.NTRP, "9.0", null) }
-        shouldThrow<IllegalArgumentException> { service.setRating(token("root"), player.id, RatingSystem.NTRP, "4.0", "1.5") }
+        shouldThrow<IllegalArgumentException> { service.setRating(token("root"), player.id, "9.0", null) }
+        shouldThrow<IllegalArgumentException> { service.setRating(token("root"), player.id, "4.0", "1.5") }
     }
 
     @Test
@@ -97,13 +96,13 @@ class RatingServiceTest {
         admin("root")
         val player = provisionUser("player")
         provisionUser("other")
-        service.setRating(token("root"), player.id, RatingSystem.NTRP, "4.0", null)
+        service.setRating(token("root"), player.id, "4.0", null)
 
-        service.getRatings(token("player"), player.id).single().system shouldBe RatingSystem.NTRP
-        service.getRatings(token("root"), player.id).single().system shouldBe RatingSystem.NTRP
-        service.getHistory(token("player"), player.id, null) shouldBe emptyList()
+        service.getRatings(token("player"), player.id).single().currentRating.toPlainString() shouldBe "4.000000"
+        service.getRatings(token("root"), player.id).single().currentRating.toPlainString() shouldBe "4.000000"
+        service.getHistory(token("player"), player.id) shouldBe emptyList()
         shouldThrow<ForbiddenException> { service.getRatings(token("other"), player.id) }
-        shouldThrow<ForbiddenException> { service.getHistory(token("other"), player.id, RatingSystem.NTRP) }
+        shouldThrow<ForbiddenException> { service.getHistory(token("other"), player.id) }
         // A caller with no provisioned account is forbidden too.
         shouldThrow<ForbiddenException> { service.getRatings(token("ghost"), player.id) }
     }
@@ -113,7 +112,7 @@ class RatingServiceTest {
         admin("root")
         val unrated = provisionUser("unrated")
         val rated = provisionUser("rated")
-        service.setRating(token("root"), rated.id, RatingSystem.NTRP, "3.0", null)
+        service.setRating(token("root"), rated.id, "3.0", null)
 
         val pending = service.pendingAssessment(token("root")).map { it.userId }
         (unrated.id in pending) shouldBe true
@@ -126,7 +125,7 @@ class RatingServiceTest {
     fun `setting a rating for an unknown user is rejected`() {
         admin("root")
         shouldThrow<org.skopeo.service.user.UserNotFoundException> {
-            service.setRating(token("root"), UUID.randomUUID(), RatingSystem.NTRP, "4.0", null)
+            service.setRating(token("root"), UUID.randomUUID(), "4.0", null)
         }
     }
 }

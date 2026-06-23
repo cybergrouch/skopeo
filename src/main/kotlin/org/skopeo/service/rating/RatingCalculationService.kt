@@ -11,7 +11,6 @@ import org.skopeo.model.MatchScore
 import org.skopeo.model.PlayerProfile
 import org.skopeo.model.Rating
 import org.skopeo.model.RatingHistoryWrite
-import org.skopeo.model.RatingSystem
 import org.skopeo.model.SetScore
 import org.skopeo.model.Team
 import org.skopeo.model.TeamType
@@ -44,7 +43,6 @@ class RatingCalculationService(
     /** One player's computed change within a processed match. */
     data class PlayerChange(
         val userId: UUID,
-        val system: RatingSystem,
         val previousRating: BigDecimal,
         val newRating: BigDecimal,
         val change: BigDecimal,
@@ -70,7 +68,7 @@ class RatingCalculationService(
         dryRun: Boolean,
     ): CalculationOutcome {
         val adminId = requireAdmin(token)
-        val snapshot = mutableMapOf<Pair<UUID, RatingSystem>, BigDecimal>()
+        val snapshot = mutableMapOf<UUID, BigDecimal>()
         val processed = matches.listPendingCalculation().map { processMatch(it, snapshot) }
 
         if (!dryRun) commit(processed = processed, ratedBy = adminId)
@@ -87,7 +85,6 @@ class RatingCalculationService(
                 calc.changes.forEach { change ->
                     ratings.applyMatchRating(
                         userId = change.userId,
-                        system = change.system,
                         newRating = change.newRating,
                         newLevel = change.newLevel,
                         matchDate = calc.matchDate,
@@ -96,7 +93,6 @@ class RatingCalculationService(
                         RatingHistoryWrite(
                             userId = change.userId,
                             matchId = calc.matchId,
-                            system = change.system,
                             previousRating = change.previousRating,
                             newRating = change.newRating,
                             ratingChange = change.change,
@@ -115,39 +111,36 @@ class RatingCalculationService(
 
     private fun processMatch(
         match: Match,
-        snapshot: MutableMap<Pair<UUID, RatingSystem>, BigDecimal>,
+        snapshot: MutableMap<UUID, BigDecimal>,
     ): MatchCalculation {
         require(match.matchType == TeamType.SINGLES) {
             "Only SINGLES matches can be calculated currently (match ${match.id})"
         }
-        val system = match.ratingSystem
         val u1 = match.team1.userIds.single()
         val u2 = match.team2.userIds.single()
-        val r1 = currentRating(u1, system, snapshot)
-        val r2 = currentRating(u2, system, snapshot)
+        val r1 = currentRating(u1, snapshot)
+        val r2 = currentRating(u2, snapshot)
 
         val request = buildRequest(match = match, r1 = r1, r2 = r2)
         val response = calculator.calculate(request).response
 
-        val changes = listOf(playerChange(u1, system, response), playerChange(u2, system, response))
-        changes.forEach { snapshot[it.userId to system] = it.newRating }
+        val changes = listOf(playerChange(u1, response), playerChange(u2, response))
+        changes.forEach { snapshot[it.userId] = it.newRating }
         return MatchCalculation(matchId = match.id, matchDate = match.matchDate, changes = changes)
     }
 
     private fun currentRating(
         userId: UUID,
-        system: RatingSystem,
-        snapshot: MutableMap<Pair<UUID, RatingSystem>, BigDecimal>,
+        snapshot: MutableMap<UUID, BigDecimal>,
     ): BigDecimal =
-        snapshot.getOrPut(userId to system) {
-            requireNotNull(ratings.findByUserAndSystem(userId, system)) {
-                "User $userId has no $system rating (pending assessment)"
+        snapshot.getOrPut(userId) {
+            requireNotNull(ratings.findCurrentRating(userId)) {
+                "User $userId has no rating (pending assessment)"
             }.currentRating
         }
 
     private fun playerChange(
         userId: UUID,
-        system: RatingSystem,
         response: org.skopeo.dto.RankingCalculationResponse,
     ): PlayerChange {
         val rc =
@@ -156,7 +149,6 @@ class RatingCalculationService(
             }
         return PlayerChange(
             userId = userId,
-            system = system,
             previousRating = BigDecimal(rc.previousRating.value),
             newRating = BigDecimal(rc.newRating.value),
             change = BigDecimal(rc.change),
@@ -179,15 +171,14 @@ private fun buildRequest(
     r1: BigDecimal,
     r2: BigDecimal,
 ): RankingCalculationRequest {
-    val system = match.ratingSystem
     val u1 = match.team1.userIds.single()
     val u2 = match.team2.userIds.single()
     val t1 = match.team1.teamId.toString()
     val t2 = match.team2.teamId.toString()
     val teams =
         mapOf(
-            t1 to singlesTeam(t1, u1, r1, system),
-            t2 to singlesTeam(t2, u2, r2, system),
+            t1 to singlesTeam(t1, u1, r1),
+            t2 to singlesTeam(t2, u2, r2),
         )
     val sets =
         match.sets.map { set ->
@@ -217,14 +208,13 @@ private fun singlesTeam(
     teamId: String,
     userId: UUID,
     rating: BigDecimal,
-    system: RatingSystem,
 ): Team =
     Team(
         teamId = teamId,
         name = teamId,
         players =
             listOf(
-                PlayerProfile(playerId = userId.toString(), name = "Player", rating = Rating.fromValue(rating.toPlainString(), system)),
+                PlayerProfile(playerId = userId.toString(), name = "Player", rating = Rating.fromValue(rating.toPlainString())),
             ),
         teamType = TeamType.SINGLES,
     )

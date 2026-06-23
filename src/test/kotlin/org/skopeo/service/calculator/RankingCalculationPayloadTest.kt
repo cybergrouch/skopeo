@@ -66,8 +66,7 @@ class RankingCalculationPayloadTest {
                         "playerId": "P1",
                         "name": "Alice",
                         "rating": {
-                          "value": "4.5",
-                          "system": "NTRP"
+                          "value": "4.5"
                         }
                       }],
                       "teamType": "SINGLES"
@@ -79,8 +78,7 @@ class RankingCalculationPayloadTest {
                         "playerId": "P2",
                         "name": "Bob",
                         "rating": {
-                          "value": "4.0",
-                          "system": "NTRP"
+                          "value": "4.0"
                         }
                       }],
                       "teamType": "SINGLES"
@@ -118,22 +116,18 @@ class RankingCalculationPayloadTest {
                       "change": "0.000000",
                       "previousRating": {
                         "value": "4.5",
-                        "system": "NTRP",
                         "publishedLevel": {
                           "value": "4.5",
                           "minRating": "4.5",
-                          "maxRating": "5.0",
-                          "system": "NTRP"
+                          "maxRating": "5.0"
                         }
                       },
                       "newRating": {
                         "value": "4.500000",
-                        "system": "NTRP",
                         "publishedLevel": {
                           "value": "4.5",
                           "minRating": "4.5",
-                          "maxRating": "5.0",
-                          "system": "NTRP"
+                          "maxRating": "5.0"
                         }
                       },
                       "percentChange": "0.000000",
@@ -143,22 +137,18 @@ class RankingCalculationPayloadTest {
                       "change": "0.000000",
                       "previousRating": {
                         "value": "4.0",
-                        "system": "NTRP",
                         "publishedLevel": {
                           "value": "4.0",
                           "minRating": "4.0",
-                          "maxRating": "4.5",
-                          "system": "NTRP"
+                          "maxRating": "4.5"
                         }
                       },
                       "newRating": {
                         "value": "4.000000",
-                        "system": "NTRP",
                         "publishedLevel": {
                           "value": "4.0",
                           "minRating": "4.0",
-                          "maxRating": "4.5",
-                          "system": "NTRP"
+                          "maxRating": "4.5"
                         }
                       },
                       "percentChange": "0.000000",
@@ -171,12 +161,10 @@ class RankingCalculationPayloadTest {
                       "name": "Alice",
                       "rating": {
                         "value": "4.500000",
-                        "system": "NTRP",
                         "publishedLevel": {
                           "value": "4.5",
                           "minRating": "4.5",
-                          "maxRating": "5.0",
-                          "system": "NTRP"
+                          "maxRating": "5.0"
                         }
                       }
                     },
@@ -185,12 +173,10 @@ class RankingCalculationPayloadTest {
                       "name": "Bob",
                       "rating": {
                         "value": "4.000000",
-                        "system": "NTRP",
                         "publishedLevel": {
                           "value": "4.0",
                           "minRating": "4.0",
-                          "maxRating": "4.5",
-                          "system": "NTRP"
+                          "maxRating": "4.5"
                         }
                       }
                     }
@@ -204,12 +190,10 @@ class RankingCalculationPayloadTest {
                         "name": "Alice",
                         "rating": {
                           "value": "4.500000",
-                          "system": "NTRP",
                           "publishedLevel": {
                             "value": "4.5",
                             "minRating": "4.5",
-                            "maxRating": "5.0",
-                            "system": "NTRP"
+                            "maxRating": "5.0"
                           }
                         }
                       }],
@@ -223,12 +207,10 @@ class RankingCalculationPayloadTest {
                         "name": "Bob",
                         "rating": {
                           "value": "4.000000",
-                          "system": "NTRP",
                           "publishedLevel": {
                             "value": "4.0",
                             "minRating": "4.0",
-                            "maxRating": "4.5",
-                            "system": "NTRP"
+                            "maxRating": "4.5"
                           }
                         }
                       }],
@@ -259,8 +241,7 @@ class RankingCalculationPayloadTest {
                         "playerId": "P1",
                         "name": "Player One",
                         "rating": {
-                          "value": "5.0",
-                          "system": "NTRP"
+                          "value": "5.0"
                         }
                       }],
                       "teamType": "SINGLES"
@@ -272,8 +253,7 @@ class RankingCalculationPayloadTest {
                         "playerId": "P2",
                         "name": "Player Two",
                         "rating": {
-                          "value": "5.0",
-                          "system": "NTRP"
+                          "value": "5.0"
                         }
                       }],
                       "teamType": "SINGLES"
@@ -311,22 +291,18 @@ class RankingCalculationPayloadTest {
                       "change": "0.032000",
                       "previousRating": {
                         "value": "5.0",
-                        "system": "NTRP",
                         "publishedLevel": {
                           "value": "5.0",
                           "minRating": "5.0",
-                          "maxRating": "5.5",
-                          "system": "NTRP"
+                          "maxRating": "5.5"
                         }
                       },
                       "newRating": {
                         "value": "5.032000",
-                        "system": "NTRP",
                         "publishedLevel": {
                           "value": "5.0",
                           "minRating": "5.0",
-                          "maxRating": "5.5",
-                          "system": "NTRP"
+                          "maxRating": "5.5"
                         }
                       },
                       "percentChange": "0.640000",
@@ -336,22 +312,18 @@ class RankingCalculationPayloadTest {
                       "change": "-0.032000",
                       "previousRating": {
                         "value": "5.0",
-                        "system": "NTRP",
                         "publishedLevel": {
                           "value": "5.0",
                           "minRating": "5.0",
-                          "maxRating": "5.5",
-                          "system": "NTRP"
+                          "maxRating": "5.5"
                         }
                       },
                       "newRating": {
                         "value": "4.968000",
-                        "system": "NTRP",
                         "publishedLevel": {
                           "value": "4.5",
                           "minRating": "4.5",
-                          "maxRating": "5.0",
-                          "system": "NTRP"
+                          "maxRating": "5.0"
                         }
                       },
                       "percentChange": "-0.640000",
@@ -364,12 +336,10 @@ class RankingCalculationPayloadTest {
                       "name": "Player One",
                       "rating": {
                         "value": "5.032000",
-                        "system": "NTRP",
                         "publishedLevel": {
                           "value": "5.0",
                           "minRating": "5.0",
-                          "maxRating": "5.5",
-                          "system": "NTRP"
+                          "maxRating": "5.5"
                         }
                       }
                     },
@@ -378,12 +348,10 @@ class RankingCalculationPayloadTest {
                       "name": "Player Two",
                       "rating": {
                         "value": "4.968000",
-                        "system": "NTRP",
                         "publishedLevel": {
                           "value": "4.5",
                           "minRating": "4.5",
-                          "maxRating": "5.0",
-                          "system": "NTRP"
+                          "maxRating": "5.0"
                         }
                       }
                     }
@@ -397,12 +365,10 @@ class RankingCalculationPayloadTest {
                         "name": "Player One",
                         "rating": {
                           "value": "5.032000",
-                          "system": "NTRP",
                           "publishedLevel": {
                             "value": "5.0",
                             "minRating": "5.0",
-                            "maxRating": "5.5",
-                            "system": "NTRP"
+                            "maxRating": "5.5"
                           }
                         }
                       }],
@@ -416,12 +382,10 @@ class RankingCalculationPayloadTest {
                         "name": "Player Two",
                         "rating": {
                           "value": "4.968000",
-                          "system": "NTRP",
                           "publishedLevel": {
                             "value": "4.5",
                             "minRating": "4.5",
-                            "maxRating": "5.0",
-                            "system": "NTRP"
+                            "maxRating": "5.0"
                           }
                         }
                       }],
@@ -452,8 +416,7 @@ class RankingCalculationPayloadTest {
                         "playerId": "WINNER",
                         "name": "Dominant Player",
                         "rating": {
-                          "value": "4.0",
-                          "system": "NTRP"
+                          "value": "4.0"
                         }
                       }],
                       "teamType": "SINGLES"
@@ -465,8 +428,7 @@ class RankingCalculationPayloadTest {
                         "playerId": "LOSER",
                         "name": "Weaker Player",
                         "rating": {
-                          "value": "3.5",
-                          "system": "NTRP"
+                          "value": "3.5"
                         }
                       }],
                       "teamType": "SINGLES"
@@ -511,22 +473,18 @@ class RankingCalculationPayloadTest {
                       "change": "0.000000",
                       "previousRating": {
                         "value": "4.0",
-                        "system": "NTRP",
                         "publishedLevel": {
                           "value": "4.0",
                           "minRating": "4.0",
-                          "maxRating": "4.5",
-                          "system": "NTRP"
+                          "maxRating": "4.5"
                         }
                       },
                       "newRating": {
                         "value": "4.000000",
-                        "system": "NTRP",
                         "publishedLevel": {
                           "value": "4.0",
                           "minRating": "4.0",
-                          "maxRating": "4.5",
-                          "system": "NTRP"
+                          "maxRating": "4.5"
                         }
                       },
                       "percentChange": "0.000000",
@@ -536,22 +494,18 @@ class RankingCalculationPayloadTest {
                       "change": "0.000000",
                       "previousRating": {
                         "value": "3.5",
-                        "system": "NTRP",
                         "publishedLevel": {
                           "value": "3.5",
                           "minRating": "3.5",
-                          "maxRating": "4.0",
-                          "system": "NTRP"
+                          "maxRating": "4.0"
                         }
                       },
                       "newRating": {
                         "value": "3.500000",
-                        "system": "NTRP",
                         "publishedLevel": {
                           "value": "3.5",
                           "minRating": "3.5",
-                          "maxRating": "4.0",
-                          "system": "NTRP"
+                          "maxRating": "4.0"
                         }
                       },
                       "percentChange": "0.000000",
@@ -564,12 +518,10 @@ class RankingCalculationPayloadTest {
                       "name": "Dominant Player",
                       "rating": {
                         "value": "4.000000",
-                        "system": "NTRP",
                         "publishedLevel": {
                           "value": "4.0",
                           "minRating": "4.0",
-                          "maxRating": "4.5",
-                          "system": "NTRP"
+                          "maxRating": "4.5"
                         }
                       }
                     },
@@ -578,12 +530,10 @@ class RankingCalculationPayloadTest {
                       "name": "Weaker Player",
                       "rating": {
                         "value": "3.500000",
-                        "system": "NTRP",
                         "publishedLevel": {
                           "value": "3.5",
                           "minRating": "3.5",
-                          "maxRating": "4.0",
-                          "system": "NTRP"
+                          "maxRating": "4.0"
                         }
                       }
                     }
@@ -597,12 +547,10 @@ class RankingCalculationPayloadTest {
                         "name": "Dominant Player",
                         "rating": {
                           "value": "4.000000",
-                          "system": "NTRP",
                           "publishedLevel": {
                             "value": "4.0",
                             "minRating": "4.0",
-                            "maxRating": "4.5",
-                            "system": "NTRP"
+                            "maxRating": "4.5"
                           }
                         }
                       }],
@@ -616,12 +564,10 @@ class RankingCalculationPayloadTest {
                         "name": "Weaker Player",
                         "rating": {
                           "value": "3.500000",
-                          "system": "NTRP",
                           "publishedLevel": {
                             "value": "3.5",
                             "minRating": "3.5",
-                            "maxRating": "4.0",
-                            "system": "NTRP"
+                            "maxRating": "4.0"
                           }
                         }
                       }],
@@ -652,8 +598,7 @@ class RankingCalculationPayloadTest {
                         "playerId": "P1",
                         "name": "Beginner",
                         "rating": {
-                          "value": "1.0",
-                          "system": "NTRP"
+                          "value": "1.0"
                         }
                       }],
                       "teamType": "SINGLES"
@@ -665,8 +610,7 @@ class RankingCalculationPayloadTest {
                         "playerId": "P2",
                         "name": "Intermediate",
                         "rating": {
-                          "value": "3.0",
-                          "system": "NTRP"
+                          "value": "3.0"
                         }
                       }],
                       "teamType": "SINGLES"
@@ -707,22 +651,18 @@ class RankingCalculationPayloadTest {
                       "change": "0.000000",
                       "previousRating": {
                         "value": "1.0",
-                        "system": "NTRP",
                         "publishedLevel": {
                           "value": "1.0",
                           "minRating": "1.0",
-                          "maxRating": "1.5",
-                          "system": "NTRP"
+                          "maxRating": "1.5"
                         }
                       },
                       "newRating": {
                         "value": "1.000000",
-                        "system": "NTRP",
                         "publishedLevel": {
                           "value": "1.0",
                           "minRating": "1.0",
-                          "maxRating": "1.5",
-                          "system": "NTRP"
+                          "maxRating": "1.5"
                         }
                       },
                       "percentChange": "0.000000",
@@ -732,22 +672,18 @@ class RankingCalculationPayloadTest {
                       "change": "0.000000",
                       "previousRating": {
                         "value": "3.0",
-                        "system": "NTRP",
                         "publishedLevel": {
                           "value": "3.0",
                           "minRating": "3.0",
-                          "maxRating": "3.5",
-                          "system": "NTRP"
+                          "maxRating": "3.5"
                         }
                       },
                       "newRating": {
                         "value": "3.000000",
-                        "system": "NTRP",
                         "publishedLevel": {
                           "value": "3.0",
                           "minRating": "3.0",
-                          "maxRating": "3.5",
-                          "system": "NTRP"
+                          "maxRating": "3.5"
                         }
                       },
                       "percentChange": "0.000000",
@@ -760,12 +696,10 @@ class RankingCalculationPayloadTest {
                       "name": "Beginner",
                       "rating": {
                         "value": "1.000000",
-                        "system": "NTRP",
                         "publishedLevel": {
                           "value": "1.0",
                           "minRating": "1.0",
-                          "maxRating": "1.5",
-                          "system": "NTRP"
+                          "maxRating": "1.5"
                         }
                       }
                     },
@@ -774,12 +708,10 @@ class RankingCalculationPayloadTest {
                       "name": "Intermediate",
                       "rating": {
                         "value": "3.000000",
-                        "system": "NTRP",
                         "publishedLevel": {
                           "value": "3.0",
                           "minRating": "3.0",
-                          "maxRating": "3.5",
-                          "system": "NTRP"
+                          "maxRating": "3.5"
                         }
                       }
                     }
@@ -793,12 +725,10 @@ class RankingCalculationPayloadTest {
                         "name": "Beginner",
                         "rating": {
                           "value": "1.000000",
-                          "system": "NTRP",
                           "publishedLevel": {
                             "value": "1.0",
                             "minRating": "1.0",
-                            "maxRating": "1.5",
-                            "system": "NTRP"
+                            "maxRating": "1.5"
                           }
                         }
                       }],
@@ -812,12 +742,10 @@ class RankingCalculationPayloadTest {
                         "name": "Intermediate",
                         "rating": {
                           "value": "3.000000",
-                          "system": "NTRP",
                           "publishedLevel": {
                             "value": "3.0",
                             "minRating": "3.0",
-                            "maxRating": "3.5",
-                            "system": "NTRP"
+                            "maxRating": "3.5"
                           }
                         }
                       }],
@@ -848,8 +776,7 @@ class RankingCalculationPayloadTest {
                         "playerId": "P1",
                         "name": "Expert",
                         "rating": {
-                          "value": "7.0",
-                          "system": "NTRP"
+                          "value": "7.0"
                         }
                       }],
                       "teamType": "SINGLES"
@@ -861,8 +788,7 @@ class RankingCalculationPayloadTest {
                         "playerId": "P2",
                         "name": "Advanced",
                         "rating": {
-                          "value": "6.0",
-                          "system": "NTRP"
+                          "value": "6.0"
                         }
                       }],
                       "teamType": "SINGLES"
@@ -903,22 +829,18 @@ class RankingCalculationPayloadTest {
                       "change": "0.000000",
                       "previousRating": {
                         "value": "7.0",
-                        "system": "NTRP",
                         "publishedLevel": {
                           "value": "7.0",
                           "minRating": "7.0",
-                          "maxRating": null,
-                          "system": "NTRP"
+                          "maxRating": null
                         }
                       },
                       "newRating": {
                         "value": "7.000000",
-                        "system": "NTRP",
                         "publishedLevel": {
                           "value": "7.0",
                           "minRating": "7.0",
-                          "maxRating": null,
-                          "system": "NTRP"
+                          "maxRating": null
                         }
                       },
                       "percentChange": "0.000000",
@@ -928,22 +850,18 @@ class RankingCalculationPayloadTest {
                       "change": "0.000000",
                       "previousRating": {
                         "value": "6.0",
-                        "system": "NTRP",
                         "publishedLevel": {
                           "value": "6.0",
                           "minRating": "6.0",
-                          "maxRating": "6.5",
-                          "system": "NTRP"
+                          "maxRating": "6.5"
                         }
                       },
                       "newRating": {
                         "value": "6.000000",
-                        "system": "NTRP",
                         "publishedLevel": {
                           "value": "6.0",
                           "minRating": "6.0",
-                          "maxRating": "6.5",
-                          "system": "NTRP"
+                          "maxRating": "6.5"
                         }
                       },
                       "percentChange": "0.000000",
@@ -956,12 +874,10 @@ class RankingCalculationPayloadTest {
                       "name": "Expert",
                       "rating": {
                         "value": "7.000000",
-                        "system": "NTRP",
                         "publishedLevel": {
                           "value": "7.0",
                           "minRating": "7.0",
-                          "maxRating": null,
-                          "system": "NTRP"
+                          "maxRating": null
                         }
                       }
                     },
@@ -970,12 +886,10 @@ class RankingCalculationPayloadTest {
                       "name": "Advanced",
                       "rating": {
                         "value": "6.000000",
-                        "system": "NTRP",
                         "publishedLevel": {
                           "value": "6.0",
                           "minRating": "6.0",
-                          "maxRating": "6.5",
-                          "system": "NTRP"
+                          "maxRating": "6.5"
                         }
                       }
                     }
@@ -989,12 +903,10 @@ class RankingCalculationPayloadTest {
                         "name": "Expert",
                         "rating": {
                           "value": "7.000000",
-                          "system": "NTRP",
                           "publishedLevel": {
                             "value": "7.0",
                             "minRating": "7.0",
-                            "maxRating": null,
-                            "system": "NTRP"
+                            "maxRating": null
                           }
                         }
                       }],
@@ -1008,12 +920,10 @@ class RankingCalculationPayloadTest {
                         "name": "Advanced",
                         "rating": {
                           "value": "6.000000",
-                          "system": "NTRP",
                           "publishedLevel": {
                             "value": "6.0",
                             "minRating": "6.0",
-                            "maxRating": "6.5",
-                            "system": "NTRP"
+                            "maxRating": "6.5"
                           }
                         }
                       }],

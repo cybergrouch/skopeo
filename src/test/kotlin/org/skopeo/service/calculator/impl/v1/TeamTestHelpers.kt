@@ -8,7 +8,6 @@ import org.skopeo.model.MatchScore
 import org.skopeo.model.PlayerProfile
 import org.skopeo.model.Rating
 import org.skopeo.model.RatingCalculationOptions
-import org.skopeo.model.RatingSystem
 import org.skopeo.model.SetScore
 import org.skopeo.model.Team
 import org.skopeo.model.TeamType
@@ -22,7 +21,6 @@ import org.skopeo.model.TiebreakScore
 fun createSinglesRequest(
     p1Rating: String,
     p2Rating: String,
-    system: RatingSystem,
     p1Games: Int,
     p2Games: Int,
     // "T1" or "T2"
@@ -34,14 +32,14 @@ fun createSinglesRequest(
         PlayerProfile(
             playerId = "P1",
             name = "Player 1",
-            rating = Rating.fromValue(value = p1Rating, system = system),
+            rating = Rating.fromValue(value = p1Rating),
         )
 
     val player2 =
         PlayerProfile(
             playerId = "P2",
             name = "Player 2",
-            rating = Rating.fromValue(value = p2Rating, system = system),
+            rating = Rating.fromValue(value = p2Rating),
         )
 
     val team1 =

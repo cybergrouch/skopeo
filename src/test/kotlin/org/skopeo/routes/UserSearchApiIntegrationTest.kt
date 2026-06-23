@@ -120,7 +120,7 @@ class UserSearchApiIntegrationTest {
         adminToken: String,
         userId: String,
         value: String,
-    ) = put("/api/v1/users/$userId/ratings/NTRP") {
+    ) = put("/api/v1/users/$userId/ratings") {
         header(HttpHeaders.Authorization, "Bearer $adminToken")
         contentType(ContentType.Application.Json)
         setBody(SetRatingRequest(value = value))

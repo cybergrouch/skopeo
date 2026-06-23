@@ -20,7 +20,6 @@ import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.rating.CalculationRequest
 import org.skopeo.dto.rating.SetRatingRequest
 import org.skopeo.dto.rating.toResponse
-import org.skopeo.model.RatingSystem
 import org.skopeo.service.rating.RatingCalculationService
 import org.skopeo.service.rating.RatingService
 
@@ -67,19 +66,17 @@ private fun Route.ratings(service: RatingService) {
     }
     get("/rating-history") {
         respondMappingErrors {
-            val system = call.request.queryParameters["system"]?.let(::ratingSystemOf)
-            val history = service.getHistory(token = verifiedToken(), userId = uuidParam("userId"), system = system)
+            val history = service.getHistory(token = verifiedToken(), userId = uuidParam("userId"))
             call.respond(status = HttpStatusCode.OK, message = history.map { it.toResponse() })
         }
     }
-    put("/ratings/{system}") {
+    put("/ratings") {
         respondMappingErrors {
             val request = call.receive<SetRatingRequest>()
             val rating =
                 service.setRating(
                     token = verifiedToken(),
                     userId = uuidParam("userId"),
-                    system = ratingSystemOf(call.parameters["system"]),
                     value = request.value,
                     confidence = request.confidence,
                 )
@@ -87,10 +84,3 @@ private fun Route.ratings(service: RatingService) {
         }
     }
 }
-
-private fun ratingSystemOf(value: String?): RatingSystem =
-    try {
-        RatingSystem.valueOf(value ?: error("missing"))
-    } catch (e: IllegalArgumentException) {
-        throw IllegalArgumentException("Invalid rating system '$value' (expected NTRP or UTR)", e)
-    }

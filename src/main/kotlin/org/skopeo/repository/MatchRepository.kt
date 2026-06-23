@@ -16,7 +16,6 @@ import org.skopeo.model.MatchFormat
 import org.skopeo.model.MatchSetResult
 import org.skopeo.model.MatchSide
 import org.skopeo.model.MatchStatus
-import org.skopeo.model.RatingSystem
 import org.skopeo.model.TeamType
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -29,15 +28,14 @@ import java.util.UUID
 class MatchRepository {
     fun createFixture(command: CreateFixtureCommand): Match =
         transaction {
-            val team1 = createTeam(command.team1Name, command.matchType, command.ratingSystem, command.team1UserIds)
-            val team2 = createTeam(command.team2Name, command.matchType, command.ratingSystem, command.team2UserIds)
+            val team1 = createTeam(command.team1Name, command.matchType, command.team1UserIds)
+            val team2 = createTeam(command.team2Name, command.matchType, command.team2UserIds)
             val matchId =
                 MatchesTable.insertAndGetId {
                     it[team1Id] = team1
                     it[team2Id] = team2
                     it[matchType] = command.matchType.name
                     it[matchFormat] = command.matchFormat.name
-                    it[ratingSystem] = command.ratingSystem.name
                     it[matchDate] = command.matchDate
                     it[status] = MatchStatus.SCHEDULED.name
                     it[venue] = command.venue
@@ -158,14 +156,12 @@ class MatchRepository {
     private fun createTeam(
         name: String,
         type: TeamType,
-        system: RatingSystem,
         userIds: List<UUID>,
     ): UUID {
         val teamId =
             TeamsTable.insertAndGetId {
                 it[TeamsTable.name] = name
                 it[teamType] = type.name
-                it[ratingSystem] = system.name
                 it[isTemporary] = true
             }.value
         userIds.forEachIndexed { index, uid ->
@@ -182,7 +178,6 @@ class MatchRepository {
         val row = MatchesTable.selectAll().where { MatchesTable.id eq id }.singleOrNull() ?: return null
         return Match(
             id = id,
-            ratingSystem = RatingSystem.valueOf(row[MatchesTable.ratingSystem]),
             matchType = TeamType.valueOf(row[MatchesTable.matchType]),
             matchFormat = MatchFormat.valueOf(row[MatchesTable.matchFormat]),
             matchDate = row[MatchesTable.matchDate],

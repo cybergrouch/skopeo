@@ -23,7 +23,6 @@ import org.skopeo.model.MatchScore
 import org.skopeo.model.PlayerProfile
 import org.skopeo.model.Rating
 import org.skopeo.model.RatingCalculationOptions
-import org.skopeo.model.RatingSystem
 import org.skopeo.model.SetScore
 import org.skopeo.model.Team
 import org.skopeo.model.TeamType
@@ -90,7 +89,6 @@ class PerformanceBasedRankingCalculatorImplTest {
         return createSinglesRequest(
             p1Rating = p1Rating,
             p2Rating = p2Rating,
-            system = RatingSystem.NTRP,
             p1Games = p1Games,
             p2Games = p2Games,
             winner = teamWinner,
@@ -409,7 +407,6 @@ class PerformanceBasedRankingCalculatorImplTest {
                 createSinglesRequest(
                     p1Rating = "2.5",
                     p2Rating = "3.5",
-                    system = RatingSystem.NTRP,
                     p1Games = 6,
                     p2Games = 0,
                     winner = "T1",
@@ -698,7 +695,6 @@ class PerformanceBasedRankingCalculatorImplTest {
             return createSinglesRequest(
                 p1Rating = p1Rating,
                 p2Rating = p2Rating,
-                system = RatingSystem.NTRP,
                 p1Games = p1Games,
                 p2Games = p2Games,
                 winner = winner,
@@ -717,14 +713,14 @@ class PerformanceBasedRankingCalculatorImplTest {
             PlayerProfile(
                 playerId = "P123",
                 name = "John Doe",
-                rating = Rating.fromValue(value = "4.5", system = RatingSystem.NTRP),
+                rating = Rating.fromValue(value = "4.5"),
             )
 
         val player2 =
             PlayerProfile(
                 playerId = "P456",
                 name = "Jane Smith",
-                rating = Rating.fromValue(value = "4.0", system = RatingSystem.NTRP),
+                rating = Rating.fromValue(value = "4.0"),
             )
 
         val team1 =

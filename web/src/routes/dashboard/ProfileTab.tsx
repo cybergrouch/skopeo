@@ -24,7 +24,7 @@ export function ProfileTab({ userId, capabilities }: ProfileTabProps) {
   const ratingsQuery = useGetApiV1UsersUserIdRatings(userId, {
     query: { enabled },
   })
-  const historyQuery = useGetApiV1UsersUserIdRatingHistory(userId, undefined, {
+  const historyQuery = useGetApiV1UsersUserIdRatingHistory(userId, {
     query: { enabled },
   })
 
@@ -66,10 +66,10 @@ export function ProfileTab({ userId, capabilities }: ProfileTabProps) {
             <ul className="space-y-2">
               {ratings.map((rating) => (
                 <li
-                  key={rating.system}
+                  key={rating.value}
                   className="flex items-center justify-between rounded-lg border p-3 text-sm"
                 >
-                  <span className="font-medium">{rating.system}</span>
+                  <span className="font-medium">NTRP</span>
                   <span>
                     {rating.value}
                     {rating.level ? ` · ${rating.level}` : ''}
@@ -105,7 +105,7 @@ export function ProfileTab({ userId, capabilities }: ProfileTabProps) {
                   className="flex items-center justify-between rounded-lg border p-3 text-sm"
                 >
                   <span className="text-muted-foreground">
-                    {entry.calculatedAt.slice(0, 10)} · {entry.system}
+                    {entry.calculatedAt.slice(0, 10)}
                   </span>
                   <span>
                     {entry.previousRating} → {entry.newRating}

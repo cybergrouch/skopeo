@@ -9,13 +9,12 @@ import java.time.LocalDateTime
 import java.util.UUID
 
 /**
- * A user's current rating in one system (NTRP or UTR), as stored. The continuous
+ * A user's current NTRP rating, as stored. The continuous
  * [currentRating] is paired with its discrete [currentLevel] (the published level);
  * [confidence] starts low and converges with matches played.
  */
 data class UserRating(
     val userId: UUID,
-    val system: RatingSystem,
     val currentRating: BigDecimal,
     val currentLevel: String?,
     val confidence: BigDecimal,
@@ -31,7 +30,6 @@ data class RatingHistoryEntry(
     val id: UUID,
     val userId: UUID,
     val matchId: UUID?,
-    val system: RatingSystem,
     val previousRating: BigDecimal,
     val newRating: BigDecimal,
     val ratingChange: BigDecimal,
@@ -55,7 +53,6 @@ data class PendingAssessment(
 data class RatingHistoryWrite(
     val userId: UUID,
     val matchId: UUID,
-    val system: RatingSystem,
     val previousRating: BigDecimal,
     val newRating: BigDecimal,
     val ratingChange: BigDecimal,
