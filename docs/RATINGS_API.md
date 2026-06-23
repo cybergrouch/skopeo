@@ -6,10 +6,10 @@ entered into a match.
 
 ## Model
 
-A user has at most one rating **per system** (`NTRP`, `UTR`) in `user_ratings`: a continuous
-`value` paired with its discrete published `level` (e.g. `4.3` → level `4.0`), a `confidence`
-(0–1, low at first, converges with play), `matchesPlayed`, and `lastMatchDate`. Rating changes
-accrue in `user_rating_history` (written by the match flow in PR2; readable here).
+A user has at most one rating in `user_ratings`: a continuous `value` paired with its discrete
+published `level` (e.g. `4.3` → level `4.0`), a `confidence` (0–1, low at first, converges with
+play), `matchesPlayed`, and `lastMatchDate`. Rating changes accrue in `user_rating_history`
+(written by the match flow in PR2; readable here).
 
 ## Assessment policy
 
@@ -22,19 +22,19 @@ accrue in `user_rating_history` (written by the match flow in PR2; readable here
 
 | Method | Path | Access |
 |---|---|---|
-| `GET` | `/api/v1/users/{userId}/ratings` | self-or-admin — current NTRP/UTR ratings |
-| `GET` | `/api/v1/users/{userId}/rating-history` | self-or-admin — history (`?system=NTRP`) |
-| `PUT` | `/api/v1/users/{userId}/ratings/{system}` | **admin only** — set/adjust `{ "value": "4.0", "confidence"?: "0.5" }` |
+| `GET` | `/api/v1/users/{userId}/ratings` | self-or-admin — the user's rating (a list, 0 or 1) |
+| `GET` | `/api/v1/users/{userId}/rating-history` | self-or-admin — history |
+| `PUT` | `/api/v1/users/{userId}/ratings` | **admin only** — set/adjust `{ "value": "4.0", "confidence"?: "0.5" }` |
 | `GET` | `/api/v1/users/pending-assessment` | **admin only** — users with no rating yet |
 
-Setting a rating validates the system range (NTRP 1.0–7.0, UTR 1.0–16.0) and derives the
-published level via the calculator's `Level` logic. Values are stored/returned at `NUMERIC(10,6)`
-precision (e.g. `"4.000000"`).
+Setting a rating validates the NTRP range (1.0–7.0) and derives the published level via the
+calculator's `Level` logic. Values are stored/returned at `NUMERIC(10,6)` precision (e.g.
+`"4.000000"`).
 
 ### Status codes
 
-`200` ok · `400` invalid rating value/confidence or unknown system · `401` missing/invalid
-token · `403` not self/admin (reads) or not admin (set / pending list) · `404` no such user.
+`200` ok · `400` invalid rating value/confidence · `401` missing/invalid token · `403` not
+self/admin (reads) or not admin (set / pending list) · `404` no such user.
 
 ## Layering
 
@@ -45,7 +45,7 @@ derivation) → `repository/RatingRepository.kt` (Exposed over `user_ratings` /
 ## Next (PR2 — fixtures & results)
 
 A HOST/ADMINISTRATOR creates a **match fixture** (participants, who must already be rated;
-system; date) then later **uploads results**, which runs the calculator on the stored ratings
+date) then later **uploads results**, which runs the calculator on the stored ratings
 and writes the new ratings + history. Adds the `matches`/`teams`/`match_sets` mappings and a
 small migration (nullable `winner_team_id` for scheduled fixtures + `created_by`/`recorded_by`).
 
@@ -62,11 +62,11 @@ onboarding.
 new/uncertain ratings converge faster:
 
 1. **Multiple seed sources**, each recorded on the rating (a `source` flag, e.g.
-   `ADMIN_ASSESSED`, `SELF_RATED`, `MATCH_DERIVED`, and later imported/`UTR_SYNCED`):
+   `ADMIN_ASSESSED`, `SELF_RATED`, `MATCH_DERIVED`, and later imported/`EXTERNAL_SYNCED`):
    - *Admin-assessed* (current) — used when there's data; starts at higher confidence.
    - *Self-rated* — the player rates themselves at sign-up; **flagged as provisional** and
      started at low confidence (and surfaced as "provisional" in the UI).
-   - *Automated/derived* — e.g. a short calibration questionnaire, or syncing an external UTR.
+   - *Automated/derived* — e.g. a short calibration questionnaire, or syncing an external rating.
 
 2. **Accelerated convergence for uncertain ratings.** A provisional/self-rated player's rating
    should move faster toward its true value. The simplest first cut is an **elevated K-factor
@@ -123,14 +123,14 @@ unverified inputs, and limit how much a noisy newcomer perturbs everyone else.**
 
 ### K-factor calibration (proposal — keep for a later item)
 
-Today the calibration anchor is `K = 0.16` for NTRP (`0.40` for UTR = `0.16 × 2.5`); see
+Today the calibration anchor is `K = 0.16` for NTRP; see
 [`RATING_CALCULATION_ALGORITHM.md`](RATING_CALCULATION_ALGORITHM.md) §3.3. A shutout between
 equals moves a rating by the full `±0.160`, which may be **too large a step** for an established
 player.
 
 Proposal to evaluate later: because ratings are computed to 6 decimal places, there's room to
-**shrink the established-player K by an order of magnitude — `0.16 → 0.016`** (and UTR
-`0.40 → 0.040`), giving steadier, finer movement once a rating is trustworthy. Then reuse the
+**shrink the established-player K by an order of magnitude — `0.16 → 0.016`**,
+giving steadier, finer movement once a rating is trustworthy. Then reuse the
 old value as the **provisional K-factor `0.16` (~10× the new baseline)** so unverified/new
 ratings still converge aggressively. This dovetails with the confidence-driven-K idea above:
 `0.016` is the low-uncertainty floor, `0.16` the high-uncertainty ceiling, with
@@ -139,8 +139,7 @@ ratings still converge aggressively. This dovetails with the confidence-driven-K
 Caveat: K is the calibration anchor for the whole algorithm — changing it shifts every derived
 per-match delta and the worked tables in `RATING_CALCULATION_ALGORITHM.md` (§3.3, dominance and
 threshold tables). So this is a **calibration exercise**, not a one-line constant change: re-derive
-the expected per-match changes, re-validate convergence speed, and refresh the documented tables
-and the `NTRPvsUTRComparison` outputs.
+the expected per-match changes, re-validate convergence speed, and refresh the documented tables.
 
 ### Convergence-based graduation (proposal — keep for a later item)
 

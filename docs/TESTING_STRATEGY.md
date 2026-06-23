@@ -4,6 +4,10 @@
 
 Skopeo employs a comprehensive testing strategy that balances speed, isolation, and confidence. The testing approach is designed around the principle of **pure functions and dependency injection**, which enables extensive unit testing without mocking.
 
+**Toolchain:** the backend tests are JUnit 5 + Kotest assertions + Ktor `testApplication`, with Testcontainers (PostgreSQL) for the database integration tests. The web client (`web/`) has its own Vitest suite (run via `npm run test:ci`).
+
+**Test counts** drift constantly, so this doc avoids hard-coding a total. As of this writing the backend has 200+ test methods across ~30 test classes, plus the web Vitest suite — for the authoritative current numbers, see the CI "Test Report" / "Web Test Report" checks.
+
 ---
 
 ## Testing Pyramid
@@ -11,17 +15,17 @@ Skopeo employs a comprehensive testing strategy that balances speed, isolation, 
 ```
            /\
           /  \
-         /E2E \        End-to-End Tests (0)
+         /E2E \        End-to-End Tests (none yet)
         /------\       - Full system tests
        /        \      - External dependencies
       / Integration\   - Slowest, broadest
      /------------\
-    /              \   Integration Tests (16 tests)
-   / API/HTTP Layer \  - Test HTTP endpoints
-  /------------------\ - JSON serialization
- /                    \ - Route handling
+    /              \   Integration Tests
+   / API/HTTP Layer \  - Test HTTP endpoints (Ktor testApplication)
+  /------------------\ - JSON serialization, route handling
+ /                    \ - DB integration via Testcontainers (PostgreSQL)
 /     Unit Tests       \
-/----------------------\ Unit Tests (107 tests)
+/----------------------\ Unit Tests (the majority)
                          - Pure function testing
                          - Business logic
                          - Fast, isolated
@@ -30,41 +34,45 @@ Skopeo employs a comprehensive testing strategy that balances speed, isolation, 
 
 ### Distribution
 
-| Layer | Tests | Percentage | Avg Speed | Purpose |
-|-------|-------|------------|-----------|---------|
-| Unit | 107 | 87% | fast | Algorithm correctness, pure logic |
-| Integration | 16 | 13% | slower | API contracts, HTTP layer |
-| E2E | 0 | 0% | N/A | Not yet implemented |
-| **Total** | **123** | **100%** | ~6s | Full coverage |
+The bulk of the suite is fast, isolated **unit tests** of the pure calculator,
+with a smaller layer of **integration tests** covering the HTTP API and (where
+applicable) the database. There are **no E2E tests** yet. Exact counts shift as
+features land — consult the CI test reports rather than a fixed number here.
+
+| Layer | Speed | Purpose |
+|-------|-------|---------|
+| Unit | fast | Algorithm correctness, pure logic (no infra) |
+| Integration | slower | API contracts, HTTP layer, DB (Testcontainers) |
+| E2E | N/A | Not yet implemented |
 
 ---
 
 ## Test Categories
 
-### 1. Unit Tests (107 tests)
+### 1. Unit Tests
 
 **Location:** `src/test/kotlin/org/skopeo/service/calculator/impl/`
 
-Tests pure business logic in complete isolation - no infrastructure, no HTTP, no JSON.
+Tests pure business logic in complete isolation - no infrastructure, no HTTP, no JSON. This is the largest part of the suite.
 
-#### 1.1 PerformanceBasedRankingCalculatorImplTest (106 tests)
+#### 1.1 PerformanceBasedRankingCalculatorImplTest
 
 **File:** `impl/v1/PerformanceBasedRankingCalculatorImplTest.kt`
 
 **Purpose:** Test the core ranking calculation algorithm
 
 Covers, largely via parameterized scenarios (see `TestScenarios.kt`):
-- NTRP and UTR rating delta calculations
-- Boundary enforcement (NTRP 1.0-7.0, UTR >= 1.0)
+- NTRP rating delta calculations
+- Boundary enforcement (NTRP 1.0-7.0)
 - Dominance, upset, and tiebreak handling
-- Rating smoothing (nested suites: NTRP Smoothing, UTR Smoothing, Edge Cases)
+- Rating smoothing (nested suites: NTRP Smoothing, Edge Cases)
 - Audit trail content and structure (nested suite: Audit Trail)
 
-#### 1.2 RatingChangeReport (1 test)
+#### 1.2 NtrpMatchupMatrixReport
 
-**File:** `impl/v1/RatingChangeReport.kt`
+**File:** `impl/v1/NtrpMatchupMatrixReport.kt`
 
-**Purpose:** Generate the full rating-change table for all match-outcome scenarios in both NTRP and UTR (embedded in RATING_CALCULATION_ALGORITHM.md) and verify the 2.5× K-factor scaling
+**Purpose:** Generate the full rating-change matrix for match-outcome scenarios (embedded in RATING_CALCULATION_ALGORITHM.md) and verify K-factor scaling
 
 Support files (no tests of their own): `TestScenarios.kt`, `TeamTestHelpers.kt`, `RankingTestCase.kt`.
 
@@ -75,19 +83,27 @@ Support files (no tests of their own): `TestScenarios.kt`, `TeamTestHelpers.kt`,
 
 ---
 
-### 2. Integration Tests (16 tests)
+### 2. Integration Tests
 
 **Location:** `src/test/kotlin/org/skopeo/`
 
 Tests the full HTTP API stack including routing, serialization, and validation.
-All boot the application with `module(initDatabase = false)` - no database required.
+The stateless calculator endpoints boot the application with
+`module(initDatabase = false)` (no database required); persistence-layer tests
+spin up a real PostgreSQL via **Testcontainers**
+(`testsupport/PostgresTestDatabase.kt`), applying the Flyway migration.
 
-| Class | Tests | Purpose |
-|-------|-------|---------|
-| `SkopeoApplicationTests` | 3 | Root, health, and metrics endpoints |
-| `OpenAPIIntegrationTest` | 2 | `/openapi.yaml` spec and Swagger UI |
-| `routes/RankingCalculationApiErrorTest` | 4 | API-level success and error responses |
-| `service/calculator/RankingCalculationPayloadTest` | 7 | Exact JSON payload snapshot tests |
+Representative classes (not exhaustive — see CI for the full list):
+
+| Class | Purpose |
+|-------|---------|
+| `SkopeoApplicationTests` | Root, health, and metrics endpoints |
+| `OpenAPIIntegrationTest` | `/openapi.yaml` spec and Swagger UI |
+| `routes/RankingCalculationApiErrorTest` | API-level success and error responses |
+| `routes/*ApiIntegrationTest` | Per-resource route integration (user, rating, match, contact, name, capability) |
+| `routes/UserRoutesAuthTest` | Auth-protected route behavior |
+| `repository/*RepositoryTest` | Exposed repositories against Testcontainers PostgreSQL |
+| `service/calculator/RankingCalculationPayloadTest` | Exact JSON payload snapshot tests |
 
 ---
 
@@ -187,17 +203,24 @@ fun testRejectsInvalidJSON() = testApplication {
 
 ```
 src/test/kotlin/org/skopeo/
-├── service/calculator/
-│   ├── impl/v1/
-│   │   ├── PerformanceBasedRankingCalculatorImplTest.kt  # Core algorithm tests
-│   │   ├── RatingChangeReport.kt                         # Rating-change table for both systems
-│   │   ├── TestScenarios.kt                              # Parameterized scenarios
-│   │   └── TeamTestHelpers.kt                            # Test helpers
-│   ├── impl/RankingTestCase.kt                           # Test case model
-│   └── RankingCalculationPayloadTest.kt                  # Payload snapshot tests
-├── routes/RankingCalculationApiErrorTest.kt              # API integration tests
-├── OpenAPIIntegrationTest.kt                             # OpenAPI/Swagger tests
-└── SkopeoApplicationTests.kt                             # Application tests
+├── service/
+│   ├── calculator/
+│   │   ├── impl/v1/
+│   │   │   ├── PerformanceBasedRankingCalculatorImplTest.kt  # Core algorithm + audit suite
+│   │   │   ├── NtrpMatchupMatrixReport.kt                    # Rating-change matrix report
+│   │   │   ├── TestScenarios.kt                              # Parameterized scenarios
+│   │   │   └── TeamTestHelpers.kt                            # Test helpers
+│   │   ├── impl/RankingTestCase.kt                           # Test case model
+│   │   └── RankingCalculationPayloadTest.kt                  # Payload snapshot tests
+│   ├── rating/  contact/  match/  name/  capability/  user/  # Service-layer unit tests
+├── repository/*RepositoryTest.kt                            # Exposed repos (Testcontainers PG)
+├── routes/*ApiIntegrationTest.kt                            # Per-resource API integration tests
+├── routes/RankingCalculationApiErrorTest.kt                # Calculator API error tests
+├── routes/UserRoutesAuthTest.kt                            # Auth-protected route tests
+├── model/*Test.kt                                          # Domain model validation tests
+├── testsupport/                                            # PostgresTestDatabase, TestFirebaseAuth
+├── OpenAPIIntegrationTest.kt                               # OpenAPI/Swagger tests
+└── SkopeoApplicationTests.kt                               # Application bootstrap tests
 ```
 
 ### Naming Conventions
@@ -247,7 +270,6 @@ fun test() {
 private fun createRequest(
     player1Rating: Double,
     player2Rating: Double,
-    system: RatingSystem,
     sets: List<SetScore>
 ): RankingCalculationRequest {
     // Build request
@@ -255,7 +277,7 @@ private fun createRequest(
 
 @Test
 fun test() {
-    val request = createRequest(4.5, 4.0, NTRP, sets)
+    val request = createRequest(4.5, 4.0, sets)
     // Test logic
 }
 ```
@@ -267,7 +289,6 @@ fun test() {
 @Test
 fun testEverything() {
     // Test NTRP boundaries
-    // Test UTR boundaries
     // Test audit trail
     // Test response structure
     // 50 lines of assertions...
@@ -321,23 +342,22 @@ fun test() {
 
 ## Test Coverage Goals
 
-### Current Coverage
+### Where Tests Concentrate
 
-| Component | Unit Tests | Integration Tests | Total | Status |
-|-----------|------------|-------------------|-------|--------|
-| RankingCalculator | 26 | 9 | 35 | ✅ Excellent |
-| AuditTrail | 14 | 0 | 14 | ✅ Excellent |
-| API Routes | 0 | 21 | 21 | ✅ Good |
-| Data Models | 0 | 30 | 30 | ✅ Good (via integration) |
+| Area | Test type | Status |
+|------|-----------|--------|
+| `RankingCalculator` algorithm | Unit | ✅ Heavily covered (parameterized scenarios) |
+| Audit trail | Unit (nested suite) | ✅ Covered |
+| Service layer (rating, user, match, …) | Unit | ✅ Covered |
+| Repositories | Integration (Testcontainers) | ✅ Covered |
+| API routes | Integration (`testApplication`) | ✅ Covered |
+| Domain models | Unit | ✅ Covered |
 
 ### Coverage Targets
 
-| Metric | Target | Current | Status |
-|--------|--------|---------|--------|
-| Line Coverage | 80%+ | ~85% | ✅ |
-| Branch Coverage | 75%+ | ~80% | ✅ |
-| Unit Tests | 50%+ | 57% | ✅ |
-| Integration Tests | 30-50% | 43% | ✅ |
+The enforced JaCoCo gate is **75% line / 70% branch** over the measured
+(service-layer) code; see [CODE_COVERAGE.md](./CODE_COVERAGE.md) for what is
+measured vs excluded, and the CI coverage summary for current figures.
 
 ---
 
@@ -469,25 +489,28 @@ See [CODE_COVERAGE.md](./CODE_COVERAGE.md) for detailed coverage documentation.
    - Run manual smoke tests
    - Verify test coverage
 
-### GitHub Actions Example
+The actual workflow runs `./gradlew check` (which chains compile → ktlint →
+detekt → tests → coverage verification) plus a separate `web` job that runs the
+Vitest suite. See [CICD.md](./CICD.md) and `.github/workflows/ci.yml` for the
+canonical configuration; a simplified illustration:
 
 ```yaml
-name: Tests
+name: CI
 on: [push, pull_request]
 jobs:
-  test:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-java@v2
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
         with:
-          java-version: '17'
-      - name: Run tests
-        run: ./gradlew test
-      - name: Generate coverage
-        run: ./gradlew jacocoTestReport
-      - name: Upload coverage
-        uses: codecov/codecov-action@v2
+          distribution: temurin
+          java-version: |
+            17
+            21
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Build, lint, detekt, test, verify coverage
+        run: ./gradlew check
 ```
 
 ---
@@ -542,9 +565,10 @@ jobs:
 
 Skopeo uses a **test-first, pure-function-focused** testing strategy:
 
-1. **57% Unit Tests** - Fast, isolated, comprehensive
-2. **43% Integration Tests** - API contracts, HTTP layer
-3. **0% E2E Tests** - Not yet needed
+1. **Unit tests (the majority)** - Fast, isolated, comprehensive
+2. **Integration tests** - API contracts and HTTP layer (Ktor `testApplication`), plus repositories against Testcontainers PostgreSQL
+3. **No E2E tests** - Not yet needed
+4. **Web suite** - the `web/` client has its own Vitest tests (run in the CI `web` job)
 
 The pure function design of `RankingCalculator` enables extensive unit testing without mocking, resulting in:
 - Faster test execution
@@ -552,7 +576,8 @@ The pure function design of `RankingCalculator` enables extensive unit testing w
 - Better coverage
 - Easier maintenance
 
-Total: **123 tests** providing confidence in both business logic and API contracts.
+For the authoritative current test counts, see the CI "Test Report" and "Web
+Test Report" checks rather than a fixed number here.
 
 ---
 

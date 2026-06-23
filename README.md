@@ -4,11 +4,13 @@ A Ktor API for dynamic calculation of tennis rankings based on match results.
 
 ## Overview
 
-Skopeo provides real-time ranking calculations for tennis players using either NTRP (National Tennis Rating Program) or UTR (Universal Tennis Rating) systems. The API calculates updated rankings for both players based on match outcomes, deriving expected results from the difference in their current rankings.
+Skopeo provides real-time ranking calculations for tennis players using the NTRP (National Tennis Rating Program) system. The API calculates updated rankings for both players based on match outcomes, deriving expected results from the difference in their current rankings. NTRP is the only supported rating system by design — UTR support was intentionally removed.
+
+Beyond the stateless calculator, Skopeo persists players, matches, and ratings: admins set each player's initial rating, hosts create match fixtures and upload results, an admin-triggered calculation turns those results into rating changes (dry-run by default, explicit commit to write), and every change is recorded in rating history. A capability-gated React web UI (`web/`) wraps it all — sign-up plus a dashboard with Profile, Matches, Research, and Admin tabs.
 
 ## Features
 
-### ✅ Implemented Features (v0.1)
+### ✅ Implemented Features
 
 #### 1. **Rating Calculation Engine** (Core)
 The heart of the Skopeo system - a sophisticated performance-based rating calculator.
@@ -19,12 +21,11 @@ The heart of the Skopeo system - a sophisticated performance-based rating calcul
   - Match dominance (games won ratio)
   - Expected vs actual performance
   - Upset detection and amplification
-- **Multiple Rating Systems**: Full support for both rating systems
+- **NTRP Rating System**: NTRP only by design (UTR was intentionally removed)
   - NTRP: 1.0-7.0 range with 0.5 published level increments
-  - UTR: 1.0-16.0 range with 1.0 published level increments
+  - Single K-factor of 0.16 calibrated to the NTRP range
 - **Published Levels**: Discrete rating buckets with automatic level change detection
-  - v1: Stateless calculation (published level calculated dynamically)
-  - v2 ready: Database-backed with scheduled updates (future)
+  - Stateless calculator derives the published level dynamically from the value
 - **Rating Smoothing**: USTA NTRP Dynamic-style smoothing for stable ratings
   - Configurable smoothing factors (0.3, 0.5, 0.7)
   - Reduces volatility from single exceptional performances
@@ -69,6 +70,23 @@ Comprehensive testing and code quality infrastructure.
   - Style enforcement
   - Best practice rules
 
+#### 5. **Persistence** (Players, Matches, Ratings)
+Built on top of the stateless calculator (PostgreSQL + Flyway + Exposed).
+
+- **Player profiles**: Sign-up provisions a profile from the verified Firebase token; `sex` (Male/Female) and date of birth are required. Names and contacts are append-only sub-resources.
+- **Capability-based authorization**: PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR grants gate every operation.
+- **Admin-set initial ratings**: Admins assign each player's starting rating; a pending-assessment list surfaces players without one.
+- **Match fixtures + results**: Hosts/admins create fixtures and upload results. Recording a result does not itself change ratings.
+- **Rating-calculation trigger**: Admins run the calculation (`POST /api/v1/ratings/calculations`) over matches pending calculation. **Dry-run is the default** (full preview, no writes); an explicit `{"dryRun": false}` commits ratings, history, and `rated_at`.
+- **Rating history**: Every change is recorded and readable per player.
+
+#### 6. **Web UI** (`web/`)
+A capability-gated React + Vite single-page app over the API.
+
+- **Authentication**: Firebase-auth sign-up and login.
+- **Dashboard**: Profile / Matches / Research / Admin tabs, shown according to the signed-in user's capabilities (Matches/Research need match-management capability; Admin needs ADMINISTRATOR).
+- **Generated API client**: Typed client generated from the OpenAPI spec under `web/src/api/generated/`.
+
 ### Input/Output
 
 **Input** (POST `/api/v1/calculate-ranking`):
@@ -78,12 +96,12 @@ Comprehensive testing and code quality infrastructure.
     "P1": {
       "playerId": "P1",
       "name": "Player 1",
-      "rating": { "value": "4.5", "system": "NTRP" }
+      "rating": { "value": "4.5" }
     },
     "P2": {
       "playerId": "P2",
       "name": "Player 2",
-      "rating": { "value": "4.0", "system": "NTRP" }
+      "rating": { "value": "4.0" }
     }
   },
   "matchScore": {
@@ -100,8 +118,8 @@ Comprehensive testing and code quality infrastructure.
   "ratingChanges": {
     "P1": {
       "change": "+0.032000",
-      "previousRating": { "value": "4.5", "system": "NTRP", "publishedLevel": {...} },
-      "newRating": { "value": "4.532000", "system": "NTRP", "publishedLevel": {...} },
+      "previousRating": { "value": "4.5", "publishedLevel": {...} },
+      "newRating": { "value": "4.532000", "publishedLevel": {...} },
       "percentChange": "+0.71%",
       "levelChanged": false
     },
@@ -110,15 +128,16 @@ Comprehensive testing and code quality infrastructure.
 }
 ```
 
-## Current Limitations
+## Persistence Status
 
-The current version (v0.1) is **stateless** and does not persist:
-- ❌ Player profiles (no database storage)
-- ❌ Historical ratings (no rating history)
-- ❌ Match results (no match database)
-- ❌ Player rankings (no leaderboard/ranking table)
+Skopeo persists its core data (PostgreSQL + Flyway + Exposed):
+- ✅ Player profiles (database-backed, capability-gated)
+- ✅ Admin-set initial ratings + rating history
+- ✅ Match fixtures and uploaded results
+- ✅ Admin-triggered rating calculation (dry-run default, explicit commit)
+- ✅ Web UI (sign-up + Profile / Matches / Research / Admin dashboard)
 
-These limitations will be addressed in the MVP roadmap below.
+The `POST /api/v1/calculate-ranking` endpoint remains a stateless "what-if" calculator that writes nothing. Leaderboards/ranking tables are not yet built (see roadmap below).
 
 ## Product Roadmap
 
@@ -129,21 +148,21 @@ Skopeo's evolution from a **stateless rating calculator** to a **comprehensive p
 | # | Feature | Priority | Status | Dependencies | Description |
 |---|---------|----------|--------|--------------|-------------|
 | **CORE SYSTEM (IMPLEMENTED)** |
-| 1 | Rating Calculation Engine | ✅ DONE | Implemented | None | Performance-based Elo calculator with NTRP/UTR support |
+| 1 | Rating Calculation Engine | ✅ DONE | Implemented | None | Performance-based Elo calculator (NTRP only; UTR removed) |
 | 2 | REST API | ✅ DONE | Implemented | #1 | HTTP API with JSON serialization |
 | 3 | API Documentation | ✅ DONE | Implemented | #2 | Swagger UI + OpenAPI 3.0 spec |
 | 4 | Quality Assurance | ✅ DONE | Implemented | All | 123 tests, coverage, code quality tools |
-| **MVP REQUIREMENTS (REQUIRED FOR PRODUCTION)** |
-| 5 | Player Profile Management | 🔴 CRITICAL | Not Started | Database | CRUD operations for player profiles with photos |
-| 6 | Player Identity Verification (KYC) 🇵🇭 | 🔴 CRITICAL | Not Started | #5 | Philippine government ID validation (Passport, DL, UMID, SSS, GSIS, National ID) |
-| 6a | Social Media Verification | 🟡 NICE-TO-HAVE | Not Started | #6 | Automated verification via social media accounts (Facebook, Instagram, Twitter) |
-| 7 | Match Tracking System | 🔴 CRITICAL | Not Started | #5, Database | CRUD for matches with score validation and audit trail |
-| 8 | Player Ranking System | 🔴 CRITICAL | Not Started | #5, #7, #1 | Dynamic rankings, leaderboards, statistics, rating history |
-| 9 | System Integration | 🔴 CRITICAL | Not Started | #5-#8 | Real-time updates across all MVP components |
+| 5 | Player Profile Management | ✅ DONE | Implemented | Database | Capability-gated profiles; sex + date of birth required at sign-up |
+| 6 | Match Tracking System | ✅ DONE | Implemented | #5, Database | Match fixtures + result upload with score validation |
+| 7 | Rating Persistence | ✅ DONE | Implemented | #5, #6, #1 | Admin-set initial ratings, calculation trigger (dry-run/commit), rating history |
+| 8 | Web UI | ✅ DONE | Implemented | #5-#7 | Sign-up + Profile / Matches / Research / Admin dashboard |
+| **MVP REQUIREMENTS (REMAINING)** |
+| 9 | Player Identity Verification (KYC) 🇵🇭 | 🔴 CRITICAL | Not Started | #5 | Philippine government ID validation (Passport, DL, UMID, SSS, GSIS, National ID) |
+| 9a | Social Media Verification | 🟡 NICE-TO-HAVE | Not Started | #9 | Automated verification via social media accounts (Facebook, Instagram, Twitter) |
+| 10 | Player Ranking System | 🔴 CRITICAL | Not Started | #5, #6, #7 | Dynamic rankings, leaderboards, statistics |
 | **NICE-TO-HAVE FEATURES (ENHANCE MVP)** |
-| 10 | Seeding Generation | 🟡 NICE-TO-HAVE | Not Started | #8 | Auto-generate tournament seedings from current rankings |
-| 11 | UTR Integration | 🟡 NICE-TO-HAVE | Not Started | #8, External API | Sync with official UTR ratings for cross-validation |
-| 12 | Dynamic Rating Confidence | 🟡 NICE-TO-HAVE | Not Started | #8 | Time-based confidence score for ratings (accounts for player inactivity) |
+| 11 | Seeding Generation | 🟡 NICE-TO-HAVE | Not Started | #10 | Auto-generate tournament seedings from current rankings |
+| 12 | Dynamic Rating Confidence | 🟡 NICE-TO-HAVE | Not Started | #10 | Time-based confidence score for ratings (accounts for player inactivity) |
 | **POST-MVP FEATURES (FUTURE ENHANCEMENTS)** |
 | 13 | Doubles Support | 🟢 FUTURE | Not Started | #7, #8 | Support for doubles matches (2v2) with team ratings |
 | 14 | Tournament Management | 🟢 FUTURE | Not Started | #8, #10 | Create and manage tournaments with brackets |
@@ -174,7 +193,6 @@ Complete player lifecycle management with identity verification.
   - Profile photo upload
 - ✅ Update player information
   - Contact details, preferences
-  - Rating system preference (NTRP vs UTR)
 - ✅ View player profile
   - Current rating and published level
   - Match history summary
@@ -209,8 +227,6 @@ players
   - phone (String)
   - birthdate (Date)
   - current_rating_ntrp (Decimal)
-  - current_rating_utr (Decimal)
-  - preferred_system (Enum: NTRP|UTR)
   - photo_url (String)
   - status (Enum: ACTIVE|INACTIVE|SUSPENDED)
   - created_at (Timestamp)
@@ -267,7 +283,6 @@ matches
   - surface (Enum: HARD|CLAY|GRASS|INDOOR)
   - tournament_id (FK → tournaments.id, nullable)
   - match_type (Enum: CASUAL|TOURNAMENT|LEAGUE)
-  - rating_system_used (Enum: NTRP|UTR)
   - status (Enum: PENDING|CONFIRMED|DISPUTED|DELETED)
   - created_at (Timestamp)
   - updated_at (Timestamp)
@@ -293,7 +308,6 @@ Dynamic ranking table with historical tracking.
   - Rating history tracking
 - ✅ **Leaderboard/Rankings Table**
   - Current rankings for all active players
-  - Filter by rating system (NTRP/UTR)
   - Filter by published level (e.g., all 4.5 NTRP players)
   - Sort by rating, win percentage, recent activity
 - ✅ **Player Statistics**
@@ -313,7 +327,6 @@ ratings_history
   - id (UUID)
   - player_id (FK → players.id)
   - match_id (FK → matches.id, nullable for manual adjustments)
-  - rating_system (Enum: NTRP|UTR)
   - previous_rating (Decimal)
   - new_rating (Decimal)
   - rating_change (Decimal)
@@ -325,7 +338,6 @@ ratings_history
 
 player_statistics
   - player_id (FK → players.id)
-  - rating_system (Enum: NTRP|UTR)
   - matches_played (Integer)
   - wins (Integer)
   - losses (Integer)
@@ -412,50 +424,7 @@ Automated player verification through social media account validation.
 - No posting capabilities requested
 - Clear data usage policy
 
-#### 7. **UTR Integration** (PRIORITY: NICE-TO-HAVE)
-Integration with Universal Tennis Rating (UTR) official system.
-
-**Core Features**:
-- ✅ **UTR API Integration**
-  - Fetch official UTR ratings for registered players
-  - Periodic sync (daily/weekly) to keep ratings current
-  - Player matching by name, birthdate, location
-- ✅ **Cross-Validation**
-  - Compare Skopeo UTR vs Official UTR
-  - Highlight significant discrepancies (>0.5 difference)
-  - Use official UTR as baseline for new players
-- ✅ **Hybrid Rating Display**
-  - Show both Skopeo rating and Official UTR
-  - Indicate last sync date
-  - Allow players to choose which rating to use for tournaments
-- ✅ **Rating Conversion**
-  - Map official UTR to NTRP equivalent
-  - Help players understand their level across systems
-
-**Use Cases**:
-- Players with official UTR can import their rating
-- Tournament directors can verify player levels
-- Cross-system validation increases rating credibility
-- Appeals process can reference official UTR
-
-**API Requirements**:
-- UTR API key and subscription
-- Player consent for data sharing
-- Rate limiting handling
-- Fallback when API unavailable
-
-**Database Schema Addition**:
-```
-utr_sync_history
-  - player_id (FK → players.id)
-  - official_utr_rating (Decimal)
-  - skopeo_utr (Decimal)
-  - rating_difference (Decimal)
-  - sync_date (Timestamp)
-  - match_confidence (Enum: HIGH|MEDIUM|LOW)
-```
-
-#### 8. **Dynamic Rating Confidence Value** (PRIORITY: NICE-TO-HAVE)
+#### 7. **Dynamic Rating Confidence Value** (PRIORITY: NICE-TO-HAVE)
 Time-based confidence scoring for dynamic ratings to account for player inactivity.
 
 **Core Features**:
@@ -570,7 +539,7 @@ More complex but accounts for partner chemistry
 **Recommended Approach**: Option 1 (Individual Doubles Ratings)
 - Simpler to implement and understand
 - Players maintain consistent doubles rating regardless of partner
-- Similar to how USTA and UTR handle doubles
+- Similar to how USTA handles doubles
 - Easier migration path from singles-only system
 
 **Database Schema Implications** (Design Considerations for #7):
@@ -608,8 +577,6 @@ match_participants
 players
   - current_rating_ntrp_singles (Decimal)
   - current_rating_ntrp_doubles (Decimal)
-  - current_rating_utr_singles (Decimal)
-  - current_rating_utr_doubles (Decimal)
 
 ratings_history
   - rating_type (Enum: SINGLES|DOUBLES)
@@ -667,10 +634,15 @@ ratings_history
 
 ## Technology Stack
 
-### Current (v0.1)
+### Current
 - **Language**: Kotlin 2.2.21
 - **Web Framework**: Ktor 3.0.3 (Netty server)
 - **Serialization**: kotlinx.serialization (JSON)
+- **Database**: PostgreSQL
+- **Migrations**: Flyway
+- **ORM**: Exposed (Kotlin SQL framework) + HikariCP connection pool
+- **Auth**: Firebase Auth (tokens verified at the API)
+- **Web UI**: React + Vite (`web/`)
 - **Build Tool**: Gradle 9.5.1
 - **Code Quality**: ktlint + Detekt
 - **Testing**: JUnit 5 + Kotest assertions
@@ -678,11 +650,7 @@ ratings_history
 - **Monitoring**: Micrometer + Prometheus
 - **API Docs**: Swagger UI + OpenAPI 3.0
 
-### Planned for MVP
-- **Database**: PostgreSQL (primary candidate)
-  - Alternative: MySQL/MariaDB
-- **ORM**: Exposed (Kotlin SQL framework)
-  - Alternative: jOOQ, Hibernate
+### Planned
 - **Caching**: Redis (for ranking leaderboards)
 - **File Storage**: AWS S3 or local filesystem (ID document storage)
 - **OCR**: Tesseract or cloud OCR service (ID verification)
@@ -821,7 +789,17 @@ See `scripts/README.md` for detailed documentation.
 | GET | `/metrics` | Prometheus metrics | Metrics in Prometheus format |
 | GET | `/swagger` | Swagger UI | Interactive API documentation |
 | GET | `/openapi.yaml` | OpenAPI specification | Raw OpenAPI spec (YAML) |
-| POST | `/api/v1/calculate-ranking` | Calculate player rankings | JSON with updated ratings |
+| POST | `/api/v1/calculate-ranking` | Stateless "what-if" ranking calculation | JSON with updated ratings |
+| POST | `/api/v1/users` | Sign-up / provision a profile (sex + date of birth required) | Created user |
+| GET | `/api/v1/users/{id}` | Read a user profile | User |
+| PUT | `/api/v1/users/{id}/ratings` | Admin-set a user's rating | Rating |
+| GET | `/api/v1/users/{id}/rating-history` | Read a user's rating history | Rating-change list |
+| GET | `/api/v1/users/pending-assessment` | Admin: users with no rating yet | User list |
+| GET / POST | `/api/v1/matches` | List / create match fixtures | Matches |
+| POST | `/api/v1/matches/{id}/result` | Upload a match result | Match |
+| POST | `/api/v1/ratings/calculations` | Admin: run rating calculation (dry-run default; `{"dryRun": false}` commits) | Calculation preview/outcome |
+
+(Plus name, contact, and capability sub-resource endpoints. See the OpenAPI spec for the full surface.)
 
 ### API Documentation
 
@@ -847,7 +825,7 @@ Skopeo uses a **performance-based rating system** with normalized gaps to ensure
 1. **Competitive or Expected Win**: Rating changes decrease as gap increases
    - Equal players (no gap): Maximum performance-based change
    - Small gap (within 8.3% of range): Moderate change based on gap size
-   - At threshold (0.5 NTRP, 1.25 UTR): Zero change
+   - At threshold (0.5 NTRP): Zero change
    - Beyond threshold (expected outcome): Zero change
 
 2. **Upset Win**: Underdog wins against favorite
@@ -889,9 +867,8 @@ Skopeo uses a **performance-based rating system** with normalized gaps to ensure
 
 ### Key Concepts
 
-**Competitive Threshold**: 8.3% of rating range (~1/12)
+**Competitive Threshold**: 8.3% of the NTRP rating range (~1/12)
 - NTRP: 0.5 points (e.g., 4.0 vs 4.5)
-- UTR: 1.25 points (e.g., 10.0 vs 11.25)
 - Matches within this threshold produce performance-based changes
 - Matches beyond this threshold (expected outcomes) produce zero change
 
@@ -903,9 +880,8 @@ Skopeo uses a **performance-based rating system** with normalized gaps to ensure
 - 7-6 = 0.077 dominance (very close)
 - 6-0, 3-6, 6-2 = (1.0 - 0.333 + 0.5) / 3 = 0.389 dominance
 
-**K-Factor Scaling**:
+**K-Factor**:
 - NTRP: K = 0.16 (typical changes ±0.032 to ±0.160)
-- UTR: K = 0.4 (2.5× larger, proportional to range)
 
 ### Rating Smoothing (Optional)
 
@@ -946,7 +922,6 @@ See **[RATING_SMOOTHING.md](docs/RATING_SMOOTHING.md)** for complete documentati
 
 ### Rating Boundaries
 - **NTRP**: 1.0 (beginner) to 7.0 (world-class)
-- **UTR**: 1.0+ (no upper limit, but 16+ is pro level)
 
 ### Want More Details?
 - **[RATING_SMOOTHING.md](docs/RATING_SMOOTHING.md)** - Complete rating smoothing guide with examples and best practices
@@ -967,7 +942,6 @@ Comprehensive documentation is available in the `docs/` directory:
   - Mathematical formulas and examples
   - Smoothing factor recommendations (0.3, 0.5, 0.7)
   - Usage guide and best practices
-  - UTR vs NTRP smoothing behavior
   - Performance and backward compatibility
 
 - **[RATING_CALCULATION_ALGORITHM.md](docs/RATING_CALCULATION_ALGORITHM.md)** - Complete algorithm behavior guide

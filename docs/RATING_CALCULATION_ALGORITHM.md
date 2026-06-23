@@ -6,7 +6,7 @@ How Skopeo turns a match result into rating changes — explained top-down, from
 
 1. [The big picture](#1-the-big-picture) — the algorithm in one sentence and one formula
 2. [The four factors](#2-the-four-factors) — what each term in the formula means and how it is computed
-3. [Deriving the constants](#3-deriving-the-constants) — where 6.0, 15.0, 0.5, 1.25, 0.16, 0.4, and 2.0 come from
+3. [Deriving the constants](#3-deriving-the-constants) — where 6.0, 0.5, 0.16, and 2.0 come from
 4. [Dominance factor tables](#4-dominance-factor-tables) — pre-computed values for all common tennis scores
 5. [The post-processing pipeline](#5-the-post-processing-pipeline) — smoothing, clamping, precision, zero-sum
 6. [Worked examples](#6-worked-examples) — full calculations, end to end, plus the complete rating-change table for all test scenarios
@@ -24,7 +24,7 @@ This is a **performance-based [Elo](#elo-rating-system) system**. Classical Elo 
 
 ### The master formula
 
-Every rating change, for both players, in both rating systems, is one multiplication:
+Every rating change, for both players, is one multiplication:
 
 ```
 change = K × dominance × scale × sign
@@ -32,7 +32,7 @@ change = K × dominance × scale × sign
 
 | Factor | Question it answers | Range | Detail |
 |---|---|---|---|
-| `K` | How big is one "step" on this rating scale? | 0.16 (NTRP) / 0.4 (UTR) | [§2.1](#21-k--the-step-size) |
+| `K` | How big is one "step" on the rating scale? | 0.16 | [§2.1](#21-k--the-step-size) |
 | `dominance` | How convincingly was the match won? | 0.0 – 1.0 | [§2.2](#22-dominance--how-convincingly) |
 | `scale` | How surprising was the result? | 0.0 – ~24 | [§2.3](#23-scale--how-surprising) |
 | `sign` | Did this player win or lose? | +1 / −1 | [§2.4](#24-sign--who-gains-who-loses) |
@@ -56,12 +56,9 @@ The **[K-factor](#k-factor)** is the classical Elo concept: a constant that conv
 max non-upset change = K × 1.0 × 1.0 = K
 ```
 
-| System | K | Typical changes it produces |
-|---|---|---|
-| NTRP | 0.16 | ±0.032 (6-4 between equals) up to ±0.160 (6-0 between equals) |
-| UTR | 0.40 | ±0.080 up to ±0.400 (same scenarios) |
+For NTRP, `K = 0.16`, which produces typical changes of ±0.032 (6-4 between equals) up to ±0.160 (6-0 between equals).
 
-A larger K means faster convergence toward true skill but noisier ratings; a smaller K means stable but slow-moving ratings. Why exactly 0.16 and 0.40 — see [§3.3](#33-the-k-factors-016-and-04).
+A larger K means faster convergence toward true skill but noisier ratings; a smaller K means stable but slow-moving ratings. Why exactly 0.16 — see [§3.3](#33-the-k-factor-016).
 
 ### 2.2 `dominance` — how convincingly
 
@@ -157,27 +154,23 @@ This is the only factor that differs between the two players, which is what make
 
 ## 3. Deriving the Constants
 
-None of the algorithm's numbers are arbitrary; each one is derived from the published shape of the two rating systems.
+None of the algorithm's numbers are arbitrary; each one is derived from the published shape of the NTRP rating system.
 
-### 3.1 The rating ranges: 6.0 and 15.0
+### 3.1 The rating range: 6.0
 
-The **[rating range](#rating-range)** is simply *ceiling minus floor* of each system's scale:
+The **[rating range](#rating-range)** is simply *ceiling minus floor* of the NTRP scale:
 
 | System | Floor | Ceiling | Range |
 |---|---|---|---|
 | NTRP | 1.0 (beginner) | 7.0 (world-class) | 7.0 − 1.0 = **6.0** |
-| UTR | 1.0 | 16.0 (top professional) | 16.0 − 1.0 = **15.0** |
 
-The range is what makes gaps comparable *across* systems via the [normalized gap](#normalized-gap): a 0.5 NTRP gap and a 1.25 UTR gap are the *same* relative skill difference, because both are 8.3% of their respective ranges:
+The range is what makes gaps comparable via the [normalized gap](#normalized-gap): expressing a gap as a fraction of the range, rather than as raw points, keeps the threshold and scale factors independent of the scale's absolute width. A 0.5 NTRP gap is 8.3% of the range:
 
 ```
-0.5 / 6.0   = 0.0833
-1.25 / 15.0 = 0.0833
+0.5 / 6.0 = 0.0833
 ```
 
-Without normalization, the algorithm would treat a 1-point UTR gap (small) the same as a 1-point NTRP gap (huge).
-
-### 3.2 The competitive threshold: 8.3% → 0.5 NTRP / 1.25 UTR
+### 3.2 The competitive threshold: 8.3% → 0.5 NTRP
 
 The **[competitive threshold](#competitive-threshold)** marks the gap beyond which a favorite's win is considered fully expected. Its anchor is the NTRP system itself: NTRP publishes levels in **0.5-point steps** (3.5, 4.0, 4.5, …), so one half-level — the smallest officially recognized skill difference — is the natural boundary of "still a competitive match":
 
@@ -185,14 +178,13 @@ The **[competitive threshold](#competitive-threshold)** marks the gap beyond whi
 threshold = half-level / range = 0.5 / 6.0 = 1/12 ≈ 0.083 = 8.3%
 ```
 
-Because the threshold is expressed as a *percentage of range*, it transfers to UTR automatically:
+Because the threshold is expressed as a *percentage of range*, it maps back to:
 
 ```
-NTRP: 8.3% × 6.0  = 0.5  rating points
-UTR:  8.3% × 15.0 = 1.25 rating points
+NTRP: 8.3% × 6.0 = 0.5 rating points
 ```
 
-### 3.3 The K-factors: 0.16 and 0.4
+### 3.3 The K-factor: 0.16
 
 **NTRP's K = 0.16 is the calibration anchor**, chosen so that typical matches produce changes large enough to matter but small enough that no single result swings a rating wildly:
 
@@ -205,14 +197,6 @@ UTR:  8.3% × 15.0 = 1.25 rating points
 
 At this calibration a player needs a sustained run of strong results — not one lucky match — to move a half-level (0.5).
 
-**UTR's K is then derived, not chosen.** To keep volatility identical *as a percentage of range*, K scales by the range ratio:
-
-```
-K_UTR = K_NTRP × (UTR range / NTRP range) = 0.16 × (15.0 / 6.0) = 0.16 × 2.5 = 0.4
-```
-
-So UTR ratings move 2.5× more points per match than NTRP — but the same *fraction of the scale*. This 2.5× ratio is verified by the `RatingChangeReport` test suite.
-
 ### 3.4 The upset multiplier: 2.0
 
 When an underdog wins, both ratings are demonstrably wrong, and the evidence is strong — beating a better player is much harder than luck usually allows. The [upset multiplier](#upset-multiplier) of **2.0** makes upset results carry double weight, so miscalibrated ratings converge quickly instead of drifting for dozens of matches. It is a fixed constant regardless of gap size (the gap already enters scale linearly); see [§7](#7-edge-cases-and-known-limitations) for the implications.
@@ -222,10 +206,8 @@ When an underdog wins, both ratings are demonstrably wrong, and the evidence is 
 | Constant | Value | Derivation |
 |---|---|---|
 | `NTRP_RANGE` | 6.0 | 7.0 ceiling − 1.0 floor |
-| `UTR_RANGE` | 15.0 | 16.0 ceiling − 1.0 floor |
 | `COMPETITIVE_THRESHOLD_PCT` | 0.083 | one NTRP half-level: 0.5 / 6.0 = 1/12 |
 | `K_FACTOR_NTRP` | 0.16 | calibration anchor (±0.03–0.16 typical changes) |
-| `K_FACTOR_UTR` | 0.4 | derived: 0.16 × (15.0 / 6.0) |
 | upset multiplier | 2.0 | upsets carry double evidence weight |
 
 ---
@@ -282,12 +264,12 @@ Note that every set carries equal weight in the average — a deciding third set
 
 Between equal-rated players, `scale = 1`, so `change = K × dominance`:
 
-| Score | Dominance | NTRP change | UTR change (×2.5) |
-|---|---|---|---|
-| 6-0, 6-0 | 1.000 | ±0.160 | ±0.400 |
-| 6-2, 6-2 | 0.500 | ±0.080 | ±0.200 |
-| 6-4, 6-4 | 0.200 | ±0.032 | ±0.080 |
-| 7-6, 7-6 | 0.077 | ±0.012 | ±0.031 |
+| Score | Dominance | NTRP change |
+|---|---|---|
+| 6-0, 6-0 | 1.000 | ±0.160 |
+| 6-2, 6-2 | 0.500 | ±0.080 |
+| 6-4, 6-4 | 0.200 | ±0.032 |
+| 7-6, 7-6 | 0.077 | ±0.012 |
 
 ---
 
@@ -324,10 +306,7 @@ Smoothing scales both players' changes identically, so it **preserves zero-sum**
 
 ### 5.2 Boundary clamping
 
-New ratings are clamped to the system's floor and ceiling:
-
-- **NTRP**: 1.0 – 7.0
-- **UTR**: 1.0 – 16.0
+New ratings are clamped to the NTRP floor and ceiling, **1.0 – 7.0**.
 
 Clamping is the *only* step that can break zero-sum. Example: a 7.0 NTRP player (at ceiling) wins; their calculated +0.2 clamps to +0.0, but the opponent still loses 0.2. This is intentional — keeping each rating accurate within its scale takes precedence over conserving points globally, and it prevents rating inflation at the edges.
 
@@ -408,17 +387,6 @@ change        = 0.16 × 0.167 × 0.398 × (+1) = +0.011
 P1: 4.3 → 4.311        P2: 4.0 → 3.989
 ```
 
-### Example 6 — Same match in UTR
-
-Equal players (10.0 UTR each); winner takes it 6-4.
-
-```
-dominance = 0.2,  scale = 1.0,  K_UTR = 0.4
-change    = 0.4 × 0.2 × 1.0 × (+1) = +0.080
-
-Exactly 2.5× the NTRP change from Example 1 (0.032 × 2.5 = 0.080) — same fraction of range.
-```
-
 ### The complete picture — every test scenario
 
 The table below is the output of the `RatingChangeReport` test (`src/test/kotlin/.../impl/v1/RatingChangeReport.kt`), which runs all shared scenarios from `TestScenarios.kt` through the calculator. The scenarios come in five groups:
@@ -432,7 +400,7 @@ The table below is the output of the `RatingChangeReport` test (`src/test/kotlin
 | **CG** | 72 | *Generated:* competitive matchups between 3.0 and 4.5 with a 0.25 gap (below the 0.5 threshold), both directions, at every score from 6-0 to 7-5 |
 | **EX** | 14 | *Generated:* extreme matchup 2.0 vs 7.0 (5.0 gap), both directions, at every legal set score including the 7-6 tiebreak |
 
-The PL, CG, and EX groups are generated in `TestScenarios.kt` with expected deltas computed independently from the master formula (the same 6-decimal BigDecimal precision as the calculator), so the parameterized test suite asserts all 763 scenarios in both rating systems. The table below shows the curated S/SM/GS rows plus the EX extreme-matchup rows; the full 763-row report including PL and CG is regenerated by the command at the end of this section. The table shows **NTRP only**; the UTR results are identical except every delta is exactly 2.5× larger (see [§3.3](#33-the-k-factors-016-and-04)) and are included in the generated report.
+The PL, CG, and EX groups are generated in `TestScenarios.kt` with expected deltas computed independently from the master formula (the same 6-decimal BigDecimal precision as the calculator), so the parameterized test suite asserts all 763 scenarios. The table below shows the curated S/SM/GS rows plus the EX extreme-matchup rows; the full 763-row report including PL and CG is regenerated by the command at the end of this section.
 
 **Constants in effect** (from `PerformanceBasedRankingCalculatorImpl`):
 
@@ -548,11 +516,11 @@ Patterns the table makes visible at a glance:
 - **Smoothing scales rows proportionally** — SM2 (factor 0.5) is exactly half of S19's unsmoothed ±0.160.
 - **Score margin scales every matchup linearly** — within each GS group the deltas are proportional to dominance: between equals, 6-0 moves ±0.160 down to ±0.012 for 7-6; the same 13× spread holds in every upset group (e.g. 1.0-gap: ±0.643 down to ±0.049).
 
-The UTR runs (every delta 2.5× the NTRP value) are verified by the same test. To regenerate the full report, including the UTR columns and published levels:
+To regenerate the full report, including published levels:
 
 ```bash
 ./gradlew test --tests "*.RatingChangeReport"
-# full fixed-width report (both systems, incl. published levels) written to /tmp/rating_change_report.txt
+# full fixed-width report (incl. published levels) written to /tmp/rating_change_report.txt
 ```
 
 ### Exhaustive matchup matrix
@@ -608,9 +576,9 @@ Key methods in the calculator:
 
 1. `calculate(request)` — entry point; orchestrates, builds audit trail and response.
 2. `calculateRatingAdjustments(...)` — the master formula and two-path scale selection.
-3. `applyRatingChange(...)` → `applyNTRPChange` / `applyUTRChange` — smoothing and boundary clamping.
+3. `applyRatingChange(...)` → `applyNTRPChange` — smoothing and boundary clamping.
 
-Test coverage: `PerformanceBasedRankingCalculatorImplTest` (763 NTRP + 763 UTR scenarios, mostly generated — see [§6](#the-complete-picture--every-test-scenario)), `MatchScoreTest` (per-set dominance averaging), `RatingChangeReport` (generates the [§6 rating-change table](#the-complete-picture--every-test-scenario) and verifies the 2.5× K ratio), `NtrpMatchupMatrixReport` (all 1,183 level×score combinations verified against the formula, see [§6](#exhaustive-matchup-matrix)), `RankingCalculationPayloadTest` (exact values), `RankingCalculationApiErrorTest` (boundaries). The calculator is a pure function returning result + audit trail, so all of this is tested without mocks.
+Test coverage: `PerformanceBasedRankingCalculatorImplTest` (763 NTRP scenarios, mostly generated — see [§6](#the-complete-picture--every-test-scenario)), `MatchScoreTest` (per-set dominance averaging), `RatingChangeReport` (generates the [§6 rating-change table](#the-complete-picture--every-test-scenario)), `NtrpMatchupMatrixReport` (all 1,183 level×score combinations verified against the formula, see [§6](#exhaustive-matchup-matrix)), `RankingCalculationPayloadTest` (exact values), `RankingCalculationApiErrorTest` (boundaries). The calculator is a pure function returning result + audit trail, so all of this is tested without mocks.
 
 ---
 
@@ -620,19 +588,19 @@ Test coverage: `PerformanceBasedRankingCalculatorImplTest` (763 NTRP + 763 UTR s
 The classical chess rating method ([Wikipedia](https://en.wikipedia.org/wiki/Elo_rating_system)): after each game, points transfer from loser to winner, with the amount based on how expected the result was. Skopeo extends Elo with margin-of-victory awareness (the dominance factor).
 
 #### K-factor
-The Elo constant that sets rating **volatility** — how many points a single match can move. In Skopeo it equals the maximum non-upset change (reached at full dominance between equals). NTRP uses K = 0.16 (the calibration anchor); UTR uses K = 0.4, *derived* from NTRP by the range ratio 15.0/6.0 = 2.5 so both systems move the same fraction of their scale per match. See [§2.1](#21-k--the-step-size), [§3.3](#33-the-k-factors-016-and-04).
+The Elo constant that sets rating **volatility** — how many points a single match can move. In Skopeo it equals the maximum non-upset change (reached at full dominance between equals). NTRP uses K = 0.16 (the calibration anchor). See [§2.1](#21-k--the-step-size), [§3.3](#33-the-k-factor-016).
 
 #### Rating gap
 The absolute difference between the two players' ratings before the match, `|rating₁ − rating₂|`. The gap drives the scale factor: small gaps mean competitive matches (results carry information), large gaps mean predictable matches (a favorite's win carries none). Also called *rating differential*.
 
 #### Rating range
-Ceiling minus floor of a rating scale: **6.0** for NTRP (7.0 − 1.0) and **15.0** for UTR (16.0 − 1.0). Used to normalize gaps so the two systems are comparable. See [§3.1](#31-the-rating-ranges-60-and-150).
+Ceiling minus floor of the NTRP scale: **6.0** (7.0 − 1.0). Used to normalize gaps so the threshold and scale factors are independent of the scale's absolute width. See [§3.1](#31-the-rating-range-60).
 
 #### Normalized gap
-The rating gap expressed as a fraction of the rating range: `normalizedGap = gap / range`. This is what makes a 0.5 NTRP gap and a 1.25 UTR gap equivalent (both 8.3%). See [§3.1](#31-the-rating-ranges-60-and-150).
+The rating gap expressed as a fraction of the rating range: `normalizedGap = gap / range`. A 0.5 NTRP gap normalizes to 8.3%. See [§3.1](#31-the-rating-range-60).
 
 #### Competitive threshold
-The normalized gap (8.3% of range ≈ 1/12, i.e. 0.5 NTRP or 1.25 UTR points) beyond which a favorite's win is treated as fully expected and produces zero change. Anchored to one NTRP **half-level** — the smallest published skill increment. It is the counterpart concept to the rating gap: the gap measures how far apart two players are; the threshold defines how far apart they can be while their match still counts as competitive. See [§3.2](#32-the-competitive-threshold-83--05-ntrp--125-utr).
+The normalized gap (8.3% of range ≈ 1/12, i.e. 0.5 NTRP points) beyond which a favorite's win is treated as fully expected and produces zero change. Anchored to one NTRP **half-level** — the smallest published skill increment. It is the counterpart concept to the rating gap: the gap measures how far apart two players are; the threshold defines how far apart they can be while their match still counts as competitive. See [§3.2](#32-the-competitive-threshold-83--05-ntrp).
 
 #### Dominance factor
 Match closeness, computed per set as `(gamesWon − gamesLost) / (gamesWon + gamesLost)` — the [efficiency formula](#efficiency-formula) applied to games — and averaged across sets for the match. Ranges 0 (perfectly even) to 1.0 (shutout) for the winner; a lost set enters the average as a negative term. See [§2.2](#22-dominance--how-convincingly) and the [tables in §4](#4-dominance-factor-tables).
@@ -659,10 +627,10 @@ The property that the winner's gain equals the loser's loss (`change₁ + change
 An optional damping multiplier (USTA NTRP Dynamic style) applied to the raw change before clamping: 0.5 means only half the calculated change is applied. Reduces volatility from single outlier performances. See [§5.1](#51-smoothing-optional) and [RATING_SMOOTHING.md](RATING_SMOOTHING.md).
 
 #### Boundary clamping
-Forcing a new rating back inside its system's floor/ceiling (1.0–7.0 NTRP, 1.0–16.0 UTR). The final pipeline step and the only one that may break zero-sum.
+Forcing a new rating back inside the NTRP floor/ceiling (1.0–7.0). The final pipeline step and the only one that may break zero-sum.
 
 #### Published level
-The discrete, public-facing rating bucket (NTRP in 0.5 steps, UTR in 1.0 steps) derived from the continuous internal rating. The API reports `levelChanged` when a rating change crosses a bucket boundary.
+The discrete, public-facing rating bucket (NTRP in 0.5 steps) derived from the continuous internal rating. The API reports `levelChanged` when a rating change crosses a bucket boundary.
 
 ---
 
@@ -670,12 +638,11 @@ The discrete, public-facing rating bucket (NTRP in 0.5 steps, UTR in 1.0 steps) 
 
 - **Elo Rating System**: [Wikipedia](https://en.wikipedia.org/wiki/Elo_rating_system)
 - **NTRP**: USTA National Tennis Rating Program (1.0–7.0 scale, 0.5-step published levels)
-- **UTR**: Universal Tennis Rating (1.0–16.0 scale as implemented)
 - **Rating smoothing**: [RATING_SMOOTHING.md](RATING_SMOOTHING.md)
 - **Audit trail design**: [AUDIT_TRAIL.md](AUDIT_TRAIL.md)
 
 ---
 
-**Document Version**: 3.1 (per-set dominance averaging; previously 3.0: top-down restructure, renamed from ALGORITHM_BEHAVIOR.md)
+**Document Version**: 3.2 (NTRP-only; removed UTR and the rating-system concept; previously 3.1: per-set dominance averaging; 3.0: top-down restructure, renamed from ALGORITHM_BEHAVIOR.md)
 **Last Updated**: 2026-06-10
 **Algorithm Version**: Performance-Based Elo v2.1 (Normalized Gap + Per-Set Dominance Averaging)

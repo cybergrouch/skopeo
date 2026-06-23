@@ -2,7 +2,11 @@
 
 ## Overview
 
-This document proposes the data model for the Dynamic Ranking Calculation API.
+This document originally proposed the data model for the Dynamic Ranking Calculation API.
+The core calculator described here is now **implemented**; this document has been updated to
+align with the shipped DTOs and domain model. Skopeo is **NTRP-only** (1.0–7.0) — there is no
+multi-system support. Sections describing features not yet built are explicitly marked
+**(future/proposed)**.
 
 ## Requirements
 
@@ -10,7 +14,7 @@ This document proposes the data model for the Dynamic Ranking Calculation API.
 1. **Player Profiles** (2 players)
    - Player ID
    - Player name
-   - Current ranking (NTRP or UTR)
+   - Current NTRP rating
 
 2. **Match Scores**
    - Set scores (with or without tiebreaks)
@@ -24,36 +28,29 @@ This document proposes the data model for the Dynamic Ranking Calculation API.
 
 ---
 
-## Proposed Data Model
+## Data Model
 
-### Option 1: Map-Based Model (Recommended)
+### Option 1: Map-Based Model (implemented)
 
-This model uses player IDs as map keys for a cleaner, more scalable design.
+This is the model that shipped: a map keyed by ID, structured match scores, and BigDecimal
+ratings serialized as strings. (The shipped request keys the map by *team* ID rather than player
+ID — see the note after the request class — but the shape is otherwise as below.)
 
 #### Core Data Classes
 
 ```kotlin
-// Enums
-enum class RatingSystem {
-    NTRP,  // National Tennis Rating Program (1.0 - 7.0)
-    UTR    // Universal Tennis Rating (1.0 - 16.5+)
-}
-
-// Rating (encapsulates value and system)
+// Rating: the continuous NTRP value paired with its discrete published level.
+// Ratings are BigDecimal-precise throughout and serialized as strings in JSON.
+// The level is derived from the value on construction (v1 stateless); clients may
+// send just `value` and the level is filled in.
 data class Rating(
-    val value: Double,
-    val system: RatingSystem
+    val value: String,            // e.g. "4.532"
+    val publishedLevel: Level     // e.g. 4.5
 ) {
     init {
-        when (system) {
-            RatingSystem.NTRP -> {
-                require(value in 1.0..7.0) { "NTRP rating must be between 1.0 and 7.0" }
-                require(value % 0.5 == 0.0) { "NTRP rating must be in 0.5 increments" }
-            }
-            RatingSystem.UTR -> {
-                require(value >= 1.0) { "UTR rating must be at least 1.0" }
-            }
-        }
+        val numericValue = value.toDoubleOrNull()
+            ?: throw IllegalArgumentException("Rating value must be a valid number")
+        require(numericValue in 1.0..7.0) { "NTRP rating must be between 1.0 and 7.0" }
     }
 }
 
@@ -111,13 +108,12 @@ data class RankingCalculationRequest(
         require(players.all { (key, profile) -> key == profile.playerId }) {
             "Map key must match player profile ID"
         }
-        // Ensure both players use the same rating system
-        val ratingSystems = players.values.map { it.rating.system }.toSet()
-        require(ratingSystems.size == 1) {
-            "Both players must use the same rating system"
-        }
     }
 }
+
+// NOTE: The shipped request model wraps players in teams to allow doubles later:
+// `RankingCalculationRequest(teams: Map<String, Team>, matchScore, matchDate?, options?)`,
+// where each Team currently holds exactly 1 player (SINGLES). See dto/RankingCalculationRequest.kt.
 
 data class MatchMetadata(
     val tournament: String? = null,
@@ -162,16 +158,16 @@ data class CalculationDetails(
       "playerId": "P123",
       "name": "John Doe",
       "rating": {
-        "value": 4.5,
-        "system": "NTRP"
+        "value": "4.5",
+        "publishedLevel": "4.5"
       }
     },
     "P456": {
       "playerId": "P456",
       "name": "Jane Smith",
       "rating": {
-        "value": 4.0,
-        "system": "NTRP"
+        "value": "4.0",
+        "publishedLevel": "4.0"
       }
     }
   },
@@ -206,16 +202,16 @@ data class CalculationDetails(
       "playerId": "P123",
       "name": "John Doe",
       "rating": {
-        "value": 4.52,
-        "system": "NTRP"
+        "value": "4.52",
+        "publishedLevel": "4.5"
       }
     },
     "P456": {
       "playerId": "P456",
       "name": "Jane Smith",
       "rating": {
-        "value": 3.98,
-        "system": "NTRP"
+        "value": "3.98",
+        "publishedLevel": "3.5"
       }
     }
   },
@@ -224,24 +220,24 @@ data class CalculationDetails(
       "change": 0.02,
       "percentChange": 0.44,
       "previousRating": {
-        "value": 4.5,
-        "system": "NTRP"
+        "value": "4.5",
+        "publishedLevel": "4.5"
       },
       "newRating": {
-        "value": 4.52,
-        "system": "NTRP"
+        "value": "4.52",
+        "publishedLevel": "4.5"
       }
     },
     "P456": {
       "change": -0.02,
       "percentChange": -0.50,
       "previousRating": {
-        "value": 4.0,
-        "system": "NTRP"
+        "value": "4.0",
+        "publishedLevel": "4.0"
       },
       "newRating": {
-        "value": 3.98,
-        "system": "NTRP"
+        "value": "3.98",
+        "publishedLevel": "3.5"
       }
     }
   },
@@ -267,16 +263,16 @@ data class CalculationDetails(
       "playerId": "P789",
       "name": "Mike Wilson",
       "rating": {
-        "value": 8.5,
-        "system": "UTR"
+        "value": "5.5",
+        "publishedLevel": "5.5"
       }
     },
     "P101": {
       "playerId": "P101",
       "name": "Sarah Lee",
       "rating": {
-        "value": 8.2,
-        "system": "UTR"
+        "value": "5.0",
+        "publishedLevel": "5.0"
       }
     }
   },
@@ -325,16 +321,16 @@ data class CalculationDetails(
       "playerId": "P111",
       "name": "Carlos Rodriguez",
       "rating": {
-        "value": 5.5,
-        "system": "NTRP"
+        "value": "5.5",
+        "publishedLevel": "5.5"
       }
     },
     "P222": {
       "playerId": "P222",
       "name": "Anna Kowalski",
       "rating": {
-        "value": 5.0,
-        "system": "NTRP"
+        "value": "5.0",
+        "publishedLevel": "5.0"
       }
     }
   },
@@ -389,7 +385,10 @@ data class CalculationDetails(
 
 ---
 
-## Option 2: Simplified String-Based Model
+## Option 2: Simplified String-Based Model (future/proposed)
+
+> **Not implemented.** The shipped API uses the structured `matchScore` (Option 1).
+> This string-based variant is retained as a possible future addition.
 
 For simpler use cases, allow score input as strings.
 
@@ -409,16 +408,16 @@ data class SimpleRankingRequest(
       "playerId": "P123",
       "name": "John Doe",
       "rating": {
-        "value": 4.5,
-        "system": "NTRP"
+        "value": "4.5",
+        "publishedLevel": "4.5"
       }
     },
     "P456": {
       "playerId": "P456",
       "name": "Jane Smith",
       "rating": {
-        "value": 4.0,
-        "system": "NTRP"
+        "value": "4.0",
+        "publishedLevel": "4.0"
       }
     }
   },
@@ -431,7 +430,10 @@ The API would parse the score string and convert it internally to the structured
 
 ---
 
-## Option 3: Hybrid Model (Recommended for MVP)
+## Option 3: Hybrid Model (future/proposed)
+
+> **Not implemented.** The shipped request takes only the structured `matchScore` (wrapped in
+> teams). This hybrid variant is retained as a possible future addition.
 
 Support both formats - accept either structured or string-based input.
 
@@ -470,15 +472,13 @@ data class RankingCalculationRequest(
   - **Must match the map key** (validated in request)
 - `name`: Non-empty string, max 100 chars
 - `rating`: Rating object
-  - `value`: Validated based on system
-    - NTRP: 1.0 to 7.0 (increments of 0.5)
-    - UTR: 1.0 to 16.5+ (any decimal)
-  - `system`: Must be NTRP or UTR
+  - `value`: NTRP, continuous in the range 1.0 to 7.0 (any decimal, e.g. "4.532" —
+    the published level is the value rounded down to the nearest 0.5)
+  - `publishedLevel`: Derived from `value` if omitted by the client
 
 ### Match Score Validation
 - Exactly 2 players required for singles match
 - Map key must match `playerId` in the profile
-- Both players must use the same rating system (validated in request)
 - At least 1 set required
 - Max 5 sets
 - Valid tennis scores:
@@ -535,7 +535,7 @@ Response: RankingCalculationResponse
    - Internally convert string to structured format
 
 2. **Required Fields Only:**
-   - Player profiles (id, name, rating, system)
+   - Player profiles (id, name, NTRP rating)
    - Match score (either format)
    - Winner (if using string format)
 
@@ -548,7 +548,6 @@ Response: RankingCalculationResponse
 - Add game-level granularity
 - Add match metadata
 - Add calculation confidence scores
-- Support more rating algorithms
 
 ---
 
@@ -557,53 +556,40 @@ Response: RankingCalculationResponse
 ```
 src/main/kotlin/org/skopeo/
 ├── model/
-│   ├── RatingSystem.kt
+│   ├── Rating.kt
+│   ├── Level.kt
 │   ├── PlayerProfile.kt
 │   ├── MatchScore.kt
 │   ├── SetScore.kt
 │   ├── TiebreakScore.kt
-│   ├── GameScore.kt
-│   └── MatchMetadata.kt
+│   └── Team.kt
 ├── dto/
 │   ├── RankingCalculationRequest.kt
 │   ├── RankingCalculationResponse.kt
-│   └── ErrorResponse.kt
+│   └── RatingChange.kt
 ├── service/
-│   ├── RankingCalculationService.kt
-│   ├── ScoreParserService.kt
-│   └── ValidationService.kt
-├── algorithm/
-│   ├── RankingAlgorithm.kt
-│   ├── NtrpAlgorithm.kt
-│   └── UtrAlgorithm.kt
+│   └── calculator/impl/v1/
+│       └── PerformanceBasedRankingCalculatorImpl.kt
 └── routes/
     └── RankingRoutes.kt
 ```
 
 ---
 
-## Questions for Discussion
+## Questions for Discussion (resolved)
 
-1. **Which model option do you prefer?**
-   - Option 1: Structured only
-   - Option 2: String-based only
-   - Option 3: Hybrid (both)
+These were the open questions when this was a proposal. They have since been resolved by the
+shipped implementation; recorded here for context.
 
-2. **MVP scope - which features are must-have?**
-   - Basic set scores only?
-   - Tiebreak support?
-   - Game-level detail?
+1. **Which model option?** → Structured `matchScore` is the implemented path
+   (Option 1). The string-based and hybrid variants below remain **(future/proposed)**.
 
-3. **Rating calculation algorithm:**
-   - Should we implement actual NTRP/UTR algorithms?
-   - Or use a simplified Elo-based approach initially?
-   - Should the algorithm be different for NTRP vs UTR?
+2. **MVP scope?** → Set scores with tiebreak support are implemented; game-level
+   detail remains **(future/proposed)**.
 
-4. **Should players in a match be required to have the same rating system?**
-   - Or allow cross-system matches (NTRP vs UTR)?
+3. **Rating calculation algorithm?** → A single Elo-style NTRP algorithm is implemented
+   (`service/calculator/impl/v1/`). Skopeo is NTRP-only; there is no UTR or multi-system support.
 
-5. **How should we handle rating boundaries?**
-   - NTRP: Can't go below 1.0 or above 7.0
-   - UTR: Can exceed 16.5 for top players
+4. **Same rating system per match?** → Not applicable — Skopeo supports only NTRP.
 
-Let me know your preferences and I'll implement accordingly!
+5. **Rating boundaries?** → NTRP ratings are clamped to 1.0–7.0.

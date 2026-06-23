@@ -1,10 +1,22 @@
 # USTA NTRP Dynamic Feature Comparison
 
-> **Purpose**: Track USTA NTRP Dynamic features that Skopeo does NOT currently implement.
-> This document serves as a reference for future enhancements and helps understand the differences
-> between our implementation and USTA's comprehensive rating system.
+> **Purpose**: Compare Skopeo against USTA's NTRP Dynamic rating system, tracking which USTA
+> features Skopeo has adopted, has in the pipeline, or does not plan to build. This document is a
+> roadmap study; it helps understand the differences between our implementation and USTA's
+> comprehensive rating system. Skopeo is **NTRP-only** (UTR is not part of the product).
 
-**Last Updated**: 2026-06-05
+**Last Updated**: 2026-06-23
+
+**Status legend used throughout:**
+- ✅ **adopted** — built and shipped in Skopeo
+- 🚧 **in pipeline** — partially built or actively planned
+- ❌ **not planned** — no current intent to build
+
+**Since the original study, Skopeo has shipped a persistence layer**, which unlocked several
+features below. Notably built: admin-set/adjusted ratings, match fixtures + result upload, a
+rating-calculation trigger that drives ratings from match results, append-only rating history,
+rating confidence that converges with matches played, continuous (dynamic) ratings paired with
+discrete published levels, a pending-assessment queue for administrators, and rating smoothing.
 
 ---
 
@@ -12,24 +24,26 @@
 
 | Feature | USTA | Skopeo | Priority | Complexity |
 |---------|------|---------------|----------|------------|
-| [Match Type Weighting](#1-match-type-weighting) | ✅ | ❌ | 🔴 High | Medium |
-| [Doubles Support](#2-doubles-support) | ✅ | ❌ | 🟡 Medium | High |
-| [Outlier Detection](#3-outlierstrikes-algorithm) | ✅ | ❌ | 🟢 Low | Medium |
-| [Minimum Match Requirements](#4-minimum-match-requirements) | ✅ | ❌ | 🟡 Medium | Low |
-| [Rating Periods](#5-time-based-rating-periods) | ✅ | ❌ | 🟢 Low | Medium |
-| [Publication Delays](#6-rating-publication-delaysholds) | ✅ | ❌ | 🟢 Low | Low |
-| [Self-Rate Validation](#7-self-rate-validation) | ✅ | ❌ | 🟡 Medium | Medium |
-| [Disqualification System](#8-disqualification-dq-system) | ✅ | ❌ | 🟡 Medium | Medium |
-| [Benchmark Players](#9-benchmarkvalidation-players) | ✅ | ❌ | 🟢 Low | High |
-| [Appeal Process](#10-appeal-process) | ✅ | ❌ | 🟢 Low | Medium |
-| [Rating Confidence](#11-rating-confidencereliability-metrics) | ✅ | ❌ | 🔴 High | Medium |
-| [Regional Variations](#12-sectionregional-variations) | ✅ | ❌ | 🟢 Low | Low |
-| [Historical Tracking](#13-historical-data-and-trends) | ✅ | ❌ | 🔴 High | High |
-| [Dynamic vs Static Ratings](#14-dynamic-vs-static-ratings) | ✅ | ❌ | 🟡 Medium | Medium |
-| [Age Considerations](#15-age-and-experience-considerations) | ✅ | ❌ | 🟢 Low | Low |
-| [Level Boundaries](#16-rating-boundaries-and-level-assignment) | ✅ | ❌ | 🟡 Medium | Low |
-| [Surface Adjustments](#17-surface-type-adjustments) | ✅ | ❌ | 🟢 Low | Medium |
-| **Rating Smoothing** | ✅ | ✅ | ✅ Implemented | - |
+| [Match Type Weighting](#1-match-type-weighting) | ✅ | ❌ not planned | 🔴 High | Medium |
+| [Doubles Support](#2-doubles-support) | ✅ | 🚧 in pipeline | 🟡 Medium | High |
+| [Outlier Detection](#3-outlierstrikes-algorithm) | ✅ | ❌ not planned | 🟢 Low | Medium |
+| [Minimum Match Requirements](#4-minimum-match-requirements) | ✅ | 🚧 in pipeline | 🟡 Medium | Low |
+| [Rating Periods](#5-time-based-rating-periods) | ✅ | ❌ not planned | 🟢 Low | Medium |
+| [Publication Delays](#6-rating-publication-delaysholds) | ✅ | ❌ not planned | 🟢 Low | Low |
+| [Self-Rate Validation](#7-self-rate-validation) | ✅ | ❌ not planned | 🟡 Medium | Medium |
+| [Disqualification System](#8-disqualification-dq-system) | ✅ | ❌ not planned | 🟡 Medium | Medium |
+| [Benchmark Players](#9-benchmarkvalidation-players) | ✅ | ❌ not planned | 🟢 Low | High |
+| [Appeal Process](#10-appeal-process) | ✅ | ❌ not planned | 🟢 Low | Medium |
+| [Rating Confidence](#11-rating-confidencereliability-metrics) | ✅ | ✅ adopted | 🔴 High | Medium |
+| [Regional Variations](#12-sectionregional-variations) | ✅ | ❌ not planned | 🟢 Low | Low |
+| [Historical Tracking](#13-historical-data-and-trends) | ✅ | ✅ adopted | 🔴 High | High |
+| [Dynamic vs Static Ratings](#14-dynamic-vs-static-ratings) | ✅ | ✅ adopted | 🟡 Medium | Medium |
+| [Age Considerations](#15-age-and-experience-considerations) | ✅ | 🚧 in pipeline | 🟢 Low | Low |
+| [Level Boundaries](#16-rating-boundaries-and-level-assignment) | ✅ | ✅ adopted | 🟡 Medium | Low |
+| [Surface Adjustments](#17-surface-type-adjustments) | ✅ | ❌ not planned | 🟢 Low | Medium |
+| **Admin-Assigned Ratings / Assessment** | ✅ | ✅ adopted | 🔴 High | Medium |
+| **Match Results Drive Ratings** | ✅ | ✅ adopted | 🔴 High | High |
+| **Rating Smoothing** | ✅ | ✅ adopted | - | - |
 
 **Priority Legend:**
 - 🔴 **High**: Valuable for most use cases, significant impact on rating quality
@@ -47,7 +61,12 @@
 
 ### 1. Match Type Weighting
 
-**Status**: ❌ Not Implemented | **Priority**: 🔴 High | **Complexity**: Medium
+**Status**: ❌ Not Planned (for now) | **Priority**: 🔴 High | **Complexity**: Medium
+
+> **Skopeo status**: Not built. Note that the `matchType` field on a stored `Match` denotes the
+> *format* (SINGLES/DOUBLES, a `TeamType`), not a USTA-style league/tournament/playoff weight
+> class. Fixtures do carry a free-text `tournamentName`, but no weighting is applied in the rating
+> calculation. This remains a possible future enhancement, not currently planned.
 
 #### What USTA Does
 
@@ -145,7 +164,13 @@ fun calculateRatingChange(
 
 ### 2. Doubles Support
 
-**Status**: ❌ Not Implemented | **Priority**: 🟡 Medium | **Complexity**: High
+**Status**: 🚧 In Pipeline | **Priority**: 🟡 Medium | **Complexity**: High
+
+> **Skopeo status**: Schema-ready, not yet calculable. The data model is intentionally
+> team-based (`Team`/`TeamType` with SINGLES/DOUBLES; matches store two `MatchSide`s each with a
+> list of user IDs), so doubles can be added without breaking the schema. The rating calculator
+> currently validates and supports SINGLES only. The partner-quality algorithm below is the
+> remaining work.
 
 #### What USTA Does
 
@@ -259,11 +284,11 @@ fun calculatePartnerInfluence(ratingDiff: Double): Double {
   "team1": {
     "player1": {
       "playerId": "P1",
-      "rating": {"value": "4.5", "system": "NTRP"}
+      "rating": {"value": "4.5", "publishedLevel": "4.5"}
     },
     "player2": {
       "playerId": "P2",
-      "rating": {"value": "4.0", "system": "NTRP"}
+      "rating": {"value": "4.0", "publishedLevel": "4.0"}
     }
   },
   "team2": {
@@ -488,7 +513,12 @@ fun calculateRatingWithOutlierDetection(
 
 ### 4. Minimum Match Requirements
 
-**Status**: ❌ Not Implemented | **Priority**: 🟡 Medium | **Complexity**: Low
+**Status**: 🚧 In Pipeline | **Priority**: 🟡 Medium | **Complexity**: Low
+
+> **Skopeo status**: Partial. The persistence layer already tracks `matchesPlayed` per user and a
+> `confidence` value that starts low and converges as matches accumulate (`UserRating`). What is
+> not yet built is a *publish threshold* that withholds a rating until a minimum match count is
+> reached. The foundation exists; gating publication on it is the remaining work.
 
 #### What USTA Does
 
@@ -599,7 +629,7 @@ fun calculateConfidence(matchCount: Int, requirements: RatingRequirements): Doub
     "P1": {
       "newRating": {
         "value": "4.23",
-        "system": "NTRP"
+        "publishedLevel": "4.0"
       },
       "change": "+0.15",
       "matchCount": 2,
@@ -981,7 +1011,7 @@ fun calculateRatingWithHoldCheck(
 {
   "ratingChanges": {
     "P1": {
-      "newRating": {"value": "4.75", "system": "NTRP"},
+      "newRating": {"value": "4.75", "publishedLevel": "4.5"},
       "change": "+0.15",
       "published": false,
       "hold": {
@@ -1035,7 +1065,15 @@ GET /api/v1/admin/rating-holds?status=ACTIVE
 
 ### 7. Self-Rate Validation
 
-**Status**: ❌ Not Implemented | **Priority**: 🟡 Medium | **Complexity**: Medium
+**Status**: ❌ Not Planned | **Priority**: 🟡 Medium | **Complexity**: Medium
+
+> **Skopeo status**: Not built, and the premise differs from Skopeo's model. Skopeo does not let
+> players self-rate; initial ratings are **admin-assigned**. A new user with no rating appears in a
+> pending-assessment queue (`PendingAssessment`), and an administrator sets the rating via
+> `PUT /api/v1/users/{userId}/ratings` (`SetRatingRequest`). Because there is no self-rating, the
+> sandbagging-detection machinery USTA layers on self-rated players is not applicable as designed.
+> (See also the new "Admin-Assigned Ratings / Assessment" entry in the summary table — that path
+> is ✅ adopted.)
 
 #### What USTA Does
 
@@ -1279,7 +1317,7 @@ fun calculateRatingWithValidation(
 {
   "ratingChanges": {
     "P1": {
-      "newRating": {"value": "4.35", "system": "NTRP"},
+      "newRating": {"value": "4.35", "publishedLevel": "4.0"},
       "change": "+0.15",
       "ratingSource": "SELF_RATED",
       "validationStatus": "UNDER_REVIEW",
@@ -1550,7 +1588,7 @@ fun calculateRatingWithDQCheck(
 {
   "ratingChanges": {
     "P1": {
-      "newRating": {"value": "4.55", "system": "NTRP"},
+      "newRating": {"value": "4.55", "publishedLevel": "4.5"},
       "change": "+0.25",
       "level": "4.0",
       "strikes": 2,
@@ -1571,7 +1609,7 @@ fun calculateRatingWithDQCheck(
 {
   "ratingChanges": {
     "P1": {
-      "newRating": {"value": "4.62", "system": "NTRP"},
+      "newRating": {"value": "4.62", "publishedLevel": "4.5"},
       "change": "+0.18",
       "level": "4.5",
       "disqualified": true,
@@ -1914,7 +1952,7 @@ class SystemCalibrationService(
 POST /api/v1/admin/benchmarks
 {
   "playerId": "P1",
-  "designatedRating": {"value": "4.5", "system": "NTRP"},
+  "designatedRating": {"value": "4.5", "publishedLevel": "4.5"},
   "confidenceLevel": 0.95,
   "validFrom": "2024-01-01",
   "section": "Southern California"
@@ -2235,7 +2273,7 @@ POST /api/v1/appeals
 {
   "playerId": "P1",
   "appealType": "MEDICAL",
-  "requestedRating": {"value": "4.0", "system": "NTRP"},
+  "requestedRating": {"value": "4.0", "publishedLevel": "4.0"},
   "playerStatement": "Played injured last 3 months, had surgery in May",
   "evidenceIds": ["doc1", "doc2"]
 }
@@ -2249,7 +2287,7 @@ POST /api/v1/admin/appeals/{appealId}/review
 {
   "approved": true,
   "decisionReason": "Medical evidence supports appeal",
-  "adjustedRating": {"value": "4.0", "system": "NTRP"},
+  "adjustedRating": {"value": "4.0", "publishedLevel": "4.0"},
   "matchesToStrike": ["match1", "match2", "match3"]
 }
 
@@ -2268,8 +2306,8 @@ GET /api/v1/admin/appeals?status=SUBMITTED
 {
   "appealId": "appeal123",
   "playerId": "P1",
-  "currentRating": {"value": "4.5", "system": "NTRP"},
-  "requestedRating": {"value": "4.0", "system": "NTRP"},
+  "currentRating": {"value": "4.5", "publishedLevel": "4.5"},
+  "requestedRating": {"value": "4.0", "publishedLevel": "4.0"},
   "appealType": "MEDICAL",
   "status": "APPROVED",
   "submittedAt": "2024-05-15T10:00:00Z",
@@ -2277,7 +2315,7 @@ GET /api/v1/admin/appeals?status=SUBMITTED
   "reviewedBy": "coordinator@section.usta.com",
   "decision": {
     "approved": true,
-    "adjustedRating": {"value": "4.0", "system": "NTRP"},
+    "adjustedRating": {"value": "4.0", "publishedLevel": "4.0"},
     "struckMatches": ["match1", "match2", "match3"],
     "effectiveDate": "2024-05-20",
     "expirationDate": "2024-11-20",
@@ -2309,43 +2347,58 @@ GET /api/v1/admin/appeals?status=SUBMITTED
 
 **Note**: Due to length, features 11-17 are summarized below. Full details can be added if needed.
 
-### 11. Rating Confidence/Reliability Metrics
+### 11. Rating Confidence/Reliability Metrics — ✅ adopted
 - **What**: Track confidence in rating based on match count, recency, opponent quality
 - **Priority**: 🔴 High (valuable for most use cases)
 - **Complexity**: Medium
 - **Value**: Distinguish between established and uncertain ratings
+- **Skopeo status**: Built. `UserRating` carries a `confidence` value that starts low and
+  converges as `matchesPlayed` grows; it is returned on the rating endpoints
+  (`UserRatingResponse`). Opponent-quality weighting of confidence is a possible refinement.
 
-### 12. Section/Regional Variations
+### 12. Section/Regional Variations — ❌ not planned
 - **What**: Support different rules/policies by geographic section
 - **Priority**: 🟢 Low (specific to USTA organizational structure)
 - **Complexity**: Low
 - **Value**: Accommodate regional differences
 
-### 13. Historical Data and Trends
+### 13. Historical Data and Trends — ✅ adopted
 - **What**: Store and analyze complete match history, rating progression
 - **Priority**: 🔴 High (essential for many features)
 - **Complexity**: High (requires full persistence layer)
 - **Value**: Enables analytics, trending, pattern detection
+- **Skopeo status**: Built. Rating changes are recorded as an append-only
+  `RatingHistoryEntry` log (per-match, with previous/new rating, change, level change,
+  dominance factor, and smoothing detail) and exposed via the rating-history endpoint. This was
+  unlocked by the persistence layer. Higher-level trend analytics can build on this store.
 
-### 14. Dynamic vs Static Ratings
-- **What**: Separate year-end (static) from in-season (dynamic) ratings
+### 14. Dynamic vs Static Ratings — ✅ adopted
+- **What**: Separate continuous (dynamic) ratings from discrete published levels
 - **Priority**: 🟡 Medium (useful for leagues)
 - **Complexity**: Medium
 - **Value**: Balance stability with accuracy
+- **Skopeo status**: Built. Every rating pairs a continuous `currentRating`/`value` with a
+  discrete `currentLevel`/`publishedLevel` (the value floored to the nearest 0.5; see `Level`).
+  The continuous value moves per match while the published level is the stable bucket. USTA's
+  *year-end vs in-season* snapshotting specifically is not built.
 
-### 15. Age and Experience Considerations
+### 15. Age and Experience Considerations — 🚧 in pipeline
 - **What**: Different treatment for juniors, seniors, new vs experienced players
 - **Priority**: 🟢 Low (nice-to-have)
 - **Complexity**: Low
 - **Value**: Better fit for different player populations
+- **Skopeo status**: Partial. `dateOfBirth` is captured at sign-up (required, alongside `sex`)
+  and stored on the user, so age data exists. No age-based rating adjustment uses it yet.
 
-### 16. Rating Boundaries and Level Assignment
-- **What**: Discrete level buckets (3.0, 3.5, 4.0) instead of continuous ratings
+### 16. Rating Boundaries and Level Assignment — ✅ adopted
+- **What**: Discrete level buckets (3.0, 3.5, 4.0) alongside continuous ratings
 - **Priority**: 🟡 Medium (needed for league organization)
 - **Complexity**: Low
 - **Value**: Simplifies league/tournament organization
+- **Skopeo status**: Built. The `Level` model defines NTRP 1.0–7.0 in 0.5-wide bands and derives
+  the published level from a rating value; every `Rating` carries its `publishedLevel`.
 
-### 17. Surface Type Adjustments
+### 17. Surface Type Adjustments — ❌ not planned
 - **What**: Different ratings for clay, hard, grass courts
 - **Priority**: 🟢 Low (nice-to-have)
 - **Complexity**: Medium
@@ -2355,27 +2408,31 @@ GET /api/v1/admin/appeals?status=SUBMITTED
 
 ## Implementation Priorities
 
-### 🔴 High Priority (Implement First)
-1. **Match Type Weighting** - Prevents gaming, improves accuracy
-2. **Rating Confidence Metrics** - Distinguish reliable vs uncertain ratings
-3. **Historical Data Tracking** - Foundation for many other features
+### ✅ Already Adopted
+- **Historical Data Tracking** - append-only rating history (foundation for many features)
+- **Rating Confidence Metrics** - confidence converging with matches played
+- **Dynamic vs Published Ratings** - continuous value + discrete level
+- **Level Boundaries** - NTRP 0.5-wide bands
+- **Admin-Assigned Ratings / Assessment** - pending-assessment queue + admin set/adjust
+- **Match Results Drive Ratings** - fixtures, result upload, calculation trigger
+- **Rating Smoothing** - USTA-style smoothing factor
 
-### 🟡 Medium Priority (Implement Second)
-4. **Doubles Support** - Expands system to most common format
-5. **Minimum Match Requirements** - Improves early rating reliability
-6. **Self-Rate Validation** - Prevents sandbagging
-7. **DQ System** - Maintains competitive balance
-8. **Level Boundaries** - Needed for league organization
+### 🚧 In Pipeline (foundation laid)
+- **Doubles Support** - team-based schema ready; calculator is SINGLES-only
+- **Minimum Match Requirements** - `matchesPlayed`/confidence tracked; publish gating remains
+- **Age Considerations** - `dateOfBirth` captured; no rating use yet
 
-### 🟢 Low Priority (Nice-to-Have)
-9. **Outlier Detection** - Improves data quality
-10. **Rating Periods** - Administrative convenience
-11. **Publication Delays** - Administrative control
-12. **Appeal Process** - Handles edge cases
-13. **Benchmark Players** - System validation
-14. **Regional Variations** - Organizational flexibility
-15. **Age Considerations** - Population-specific optimization
-16. **Surface Adjustments** - Advanced feature
+### ❌ Not Planned (for now)
+- **Match Type Weighting** - Prevents gaming, improves accuracy
+- **Self-Rate Validation** - N/A: Skopeo uses admin-assigned, not self-rated, initial ratings
+- **DQ System** - Maintains competitive balance
+- **Outlier Detection** - Improves data quality
+- **Rating Periods** - Administrative convenience
+- **Publication Delays** - Administrative control
+- **Appeal Process** - Handles edge cases
+- **Benchmark Players** - System validation
+- **Regional Variations** - Organizational flexibility
+- **Surface Adjustments** - Advanced feature
 
 ---
 
