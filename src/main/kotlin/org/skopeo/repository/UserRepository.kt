@@ -80,6 +80,9 @@ class UserRepository {
 
     fun findById(id: UUID): User? = transaction { loadAggregate(id) }
 
+    /** Resolve multiple ids to their aggregates in one transaction; unknown ids are dropped. */
+    fun findAllByIds(ids: List<UUID>): List<User> = transaction { ids.distinct().mapNotNull { loadAggregate(it) } }
+
     /**
      * Active users whose name (any type) contains [query] (case-insensitive), capped at [limit].
      * Backs the staff player-picker and admin role-grant lookups.

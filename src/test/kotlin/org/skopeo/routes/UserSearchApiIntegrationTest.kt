@@ -86,10 +86,10 @@ class UserSearchApiIntegrationTest {
             setBody(CreateUserRequest(displayName = displayName))
         }.body()
 
-    private suspend fun HttpClient.search(
+    private suspend fun HttpClient.lookup(
         token: String,
-        query: String?,
-    ) = get("/api/v1/users${if (query == null) "" else "?query=$query"}") {
+        params: String,
+    ) = get("/api/v1/users${if (params.isEmpty()) "" else "?$params"}") {
         header(HttpHeaders.Authorization, "Bearer $token")
     }
 
@@ -101,7 +101,7 @@ class UserSearchApiIntegrationTest {
             client.provisionNamed("u2", "Alicia")
             client.provisionNamed("u3", "Bob")
 
-            val results = client.search(host, "ALI").body<List<UserSummaryResponse>>()
+            val results = client.lookup(host, "name=ALI").body<List<UserSummaryResponse>>()
 
             results.map { it.displayName }.toSet() shouldBe setOf("Alice", "Alicia")
         }
@@ -112,32 +112,62 @@ class UserSearchApiIntegrationTest {
             val admin = seedStaff("admin", setOf(Capability.ADMINISTRATOR))
             client.provisionNamed("u1", "Charlie")
 
-            val response = client.search(admin, "char")
+            val response = client.lookup(admin, "name=char")
             response.status shouldBe HttpStatusCode.OK
             response.body<List<UserSummaryResponse>>().single().displayName shouldBe "Charlie"
         }
 
     @Test
-    fun `a plain player cannot search`() =
+    fun `a host resolves known ids to summaries`() =
+        withApp { client ->
+            val host = seedStaff("host", setOf(Capability.HOST))
+            val alice = client.provisionNamed("u1", "Alice")
+            val bob = client.provisionNamed("u2", "Bob")
+            client.provisionNamed("u3", "Carol")
+
+            val results =
+                client
+                    .lookup(host, "ids=${alice.id},${bob.id}")
+                    .body<List<UserSummaryResponse>>()
+
+            results.map { it.displayName }.toSet() shouldBe setOf("Alice", "Bob")
+        }
+
+    @Test
+    fun `a plain player cannot look up users`() =
         withApp { client ->
             seedStaff("admin", setOf(Capability.ADMINISTRATOR))
             val player = TestFirebaseAuth.mintToken("p1")
             client.provisionNamed("p1", "Player One")
 
-            client.search(player, "player").status shouldBe HttpStatusCode.Forbidden
+            client.lookup(player, "name=player").status shouldBe HttpStatusCode.Forbidden
         }
 
     @Test
-    fun `a missing query is a 400`() =
+    fun `neither name nor ids is a 400`() =
         withApp { client ->
             val host = seedStaff("host", setOf(Capability.HOST))
-            client.search(host, null).status shouldBe HttpStatusCode.BadRequest
+            client.lookup(host, "").status shouldBe HttpStatusCode.BadRequest
         }
 
     @Test
-    fun `a blank query is a 400`() =
+    fun `both name and ids is a 400`() =
         withApp { client ->
             val host = seedStaff("host", setOf(Capability.HOST))
-            client.search(host, "%20").status shouldBe HttpStatusCode.BadRequest
+            client.lookup(host, "name=a&ids=${java.util.UUID.randomUUID()}").status shouldBe HttpStatusCode.BadRequest
+        }
+
+    @Test
+    fun `a blank name is a 400`() =
+        withApp { client ->
+            val host = seedStaff("host", setOf(Capability.HOST))
+            client.lookup(host, "name=%20").status shouldBe HttpStatusCode.BadRequest
+        }
+
+    @Test
+    fun `a malformed id is a 400`() =
+        withApp { client ->
+            val host = seedStaff("host", setOf(Capability.HOST))
+            client.lookup(host, "ids=not-a-uuid").status shouldBe HttpStatusCode.BadRequest
         }
 }

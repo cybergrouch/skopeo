@@ -21,17 +21,32 @@ class UserService(
     private val repository: UserRepository = UserRepository(),
 ) {
     /**
-     * Search users by name for the staff player-picker and admin role-grants — HOST/ADMINISTRATOR
-     * only (it exposes other users). [query] must be non-blank; results are capped by the repository.
+     * Search users by name fragment for the staff player-picker and admin role-grants —
+     * HOST/ADMINISTRATOR only (it exposes other users). [name] must be non-blank; results are
+     * capped by the repository.
      */
-    fun search(
+    fun searchByName(
         token: VerifiedFirebaseToken,
-        query: String,
+        name: String,
     ): List<User> {
         requireStaff(token)
-        val term = query.trim()
-        require(term.isNotEmpty()) { "query must not be blank" }
+        val term = name.trim()
+        require(term.isNotEmpty()) { "name must not be blank" }
         return repository.searchByName(term)
+    }
+
+    /**
+     * Resolve known user ids to their profiles — HOST/ADMINISTRATOR only. Used to turn the bare
+     * UUIDs the UI holds (match rosters, rating history, calculation previews) into display names.
+     * Unknown ids are simply omitted from the result.
+     */
+    fun findByIds(
+        token: VerifiedFirebaseToken,
+        ids: List<UUID>,
+    ): List<User> {
+        requireStaff(token)
+        require(ids.isNotEmpty()) { "ids must not be empty" }
+        return repository.findAllByIds(ids)
     }
 
     /** Outcome of provisioning: [created] distinguishes a fresh user (201) from an idempotent hit (200). */
