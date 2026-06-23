@@ -2,7 +2,7 @@ openapi: 3.0.0
 info:
   title: Skopeo API
   version: 1.0.0
-  description: Performance-based tennis ranking calculation API supporting NTRP and UTR rating systems
+  description: Performance-based tennis ranking calculation API using the NTRP rating system
 
 servers:
   - url: http://localhost:8080
@@ -30,7 +30,7 @@ paths:
       summary: Calculate ranking changes
       description: |
         Calculates rating changes for players based on match results.
-        Supports both NTRP (National Tennis Rating Program) and UTR (Universal Tennis Rating) systems.
+        Uses the NTRP (National Tennis Rating Program) system.
 
         The algorithm uses a performance-based Elo calculation that considers:
         - Current player ratings and rating difference
@@ -828,7 +828,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/UserRatingResponse'
         '400':
-          description: Invalid rating value/confidence or unknown system
+          description: Invalid rating value/confidence
         '403':
           description: Caller is not an ADMINISTRATOR
         '404':
@@ -896,7 +896,7 @@ paths:
           description: Caller is not an ADMINISTRATOR
     post:
       summary: Create a match fixture (HOST/ADMINISTRATOR)
-      description: Scheduled fixture, no results. Every participant must already be rated in the system.
+      description: Scheduled fixture, no results. Every participant must already be rated.
       tags:
         - Matches
       security:
@@ -915,7 +915,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/MatchResponse'
         '400':
-          description: Invalid input (bad ids/date/system, unrated participant, bad composition)
+          description: Invalid input (bad ids/date, unrated participant, bad composition)
         '403':
           description: Caller is not HOST/ADMINISTRATOR
 
@@ -1636,7 +1636,7 @@ components:
       properties:
         value:
           type: string
-          description: Rating value (NTRP 1.0–7.0, UTR 1.0–16.0).
+          description: Rating value (NTRP 1.0–7.0).
         confidence:
           type: string
           nullable: true

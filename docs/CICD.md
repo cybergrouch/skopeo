@@ -52,24 +52,31 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Install BOTH JDK 17 and 21. The last entry (21) becomes JAVA_HOME, so
       # Gradle's daemon — and detekt — run on 21. This is required: detekt 1.23.8
       # crashes on JDK 25+, which is exactly why gradle-daemon-jvm.properties pins
       # the daemon to 21. The build still compiles with the Java 17 toolchain.
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: |
             17
             21
 
-      - uses: gradle/actions/setup-gradle@v4   # Gradle caching, build scans
+      - uses: gradle/actions/setup-gradle@v6   # Gradle caching, build scans
 
       - name: Build, lint, detekt, test, verify coverage
         run: ./gradlew check
 ```
+
+> The committed `ci.yml` also adds a second **`web`** job (Node 22 via
+> `actions/setup-node@v5`) that lints, type-checks, tests (Vitest), and builds
+> the `web/` SPA — typecheck/build regenerate the orval API client from the
+> backend OpenAPI spec, proving the frontend stays in sync with the contract.
+> Both jobs publish drillable per-test reports via `dorny/test-reporter@v3` and
+> upload coverage to Codecov via `codecov/codecov-action@v7`.
 
 `./gradlew check` already chains everything: compile → ktlint → detekt → tests (JUnit 5 + Kotest) → JaCoCo coverage verification (75% line / 70% branch). One command, the full gate.
 
@@ -174,7 +181,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ vars.WIF_PROVIDER }}
@@ -192,13 +199,26 @@ Until this is in place, deploy manually per [DEPLOYMENT_GCP.md](DEPLOYMENT_GCP.m
 
 ---
 
-## Phase 3 — web UI CI/CD (when `web/` exists)
+## Phase 3 — web UI CI/CD (`web/` now exists)
 
-The monorepo holds both the API and (later) the SPA, so workflows are **path-filtered** to run only what changed:
+The monorepo holds both the API and the SPA. This phase is now **implemented**:
 
-- **Web CI:** lint + build the SPA on `pull_request` touching `web/**` (`npm ci && npm run build`, plus the OpenAPI type-gen check).
-- **Web CD:** deploy to **Firebase Hosting** on merge. `firebase init hosting:github` auto-generates the workflows — including **PR preview deploys** (a temporary URL per PR) and merge-to-live deploy — using a Firebase-managed service account.
-- Keep the API workflows' `paths:` filters (Phase 2) so an API change doesn't trigger a web deploy and vice-versa.
+- **Web CI:** the `web` job in `ci.yml` runs on every PR/push — `npm ci`, lint,
+  type-check (which regenerates the orval API client from the backend OpenAPI
+  spec, proving the frontend stays in sync with the contract), the Vitest suite
+  (`npm run test:ci`), and `npm run build`. It publishes a "Web Test Report"
+  check and uploads frontend coverage to Codecov under the `frontend` flag.
+- **Web CD:** `.github/workflows/deploy-web.yml` deploys to **Firebase Hosting**
+  on pushes to `main` that touch `web/**`, the OpenAPI spec, `firebase.json`, or
+  the workflow itself (path-filtered). It uses `actions/setup-node@v5` (Node 22)
+  to build, then `FirebaseExtended/action-hosting-deploy@v0` to deploy the
+  `live` channel. The job is **inert until configured** — guarded by
+  `if: ${{ vars.VITE_FIREBASE_PROJECT_ID != '' }}` — so merging it never
+  produces a red run before the Firebase vars/secrets exist. `VITE_*` client
+  values come from repo *variables* (safe in the bundle); the deploy service
+  account is the only secret (`FIREBASE_SERVICE_ACCOUNT`).
+- The API deploy workflow (Phase 2) keeps its own `paths:` filters so an API
+  change doesn't trigger a web deploy and vice-versa.
 
 ---
 
@@ -209,7 +229,7 @@ The monorepo holds both the API and (later) the SPA, so workflows are **path-fil
 3. Enable branch protection on `main` (1b).
 4. Route the pending commits through the first PR (1c).
 5. *(Later)* WIF + `deploy-api.yml` (Phase 2).
-6. *(When `web/` lands)* web CI/CD (Phase 3).
+6. ✅ Web CI/CD (Phase 3) — `web` job in `ci.yml` + `deploy-web.yml` (now in place).
 
 ---
 

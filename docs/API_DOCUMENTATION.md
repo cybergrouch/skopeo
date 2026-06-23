@@ -2,7 +2,7 @@
 
 ## Overview
 
-Skopeo provides a REST API for calculating updated tennis player rankings based on match results. The API supports both NTRP (National Tennis Rating Program) and UTR (Universal Tennis Rating) systems.
+Skopeo provides a REST API for calculating updated tennis player rankings based on match results. The API uses the NTRP (National Tennis Rating Program) system.
 
 **Base URL:** `http://localhost:8080`
 
@@ -50,8 +50,7 @@ Calculate updated player rankings based on match results.
       "playerId": "string",
       "name": "string",
       "rating": {
-        "value": number,
-        "system": "NTRP" | "UTR"
+        "value": number
       }
     }
   },
@@ -85,8 +84,7 @@ Calculate updated player rankings based on match results.
       "playerId": "string",
       "name": "string",
       "rating": {
-        "value": number,
-        "system": "NTRP" | "UTR"
+        "value": number
       }
     }
   },
@@ -95,12 +93,10 @@ Calculate updated player rankings based on match results.
       "change": number,
       "percentChange": number,
       "previousRating": {
-        "value": number,
-        "system": "NTRP" | "UTR"
+        "value": number
       },
       "newRating": {
-        "value": number,
-        "system": "NTRP" | "UTR"
+        "value": number
       }
     }
   }
@@ -142,11 +138,9 @@ Calculate updated player rankings based on match results.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `value` | number | Yes | Rating value |
-| `system` | string | Yes | "NTRP" or "UTR" |
 
 **Rating Constraints:**
 - **NTRP**: 1.0 to 7.0 (continuous decimal values)
-- **UTR**: >= 1.0 (continuous decimal values)
 
 ### MatchScore
 
@@ -204,12 +198,12 @@ curl -X POST http://localhost:8080/api/v1/calculate-ranking \
     "P123": {
       "playerId": "P123",
       "name": "John Doe",
-      "rating": {"value": 4.5, "system": "NTRP"}
+      "rating": {"value": 4.5}
     },
     "P456": {
       "playerId": "P456",
       "name": "Jane Smith",
-      "rating": {"value": 4.0, "system": "NTRP"}
+      "rating": {"value": 4.0}
     }
   },
   "matchScore": {
@@ -228,26 +222,26 @@ curl -X POST http://localhost:8080/api/v1/calculate-ranking \
     "P123": {
       "playerId": "P123",
       "name": "John Doe",
-      "rating": {"value": 4.5, "system": "NTRP"}
+      "rating": {"value": 4.5}
     },
     "P456": {
       "playerId": "P456",
       "name": "Jane Smith",
-      "rating": {"value": 4.0, "system": "NTRP"}
+      "rating": {"value": 4.0}
     }
   },
   "ratingChanges": {
     "P123": {
       "change": 0.0,
       "percentChange": 0.0,
-      "previousRating": {"value": 4.5, "system": "NTRP"},
-      "newRating": {"value": 4.5, "system": "NTRP"}
+      "previousRating": {"value": 4.5},
+      "newRating": {"value": 4.5}
     },
     "P456": {
       "change": 0.0,
       "percentChange": 0.0,
-      "previousRating": {"value": 4.0, "system": "NTRP"},
-      "newRating": {"value": 4.0, "system": "NTRP"}
+      "previousRating": {"value": 4.0},
+      "newRating": {"value": 4.0}
     }
   }
 }
@@ -255,7 +249,7 @@ curl -X POST http://localhost:8080/api/v1/calculate-ranking \
 
 *Note: Uses Elo-based ranking algorithm. See [RATING_CALCULATION_ALGORITHM.md](./RATING_CALCULATION_ALGORITHM.md) for details.*
 
-### Example 2: UTR Match with Tiebreak
+### Example 2: NTRP Match with Tiebreak
 
 **Request:**
 ```bash
@@ -266,12 +260,12 @@ curl -X POST http://localhost:8080/api/v1/calculate-ranking \
     "P789": {
       "playerId": "P789",
       "name": "Mike Wilson",
-      "rating": {"value": 8.5, "system": "UTR"}
+      "rating": {"value": 4.5}
     },
     "P101": {
       "playerId": "P101",
       "name": "Sarah Lee",
-      "rating": {"value": 8.2, "system": "UTR"}
+      "rating": {"value": 4.2}
     }
   },
   "matchScore": {
@@ -305,26 +299,26 @@ curl -X POST http://localhost:8080/api/v1/calculate-ranking \
     "P789": {
       "playerId": "P789",
       "name": "Mike Wilson",
-      "rating": {"value": 8.6, "system": "UTR"}
+      "rating": {"value": 4.6}
     },
     "P101": {
       "playerId": "P101",
       "name": "Sarah Lee",
-      "rating": {"value": 8.1, "system": "UTR"}
+      "rating": {"value": 4.1}
     }
   },
   "ratingChanges": {
     "P789": {
       "change": 0.1,
-      "percentChange": 1.18,
-      "previousRating": {"value": 8.5, "system": "UTR"},
-      "newRating": {"value": 8.6, "system": "UTR"}
+      "percentChange": 2.22,
+      "previousRating": {"value": 4.5},
+      "newRating": {"value": 4.6}
     },
     "P101": {
       "change": -0.1,
-      "percentChange": -1.22,
-      "previousRating": {"value": 8.2, "system": "UTR"},
-      "newRating": {"value": 8.1, "system": "UTR"}
+      "percentChange": -2.38,
+      "previousRating": {"value": 4.2},
+      "newRating": {"value": 4.1}
     }
   }
 }
@@ -338,16 +332,14 @@ curl -X POST http://localhost:8080/api/v1/calculate-ranking \
 
 1. **Exactly 2 players required** for singles matches
 2. **Map keys must match player IDs** in profiles
-3. **Both players must use same rating system**
-4. **Player IDs in scores must be valid** (exist in players map)
-5. **Winner must be a valid player ID**
+3. **Player IDs in scores must be valid** (exist in players map)
+4. **Winner must be a valid player ID**
 
 ### Player Validation
 
 1. **Player ID**: Non-blank, max 50 characters
 2. **Name**: Non-blank, max 100 characters
-3. **Rating value**: Must be valid for the rating system
-4. **Rating system**: Must be "NTRP" or "UTR"
+3. **Rating value**: Must be a valid NTRP value (1.0 to 7.0)
 
 ### Match Score Validation
 
@@ -414,7 +406,6 @@ http POST :8080/api/v1/calculate-ranking < test-data.json
 1. **No Persistence**: Match results and player profiles are not stored
 2. **No Authentication**: API is open without authentication
 3. **No Rate Limiting**: Unlimited requests allowed
-4. **Single-System Matches Only**: Cannot process matches between NTRP and UTR players
 
 ---
 
@@ -427,9 +418,8 @@ http POST :8080/api/v1/calculate-ranking < test-data.json
 - ✅ API documentation
 
 ### Phase 2: Ranking Algorithm ✅
-- ✅ Performance-based Elo algorithm (K=0.16 NTRP, K=0.4 UTR)
-- ✅ NTRP-specific and UTR-specific calculations
-- ✅ Algorithm selection based on rating system
+- ✅ Performance-based Elo algorithm (K=0.16 NTRP)
+- ✅ NTRP-specific calculations
 - ✅ Optional rating smoothing (see [RATING_SMOOTHING.md](./RATING_SMOOTHING.md))
 
 ### Phase 3: Persistence (In Progress)

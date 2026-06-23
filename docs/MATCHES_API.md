@@ -4,9 +4,9 @@ Match **fixtures** and **results**, recorded deliberately and **append-only**. R
 result does **not** move ratings — that's a separate, previewable calculation trigger (PR2b).
 
 ## Three-phase lifecycle
-1. **Fixture** — a HOST/ADMINISTRATOR schedules a match (participants + system + proposed
-   `matchDate`); `status=SCHEDULED`, no winner, no scores. Every participant must already have a
-   rating in that system (a *pending-assessment* user can't be entered).
+1. **Fixture** — a HOST/ADMINISTRATOR schedules a match (participants + proposed
+   `matchDate`); `status=SCHEDULED`, no winner, no scores. Every participant must already be
+   rated (a *pending-assessment* user can't be entered).
 2. **Results** — a HOST/ADMINISTRATOR uploads the set scores; the server derives per-set and
    match winners, sets `status=COMPLETED` and `completed_at`. Now *pending calculation*.
 3. **Calculation** (PR2b) — an administrator triggers the rating computation over pending
@@ -38,7 +38,7 @@ Per set: more games wins; if games are equal, the tiebreak points decide; otherw
 rejected. The match winner is whoever won more sets; a tie (no clear winner) is rejected.
 
 ### Status codes
-`200`/`201` · `400` invalid input (bad ids/date/system, unrated participant, no clear winner,
+`200`/`201` · `400` invalid input (bad ids/date, unrated participant, no clear winner,
 bad team composition) · `401` · `403` not staff / not a participant · `404` no such match ·
 `409` results already uploaded, disabling a rated match, or a disabled match.
 
@@ -59,7 +59,7 @@ Recording results never moves ratings — an administrator triggers the calculat
 `POST /api/v1/ratings/calculations` (ADMINISTRATOR), body `{ "dryRun": true }`.
 
 - Gathers the matches **pending calculation** (active, `COMPLETED`, `rated_at IS NULL`) and
-  processes them **oldest→newest by `completed_at`** against an in-memory `(user, system) → rating`
+  processes them **oldest→newest by `completed_at`** against an in-memory `(user) → rating`
   snapshot — seeded from stored ratings and **carried forward** so the chain is correct (match N
   uses the rating match N-1 produced). Each match reuses the existing `RankingCalculator`.
 - **`dryRun` defaults to `true`** (an empty/absent body is a dry run): returns the full per-match,

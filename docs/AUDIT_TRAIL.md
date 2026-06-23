@@ -30,9 +30,9 @@ fun calculate(request: Request): Response {
 // We use this (pure function):
 fun calculate(request: Request): Result {
     val audit = AuditTrail()
-    audit.info("Starting calculation")  // Collected, not executed
+    audit.add(AuditEntry("Starting calculation"))  // Collected, not executed
     val response = doCalculation()
-    audit.info("Calculation complete")  // Collected, not executed
+    audit.add(AuditEntry("Calculation complete"))  // Collected, not executed
     return Result(response, audit.getEntries())  // Return both
 }
 ```
@@ -41,35 +41,22 @@ fun calculate(request: Request): Result {
 
 ## Data Structures
 
-### AuditLevel
-
-Severity levels for audit entries:
-
-```kotlin
-enum class AuditLevel {
-    DEBUG,   // Detailed diagnostic information
-    INFO,    // General informational messages
-    WARN,    // Warning messages
-    ERROR    // Error messages
-}
-```
-
 ### AuditEntry
 
-A single audit entry capturing a point in the calculation:
+A single audit entry capturing a point in the calculation. The model is
+intentionally minimal — just a human-readable message plus structured context.
+There is **no** severity level: entries are not classified as DEBUG/INFO/WARN/ERROR.
 
 ```kotlin
 data class AuditEntry(
-    val level: AuditLevel,           // Severity level
-    val message: String,             // Human-readable message
-    val context: Map<String, Any>    // Structured data (player names, ratings, etc.)
+    val message: String,                          // Human-readable message
+    val context: Map<String, Any> = emptyMap()    // Structured data (player names, ratings, etc.)
 )
 ```
 
 **Example:**
 ```kotlin
 AuditEntry(
-    level = AuditLevel.INFO,
     message = "Calculating ranking for John Doe (4.5) vs Jane Smith (4.0)",
     context = mapOf(
         "player1" to "John Doe",
@@ -105,12 +92,7 @@ val result = rankingCalculator.calculate(request)
 
 // Process the audit trail (log it)
 result.audit.forEach { entry ->
-    when (entry.level) {
-        AuditLevel.DEBUG -> logger.debug { entry.message }
-        AuditLevel.INFO -> logger.info { entry.message }
-        AuditLevel.WARN -> logger.warn { entry.message }
-        AuditLevel.ERROR -> logger.error { entry.message }
-    }
+    logger.info { entry.message }
 }
 
 // Return the response to the client
@@ -131,13 +113,12 @@ fun testAuditTrailContainsCalculationStart() {
 
     // Verify audit trail contains expected entry
     val startEntry = result.audit.find {
-        it.level == AuditLevel.INFO &&
         it.message.contains("Calculating ranking")
     }
 
-    assertNotNull(startEntry)
-    assertEquals("John Doe", startEntry.context["player1"])
-    assertEquals(4.5, startEntry.context["player1Rating"])
+    startEntry.shouldNotBeNull()
+    startEntry.context["player1"] shouldBe "John Doe"
+    startEntry.context["player1Rating"] shouldBe 4.5
 }
 ```
 
@@ -147,10 +128,9 @@ fun testAuditTrailContainsCalculationStart() {
 
 The `RankingCalculator` produces the following audit entries:
 
-### 1. Calculation Start (INFO)
+### 1. Calculation Start
 ```kotlin
 AuditEntry(
-    level = INFO,
     message = "Calculating ranking for {player1} ({rating1}) vs {player2} ({rating2})",
     context = {
         "player1": String,
@@ -161,10 +141,9 @@ AuditEntry(
 )
 ```
 
-### 2. Match Result Analysis (DEBUG)
+### 2. Match Result Analysis
 ```kotlin
 AuditEntry(
-    level = DEBUG,
     message = "Match result - Winner: {winnerTeamId}, Score: {score}",
     context = {
         "winnerTeamId": String,
@@ -184,7 +163,7 @@ AuditEntry(
     message = "Adjustment factors - {player}: change = K × dominance × scale × sign = {K} × {dominance} × {scale} × {sign} = {change}",
     context = {
         "playerId": String,
-        "kFactor": String,                  // 0.160000 (NTRP) or 0.400000 (UTR)
+        "kFactor": String,                  // 0.160000
         "dominance": String,                // signed per-set average; negative for the loser
         "ratingGap": String,                // |rating1 - rating2|
         "normalizedGap": String,            // ratingGap / ratingRange
@@ -198,10 +177,9 @@ AuditEntry(
 )
 ```
 
-### 4. Rating Changes (INFO)
+### 4. Rating Changes
 ```kotlin
 AuditEntry(
-    level = INFO,
     message = "Rating changes - {player1}: {change1}, {player2}: {change2}",
     context = {
         "player1Change": Double,
@@ -210,28 +188,12 @@ AuditEntry(
 )
 ```
 
-### 5. System-Specific Changes (DEBUG)
+### 5. NTRP Rating Change
 ```kotlin
-// For NTRP
 AuditEntry(
-    level = DEBUG,
     message = "NTRP change: {original} + {change} = {new} -> rounded {rounded} -> clamped {clamped}",
     context = {
         "system": "NTRP",
-        "original": Double,
-        "change": Double,
-        "newValue": Double,
-        "rounded": Double,
-        "clamped": Double
-    }
-)
-
-// For UTR
-AuditEntry(
-    level = DEBUG,
-    message = "UTR change: {original} + {change} = {new} -> rounded {rounded} -> clamped {clamped}",
-    context = {
-        "system": "UTR",
         "original": Double,
         "change": Double,
         "newValue": Double,
@@ -299,7 +261,7 @@ Callers can decide what to do with audit information:
 **Log it:**
 ```kotlin
 result.audit.forEach { entry ->
-    logger.log(entry.level, entry.message)
+    logger.info { entry.message }
 }
 ```
 
@@ -313,14 +275,14 @@ result.audit.forEach { entry ->
 **Send to monitoring service:**
 ```kotlin
 result.audit.forEach { entry ->
-    metrics.track(entry.level, entry.message, entry.context)
+    metrics.track(entry.message, entry.context)
 }
 ```
 
 **Analyze it:**
 ```kotlin
-val debugCount = result.audit.count { it.level == AuditLevel.DEBUG }
-val hasWarnings = result.audit.any { it.level == AuditLevel.WARN }
+val totalEntries = result.audit.size
+val mentionsUpset = result.audit.any { it.message.contains("upset") }
 ```
 
 ### 4. Structured Context Data
@@ -379,18 +341,15 @@ fun testAuditOrder() {
 }
 ```
 
-### Test Audit Levels
+### Test Audit Trail Is Non-Empty
 
 ```kotlin
 @Test
-fun testAuditHasAppropriatelevels() {
+fun testAuditTrailIsPopulated() {
     val result = calculator.calculate(request)
 
-    val infoCount = result.audit.count { it.level == AuditLevel.INFO }
-    val debugCount = result.audit.count { it.level == AuditLevel.DEBUG }
-
-    assertTrue(infoCount > 0, "Should have INFO entries")
-    assertTrue(debugCount > infoCount, "Should have more DEBUG than INFO")
+    result.audit.shouldNotBeEmpty()
+    result.audit.any { it.message.contains("Rating changes") } shouldBe true
 }
 ```
 
@@ -430,25 +389,25 @@ class AuditTrail {
 }
 ```
 
-**Design Note:** The API is intentionally minimal - there's only one method (`add`). The `AuditEntry` itself captures the level, making the API cleaner and eliminating method duplication.
+**Design Note:** The API is intentionally minimal - there's only one method (`add`). An `AuditEntry` is just a message plus a structured context map, which keeps the API clean and avoids per-level method duplication.
 
 Usage in calculator:
 ```kotlin
 fun calculate(request: Request): Result {
     val audit = AuditTrail()
 
-    audit.add(AuditEntry(INFO, "Starting", mapOf("request" to request.id)))
+    audit.add(AuditEntry("Starting", mapOf("request" to request.id)))
     val result = doWork()
-    audit.add(AuditEntry(DEBUG, "Intermediate", mapOf("value" to result)))
+    audit.add(AuditEntry("Intermediate", mapOf("value" to result)))
 
     return Result(response, audit.getEntries())
 }
 ```
 
 **Benefits of single-method API:**
-- Simpler interface (one method instead of four)
+- Simpler interface (one method)
 - `AuditEntry` is the primary API surface
-- Easier to extend (add new levels without changing `AuditTrail`)
+- Easy to consume (just iterate and log/store the messages)
 - More consistent with functional programming style
 
 ### Why Not Just Return Logs?
@@ -466,14 +425,13 @@ return listOf(
 **✅ Structured entries:**
 ```kotlin
 return listOf(
-    AuditEntry(INFO, "Calculating", mapOf("p1" to "John", "p2" to "Jane")),
-    AuditEntry(DEBUG, "Expected score", mapOf("score" to 0.5))
+    AuditEntry("Calculating", mapOf("p1" to "John", "p2" to "Jane")),
+    AuditEntry("Expected score", mapOf("score" to 0.5))
 )
 ```
 
 Benefits of structured entries:
 - Type-safe context data
-- Filterable by level
 - Machine-readable
 - Can be serialized to JSON
 - Supports structured logging
@@ -516,9 +474,9 @@ fun test() {
 class RankingCalculator {
     fun calculate(request: Request): Result {
         val audit = AuditTrail()
-        audit.add(AuditEntry(INFO, "Starting calculation"))
+        audit.add(AuditEntry("Starting calculation"))
         val result = doWork()
-        audit.add(AuditEntry(DEBUG, "Intermediate value: $result"))
+        audit.add(AuditEntry("Intermediate value: $result"))
         return Result(Response(result), audit.getEntries())
     }
 }
@@ -563,9 +521,10 @@ Potential improvements to the audit trail system:
 
 ---
 
-**Location:** `src/main/kotlin/org/skopeo/service/`
-- `AuditTrail.kt` - Audit trail builder
-- `RankingCalculationResult.kt` - Result wrapper
-- `RankingCalculator.kt` - Pure calculator function
+**Location:** `src/main/kotlin/org/skopeo/service/calculator/`
+- `AuditTrail.kt` - `AuditEntry` + audit trail collector
+- `RankingCalculationResult.kt` - Result wrapper (response + audit)
+- `RankingCalculator.kt` - Pure calculator interface
 
-**Tests:** `../src/test/kotlin/org/skopeo/service/calculator/impl/v1/PerformanceBasedRankingCalculatorImplAuditTest.kt`
+**Tests:** the audit-trail assertions live in a nested suite inside
+`src/test/kotlin/org/skopeo/service/calculator/impl/v1/PerformanceBasedRankingCalculatorImplTest.kt`

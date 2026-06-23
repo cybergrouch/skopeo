@@ -33,7 +33,7 @@ finalRating = previousRating + smoothedChange
 
 1. **Calculate raw change**: Use performance-based Elo formula
 2. **Apply smoothing**: Blend calculated and previous ratings
-3. **Clamp to range**: Ensure rating stays within valid bounds (1.0-7.0 NTRP, 1.0-16.0 UTR)
+3. **Clamp to range**: Ensure rating stays within valid bounds (1.0-7.0 NTRP)
 
 ### Mathematical Properties
 
@@ -116,21 +116,6 @@ Player 1: 4.0 → 4.016000 (+0.016000)
 Player 2: 4.0 → 3.984000 (-0.016000)
 ```
 
-## UTR vs NTRP Smoothing
-
-Both rating systems use the same smoothing formula, but UTR changes are 2.5× larger due to K-factor scaling:
-
-| System | K-Factor | Range | Example Change (no smoothing) | With 0.5 Smoothing |
-|--------|----------|-------|-------------------------------|-------------------|
-| NTRP | 0.16 | 1.0-7.0 (6.0) | ±0.160000 | ±0.080000 |
-| UTR | 0.40 | 1.0-16.0 (15.0) | ±0.400000 | ±0.200000 |
-
-**Key insight**: UTR changes are 2.5× larger, but as a percentage of range:
-- NTRP: 0.160 / 6.0 = 2.67% of range
-- UTR: 0.400 / 15.0 = 2.67% of range
-
-Smoothing maintains this proportional relationship.
-
 ## API Usage
 
 ### Kotlin
@@ -144,12 +129,12 @@ val request = RankingCalculationRequest(
         "P1" to PlayerProfile(
             playerId = "P1",
             name = "Player 1",
-            rating = Rating(value = "4.0", system = RatingSystem.NTRP)
+            rating = Rating.fromValue(value = "4.0")
         ),
         "P2" to PlayerProfile(
             playerId = "P2",
             name = "Player 2",
-            rating = Rating(value = "4.0", system = RatingSystem.NTRP)
+            rating = Rating.fromValue(value = "4.0")
         )
     ),
     matchScore = MatchScore(
@@ -178,16 +163,14 @@ val result = calculator.calculate(request)
       "playerId": "P1",
       "name": "Player 1",
       "rating": {
-        "value": "4.0",
-        "system": "NTRP"
+        "value": "4.0"
       }
     },
     "P2": {
       "playerId": "P2",
       "name": "Player 2",
       "rating": {
-        "value": "4.0",
-        "system": "NTRP"
+        "value": "4.0"
       }
     }
   },
@@ -328,7 +311,6 @@ Existing code continues to work without modification.
 Comprehensive test coverage in `PerformanceBasedRankingCalculatorImplTest.kt`:
 
 - **NTRP Smoothing**: 6 tests covering factors 0.3, 0.5, 0.7
-- **UTR Smoothing**: 3 tests verifying 2.5× scaling maintained
 - **Edge Cases**: 3 tests for boundaries and extreme values
 - **Audit Trail**: Verification of smoothing metadata
 - **Zero-Sum Property**: Confirmed preserved before clamping
