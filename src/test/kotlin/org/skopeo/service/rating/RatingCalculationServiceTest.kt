@@ -9,6 +9,8 @@ import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import org.jetbrains.exposed.sql.deleteAll
+import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -24,6 +26,7 @@ import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RatingRepository
+import org.skopeo.repository.UserRatingsTable
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.match.MatchService
 import org.skopeo.service.user.ForbiddenException
@@ -160,5 +163,19 @@ class RatingCalculationServiceTest {
 
         shouldThrow<ForbiddenException> { calc.calculate(token("host"), dryRun = true) }
         shouldThrow<ForbiddenException> { calc.calculate(token("ghost"), dryRun = false) }
+    }
+
+    @Test
+    fun `calculation fails if a pending match participant has no rating`() {
+        provisionUser("root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val p1 = provisionUser("p1", rated = true)
+        val p2 = provisionUser("p2", rated = true)
+        playedMatch("root", winner = p1.id, loser = p2.id)
+
+        // Strip ratings out from under the pending match (a state the fixture flow prevents,
+        // but the calculation guards against): currentRating then has nothing to resolve.
+        transaction { UserRatingsTable.deleteAll() }
+
+        shouldThrow<IllegalArgumentException> { calc.calculate(token("root"), dryRun = true) }
     }
 }
