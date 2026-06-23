@@ -150,6 +150,16 @@ class UserRepositoryTest {
     }
 
     @Test
+    fun `updateProfile changes sex when provided`() {
+        val created = repository.provision(googleSignup()) // sex = Male
+
+        val updated = repository.updateProfile(created.id, ProfilePatch(sex = "Female"))
+
+        updated.shouldNotBeNull()
+        updated.sex shouldBe "Female"
+    }
+
+    @Test
     fun `updateProfile returns null for an unknown id`() {
         repository.updateProfile(UUID.randomUUID(), ProfilePatch(city = "Davao")).shouldBe(null)
     }
