@@ -113,8 +113,6 @@ erDiagram
         decimal confidence_score "0.0-1.0, decays over time"
         integer matches_played
         date last_match_date
-        decimal utr_rating "deprecated, vestigial — unused after UTR removal"
-        timestamp utr_last_synced "deprecated, vestigial — unused after UTR removal"
         timestamp created_at
         timestamp updated_at
     }
@@ -372,7 +370,6 @@ LIMIT 64;
 - **Fine-grained authorization** — a capability catalog + role→capability mapping layered over `user_capabilities`.
 - **Social-media verification** — a `user_social_media` table (Facebook/Instagram/etc.) for additional identity confirmation.
 - **Tournaments & seeding** — `tournaments`, `tournament_draws` tables; persisted seeding ranks.
-- **Drop vestigial UTR columns** — `user_ratings.utr_rating` / `utr_last_synced` are dead columns left over from the removed UTR support; a follow-up migration should drop them.
 - **Doubles** — already supported by the team model (`teams` / `team_users` with 2 users).
 
 ## Technology
