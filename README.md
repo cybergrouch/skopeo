@@ -92,25 +92,33 @@ A capability-gated React + Vite single-page app over the API.
 **Input** (POST `/api/v1/calculate-ranking`):
 ```json
 {
-  "players": {
-    "P1": {
-      "playerId": "P1",
+  "teams": {
+    "T1": {
+      "teamId": "T1",
       "name": "Player 1",
-      "rating": { "value": "4.5" }
+      "players": [
+        { "playerId": "P1", "name": "Player 1", "rating": { "value": "4.5" } }
+      ],
+      "teamType": "SINGLES"
     },
-    "P2": {
-      "playerId": "P2",
+    "T2": {
+      "teamId": "T2",
       "name": "Player 2",
-      "rating": { "value": "4.0" }
+      "players": [
+        { "playerId": "P2", "name": "Player 2", "rating": { "value": "4.0" } }
+      ],
+      "teamType": "SINGLES"
     }
   },
   "matchScore": {
     "sets": [
-      { "games": { "P1": 6, "P2": 2 }, "winnerTeamId": "P1" }
+      { "games": { "T1": 6, "T2": 2 }, "winnerTeamId": "T1" }
     ]
   }
 }
 ```
+
+The API is team-based (`teams: Map<String, Team>`, keyed by team ID) so doubles can be added later without a schema change; for singles each team holds exactly one player. `matchScore` games and `winnerTeamId` reference team IDs.
 
 **Output**:
 ```json
