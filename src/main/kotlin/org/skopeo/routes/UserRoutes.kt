@@ -21,8 +21,10 @@ import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.user.CreateUserRequest
 import org.skopeo.dto.user.ProfileRequest
 import org.skopeo.dto.user.toResponse
+import org.skopeo.dto.user.toSummary
 import org.skopeo.service.user.UserService
 import org.skopeo.service.user.toProfilePatch
+import java.util.UUID
 
 /**
  * User-management API. Identity is taken from the verified Firebase token; access to
@@ -33,6 +35,7 @@ fun Application.configureUserRoutes(service: UserService = UserService()) {
     routing {
         authenticate(FIREBASE_AUTH) {
             route("/api/v1/users") {
+                searchUsers(service)
                 createUser(service)
                 currentUser(service)
                 userById(service)
@@ -40,6 +43,38 @@ fun Application.configureUserRoutes(service: UserService = UserService()) {
         }
     }
 }
+
+private fun Route.searchUsers(service: UserService) {
+    get {
+        respondMappingErrors {
+            val name = call.request.queryParameters["name"]
+            val ids = call.request.queryParameters["ids"]
+            val results =
+                when {
+                    name != null && ids != null ->
+                        throw IllegalArgumentException("provide either 'name' or 'ids', not both")
+                    name != null -> service.searchByName(token = verifiedToken(), name = name)
+                    ids != null -> service.findByIds(token = verifiedToken(), ids = parseIds(ids))
+                    else -> throw IllegalArgumentException("a 'name' or 'ids' query parameter is required")
+                }
+            call.respond(status = HttpStatusCode.OK, message = results.map { it.toSummary() })
+        }
+    }
+}
+
+/** Parse a comma-separated list of UUIDs; any malformed id is a 400. */
+private fun parseIds(raw: String): List<UUID> =
+    raw
+        .split(",")
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .map { value ->
+            try {
+                UUID.fromString(value)
+            } catch (e: IllegalArgumentException) {
+                throw IllegalArgumentException("Invalid user id '$value'", e)
+            }
+        }
 
 private fun Route.createUser(service: UserService) {
     post {

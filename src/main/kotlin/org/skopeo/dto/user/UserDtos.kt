@@ -4,6 +4,7 @@
 package org.skopeo.dto.user
 
 import kotlinx.serialization.Serializable
+import org.skopeo.model.NameType
 import org.skopeo.model.User
 
 /**
@@ -123,5 +124,20 @@ fun User.toResponse(): UserResponse =
             identities.map {
                 IdentityDto(provider = it.provider.name, providerUid = it.providerUid, isPrimary = it.isPrimary)
             },
+        capabilities = capabilities.map { it.name }.sorted(),
+    )
+
+/** Slim user shape for search results (player picker, role grants) — no contacts/identities. */
+@Serializable
+data class UserSummaryResponse(
+    val id: String,
+    val displayName: String?,
+    val capabilities: List<String>,
+)
+
+fun User.toSummary(): UserSummaryResponse =
+    UserSummaryResponse(
+        id = id.toString(),
+        displayName = names.firstOrNull { it.type == NameType.DISPLAY && it.isActive }?.value,
         capabilities = capabilities.map { it.name }.sorted(),
     )

@@ -10,6 +10,8 @@ import org.skopeo.model.User
 import org.skopeo.repository.UserRepository
 import java.util.UUID
 
+private val STAFF_ROLES = setOf(Capability.HOST, Capability.ADMINISTRATOR)
+
 /**
  * Orchestrates user provisioning and CRUD, enforcing the self-or-ADMINISTRATOR
  * access policy. All mutations funnel through here (rather than the routes) so a
@@ -18,6 +20,35 @@ import java.util.UUID
 class UserService(
     private val repository: UserRepository = UserRepository(),
 ) {
+    /**
+     * Search users by name fragment for the staff player-picker and admin role-grants —
+     * HOST/ADMINISTRATOR only (it exposes other users). [name] must be non-blank; results are
+     * capped by the repository.
+     */
+    fun searchByName(
+        token: VerifiedFirebaseToken,
+        name: String,
+    ): List<User> {
+        requireStaff(token)
+        val term = name.trim()
+        require(term.isNotEmpty()) { "name must not be blank" }
+        return repository.searchByName(term)
+    }
+
+    /**
+     * Resolve known user ids to their profiles — HOST/ADMINISTRATOR only. Used to turn the bare
+     * UUIDs the UI holds (match rosters, rating history, calculation previews) into display names.
+     * Unknown ids are simply omitted from the result.
+     */
+    fun findByIds(
+        token: VerifiedFirebaseToken,
+        ids: List<UUID>,
+    ): List<User> {
+        requireStaff(token)
+        require(ids.isNotEmpty()) { "ids must not be empty" }
+        return repository.findAllByIds(ids)
+    }
+
     /** Outcome of provisioning: [created] distinguishes a fresh user (201) from an idempotent hit (200). */
     data class Provisioned(
         val user: User,
@@ -76,6 +107,12 @@ class UserService(
         val target = repository.findById(id) ?: throw UserNotFoundException(id)
         requireAccess(token = token, target = target)
         repository.deactivate(id)
+    }
+
+    /** Allow only HOST or ADMINISTRATOR callers. */
+    private fun requireStaff(token: VerifiedFirebaseToken) {
+        val caller = repository.findByFirebaseUid(token.uid)
+        if (caller == null || caller.capabilities.none { it in STAFF_ROLES }) throw ForbiddenException()
     }
 
     /** Allow only the target user themselves or an ADMINISTRATOR. */

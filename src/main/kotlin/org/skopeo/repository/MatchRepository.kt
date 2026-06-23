@@ -116,28 +116,41 @@ class MatchRepository {
         }
     }
 
-    /** Active, completed, not-yet-rated matches, oldest completion first (calculation order). */
-    fun listPendingCalculation(): List<Match> =
+    /**
+     * Active, completed, not-yet-rated matches, oldest completion first (calculation order).
+     * When [createdBy] is non-null, scoped to fixtures that user created (HOST oversight).
+     */
+    fun listPendingCalculation(createdBy: UUID? = null): List<Match> =
         transaction {
             MatchesTable
                 .selectAll()
                 .where {
-                    MatchesTable.isActive and
-                        (MatchesTable.status eq MatchStatus.COMPLETED.name) and
-                        MatchesTable.ratedAt.isNull()
+                    val base =
+                        MatchesTable.isActive and
+                            (MatchesTable.status eq MatchStatus.COMPLETED.name) and
+                            MatchesTable.ratedAt.isNull()
+                    if (createdBy != null) base and (MatchesTable.createdBy eq createdBy) else base
                 }.orderBy(MatchesTable.completedAt to SortOrder.ASC)
                 .map { loadMatch(it[MatchesTable.id].value)!! }
         }
 
-    /** Active fixtures still scheduled whose match date is before [asOf] — overdue for results. */
-    fun listAwaitingResults(asOf: LocalDate): List<Match> =
+    /**
+     * Active fixtures still scheduled whose match date is before [asOf] — overdue for results.
+     * When [createdBy] is non-null, scoped to fixtures that user created (HOST oversight).
+     */
+    fun listAwaitingResults(
+        asOf: LocalDate,
+        createdBy: UUID? = null,
+    ): List<Match> =
         transaction {
             MatchesTable
                 .selectAll()
                 .where {
-                    MatchesTable.isActive and
-                        (MatchesTable.status eq MatchStatus.SCHEDULED.name) and
-                        (MatchesTable.matchDate less asOf)
+                    val base =
+                        MatchesTable.isActive and
+                            (MatchesTable.status eq MatchStatus.SCHEDULED.name) and
+                            (MatchesTable.matchDate less asOf)
+                    if (createdBy != null) base and (MatchesTable.createdBy eq createdBy) else base
                 }.orderBy(MatchesTable.matchDate to SortOrder.ASC)
                 .map { loadMatch(it[MatchesTable.id].value)!! }
         }

@@ -97,6 +97,51 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/users:
+    get:
+      summary: Look up users by name or id (HOST/ADMINISTRATOR only)
+      description: |
+        Two mutually-exclusive lookups (provide exactly one):
+          - `name` — case-insensitive, partial match on any of a user's names
+            (the staff player-picker and admin role-grants).
+          - `ids` — comma-separated UUIDs to resolve known ids to display names
+            (match rosters, rating history, calculation previews).
+        Returns a slim summary (no contacts/identities). Name results are capped server-side.
+      tags:
+        - Users
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: name
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Name fragment to search for (mutually exclusive with `ids`).
+        - name: ids
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Comma-separated user UUIDs to resolve (mutually exclusive with `name`).
+      responses:
+        '200':
+          description: Matching users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserSummaryResponse'
+        '400':
+          description: Neither or both of name/ids given, blank name, or a malformed id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid Firebase token
+        '403':
+          description: Caller is not HOST or ADMINISTRATOR
     post:
       summary: Provision the authenticated user
       description: |
@@ -820,7 +865,10 @@ paths:
 
   /api/v1/matches:
     get:
-      summary: List match fixtures by oversight view (ADMINISTRATOR only)
+      summary: List match fixtures by oversight view (HOST/ADMINISTRATOR)
+      description: |
+        An ADMINISTRATOR sees every match in the view; a HOST sees only the fixtures
+        they created (so they can find their own matches awaiting results).
       tags:
         - Matches
       security:
@@ -1340,6 +1388,25 @@ components:
         city:
           type: string
           nullable: true
+
+    UserSummaryResponse:
+      type: object
+      description: Slim user shape for search results (player picker, role grants).
+      required:
+        - id
+        - capabilities
+      properties:
+        id:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+          nullable: true
+        capabilities:
+          type: array
+          items:
+            type: string
+            enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR]
 
     UserResponse:
       type: object
