@@ -21,6 +21,8 @@ tags:
     description: User roles (admin-only); append-only grants with audit
   - name: Ratings
     description: Player ratings & assessment; initial ratings are administrator-set
+  - name: Matches
+    description: Match fixtures & results (append-only); ratings calculated separately
 
 paths:
   /api/v1/calculate-ranking:
@@ -789,6 +791,162 @@ paths:
         '404':
           description: No such user
 
+  /api/v1/matches:
+    get:
+      summary: List match fixtures by oversight view (ADMINISTRATOR only)
+      tags:
+        - Matches
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: filter
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [pending-calculation, awaiting-results]
+          description: pending-calculation = completed & unrated; awaiting-results = scheduled & overdue.
+      responses:
+        '200':
+          description: Matching fixtures
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MatchResponse'
+        '400':
+          description: Missing or invalid filter
+        '403':
+          description: Caller is not an ADMINISTRATOR
+    post:
+      summary: Create a match fixture (HOST/ADMINISTRATOR)
+      description: Scheduled fixture, no results. Every participant must already be rated in the system.
+      tags:
+        - Matches
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFixtureRequest'
+      responses:
+        '201':
+          description: Fixture created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchResponse'
+        '400':
+          description: Invalid input (bad ids/date/system, unrated participant, bad composition)
+        '403':
+          description: Caller is not HOST/ADMINISTRATOR
+
+  /api/v1/matches/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      summary: Get a match
+      description: Limited to a participant or HOST/ADMINISTRATOR.
+      tags:
+        - Matches
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The match
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchResponse'
+        '403':
+          description: Forbidden
+        '404':
+          description: No such match
+
+  /api/v1/matches/{id}/result:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      summary: Upload match results (HOST/ADMINISTRATOR)
+      description: |
+        Records the set scores, derives the winner, and marks the match COMPLETED (pending
+        calculation). Ratings are NOT computed here.
+      tags:
+        - Matches
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MatchResultRequest'
+      responses:
+        '200':
+          description: Completed match
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchResponse'
+        '400':
+          description: Invalid scores or no clear winner
+        '403':
+          description: Caller is not HOST/ADMINISTRATOR
+        '404':
+          description: No such match
+        '409':
+          description: Results already uploaded, or the match is disabled
+
+  /api/v1/matches/{id}/state:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    put:
+      summary: Enable or disable a match (HOST/ADMINISTRATOR)
+      description: |
+        Append-only corrections: disable the original and add a new match. Disabling is allowed
+        only while the match is unrated.
+      tags:
+        - Matches
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MatchStateRequest'
+      responses:
+        '200':
+          description: Updated match
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchResponse'
+        '403':
+          description: Caller is not HOST/ADMINISTRATOR
+        '404':
+          description: No such match
+        '409':
+          description: Cannot disable a match that has already been rated
+
 components:
   securitySchemes:
     firebaseAuth:
@@ -1482,4 +1640,186 @@ components:
           format: uuid
         displayName:
           type: string
+          nullable: true
+
+    CreateFixtureRequest:
+      type: object
+      required:
+        - ratingSystem
+        - matchType
+        - matchFormat
+        - matchDate
+        - team1
+        - team2
+      properties:
+        ratingSystem:
+          type: string
+          enum: [NTRP, UTR]
+        matchType:
+          type: string
+          enum: [SINGLES, DOUBLES, MIXED_DOUBLES]
+        matchFormat:
+          type: string
+          enum: [BEST_OF_THREE, BEST_OF_FIVE]
+        matchDate:
+          type: string
+          format: date
+        team1:
+          type: array
+          items:
+            type: string
+            format: uuid
+        team2:
+          type: array
+          items:
+            type: string
+            format: uuid
+        venue:
+          type: string
+          nullable: true
+        tournamentName:
+          type: string
+          nullable: true
+
+    SetScoreRequest:
+      type: object
+      required:
+        - team1Games
+        - team2Games
+      properties:
+        team1Games:
+          type: integer
+        team2Games:
+          type: integer
+        tiebreakTeam1Points:
+          type: integer
+          nullable: true
+        tiebreakTeam2Points:
+          type: integer
+          nullable: true
+
+    MatchResultRequest:
+      type: object
+      required:
+        - sets
+      properties:
+        sets:
+          type: array
+          items:
+            $ref: '#/components/schemas/SetScoreRequest'
+
+    MatchStateRequest:
+      type: object
+      required:
+        - isActive
+      properties:
+        isActive:
+          type: boolean
+
+    MatchSideResponse:
+      type: object
+      required:
+        - teamId
+        - userIds
+      properties:
+        teamId:
+          type: string
+          format: uuid
+        userIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    MatchSetResponse:
+      type: object
+      required:
+        - setNumber
+        - team1Games
+        - team2Games
+        - winnerTeamId
+      properties:
+        setNumber:
+          type: integer
+        team1Games:
+          type: integer
+        team2Games:
+          type: integer
+        winnerTeamId:
+          type: string
+          format: uuid
+        tiebreakTeam1Points:
+          type: integer
+          nullable: true
+        tiebreakTeam2Points:
+          type: integer
+          nullable: true
+
+    MatchResponse:
+      type: object
+      required:
+        - id
+        - ratingSystem
+        - matchType
+        - matchFormat
+        - matchDate
+        - status
+        - team1
+        - team2
+        - sets
+        - isActive
+      properties:
+        id:
+          type: string
+          format: uuid
+        ratingSystem:
+          type: string
+          enum: [NTRP, UTR]
+        matchType:
+          type: string
+          enum: [SINGLES, DOUBLES, MIXED_DOUBLES]
+        matchFormat:
+          type: string
+          enum: [BEST_OF_THREE, BEST_OF_FIVE]
+        matchDate:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [SCHEDULED, IN_PROGRESS, COMPLETED, CANCELLED]
+        team1:
+          $ref: '#/components/schemas/MatchSideResponse'
+        team2:
+          $ref: '#/components/schemas/MatchSideResponse'
+        winnerTeamId:
+          type: string
+          format: uuid
+          nullable: true
+        sets:
+          type: array
+          items:
+            $ref: '#/components/schemas/MatchSetResponse'
+        venue:
+          type: string
+          nullable: true
+        tournamentName:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        ratedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdBy:
+          type: string
+          format: uuid
+          nullable: true
+        recordedBy:
+          type: string
+          format: uuid
           nullable: true
