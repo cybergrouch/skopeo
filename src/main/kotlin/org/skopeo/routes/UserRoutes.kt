@@ -44,18 +44,28 @@ fun Application.configureUserRoutes(service: UserService = UserService()) {
     }
 }
 
+private val FILTER_PARAMS = listOf("name", "sex", "age", "rating")
+
 private fun Route.searchUsers(service: UserService) {
     get {
         respondMappingErrors {
-            val name = call.request.queryParameters["name"]
-            val ids = call.request.queryParameters["ids"]
+            val params = call.request.queryParameters
+            val ids = params["ids"]
             val results =
-                when {
-                    name != null && ids != null ->
-                        throw IllegalArgumentException("provide either 'name' or 'ids', not both")
-                    name != null -> service.searchByName(token = verifiedToken(), name = name)
-                    ids != null -> service.findByIds(token = verifiedToken(), ids = parseIds(ids))
-                    else -> throw IllegalArgumentException("a 'name' or 'ids' query parameter is required")
+                if (ids != null) {
+                    // Id resolution is its own exclusive mode — it can't be combined with filters.
+                    require(FILTER_PARAMS.none { params[it] != null }) {
+                        "'ids' cannot be combined with other filters"
+                    }
+                    service.findByIds(token = verifiedToken(), ids = parseIds(ids))
+                } else {
+                    service.search(
+                        token = verifiedToken(),
+                        name = params["name"],
+                        sex = params["sex"],
+                        age = params["age"],
+                        rating = params["rating"],
+                    )
                 }
             call.respond(status = HttpStatusCode.OK, message = results.map { it.toSummary() })
         }

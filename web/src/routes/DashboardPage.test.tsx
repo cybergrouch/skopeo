@@ -26,6 +26,9 @@ vi.mock('./dashboard/AdminTab', () => ({
 vi.mock('./dashboard/MatchesTab', () => ({
   MatchesTab: () => <div>matches content</div>,
 }))
+vi.mock('./dashboard/ResearchTab', () => ({
+  ResearchTab: () => <div>research content</div>,
+}))
 
 function renderDashboard() {
   return render(
@@ -54,6 +57,7 @@ describe('DashboardPage', () => {
     renderDashboard()
     expect(screen.getByRole('tab', { name: 'Profile' })).toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: 'Matches' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Research' })).not.toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: 'Admin' })).not.toBeInTheDocument()
   })
 
@@ -64,6 +68,7 @@ describe('DashboardPage', () => {
     })
     renderDashboard()
     expect(screen.getByRole('tab', { name: 'Matches' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Research' })).toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: 'Admin' })).not.toBeInTheDocument()
   })
 
@@ -79,6 +84,9 @@ describe('DashboardPage', () => {
 
     await user.click(screen.getByRole('tab', { name: 'Matches' }))
     expect(screen.getByText('matches content')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('tab', { name: 'Research' }))
+    expect(screen.getByText('research content')).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: 'Admin' }))
     expect(screen.getByText('admin content')).toBeInTheDocument()

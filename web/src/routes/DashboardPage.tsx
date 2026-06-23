@@ -8,6 +8,7 @@ import { useGetApiV1UsersMe } from '@/api/generated/users/users'
 import { ProfileTab } from './dashboard/ProfileTab'
 import { AdminTab } from './dashboard/AdminTab'
 import { MatchesTab } from './dashboard/MatchesTab'
+import { ResearchTab } from './dashboard/ResearchTab'
 
 export function DashboardPage() {
   const navigate = useNavigate()
@@ -48,6 +49,9 @@ export function DashboardPage() {
               {showMatches ? (
                 <TabsTrigger value="matches">Matches</TabsTrigger>
               ) : null}
+              {showMatches ? (
+                <TabsTrigger value="research">Research</TabsTrigger>
+              ) : null}
               {showAdmin ? (
                 <TabsTrigger value="admin">Admin</TabsTrigger>
               ) : null}
@@ -59,6 +63,11 @@ export function DashboardPage() {
             {showMatches ? (
               <TabsContent value="matches">
                 <MatchesTab />
+              </TabsContent>
+            ) : null}
+            {showMatches ? (
+              <TabsContent value="research">
+                <ResearchTab />
               </TabsContent>
             ) : null}
             {showAdmin ? (

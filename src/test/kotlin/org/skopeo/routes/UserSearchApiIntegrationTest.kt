@@ -10,6 +10,7 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
+import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
@@ -21,6 +22,7 @@ import io.ktor.server.testing.testApplication
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.dto.rating.SetRatingRequest
 import org.skopeo.dto.user.CreateUserRequest
 import org.skopeo.dto.user.UserResponse
 import org.skopeo.dto.user.UserSummaryResponse
@@ -91,6 +93,37 @@ class UserSearchApiIntegrationTest {
         params: String,
     ) = get("/api/v1/users${if (params.isEmpty()) "" else "?$params"}") {
         header(HttpHeaders.Authorization, "Bearer $token")
+    }
+
+    /** Query with properly-encoded filter params (handles interval brackets/parens). */
+    private suspend fun HttpClient.searchWith(
+        token: String,
+        vararg filters: Pair<String, String>,
+    ) = get("/api/v1/users") {
+        header(HttpHeaders.Authorization, "Bearer $token")
+        url { filters.forEach { (key, value) -> parameters.append(key, value) } }
+    }
+
+    private suspend fun HttpClient.provisionProfile(
+        uid: String,
+        displayName: String,
+        sex: String? = null,
+        dateOfBirth: String? = null,
+    ): UserResponse =
+        post("/api/v1/users") {
+            header(HttpHeaders.Authorization, "Bearer ${TestFirebaseAuth.mintToken(uid)}")
+            contentType(ContentType.Application.Json)
+            setBody(CreateUserRequest(displayName = displayName, sex = sex, dateOfBirth = dateOfBirth))
+        }.body()
+
+    private suspend fun HttpClient.rate(
+        adminToken: String,
+        userId: String,
+        value: String,
+    ) = put("/api/v1/users/$userId/ratings/NTRP") {
+        header(HttpHeaders.Authorization, "Bearer $adminToken")
+        contentType(ContentType.Application.Json)
+        setBody(SetRatingRequest(value = value))
     }
 
     @Test
@@ -219,5 +252,80 @@ class UserSearchApiIntegrationTest {
         withApp { client ->
             val host = seedStaff("host", setOf(Capability.HOST))
             client.lookup(host, "ids=not-a-uuid").status shouldBe HttpStatusCode.BadRequest
+        }
+
+    @Test
+    fun `filters by sex`() =
+        withApp { client ->
+            val host = seedStaff("host", setOf(Capability.HOST))
+            client.provisionProfile("u1", "Alice", sex = "Female")
+            client.provisionProfile("u2", "Bob", sex = "Male")
+
+            val results = client.searchWith(host, "sex" to "Female").body<List<UserSummaryResponse>>()
+
+            results.map { it.displayName } shouldBe listOf("Alice")
+        }
+
+    @Test
+    fun `filters by age range`() =
+        withApp { client ->
+            val host = seedStaff("host", setOf(Capability.HOST))
+            client.provisionProfile("u1", "Twenties", dateOfBirth = "2000-01-01") // ~26
+            client.provisionProfile("u2", "Teen", dateOfBirth = "2012-01-01") // ~14
+            client.provisionProfile("u3", "Older", dateOfBirth = "1985-01-01") // ~41
+
+            val results = client.searchWith(host, "age" to "(20,30]").body<List<UserSummaryResponse>>()
+
+            results.map { it.displayName } shouldBe listOf("Twenties")
+        }
+
+    @Test
+    fun `filters by NTRP rating range`() =
+        withApp { client ->
+            val admin = seedStaff("admin", setOf(Capability.ADMINISTRATOR))
+            val a = client.provisionProfile("u1", "Mid")
+            val b = client.provisionProfile("u2", "High")
+            client.rate(admin, a.id, "4.0")
+            client.rate(admin, b.id, "5.5")
+
+            val results = client.searchWith(admin, "rating" to "[3.5,4.5)").body<List<UserSummaryResponse>>()
+
+            results.map { it.displayName } shouldBe listOf("Mid")
+        }
+
+    @Test
+    fun `combines name and sex filters`() =
+        withApp { client ->
+            val host = seedStaff("host", setOf(Capability.HOST))
+            client.provisionProfile("u1", "Alice", sex = "Female")
+            client.provisionProfile("u2", "Alicia", sex = "Male")
+
+            val results =
+                client.searchWith(host, "name" to "ali", "sex" to "Female").body<List<UserSummaryResponse>>()
+
+            results.map { it.displayName } shouldBe listOf("Alice")
+        }
+
+    @Test
+    fun `ids cannot be combined with filters`() =
+        withApp { client ->
+            val host = seedStaff("host", setOf(Capability.HOST))
+            client
+                .searchWith(host, "ids" to java.util.UUID.randomUUID().toString(), "sex" to "Male")
+                .status shouldBe HttpStatusCode.BadRequest
+        }
+
+    @Test
+    fun `an invalid sex value is a 400`() =
+        withApp { client ->
+            val host = seedStaff("host", setOf(Capability.HOST))
+            client.searchWith(host, "sex" to "Other").status shouldBe HttpStatusCode.BadRequest
+        }
+
+    @Test
+    fun `a malformed interval is a 400`() =
+        withApp { client ->
+            val host = seedStaff("host", setOf(Capability.HOST))
+            client.searchWith(host, "rating" to "3.0,4.0").status shouldBe HttpStatusCode.BadRequest
         }
 }
