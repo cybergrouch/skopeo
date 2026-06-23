@@ -34,12 +34,15 @@ export default defineConfig({
       provider: 'v8',
       reportsDirectory: './coverage',
       reporter: ['text', 'lcov'],
-      // Mirror the backend: exclude generated/config/entry glue from coverage.
+      // Mirror the backend: exclude generated code and pure SDK-init/composition
+      // glue (like the backend excludes config/ and Application) from coverage.
       include: ['src/**/*.{ts,tsx}'],
       exclude: [
         'src/api/generated/**',
         'src/test/**',
         'src/main.tsx',
+        'src/App.tsx', // router/provider composition
+        'src/lib/firebase.ts', // Firebase SDK initialization
         'src/vite-env.d.ts',
         '**/*.d.ts',
       ],
