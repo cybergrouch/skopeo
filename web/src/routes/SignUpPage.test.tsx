@@ -1,11 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { FirebaseError } from 'firebase/app'
 import { SignUpPage } from './SignUpPage'
 
-// Hoisted spies so the vi.mock factories (hoisted above imports) can close over them.
 const { signUpWithEmail, signInWithGoogle, mutateAsync, navigateMock } =
   vi.hoisted(() => ({
     signUpWithEmail: vi.fn(),
@@ -17,11 +16,9 @@ const { signUpWithEmail, signInWithGoogle, mutateAsync, navigateMock } =
 vi.mock('@/auth/useAuth', () => ({
   useAuth: () => ({ signUpWithEmail, signInWithGoogle }),
 }))
-
 vi.mock('@/api/generated/users/users', () => ({
   usePostApiV1Users: () => ({ mutateAsync }),
 }))
-
 vi.mock('react-router-dom', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react-router-dom')>()
   return { ...actual, useNavigate: () => navigateMock }
@@ -33,6 +30,13 @@ function renderSignUp() {
       <SignUpPage />
     </MemoryRouter>,
   )
+}
+
+async function fillProfile(user: ReturnType<typeof userEvent.setup>) {
+  fireEvent.change(screen.getByLabelText('Date of birth'), {
+    target: { value: '2000-01-01' },
+  })
+  await user.selectOptions(screen.getByLabelText('Sex'), 'Male')
 }
 
 describe('SignUpPage', () => {
@@ -47,17 +51,17 @@ describe('SignUpPage', () => {
     renderSignUp()
 
     await user.type(screen.getByLabelText('Display name'), 'Roger F.')
+    await fillProfile(user)
     await user.type(screen.getByLabelText('Email'), 'roger@example.com')
     await user.type(screen.getByLabelText('Password'), 'secret123')
     await user.click(screen.getByRole('button', { name: /create account/i }))
 
     await waitFor(() =>
-      expect(signUpWithEmail).toHaveBeenCalledWith(
-        'roger@example.com',
-        'secret123',
-      ),
+      expect(signUpWithEmail).toHaveBeenCalledWith('roger@example.com', 'secret123'),
     )
-    expect(mutateAsync).toHaveBeenCalledWith({ data: { displayName: 'Roger F.' } })
+    expect(mutateAsync).toHaveBeenCalledWith({
+      data: { displayName: 'Roger F.', sex: 'Male', dateOfBirth: '2000-01-01' },
+    })
     expect(navigateMock).toHaveBeenCalledWith('/dashboard', { replace: true })
   })
 
@@ -67,12 +71,15 @@ describe('SignUpPage', () => {
     const user = userEvent.setup()
     renderSignUp()
 
+    await fillProfile(user)
     await user.type(screen.getByLabelText('Email'), 'roger@example.com')
     await user.type(screen.getByLabelText('Password'), 'secret123')
     await user.click(screen.getByRole('button', { name: /create account/i }))
 
     await waitFor(() =>
-      expect(mutateAsync).toHaveBeenCalledWith({ data: { displayName: null } }),
+      expect(mutateAsync).toHaveBeenCalledWith({
+        data: { displayName: null, sex: 'Male', dateOfBirth: '2000-01-01' },
+      }),
     )
   })
 
@@ -83,6 +90,7 @@ describe('SignUpPage', () => {
     const user = userEvent.setup()
     renderSignUp()
 
+    await fillProfile(user)
     await user.type(screen.getByLabelText('Email'), 'taken@example.com')
     await user.type(screen.getByLabelText('Password'), 'secret123')
     await user.click(screen.getByRole('button', { name: /create account/i }))
@@ -94,17 +102,33 @@ describe('SignUpPage', () => {
     expect(navigateMock).not.toHaveBeenCalled()
   })
 
-  it('provisions with a null display name when signing up with Google', async () => {
+  it('signs up with Google once the profile is filled', async () => {
     signInWithGoogle.mockResolvedValue({})
     mutateAsync.mockResolvedValue({})
     const user = userEvent.setup()
     renderSignUp()
 
+    await fillProfile(user)
     await user.click(screen.getByRole('button', { name: /continue with google/i }))
 
     await waitFor(() => expect(signInWithGoogle).toHaveBeenCalled())
-    expect(mutateAsync).toHaveBeenCalledWith({ data: { displayName: null } })
+    expect(mutateAsync).toHaveBeenCalledWith({
+      data: { displayName: null, sex: 'Male', dateOfBirth: '2000-01-01' },
+    })
     expect(navigateMock).toHaveBeenCalledWith('/dashboard', { replace: true })
+  })
+
+  it('requires date of birth and sex before Google sign-up', async () => {
+    const user = userEvent.setup()
+    renderSignUp()
+
+    await user.click(screen.getByRole('button', { name: /continue with google/i }))
+
+    expect(
+      await screen.findByText(/Please enter your date of birth and sex/i),
+    ).toBeInTheDocument()
+    expect(signInWithGoogle).not.toHaveBeenCalled()
+    expect(mutateAsync).not.toHaveBeenCalled()
   })
 
   it('shows an error when Google sign-up fails', async () => {
@@ -114,6 +138,7 @@ describe('SignUpPage', () => {
     const user = userEvent.setup()
     renderSignUp()
 
+    await fillProfile(user)
     await user.click(screen.getByRole('button', { name: /continue with google/i }))
 
     expect(await screen.findByText('Sign-in was cancelled.')).toBeInTheDocument()

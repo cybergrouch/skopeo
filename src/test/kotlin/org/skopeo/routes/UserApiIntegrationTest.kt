@@ -18,6 +18,7 @@ import io.ktor.client.statement.HttpResponse
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.content.TextContent
 import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.testing.ApplicationTestBuilder
@@ -53,7 +54,7 @@ class UserApiIntegrationTest {
 
     private fun ApplicationTestBuilder.jsonClient(): HttpClient = createClient { install(ContentNegotiation) { json() } }
 
-    private val defaultBody = CreateUserRequest(displayName = "Juan")
+    private val defaultBody = CreateUserRequest(displayName = "Juan", dateOfBirth = "2000-01-01", sex = "Male")
 
     private suspend fun HttpClient.createUser(
         token: String,
@@ -167,6 +168,23 @@ class UserApiIntegrationTest {
         withApp { client ->
             val token = TestFirebaseAuth.mintToken(uid = "fb-5")
 
-            client.createUser(token, CreateUserRequest(displayName = "Juan", sex = "X")).status shouldBe HttpStatusCode.BadRequest
+            val badSex = CreateUserRequest(displayName = "Juan", sex = "X", dateOfBirth = "2000-01-01")
+            client.createUser(token, badSex).status shouldBe HttpStatusCode.BadRequest
+        }
+
+    @Test
+    fun `sex and date of birth are required`() =
+        withApp { client ->
+            val token = TestFirebaseAuth.mintToken(uid = "fb-6")
+
+            suspend fun postRaw(json: String) =
+                client
+                    .post("/api/v1/users") {
+                        header(HttpHeaders.Authorization, "Bearer $token")
+                        setBody(TextContent(json, ContentType.Application.Json))
+                    }.status
+
+            postRaw("""{"displayName":"Juan","dateOfBirth":"2000-01-01"}""") shouldBe HttpStatusCode.BadRequest
+            postRaw("""{"displayName":"Juan","sex":"Male"}""") shouldBe HttpStatusCode.BadRequest
         }
 }

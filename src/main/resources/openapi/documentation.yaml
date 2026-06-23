@@ -1364,9 +1364,13 @@ components:
       type: object
       description: |
         Profile details the client supplies. Identity and email come from the verified
-        token and are ignored if present here. displayName is the single name shown in the
-        UI; if omitted, the token's name (Google/Facebook) is used. Structured names
-        (FIRST/LAST/nicknames) are added later via the names API.
+        token and are ignored if present here. dateOfBirth and sex are required — every
+        member supplies them at sign-up because they drive tournament-category eligibility.
+        displayName is the single name shown in the UI; if omitted, the token's name
+        (Google/Facebook) is used. Structured names (FIRST/LAST/nicknames) come later.
+      required:
+        - dateOfBirth
+        - sex
       properties:
         displayName:
           type: string
@@ -1377,11 +1381,9 @@ components:
         dateOfBirth:
           type: string
           format: date
-          nullable: true
           description: ISO-8601 (yyyy-MM-dd)
         sex:
           type: string
-          nullable: true
           enum: [Male, Female]
         city:
           type: string

@@ -54,14 +54,14 @@ class UserServiceTest {
         providerUid = uid,
     )
 
-    private val request = CreateUserRequest(displayName = "Juan")
+    private val request = CreateUserRequest(displayName = "Juan", dateOfBirth = "2000-01-01", sex = "Male")
 
     @Test
     fun `provision creates a player then is idempotent`() {
         val first =
             service.provision(
                 token = token(uid = "u1", email = "u1@example.com", emailVerified = true, name = "U One", signInProvider = "google.com"),
-                request = CreateUserRequest(),
+                request = CreateUserRequest(dateOfBirth = "2000-01-01", sex = "Male"),
             )
 
         first.created.shouldBeTrue()
@@ -69,7 +69,7 @@ class UserServiceTest {
         first.user.names.single().value shouldBe "U One" // token display name fallback
         first.user.contacts.single().status shouldBe VerificationStatus.VERIFIED
 
-        val again = service.provision(token = token(uid = "u1"), request = CreateUserRequest())
+        val again = service.provision(token = token(uid = "u1"), request = CreateUserRequest(dateOfBirth = "2000-01-01", sex = "Male"))
         again.created.shouldBeFalse()
         again.user.id shouldBe first.user.id
     }
@@ -113,7 +113,7 @@ class UserServiceTest {
         val user =
             service.provision(
                 token = token(uid = "p1"),
-                request = CreateUserRequest(displayName = "Juan", sex = "Male", city = "Manila"),
+                request = CreateUserRequest(displayName = "Juan", sex = "Male", city = "Manila", dateOfBirth = "2000-01-01"),
             ).user
 
         val patched = service.patchProfile(token = token(uid = "p1"), id = user.id, patch = ProfilePatch(city = "Cebu"))

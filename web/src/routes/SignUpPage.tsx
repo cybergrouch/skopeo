@@ -6,7 +6,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuth } from '@/auth/useAuth'
 import { usePostApiV1Users } from '@/api/generated/users/users'
+import type { CreateUserRequestSex } from '@/api/generated/model'
 import { authErrorMessage } from '@/lib/firebase-errors'
+
+const SEXES = ['Male', 'Female'] as const
 
 export function SignUpPage() {
   const navigate = useNavigate()
@@ -16,13 +19,18 @@ export function SignUpPage() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [sex, setSex] = useState('')
+  const [dateOfBirth, setDateOfBirth] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   // Provisioning the Skopeo profile is the final, idempotent step of sign-up
-  // (POST /api/v1/users); identity comes from the verified token, not the body.
+  // (POST /api/v1/users). Sex and date of birth are required — they drive
+  // tournament-category eligibility — so they ride along from the form.
   async function provisionAndContinue(displayName: string | null) {
-    await provision.mutateAsync({ data: { displayName } })
+    await provision.mutateAsync({
+      data: { displayName, sex: sex as CreateUserRequestSex, dateOfBirth },
+    })
     navigate('/dashboard', { replace: true })
   }
 
@@ -40,11 +48,15 @@ export function SignUpPage() {
   }
 
   async function onGoogle() {
+    if (!sex || !dateOfBirth) {
+      setError('Please enter your date of birth and sex before continuing with Google.')
+      return
+    }
     setError(null)
     setBusy(true)
     try {
       await signInWithGoogle()
-      await provisionAndContinue(null)
+      await provisionAndContinue(name.trim() || null)
     } catch (err) {
       setError(authErrorMessage(err))
       setBusy(false)
@@ -74,6 +86,35 @@ export function SignUpPage() {
             placeholder="Roger F."
             autoComplete="name"
           />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="dateOfBirth">Date of birth</Label>
+          <Input
+            id="dateOfBirth"
+            type="date"
+            required
+            value={dateOfBirth}
+            onChange={(e) => setDateOfBirth(e.target.value)}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="sex">Sex</Label>
+          <select
+            id="sex"
+            required
+            value={sex}
+            onChange={(e) => setSex(e.target.value)}
+            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+          >
+            <option value="" disabled>
+              Select…
+            </option>
+            {SEXES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="space-y-2">
           <Label htmlFor="email">Email</Label>
