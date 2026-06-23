@@ -6,6 +6,7 @@ import { useAuth } from '@/auth/useAuth'
 import { canManageMatches, isAdministrator } from '@/auth/capabilities'
 import { useGetApiV1UsersMe } from '@/api/generated/users/users'
 import { ProfileTab } from './dashboard/ProfileTab'
+import { AdminTab } from './dashboard/AdminTab'
 import { ComingSoon } from './dashboard/ComingSoon'
 
 export function DashboardPage() {
@@ -62,7 +63,7 @@ export function DashboardPage() {
             ) : null}
             {showAdmin ? (
               <TabsContent value="admin">
-                <ComingSoon title="Admin" />
+                <AdminTab />
               </TabsContent>
             ) : null}
           </Tabs>

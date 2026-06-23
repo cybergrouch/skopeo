@@ -16,9 +16,12 @@ vi.mock('react-router-dom', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react-router-dom')>()
   return { ...actual, useNavigate: () => navigateMock }
 })
-// Stub the Profile tab so this test focuses on the shell (tab gating + sign-out).
+// Stub the tab bodies so this test focuses on the shell (tab gating + sign-out).
 vi.mock('./dashboard/ProfileTab', () => ({
   ProfileTab: () => <div>profile content</div>,
+}))
+vi.mock('./dashboard/AdminTab', () => ({
+  AdminTab: () => <div>admin content</div>,
 }))
 
 function renderDashboard() {
@@ -75,7 +78,7 @@ describe('DashboardPage', () => {
     expect(screen.getByText('Coming soon.')).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: 'Admin' }))
-    expect(screen.getByText('Coming soon.')).toBeInTheDocument()
+    expect(screen.getByText('admin content')).toBeInTheDocument()
   })
 
   it('still renders the profile tab when the id is missing', () => {
