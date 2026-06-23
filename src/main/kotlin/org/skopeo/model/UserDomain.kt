@@ -105,7 +105,7 @@ data class User(
     val firebaseUid: String?,
     val photoUrl: String?,
     val dateOfBirth: LocalDate?,
-    val gender: String?,
+    val sex: String?,
     val city: String?,
     val country: String,
     val kycVerified: Boolean,
@@ -125,7 +125,7 @@ data class ProvisionUserCommand(
     val email: ContactInfo? = null,
     val phone: ContactInfo? = null,
     val dateOfBirth: LocalDate? = null,
-    val gender: String? = null,
+    val sex: String? = null,
     val city: String? = null,
     val country: String? = null,
     val capabilities: Set<Capability> = setOf(Capability.PLAYER),
@@ -135,6 +135,6 @@ data class ProvisionUserCommand(
 data class ProfilePatch(
     val photoUrl: String? = null,
     val dateOfBirth: LocalDate? = null,
-    val gender: String? = null,
+    val sex: String? = null,
     val city: String? = null,
 )

@@ -113,16 +113,16 @@ class UserServiceTest {
         val user =
             service.provision(
                 token = token(uid = "p1"),
-                request = CreateUserRequest(displayName = "Juan", gender = "M", city = "Manila"),
+                request = CreateUserRequest(displayName = "Juan", sex = "Male", city = "Manila"),
             ).user
 
         val patched = service.patchProfile(token = token(uid = "p1"), id = user.id, patch = ProfilePatch(city = "Cebu"))
         patched.city shouldBe "Cebu"
-        patched.gender shouldBe "M" // untouched by PATCH
+        patched.sex shouldBe "Male" // untouched by PATCH
 
         val replaced = service.replaceProfile(token = token(uid = "p1"), id = user.id, patch = ProfilePatch(city = "Davao"))
         replaced.city shouldBe "Davao"
-        replaced.gender.shouldBeNull() // cleared by PUT
+        replaced.sex.shouldBeNull() // cleared by PUT
     }
 
     @Test

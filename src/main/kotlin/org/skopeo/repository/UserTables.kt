@@ -10,7 +10,7 @@ import org.jetbrains.exposed.sql.javatime.datetime
 
 // Column widths mirror the V1 schema's VARCHAR sizes.
 private const val FIREBASE_UID_MAX = 128
-private const val GENDER_MAX = 10
+private const val SEX_MAX = 10
 private const val CITY_MAX = 100
 private const val COUNTRY_CODE_LEN = 2
 private const val CONTACT_TYPE_MAX = 10
@@ -27,7 +27,7 @@ internal object UsersTable : UUIDTable("users") {
     val firebaseUid = varchar("firebase_uid", FIREBASE_UID_MAX).nullable()
     val photoUrl = text("photo_url").nullable()
     val dateOfBirth = date("date_of_birth").nullable()
-    val gender = varchar("gender", GENDER_MAX).nullable()
+    val sex = varchar("sex", SEX_MAX).nullable()
     val city = varchar("city", CITY_MAX).nullable()
     val country = varchar("country", COUNTRY_CODE_LEN).default("PH")
     val kycVerified = bool("kyc_verified").default(false)

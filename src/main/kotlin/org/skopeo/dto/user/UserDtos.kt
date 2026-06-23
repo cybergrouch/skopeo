@@ -53,7 +53,7 @@ data class CreateUserRequest(
     val displayName: String? = null,
     val phone: String? = null,
     val dateOfBirth: String? = null,
-    val gender: String? = null,
+    val sex: String? = null,
     val city: String? = null,
     val country: String? = null,
 )
@@ -66,7 +66,7 @@ data class CreateUserRequest(
 data class ProfileRequest(
     val photoUrl: String? = null,
     val dateOfBirth: String? = null,
-    val gender: String? = null,
+    val sex: String? = null,
     val city: String? = null,
 )
 
@@ -76,7 +76,7 @@ data class UserResponse(
     val firebaseUid: String?,
     val photoUrl: String?,
     val dateOfBirth: String?,
-    val gender: String?,
+    val sex: String?,
     val city: String?,
     val country: String,
     val kycVerified: Boolean,
@@ -93,7 +93,7 @@ fun User.toResponse(): UserResponse =
         firebaseUid = firebaseUid,
         photoUrl = photoUrl,
         dateOfBirth = dateOfBirth?.toString(),
-        gender = gender,
+        sex = sex,
         city = city,
         country = country,
         kycVerified = kycVerified,
