@@ -8,11 +8,15 @@ vi.mock('./admin/PendingAssessmentSection', () => ({
 vi.mock('./admin/PendingCalculationSection', () => ({
   PendingCalculationSection: () => <div>pending calculation section</div>,
 }))
+vi.mock('./admin/RoleGrantsSection', () => ({
+  RoleGrantsSection: () => <div>role grants section</div>,
+}))
 
 describe('AdminTab', () => {
-  it('renders both admin sections', () => {
+  it('renders the admin sections', () => {
     render(<AdminTab />)
     expect(screen.getByText('pending assessment section')).toBeInTheDocument()
+    expect(screen.getByText('role grants section')).toBeInTheDocument()
     expect(screen.getByText('pending calculation section')).toBeInTheDocument()
   })
 })

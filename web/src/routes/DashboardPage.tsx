@@ -7,7 +7,7 @@ import { canManageMatches, isAdministrator } from '@/auth/capabilities'
 import { useGetApiV1UsersMe } from '@/api/generated/users/users'
 import { ProfileTab } from './dashboard/ProfileTab'
 import { AdminTab } from './dashboard/AdminTab'
-import { ComingSoon } from './dashboard/ComingSoon'
+import { MatchesTab } from './dashboard/MatchesTab'
 
 export function DashboardPage() {
   const navigate = useNavigate()
@@ -58,7 +58,7 @@ export function DashboardPage() {
             </TabsContent>
             {showMatches ? (
               <TabsContent value="matches">
-                <ComingSoon title="Matches" />
+                <MatchesTab />
               </TabsContent>
             ) : null}
             {showAdmin ? (
