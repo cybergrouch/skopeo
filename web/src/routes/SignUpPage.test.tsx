@@ -40,7 +40,7 @@ describe('SignUpPage', () => {
     vi.clearAllMocks()
   })
 
-  it('signs up, provisions the profile, and navigates to /pending', async () => {
+  it('signs up, provisions the profile, and navigates to /dashboard', async () => {
     signUpWithEmail.mockResolvedValue({})
     mutateAsync.mockResolvedValue({})
     const user = userEvent.setup()
@@ -58,7 +58,7 @@ describe('SignUpPage', () => {
       ),
     )
     expect(mutateAsync).toHaveBeenCalledWith({ data: { displayName: 'Roger F.' } })
-    expect(navigateMock).toHaveBeenCalledWith('/pending', { replace: true })
+    expect(navigateMock).toHaveBeenCalledWith('/dashboard', { replace: true })
   })
 
   it('provisions with a null display name when the name is left blank', async () => {
@@ -104,7 +104,7 @@ describe('SignUpPage', () => {
 
     await waitFor(() => expect(signInWithGoogle).toHaveBeenCalled())
     expect(mutateAsync).toHaveBeenCalledWith({ data: { displayName: null } })
-    expect(navigateMock).toHaveBeenCalledWith('/pending', { replace: true })
+    expect(navigateMock).toHaveBeenCalledWith('/dashboard', { replace: true })
   })
 
   it('shows an error when Google sign-up fails', async () => {

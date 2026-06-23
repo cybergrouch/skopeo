@@ -9,7 +9,7 @@ import { AuthProvider } from '@/auth/AuthProvider'
 import { RequireAuth } from '@/auth/RequireAuth'
 import { SignUpPage } from '@/routes/SignUpPage'
 import { LoginPage } from '@/routes/LoginPage'
-import { PendingAssessmentPage } from '@/routes/PendingAssessmentPage'
+import { DashboardPage } from '@/routes/DashboardPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -26,15 +26,15 @@ function App() {
             <Route path="/signup" element={<SignUpPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route
-              path="/pending"
+              path="/dashboard"
               element={
                 <RequireAuth>
-                  <PendingAssessmentPage />
+                  <DashboardPage />
                 </RequireAuth>
               }
             />
-            <Route path="/" element={<Navigate to="/pending" replace />} />
-            <Route path="*" element={<Navigate to="/pending" replace />} />
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>

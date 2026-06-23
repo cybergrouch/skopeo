@@ -23,7 +23,7 @@ export function SignUpPage() {
   // (POST /api/v1/users); identity comes from the verified token, not the body.
   async function provisionAndContinue(displayName: string | null) {
     await provision.mutateAsync({ data: { displayName } })
-    navigate('/pending', { replace: true })
+    navigate('/dashboard', { replace: true })
   }
 
   async function onEmailSubmit(event: FormEvent) {
