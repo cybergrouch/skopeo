@@ -23,6 +23,9 @@ vi.mock('./dashboard/ProfileTab', () => ({
 vi.mock('./dashboard/AdminTab', () => ({
   AdminTab: () => <div>admin content</div>,
 }))
+vi.mock('./dashboard/MatchesTab', () => ({
+  MatchesTab: () => <div>matches content</div>,
+}))
 
 function renderDashboard() {
   return render(
@@ -75,7 +78,7 @@ describe('DashboardPage', () => {
     expect(screen.getByRole('tab', { name: 'Admin' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: 'Matches' }))
-    expect(screen.getByText('Coming soon.')).toBeInTheDocument()
+    expect(screen.getByText('matches content')).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: 'Admin' }))
     expect(screen.getByText('admin content')).toBeInTheDocument()
