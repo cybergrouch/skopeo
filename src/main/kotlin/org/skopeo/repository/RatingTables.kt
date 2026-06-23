@@ -15,7 +15,7 @@ private const val CONFIDENCE_PRECISION = 3
 private const val CONFIDENCE_SCALE = 2
 private const val LEVEL_MAX = 10
 
-/** Current rating per (user, system). Flyway owns the DDL; this maps only what the repository touches. */
+/** Current rating per user (NTRP-only). Flyway owns the DDL; this maps only what the repository touches. */
 internal object UserRatingsTable : UUIDTable("user_ratings") {
     val userId = reference("user_id", UsersTable, onDelete = ReferenceOption.CASCADE)
     val currentRating = decimal("current_rating", RATING_PRECISION, RATING_SCALE)
