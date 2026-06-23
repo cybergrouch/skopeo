@@ -67,7 +67,7 @@ class RankingCalculationApiErrorTest {
         }
 
     @Test
-    fun testSuccessfulUTRRequest() =
+    fun testSuccessfulNtrpRequest() =
         testApplication {
             application {
                 module(initDatabase = false)
@@ -80,13 +80,13 @@ class RankingCalculationApiErrorTest {
                     "T1": {
                       "teamId": "T1",
                       "name": "Player 1",
-                      "players": [{"playerId": "P1", "name": "Player 1", "rating": {"value": "12.5", "system": "UTR"}}],
+                      "players": [{"playerId": "P1", "name": "Player 1", "rating": {"value": "4.5", "system": "NTRP"}}],
                       "teamType": "SINGLES"
                     },
                     "T2": {
                       "teamId": "T2",
                       "name": "Player 2",
-                      "players": [{"playerId": "P2", "name": "Player 2", "rating": {"value": "10.0", "system": "UTR"}}],
+                      "players": [{"playerId": "P2", "name": "Player 2", "rating": {"value": "4.0", "system": "NTRP"}}],
                       "teamType": "SINGLES"
                     }
                   },

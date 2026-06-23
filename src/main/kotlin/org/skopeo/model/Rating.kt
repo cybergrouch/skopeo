@@ -43,15 +43,8 @@ data class Rating(
             value.toDouble()
                 ?: throw IllegalArgumentException("Rating value must be a valid number, got '$value'")
 
-        // Validate system-specific constraints
-        when (system) {
-            RatingSystem.NTRP -> {
-                require(numericValue in 1.0..7.0) { "NTRP rating must be between 1.0 and 7.0, got $value" }
-            }
-            RatingSystem.UTR -> {
-                require(numericValue in 1.0..16.0) { "UTR rating must be between 1.0 and 16.0, got $value" }
-            }
-        }
+        // Validate the NTRP range.
+        require(numericValue in 1.0..7.0) { "NTRP rating must be between 1.0 and 7.0, got $value" }
 
         // Validate that published level matches the rating system
         require(publishedLevel.system == system) {

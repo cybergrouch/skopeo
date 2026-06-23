@@ -59,9 +59,7 @@ class RatingRepositoryTest {
 
         ratings.setRating(userId, RatingSystem.NTRP, BigDecimal("4.0"), "4.0", BigDecimal("0.60"))
         ratings.findByUserAndSystem(userId, RatingSystem.NTRP)!!.currentRating shouldBe BigDecimal("4.000000")
-
-        ratings.setRating(userId, RatingSystem.UTR, BigDecimal("9.0"), "9.0", BigDecimal("0.50"))
-        ratings.findByUser(userId).size shouldBe 2
+        ratings.findByUser(userId).size shouldBe 1
     }
 
     @Test

@@ -42,7 +42,6 @@ import kotlin.math.abs
  * - Verifies audit trail structure and content
  * - Tests calculation start, match result, ranking adjustments, rating changes
  * - Validates zero-sum property and audit entry order
- * - Covers both NTRP and UTR rating systems
  */
 class PerformanceBasedRankingCalculatorImplTest {
     private val calculator = PerformanceBasedRankingCalculatorImpl()
@@ -65,27 +64,6 @@ class PerformanceBasedRankingCalculatorImplTest {
                     scenario.winner,
                     scenario.expectedNtrpP1Delta,
                     scenario.expectedNtrpP2Delta,
-                    scenario.description,
-                )
-            }
-
-        /**
-         * UTR test scenarios from shared TestScenarios.
-         *
-         * Format: scenario, p1Rating, p2Rating, p1Games, p2Games, winner, expectedP1Delta, expectedP2Delta, description
-         */
-        @JvmStatic
-        fun utrScenarios(): Stream<Arguments> =
-            TestScenarios.allScenarios.stream().map { scenario ->
-                Arguments.of(
-                    scenario.id,
-                    scenario.utrP1,
-                    scenario.utrP2,
-                    scenario.p1Games,
-                    scenario.p2Games,
-                    scenario.winner,
-                    scenario.expectedUtrP1Delta,
-                    scenario.expectedUtrP2Delta,
                     scenario.description,
                 )
             }
@@ -121,36 +99,6 @@ class PerformanceBasedRankingCalculatorImplTest {
         )
     }
 
-    private fun createUTRRequest(
-        p1Rating: String,
-        p2Rating: String,
-        p1Games: Int,
-        p2Games: Int,
-        // "P1"/"P2" (player ID) or "T1"/"T2" (team ID)
-        winner: String,
-        smoothingEnabled: Boolean = false,
-        smoothingFactor: Double = 0.5,
-    ): RankingCalculationRequest {
-        // Map player ID to team ID (pass through if already a team ID)
-        val teamWinner =
-            when (winner) {
-                "P1" -> "T1"
-                "P2" -> "T2"
-                else -> winner // Already a team ID
-            }
-
-        return createSinglesRequest(
-            p1Rating = p1Rating,
-            p2Rating = p2Rating,
-            system = RatingSystem.UTR,
-            p1Games = p1Games,
-            p2Games = p2Games,
-            winner = teamWinner,
-            smoothingEnabled = smoothingEnabled,
-            smoothingFactor = smoothingFactor,
-        )
-    }
-
     @ParameterizedTest(name = "{0}: {8}")
     @MethodSource("ntrpScenarios")
     @DisplayName("NTRP rating delta calculations")
@@ -172,41 +120,6 @@ class PerformanceBasedRankingCalculatorImplTest {
             calculator.calculate(
                 request =
                     createRequest(
-                        p1Rating = p1Rating,
-                        p2Rating = p2Rating,
-                        p1Games = p1Games,
-                        p2Games = p2Games,
-                        winner = winner,
-                        smoothingEnabled = fullScenario.smoothingEnabled,
-                        smoothingFactor = fullScenario.smoothingFactor,
-                    ),
-            )
-
-        result.response.ratingChanges["P1"]?.change shouldBe expectedP1Delta
-        result.response.ratingChanges["P2"]?.change shouldBe expectedP2Delta
-    }
-
-    @ParameterizedTest(name = "{0}: {8}")
-    @MethodSource("utrScenarios")
-    @DisplayName("UTR rating delta calculations")
-    fun testUTRRatingDeltas(
-        scenario: String,
-        p1Rating: String,
-        p2Rating: String,
-        p1Games: Int,
-        p2Games: Int,
-        winner: String,
-        expectedP1Delta: String,
-        expectedP2Delta: String,
-        description: String,
-    ) {
-        // Get the full scenario to access smoothing parameters
-        val fullScenario = TestScenarios.allScenarios.find { it.id == scenario }!!
-
-        val result =
-            calculator.calculate(
-                request =
-                    createUTRRequest(
                         p1Rating = p1Rating,
                         p2Rating = p2Rating,
                         p1Games = p1Games,
@@ -383,23 +296,6 @@ class PerformanceBasedRankingCalculatorImplTest {
                 entry.context shouldContainKey "change"
                 entry.context shouldContainKey "newValue"
                 entry.context shouldContainKey "clamped"
-            }
-        }
-
-        @Test
-        @DisplayName("Contains UTR system-specific changes")
-        fun testAuditTrailForUTRMatch() {
-            val request = createUTRAuditTestRequest()
-            val result = calculator.calculate(request)
-
-            val utrChanges = result.audit.filter { it.message.contains("UTR change") }
-
-            utrChanges.size shouldBe 2
-
-            utrChanges.forEach { entry ->
-                entry.context["system"] shouldBe "UTR"
-                entry.context shouldContainKey "original"
-                entry.context shouldContainKey "change"
             }
         }
 
@@ -717,92 +613,6 @@ class PerformanceBasedRankingCalculatorImplTest {
         }
 
         @Nested
-        @DisplayName("UTR Smoothing")
-        inner class UTRSmoothing {
-            @Test
-            @DisplayName("Without smoothing applies full change")
-            fun testWithoutSmoothing() {
-                val request =
-                    createUTRRequest(
-                        p1Rating = "10.0",
-                        p2Rating = "10.0",
-                        p1Games = 6,
-                        p2Games = 0,
-                        options = RatingCalculationOptions(smoothingEnabled = false),
-                    )
-
-                val result = calculator.calculate(request = request)
-
-                val p1NewRating = result.response.ratingChanges["P1"]!!.newRating.value.toDouble()
-                val p1OldRating = 10.0
-                val p1Change = result.response.ratingChanges["P1"]!!.change.toDouble()
-
-                // Without smoothing: new = old + change
-                p1NewRating shouldBe (p1OldRating + p1Change)
-            }
-
-            @Test
-            @DisplayName("With smoothing (0.5) applies half change")
-            fun testWithSmoothingHalf() {
-                val requestNoSmoothing =
-                    createUTRRequest(
-                        p1Rating = "10.0",
-                        p2Rating = "10.0",
-                        p1Games = 6,
-                        p2Games = 0,
-                        options = RatingCalculationOptions(smoothingEnabled = false),
-                    )
-                val resultNoSmoothing = calculator.calculate(request = requestNoSmoothing)
-                val fullChange = resultNoSmoothing.response.ratingChanges["P1"]!!.change.toDouble()
-
-                val requestWithSmoothing =
-                    createUTRRequest(
-                        p1Rating = "10.0",
-                        p2Rating = "10.0",
-                        p1Games = 6,
-                        p2Games = 0,
-                        options = RatingCalculationOptions(smoothingEnabled = true, smoothingFactor = 0.5),
-                    )
-                val resultWithSmoothing = calculator.calculate(request = requestWithSmoothing)
-                val smoothedChange = resultWithSmoothing.response.ratingChanges["P1"]!!.change.toDouble()
-
-                // With smoothing factor 0.5: change should be approximately half
-                smoothedChange.shouldBeBetween(fullChange * 0.45, fullChange * 0.55, 0.0)
-            }
-
-            @Test
-            @DisplayName("UTR scaling preserved with smoothing")
-            fun testUTRScalingPreserved() {
-                // Test that UTR changes are still 2.5× NTRP changes even with smoothing
-                val ntrpRequest =
-                    createNTRPRequest(
-                        p1Rating = "4.0",
-                        p2Rating = "4.0",
-                        p1Games = 6,
-                        p2Games = 0,
-                        options = RatingCalculationOptions(smoothingEnabled = true, smoothingFactor = 0.5),
-                    )
-                val ntrpResult = calculator.calculate(request = ntrpRequest)
-                val ntrpChange = ntrpResult.response.ratingChanges["P1"]!!.change.toDouble()
-
-                val utrRequest =
-                    createUTRRequest(
-                        p1Rating = "10.0",
-                        p2Rating = "10.0",
-                        p1Games = 6,
-                        p2Games = 0,
-                        options = RatingCalculationOptions(smoothingEnabled = true, smoothingFactor = 0.5),
-                    )
-                val utrResult = calculator.calculate(request = utrRequest)
-                val utrChange = utrResult.response.ratingChanges["P1"]!!.change.toDouble()
-
-                // UTR should be approximately 2.5× NTRP
-                val ratio = utrChange / ntrpChange
-                ratio.shouldBeBetween(2.45, 2.55, 0.0)
-            }
-        }
-
-        @Nested
         @DisplayName("Edge Cases")
         inner class EdgeCases {
             @Test
@@ -896,26 +706,6 @@ class PerformanceBasedRankingCalculatorImplTest {
                 smoothingFactor = options?.smoothingFactor ?: 0.5,
             )
         }
-
-        private fun createUTRRequest(
-            p1Rating: String,
-            p2Rating: String,
-            p1Games: Int,
-            p2Games: Int,
-            options: RatingCalculationOptions? = null,
-        ): RankingCalculationRequest {
-            val winner = if (p1Games > p2Games) "T1" else "T2"
-            return createSinglesRequest(
-                p1Rating = p1Rating,
-                p2Rating = p2Rating,
-                system = RatingSystem.UTR,
-                p1Games = p1Games,
-                p2Games = p2Games,
-                winner = winner,
-                smoothingEnabled = options?.smoothingEnabled ?: false,
-                smoothingFactor = options?.smoothingFactor ?: 0.5,
-            )
-        }
     }
 
     // ========================================
@@ -961,51 +751,6 @@ class PerformanceBasedRankingCalculatorImplTest {
                 ),
                 SetScore(
                     games = mapOf("T1" to 6, "T2" to 3),
-                    winnerTeamId = "T1",
-                ),
-            )
-
-        return RankingCalculationRequest(
-            teams = mapOf("T1" to team1, "T2" to team2),
-            matchScore = MatchScore(sets = sets),
-        )
-    }
-
-    private fun createUTRAuditTestRequest(): RankingCalculationRequest {
-        val player1 =
-            PlayerProfile(
-                playerId = "P789",
-                name = "Mike Wilson",
-                rating = Rating.fromValue(value = "8.5", system = RatingSystem.UTR),
-            )
-
-        val player2 =
-            PlayerProfile(
-                playerId = "P101",
-                name = "Sarah Lee",
-                rating = Rating.fromValue(value = "8.2", system = RatingSystem.UTR),
-            )
-
-        val team1 =
-            Team(
-                teamId = "T1",
-                name = player1.name,
-                players = listOf(player1),
-                teamType = TeamType.SINGLES,
-            )
-
-        val team2 =
-            Team(
-                teamId = "T2",
-                name = player2.name,
-                players = listOf(player2),
-                teamType = TeamType.SINGLES,
-            )
-
-        val sets =
-            listOf(
-                SetScore(
-                    games = mapOf("T1" to 6, "T2" to 4),
                     winnerTeamId = "T1",
                 ),
             )

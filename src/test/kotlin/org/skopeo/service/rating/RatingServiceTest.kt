@@ -89,7 +89,6 @@ class RatingServiceTest {
         val player = provisionUser("player")
 
         shouldThrow<IllegalArgumentException> { service.setRating(token("root"), player.id, RatingSystem.NTRP, "9.0", null) }
-        shouldThrow<IllegalArgumentException> { service.setRating(token("root"), player.id, RatingSystem.UTR, "20", null) }
         shouldThrow<IllegalArgumentException> { service.setRating(token("root"), player.id, RatingSystem.NTRP, "4.0", "1.5") }
     }
 

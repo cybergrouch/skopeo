@@ -86,12 +86,8 @@ data class Level(
             value: String,
             system: RatingSystem,
         ): Level {
-            val ratingValue = value.toBigDecimal()
-
-            return when (system) {
-                RatingSystem.NTRP -> calculateNTRPLevel(ratingValue)
-                RatingSystem.UTR -> calculateUTRLevel(ratingValue)
-            }
+            require(system == RatingSystem.NTRP) { "Unsupported rating system: $system" }
+            return calculateNTRPLevel(value.toBigDecimal())
         }
 
         /**
@@ -154,37 +150,6 @@ data class Level(
             )
         }
 
-        private fun calculateUTRLevel(rating: BigDecimal): Level {
-            // UTR levels are in 1.0 increments: 1.0, 2.0, 3.0, ..., 16.0+
-            // Round down to nearest 1.0
-
-            // Clamp minimum to 1.0 (no maximum for UTR)
-            val clampedRating = rating.coerceAtLeast(BigDecimal("1.0"))
-
-            // Calculate level by rounding down to nearest integer
-            val levelValue =
-                clampedRating.toBigInteger().toBigDecimal()
-                    .setScale(1, java.math.RoundingMode.HALF_UP)
-
-            val levelStr = levelValue.toPlainString()
-
-            // Calculate boundaries
-            val minRating = levelValue
-            val maxRating =
-                if (levelValue >= BigDecimal("16.0")) {
-                    null // 16.0+ is open-ended
-                } else {
-                    (levelValue + BigDecimal("1.0")).setScale(1, java.math.RoundingMode.HALF_UP)
-                }
-
-            return Level(
-                value = levelStr,
-                minRating = minRating.toPlainString(),
-                maxRating = maxRating?.toPlainString(),
-                system = RatingSystem.UTR,
-            )
-        }
-
         /**
          * Check if a rating is within a specific level's boundaries.
          *
@@ -225,13 +190,7 @@ data class Level(
      * @return Description string (e.g., "NTRP 4.0 (Advanced)")
      */
     fun getDescription(): String {
-        val skillLevel =
-            when (system) {
-                RatingSystem.NTRP -> getNTRPSkillLevel(value.toDouble())
-                RatingSystem.UTR -> getUTRSkillLevel(value.toDouble())
-            }
-
-        return "$system $value ($skillLevel)"
+        return "$system $value (${getNTRPSkillLevel(value.toDouble())})"
     }
 
     private fun getNTRPSkillLevel(level: Double): String =
@@ -243,15 +202,5 @@ data class Level(
             level < 6.0 -> "Expert/College"
             level < 7.0 -> "Professional"
             else -> "World-Class"
-        }
-
-    private fun getUTRSkillLevel(level: Double): String =
-        when {
-            level < 3.0 -> "Beginner"
-            level < 5.0 -> "Intermediate"
-            level < 7.0 -> "Advanced"
-            level < 9.0 -> "College"
-            level < 11.0 -> "Professional"
-            else -> "Elite Professional"
         }
 }
