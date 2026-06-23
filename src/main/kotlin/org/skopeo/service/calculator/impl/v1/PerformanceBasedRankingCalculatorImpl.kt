@@ -80,9 +80,8 @@ import java.math.BigDecimal
  * - With 0.7 smoothing: +0.112 / -0.112 (70% applied)
  *
  * ### Important Notes:
- * - Smoothing is applied BEFORE boundary clamping (1.0-7.0 NTRP, 1.0-16.0 UTR)
+ * - Smoothing is applied BEFORE boundary clamping (NTRP 1.0-7.0)
  * - Zero-sum property is preserved: sum of changes remains zero before clamping
- * - UTR and NTRP both support smoothing with 2.5× K-factor scaling maintained
  * - Default: smoothing disabled for backward compatibility
  *
  * All internal calculations use BigDecimal with 6 decimal places precision
@@ -106,10 +105,9 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
         // This ensures gradual convergence without excessive volatility
         private val K_FACTOR_NTRP = "0.16".bd
 
-        // Competitive threshold as percentage of rating range (8.3% for all systems)
+        // Competitive threshold as percentage of the NTRP rating range
         // 8.3% ≈ 1/12 of range, representing a "half-level" skill difference
         //   - NTRP: 8.3% × 6.0 = 0.5 points (e.g., 4.0 vs 4.5)
-        //   - UTR: 8.3% × 15.0 = 1.25 points (e.g., 10.0 vs 11.25)
         //
         // How this affects changes:
         //   - Gap < 8.3%: Full performance-based changes (competitive match)
@@ -307,13 +305,11 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
          *   competitive_factor = max(0, (threshold_pct - normalized_gap) / threshold_pct)
          *
          * Pluggable constants:
-         *   - threshold_pct: 8.3% of rating range (same for all systems)
+         *   - threshold_pct: 8.3% of the NTRP rating range
          *   - upset_multiplier: bonus for upsets (2.0)
          *
          * Rating gaps are normalized by rating range to ensure proportional fairness:
          *   - 0.5 NTRP gap = 0.5/6.0 = 8.3% of range
-         *   - 1.25 UTR gap = 1.25/15.0 = 8.3% of range
-         *   - Both produce identical competitive factors → consistent 2.5× K-factor scaling
          *
          * This approach reduces from 5 branches to 2 while maintaining proper handling of:
          *   - Expected wins (higher beats lower with large gap) → minimal change
@@ -344,11 +340,8 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
             // Get rating range for normalization
             val ratingRange = NTRP_RANGE
 
-            // Normalize rating gap as percentage of range
-            // This ensures fair treatment across rating systems with different scales:
+            // Normalize rating gap as percentage of the NTRP range
             //   - 0.5 NTRP gap → 0.5/6.0 = 8.3% normalized
-            //   - 1.25 UTR gap → 1.25/15.0 = 8.3% normalized
-            // Both produce identical scale factors → consistent K-factor ratio (2.5×)
             val normalizedGap = absAdvantage.divideBy(ratingRange)
 
             // Pluggable constants
@@ -380,7 +373,7 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
 
             // Final formula: change = K × dominance × scale × sign
             // Where:
-            //   K = K-factor (0.16 for NTRP, 0.4 for UTR)
+            //   K = K-factor (0.16 for NTRP)
             //   dominance = average per-set (gamesWon − gamesLost)/(gamesWon + gamesLost), magnitude 0.0 to 1.0
             //   scale = upset_factor OR competitive_factor (calculated above)
             //   sign = +1 for winner, -1 for loser (ensures zero-sum before clamping)
