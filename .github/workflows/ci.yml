@@ -72,3 +72,32 @@ jobs:
           files: build/reports/jacoco/test/jacocoTestReport.xml
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
+
+  # Web client (web/): the orval client is generated from the backend OpenAPI
+  # spec via npm pre-hooks (pretypecheck/prebuild), so typecheck and build prove
+  # the frontend stays in sync with the API contract.
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check (generates the API client)
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
