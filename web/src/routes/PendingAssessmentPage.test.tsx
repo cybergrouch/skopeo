@@ -7,11 +7,13 @@ import { PendingAssessmentPage } from './PendingAssessmentPage'
 const {
   useGetApiV1UsersMe,
   useGetApiV1UsersUserIdRatings,
+  useAuthMock,
   signOut,
   navigateMock,
 } = vi.hoisted(() => ({
   useGetApiV1UsersMe: vi.fn(),
   useGetApiV1UsersUserIdRatings: vi.fn(),
+  useAuthMock: vi.fn(),
   signOut: vi.fn(),
   navigateMock: vi.fn(),
 }))
@@ -20,12 +22,7 @@ vi.mock('@/api/generated/users/users', () => ({ useGetApiV1UsersMe }))
 vi.mock('@/api/generated/ratings/ratings', () => ({
   useGetApiV1UsersUserIdRatings,
 }))
-vi.mock('@/auth/useAuth', () => ({
-  useAuth: () => ({
-    user: { displayName: 'Roger F.', email: 'roger@example.com' },
-    signOut,
-  }),
-}))
+vi.mock('@/auth/useAuth', () => ({ useAuth: useAuthMock }))
 vi.mock('react-router-dom', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react-router-dom')>()
   return { ...actual, useNavigate: () => navigateMock }
@@ -42,8 +39,15 @@ function renderPending() {
 describe('PendingAssessmentPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    useAuthMock.mockReturnValue({
+      user: { displayName: 'Roger F.', email: 'roger@example.com' },
+      signOut,
+    })
     useGetApiV1UsersMe.mockReturnValue({ data: { id: 'u1' }, isLoading: false })
-    useGetApiV1UsersUserIdRatings.mockReturnValue({ data: [], isLoading: false })
+    useGetApiV1UsersUserIdRatings.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+    })
   })
 
   it('greets the user by display name', () => {
@@ -51,12 +55,25 @@ describe('PendingAssessmentPage', () => {
     expect(screen.getByText('Welcome, Roger F.')).toBeInTheDocument()
   })
 
+  it('falls back to the email when there is no display name', () => {
+    useAuthMock.mockReturnValue({
+      user: { displayName: null, email: 'roger@example.com' },
+      signOut,
+    })
+    renderPending()
+    expect(screen.getByText('Welcome, roger@example.com')).toBeInTheDocument()
+  })
+
+  it("falls back to 'player' when there is no user", () => {
+    useAuthMock.mockReturnValue({ user: null, signOut })
+    renderPending()
+    expect(screen.getByText('Welcome, player')).toBeInTheDocument()
+  })
+
   it('shows the pending-assessment notice when there is no rating', () => {
     renderPending()
     expect(screen.getByText('Pending assessment')).toBeInTheDocument()
-    expect(
-      screen.getByText(/awaiting an initial rating/i),
-    ).toBeInTheDocument()
+    expect(screen.getByText(/awaiting an initial rating/i)).toBeInTheDocument()
   })
 
   it('lists ratings and hides the pending notice once rated', () => {
@@ -68,6 +85,16 @@ describe('PendingAssessmentPage', () => {
     expect(screen.getByText('NTRP')).toBeInTheDocument()
     expect(screen.getByText('4.000000 · 4.0')).toBeInTheDocument()
     expect(screen.queryByText('Pending assessment')).not.toBeInTheDocument()
+  })
+
+  it('renders a rating without a level as just the value', () => {
+    useGetApiV1UsersUserIdRatings.mockReturnValue({
+      data: [{ system: 'UTR', value: '8.500000', level: null }],
+      isLoading: false,
+    })
+    renderPending()
+    expect(screen.getByText('UTR')).toBeInTheDocument()
+    expect(screen.getByText('8.500000')).toBeInTheDocument()
   })
 
   it('shows a loading state while the profile resolves', () => {
