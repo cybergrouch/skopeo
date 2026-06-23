@@ -39,7 +39,7 @@ erDiagram
         string firebase_uid UK "Firebase Auth UID (auth anchor); nullable"
         string photo_url "from provider or upload"
         date date_of_birth
-        string gender "M/F/Other"
+        string sex "Male/Female"
         string city
         string country "default: PH"
         boolean kyc_verified "default: false"
@@ -107,15 +107,12 @@ erDiagram
 
     USER_RATINGS {
         uuid id PK
-        uuid user_id FK "not null, unique per system"
-        string rating_system "NTRP, UTR"
-        decimal current_rating "precision 10,6"
+        uuid user_id FK "not null, unique"
+        decimal current_rating "precision 10,6, 1.0-7.0"
         string current_level
         decimal confidence_score "0.0-1.0, decays over time"
         integer matches_played
         date last_match_date
-        decimal utr_rating
-        timestamp utr_last_synced
         timestamp created_at
         timestamp updated_at
     }
@@ -124,7 +121,6 @@ erDiagram
         uuid id PK
         uuid user_id FK "not null"
         uuid match_id FK
-        string rating_system "NTRP, UTR"
         decimal previous_rating
         decimal new_rating
         decimal rating_change
@@ -138,7 +134,6 @@ erDiagram
         string name "not null"
         string team_type "SINGLES, DOUBLES, MIXED_DOUBLES"
         boolean is_temporary
-        string rating_system "NTRP, UTR"
         timestamp created_at
         timestamp updated_at
     }
@@ -159,7 +154,6 @@ erDiagram
         uuid winner_team_id FK "not null"
         string match_type "SINGLES, DOUBLES, MIXED_DOUBLES"
         string match_format "BEST_OF_THREE, BEST_OF_FIVE"
-        string rating_system "NTRP, UTR"
         date match_date "not null"
         string venue
         string status "SCHEDULED, IN_PROGRESS, COMPLETED, CANCELLED"
@@ -251,14 +245,14 @@ A user is granted one or more broad **capabilities**: `PLAYER`, `HOST`, `CLUB_OW
 
 ### Rating tables
 
-- **`user_ratings`** — current rating per user per system (NTRP/UTR), one row each (`uq_user_rating_system`); `confidence_score` decays with `last_match_date`.
+- **`user_ratings`** — current NTRP rating per user, one row each (`uq_user_rating`, `chk_user_rating_range` keeps `current_rating` between 1.0 and 7.0); `confidence_score` decays with `last_match_date`.
 - **`user_rating_history`** — immutable audit trail of every rating change (with `dominance_factor`, smoothing flags, `calculated_at`).
 
 ### Match structure
 
 - **`teams`** — match participants (SINGLES = 1 user, DOUBLES/MIXED = 2); `is_temporary` distinguishes ad-hoc from established partnerships.
 - **`team_users`** — team membership junction; `position` (1/2) for doubles order; `left_at` tracks roster history.
-- **`matches`** — between two teams; `winner_team_id ∈ {team1, team2}`, `team1 ≠ team2`, all participants share one `rating_system`.
+- **`matches`** — between two teams; `winner_team_id ∈ {team1, team2}`, `team1 ≠ team2`.
 - **`match_sets`** / **`match_set_tiebreaks`** — set-by-set scoring and optional tiebreak detail.
 
 ## Data Integrity Constraints
@@ -293,7 +287,7 @@ ALTER TABLE match_set_tiebreaks ADD CONSTRAINT fk_tiebreaks_winner FOREIGN KEY (
 ### Check & uniqueness constraints (highlights)
 
 ```sql
-ALTER TABLE users ADD CONSTRAINT chk_users_gender CHECK (gender IN ('M', 'F', 'Other'));
+ALTER TABLE users ADD CONSTRAINT chk_users_sex CHECK (sex IN ('Male', 'Female'));
 
 ALTER TABLE user_names ADD CONSTRAINT chk_name_type
     CHECK (name_type IN ('FIRST','MIDDLE','LAST','SUFFIX','NICKNAME','PREFERRED','FULL','GOVERNMENT'));
@@ -313,18 +307,20 @@ CREATE UNIQUE INDEX uq_contact_verified_value ON contact_information(contact_typ
 ALTER TABLE user_capabilities ADD CONSTRAINT chk_capability CHECK (capability IN ('PLAYER','HOST','CLUB_OWNER','ADMINISTRATOR'));
 ALTER TABLE user_capabilities ADD CONSTRAINT uq_user_capability UNIQUE (user_id, capability);
 
--- Ratings, teams, matches: NTRP 1.0-7.0 / UTR 1.0-16.0 range checks, team/match type enums,
--- winner-in-match, team1!=team2, etc. (see V1 migration for the full list)
+ALTER TABLE user_ratings ADD CONSTRAINT uq_user_rating UNIQUE (user_id);
+ALTER TABLE user_ratings ADD CONSTRAINT chk_user_rating_range CHECK (current_rating BETWEEN 1.0 AND 7.0);
+
+-- Ratings, teams, matches: team/match type enums, winner-in-match, team1!=team2,
+-- etc. (see the V1 and V9 migrations for the full list)
 ```
 
 ## Sample Queries
 
-### A user's display name + current ratings
+### A user's display name + current rating
 
 ```sql
 SELECT
     n.value AS display_name,
-    r.rating_system,
     r.current_rating,
     r.current_level,
     r.confidence_score,
@@ -363,8 +359,7 @@ SELECT
 FROM users u
 JOIN user_names n   ON n.user_id = u.id AND n.is_primary
 JOIN user_ratings r ON r.user_id = u.id
-WHERE r.rating_system = 'NTRP'
-  AND u.is_active
+WHERE u.is_active
   AND r.last_match_date > CURRENT_DATE - INTERVAL '180 days'
 ORDER BY r.current_rating DESC, r.confidence_score DESC
 LIMIT 64;
@@ -375,7 +370,6 @@ LIMIT 64;
 - **Fine-grained authorization** — a capability catalog + role→capability mapping layered over `user_capabilities`.
 - **Social-media verification** — a `user_social_media` table (Facebook/Instagram/etc.) for additional identity confirmation.
 - **Tournaments & seeding** — `tournaments`, `tournament_draws` tables; persisted seeding ranks.
-- **UTR integration** — sync official UTR ratings into `user_ratings.utr_rating`.
 - **Doubles** — already supported by the team model (`teams` / `team_users` with 2 users).
 
 ## Technology

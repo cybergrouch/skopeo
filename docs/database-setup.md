@@ -52,12 +52,16 @@ SELECT * FROM flyway_schema_history;
 ```
 
 Expected tables:
-- `players`
-- `player_kyc`
-- `player_ratings`
-- `player_rating_history`
+- `users`
+- `user_kyc`
+- `user_names`
+- `user_identities`
+- `contact_information`
+- `user_capabilities`
+- `user_ratings`
+- `user_rating_history`
 - `teams`
-- `team_players`
+- `team_users`
 - `matches`
 - `match_sets`
 - `match_set_tiebreaks`
@@ -149,18 +153,18 @@ docker run --rm \
 Example:
 
 ```sql
--- V2__add_player_preferences.sql
-CREATE TABLE player_preferences (
+-- V2__add_user_preferences.sql
+CREATE TABLE user_preferences (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    player_id UUID NOT NULL,
+    user_id UUID NOT NULL,
     notification_enabled BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT fk_preferences_player
-        FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE
+    CONSTRAINT fk_preferences_user
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_preferences_player ON player_preferences(player_id);
+CREATE INDEX idx_preferences_user ON user_preferences(user_id);
 ```
 
 ---
@@ -208,7 +212,7 @@ psql -h localhost -U postgres -d SkopeoDb
 \dt
 
 -- Describe table structure
-\d players
+\d users
 
 -- List all indexes
 \di
@@ -217,10 +221,10 @@ psql -h localhost -U postgres -d SkopeoDb
 \dt+
 
 -- Run SQL query
-SELECT name, email FROM players LIMIT 10;
+SELECT id, city, country FROM users LIMIT 10;
 
 -- Export query results to CSV
-\copy (SELECT * FROM players) TO '/tmp/players.csv' WITH CSV HEADER;
+\copy (SELECT * FROM users) TO '/tmp/users.csv' WITH CSV HEADER;
 
 -- Exit
 \q
@@ -242,25 +246,24 @@ Password: postgres
 
 ## Sample Queries
 
-### Get All Players with Their Ratings
+### Get All Users with Their Ratings
 
 ```sql
 SELECT
-    p.name,
-    p.email,
-    pr.rating_system,
-    pr.current_rating,
-    pr.current_level,
-    pr.matches_played,
-    pr.confidence_score,
-    pr.last_match_date
-FROM players p
-LEFT JOIN player_ratings pr ON p.id = pr.player_id
-WHERE p.is_active = true
-ORDER BY pr.rating_system, pr.current_rating DESC;
+    n.value AS display_name,
+    ur.current_rating,
+    ur.current_level,
+    ur.matches_played,
+    ur.confidence_score,
+    ur.last_match_date
+FROM users u
+JOIN user_names n    ON n.user_id = u.id AND n.is_primary
+LEFT JOIN user_ratings ur ON ur.user_id = u.id
+WHERE u.is_active = true
+ORDER BY ur.current_rating DESC;
 ```
 
-### Get Player Match History
+### Get User Match History
 
 ```sql
 SELECT
@@ -279,9 +282,9 @@ FROM matches m
 JOIN teams t1 ON m.team1_id = t1.id
 JOIN teams t2 ON m.team2_id = t2.id
 JOIN match_sets ms ON m.id = ms.match_id
-JOIN team_players tp ON tp.team_id IN (t1.id, t2.id)
-WHERE tp.player_id = '<player-uuid-here>'
-    AND tp.left_at IS NULL
+JOIN team_users tu ON tu.team_id IN (t1.id, t2.id)
+WHERE tu.user_id = '<user-uuid-here>'
+    AND tu.left_at IS NULL
 GROUP BY m.id, m.match_date, t1.name, t2.name, m.winner_team_id
 ORDER BY m.match_date DESC;
 ```
@@ -290,7 +293,7 @@ ORDER BY m.match_date DESC;
 
 ```sql
 -- Update confidence scores based on last match date
-UPDATE player_ratings
+UPDATE user_ratings
 SET confidence_score = GREATEST(
     0.0,
     1.0 - (EXTRACT(EPOCH FROM (CURRENT_DATE - last_match_date)) / (365.0 * 86400.0))
@@ -298,25 +301,25 @@ SET confidence_score = GREATEST(
 WHERE last_match_date < CURRENT_DATE;
 ```
 
-### Top-Ranked Players (Seeding List)
+### Top-Ranked Users (Seeding List)
 
 ```sql
 SELECT
-    p.name,
-    pr.current_rating,
-    pr.current_level,
-    pr.matches_played,
-    pr.confidence_score,
-    pr.last_match_date,
+    n.value AS display_name,
+    ur.current_rating,
+    ur.current_level,
+    ur.matches_played,
+    ur.confidence_score,
+    ur.last_match_date,
     ROW_NUMBER() OVER (
-        ORDER BY pr.current_rating DESC, pr.confidence_score DESC
+        ORDER BY ur.current_rating DESC, ur.confidence_score DESC
     ) as seed
-FROM players p
-JOIN player_ratings pr ON p.id = pr.player_id
-WHERE pr.rating_system = 'NTRP'
-    AND p.is_active = true
-    AND pr.last_match_date > CURRENT_DATE - INTERVAL '180 days'
-ORDER BY pr.current_rating DESC, pr.confidence_score DESC
+FROM users u
+JOIN user_names n   ON n.user_id = u.id AND n.is_primary
+JOIN user_ratings ur ON ur.user_id = u.id
+WHERE u.is_active = true
+    AND ur.last_match_date > CURRENT_DATE - INTERVAL '180 days'
+ORDER BY ur.current_rating DESC, ur.confidence_score DESC
 LIMIT 64;
 ```
 
@@ -443,7 +446,7 @@ docker exec SkopeoDb_db pg_dump -U postgres SkopeoDb > backup.sql
 docker exec SkopeoDb_db pg_dump -U postgres SkopeoDb | gzip > backup.sql.gz
 
 # Backup specific tables only
-docker exec SkopeoDb_db pg_dump -U postgres -t players -t player_ratings SkopeoDb > players_backup.sql
+docker exec SkopeoDb_db pg_dump -U postgres -t users -t user_ratings SkopeoDb > users_backup.sql
 ```
 
 ### Restore Database
@@ -467,7 +470,7 @@ cat backup.sql | docker exec -i SkopeoDb_db psql -U postgres -d SkopeoDb_restore
 Once the database is set up, you can:
 
 1. **Create repository interfaces** - See `docs/repository-implementation.md` (coming soon)
-2. **Add API endpoints** - Implement CRUD operations for players, matches, etc.
+2. **Add API endpoints** - Implement CRUD operations for users, matches, etc.
 3. **Write integration tests** - Test database interactions
 4. **Set up monitoring** - Track query performance and connection pool metrics
 
