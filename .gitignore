@@ -86,3 +86,8 @@ Desktop.ini
 
 # Pitch deck — kept local (contains personal contact details)
 presentation/
+
+# Firebase CLI local artifacts
+.firebase/
+firebase-debug.log
+.runtimeconfig.json

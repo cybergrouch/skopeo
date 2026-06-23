@@ -1,0 +1,61 @@
+name: Deploy Web
+
+# Deploys the web client to Firebase Hosting on every push to main that touches
+# the frontend (or the OpenAPI spec it generates against). Inert until configured:
+# the job is skipped unless the VITE_FIREBASE_PROJECT_ID repo variable is set, so
+# merging this workflow never produces a red run before secrets/vars exist.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - 'src/main/resources/openapi/documentation.yaml'
+      - 'firebase.json'
+      - '.github/workflows/deploy-web.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-web
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ vars.VITE_FIREBASE_PROJECT_ID != '' }}
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Vite inlines VITE_* at build time. These are public Firebase client values
+      # (safe in the bundle), supplied as repo *variables*; the Firebase secret
+      # never leaves Firebase. The deploy service account is the only secret.
+      - name: Build
+        run: npm run build
+        env:
+          VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+
+      - name: Deploy to Firebase Hosting (live)
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
+          channelId: live
+          entryPoint: .
