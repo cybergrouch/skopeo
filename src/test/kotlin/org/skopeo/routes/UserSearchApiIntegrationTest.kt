@@ -107,6 +107,41 @@ class UserSearchApiIntegrationTest {
         }
 
     @Test
+    fun `name search tolerates a misspelling`() =
+        withApp { client ->
+            val host = seedStaff("host", setOf(Capability.HOST))
+            client.provisionNamed("u1", "Alice")
+            client.provisionNamed("u2", "Bob")
+
+            val results = client.lookup(host, "name=Alyce").body<List<UserSummaryResponse>>()
+
+            results.map { it.displayName } shouldBe listOf("Alice")
+        }
+
+    @Test
+    fun `a profile with several matching names appears once, and non-display names are searched`() =
+        withApp { client ->
+            val host = seedStaff("host", setOf(Capability.HOST))
+            // One profile whose FIRST and DISPLAY names both match "john".
+            UserRepository().provision(
+                ProvisionUserCommand(
+                    firebaseUid = "multi",
+                    identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = "multi", isPrimary = true),
+                    names =
+                        listOf(
+                            UserName(type = NameType.FIRST, value = "Johnathan"),
+                            UserName(type = NameType.DISPLAY, value = "Johnny"),
+                        ),
+                    capabilities = setOf(Capability.PLAYER),
+                ),
+            )
+
+            val results = client.lookup(host, "name=john").body<List<UserSummaryResponse>>()
+
+            results.count { it.displayName == "Johnny" } shouldBe 1
+        }
+
+    @Test
     fun `an admin can search too`() =
         withApp { client ->
             val admin = seedStaff("admin", setOf(Capability.ADMINISTRATOR))

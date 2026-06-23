@@ -3,12 +3,17 @@
 
 package org.skopeo.repository
 
+import org.jetbrains.exposed.sql.CustomFunction
+import org.jetbrains.exposed.sql.FloatColumnType
 import org.jetbrains.exposed.sql.ResultRow
+import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.lowerCase
+import org.jetbrains.exposed.sql.or
 import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.stringParam
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.model.AuthProvider
@@ -22,6 +27,10 @@ import org.skopeo.model.UserIdentity
 import java.util.UUID
 
 private const val SEARCH_LIMIT = 20
+
+// pg_trgm similarity floor for fuzzy name matches (0..1); the substring match below it is
+// still included via OR. 0.3 is pg_trgm's own default — typo-tolerant without much noise.
+private const val SIMILARITY_THRESHOLD = 0.3f
 
 /**
  * Persistence for the user aggregate (users + names + identities + contacts +
@@ -84,24 +93,30 @@ class UserRepository {
     fun findAllByIds(ids: List<UUID>): List<User> = transaction { ids.distinct().mapNotNull { loadAggregate(it) } }
 
     /**
-     * Active users whose name (any type) contains [query] (case-insensitive), capped at [limit].
-     * Backs the staff player-picker and admin role-grant lookups.
+     * Active users matching [query] across any of their names (case-insensitive), ranked by
+     * trigram similarity so misspellings still match (e.g. "Alyce" → "Alice"); a substring
+     * match is also included. Deduplicated by user (one profile may have several names) and
+     * capped at [limit]. Backs the staff player-picker and admin role-grant lookups.
      */
     fun searchByName(
         query: String,
         limit: Int = SEARCH_LIMIT,
     ): List<User> =
         transaction {
-            val pattern = "%${query.lowercase()}%"
+            val normalized = query.lowercase()
+            val nameLower = UserNamesTable.value.lowerCase()
+            val proximity = CustomFunction("SIMILARITY", FloatColumnType(), nameLower, stringParam(normalized))
             UserNamesTable
                 .selectAll()
-                .where { (UserNamesTable.value.lowerCase() like pattern) and UserNamesTable.isActive }
+                .where {
+                    UserNamesTable.isActive and
+                        ((nameLower like "%$normalized%") or (proximity greaterEq SIMILARITY_THRESHOLD))
+                }.orderBy(proximity to SortOrder.DESC)
                 .map { it[UserNamesTable.userId].value }
                 .distinct()
+                .take(limit)
                 .mapNotNull { loadAggregate(it) }
                 .filter { it.isActive }
-                .sortedBy { it.id.toString() }
-                .take(limit)
         }
 
     fun findByFirebaseUid(firebaseUid: String): User? =
