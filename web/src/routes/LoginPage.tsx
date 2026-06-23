@@ -21,7 +21,8 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  const from = (location.state as LocationState | null)?.from?.pathname ?? '/pending'
+  const from =
+    (location.state as LocationState | null)?.from?.pathname ?? '/dashboard'
 
   async function run(action: () => Promise<unknown>) {
     setError(null)

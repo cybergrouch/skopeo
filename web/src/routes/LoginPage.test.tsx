@@ -48,7 +48,7 @@ describe('LoginPage', () => {
         'secret123',
       ),
     )
-    expect(navigateMock).toHaveBeenCalledWith('/pending', { replace: true })
+    expect(navigateMock).toHaveBeenCalledWith('/dashboard', { replace: true })
   })
 
   it('shows an error and does not navigate on bad credentials', async () => {
@@ -76,6 +76,6 @@ describe('LoginPage', () => {
     await user.click(screen.getByRole('button', { name: /continue with google/i }))
 
     await waitFor(() => expect(signInWithGoogle).toHaveBeenCalled())
-    expect(navigateMock).toHaveBeenCalledWith('/pending', { replace: true })
+    expect(navigateMock).toHaveBeenCalledWith('/dashboard', { replace: true })
   })
 })
