@@ -71,3 +71,31 @@ truth, a backend contract change surfaces here as a type error.
 - `/login` — sign in
 - `/pending` — authenticated landing; shows pending-assessment state or the
   assigned rating(s)
+
+## Deployment (Firebase Hosting)
+
+Hosting config lives in the repo-root `firebase.json` (serves `web/dist`, SPA
+rewrites to `index.html`, immutable caching for hashed assets). The
+`.github/workflows/deploy-web.yml` workflow builds and deploys to the **live**
+channel on every push to `main` that touches `web/`.
+
+The deploy job is **skipped until configured** (guarded on the
+`VITE_FIREBASE_PROJECT_ID` repo variable), so the workflow is inert until you add:
+
+**Repository → Settings → Secrets and variables → Actions**
+
+- **Variables** (public Firebase client config, inlined into the bundle):
+  `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`,
+  `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`, and `VITE_API_BASE_URL`
+  (the deployed API origin, e.g. `https://api.skopeo.app`).
+- **Secret**: `FIREBASE_SERVICE_ACCOUNT` — JSON for a service account with the
+  *Firebase Hosting Admin* role (Firebase console → Project settings → Service
+  accounts → Generate new private key). This is the only secret; the Firebase
+  app secret stays in Firebase.
+
+### Manual deploy
+
+```bash
+cd web && npm run build      # produces web/dist
+cd .. && firebase deploy --only hosting   # uses firebase.json; requires firebase-tools + login
+```
