@@ -14,7 +14,7 @@ const { useGetApiV1UsersPendingAssessment, mutateAsync, setRatingState } =
 vi.mock('@/api/generated/ratings/ratings', () => ({
   useGetApiV1UsersPendingAssessment,
   // Invoke the caller's onSuccess on a successful assignment (drives invalidation).
-  usePutApiV1UsersUserIdRatingsSystem: (options?: {
+  usePutApiV1UsersUserIdRatings: (options?: {
     mutation?: { onSuccess?: () => void }
   }) => ({
     isPending: setRatingState.isPending,
@@ -76,19 +76,17 @@ describe('PendingAssessmentSection', () => {
     expect(screen.getByText('u-no-name')).toBeInTheDocument()
   })
 
-  it('assigns a rating with the chosen system and value', async () => {
+  it('assigns a rating with the entered value', async () => {
     const user = userEvent.setup()
     renderSection()
 
-    await user.selectOptions(screen.getByLabelText('System'), 'UTR')
-    await user.type(screen.getByLabelText('Rating'), '8.5')
+    await user.type(screen.getByLabelText('Rating'), '4.5')
     await user.click(screen.getByRole('button', { name: 'Set rating' }))
 
     await waitFor(() =>
       expect(mutateAsync).toHaveBeenCalledWith({
         userId: 'u1',
-        system: 'UTR',
-        data: { value: '8.5' },
+        data: { value: '4.5' },
       }),
     )
   })

@@ -29,12 +29,6 @@ data class RankingCalculationRequest(
             }
         }
 
-        // Validation: Both teams must use the same rating system
-        val ratingSystems = teams.values.map { it.ratingSystem }.distinct()
-        require(ratingSystems.size == 1) {
-            "Both teams must use the same rating system, got: $ratingSystems"
-        }
-
         // Validation: Match score must reference valid team IDs
         val teamIds = teams.keys
         matchScore.sets.forEach { set ->

@@ -20,7 +20,6 @@ import org.skopeo.model.MatchQuery
 import org.skopeo.model.MatchStatus
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
-import org.skopeo.model.RatingSystem
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
@@ -67,7 +66,7 @@ class MatchServiceTest {
                     capabilities = roles,
                 ),
             )
-        if (rated) ratings.setRating(user.id, RatingSystem.NTRP, BigDecimal("4.0"), "4.0", BigDecimal("0.50"))
+        if (rated) ratings.setRating(user.id, BigDecimal("4.0"), "4.0", BigDecimal("0.50"))
         return user
     }
 
@@ -78,7 +77,6 @@ class MatchServiceTest {
         p2: UUID,
         date: String = "2026-01-01",
     ) = CreateFixtureRequest(
-        ratingSystem = "NTRP",
         matchType = "SINGLES",
         matchFormat = "BEST_OF_THREE",
         matchDate = date,

@@ -10,14 +10,12 @@ import org.jetbrains.exposed.sql.javatime.datetime
 
 private const val NAME_MAX = 255
 private const val TYPE_MAX = 20
-private const val MATCH_SYSTEM_MAX = 10
 private const val ROUND_MAX = 50
 
 internal object TeamsTable : UUIDTable("teams") {
     val name = varchar("name", NAME_MAX)
     val teamType = varchar("team_type", TYPE_MAX)
     val isTemporary = bool("is_temporary").default(true)
-    val ratingSystem = varchar("rating_system", MATCH_SYSTEM_MAX)
 }
 
 internal object TeamUsersTable : UUIDTable("team_users") {
@@ -32,7 +30,6 @@ internal object MatchesTable : UUIDTable("matches") {
     val winnerTeamId = reference("winner_team_id", TeamsTable, onDelete = ReferenceOption.RESTRICT).nullable()
     val matchType = varchar("match_type", TYPE_MAX)
     val matchFormat = varchar("match_format", TYPE_MAX)
-    val ratingSystem = varchar("rating_system", MATCH_SYSTEM_MAX)
     val matchDate = date("match_date")
     val venue = varchar("venue", NAME_MAX).nullable()
     val tournamentName = varchar("tournament_name", NAME_MAX).nullable()

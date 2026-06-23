@@ -8,7 +8,6 @@ import org.skopeo.model.NameType
 import org.skopeo.model.PendingAssessment
 import org.skopeo.model.Rating
 import org.skopeo.model.RatingHistoryEntry
-import org.skopeo.model.RatingSystem
 import org.skopeo.model.UserRating
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
@@ -42,34 +41,31 @@ class RatingService(
     fun getHistory(
         token: VerifiedFirebaseToken,
         userId: UUID,
-        system: RatingSystem?,
     ): List<RatingHistoryEntry> {
         requireUserExists(userId)
         requireSelfOrAdmin(token = token, userId = userId)
-        return ratings.historyByUser(userId = userId, system = system)
+        return ratings.historyByUser(userId = userId)
     }
 
-    /** Set (or adjust) a user's rating in a system — ADMINISTRATOR only. Computes the published level. */
+    /** Set (or adjust) a user's rating — ADMINISTRATOR only. Computes the published level. */
     fun setRating(
         token: VerifiedFirebaseToken,
         userId: UUID,
-        system: RatingSystem,
         value: String,
         confidence: String?,
     ): UserRating {
         requireAdmin(token)
         requireUserExists(userId)
-        // Rating.fromValue validates the system range and derives the published level.
+        // Rating.fromValue validates the NTRP range and derives the published level.
         val level =
             try {
-                Rating.fromValue(value = value, system = system).publishedLevel.value
+                Rating.fromValue(value = value).publishedLevel.value
             } catch (e: IllegalArgumentException) {
-                throw IllegalArgumentException("Invalid rating '$value' for $system", e)
+                throw IllegalArgumentException("Invalid rating '$value'", e)
             }
         val confidenceValue = parseConfidence(confidence)
         return ratings.setRating(
             userId = userId,
-            system = system,
             rating = BigDecimal(value),
             level = level,
             confidence = confidenceValue,

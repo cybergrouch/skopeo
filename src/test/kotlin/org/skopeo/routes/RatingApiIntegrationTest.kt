@@ -91,14 +91,13 @@ class RatingApiIntegrationTest {
             val user = client.provisionSelf(userToken)
 
             val set =
-                client.put("/api/v1/users/${user.id}/ratings/NTRP") {
+                client.put("/api/v1/users/${user.id}/ratings") {
                     header(HttpHeaders.Authorization, "Bearer $adminToken")
                     contentType(ContentType.Application.Json)
                     setBody(SetRatingRequest(value = "4.0"))
                 }
             set.status shouldBe HttpStatusCode.OK
             set.body<UserRatingResponse>().let {
-                it.system shouldBe "NTRP"
                 it.value shouldBe "4.000000"
                 it.level shouldBe "4.0"
             }
@@ -108,7 +107,7 @@ class RatingApiIntegrationTest {
                     header(HttpHeaders.Authorization, "Bearer $userToken")
                 }
             ratings.status shouldBe HttpStatusCode.OK
-            ratings.body<List<UserRatingResponse>>().single().system shouldBe "NTRP"
+            ratings.body<List<UserRatingResponse>>().single().value shouldBe "4.000000"
         }
 
     @Test
@@ -140,7 +139,7 @@ class RatingApiIntegrationTest {
             val alice = client.provisionSelf(aliceToken)
             client.provisionSelf(bobToken)
 
-            client.put("/api/v1/users/${alice.id}/ratings/NTRP") {
+            client.put("/api/v1/users/${alice.id}/ratings") {
                 header(HttpHeaders.Authorization, "Bearer $aliceToken")
                 contentType(ContentType.Application.Json)
                 setBody(SetRatingRequest(value = "4.0"))

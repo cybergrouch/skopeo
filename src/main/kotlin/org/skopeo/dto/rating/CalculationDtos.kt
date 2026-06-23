@@ -18,7 +18,6 @@ data class CalculationRequest(
 @Serializable
 data class PlayerChangeResponse(
     val userId: String,
-    val system: String,
     val previousRating: String,
     val newRating: String,
     val change: String,
@@ -55,7 +54,6 @@ fun RatingCalculationService.CalculationOutcome.toResponse(): CalculationRespons
                         calc.changes.map {
                             PlayerChangeResponse(
                                 userId = it.userId.toString(),
-                                system = it.system.name,
                                 previousRating = it.previousRating.toPlainString(),
                                 newRating = it.newRating.toPlainString(),
                                 change = it.change.toPlainString(),

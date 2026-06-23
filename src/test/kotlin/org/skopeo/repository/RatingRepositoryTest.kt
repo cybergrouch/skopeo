@@ -13,7 +13,6 @@ import org.junit.jupiter.api.Test
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
-import org.skopeo.model.RatingSystem
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.testsupport.PostgresTestDatabase
@@ -50,37 +49,34 @@ class RatingRepositoryTest {
     fun `setRating inserts then updates, per system`() {
         val userId = newUser("u1")
 
-        ratings.setRating(userId, RatingSystem.NTRP, BigDecimal("3.5"), "3.5", BigDecimal("0.50"))
-        ratings.findByUserAndSystem(userId, RatingSystem.NTRP)!!.let {
+        ratings.setRating(userId, BigDecimal("3.5"), "3.5", BigDecimal("0.50"))
+        ratings.findCurrentRating(userId)!!.let {
             it.currentRating shouldBe BigDecimal("3.500000")
             it.currentLevel shouldBe "3.5"
             it.matchesPlayed shouldBe 0
         }
 
-        ratings.setRating(userId, RatingSystem.NTRP, BigDecimal("4.0"), "4.0", BigDecimal("0.60"))
-        ratings.findByUserAndSystem(userId, RatingSystem.NTRP)!!.currentRating shouldBe BigDecimal("4.000000")
-
-        ratings.setRating(userId, RatingSystem.UTR, BigDecimal("9.0"), "9.0", BigDecimal("0.50"))
-        ratings.findByUser(userId).size shouldBe 2
+        ratings.setRating(userId, BigDecimal("4.0"), "4.0", BigDecimal("0.60"))
+        ratings.findCurrentRating(userId)!!.currentRating shouldBe BigDecimal("4.000000")
+        ratings.findByUser(userId).size shouldBe 1
     }
 
     @Test
     fun `findByUserAndSystem is null when absent`() {
-        ratings.findByUserAndSystem(UUID.randomUUID(), RatingSystem.NTRP).shouldBeNull()
+        ratings.findCurrentRating(UUID.randomUUID()).shouldBeNull()
     }
 
     @Test
     fun `history is empty for a new user (both filters)`() {
         val userId = newUser("u2")
-        ratings.historyByUser(userId, null) shouldBe emptyList()
-        ratings.historyByUser(userId, RatingSystem.NTRP) shouldBe emptyList()
+        ratings.historyByUser(userId) shouldBe emptyList()
     }
 
     @Test
     fun `pending assessment lists active users without a rating`() {
         val unrated = newUser("unrated")
         val rated = newUser("rated")
-        ratings.setRating(rated, RatingSystem.NTRP, BigDecimal("3.0"), "3.0", BigDecimal("0.50"))
+        ratings.setRating(rated, BigDecimal("3.0"), "3.0", BigDecimal("0.50"))
 
         val pending = ratings.userIdsPendingAssessment()
         pending shouldContain unrated

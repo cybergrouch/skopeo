@@ -92,7 +92,7 @@ class CalculationApiIntegrationTest {
         adminToken: String,
         userId: String,
     ) {
-        put("/api/v1/users/$userId/ratings/NTRP") {
+        put("/api/v1/users/$userId/ratings") {
             header(HttpHeaders.Authorization, "Bearer $adminToken")
             contentType(ContentType.Application.Json)
             setBody(SetRatingRequest(value = "4.0"))
@@ -121,7 +121,6 @@ class CalculationApiIntegrationTest {
                     contentType(ContentType.Application.Json)
                     setBody(
                         CreateFixtureRequest(
-                            ratingSystem = "NTRP",
                             matchType = "SINGLES",
                             matchFormat = "BEST_OF_THREE",
                             matchDate = "2026-01-01",

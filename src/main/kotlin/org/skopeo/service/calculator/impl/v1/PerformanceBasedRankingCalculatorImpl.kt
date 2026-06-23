@@ -9,7 +9,6 @@ import org.skopeo.dto.RatingChange
 import org.skopeo.model.MatchScore
 import org.skopeo.model.PlayerProfile
 import org.skopeo.model.Rating
-import org.skopeo.model.RatingSystem
 import org.skopeo.model.calculateDominanceFactor
 import org.skopeo.model.matchScore
 import org.skopeo.service.calculator.AuditEntry
@@ -99,11 +98,6 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
         private val NTRP_MAX = "7.0".bd
         private val NTRP_RANGE = NTRP_MAX - NTRP_MIN // 6.0
 
-        // UTR-specific constants
-        private val UTR_MIN = ONE
-        private val UTR_MAX = "16.0".bd
-        private val UTR_RANGE = "15.0".bd // Practical range (1.0-16.0 for professional level)
-
         // K-factor for NTRP (base calibration)
         // K=0.16 chosen to produce typical changes of:
         //   - Equal players, close match (6-4): ±0.032
@@ -160,7 +154,6 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
                         "player1Rating" to player1.rating.value,
                         "player2" to player2.name,
                         "player2Rating" to player2.rating.value,
-                        "ratingSystem" to player1.rating.system.name,
                     ),
             ),
         )
@@ -186,7 +179,6 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
                 calculateRatingAdjustments(
                     player1 = player1,
                     player2 = player2,
-                    ratingSystem = player1.rating.system,
                     matchScore = request.matchScore,
                     audit = audit,
                     player1TeamId = team1Id,
@@ -299,7 +291,6 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
         player1: PlayerProfile,
         player2: PlayerProfile,
         matchScore: MatchScore,
-        ratingSystem: RatingSystem,
         audit: AuditTrail,
         player1TeamId: String,
         player2TeamId: String,
@@ -351,11 +342,7 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
             val isWinner = matchScore.winnerTeamId == teamId
 
             // Get rating range for normalization
-            val ratingRange =
-                when (ratingSystem) {
-                    RatingSystem.NTRP -> NTRP_RANGE
-                    RatingSystem.UTR -> UTR_RANGE
-                }
+            val ratingRange = NTRP_RANGE
 
             // Normalize rating gap as percentage of range
             // This ensures fair treatment across rating systems with different scales:
@@ -427,15 +414,8 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
             return change
         }
 
-        // K-factor scales proportionally by rating range to maintain consistent volatility
-        // UTR has a wider range (15.0) than NTRP (6.0), so K_UTR = K_NTRP × (15.0/6.0) = K_NTRP × 2.5
-        // This ensures that a 1-point UTR gap produces the same % change as a 0.4-point NTRP gap
-        // Example: 1.0 UTR = 1.0/15.0 = 6.67% of range ≈ 0.4 NTRP = 0.4/6.0 = 6.67% of range
-        val ratingScale =
-            when (ratingSystem) {
-                RatingSystem.NTRP -> K_FACTOR_NTRP
-                RatingSystem.UTR -> K_FACTOR_NTRP * UTR_RANGE.divideBy(divisor = NTRP_RANGE) // Result: 0.16 × 2.5 = 0.4
-            }
+        // K-factor calibrated for NTRP's 6.0-point range.
+        val ratingScale = K_FACTOR_NTRP
 
         // Calculate base Elo changes
         val player1RankingAdjustment =
@@ -509,11 +489,7 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
         change: BigDecimal,
         options: org.skopeo.model.RatingCalculationOptions,
         audit: AuditTrail,
-    ): Rating =
-        when (rating.system) {
-            RatingSystem.NTRP -> applyNTRPChange(rating = rating, change = change, options = options, audit = audit)
-            RatingSystem.UTR -> applyUTRChange(rating = rating, change = change, options = options, audit = audit)
-        }
+    ): Rating = applyNTRPChange(rating = rating, change = change, options = options, audit = audit)
 
     /**
      * Apply rating change for NTRP (continuous values, range 1.0-7.0).
@@ -602,102 +578,7 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
             ),
         )
 
-        return Rating.fromValue(
-            value = clamped.toStringPrecise(),
-            system = rating.system,
-        )
-    }
-
-    /**
-     * Apply rating change for UTR (decimal values allowed, minimum 1.0).
-     *
-     * Supports USTA NTRP Dynamic-style rating smoothing when enabled via options.
-     * Smoothing averages the calculated new rating with the previous rating for stability.
-     *
-     * ## UTR Smoothing Behavior:
-     * UTR uses the same smoothing formula as NTRP, but with 2.5× larger K-factor:
-     * - K_NTRP = 0.16
-     * - K_UTR = 0.40 (2.5× larger due to wider rating range: 15.0 vs 6.0)
-     *
-     * This means UTR ratings change 2.5× faster than NTRP, even with smoothing:
-     * ```
-     * UTR_change = NTRP_change × 2.5
-     * ```
-     *
-     * ## Example (10.0 UTR, +0.400 raw change):
-     * - Factor 0.0: smoothed = 10.0 + (0.400 × 0.0) = 10.000
-     * - Factor 0.3: smoothed = 10.0 + (0.400 × 0.3) = 10.120
-     * - Factor 0.5: smoothed = 10.0 + (0.400 × 0.5) = 10.200
-     * - Factor 0.7: smoothed = 10.0 + (0.400 × 0.7) = 10.280
-     * - Factor 1.0: smoothed = 10.0 + (0.400 × 1.0) = 10.400
-     *
-     * Compare to equivalent NTRP (4.0, +0.160 raw change):
-     * - Factor 0.5: NTRP = 4.080, UTR = 10.200
-     * - Ratio: 10.200 / 4.080 ≈ 2.5× (but both use same % of range)
-     *
-     * ## Process Order:
-     * 1. Calculate raw rating change (2.5× larger than NTRP)
-     * 2. Apply smoothing (if enabled)
-     * 3. Clamp to valid UTR range (1.0-16.0)
-     */
-    private fun applyUTRChange(
-        rating: Rating,
-        change: BigDecimal,
-        options: org.skopeo.model.RatingCalculationOptions,
-        audit: AuditTrail,
-    ): Rating {
-        val originalValue = rating.value.bd
-        val calculatedValue = originalValue + change
-
-        // Apply smoothing if enabled (USTA NTRP Dynamic style)
-        // UTR uses same formula as NTRP but with 2.5× larger changes
-        val smoothedValue =
-            if (options.smoothingEnabled) {
-                val factor = options.smoothingFactor.bd
-                (calculatedValue * factor) + (originalValue * (ONE - factor))
-            } else {
-                calculatedValue
-            }
-
-        // Clamp to valid UTR range (no rounding - keep 6 decimal precision)
-        val clamped =
-            if (smoothedValue < UTR_MIN) {
-                UTR_MIN
-            } else if (smoothedValue > UTR_MAX) {
-                UTR_MAX
-            } else {
-                smoothedValue
-            }
-
-        audit.add(
-            AuditEntry(
-                message =
-                    buildString {
-                        append("UTR change: ${rating.value} + ${change.toStringPrecise()} = ")
-                        append("${calculatedValue.toStringPrecise()}")
-                        if (options.smoothingEnabled) {
-                            append(" -> smoothed ${smoothedValue.toStringPrecise()} (factor=${options.smoothingFactor})")
-                        }
-                        append(" -> clamped ${clamped.toStringPrecise()}")
-                    },
-                context =
-                    mapOf(
-                        "system" to "UTR",
-                        "original" to rating.value,
-                        "change" to change.toStringPrecise(),
-                        "newValue" to calculatedValue.toStringPrecise(),
-                        "clamped" to clamped.toStringPrecise(),
-                        "smoothingEnabled" to options.smoothingEnabled.toString(),
-                        "smoothingFactor" to options.smoothingFactor,
-                        "smoothed" to if (options.smoothingEnabled) smoothedValue.toStringPrecise() else "N/A",
-                    ),
-            ),
-        )
-
-        return Rating.fromValue(
-            value = clamped.toStringPrecise(),
-            system = rating.system,
-        )
+        return Rating.fromValue(value = clamped.toStringPrecise())
     }
 
     /**

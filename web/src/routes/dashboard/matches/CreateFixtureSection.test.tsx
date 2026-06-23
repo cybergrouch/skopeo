@@ -84,10 +84,9 @@ describe('CreateFixtureSection', () => {
     expect(button).toBeEnabled()
   })
 
-  it('creates a fixture with the chosen players, system, format, and date', async () => {
+  it('creates a fixture with the chosen players, format, and date', async () => {
     renderSection()
     const user = await pickPlayersAndDate()
-    await user.selectOptions(screen.getByLabelText('System'), 'UTR')
     await user.selectOptions(screen.getByLabelText('Format'), 'BEST_OF_FIVE')
 
     await user.click(screen.getByRole('button', { name: /schedule fixture/i }))
@@ -95,7 +94,6 @@ describe('CreateFixtureSection', () => {
     await waitFor(() =>
       expect(mutateAsync).toHaveBeenCalledWith({
         data: {
-          ratingSystem: 'UTR',
           matchType: 'SINGLES',
           matchFormat: 'BEST_OF_FIVE',
           matchDate: '2026-07-01',

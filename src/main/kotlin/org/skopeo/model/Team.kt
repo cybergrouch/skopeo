@@ -48,12 +48,6 @@ data class Team(
                 }
             }
         }
-
-        // All players must use the same rating system
-        val ratingSystems = players.map { it.rating.system }.distinct()
-        require(ratingSystems.size == 1) {
-            "All players in a team must use the same rating system, got: $ratingSystems"
-        }
     }
 
     /**
@@ -66,12 +60,6 @@ data class Team(
         }
         return players[0]
     }
-
-    /**
-     * Returns the rating system used by this team's players.
-     */
-    val ratingSystem: RatingSystem
-        get() = players[0].rating.system
 }
 
 /**

@@ -195,12 +195,11 @@ private fun nameMatches(name: String): Op<Boolean> {
     )
 }
 
-/** Correlated EXISTS: the user has an NTRP rating within [range] (inclusive/exclusive per bound). */
+/** Correlated EXISTS: the user has a rating within [range] (inclusive/exclusive per bound). */
 private fun ratingMatches(range: NumericRange): Op<Boolean> =
     exists(
         UserRatingsTable.selectAll().where {
-            var op: Op<Boolean> =
-                (UserRatingsTable.userId eq UsersTable.id) and (UserRatingsTable.ratingSystem eq "NTRP")
+            var op: Op<Boolean> = UserRatingsTable.userId eq UsersTable.id
             range.lower?.let { bound ->
                 op = op and
                     if (bound.inclusive) {

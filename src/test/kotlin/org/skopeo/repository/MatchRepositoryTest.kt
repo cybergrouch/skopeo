@@ -20,7 +20,6 @@ import org.skopeo.model.MatchSetResult
 import org.skopeo.model.MatchStatus
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
-import org.skopeo.model.RatingSystem
 import org.skopeo.model.TeamType
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
@@ -61,7 +60,6 @@ class MatchRepositoryTest {
         date: LocalDate = LocalDate.of(2026, 1, 1),
     ) = matches.createFixture(
         CreateFixtureCommand(
-            ratingSystem = RatingSystem.NTRP,
             matchType = TeamType.SINGLES,
             matchFormat = MatchFormat.BEST_OF_THREE,
             matchDate = date,

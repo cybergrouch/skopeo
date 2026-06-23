@@ -58,7 +58,6 @@ paths:
                       name: "Player 1"
                       rating:
                         value: "4.5"
-                        system: "NTRP"
                   teamType: "SINGLES"
                 T2:
                   teamId: "T2"
@@ -68,7 +67,6 @@ paths:
                       name: "Player 2"
                       rating:
                         value: "4.0"
-                        system: "NTRP"
                   teamType: "SINGLES"
               matchScore:
                 sets:
@@ -789,7 +787,7 @@ paths:
           format: uuid
     get:
       summary: Get a user's current ratings
-      description: Self-or-ADMINISTRATOR. Returns the user's NTRP/UTR ratings.
+      description: Self-or-ADMINISTRATOR. Returns the user's NTRP rating.
       tags:
         - Ratings
       security:
@@ -807,26 +805,11 @@ paths:
           description: Forbidden
         '404':
           description: No such user
-
-  /api/v1/users/{userId}/ratings/{system}:
-    parameters:
-      - name: userId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: system
-        in: path
-        required: true
-        schema:
-          type: string
-          enum: [NTRP, UTR]
     put:
       summary: Set or adjust a user's rating (ADMINISTRATOR only)
       description: |
-        The initial assessment, or a later adjustment. Validates the system range
-        (NTRP 1.0–7.0, UTR 1.0–16.0) and derives the published level.
+        The initial assessment, or a later adjustment. Validates the NTRP range
+        (1.0–7.0) and derives the published level.
       tags:
         - Ratings
       security:
@@ -859,15 +842,9 @@ paths:
         schema:
           type: string
           format: uuid
-      - name: system
-        in: query
-        required: false
-        schema:
-          type: string
-          enum: [NTRP, UTR]
     get:
       summary: Get a user's rating history
-      description: Self-or-ADMINISTRATOR. Optionally filter by system.
+      description: Self-or-ADMINISTRATOR.
       tags:
         - Ratings
       security:
@@ -1151,13 +1128,10 @@ components:
       type: object
       required:
         - value
-        - system
       properties:
         value:
           type: string
-          description: The numeric rating value (e.g., "4.5", "10.123456")
-        system:
-          $ref: '#/components/schemas/RatingSystem'
+          description: The numeric NTRP rating value (e.g., "4.5", "4.123456")
         publishedLevel:
           $ref: '#/components/schemas/Level'
           description: The published level (optional in request, always present in response)
@@ -1168,29 +1142,16 @@ components:
         - value
         - minRating
         - maxRating
-        - system
       properties:
         value:
           type: string
-          description: The published level value (e.g., "4.5" for NTRP, "10.0" for UTR)
+          description: The published NTRP level value (e.g., "4.5")
         minRating:
           type: string
           description: Minimum rating for this level (inclusive)
         maxRating:
           type: string
           description: Maximum rating for this level (exclusive)
-        system:
-          $ref: '#/components/schemas/RatingSystem'
-
-    RatingSystem:
-      type: string
-      enum:
-        - NTRP
-        - UTR
-      description: |
-        Rating system:
-        - NTRP: National Tennis Rating Program (1.0 - 7.0 range)
-        - UTR: Universal Tennis Rating (1.0 - 16.0 range)
 
     MatchScore:
       type: object
@@ -1684,14 +1645,10 @@ components:
     UserRatingResponse:
       type: object
       required:
-        - system
         - value
         - confidence
         - matchesPlayed
       properties:
-        system:
-          type: string
-          enum: [NTRP, UTR]
         value:
           type: string
         level:
@@ -1710,7 +1667,6 @@ components:
       type: object
       required:
         - id
-        - system
         - previousRating
         - newRating
         - ratingChange
@@ -1725,9 +1681,6 @@ components:
           type: string
           format: uuid
           nullable: true
-        system:
-          type: string
-          enum: [NTRP, UTR]
         previousRating:
           type: string
         newRating:
@@ -1772,16 +1725,12 @@ components:
     CreateFixtureRequest:
       type: object
       required:
-        - ratingSystem
         - matchType
         - matchFormat
         - matchDate
         - team1
         - team2
       properties:
-        ratingSystem:
-          type: string
-          enum: [NTRP, UTR]
         matchType:
           type: string
           enum: [SINGLES, DOUBLES, MIXED_DOUBLES]
@@ -1886,7 +1835,6 @@ components:
       type: object
       required:
         - id
-        - ratingSystem
         - matchType
         - matchFormat
         - matchDate
@@ -1899,9 +1847,6 @@ components:
         id:
           type: string
           format: uuid
-        ratingSystem:
-          type: string
-          enum: [NTRP, UTR]
         matchType:
           type: string
           enum: [SINGLES, DOUBLES, MIXED_DOUBLES]
@@ -1963,7 +1908,6 @@ components:
       type: object
       required:
         - userId
-        - system
         - previousRating
         - newRating
         - change
@@ -1973,9 +1917,6 @@ components:
         userId:
           type: string
           format: uuid
-        system:
-          type: string
-          enum: [NTRP, UTR]
         previousRating:
           type: string
         newRating:

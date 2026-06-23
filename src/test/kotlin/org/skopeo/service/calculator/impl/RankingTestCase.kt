@@ -47,7 +47,6 @@ sealed class TestScore(
 data class TestScenario(
     val player1Rating: String,
     val player2Rating: String,
-    val ratingSystem: String,
     val matchScore: TestScore.MatchScore,
 ) {
     val isUpset =
@@ -55,9 +54,9 @@ data class TestScenario(
 
     val description =
         if (isUpset) {
-            "$ratingSystem: Lower rated player wins upset (${matchScore.player1Games}-${matchScore.player2Games})"
+            "NTRP: Lower rated player wins upset (${matchScore.player1Games}-${matchScore.player2Games})"
         } else {
-            "$ratingSystem: Higher rated player wins (${matchScore.player1Games}-${matchScore.player2Games})"
+            "NTRP: Higher rated player wins (${matchScore.player1Games}-${matchScore.player2Games})"
         }
 
     val swapPlayerRatings: TestScenario
@@ -65,7 +64,6 @@ data class TestScenario(
             TestScenario(
                 player1Rating = player2Rating,
                 player2Rating = player1Rating,
-                ratingSystem = ratingSystem,
                 matchScore = matchScore,
             )
 }
@@ -94,7 +92,6 @@ object Scenarios {
         TestScenario(
             player1Rating = "4.5",
             player2Rating = "4.0",
-            ratingSystem = "NTRP",
             matchScore =
                 createMatchScores(
                     player1Games = 6,
@@ -106,7 +103,6 @@ object Scenarios {
         TestScenario(
             player1Rating = "4.5",
             player2Rating = "4.0",
-            ratingSystem = "NTRP",
             matchScore =
                 createMatchScores(
                     player1Games = 6,
@@ -118,7 +114,6 @@ object Scenarios {
         TestScenario(
             player1Rating = "4.5",
             player2Rating = "4.0",
-            ratingSystem = "NTRP",
             matchScore =
                 createMatchScores(
                     player1Games = 6,
@@ -130,7 +125,6 @@ object Scenarios {
         TestScenario(
             player1Rating = "4.5",
             player2Rating = "4.0",
-            ratingSystem = "NTRP",
             matchScore =
                 createMatchScores(
                     player1Games = 6,
@@ -142,7 +136,6 @@ object Scenarios {
         TestScenario(
             player1Rating = "4.5",
             player2Rating = "4.0",
-            ratingSystem = "NTRP",
             matchScore =
                 createMatchScores(
                     player1Games = 6,
@@ -158,7 +151,6 @@ object Scenarios {
         TestScenario(
             player1Rating = "4.5",
             player2Rating = "4.0",
-            ratingSystem = "NTRP",
             matchScore = createMatchScores(
                 player1Games = 6,
                 player2Games = 5
@@ -170,7 +162,6 @@ object Scenarios {
         TestScenario(
             player1Rating = "4.5",
             player2Rating = "4.0",
-            ratingSystem = "NTRP",
             matchScore =
                 createMatchScores(
                     player1Games = 7,
@@ -191,7 +182,6 @@ object Scenarios {
         TestScenario(
             player1Rating = "4.5",
             player2Rating = "4.0",
-            ratingSystem = "NTRP",
             matchScore = createMatchScores(
                 player1Games = 7,
                 player2Games = 6

@@ -6,7 +6,6 @@ package org.skopeo.service.calculator.impl.v1
 import io.kotest.matchers.doubles.plusOrMinus
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
-import org.skopeo.model.RatingSystem
 import java.io.File
 import java.util.Locale
 import kotlin.math.abs
@@ -94,7 +93,6 @@ class NtrpMatchupMatrixReport {
                     createSinglesRequest(
                         p1Rating = p1,
                         p2Rating = p2,
-                        system = RatingSystem.NTRP,
                         p1Games = gamesWon,
                         p2Games = gamesLost,
                         winner = "T1",
