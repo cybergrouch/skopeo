@@ -38,7 +38,7 @@ class UserService(
         rating: String?,
     ): List<User> {
         requireStaff(token)
-        val nameTerm = name?.trim()?.takeIf { it.isNotEmpty() }
+        val nameTerm = name?.let { it.trim().ifEmpty { null } }
         val sexValue = validatedSex(sex)
         val ageRange = age?.let { NumericRange.parse(it) }
         val ratingRange = rating?.let { NumericRange.parse(it) }
