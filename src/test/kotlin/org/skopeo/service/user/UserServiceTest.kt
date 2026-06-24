@@ -146,4 +146,34 @@ class UserServiceTest {
 
         service.getById(token = token(uid = "d1"), id = user.id).isActive.shouldBeFalse()
     }
+
+    @Test
+    fun `deactivate forbids others and 404s on unknown`() {
+        val user = service.provision(token = token(uid = "d2"), request = request).user
+        service.provision(token = token(uid = "stranger"), request = request)
+
+        shouldThrow<ForbiddenException> { service.deactivate(token = token(uid = "stranger"), id = user.id) }
+        shouldThrow<UserNotFoundException> { service.deactivate(token = token(uid = "d2"), id = UUID.randomUUID()) }
+    }
+
+    @Test
+    fun `replaceProfile forbids others and 404s on unknown`() {
+        val user = service.provision(token = token(uid = "r1"), request = request).user
+        service.provision(token = token(uid = "outsider"), request = request)
+
+        shouldThrow<ForbiddenException> {
+            service.replaceProfile(token = token(uid = "outsider"), id = user.id, patch = ProfilePatch(city = "X"))
+        }
+        shouldThrow<UserNotFoundException> {
+            service.replaceProfile(token = token(uid = "r1"), id = UUID.randomUUID(), patch = ProfilePatch(city = "X"))
+        }
+    }
+
+    @Test
+    fun `an unprovisioned caller is forbidden from accessing a profile`() {
+        val user = service.provision(token = token(uid = "victim"), request = request).user
+
+        // The caller's token has no user row, so requireAccess sees caller == null (isAdmin == false).
+        shouldThrow<ForbiddenException> { service.getById(token = token(uid = "no-such-user"), id = user.id) }
+    }
 }

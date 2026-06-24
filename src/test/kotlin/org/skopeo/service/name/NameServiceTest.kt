@@ -20,6 +20,7 @@ import org.skopeo.model.UserName
 import org.skopeo.repository.NameRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.user.ForbiddenException
+import org.skopeo.service.user.UserNotFoundException
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.util.UUID
@@ -146,6 +147,33 @@ class NameServiceTest {
         shouldThrow<NameNotFoundException> {
             service.get(token = token(uid = "owner"), userId = owner.id, nameId = name.id)
         }
+    }
+
+    @Test
+    fun `listing names for a non-existent user is not found`() {
+        provisionUser(uid = "owner")
+
+        shouldThrow<UserNotFoundException> {
+            service.list(token = token(uid = "owner"), userId = UUID.randomUUID())
+        }
+    }
+
+    @Test
+    fun `creating a name for a non-existent user is not found`() {
+        provisionUser(uid = "owner")
+
+        shouldThrow<UserNotFoundException> {
+            service.create(token = token(uid = "owner"), userId = UUID.randomUUID(), request = nickname(value = "JB"))
+        }
+    }
+
+    @Test
+    fun `an administrator can list another user's names`() {
+        val owner = provisionUser(uid = "owner")
+        provisionUser(uid = "root", capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        service.create(token = token(uid = "owner"), userId = owner.id, request = nickname(value = "JB"))
+
+        service.list(token = token(uid = "root"), userId = owner.id).count { it.type == NameType.NICKNAME } shouldBe 1
     }
 
     @Test

@@ -44,20 +44,10 @@ fun Application.configureRankingRoutes() {
 
                 logger.info { "Ranking calculation completed successfully" }
                 call.respond(status = HttpStatusCode.OK, message = result.response)
-            } catch (e: kotlinx.serialization.SerializationException) {
-                // Must precede IllegalArgumentException: kotlinx SerializationException is a subtype of it.
-                logger.warn(t = e) { "JSON serialization error in ranking calculation request" }
-                call.respond(
-                    status = HttpStatusCode.BadRequest,
-                    message = mapOf("error" to "Invalid JSON", "message" to (e.message ?: "Invalid request format")),
-                )
-            } catch (e: IllegalArgumentException) {
-                logger.warn(t = e) { "Validation error in ranking calculation request" }
-                call.respond(
-                    status = HttpStatusCode.BadRequest,
-                    message = mapOf("error" to "Validation error", "message" to (e.message ?: "Invalid request")),
-                )
             } catch (e: BadRequestException) {
+                // Ktor's content negotiation wraps deserialization + DTO `init` validation
+                // failures (SerializationException, IllegalArgumentException) in BadRequestException,
+                // so this single catch handles all malformed/invalid request bodies.
                 logger.warn(t = e) { "Invalid request body in ranking calculation request" }
                 call.respond(status = HttpStatusCode.BadRequest, message = badRequestErrorBody(e = e))
             } catch (e: Exception) {

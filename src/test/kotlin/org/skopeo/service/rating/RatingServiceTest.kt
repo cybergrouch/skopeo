@@ -146,4 +146,43 @@ class RatingServiceTest {
             service.setRating(token = token(uid = "root"), userId = UUID.randomUUID(), value = "4.0", confidence = null)
         }
     }
+
+    @Test
+    fun `pending assessment yields a null display name for a user without one`() {
+        admin(uid = "root")
+        // Provision a user with no DISPLAY name (only a FIRST name) so the display-name lookup
+        // resolves to null on the pending-assessment list.
+        val nameless =
+            users.provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = "nameless",
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "nameless", isPrimary = true),
+                        names = listOf(UserName(type = NameType.FIRST, value = "First")),
+                        capabilities = setOf(Capability.PLAYER),
+                    ),
+            )
+
+        val entry = service.pendingAssessment(token = token(uid = "root")).single { it.userId == nameless.id }
+        entry.displayName shouldBe null
+    }
+
+    @Test
+    fun `a negative confidence is rejected`() {
+        admin(uid = "root")
+        val player = provisionUser(uid = "player")
+
+        shouldThrow<IllegalArgumentException> {
+            service.setRating(token = token(uid = "root"), userId = player.id, value = "4.0", confidence = "-0.1")
+        }
+    }
+
+    @Test
+    fun `an admin may read their own ratings and history`() {
+        val root = admin(uid = "root")
+        service.setRating(token = token(uid = "root"), userId = root.id, value = "5.0", confidence = null)
+
+        service.getRatings(token = token(uid = "root"), userId = root.id).single().currentRating.toPlainString() shouldBe "5.000000"
+        service.getHistory(token = token(uid = "root"), userId = root.id) shouldBe emptyList()
+    }
 }

@@ -237,6 +237,82 @@ class MatchServiceTest {
     }
 
     @Test
+    fun `a fixture rejects a disallowed match format`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+
+        shouldThrow<IllegalArgumentException> {
+            service.createFixture(
+                token = token(uid = "host"),
+                request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(matchFormat = "BEST_OF_ONE"),
+            )
+        }
+    }
+
+    @Test
+    fun `a fixture rejects an unknown participant id`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val ghostId = UUID.randomUUID()
+
+        shouldThrow<IllegalArgumentException> {
+            service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = ghostId))
+        }
+    }
+
+    @Test
+    fun `a fixture rejects an inactive participant`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        users.deactivate(id = p2.id)
+
+        shouldThrow<IllegalArgumentException> {
+            service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id))
+        }
+    }
+
+    @Test
+    fun `uploading results to an unknown match is not found`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+
+        shouldThrow<MatchNotFoundException> {
+            service.uploadResult(token = token(uid = "host"), matchId = UUID.randomUUID(), request = straightSets())
+        }
+    }
+
+    @Test
+    fun `disabling an unknown match is not found`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+
+        shouldThrow<MatchNotFoundException> {
+            service.setActive(token = token(uid = "host"), matchId = UUID.randomUUID(), active = false)
+        }
+    }
+
+    @Test
+    fun `a host can disable then re-enable a match`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val match = service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id))
+
+        service.setActive(token = token(uid = "host"), matchId = match.id, active = false).isActive shouldBe false
+        service.setActive(token = token(uid = "host"), matchId = match.id, active = true).isActive shouldBe true
+    }
+
+    @Test
+    fun `reading a match refuses an unprovisioned caller`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val match = service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id))
+
+        shouldThrow<ForbiddenException> { service.getById(token = token(uid = "ghost"), matchId = match.id) }
+    }
+
+    @Test
     fun `oversight queries are staff-only, and a host is scoped to their own fixtures`() {
         provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))

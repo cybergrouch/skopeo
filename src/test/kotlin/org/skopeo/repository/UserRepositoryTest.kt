@@ -150,6 +150,17 @@ class UserRepositoryTest {
     }
 
     @Test
+    fun `updateProfile patches the photoUrl when provided`() {
+        val created = repository.provision(command = googleSignup())
+
+        val updated = repository.updateProfile(id = created.id, patch = ProfilePatch(photoUrl = "https://example.com/new.jpg"))
+
+        updated.shouldNotBeNull()
+        updated.photoUrl shouldBe "https://example.com/new.jpg"
+        updated.city shouldBe "Manila" // untouched
+    }
+
+    @Test
     fun `updateProfile changes sex when provided`() {
         val created = repository.provision(command = googleSignup()) // sex = Male
 
