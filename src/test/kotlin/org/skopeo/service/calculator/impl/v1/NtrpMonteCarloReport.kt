@@ -12,35 +12,28 @@ import kotlin.random.Random
 
 /**
  * Monte Carlo simulation of how a player's NTRP rating evolves over N matches (a runnable
- * report, not a test). For each starting level (1.0–7.0) and each opponent-mix scenario we run
- * many independent players through N randomized matches, feeding every result through the real
- * calculator, and summarize the distribution of the final rating.
+ * report, not a test). Two analyses, both seeded for reproducibility:
  *
- * ## Model (all parameters are constants below, tune freely)
+ * 1. **Gap scenarios** — opponents are drawn near the player and the outcome is derived from the
+ *    rating gap; we report the final-rating distribution per starting level for two opponent mixes
+ *    (majority within a 0.5 gap vs majority 0.5–1.0 away).
+ * 2. **Outcome-class experiment** — the opponent gap is held neutral (uniform 0–1.0) and the
+ *    per-match outcome mix is *fixed* by a class, so each class's effect on the rating is isolated.
+ *    Classes: equal; more wins (dom = comp); more competitive wins; more dominant wins; more losses
+ *    (dom = comp); more competitive losses; more dominated.
  *
- * **Opponent gap** (relative to the player's *current* rating; direction above/below is 50/50,
- * flipped when it would fall outside 1.0–7.0):
- *   - Scenario "within 0.5": [P_WITHIN_HALF_NEAR] of opponents are within a 0.5 gap, the rest 0.5–1.0.
- *   - Scenario "beyond 0.5": the majority are 0.5–1.0 away (only [P_WITHIN_HALF_FAR] within 0.5).
+ * The four outcomes are DOMINANT_WIN, COMPETITIVE_WIN, COMPETITIVE_LOSS, and DOMINATED (the inverse
+ * of a dominant win — the player is crushed, e.g. 0-6/1-6/2-6). Dominant scores have a margin ≥ 0.5
+ * (6-0/6-1/6-2), competitive ≤ 0.333 (6-3/6-4/7-5). Every result runs through the real calculator.
  *
- * **Outcome** depends on the rating difference δ = player − opponent:
- *   - P(player wins) = logistic(δ / [WIN_SCALE]).
- *   - Given the outcome, the match is *dominant* with logistic(±δ / [DOM_SCALE]) (the favorite is
- *     more likely to dominate), otherwise *competitive*. This yields the four buckets requested:
- *     DOMINANT_WIN, COMPETITIVE_WIN, COMPETITIVE_LOSS, and DOMINATED — the last being the inverse
- *     of a dominant win (the player is crushed, e.g. 0-6/1-6/2-6).
- *   - A bucket maps to a concrete set score ([DOMINANT_SCORES] / [COMPETITIVE_SCORES]): "dominant"
- *     is a margin ≥ 0.5 (6-0/6-1/6-2) and "competitive" is ≤ 0.333 (6-3/6-4/7-5).
- *
- * The run is seeded ([SEED]) so the report is reproducible. Outputs: /tmp/ntrp_montecarlo.txt and
- * presentations/ntrp_montecarlo.md.
+ * Outputs: /tmp/ntrp_montecarlo.txt and presentations/ntrp_montecarlo.md.
  */
 class NtrpMonteCarloReport {
     private val calculator = PerformanceBasedRankingCalculatorImpl()
 
     companion object {
         private const val SEED = 20_260_624L
-        private const val TRIALS = 5_000
+        private const val TRIALS = 3_000
         private const val MATCHES = 20
         private const val NTRP_MIN = 1.0
         private const val NTRP_MAX = 7.0
@@ -52,8 +45,9 @@ class NtrpMonteCarloReport {
         private const val HALF_GAP = 0.5
         private const val P_WITHIN_HALF_NEAR = 0.7 // "majority within 0.5"
         private const val P_WITHIN_HALF_FAR = 0.3 // "majority 0.5–1.0"
+        private const val NEUTRAL_P_WITHIN_HALF = 0.5 // class experiment: uniform 0–1.0 opponent gap
 
-        // (winnerGames, loserGames) per bucket — dominance = (w-l)/(w+l).
+        // (winnerGames, loserGames) per bucket — margin = (w-l)/(w+l).
         private val DOMINANT_SCORES = listOf(6 to 0, 6 to 1, 6 to 2) // 1.000, 0.714, 0.500
         private val COMPETITIVE_SCORES = listOf(6 to 3, 6 to 4, 7 to 5) // 0.333, 0.200, 0.167
 
@@ -76,6 +70,21 @@ class NtrpMonteCarloReport {
         DOMINATED(label = "Dominated"),
     }
 
+    /** A fixed per-match outcome mix. [weights] are P(DW, CW, CL, Dominated) in [Outcome] order. */
+    enum class OutcomeClass(
+        val label: String,
+        val short: String,
+        val weights: List<Double>,
+    ) {
+        EQUAL(label = "Equal (all four 25%)", short = "Equal", weights = listOf(0.25, 0.25, 0.25, 0.25)),
+        MORE_WINS(label = "More wins (dom = comp)", short = "+Win", weights = listOf(0.35, 0.35, 0.15, 0.15)),
+        MORE_COMPETITIVE_WINS(label = "More competitive wins", short = "+CWin", weights = listOf(0.20, 0.50, 0.15, 0.15)),
+        MORE_DOMINANT_WINS(label = "More dominant wins", short = "+DWin", weights = listOf(0.50, 0.20, 0.15, 0.15)),
+        MORE_LOSSES(label = "More losses (dom = comp)", short = "+Loss", weights = listOf(0.15, 0.15, 0.35, 0.35)),
+        MORE_COMPETITIVE_LOSSES(label = "More competitive losses", short = "+CLoss", weights = listOf(0.15, 0.15, 0.50, 0.20)),
+        MORE_DOMINATED(label = "More dominated losses", short = "+Domd", weights = listOf(0.15, 0.15, 0.20, 0.50)),
+    }
+
     private data class Stats(
         val mean: Double,
         val sd: Double,
@@ -90,14 +99,24 @@ class NtrpMonteCarloReport {
         val outcomeShare: Map<Outcome, Double>,
     )
 
+    private data class ClassResult(
+        val meanEnd: Double,
+        val sd: Double,
+        val meanChange: Double,
+    )
+
     fun generateMonteCarloReport() {
         val results = Scenario.entries.associateWith { scenario -> simulateScenario(scenario = scenario) }
+        val classResults =
+            TestScenarios.allNtrpLevels.map { level ->
+                level to OutcomeClass.entries.associateWith { cls -> simulateClass(level = level, outcomeClass = cls) }
+            }
 
-        val text = renderText(results = results)
+        val text = renderText(results = results, classResults = classResults)
         println(message = text)
         File("/tmp/ntrp_montecarlo.txt").writeText(text = text)
 
-        val markdown = renderMarkdown(results = results)
+        val markdown = renderMarkdown(results = results, classResults = classResults)
         val mdFile = File("presentations/ntrp_montecarlo.md")
         mdFile.parentFile?.mkdirs()
         mdFile.writeText(text = markdown)
@@ -105,9 +124,10 @@ class NtrpMonteCarloReport {
         println(message = "\nResults written to /tmp/ntrp_montecarlo.txt and ${mdFile.path}")
     }
 
+    // --- Analysis 1: gap-driven scenarios ---
+
     private fun simulateScenario(scenario: Scenario): List<LevelResult> =
         TestScenarios.allNtrpLevels.map { level ->
-            // Each level/scenario gets its own seeded RNG so the report is reproducible regardless of order.
             val rng = Random(seed = SEED + level.hashCode())
             val finals = DoubleArray(size = TRIALS)
             val counts = Outcome.entries.associateWith { 0 }.toMutableMap()
@@ -115,10 +135,11 @@ class NtrpMonteCarloReport {
             repeat(times = TRIALS) { trial ->
                 var rating = level.toDouble()
                 repeat(times = MATCHES) {
-                    val (outcome, newRating) = playMatch(rating = rating, scenario = scenario, rng = rng)
+                    val opponent = pickOpponent(rating = rating, pWithinHalf = scenario.pWithinHalf, rng = rng)
+                    val outcome = gapOutcome(rating = rating, opponent = opponent, rng = rng)
                     counts[outcome] = (counts[outcome] ?: 0) + 1
                     matchesPlayed += 1
-                    rating = newRating
+                    rating = applyMatch(rating = rating, opponent = opponent, outcome = outcome, rng = rng)
                 }
                 finals[trial] = rating
             }
@@ -129,57 +150,88 @@ class NtrpMonteCarloReport {
             )
         }
 
-    /** One match: pick an opponent, sample the outcome, run it through the calculator, return the new rating. */
-    private fun playMatch(
+    /** Outcome derived from the rating gap: the favorite wins more and dominates more. */
+    private fun gapOutcome(
         rating: Double,
-        scenario: Scenario,
+        opponent: Double,
         rng: Random,
-    ): Pair<Outcome, Double> {
-        val opponent = pickOpponent(rating = rating, scenario = scenario, rng = rng)
+    ): Outcome {
         val delta = rating - opponent
-        val playerWins = rng.nextDouble() < logistic(x = delta, scale = WIN_SCALE)
-
-        val outcome: Outcome
-        val p1Games: Int
-        val p2Games: Int
-        val winner: String
-        if (playerWins) {
-            val dominant = rng.nextDouble() < logistic(x = delta, scale = DOM_SCALE)
-            outcome = if (dominant) Outcome.DOMINANT_WIN else Outcome.COMPETITIVE_WIN
-            val (w, l) = pickScore(dominant = dominant, rng = rng)
-            p1Games = w
-            p2Games = l
-            winner = "T1"
+        return if (rng.nextDouble() < logistic(x = delta, scale = WIN_SCALE)) {
+            if (rng.nextDouble() < logistic(x = delta, scale = DOM_SCALE)) Outcome.DOMINANT_WIN else Outcome.COMPETITIVE_WIN
         } else {
-            val opponentDominant = rng.nextDouble() < logistic(x = -delta, scale = DOM_SCALE)
-            outcome = if (opponentDominant) Outcome.DOMINATED else Outcome.COMPETITIVE_LOSS
-            val (w, l) = pickScore(dominant = opponentDominant, rng = rng)
-            p1Games = l
-            p2Games = w
-            winner = "T2"
+            if (rng.nextDouble() < logistic(x = -delta, scale = DOM_SCALE)) Outcome.DOMINATED else Outcome.COMPETITIVE_LOSS
         }
+    }
 
+    // --- Analysis 2: fixed outcome-class experiment ---
+
+    private fun simulateClass(
+        level: String,
+        outcomeClass: OutcomeClass,
+    ): ClassResult {
+        val rng = Random(seed = SEED + level.hashCode() + outcomeClass.ordinal)
+        val finals = DoubleArray(size = TRIALS)
+        repeat(times = TRIALS) { trial ->
+            var rating = level.toDouble()
+            repeat(times = MATCHES) {
+                val opponent = pickOpponent(rating = rating, pWithinHalf = NEUTRAL_P_WITHIN_HALF, rng = rng)
+                val outcome = classOutcome(weights = outcomeClass.weights, rng = rng)
+                rating = applyMatch(rating = rating, opponent = opponent, outcome = outcome, rng = rng)
+            }
+            finals[trial] = rating
+        }
+        val stats = statsOf(values = finals)
+        return ClassResult(meanEnd = stats.mean, sd = stats.sd, meanChange = stats.mean - level.toDouble())
+    }
+
+    /** Draw an outcome from a fixed categorical distribution. */
+    private fun classOutcome(
+        weights: List<Double>,
+        rng: Random,
+    ): Outcome {
+        var threshold = rng.nextDouble() * weights.sum()
+        for (outcome in Outcome.entries) {
+            threshold -= weights[outcome.ordinal]
+            if (threshold < 0) {
+                return outcome
+            }
+        }
+        return Outcome.entries.last()
+    }
+
+    // --- Shared match machinery ---
+
+    /** Map an outcome to a concrete set score, then run it through the calculator; return the new rating. */
+    private fun applyMatch(
+        rating: Double,
+        opponent: Double,
+        outcome: Outcome,
+        rng: Random,
+    ): Double {
+        val dominant = outcome == Outcome.DOMINANT_WIN || outcome == Outcome.DOMINATED
+        val playerWins = outcome == Outcome.DOMINANT_WIN || outcome == Outcome.COMPETITIVE_WIN
+        val (w, l) = pickScore(dominant = dominant, rng = rng)
         val result =
             calculator.calculate(
                 request =
                     createSinglesRequest(
                         p1Rating = fmtRating(value = rating),
                         p2Rating = fmtRating(value = opponent),
-                        p1Games = p1Games,
-                        p2Games = p2Games,
-                        winner = winner,
+                        p1Games = if (playerWins) w else l,
+                        p2Games = if (playerWins) l else w,
+                        winner = if (playerWins) "T1" else "T2",
                     ),
             )
-        val newRating = result.response.ratingChanges["P1"]?.newRating?.value?.toDouble() ?: rating
-        return outcome to newRating
+        return result.response.ratingChanges["P1"]?.newRating?.value?.toDouble() ?: rating
     }
 
     private fun pickOpponent(
         rating: Double,
-        scenario: Scenario,
+        pWithinHalf: Double,
         rng: Random,
     ): Double {
-        val within = rng.nextDouble() < scenario.pWithinHalf
+        val within = rng.nextDouble() < pWithinHalf
         val gap = if (within) rng.nextDouble() * HALF_GAP else HALF_GAP + rng.nextDouble() * HALF_GAP
         val above =
             when {
@@ -219,19 +271,21 @@ class NtrpMonteCarloReport {
         return Stats(mean = mean, sd = sqrt(x = variance), min = sorted.first(), max = sorted.last(), percentiles = percentiles)
     }
 
-    private fun renderText(results: Map<Scenario, List<LevelResult>>): String =
+    // --- Rendering ---
+
+    private fun renderText(
+        results: Map<Scenario, List<LevelResult>>,
+        classResults: List<Pair<String, Map<OutcomeClass, ClassResult>>>,
+    ): String =
         buildString {
             appendLine(value = "NTRP RATING MONTE CARLO ($TRIALS players × $MATCHES matches each, seed $SEED)")
-            appendLine(value = "Final-rating distribution by starting level.")
             appendLine(value = "Win prob = logistic(δ/$WIN_SCALE); dominance split via δ/$DOM_SCALE.")
             appendLine(value = "pN = Nth percentile of final rating (pN = N% of players finished below it); [p5,p95] is a 90% band.")
             results.forEach { (scenario, levels) ->
                 appendLine()
                 appendLine(value = "=== Scenario: ${scenario.label} (P[within 0.5]=${scenario.pWithinHalf}) ===")
                 appendLine(value = "start   mean     sd      p5     p25     p50     p75     p95     min     max")
-                levels.forEach { lr ->
-                    appendLine(value = textRow(lr = lr))
-                }
+                levels.forEach { lr -> appendLine(value = textRow(lr = lr)) }
                 appendLine(value = "-- outcome mix (share of all matches) --")
                 appendLine(value = "start   domWin  compWin compLoss dominated")
                 levels.forEach { lr ->
@@ -243,6 +297,47 @@ class NtrpMonteCarloReport {
                                 },
                     )
                 }
+            }
+            appendLine(value = classSectionText(classResults = classResults))
+        }
+
+    private fun classSectionText(classResults: List<Pair<String, Map<OutcomeClass, ClassResult>>>): String =
+        buildString {
+            appendLine()
+            appendLine(value = "=== OUTCOME-CLASS EXPERIMENT (opponent gap neutral: P[within 0.5]=$NEUTRAL_P_WITHIN_HALF) ===")
+            appendLine(value = "Each class fixes the per-match outcome probabilities (DW/CW/CL/Dominated):")
+            OutcomeClass.entries.forEach { c ->
+                appendLine(
+                    value =
+                        String.format(Locale.US, "  %-7s %-24s ", c.short, c.label) +
+                            Outcome.entries.joinToString(separator = " ") { o -> String.format(Locale.US, "%.2f", c.weights[o.ordinal]) },
+                )
+            }
+            appendLine(value = "-- mean rating change (Δ) after $MATCHES matches --")
+            appendLine(
+                value = "start " + OutcomeClass.entries.joinToString(separator = "") { c -> String.format(Locale.US, "%8s", c.short) },
+            )
+            classResults.forEach { (level, byClass) ->
+                appendLine(
+                    value =
+                        String.format(Locale.US, "%-6s", level) +
+                            OutcomeClass.entries.joinToString(separator = "") { c ->
+                                String.format(Locale.US, "%+8.3f", byClass.getValue(key = c).meanChange)
+                            },
+                )
+            }
+            appendLine(value = "-- mean end rating --")
+            appendLine(
+                value = "start " + OutcomeClass.entries.joinToString(separator = "") { c -> String.format(Locale.US, "%8s", c.short) },
+            )
+            classResults.forEach { (level, byClass) ->
+                appendLine(
+                    value =
+                        String.format(Locale.US, "%-6s", level) +
+                            OutcomeClass.entries.joinToString(separator = "") { c ->
+                                String.format(Locale.US, "%8.3f", byClass.getValue(key = c).meanEnd)
+                            },
+                )
             }
         }
 
@@ -262,7 +357,10 @@ class NtrpMonteCarloReport {
                 lr.stats.max,
             )
 
-    private fun renderMarkdown(results: Map<Scenario, List<LevelResult>>): String =
+    private fun renderMarkdown(
+        results: Map<Scenario, List<LevelResult>>,
+        classResults: List<Pair<String, Map<OutcomeClass, ClassResult>>>,
+    ): String =
         buildString {
             appendLine(value = "# NTRP Rating Monte Carlo")
             appendLine()
@@ -275,6 +373,8 @@ class NtrpMonteCarloReport {
             appendLine(value = "**Percentiles** (`pN`) describe the spread of final ratings: `pN` = N% of simulated")
             appendLine(value = "players finished *below* that rating. So p5/p95 bracket the middle 90% of outcomes,")
             appendLine(value = "p25/p75 the middle 50% (interquartile range), and p50 is the median.")
+            appendLine()
+            appendLine(value = "# Analysis 1 — gap-driven scenarios")
             results.forEach { (scenario, levels) ->
                 appendLine()
                 appendLine(value = "## ${scenario.label} (P[opponent within 0.5] = ${scenario.pWithinHalf})")
@@ -291,7 +391,58 @@ class NtrpMonteCarloReport {
                 appendLine(value = "|---|---|---|---|---|")
                 levels.forEach { lr -> appendLine(value = markdownOutcomeRow(lr = lr)) }
             }
+            appendLine(value = classSectionMarkdown(classResults = classResults))
         }
+
+    private fun classSectionMarkdown(classResults: List<Pair<String, Map<OutcomeClass, ClassResult>>>): String =
+        buildString {
+            appendLine()
+            appendLine(value = "# Analysis 2 — outcome-class experiment")
+            appendLine()
+            appendLine(value = "The opponent gap is held neutral (uniform 0–1.0; P[within 0.5] = $NEUTRAL_P_WITHIN_HALF) and only the")
+            appendLine(value = "per-match outcome mix varies, so each table isolates a class's effect on the rating.")
+            appendLine()
+            appendLine(value = "Class definitions (per-match probabilities):")
+            appendLine()
+            appendLine(value = "| Class | Dominant win | Competitive win | Competitive loss | Dominated |")
+            appendLine(value = "|---|---|---|---|---|")
+            OutcomeClass.entries.forEach { c ->
+                appendLine(
+                    value =
+                        "| ${c.label} | " +
+                            Outcome.entries.joinToString(separator = " | ") { o ->
+                                String.format(Locale.US, "%.0f%%", c.weights[o.ordinal] * PERCENT)
+                            } + " |",
+                )
+            }
+            appendLine()
+            appendLine(value = "Mean rating change (Δ) after $MATCHES matches, by starting level × class:")
+            appendLine()
+            appendClassMatrix(classResults = classResults, signed = true) { it.meanChange }
+            appendLine()
+            appendLine(value = "Mean end rating, by starting level × class:")
+            appendLine()
+            appendClassMatrix(classResults = classResults, signed = false) { it.meanEnd }
+        }
+
+    private fun StringBuilder.appendClassMatrix(
+        classResults: List<Pair<String, Map<OutcomeClass, ClassResult>>>,
+        signed: Boolean,
+        value: (ClassResult) -> Double,
+    ) {
+        appendLine(value = "| Start | " + OutcomeClass.entries.joinToString(separator = " | ") { c -> c.short } + " |")
+        appendLine(value = "|---|" + "---|".repeat(n = OutcomeClass.entries.size))
+        val format = if (signed) "%+.3f" else "%.3f"
+        classResults.forEach { (level, byClass) ->
+            appendLine(
+                value =
+                    "| **$level** | " +
+                        OutcomeClass.entries.joinToString(separator = " | ") { c ->
+                            String.format(Locale.US, format, value(byClass.getValue(key = c)))
+                        } + " |",
+            )
+        }
+    }
 
     private fun markdownStatsRow(lr: LevelResult): String =
         "| **${lr.startLevel}** | " +
