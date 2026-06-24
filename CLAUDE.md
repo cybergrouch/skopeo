@@ -27,13 +27,13 @@ Helper scripts in `scripts/`: `start-server.sh`, `stop-server.sh`, `test-api.sh`
 ## JVM Constraints
 
 - Code targets Java 17 (Gradle toolchain).
-- The Gradle daemon is pinned to Java 21 in `gradle/gradle-daemon-jvm.properties` because detekt 1.23.8's bundled Kotlin compiler crashes on Java 25+. Do not raise it until detekt 2.0 is adopted. See `docs/JVM_COMPATIBILITY.md`.
+- The Gradle daemon is pinned to Java 21 in `gradle/gradle-daemon-jvm.properties` because detekt 1.23.8's bundled Kotlin compiler crashes on Java 25+. Do not raise it until detekt 2.0 is adopted. See `docs/engineering/operations/JVM_COMPATIBILITY.md`.
 
 ## Architecture
 
 **Stateless calculation flow**: `Application.kt` (Ktor module setup) → `routes/RankingRoutes.kt` (POST `/api/v1/calculate-ranking`, error handling) → `service/calculator/impl/v1/PerformanceBasedRankingCalculatorImpl.kt` (the algorithm) → `RankingCalculationResult` (response DTO + audit trail). This endpoint persists nothing — it is a pure "what-if" calculator.
 
-**Pure-function core with audit trail**: `RankingCalculator.calculate()` is a pure function with no side effects. Instead of logging internally, it returns a `RankingCalculationResult` containing both the response and an `AuditTrail` (list of `AuditEntry`); the route layer logs the audit entries. This is why business-logic tests need no mocking and can assert on audit contents directly. See `docs/AUDIT_TRAIL.md`.
+**Pure-function core with audit trail**: `RankingCalculator.calculate()` is a pure function with no side effects. Instead of logging internally, it returns a `RankingCalculationResult` containing both the response and an `AuditTrail` (list of `AuditEntry`); the route layer logs the audit entries. This is why business-logic tests need no mocking and can assert on audit contents directly. See `docs/engineering/architecture/AUDIT_TRAIL.md`.
 
 **Team-based request model**: The API accepts `teams: Map<String, Team>`, not bare players — designed so doubles can be added later without breaking the schema. Currently `RankingCalculationRequest.init` enforces exactly 2 SINGLES teams of 1 player each. Validation lives in DTO/model `init` blocks and throws `IllegalArgumentException`, which routes map to 400.
 
@@ -43,7 +43,7 @@ Helper scripts in `scripts/`: `start-server.sh`, `stop-server.sh`, `test-api.sh`
 - **Matches**: `routes/MatchRoutes.kt` → `service/match/MatchService.kt` → `repository/MatchRepository.kt` (`MatchTables.kt`). HOST/ADMINISTRATOR create fixtures and upload results; recording a result does NOT compute ratings.
 - **Rating-calculation trigger**: `service/rating/RatingCalculationService.kt` (ADMINISTRATOR only, `POST /api/v1/ratings/calculations`). It processes matches pending calculation oldest→newest, carrying ratings forward through an in-memory snapshot, reusing the stateless `RankingCalculator`. **Dry-run is the default** (full preview, no writes); only an explicit `{"dryRun": false}` persists ratings + history + `rated_at` in one transaction.
 
-**Web UI** (`web/`, React + Vite, generated API client under `web/src/api/generated/`): Firebase-auth sign-up/login, then a capability-gated dashboard (`routes/DashboardPage.tsx`) with Profile / Matches / Research / Admin tabs (Matches/Research require match-management capability; Admin requires ADMINISTRATOR). See `docs/WEB_UI_ARCHITECTURE.md`.
+**Web UI** (`web/`, React + Vite, generated API client under `web/src/api/generated/`): Firebase-auth sign-up/login, then a capability-gated dashboard (`routes/DashboardPage.tsx`) with Profile / Matches / Research / Admin tabs (Matches/Research require match-management capability; Admin requires ADMINISTRATOR). See `docs/engineering/architecture/WEB_UI_ARCHITECTURE.md`.
 
 **Money-style precision**: Ratings are `BigDecimal` throughout (serialized as strings in JSON); `service/calculator/impl/BigDecimalUtils.kt` centralizes scale/rounding.
 
@@ -51,7 +51,7 @@ Helper scripts in `scripts/`: `start-server.sh`, `stop-server.sh`, `test-api.sh`
 
 **Database**: `config/DatabaseConfig.kt` wires HikariCP + Flyway migrations + Exposed on startup. `Application.module(initDatabase: Boolean)` allows tests to skip DB init — integration tests call `module(initDatabase = false)`. Config is read from `src/main/resources/application.yaml` (env vars `DATABASE_URL`, `DATABASE_USER`, `DATABASE_PASSWORD`).
 
-**Algorithm behavior** (details in `docs/RATING_CALCULATION_ALGORITHM.md`): single NTRP K-factor of 0.16 over the 1.0–7.0 range. Rating changes depend on dominance (game margin), the rating gap vs a competitive threshold (8.3% of the NTRP range = 0.5 points; expected wins beyond it yield zero change), a 2× upset multiplier, and optional USTA-style smoothing via `options.smoothingFactor`.
+**Algorithm behavior** (details in `docs/product/RATING_CALCULATION_ALGORITHM.md`): single NTRP K-factor of 0.16 over the 1.0–7.0 range. Rating changes depend on dominance (game margin), the rating gap vs a competitive threshold (8.3% of the NTRP range = 0.5 points; expected wins beyond it yield zero change), a 2× upset multiplier, and optional USTA-style smoothing via `options.smoothingFactor`.
 
 ## Code Style Enforcement
 

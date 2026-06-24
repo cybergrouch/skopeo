@@ -717,7 +717,7 @@ docker stop skopeo
 docker run -d -p 8080:8080 skopeo:1.0.0
 ```
 
-See [docs/DOCKER_DEPLOYMENT.md](docs/DOCKER_DEPLOYMENT.md) for comprehensive Docker deployment guide.
+See [docs/engineering/operations/DOCKER_DEPLOYMENT.md](docs/engineering/operations/DOCKER_DEPLOYMENT.md) for comprehensive Docker deployment guide.
 
 ### Testing the API
 
@@ -813,7 +813,7 @@ See `scripts/README.md` for detailed documentation.
 
 - **Interactive**: Visit `/swagger` for Swagger UI (try API calls in browser)
 - **Machine-readable**: Download `/openapi.yaml` for code generation and tooling
-- **Detailed specs**: See [docs/API_DOCUMENTATION.md](docs/API_DOCUMENTATION.md)
+- **Detailed specs**: See [docs/engineering/api/API_DOCUMENTATION.md](docs/engineering/api/API_DOCUMENTATION.md)
 
 ## How Ratings Are Calculated
 
@@ -926,74 +926,74 @@ With 0.7 factor:   +0.112 / -0.112  (70% applied)
 }
 ```
 
-See **[RATING_SMOOTHING.md](docs/RATING_SMOOTHING.md)** for complete documentation with examples and best practices.
+See **[RATING_SMOOTHING.md](docs/product/RATING_SMOOTHING.md)** for complete documentation with examples and best practices.
 
 ### Rating Boundaries
 - **NTRP**: 1.0 (beginner) to 7.0 (world-class)
 
 ### Want More Details?
-- **[RATING_SMOOTHING.md](docs/RATING_SMOOTHING.md)** - Complete rating smoothing guide with examples and best practices
-- **[RATING_CALCULATION_ALGORITHM.md](docs/RATING_CALCULATION_ALGORITHM.md)** - Complete algorithm explanation with formulas, edge cases, and technical details
+- **[RATING_SMOOTHING.md](docs/product/RATING_SMOOTHING.md)** - Complete rating smoothing guide with examples and best practices
+- **[RATING_CALCULATION_ALGORITHM.md](docs/product/RATING_CALCULATION_ALGORITHM.md)** - Complete algorithm explanation with formulas, edge cases, and technical details
 
 ## Documentation
 
 Comprehensive documentation is available in the `docs/` directory:
 
-- **[API_DOCUMENTATION.md](docs/API_DOCUMENTATION.md)** - Complete API reference
+- **[API_DOCUMENTATION.md](docs/engineering/api/API_DOCUMENTATION.md)** - Complete API reference
   - Endpoint specifications
   - Request/response formats
   - Data models and validation rules
   - Examples and error codes
 
-- **[RATING_SMOOTHING.md](docs/RATING_SMOOTHING.md)** - Rating smoothing algorithm (NEW)
+- **[RATING_SMOOTHING.md](docs/product/RATING_SMOOTHING.md)** - Rating smoothing algorithm (NEW)
   - USTA NTRP Dynamic-style smoothing explained
   - Mathematical formulas and examples
   - Smoothing factor recommendations (0.3, 0.5, 0.7)
   - Usage guide and best practices
   - Performance and backward compatibility
 
-- **[RATING_CALCULATION_ALGORITHM.md](docs/RATING_CALCULATION_ALGORITHM.md)** - Complete algorithm behavior guide
+- **[RATING_CALCULATION_ALGORITHM.md](docs/product/RATING_CALCULATION_ALGORITHM.md)** - Complete algorithm behavior guide
   - Performance-based Elo system overview
   - Five adjustment cases explained with examples
   - Edge cases and special handling
   - Magic constant explanations
   - Known limitations and test coverage
 
-- **[AUDIT_TRAIL.md](docs/AUDIT_TRAIL.md)** - Audit trail design
+- **[AUDIT_TRAIL.md](docs/engineering/architecture/AUDIT_TRAIL.md)** - Audit trail design
   - Monadic pattern explanation
   - Pure function benefits
   - Testing without mocking
   - Usage examples
 
-- **[TESTING_STRATEGY.md](docs/TESTING_STRATEGY.md)** - Testing pyramid and strategy
+- **[TESTING_STRATEGY.md](docs/engineering/quality/TESTING_STRATEGY.md)** - Testing pyramid and strategy
   - Test organization and pyramid
   - Unit vs integration tests
   - Pure function testing
   - Coverage goals and best practices
 
-- **[CODE_COVERAGE.md](docs/CODE_COVERAGE.md)** - Code coverage guide
+- **[CODE_COVERAGE.md](docs/engineering/quality/CODE_COVERAGE.md)** - Code coverage guide
   - JaCoCo configuration
   - Coverage reports (HTML/XML)
   - Current metrics (~79% lines, ~75% branches)
   - CI/CD integration
 
-- **[JVM_COMPATIBILITY.md](docs/JVM_COMPATIBILITY.md)** - JVM version strategy
+- **[JVM_COMPATIBILITY.md](docs/engineering/operations/JVM_COMPATIBILITY.md)** - JVM version strategy
   - Build failure investigation (detekt vs Java 25+)
   - Gradle daemon pinned to Java 21 LTS and why
   - GCP/AWS Java runtime support survey
   - Upgrade path when detekt 2.0 ships
 
-- **[DEPLOYMENT_GCP.md](docs/DEPLOYMENT_GCP.md)** - Cloud deployment guide
+- **[DEPLOYMENT_GCP.md](docs/engineering/operations/DEPLOYMENT_GCP.md)** - Cloud deployment guide
   - Platform decision: GCP (Cloud Run + Cloud SQL) vs AWS, with costs
   - Step-by-step deployment of the API and PostgreSQL
   - Day-2 operations, scaling path, and teardown
 
-- **[WEB_UI_ARCHITECTURE.md](docs/WEB_UI_ARCHITECTURE.md)** - Web UI decisions & roadmap
+- **[WEB_UI_ARCHITECTURE.md](docs/engineering/architecture/WEB_UI_ARCHITECTURE.md)** - Web UI decisions & roadmap
   - Decoupled frontend, monorepo `web/` layout
   - SPA vs SSR analysis; recommended tech stack (SPA + PWA + Capacitor path)
   - Authentication approach (token-based via Firebase Auth, verified at the API)
 
-- **[CICD.md](docs/CICD.md)** - CI/CD plan (GitHub Actions)
+- **[CICD.md](docs/engineering/operations/CICD.md)** - CI/CD plan (GitHub Actions)
   - Phase 1: CI gate (`./gradlew check`) + branch protection for the PR workflow
   - Phase 2: keyless Cloud Run deploys via Workload Identity Federation
   - Phase 3: web UI CI/CD (Firebase Hosting, path-filtered)
@@ -1045,7 +1045,7 @@ open build/reports/jacoco/test/html/index.html
 - **Fast Feedback**: Unit tests run in ~500ms
 - **High Coverage**: ~85% line coverage, ~80% branch coverage
 
-See [TESTING_STRATEGY.md](docs/TESTING_STRATEGY.md) for complete details.
+See [TESTING_STRATEGY.md](docs/engineering/quality/TESTING_STRATEGY.md) for complete details.
 
 ## Development
 

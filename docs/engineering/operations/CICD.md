@@ -2,7 +2,7 @@
 
 How Skopeo builds, gates, and deploys via GitHub Actions — phased so the pieces that unblock a proper PR workflow come first, and automated deployment follows when it earns its keep.
 
-Context: solo developer, pilot stage, GitHub-hosted repo, cost-sensitive. The API deploys to GCP Cloud Run + Cloud SQL ([DEPLOYMENT_GCP.md](DEPLOYMENT_GCP.md)); the web UI (later) to Firebase Hosting ([WEB_UI_ARCHITECTURE.md](WEB_UI_ARCHITECTURE.md)).
+Context: solo developer, pilot stage, GitHub-hosted repo, cost-sensitive. The API deploys to GCP Cloud Run + Cloud SQL ([DEPLOYMENT_GCP.md](DEPLOYMENT_GCP.md)); the web UI (later) to Firebase Hosting ([WEB_UI_ARCHITECTURE.md](../architecture/WEB_UI_ARCHITECTURE.md)).
 
 ---
 
@@ -237,4 +237,4 @@ The monorepo holds both the API and the SPA. This phase is now **implemented**:
 
 - [gradle/actions — setup-gradle](https://github.com/gradle/actions) · [actions/setup-java](https://github.com/actions/setup-java) · [GitHub Docs — building Java with Gradle](https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-java-with-gradle)
 - [google-github-actions/auth — Workload Identity Federation](https://github.com/google-github-actions/auth) · [Cloud Run CD via WIF (2026 guide)](https://oneuptime.com/blog/post/2026-02-17-how-to-set-up-continuous-deployment-to-cloud-run-using-github-actions-and-workload-identity-federation/view)
-- Related: [DEPLOYMENT_GCP.md](DEPLOYMENT_GCP.md) · [WEB_UI_ARCHITECTURE.md](WEB_UI_ARCHITECTURE.md) · [JVM_COMPATIBILITY.md](JVM_COMPATIBILITY.md) (the detekt/JDK pin)
+- Related: [DEPLOYMENT_GCP.md](DEPLOYMENT_GCP.md) · [WEB_UI_ARCHITECTURE.md](../architecture/WEB_UI_ARCHITECTURE.md) · [JVM_COMPATIBILITY.md](JVM_COMPATIBILITY.md) (the detekt/JDK pin)

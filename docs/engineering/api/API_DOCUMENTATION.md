@@ -247,7 +247,7 @@ curl -X POST http://localhost:8080/api/v1/calculate-ranking \
 }
 ```
 
-*Note: Uses Elo-based ranking algorithm. See [RATING_CALCULATION_ALGORITHM.md](./RATING_CALCULATION_ALGORITHM.md) for details.*
+*Note: Uses Elo-based ranking algorithm. See [RATING_CALCULATION_ALGORITHM.md](../../product/RATING_CALCULATION_ALGORITHM.md) for details.*
 
 ### Example 2: NTRP Match with Tiebreak
 
@@ -420,7 +420,7 @@ http POST :8080/api/v1/calculate-ranking < test-data.json
 ### Phase 2: Ranking Algorithm ✅
 - ✅ Performance-based Elo algorithm (K=0.16 NTRP)
 - ✅ NTRP-specific calculations
-- ✅ Optional rating smoothing (see [RATING_SMOOTHING.md](./RATING_SMOOTHING.md))
+- ✅ Optional rating smoothing (see [RATING_SMOOTHING.md](../../product/RATING_SMOOTHING.md))
 
 ### Phase 3: Persistence (In Progress)
 - ✅ Database infrastructure (PostgreSQL, Flyway, Exposed)

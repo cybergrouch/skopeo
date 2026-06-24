@@ -302,9 +302,9 @@ Then reinstall:
 
 ## Related Documentation
 
-- [README.md](../README.md) - Project setup and usage
-- [CODE_COVERAGE.md](./CODE_COVERAGE.md) - Code coverage guide
-- [TESTING_STRATEGY.md](./TESTING_STRATEGY.md) - Testing approach
+- [README.md](../../../README.md) - Project setup and usage
+- [CODE_COVERAGE.md](../quality/CODE_COVERAGE.md) - Code coverage guide
+- [TESTING_STRATEGY.md](../quality/TESTING_STRATEGY.md) - Testing approach
 
 ---
 

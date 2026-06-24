@@ -304,6 +304,6 @@ tasks.test {
 // Database migrations:
 // - Runtime: the app runs Flyway (flyway-core) on startup via DatabaseConfig.init,
 //   so migrations apply automatically on `./gradlew run`, in Docker, and on Cloud Run.
-// - Manual/ad-hoc: use the Flyway CLI Docker image (see docs/database-setup.md).
+// - Manual/ad-hoc: use the Flyway CLI Docker image (see docs/engineering/operations/database-setup.md).
 // The official Flyway *Gradle plugin* is intentionally NOT used — it relies on
 // JavaPluginConvention, removed in Gradle 9, and is effectively unmaintained.

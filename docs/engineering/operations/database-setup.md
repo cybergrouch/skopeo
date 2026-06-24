@@ -474,4 +474,4 @@ Once the database is set up, you can:
 3. **Write integration tests** - Test database interactions
 4. **Set up monitoring** - Track query performance and connection pool metrics
 
-For schema details and table relationships, see: [Database Schema Documentation](./database-schema.md)
+For schema details and table relationships, see: [Database Schema Documentation](../architecture/database-schema.md)

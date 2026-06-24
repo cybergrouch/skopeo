@@ -151,9 +151,9 @@ docker exec -it SkopeoDb_db psql -U postgres -d SkopeoDb
 - `src/main/resources/db/migration/V1__create_initial_schema.sql`
 
 **Documentation:**
-- `docs/database-schema.md` - Complete schema reference
-- `docs/database-setup.md` - Setup and usage guide
-- `docs/IMPLEMENTATION_LOG.md` - This file
+- `docs/engineering/architecture/database-schema.md` - Complete schema reference
+- `docs/engineering/operations/database-setup.md` - Setup and usage guide
+- `docs/engineering/IMPLEMENTATION_LOG.md` - This file
 
 **Modified:**
 - `build.gradle.kts` - Database dependencies and Flyway plugin
@@ -219,8 +219,8 @@ The database infrastructure is now complete and ready for:
 
 ### References
 
-- [Database Schema Documentation](./database-schema.md)
-- [Database Setup Guide](./database-setup.md)
+- [Database Schema Documentation](architecture/database-schema.md)
+- [Database Setup Guide](operations/database-setup.md)
 - [PostgreSQL Documentation](https://www.postgresql.org/docs/15/)
 - [Flyway Documentation](https://flywaydb.org/documentation/)
 - [Exposed Framework](https://github.com/JetBrains/Exposed)

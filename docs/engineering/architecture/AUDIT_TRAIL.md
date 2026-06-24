@@ -516,8 +516,8 @@ Potential improvements to the audit trail system:
 
 ## Related Documentation
 
-- [RATING_CALCULATION_ALGORITHM.md](./RATING_CALCULATION_ALGORITHM.md) - Algorithm implementation details
-- [API_DOCUMENTATION.md](./API_DOCUMENTATION.md) - API endpoint specifications
+- [RATING_CALCULATION_ALGORITHM.md](../../product/RATING_CALCULATION_ALGORITHM.md) - Algorithm implementation details
+- [API_DOCUMENTATION.md](../api/API_DOCUMENTATION.md) - API endpoint specifications
 
 ---
 
