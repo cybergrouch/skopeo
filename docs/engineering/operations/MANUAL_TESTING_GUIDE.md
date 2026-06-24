@@ -133,6 +133,10 @@ VITE_FIREBASE_APP_ID=<your-app-id>
 VITE_API_BASE_URL=
 ```
 
+> The app only reads these four `VITE_FIREBASE_*` keys plus `VITE_API_BASE_URL`; the
+> `storageBucket`, `messagingSenderId`, and `measurementId` fields from the Firebase config
+> snippet are not used and can be omitted.
+
 - [ ] 3.3 Start the dev server:
 
 ```bash
@@ -295,6 +299,7 @@ gcloud run deploy skopeo \
 | Popup: "auth domain not authorized" | Domain not authorized | Add it under Firebase Auth → Settings → Authorized domains (`localhost` is there by default) |
 | Web loads but API calls fail / CORS | Wrong base URL or proxy not used | Keep `VITE_API_BASE_URL` empty for the dev server; confirm API is up at :8080 |
 | `docker compose up` fails on port in use | 5432/8080 taken | Stop the conflicting service or change the published port |
+| API logs: connection refused to Postgres | DB not healthy yet | `docker compose logs postgres`; wait for healthy, then restart `skopeo` |
 | Dashboard shows only Profile tab | Account has only `PLAYER` | Expected; bootstrap an admin (see "Optional") |
 
 ---
