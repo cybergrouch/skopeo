@@ -8,6 +8,8 @@ const MESSAGES: Record<string, string> = {
   'auth/user-not-found': 'Incorrect email or password.',
   'auth/wrong-password': 'Incorrect email or password.',
   'auth/popup-closed-by-user': 'Sign-in was cancelled.',
+  'auth/account-exists-with-different-credential':
+    'An account already exists with this email. Sign in with the original method.',
   'auth/too-many-requests': 'Too many attempts. Please try again later.',
   'auth/network-request-failed': 'Network error. Check your connection.',
 }

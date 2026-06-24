@@ -7,6 +7,7 @@ import { useAuth } from './useAuth'
 const fb = vi.hoisted(() => ({
   authObj: { name: 'auth' },
   googleObj: { name: 'google' },
+  facebookObj: { name: 'facebook' },
   createUserWithEmailAndPassword: vi.fn(),
   signInWithEmailAndPassword: vi.fn(),
   signInWithPopup: vi.fn(),
@@ -17,6 +18,7 @@ const fb = vi.hoisted(() => ({
 vi.mock('@/lib/firebase', () => ({
   auth: fb.authObj,
   googleProvider: fb.googleObj,
+  facebookProvider: fb.facebookObj,
 }))
 vi.mock('firebase/auth', () => ({
   createUserWithEmailAndPassword: fb.createUserWithEmailAndPassword,
@@ -40,6 +42,7 @@ function Consumer() {
         signin
       </button>
       <button onClick={() => void actions.signInWithGoogle()}>google</button>
+      <button onClick={() => void actions.signInWithFacebook()}>facebook</button>
       <button onClick={() => void actions.signOut()}>signout</button>
     </div>
   )
@@ -101,6 +104,9 @@ describe('AuthProvider', () => {
 
     await user.click(screen.getByText('google'))
     expect(fb.signInWithPopup).toHaveBeenCalledWith(fb.authObj, fb.googleObj)
+
+    await user.click(screen.getByText('facebook'))
+    expect(fb.signInWithPopup).toHaveBeenCalledWith(fb.authObj, fb.facebookObj)
 
     await user.click(screen.getByText('signout'))
     expect(fb.signOut).toHaveBeenCalledWith(fb.authObj)

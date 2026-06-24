@@ -14,7 +14,7 @@ interface LocationState {
 export function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { signInWithEmail, signInWithGoogle } = useAuth()
+  const { signInWithEmail, signInWithGoogle, signInWithFacebook } = useAuth()
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -105,6 +105,16 @@ export function LoginPage() {
         disabled={busy}
       >
         Continue with Google
+      </Button>
+
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full"
+        onClick={() => void run(signInWithFacebook)}
+        disabled={busy}
+      >
+        Continue with Facebook
       </Button>
     </AuthLayout>
   )

@@ -46,12 +46,14 @@ All three providers go through Firebase's JS SDK (`web/src/auth/AuthProvider.tsx
 | Manual sign-up | `createUserWithEmailAndPassword` | ✅ implemented — creates the credential in Firebase **and** signs the user in immediately |
 | Google sign-up/login | `signInWithPopup(googleProvider)` | ✅ implemented — OAuth handled entirely by Firebase |
 | Manual login (returning user) | `signInWithEmailAndPassword` | ✅ implemented — validates against Firebase's stored credential |
-| Facebook sign-up/login | `signInWithPopup(facebookProvider)` | ❌ **not implemented** (see below) |
+| Facebook sign-up/login | `signInWithPopup(facebookProvider)` | ✅ implemented (client) — requires the Facebook provider enabled in the Firebase console |
 
-> ⚠️ **Facebook sign-up/login is not implemented yet.** `web/src/lib/firebase.ts` only
-> configures the Google provider and email/password, and there is no Facebook button on the
-> sign-up or login pages. Until it is wired up (see [Firebase-native gaps](#firebase-native-gaps-not-backenddatabase-work)),
-> Facebook is **not** a working sign-in option.
+> ℹ️ **Facebook is wired in the web UI** (`facebookProvider` in `web/src/lib/firebase.ts`,
+> `signInWithFacebook` in `AuthProvider`, and a "Continue with Facebook" button on the sign-up
+> and login pages). For it to work at runtime, an operator must **enable the Facebook provider
+> in the Firebase console** — that needs a Facebook app (App ID + secret) from
+> developers.facebook.com and the OAuth redirect URI registered there. The application code
+> requires no further changes; the token flow is identical to Google.
 
 **Routing** (`web/src/App.tsx`): `/signup` → `SignUpPage`, `/login` → `LoginPage`, `/dashboard`
 is gated by `RequireAuth`.
@@ -181,8 +183,9 @@ database:
   verify it.
 - **Password reset** — wire `sendPasswordResetEmail(auth, email)` to a "Forgot password?" link on
   `LoginPage`. Firebase sends and handles the reset entirely.
-- **Facebook** — add `FacebookAuthProvider` in `web/src/lib/firebase.ts` and a button on the
-  sign-up/login pages (and enable Facebook in the Firebase console). Same token flow as Google.
+- **Facebook (runtime enablement)** — the client is wired (`facebookProvider`,
+  `signInWithFacebook`, buttons). The remaining step is operational: enable the Facebook provider
+  in the Firebase console (requires a Facebook app's App ID + secret). No code change needed.
 
 ## Key files
 

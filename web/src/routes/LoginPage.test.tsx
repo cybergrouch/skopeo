@@ -5,14 +5,16 @@ import { MemoryRouter } from 'react-router-dom'
 import { FirebaseError } from 'firebase/app'
 import { LoginPage } from './LoginPage'
 
-const { signInWithEmail, signInWithGoogle, navigateMock } = vi.hoisted(() => ({
-  signInWithEmail: vi.fn(),
-  signInWithGoogle: vi.fn(),
-  navigateMock: vi.fn(),
-}))
+const { signInWithEmail, signInWithGoogle, signInWithFacebook, navigateMock } =
+  vi.hoisted(() => ({
+    signInWithEmail: vi.fn(),
+    signInWithGoogle: vi.fn(),
+    signInWithFacebook: vi.fn(),
+    navigateMock: vi.fn(),
+  }))
 
 vi.mock('@/auth/useAuth', () => ({
-  useAuth: () => ({ signInWithEmail, signInWithGoogle }),
+  useAuth: () => ({ signInWithEmail, signInWithGoogle, signInWithFacebook }),
 }))
 
 vi.mock('react-router-dom', async (importOriginal) => {
@@ -76,6 +78,19 @@ describe('LoginPage', () => {
     await user.click(screen.getByRole('button', { name: /continue with google/i }))
 
     await waitFor(() => expect(signInWithGoogle).toHaveBeenCalled())
+    expect(navigateMock).toHaveBeenCalledWith('/dashboard', { replace: true })
+  })
+
+  it('signs in with Facebook', async () => {
+    signInWithFacebook.mockResolvedValue({})
+    const user = userEvent.setup()
+    renderLogin()
+
+    await user.click(
+      screen.getByRole('button', { name: /continue with facebook/i }),
+    )
+
+    await waitFor(() => expect(signInWithFacebook).toHaveBeenCalled())
     expect(navigateMock).toHaveBeenCalledWith('/dashboard', { replace: true })
   })
 })

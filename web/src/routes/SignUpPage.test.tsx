@@ -5,16 +5,22 @@ import { MemoryRouter } from 'react-router-dom'
 import { FirebaseError } from 'firebase/app'
 import { SignUpPage } from './SignUpPage'
 
-const { signUpWithEmail, signInWithGoogle, mutateAsync, navigateMock } =
-  vi.hoisted(() => ({
-    signUpWithEmail: vi.fn(),
-    signInWithGoogle: vi.fn(),
-    mutateAsync: vi.fn(),
-    navigateMock: vi.fn(),
-  }))
+const {
+  signUpWithEmail,
+  signInWithGoogle,
+  signInWithFacebook,
+  mutateAsync,
+  navigateMock,
+} = vi.hoisted(() => ({
+  signUpWithEmail: vi.fn(),
+  signInWithGoogle: vi.fn(),
+  signInWithFacebook: vi.fn(),
+  mutateAsync: vi.fn(),
+  navigateMock: vi.fn(),
+}))
 
 vi.mock('@/auth/useAuth', () => ({
-  useAuth: () => ({ signUpWithEmail, signInWithGoogle }),
+  useAuth: () => ({ signUpWithEmail, signInWithGoogle, signInWithFacebook }),
 }))
 vi.mock('@/api/generated/users/users', () => ({
   usePostApiV1Users: () => ({ mutateAsync }),
@@ -116,6 +122,39 @@ describe('SignUpPage', () => {
       data: { displayName: null, sex: 'Male', dateOfBirth: '2000-01-01' },
     })
     expect(navigateMock).toHaveBeenCalledWith('/dashboard', { replace: true })
+  })
+
+  it('signs up with Facebook once the profile is filled', async () => {
+    signInWithFacebook.mockResolvedValue({})
+    mutateAsync.mockResolvedValue({})
+    const user = userEvent.setup()
+    renderSignUp()
+
+    await fillProfile(user)
+    await user.click(
+      screen.getByRole('button', { name: /continue with facebook/i }),
+    )
+
+    await waitFor(() => expect(signInWithFacebook).toHaveBeenCalled())
+    expect(mutateAsync).toHaveBeenCalledWith({
+      data: { displayName: null, sex: 'Male', dateOfBirth: '2000-01-01' },
+    })
+    expect(navigateMock).toHaveBeenCalledWith('/dashboard', { replace: true })
+  })
+
+  it('requires date of birth and sex before Facebook sign-up', async () => {
+    const user = userEvent.setup()
+    renderSignUp()
+
+    await user.click(
+      screen.getByRole('button', { name: /continue with facebook/i }),
+    )
+
+    expect(
+      await screen.findByText(/Please enter your date of birth and sex/i),
+    ).toBeInTheDocument()
+    expect(signInWithFacebook).not.toHaveBeenCalled()
+    expect(mutateAsync).not.toHaveBeenCalled()
   })
 
   it('requires date of birth and sex before Google sign-up', async () => {

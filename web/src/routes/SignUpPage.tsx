@@ -13,7 +13,7 @@ const SEXES = ['Male', 'Female'] as const
 
 export function SignUpPage() {
   const navigate = useNavigate()
-  const { signUpWithEmail, signInWithGoogle } = useAuth()
+  const { signUpWithEmail, signInWithGoogle, signInWithFacebook } = useAuth()
   const provision = usePostApiV1Users()
 
   const [name, setName] = useState('')
@@ -47,15 +47,17 @@ export function SignUpPage() {
     }
   }
 
-  async function onGoogle() {
+  // Google and Facebook share the flow: sex + date of birth are required up front
+  // (the popup yields no such fields), then provision the profile from the token.
+  async function onOAuth(signIn: () => Promise<unknown>, provider: string) {
     if (!sex || !dateOfBirth) {
-      setError('Please enter your date of birth and sex before continuing with Google.')
+      setError(`Please enter your date of birth and sex before continuing with ${provider}.`)
       return
     }
     setError(null)
     setBusy(true)
     try {
-      await signInWithGoogle()
+      await signIn()
       await provisionAndContinue(name.trim() || null)
     } catch (err) {
       setError(authErrorMessage(err))
@@ -163,10 +165,20 @@ export function SignUpPage() {
         type="button"
         variant="outline"
         className="w-full"
-        onClick={onGoogle}
+        onClick={() => void onOAuth(signInWithGoogle, 'Google')}
         disabled={busy}
       >
         Continue with Google
+      </Button>
+
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full"
+        onClick={() => void onOAuth(signInWithFacebook, 'Facebook')}
+        disabled={busy}
+      >
+        Continue with Facebook
       </Button>
     </AuthLayout>
   )
