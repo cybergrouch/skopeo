@@ -199,6 +199,13 @@ floor and gets clamped while the K=0.016 run never gets close.
 
 ### Conclusions
 
+> **"Season" in this document** means a competitive cycle of roughly **20 matches**.
+> For a recreational player at ~1–2 matches per week that is about **3–4 months** of
+> regular play; a more casual player at ~2 matches per month would take closer to
+> **8–10 months** to accumulate the same 20 matches. The simulations measure matches,
+> not calendar time — the month figures are only to translate "20 matches" into an
+> intuitive duration.
+
 - **K trades responsiveness for stability.** At K=0.16 a strong performer gains
   nearly a full NTRP level (+0.96) in ~20 matches; at K=0.016 the same gain takes
   **~200 matches**. Convergence time scales like `1/K`.
