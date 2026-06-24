@@ -97,6 +97,13 @@ are nearly identical; the within-0.5 distribution of the final rating:
   (1.0 → median 1.31, 7.0 → median 6.70) because the floor/ceiling clamp losses
   at the bottom and gains at the top, and edge players mostly play "into" the range.
 
+![Analysis 1 — median final rating vs starting level](images/montecarlo_median_check.png)
+
+The median (both opponent mixes) sits on the dashed `y = x` "no change" line through
+the interior — unbiased on average — and only bends inward at the 1.0 / 7.0 ends.
+The Mermaid chart below adds the p5–p95 band (the within-0.5 scenario) that the
+median-only view omits:
+
 ```mermaid
 xychart-beta
     title "Final rating after 20 matches — p95 (top), median, p5 (bottom)"
@@ -114,6 +121,11 @@ mix is fixed by a class**, isolating each performance pattern's effect. Classes:
 *Equal*, *more wins* (`+Win`), *more competitive wins* (`+CWin`), *more dominant
 wins* (`+DWin`), *more losses* (`+Loss`), *more competitive losses* (`+CLoss`),
 *more dominated* (`+Domd`).
+
+![Outcome-class heatmap — mean Δ by starting level × class](images/montecarlo_class_heatmap.png)
+
+Green cells raise the rating, red cells lower it; the colour intensity is the size
+of the move. The full numeric values (all 13 levels) follow.
 
 Mean rating change (Δ) after 20 matches, by starting level × class:
 
