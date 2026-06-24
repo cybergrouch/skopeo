@@ -18,13 +18,13 @@ data class RankingCalculationRequest(
 ) {
     init {
         // Validation: Exactly 2 teams required
-        require(teams.size == 2) {
+        require(value = teams.size == 2) {
             "Exactly 2 teams required for a match, got ${teams.size}"
         }
 
         // Validation: Map keys must match team IDs
         teams.forEach { (key, team) ->
-            require(key == team.teamId) {
+            require(value = key == team.teamId) {
                 "Team map key '$key' must match team ID '${team.teamId}'"
             }
         }
@@ -33,20 +33,20 @@ data class RankingCalculationRequest(
         val teamIds = teams.keys
         matchScore.sets.forEach { set ->
             set.games.keys.forEach { id ->
-                require(id in teamIds) {
+                require(value = id in teamIds) {
                     "Set games reference invalid team ID '$id', valid IDs: $teamIds"
                 }
             }
-            require(set.winnerTeamId in teamIds) {
+            require(value = set.winnerTeamId in teamIds) {
                 "Set winner '${set.winnerTeamId}' is not a valid team ID, valid IDs: $teamIds"
             }
             set.tiebreak?.let { tb ->
                 tb.points.keys.forEach { id ->
-                    require(id in teamIds) {
+                    require(value = id in teamIds) {
                         "Tiebreak points reference invalid team ID '$id', valid IDs: $teamIds"
                     }
                 }
-                require(tb.winnerTeamId in teamIds) {
+                require(value = tb.winnerTeamId in teamIds) {
                     "Tiebreak winner '${tb.winnerTeamId}' is not a valid team ID, valid IDs: $teamIds"
                 }
             }
@@ -54,7 +54,7 @@ data class RankingCalculationRequest(
 
         // For singles (current scope): verify both teams have exactly 1 player
         teams.values.forEach { team ->
-            require(team.teamType == TeamType.SINGLES && team.players.size == 1) {
+            require(value = team.teamType == TeamType.SINGLES && team.players.size == 1) {
                 "Only SINGLES matches are currently supported (1 player per team). " +
                     "Team '${team.teamId}' has ${team.players.size} players with type ${team.teamType}"
             }

@@ -32,7 +32,7 @@ class RatingRepository {
                 .map { it.toUserRating() }
         }
 
-    fun findCurrentRating(userId: UUID): UserRating? = transaction { ratingRow(userId)?.toUserRating() }
+    fun findCurrentRating(userId: UUID): UserRating? = transaction { ratingRow(userId = userId)?.toUserRating() }
 
     /** Insert or update the user's rating (admin assessment). */
     fun setRating(
@@ -42,7 +42,7 @@ class RatingRepository {
         confidence: BigDecimal,
     ): UserRating =
         transaction {
-            if (ratingRow(userId) == null) {
+            if (ratingRow(userId = userId) == null) {
                 UserRatingsTable.insert {
                     it[UserRatingsTable.userId] = userId
                     it[currentRating] = rating
@@ -50,13 +50,13 @@ class RatingRepository {
                     it[confidenceScore] = confidence
                 }
             } else {
-                UserRatingsTable.update({ UserRatingsTable.userId eq userId }) {
+                UserRatingsTable.update(where = { UserRatingsTable.userId eq userId }) {
                     it[currentRating] = rating
                     it[currentLevel] = level
                     it[confidenceScore] = confidence
                 }
             }
-            ratingRow(userId)!!.toUserRating()
+            ratingRow(userId = userId)!!.toUserRating()
         }
 
     fun historyByUser(userId: UUID): List<RatingHistoryEntry> =
@@ -87,8 +87,8 @@ class RatingRepository {
         matchDate: LocalDate,
     ) {
         transaction {
-            UserRatingsTable.update({ UserRatingsTable.userId eq userId }) {
-                with(SqlExpressionBuilder) { it[matchesPlayed] = matchesPlayed + 1 }
+            UserRatingsTable.update(where = { UserRatingsTable.userId eq userId }) {
+                with(receiver = SqlExpressionBuilder) { it[matchesPlayed] = matchesPlayed + 1 }
                 it[currentRating] = newRating
                 it[currentLevel] = newLevel
                 it[lastMatchDate] = matchDate

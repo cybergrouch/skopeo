@@ -69,31 +69,32 @@ class ContactApiIntegrationTest {
     /** Provision an ADMINISTRATOR directly (the API only ever grants PLAYER) and return its token. */
     private fun seedAdminToken(uid: String = "admin"): String {
         UserRepository().provision(
-            ProvisionUserCommand(
-                firebaseUid = uid,
-                identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
-                names = listOf(UserName(type = NameType.FIRST, value = "Admin")),
-                capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
-            ),
+            command =
+                ProvisionUserCommand(
+                    firebaseUid = uid,
+                    identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
+                    names = listOf(UserName(type = NameType.FIRST, value = "Admin")),
+                    capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
+                ),
         )
         return TestFirebaseAuth.mintToken(uid = uid)
     }
 
     private suspend fun HttpClient.provisionSelf(token: String): UserResponse =
-        post("/api/v1/users") {
-            header(HttpHeaders.Authorization, "Bearer $token")
-            contentType(ContentType.Application.Json)
-            setBody(CreateUserRequest(displayName = "Juan", dateOfBirth = "2000-01-01", sex = "Male"))
+        post(urlString = "/api/v1/users") {
+            header(key = HttpHeaders.Authorization, value = "Bearer $token")
+            contentType(type = ContentType.Application.Json)
+            setBody(body = CreateUserRequest(displayName = "Juan", dateOfBirth = "2000-01-01", sex = "Male"))
         }.body()
 
     private suspend fun HttpClient.addPhone(
         token: String,
         userId: String,
     ): HttpResponse =
-        post("/api/v1/users/$userId/contacts") {
-            header(HttpHeaders.Authorization, "Bearer $token")
-            contentType(ContentType.Application.Json)
-            setBody(ContactCreateRequest(type = "PHONE", value = "+639170000000", isPrimary = true))
+        post(urlString = "/api/v1/users/$userId/contacts") {
+            header(key = HttpHeaders.Authorization, value = "Bearer $token")
+            contentType(type = ContentType.Application.Json)
+            setBody(body = ContactCreateRequest(type = "PHONE", value = "+639170000000", isPrimary = true))
         }
 
     @Test
@@ -101,7 +102,7 @@ class ContactApiIntegrationTest {
         withApp { client ->
             val adminToken = seedAdminToken()
             val userToken = TestFirebaseAuth.mintToken(uid = "fb-1")
-            val user = client.provisionSelf(userToken)
+            val user = client.provisionSelf(token = userToken)
 
             val phone = client.addPhone(token = userToken, userId = user.id)
             phone.status shouldBe HttpStatusCode.Created
@@ -109,18 +110,18 @@ class ContactApiIntegrationTest {
             contact.status shouldBe "PENDING"
 
             // The owner cannot mark their own contact verified.
-            client.put("/api/v1/users/${user.id}/contacts/${contact.id}/verification") {
-                header(HttpHeaders.Authorization, "Bearer $userToken")
-                contentType(ContentType.Application.Json)
-                setBody(VerificationRequest(status = "VERIFIED"))
+            client.put(urlString = "/api/v1/users/${user.id}/contacts/${contact.id}/verification") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $userToken")
+                contentType(type = ContentType.Application.Json)
+                setBody(body = VerificationRequest(status = "VERIFIED"))
             }.status shouldBe HttpStatusCode.Forbidden
 
             // An administrator can.
             val verified =
-                client.put("/api/v1/users/${user.id}/contacts/${contact.id}/verification") {
-                    header(HttpHeaders.Authorization, "Bearer $adminToken")
-                    contentType(ContentType.Application.Json)
-                    setBody(VerificationRequest(status = "VERIFIED"))
+                client.put(urlString = "/api/v1/users/${user.id}/contacts/${contact.id}/verification") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = VerificationRequest(status = "VERIFIED"))
                 }
             verified.status shouldBe HttpStatusCode.OK
             verified.body<ContactResponse>().let {
@@ -133,7 +134,7 @@ class ContactApiIntegrationTest {
     fun `a second active contact conflicts, but disabling then adding works`() =
         withApp { client ->
             val userToken = TestFirebaseAuth.mintToken(uid = "fb-2")
-            val user = client.provisionSelf(userToken)
+            val user = client.provisionSelf(token = userToken)
             val contact = client.addPhone(token = userToken, userId = user.id).body<ContactResponse>()
 
             // Second active phone for the same user → one-active-per-type conflict.
@@ -141,10 +142,10 @@ class ContactApiIntegrationTest {
 
             // Disable the first, then a new phone is accepted.
             val disabled =
-                client.put("/api/v1/users/${user.id}/contacts/${contact.id}/state") {
-                    header(HttpHeaders.Authorization, "Bearer $userToken")
-                    contentType(ContentType.Application.Json)
-                    setBody(ContactStateRequest(isActive = false))
+                client.put(urlString = "/api/v1/users/${user.id}/contacts/${contact.id}/state") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $userToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = ContactStateRequest(isActive = false))
                 }
             disabled.status shouldBe HttpStatusCode.OK
             disabled.body<ContactResponse>().isActive shouldBe false
@@ -156,17 +157,17 @@ class ContactApiIntegrationTest {
     fun `owner lists and disables their contacts`() =
         withApp { client ->
             val userToken = TestFirebaseAuth.mintToken(uid = "fb-3")
-            val user = client.provisionSelf(userToken)
+            val user = client.provisionSelf(token = userToken)
             val contact = client.addPhone(token = userToken, userId = user.id).body<ContactResponse>()
 
-            client.get("/api/v1/users/${user.id}/contacts") {
-                header(HttpHeaders.Authorization, "Bearer $userToken")
+            client.get(urlString = "/api/v1/users/${user.id}/contacts") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $userToken")
             }.status shouldBe HttpStatusCode.OK
 
-            client.put("/api/v1/users/${user.id}/contacts/${contact.id}/state") {
-                header(HttpHeaders.Authorization, "Bearer $userToken")
-                contentType(ContentType.Application.Json)
-                setBody(ContactStateRequest(isActive = false))
+            client.put(urlString = "/api/v1/users/${user.id}/contacts/${contact.id}/state") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $userToken")
+                contentType(type = ContentType.Application.Json)
+                setBody(body = ContactStateRequest(isActive = false))
             }.status shouldBe HttpStatusCode.OK
         }
 }

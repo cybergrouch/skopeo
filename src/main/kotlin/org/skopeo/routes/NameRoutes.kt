@@ -29,10 +29,10 @@ import org.skopeo.service.name.NameService
 fun Application.configureNameRoutes(service: NameService = NameService()) {
     routing {
         authenticate(FIREBASE_AUTH) {
-            route("/api/v1/users/{userId}/names") {
-                listAndCreate(service)
-                byId(service)
-                state(service)
+            route(path = "/api/v1/users/{userId}/names") {
+                listAndCreate(service = service)
+                byId(service = service)
+                state(service = service)
             }
         }
     }
@@ -41,37 +41,37 @@ fun Application.configureNameRoutes(service: NameService = NameService()) {
 private fun Route.listAndCreate(service: NameService) {
     get {
         respondMappingErrors {
-            val list = service.list(token = verifiedToken(), userId = uuidParam("userId"))
+            val list = service.list(token = verifiedToken(), userId = uuidParam(name = "userId"))
             call.respond(status = HttpStatusCode.OK, message = list.map { it.toResponse() })
         }
     }
     post {
         respondMappingErrors {
             val request = call.receive<NameCreateRequest>()
-            val name = service.create(token = verifiedToken(), userId = uuidParam("userId"), request = request)
+            val name = service.create(token = verifiedToken(), userId = uuidParam(name = "userId"), request = request)
             call.respond(status = HttpStatusCode.Created, message = name.toResponse())
         }
     }
 }
 
 private fun Route.byId(service: NameService) {
-    get("/{id}") {
+    get(path = "/{id}") {
         respondMappingErrors {
-            val name = service.get(token = verifiedToken(), userId = uuidParam("userId"), nameId = uuidParam("id"))
+            val name = service.get(token = verifiedToken(), userId = uuidParam(name = "userId"), nameId = uuidParam(name = "id"))
             call.respond(status = HttpStatusCode.OK, message = name.toResponse())
         }
     }
 }
 
 private fun Route.state(service: NameService) {
-    put("/{id}/state") {
+    put(path = "/{id}/state") {
         respondMappingErrors {
             val request = call.receive<NameStateRequest>()
             val name =
                 service.setActive(
                     token = verifiedToken(),
-                    userId = uuidParam("userId"),
-                    nameId = uuidParam("id"),
+                    userId = uuidParam(name = "userId"),
+                    nameId = uuidParam(name = "id"),
                     active = request.isActive,
                 )
             call.respond(status = HttpStatusCode.OK, message = name.toResponse())

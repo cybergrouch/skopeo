@@ -60,10 +60,10 @@ class NameApiIntegrationTest {
         }
 
     private suspend fun HttpClient.provisionSelf(token: String): UserResponse =
-        post("/api/v1/users") {
-            header(HttpHeaders.Authorization, "Bearer $token")
-            contentType(ContentType.Application.Json)
-            setBody(CreateUserRequest(displayName = "Juan", dateOfBirth = "2000-01-01", sex = "Male"))
+        post(urlString = "/api/v1/users") {
+            header(key = HttpHeaders.Authorization, value = "Bearer $token")
+            contentType(type = ContentType.Application.Json)
+            setBody(body = CreateUserRequest(displayName = "Juan", dateOfBirth = "2000-01-01", sex = "Male"))
         }.body()
 
     private suspend fun HttpClient.addName(
@@ -71,42 +71,48 @@ class NameApiIntegrationTest {
         userId: String,
         request: NameCreateRequest,
     ): HttpResponse =
-        post("/api/v1/users/$userId/names") {
-            header(HttpHeaders.Authorization, "Bearer $token")
-            contentType(ContentType.Application.Json)
-            setBody(request)
+        post(urlString = "/api/v1/users/$userId/names") {
+            header(key = HttpHeaders.Authorization, value = "Bearer $token")
+            contentType(type = ContentType.Application.Json)
+            setBody(body = request)
         }
 
     private suspend fun HttpClient.listNames(
         token: String,
         userId: String,
     ): List<NameResponse> =
-        get("/api/v1/users/$userId/names") {
-            header(HttpHeaders.Authorization, "Bearer $token")
+        get(urlString = "/api/v1/users/$userId/names") {
+            header(key = HttpHeaders.Authorization, value = "Bearer $token")
         }.body()
 
     @Test
     fun `add multiple names of a type and replace the display name`() =
         withApp { client ->
             val token = TestFirebaseAuth.mintToken(uid = "fb-1")
-            val user = client.provisionSelf(token)
+            val user = client.provisionSelf(token = token)
 
             // Provisioning created one DISPLAY name.
-            client.listNames(token, user.id).single().let {
+            client.listNames(token = token, userId = user.id).single().let {
                 it.type shouldBe "DISPLAY"
                 it.value shouldBe "Juan"
             }
 
             // Two nicknames of the same type are both accepted.
-            client.addName(token, user.id, NameCreateRequest(type = "NICKNAME", value = "JB")).status shouldBe HttpStatusCode.Created
-            client.addName(token, user.id, NameCreateRequest(type = "NICKNAME", value = "Boy")).status shouldBe HttpStatusCode.Created
+            client
+                .addName(token = token, userId = user.id, request = NameCreateRequest(type = "NICKNAME", value = "JB"))
+                .status shouldBe HttpStatusCode.Created
+            client
+                .addName(token = token, userId = user.id, request = NameCreateRequest(type = "NICKNAME", value = "Boy"))
+                .status shouldBe HttpStatusCode.Created
 
             // Posting a new DISPLAY name replaces the old one.
             val newDisplay =
-                client.addName(token, user.id, NameCreateRequest(type = "DISPLAY", value = "Johnny")).body<NameResponse>()
+                client
+                    .addName(token = token, userId = user.id, request = NameCreateRequest(type = "DISPLAY", value = "Johnny"))
+                    .body<NameResponse>()
             newDisplay.value shouldBe "Johnny"
 
-            val all = client.listNames(token, user.id)
+            val all = client.listNames(token = token, userId = user.id)
             all.count { it.type == "DISPLAY" && it.isActive } shouldBe 1
             all.single { it.type == "DISPLAY" && it.isActive }.value shouldBe "Johnny"
             all.count { it.type == "DISPLAY" && !it.isActive } shouldBe 1 // the old "Juan" kept as history
@@ -116,13 +122,13 @@ class NameApiIntegrationTest {
     fun `the display name cannot be disabled`() =
         withApp { client ->
             val token = TestFirebaseAuth.mintToken(uid = "fb-2")
-            val user = client.provisionSelf(token)
-            val display = client.listNames(token, user.id).single { it.type == "DISPLAY" }
+            val user = client.provisionSelf(token = token)
+            val display = client.listNames(token = token, userId = user.id).single { it.type == "DISPLAY" }
 
-            client.put("/api/v1/users/${user.id}/names/${display.id}/state") {
-                header(HttpHeaders.Authorization, "Bearer $token")
-                contentType(ContentType.Application.Json)
-                setBody(NameStateRequest(isActive = false))
+            client.put(urlString = "/api/v1/users/${user.id}/names/${display.id}/state") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $token")
+                contentType(type = ContentType.Application.Json)
+                setBody(body = NameStateRequest(isActive = false))
             }.status shouldBe HttpStatusCode.BadRequest
         }
 
@@ -131,11 +137,11 @@ class NameApiIntegrationTest {
         withApp { client ->
             val ownerToken = TestFirebaseAuth.mintToken(uid = "owner")
             val intruderToken = TestFirebaseAuth.mintToken(uid = "intruder")
-            val owner = client.provisionSelf(ownerToken)
-            client.provisionSelf(intruderToken)
+            val owner = client.provisionSelf(token = ownerToken)
+            client.provisionSelf(token = intruderToken)
 
-            client.get("/api/v1/users/${owner.id}/names") {
-                header(HttpHeaders.Authorization, "Bearer $intruderToken")
+            client.get(urlString = "/api/v1/users/${owner.id}/names") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $intruderToken")
             }.status shouldBe HttpStatusCode.Forbidden
         }
 }

@@ -60,10 +60,10 @@ class UserApiIntegrationTest {
         token: String,
         body: CreateUserRequest = defaultBody,
     ): HttpResponse =
-        post("/api/v1/users") {
-            header(HttpHeaders.Authorization, "Bearer $token")
-            contentType(ContentType.Application.Json)
-            setBody(body)
+        post(urlString = "/api/v1/users") {
+            header(key = HttpHeaders.Authorization, value = "Bearer $token")
+            contentType(type = ContentType.Application.Json)
+            setBody(body = body)
         }
 
     private fun withApp(block: suspend (HttpClient) -> Unit) =
@@ -83,13 +83,13 @@ class UserApiIntegrationTest {
                     signInProvider = "google.com",
                 )
 
-            val created = client.createUser(token)
+            val created = client.createUser(token = token)
             created.status shouldBe HttpStatusCode.Created
             val body = created.body<UserResponse>()
             body.firebaseUid shouldBe "fb-1"
             body.capabilities shouldBe listOf("PLAYER")
 
-            val again = client.createUser(token)
+            val again = client.createUser(token = token)
             again.status shouldBe HttpStatusCode.OK
             again.body<UserResponse>().id shouldBe body.id
         }
@@ -99,12 +99,12 @@ class UserApiIntegrationTest {
         withApp { client ->
             val token = TestFirebaseAuth.mintToken(uid = "fb-2")
 
-            client.get("/api/v1/users/me") { header(HttpHeaders.Authorization, "Bearer $token") }
+            client.get(urlString = "/api/v1/users/me") { header(key = HttpHeaders.Authorization, value = "Bearer $token") }
                 .status shouldBe HttpStatusCode.NotFound
 
-            client.createUser(token)
+            client.createUser(token = token)
 
-            val me = client.get("/api/v1/users/me") { header(HttpHeaders.Authorization, "Bearer $token") }
+            val me = client.get(urlString = "/api/v1/users/me") { header(key = HttpHeaders.Authorization, value = "Bearer $token") }
             me.status shouldBe HttpStatusCode.OK
             me.body<UserResponse>().firebaseUid shouldBe "fb-2"
         }
@@ -114,12 +114,12 @@ class UserApiIntegrationTest {
         withApp { client ->
             val aliceToken = TestFirebaseAuth.mintToken(uid = "alice")
             val bobToken = TestFirebaseAuth.mintToken(uid = "bob")
-            val alice = client.createUser(aliceToken).body<UserResponse>()
-            client.createUser(bobToken)
+            val alice = client.createUser(token = aliceToken).body<UserResponse>()
+            client.createUser(token = bobToken)
 
-            client.get("/api/v1/users/${alice.id}") { header(HttpHeaders.Authorization, "Bearer $aliceToken") }
+            client.get(urlString = "/api/v1/users/${alice.id}") { header(key = HttpHeaders.Authorization, value = "Bearer $aliceToken") }
                 .status shouldBe HttpStatusCode.OK
-            client.get("/api/v1/users/${alice.id}") { header(HttpHeaders.Authorization, "Bearer $bobToken") }
+            client.get(urlString = "/api/v1/users/${alice.id}") { header(key = HttpHeaders.Authorization, value = "Bearer $bobToken") }
                 .status shouldBe HttpStatusCode.Forbidden
         }
 
@@ -127,11 +127,13 @@ class UserApiIntegrationTest {
     fun `unknown id is 404 and malformed id is 400`() =
         withApp { client ->
             val token = TestFirebaseAuth.mintToken(uid = "fb-3")
-            client.createUser(token)
+            client.createUser(token = token)
 
-            client.get("/api/v1/users/${java.util.UUID.randomUUID()}") { header(HttpHeaders.Authorization, "Bearer $token") }
+            client.get(urlString = "/api/v1/users/${java.util.UUID.randomUUID()}") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $token")
+            }
                 .status shouldBe HttpStatusCode.NotFound
-            client.get("/api/v1/users/not-a-uuid") { header(HttpHeaders.Authorization, "Bearer $token") }
+            client.get(urlString = "/api/v1/users/not-a-uuid") { header(key = HttpHeaders.Authorization, value = "Bearer $token") }
                 .status shouldBe HttpStatusCode.BadRequest
         }
 
@@ -139,27 +141,27 @@ class UserApiIntegrationTest {
     fun `PATCH updates and DELETE deactivates`() =
         withApp { client ->
             val token = TestFirebaseAuth.mintToken(uid = "fb-4")
-            val user = client.createUser(token).body<UserResponse>()
+            val user = client.createUser(token = token).body<UserResponse>()
 
             val patched =
-                client.patch("/api/v1/users/${user.id}") {
-                    header(HttpHeaders.Authorization, "Bearer $token")
-                    contentType(ContentType.Application.Json)
-                    setBody(ProfileRequest(city = "Cebu"))
+                client.patch(urlString = "/api/v1/users/${user.id}") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $token")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = ProfileRequest(city = "Cebu"))
                 }
             patched.status shouldBe HttpStatusCode.OK
             patched.body<UserResponse>().city shouldBe "Cebu"
 
-            client.put("/api/v1/users/${user.id}") {
-                header(HttpHeaders.Authorization, "Bearer $token")
-                contentType(ContentType.Application.Json)
-                setBody(ProfileRequest(city = "Davao"))
+            client.put(urlString = "/api/v1/users/${user.id}") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $token")
+                contentType(type = ContentType.Application.Json)
+                setBody(body = ProfileRequest(city = "Davao"))
             }.body<UserResponse>().city shouldBe "Davao"
 
-            client.delete("/api/v1/users/${user.id}") { header(HttpHeaders.Authorization, "Bearer $token") }
+            client.delete(urlString = "/api/v1/users/${user.id}") { header(key = HttpHeaders.Authorization, value = "Bearer $token") }
                 .status shouldBe HttpStatusCode.NoContent
 
-            client.get("/api/v1/users/me") { header(HttpHeaders.Authorization, "Bearer $token") }
+            client.get(urlString = "/api/v1/users/me") { header(key = HttpHeaders.Authorization, value = "Bearer $token") }
                 .body<UserResponse>().isActive shouldBe false
         }
 
@@ -169,7 +171,7 @@ class UserApiIntegrationTest {
             val token = TestFirebaseAuth.mintToken(uid = "fb-5")
 
             val badSex = CreateUserRequest(displayName = "Juan", sex = "X", dateOfBirth = "2000-01-01")
-            client.createUser(token, badSex).status shouldBe HttpStatusCode.BadRequest
+            client.createUser(token = token, body = badSex).status shouldBe HttpStatusCode.BadRequest
         }
 
     @Test
@@ -179,12 +181,12 @@ class UserApiIntegrationTest {
 
             suspend fun postRaw(json: String) =
                 client
-                    .post("/api/v1/users") {
-                        header(HttpHeaders.Authorization, "Bearer $token")
-                        setBody(TextContent(json, ContentType.Application.Json))
+                    .post(urlString = "/api/v1/users") {
+                        header(key = HttpHeaders.Authorization, value = "Bearer $token")
+                        setBody(body = TextContent(json, ContentType.Application.Json))
                     }.status
 
-            postRaw("""{"displayName":"Juan","dateOfBirth":"2000-01-01"}""") shouldBe HttpStatusCode.BadRequest
-            postRaw("""{"displayName":"Juan","sex":"Male"}""") shouldBe HttpStatusCode.BadRequest
+            postRaw(json = """{"displayName":"Juan","dateOfBirth":"2000-01-01"}""") shouldBe HttpStatusCode.BadRequest
+            postRaw(json = """{"displayName":"Juan","sex":"Male"}""") shouldBe HttpStatusCode.BadRequest
         }
 }

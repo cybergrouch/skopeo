@@ -49,7 +49,7 @@ class CapabilityRepository {
                     it[UserCapabilitiesTable.grantedBy] = grantedBy
                     it[grantedAt] = LocalDateTime.now()
                 }
-            loadById(id.value)
+            loadById(id = id.value)
         }
 
     /** Revoke the active grant (if any) — disables it with audit stamps. */
@@ -62,12 +62,12 @@ class CapabilityRepository {
         transaction {
             val active = activeRow(userId = userId, capability = capability) ?: return@transaction null
             val id = active[UserCapabilitiesTable.id].value
-            UserCapabilitiesTable.update({ UserCapabilitiesTable.id eq id }) {
+            UserCapabilitiesTable.update(where = { UserCapabilitiesTable.id eq id }) {
                 it[isActive] = false
                 it[UserCapabilitiesTable.revokedAt] = revokedAt
                 it[UserCapabilitiesTable.revokedBy] = revokedBy
             }
-            loadById(id)
+            loadById(id = id)
         }
 
     /** Count of users currently holding an active ADMINISTRATOR grant. */
@@ -104,7 +104,7 @@ internal fun ResultRow.toCapabilityGrant(): CapabilityGrant =
     CapabilityGrant(
         id = this[UserCapabilitiesTable.id].value,
         userId = this[UserCapabilitiesTable.userId].value,
-        capability = Capability.valueOf(this[UserCapabilitiesTable.capability]),
+        capability = Capability.valueOf(value = this[UserCapabilitiesTable.capability]),
         isActive = this[UserCapabilitiesTable.isActive],
         grantedBy = this[UserCapabilitiesTable.grantedBy]?.value,
         grantedAt = this[UserCapabilitiesTable.grantedAt],

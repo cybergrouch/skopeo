@@ -44,30 +44,31 @@ class MatchService(
         token: VerifiedFirebaseToken,
         request: CreateFixtureRequest,
     ): Match {
-        val createdBy = requireStaff(token)
-        val type = parseEnum(request.matchType) { TeamType.valueOf(it) }
-        val format = parseEnum(request.matchFormat) { MatchFormat.valueOf(it) }
-        require(format in ALLOWED_FORMATS) { "matchFormat must be BEST_OF_THREE or BEST_OF_FIVE" }
-        val matchDate = parseDate(request.matchDate)
-        val team1Ids = request.team1.map(::parseUuid)
-        val team2Ids = request.team2.map(::parseUuid)
+        val createdBy = requireStaff(token = token)
+        val type = parseEnum(value = request.matchType) { TeamType.valueOf(value = it) }
+        val format = parseEnum(value = request.matchFormat) { MatchFormat.valueOf(value = it) }
+        require(value = format in ALLOWED_FORMATS) { "matchFormat must be BEST_OF_THREE or BEST_OF_FIVE" }
+        val matchDate = parseDate(value = request.matchDate)
+        val team1Ids = request.team1.map(transform = ::parseUuid)
+        val team2Ids = request.team2.map(transform = ::parseUuid)
         validateComposition(type = type, team1 = team1Ids, team2 = team2Ids)
-        val team1Users = resolveRatedParticipants(team1Ids)
-        val team2Users = resolveRatedParticipants(team2Ids)
+        val team1Users = resolveRatedParticipants(ids = team1Ids)
+        val team2Users = resolveRatedParticipants(ids = team2Ids)
 
         return matches.createFixture(
-            CreateFixtureCommand(
-                matchType = type,
-                matchFormat = format,
-                matchDate = matchDate,
-                team1UserIds = team1Ids,
-                team2UserIds = team2Ids,
-                team1Name = teamName(team1Users),
-                team2Name = teamName(team2Users),
-                createdBy = createdBy,
-                venue = request.venue,
-                tournamentName = request.tournamentName,
-            ),
+            command =
+                CreateFixtureCommand(
+                    matchType = type,
+                    matchFormat = format,
+                    matchDate = matchDate,
+                    team1UserIds = team1Ids,
+                    team2UserIds = team2Ids,
+                    team1Name = teamName(users = team1Users),
+                    team2Name = teamName(users = team2Users),
+                    createdBy = createdBy,
+                    venue = request.venue,
+                    tournamentName = request.tournamentName,
+                ),
         )
     }
 
@@ -77,18 +78,19 @@ class MatchService(
         matchId: UUID,
         request: MatchResultRequest,
     ): Match {
-        val recordedBy = requireStaff(token)
-        val match = matches.findById(matchId) ?: throw MatchNotFoundException(matchId)
-        if (!match.isActive) throw MatchConflictException("Match is disabled")
-        if (match.status != MatchStatus.SCHEDULED) throw MatchConflictException("Match already has results")
-        val (resolvedSets, winner) = deriveOutcome(match.team1.teamId, match.team2.teamId, request)
+        val recordedBy = requireStaff(token = token)
+        val match = matches.findById(matchId = matchId) ?: throw MatchNotFoundException(id = matchId)
+        if (!match.isActive) throw MatchConflictException(message = "Match is disabled")
+        if (match.status != MatchStatus.SCHEDULED) throw MatchConflictException(message = "Match already has results")
+        val (resolvedSets, winner) =
+            deriveOutcome(team1Id = match.team1.teamId, team2Id = match.team2.teamId, request = request)
         return matches.addResult(
             matchId = matchId,
             sets = resolvedSets,
             winnerTeamId = winner,
             recordedBy = recordedBy,
             completedAt = LocalDateTime.now(),
-        ) ?: throw MatchNotFoundException(matchId)
+        ) ?: throw MatchNotFoundException(id = matchId)
     }
 
     @Suppress("ThrowsCount") // distinct guardrails: not-found, rated-lock, not-found-on-update
@@ -97,21 +99,22 @@ class MatchService(
         matchId: UUID,
         active: Boolean,
     ): Match {
-        requireStaff(token)
-        val match = matches.findById(matchId) ?: throw MatchNotFoundException(matchId)
+        requireStaff(token = token)
+        val match = matches.findById(matchId = matchId) ?: throw MatchNotFoundException(id = matchId)
         if (!active && match.ratedAt != null) {
-            throw MatchConflictException("Cannot disable a match that has already been rated")
+            throw MatchConflictException(message = "Cannot disable a match that has already been rated")
         }
         val disabledAt = if (active) null else LocalDateTime.now()
-        return matches.setActive(matchId, active, disabledAt) ?: throw MatchNotFoundException(matchId)
+        return matches.setActive(matchId = matchId, active = active, disabledAt = disabledAt)
+            ?: throw MatchNotFoundException(id = matchId)
     }
 
     fun getById(
         token: VerifiedFirebaseToken,
         matchId: UUID,
     ): Match {
-        val match = matches.findById(matchId) ?: throw MatchNotFoundException(matchId)
-        val caller = users.findByFirebaseUid(token.uid)
+        val match = matches.findById(matchId = matchId) ?: throw MatchNotFoundException(id = matchId)
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
         val isStaff = caller?.capabilities?.any { it in STAFF_ROLES } == true
         val isParticipant = caller != null && caller.id in (match.team1.userIds + match.team2.userIds)
         if (!isStaff && !isParticipant) throw ForbiddenException()
@@ -126,27 +129,27 @@ class MatchService(
         token: VerifiedFirebaseToken,
         view: MatchQuery,
     ): List<Match> {
-        val caller = staffCaller(token)
-        val scopedTo = if (caller.capabilities.contains(Capability.ADMINISTRATOR)) null else caller.id
+        val caller = staffCaller(token = token)
+        val scopedTo = if (caller.capabilities.contains(element = Capability.ADMINISTRATOR)) null else caller.id
         return when (view) {
             MatchQuery.PENDING_CALCULATION -> matches.listPendingCalculation(createdBy = scopedTo)
             MatchQuery.AWAITING_RESULTS -> matches.listAwaitingResults(asOf = LocalDate.now(), createdBy = scopedTo)
         }
     }
 
-    private fun requireStaff(token: VerifiedFirebaseToken): UUID = staffCaller(token).id
+    private fun requireStaff(token: VerifiedFirebaseToken): UUID = staffCaller(token = token).id
 
     private fun staffCaller(token: VerifiedFirebaseToken): User {
-        val caller = users.findByFirebaseUid(token.uid)
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
         if (caller == null || caller.capabilities.none { it in STAFF_ROLES }) throw ForbiddenException()
         return caller
     }
 
     private fun resolveRatedParticipants(ids: List<UUID>): List<User> =
         ids.map { id ->
-            val user = users.findById(id) ?: throw IllegalArgumentException("Unknown user $id")
-            require(user.isActive) { "User $id is not active" }
-            requireNotNull(ratings.findCurrentRating(id)) {
+            val user = users.findById(id = id) ?: throw IllegalArgumentException("Unknown user $id")
+            require(value = user.isActive) { "User $id is not active" }
+            requireNotNull(value = ratings.findCurrentRating(userId = id)) {
                 "User $id has no rating yet (pending assessment)"
             }
             user
@@ -159,9 +162,9 @@ private fun validateComposition(
     team2: List<UUID>,
 ) {
     val expected = if (type == TeamType.SINGLES) 1 else 2
-    require(team1.size == expected && team2.size == expected) { "$type needs $expected player(s) per side" }
+    require(value = team1.size == expected && team2.size == expected) { "$type needs $expected player(s) per side" }
     val all = team1 + team2
-    require(all.toSet().size == all.size) { "a player cannot appear more than once in a match" }
+    require(value = all.toSet().size == all.size) { "a player cannot appear more than once in a match" }
 }
 
 /** Derive per-set winners and the match winner from the raw scores; validates a clear outcome. */
@@ -170,12 +173,12 @@ private fun deriveOutcome(
     team2Id: UUID,
     request: MatchResultRequest,
 ): Pair<List<MatchSetResult>, UUID> {
-    require(request.sets.isNotEmpty()) { "at least one set is required" }
+    require(value = request.sets.isNotEmpty()) { "at least one set is required" }
     var team1Sets = 0
     var team2Sets = 0
     val resolved =
         request.sets.mapIndexed { index, set ->
-            require(set.team1Games >= 0 && set.team2Games >= 0) { "set ${index + 1}: games must be non-negative" }
+            require(value = set.team1Games >= 0 && set.team2Games >= 0) { "set ${index + 1}: games must be non-negative" }
             val winner = setWinner(team1Id = team1Id, team2Id = team2Id, set = set, setNumber = index + 1)
             if (winner == team1Id) team1Sets++ else team2Sets++
             MatchSetResult(
@@ -187,7 +190,7 @@ private fun deriveOutcome(
                 tiebreakTeam2Points = set.tiebreakTeam2Points,
             )
         }
-    require(team1Sets != team2Sets) { "the match has no clear winner (sets are tied)" }
+    require(value = team1Sets != team2Sets) { "the match has no clear winner (sets are tied)" }
     return resolved to if (team1Sets > team2Sets) team1Id else team2Id
 }
 
@@ -207,7 +210,7 @@ private fun setWinner(
     }
 
 private fun teamName(users: List<User>): String =
-    users.joinToString("/") { user ->
+    users.joinToString(separator = "/") { user ->
         user.names.firstOrNull { it.type == NameType.DISPLAY && it.isActive }?.value ?: "Player"
     }
 

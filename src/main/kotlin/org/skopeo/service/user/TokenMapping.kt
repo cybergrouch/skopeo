@@ -39,7 +39,7 @@ internal fun contactSourceOf(provider: AuthProvider): ContactSource =
 
 internal fun validatedSex(value: String?): String? {
     if (value == null) return null
-    require(value in ALLOWED_SEXES) { "Invalid sex '$value'; expected one of $ALLOWED_SEXES" }
+    require(value = value in ALLOWED_SEXES) { "Invalid sex '$value'; expected one of $ALLOWED_SEXES" }
     return value
 }
 
@@ -75,13 +75,13 @@ internal fun buildProvisionCommand(
     token: VerifiedFirebaseToken,
     request: CreateUserRequest,
 ): ProvisionUserCommand {
-    val provider = authProviderOf(token.signInProvider)
+    val provider = authProviderOf(signInProvider = token.signInProvider)
     val email =
         token.email?.let { address ->
             ContactInfo(
                 type = ContactType.EMAIL,
                 value = address,
-                source = contactSourceOf(provider),
+                source = contactSourceOf(provider = provider),
                 status = if (token.emailVerified) VerificationStatus.VERIFIED else VerificationStatus.PENDING,
                 method = if (token.emailVerified) VerificationMethod.OAUTH_PROVIDER else null,
                 isPrimary = true,
@@ -104,8 +104,8 @@ internal fun buildProvisionCommand(
         photoUrl = token.picture,
         email = email,
         phone = phone,
-        dateOfBirth = parseDateOfBirth(request.dateOfBirth),
-        sex = validatedSex(request.sex),
+        dateOfBirth = parseDateOfBirth(value = request.dateOfBirth),
+        sex = validatedSex(value = request.sex),
         city = request.city,
         country = request.country,
     )
@@ -114,7 +114,7 @@ internal fun buildProvisionCommand(
 internal fun ProfileRequest.toProfilePatch(): ProfilePatch =
     ProfilePatch(
         photoUrl = photoUrl,
-        dateOfBirth = parseDateOfBirth(dateOfBirth),
-        sex = validatedSex(sex),
+        dateOfBirth = parseDateOfBirth(value = dateOfBirth),
+        sex = validatedSex(value = sex),
         city = city,
     )

@@ -53,79 +53,97 @@ class RatingServiceTest {
             ),
         )
 
-    private fun admin(uid: String = "root") = provisionUser(uid, roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+    private fun admin(uid: String = "root") = provisionUser(uid = uid, roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
     @Test
     fun `admin sets a rating and the published level is derived`() {
-        admin("root")
-        val player = provisionUser("player")
+        admin(uid = "root")
+        val player = provisionUser(uid = "player")
 
-        val rating = service.setRating(token("root"), player.id, "4.3", null)
+        val rating = service.setRating(token = token(uid = "root"), userId = player.id, value = "4.3", confidence = null)
 
         rating.currentRating.toPlainString() shouldBe "4.300000" // stored as NUMERIC(10,6)
         rating.currentLevel shouldBe "4.0" // NTRP rounds down to the 0.5 level
         rating.confidence.toPlainString() shouldBe "0.50" // default
 
         // An explicit confidence is honored.
-        val adjusted = service.setRating(token("root"), player.id, "4.5", "0.70")
+        val adjusted = service.setRating(token = token(uid = "root"), userId = player.id, value = "4.5", confidence = "0.70")
         adjusted.confidence.toPlainString() shouldBe "0.70"
     }
 
     @Test
     fun `only an admin may set a rating`() {
-        admin("root")
-        val player = provisionUser("player")
+        admin(uid = "root")
+        val player = provisionUser(uid = "player")
 
-        shouldThrow<ForbiddenException> { service.setRating(token("player"), player.id, "4.0", null) }
-        shouldThrow<ForbiddenException> { service.setRating(token("ghost"), player.id, "4.0", null) }
+        shouldThrow<ForbiddenException> {
+            service.setRating(
+                token = token(uid = "player"),
+                userId = player.id,
+                value = "4.0",
+                confidence = null,
+            )
+        }
+        shouldThrow<ForbiddenException> {
+            service.setRating(
+                token = token(uid = "ghost"),
+                userId = player.id,
+                value = "4.0",
+                confidence = null,
+            )
+        }
     }
 
     @Test
     fun `invalid rating value or confidence is rejected`() {
-        admin("root")
-        val player = provisionUser("player")
+        admin(uid = "root")
+        val player = provisionUser(uid = "player")
 
-        shouldThrow<IllegalArgumentException> { service.setRating(token("root"), player.id, "9.0", null) }
-        shouldThrow<IllegalArgumentException> { service.setRating(token("root"), player.id, "4.0", "1.5") }
+        shouldThrow<IllegalArgumentException> {
+            service.setRating(token = token(uid = "root"), userId = player.id, value = "9.0", confidence = null)
+        }
+        shouldThrow<IllegalArgumentException> {
+            service.setRating(token = token(uid = "root"), userId = player.id, value = "4.0", confidence = "1.5")
+        }
     }
 
     @Test
     fun `reading ratings and history is self-or-admin`() {
-        admin("root")
-        val player = provisionUser("player")
-        provisionUser("other")
-        service.setRating(token("root"), player.id, "4.0", null)
+        admin(uid = "root")
+        val player = provisionUser(uid = "player")
+        provisionUser(uid = "other")
+        service.setRating(token = token(uid = "root"), userId = player.id, value = "4.0", confidence = null)
 
-        service.getRatings(token("player"), player.id).single().currentRating.toPlainString() shouldBe "4.000000"
-        service.getRatings(token("root"), player.id).single().currentRating.toPlainString() shouldBe "4.000000"
-        service.getHistory(token("player"), player.id) shouldBe emptyList()
-        shouldThrow<ForbiddenException> { service.getRatings(token("other"), player.id) }
-        shouldThrow<ForbiddenException> { service.getHistory(token("other"), player.id) }
+        service.getRatings(token = token(uid = "player"), userId = player.id).single().currentRating.toPlainString() shouldBe "4.000000"
+        service.getRatings(token = token(uid = "root"), userId = player.id).single().currentRating.toPlainString() shouldBe "4.000000"
+        service.getHistory(token = token(uid = "player"), userId = player.id) shouldBe emptyList()
+        shouldThrow<ForbiddenException> { service.getRatings(token = token(uid = "other"), userId = player.id) }
+        shouldThrow<ForbiddenException> { service.getHistory(token = token(uid = "other"), userId = player.id) }
         // A caller with no provisioned account is forbidden too.
-        shouldThrow<ForbiddenException> { service.getRatings(token("ghost"), player.id) }
+        shouldThrow<ForbiddenException> { service.getRatings(token = token(uid = "ghost"), userId = player.id) }
     }
 
     @Test
     fun `pending assessment lists unrated users for admins only`() {
-        admin("root")
-        val unrated = provisionUser("unrated")
-        val rated = provisionUser("rated")
-        service.setRating(token("root"), rated.id, "3.0", null)
+        admin(uid = "root")
+        val unrated = provisionUser(uid = "unrated")
+        val rated = provisionUser(uid = "rated")
+        service.setRating(token = token(uid = "root"), userId = rated.id, value = "3.0", confidence = null)
 
-        val pending = service.pendingAssessment(token("root")).map { it.userId }
+        val pending = service.pendingAssessment(token = token(uid = "root")).map { it.userId }
         (unrated.id in pending) shouldBe true
         (rated.id in pending) shouldBe false
 
-        shouldThrow<ForbiddenException> { service.pendingAssessment(token("unrated")) }
+        shouldThrow<ForbiddenException> { service.pendingAssessment(token = token(uid = "unrated")) }
     }
 
     @Test
     fun `setting a rating for an unknown user is rejected`() {
-        admin("root")
+        admin(uid = "root")
         shouldThrow<org.skopeo.service.user.UserNotFoundException> {
-            service.setRating(token("root"), UUID.randomUUID(), "4.0", null)
+            service.setRating(token = token(uid = "root"), userId = UUID.randomUUID(), value = "4.0", confidence = null)
         }
     }
 }

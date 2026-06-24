@@ -29,9 +29,9 @@ import org.skopeo.service.capability.CapabilityService
 fun Application.configureCapabilityRoutes(service: CapabilityService = CapabilityService()) {
     routing {
         authenticate(FIREBASE_AUTH) {
-            route("/api/v1/users/{userId}/capabilities") {
-                listAndGrant(service)
-                revoke(service)
+            route(path = "/api/v1/users/{userId}/capabilities") {
+                listAndGrant(service = service)
+                revoke(service = service)
             }
         }
     }
@@ -40,14 +40,14 @@ fun Application.configureCapabilityRoutes(service: CapabilityService = Capabilit
 private fun Route.listAndGrant(service: CapabilityService) {
     get {
         respondMappingErrors {
-            val grants = service.list(token = verifiedToken(), userId = uuidParam("userId"))
+            val grants = service.list(token = verifiedToken(), userId = uuidParam(name = "userId"))
             call.respond(status = HttpStatusCode.OK, message = grants.map { it.toResponse() })
         }
     }
     post {
         respondMappingErrors {
             val request = call.receive<CapabilityGrantRequest>()
-            val result = service.grant(token = verifiedToken(), userId = uuidParam("userId"), capabilityName = request.capability)
+            val result = service.grant(token = verifiedToken(), userId = uuidParam(name = "userId"), capabilityName = request.capability)
             val status = if (result.created) HttpStatusCode.Created else HttpStatusCode.OK
             call.respond(status = status, message = result.grant.toResponse())
         }
@@ -55,10 +55,10 @@ private fun Route.listAndGrant(service: CapabilityService) {
 }
 
 private fun Route.revoke(service: CapabilityService) {
-    delete("/{capability}") {
+    delete(path = "/{capability}") {
         respondMappingErrors {
-            val capability = call.parameters["capability"] ?: throw BadRequestException("Missing capability")
-            service.revoke(token = verifiedToken(), userId = uuidParam("userId"), capabilityName = capability)
+            val capability = call.parameters["capability"] ?: throw BadRequestException(message = "Missing capability")
+            service.revoke(token = verifiedToken(), userId = uuidParam(name = "userId"), capabilityName = capability)
             call.respond(status = HttpStatusCode.NoContent, message = "")
         }
     }

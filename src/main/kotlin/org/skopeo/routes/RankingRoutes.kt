@@ -23,7 +23,7 @@ fun Application.configureRankingRoutes() {
     val rankingCalculator: RankingCalculator = PerformanceBasedRankingCalculatorImpl()
 
     routing {
-        post("/api/v1/calculate-ranking") {
+        post(path = "/api/v1/calculate-ranking") {
             logger.info { "Received ranking calculation request" }
 
             try {
@@ -35,7 +35,7 @@ fun Application.configureRankingRoutes() {
                 }
 
                 // Calculate ranking using Elo-based algorithm (pure function)
-                val result = rankingCalculator.calculate(request)
+                val result = rankingCalculator.calculate(request = request)
 
                 // Log the audit trail from the calculation
                 result.audit.forEach { entry ->
@@ -43,27 +43,28 @@ fun Application.configureRankingRoutes() {
                 }
 
                 logger.info { "Ranking calculation completed successfully" }
-                call.respond(HttpStatusCode.OK, result.response)
-            } catch (e: IllegalArgumentException) {
-                logger.warn(e) { "Validation error in ranking calculation request" }
-                call.respond(
-                    HttpStatusCode.BadRequest,
-                    mapOf("error" to "Validation error", "message" to (e.message ?: "Invalid request")),
-                )
+                call.respond(status = HttpStatusCode.OK, message = result.response)
             } catch (e: kotlinx.serialization.SerializationException) {
-                logger.warn(e) { "JSON serialization error in ranking calculation request" }
+                // Must precede IllegalArgumentException: kotlinx SerializationException is a subtype of it.
+                logger.warn(t = e) { "JSON serialization error in ranking calculation request" }
                 call.respond(
-                    HttpStatusCode.BadRequest,
-                    mapOf("error" to "Invalid JSON", "message" to (e.message ?: "Invalid request format")),
+                    status = HttpStatusCode.BadRequest,
+                    message = mapOf("error" to "Invalid JSON", "message" to (e.message ?: "Invalid request format")),
+                )
+            } catch (e: IllegalArgumentException) {
+                logger.warn(t = e) { "Validation error in ranking calculation request" }
+                call.respond(
+                    status = HttpStatusCode.BadRequest,
+                    message = mapOf("error" to "Validation error", "message" to (e.message ?: "Invalid request")),
                 )
             } catch (e: BadRequestException) {
-                logger.warn(e) { "Invalid request body in ranking calculation request" }
-                call.respond(HttpStatusCode.BadRequest, badRequestErrorBody(e = e))
+                logger.warn(t = e) { "Invalid request body in ranking calculation request" }
+                call.respond(status = HttpStatusCode.BadRequest, message = badRequestErrorBody(e = e))
             } catch (e: Exception) {
-                logger.error(e) { "Error processing ranking calculation request" }
+                logger.error(t = e) { "Error processing ranking calculation request" }
                 call.respond(
-                    HttpStatusCode.InternalServerError,
-                    mapOf("error" to "Internal server error", "message" to "An unexpected error occurred"),
+                    status = HttpStatusCode.InternalServerError,
+                    message = mapOf("error" to "Internal server error", "message" to "An unexpected error occurred"),
                 )
             }
         }
@@ -78,7 +79,7 @@ fun Application.configureRankingRoutes() {
  * the client sees the actual validation message.
  */
 private fun badRequestErrorBody(e: BadRequestException): Map<String, String> {
-    val rootCause = generateSequence<Throwable>(e) { it.cause }.last()
+    val rootCause = generateSequence<Throwable>(seed = e) { it.cause }.last()
     val error = if (rootCause is kotlinx.serialization.SerializationException) "Invalid JSON" else "Validation error"
     return mapOf("error" to error, "message" to (rootCause.message ?: "Invalid request"))
 }

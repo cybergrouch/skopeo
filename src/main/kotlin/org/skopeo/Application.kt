@@ -40,7 +40,7 @@ private val logger = KotlinLogging.logger {}
 
 fun main(args: Array<String>) {
     logger.info { "Starting Skopeo API..." }
-    EngineMain.main(args)
+    EngineMain.main(args = args)
 }
 
 fun Application.module(
@@ -49,10 +49,10 @@ fun Application.module(
 ) {
     if (initDatabase) {
         // Initialize database connection and run migrations
-        DatabaseConfig.init(this)
+        DatabaseConfig.init(application = this)
 
         // Set up shutdown hook to close database connection
-        monitor.subscribe(io.ktor.server.application.ApplicationStopped) {
+        monitor.subscribe(definition = io.ktor.server.application.ApplicationStopped) {
             logger.info { "Application stopping, closing database connections..." }
             DatabaseConfig.close()
         }
@@ -61,7 +61,7 @@ fun Application.module(
     configureMonitoring()
     configurePlugins()
     configureCORS()
-    configureSecurity(firebaseAuth)
+    configureSecurity(settings = firebaseAuth)
     configureOpenAPI()
     configureRouting()
     configureRankingRoutes()
@@ -76,7 +76,7 @@ fun Application.module(
 
 fun Application.configureMonitoring() {
     // Request/Response logging
-    install(CallLogging) {
+    install(plugin = CallLogging) {
         level = Level.INFO
         format { call ->
             val status = call.response.status()
@@ -89,23 +89,23 @@ fun Application.configureMonitoring() {
 
     // Performance metrics
     val prometheusRegistry = PrometheusMeterRegistry(PrometheusConfig.DEFAULT)
-    install(MicrometerMetrics) {
+    install(plugin = MicrometerMetrics) {
         registry = prometheusRegistry
     }
     logger.info { "Metrics monitoring configured (Prometheus)" }
 
     // Expose metrics endpoint
     routing {
-        get("/metrics") {
+        get(path = "/metrics") {
             logger.debug { "Metrics endpoint accessed" }
-            call.respond(prometheusRegistry.scrape())
+            call.respond(message = prometheusRegistry.scrape())
         }
     }
     logger.info { "Metrics endpoint available at /metrics" }
 }
 
 fun Application.configurePlugins() {
-    install(ContentNegotiation) {
+    install(plugin = ContentNegotiation) {
         json()
     }
     logger.info { "Content negotiation configured with JSON support" }
@@ -121,20 +121,20 @@ fun Application.configurePlugins() {
  * Add the deployed web UI origin (e.g. the Firebase Hosting domain) when it is known.
  */
 fun Application.configureCORS() {
-    install(CORS) {
+    install(plugin = CORS) {
         // Local development: Vite dev server default origin
         allowHost(host = "localhost:5173", schemes = listOf("http", "https"))
         // TODO: add the deployed web UI origin, e.g.:
         // allowHost(host = "skopeo-web.web.app", schemes = listOf("https"))
 
-        allowMethod(HttpMethod.Get)
-        allowMethod(HttpMethod.Post)
-        allowMethod(HttpMethod.Put)
-        allowMethod(HttpMethod.Delete)
-        allowMethod(HttpMethod.Options)
+        allowMethod(method = HttpMethod.Get)
+        allowMethod(method = HttpMethod.Post)
+        allowMethod(method = HttpMethod.Put)
+        allowMethod(method = HttpMethod.Delete)
+        allowMethod(method = HttpMethod.Options)
 
-        allowHeader(HttpHeaders.ContentType)
-        allowHeader(HttpHeaders.Authorization)
+        allowHeader(header = HttpHeaders.ContentType)
+        allowHeader(header = HttpHeaders.Authorization)
     }
     logger.info { "CORS configured for web UI origins" }
 }
@@ -142,12 +142,12 @@ fun Application.configureCORS() {
 fun Application.configureOpenAPI() {
     routing {
         // Serve raw OpenAPI specification file
-        get("/openapi.yaml") {
+        get(path = "/openapi.yaml") {
             logger.debug { "OpenAPI YAML specification requested" }
             val yamlContent =
                 this::class.java.classLoader.getResource("openapi/documentation.yaml")?.readText()
                     ?: throw IllegalStateException("OpenAPI specification file not found")
-            call.respondText(yamlContent, ContentType.Text.Plain)
+            call.respondText(text = yamlContent, contentType = ContentType.Text.Plain)
         }
 
         // Serve Swagger UI (interactive API documentation)
@@ -158,12 +158,12 @@ fun Application.configureOpenAPI() {
 
 fun Application.configureRouting() {
     routing {
-        get("/") {
+        get(path = "/") {
             logger.info { "Root endpoint accessed" }
-            call.respondText("Skopeo API")
+            call.respondText(text = "Skopeo API")
         }
 
-        get("/health") {
+        get(path = "/health") {
             logger.debug { "Health check endpoint accessed" }
             call.respond(
                 status = HttpStatusCode.OK,

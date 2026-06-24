@@ -55,7 +55,7 @@ class UserSearchApiIntegrationTest {
         PostgresTestDatabase.truncate()
     }
 
-    private fun ApplicationTestBuilder.jsonClient(): HttpClient = createClient { install(ContentNegotiation) { json() } }
+    private fun ApplicationTestBuilder.jsonClient(): HttpClient = createClient { install(plugin = ContentNegotiation) { json() } }
 
     private fun withApp(block: suspend (HttpClient) -> Unit) =
         testApplication {
@@ -68,12 +68,13 @@ class UserSearchApiIntegrationTest {
         roles: Set<Capability>,
     ): String {
         UserRepository().provision(
-            ProvisionUserCommand(
-                firebaseUid = uid,
-                identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
-                names = listOf(UserName(type = NameType.DISPLAY, value = uid)),
-                capabilities = roles + Capability.PLAYER,
-            ),
+            command =
+                ProvisionUserCommand(
+                    firebaseUid = uid,
+                    identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
+                    names = listOf(UserName(type = NameType.DISPLAY, value = uid)),
+                    capabilities = roles + Capability.PLAYER,
+                ),
         )
         return TestFirebaseAuth.mintToken(uid = uid)
     }
@@ -82,26 +83,26 @@ class UserSearchApiIntegrationTest {
         uid: String,
         displayName: String,
     ): UserResponse =
-        post("/api/v1/users") {
-            header(HttpHeaders.Authorization, "Bearer ${TestFirebaseAuth.mintToken(uid)}")
-            contentType(ContentType.Application.Json)
-            setBody(CreateUserRequest(displayName = displayName, dateOfBirth = "2000-01-01", sex = "Male"))
+        post(urlString = "/api/v1/users") {
+            header(key = HttpHeaders.Authorization, value = "Bearer ${TestFirebaseAuth.mintToken(uid = uid)}")
+            contentType(type = ContentType.Application.Json)
+            setBody(body = CreateUserRequest(displayName = displayName, dateOfBirth = "2000-01-01", sex = "Male"))
         }.body()
 
     private suspend fun HttpClient.lookup(
         token: String,
         params: String,
-    ) = get("/api/v1/users${if (params.isEmpty()) "" else "?$params"}") {
-        header(HttpHeaders.Authorization, "Bearer $token")
+    ) = get(urlString = "/api/v1/users${if (params.isEmpty()) "" else "?$params"}") {
+        header(key = HttpHeaders.Authorization, value = "Bearer $token")
     }
 
     /** Query with properly-encoded filter params (handles interval brackets/parens). */
     private suspend fun HttpClient.searchWith(
         token: String,
         vararg filters: Pair<String, String>,
-    ) = get("/api/v1/users") {
-        header(HttpHeaders.Authorization, "Bearer $token")
-        url { filters.forEach { (key, value) -> parameters.append(key, value) } }
+    ) = get(urlString = "/api/v1/users") {
+        header(key = HttpHeaders.Authorization, value = "Bearer $token")
+        url { filters.forEach { (key, value) -> parameters.append(name = key, value = value) } }
     }
 
     private suspend fun HttpClient.provisionProfile(
@@ -110,31 +111,31 @@ class UserSearchApiIntegrationTest {
         sex: String = "Male",
         dateOfBirth: String = "2000-01-01",
     ): UserResponse =
-        post("/api/v1/users") {
-            header(HttpHeaders.Authorization, "Bearer ${TestFirebaseAuth.mintToken(uid)}")
-            contentType(ContentType.Application.Json)
-            setBody(CreateUserRequest(displayName = displayName, sex = sex, dateOfBirth = dateOfBirth))
+        post(urlString = "/api/v1/users") {
+            header(key = HttpHeaders.Authorization, value = "Bearer ${TestFirebaseAuth.mintToken(uid = uid)}")
+            contentType(type = ContentType.Application.Json)
+            setBody(body = CreateUserRequest(displayName = displayName, sex = sex, dateOfBirth = dateOfBirth))
         }.body()
 
     private suspend fun HttpClient.rate(
         adminToken: String,
         userId: String,
         value: String,
-    ) = put("/api/v1/users/$userId/ratings") {
-        header(HttpHeaders.Authorization, "Bearer $adminToken")
-        contentType(ContentType.Application.Json)
-        setBody(SetRatingRequest(value = value))
+    ) = put(urlString = "/api/v1/users/$userId/ratings") {
+        header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+        contentType(type = ContentType.Application.Json)
+        setBody(body = SetRatingRequest(value = value))
     }
 
     @Test
     fun `a host finds users by partial, case-insensitive name`() =
         withApp { client ->
-            val host = seedStaff("host", setOf(Capability.HOST))
-            client.provisionNamed("u1", "Alice")
-            client.provisionNamed("u2", "Alicia")
-            client.provisionNamed("u3", "Bob")
+            val host = seedStaff(uid = "host", roles = setOf(Capability.HOST))
+            client.provisionNamed(uid = "u1", displayName = "Alice")
+            client.provisionNamed(uid = "u2", displayName = "Alicia")
+            client.provisionNamed(uid = "u3", displayName = "Bob")
 
-            val results = client.lookup(host, "name=ALI").body<List<UserSummaryResponse>>()
+            val results = client.lookup(token = host, params = "name=ALI").body<List<UserSummaryResponse>>()
 
             results.map { it.displayName }.toSet() shouldBe setOf("Alice", "Alicia")
         }
@@ -142,11 +143,11 @@ class UserSearchApiIntegrationTest {
     @Test
     fun `name search tolerates a misspelling`() =
         withApp { client ->
-            val host = seedStaff("host", setOf(Capability.HOST))
-            client.provisionNamed("u1", "Alice")
-            client.provisionNamed("u2", "Bob")
+            val host = seedStaff(uid = "host", roles = setOf(Capability.HOST))
+            client.provisionNamed(uid = "u1", displayName = "Alice")
+            client.provisionNamed(uid = "u2", displayName = "Bob")
 
-            val results = client.lookup(host, "name=Alyce").body<List<UserSummaryResponse>>()
+            val results = client.lookup(token = host, params = "name=Alyce").body<List<UserSummaryResponse>>()
 
             results.map { it.displayName } shouldBe listOf("Alice")
         }
@@ -154,22 +155,24 @@ class UserSearchApiIntegrationTest {
     @Test
     fun `a profile with several matching names appears once, and non-display names are searched`() =
         withApp { client ->
-            val host = seedStaff("host", setOf(Capability.HOST))
+            val host = seedStaff(uid = "host", roles = setOf(Capability.HOST))
             // One profile whose FIRST and DISPLAY names both match "john".
             UserRepository().provision(
-                ProvisionUserCommand(
-                    firebaseUid = "multi",
-                    identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = "multi", isPrimary = true),
-                    names =
-                        listOf(
-                            UserName(type = NameType.FIRST, value = "Johnathan"),
-                            UserName(type = NameType.DISPLAY, value = "Johnny"),
-                        ),
-                    capabilities = setOf(Capability.PLAYER),
-                ),
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = "multi",
+                        identity =
+                            UserIdentity(provider = AuthProvider.GOOGLE, providerUid = "multi", isPrimary = true),
+                        names =
+                            listOf(
+                                UserName(type = NameType.FIRST, value = "Johnathan"),
+                                UserName(type = NameType.DISPLAY, value = "Johnny"),
+                            ),
+                        capabilities = setOf(Capability.PLAYER),
+                    ),
             )
 
-            val results = client.lookup(host, "name=john").body<List<UserSummaryResponse>>()
+            val results = client.lookup(token = host, params = "name=john").body<List<UserSummaryResponse>>()
 
             results.count { it.displayName == "Johnny" } shouldBe 1
         }
@@ -177,10 +180,10 @@ class UserSearchApiIntegrationTest {
     @Test
     fun `an admin can search too`() =
         withApp { client ->
-            val admin = seedStaff("admin", setOf(Capability.ADMINISTRATOR))
-            client.provisionNamed("u1", "Charlie")
+            val admin = seedStaff(uid = "admin", roles = setOf(Capability.ADMINISTRATOR))
+            client.provisionNamed(uid = "u1", displayName = "Charlie")
 
-            val response = client.lookup(admin, "name=char")
+            val response = client.lookup(token = admin, params = "name=char")
             response.status shouldBe HttpStatusCode.OK
             response.body<List<UserSummaryResponse>>().single().displayName shouldBe "Charlie"
         }
@@ -188,14 +191,14 @@ class UserSearchApiIntegrationTest {
     @Test
     fun `a host resolves known ids to summaries`() =
         withApp { client ->
-            val host = seedStaff("host", setOf(Capability.HOST))
-            val alice = client.provisionNamed("u1", "Alice")
-            val bob = client.provisionNamed("u2", "Bob")
-            client.provisionNamed("u3", "Carol")
+            val host = seedStaff(uid = "host", roles = setOf(Capability.HOST))
+            val alice = client.provisionNamed(uid = "u1", displayName = "Alice")
+            val bob = client.provisionNamed(uid = "u2", displayName = "Bob")
+            client.provisionNamed(uid = "u3", displayName = "Carol")
 
             val results =
                 client
-                    .lookup(host, "ids=${alice.id},${bob.id}")
+                    .lookup(token = host, params = "ids=${alice.id},${bob.id}")
                     .body<List<UserSummaryResponse>>()
 
             results.map { it.displayName }.toSet() shouldBe setOf("Alice", "Bob")
@@ -204,64 +207,64 @@ class UserSearchApiIntegrationTest {
     @Test
     fun `a plain player cannot look up users`() =
         withApp { client ->
-            seedStaff("admin", setOf(Capability.ADMINISTRATOR))
-            val player = TestFirebaseAuth.mintToken("p1")
-            client.provisionNamed("p1", "Player One")
+            seedStaff(uid = "admin", roles = setOf(Capability.ADMINISTRATOR))
+            val player = TestFirebaseAuth.mintToken(uid = "p1")
+            client.provisionNamed(uid = "p1", displayName = "Player One")
 
-            client.lookup(player, "name=player").status shouldBe HttpStatusCode.Forbidden
+            client.lookup(token = player, params = "name=player").status shouldBe HttpStatusCode.Forbidden
         }
 
     @Test
     fun `an unprovisioned caller is forbidden`() =
         withApp { client ->
             // A valid token whose uid was never provisioned — no caller record at all.
-            client.lookup(TestFirebaseAuth.mintToken("ghost"), "name=alice").status shouldBe
+            client.lookup(token = TestFirebaseAuth.mintToken(uid = "ghost"), params = "name=alice").status shouldBe
                 HttpStatusCode.Forbidden
         }
 
     @Test
     fun `an empty ids list is a 400`() =
         withApp { client ->
-            val host = seedStaff("host", setOf(Capability.HOST))
-            client.lookup(host, "ids=").status shouldBe HttpStatusCode.BadRequest
+            val host = seedStaff(uid = "host", roles = setOf(Capability.HOST))
+            client.lookup(token = host, params = "ids=").status shouldBe HttpStatusCode.BadRequest
         }
 
     @Test
     fun `neither name nor ids is a 400`() =
         withApp { client ->
-            val host = seedStaff("host", setOf(Capability.HOST))
-            client.lookup(host, "").status shouldBe HttpStatusCode.BadRequest
+            val host = seedStaff(uid = "host", roles = setOf(Capability.HOST))
+            client.lookup(token = host, params = "").status shouldBe HttpStatusCode.BadRequest
         }
 
     @Test
     fun `both name and ids is a 400`() =
         withApp { client ->
-            val host = seedStaff("host", setOf(Capability.HOST))
-            client.lookup(host, "name=a&ids=${java.util.UUID.randomUUID()}").status shouldBe HttpStatusCode.BadRequest
+            val host = seedStaff(uid = "host", roles = setOf(Capability.HOST))
+            client.lookup(token = host, params = "name=a&ids=${java.util.UUID.randomUUID()}").status shouldBe HttpStatusCode.BadRequest
         }
 
     @Test
     fun `a blank name is a 400`() =
         withApp { client ->
-            val host = seedStaff("host", setOf(Capability.HOST))
-            client.lookup(host, "name=%20").status shouldBe HttpStatusCode.BadRequest
+            val host = seedStaff(uid = "host", roles = setOf(Capability.HOST))
+            client.lookup(token = host, params = "name=%20").status shouldBe HttpStatusCode.BadRequest
         }
 
     @Test
     fun `a malformed id is a 400`() =
         withApp { client ->
-            val host = seedStaff("host", setOf(Capability.HOST))
-            client.lookup(host, "ids=not-a-uuid").status shouldBe HttpStatusCode.BadRequest
+            val host = seedStaff(uid = "host", roles = setOf(Capability.HOST))
+            client.lookup(token = host, params = "ids=not-a-uuid").status shouldBe HttpStatusCode.BadRequest
         }
 
     @Test
     fun `filters by sex`() =
         withApp { client ->
-            val host = seedStaff("host", setOf(Capability.HOST))
-            client.provisionProfile("u1", "Alice", sex = "Female")
-            client.provisionProfile("u2", "Bob", sex = "Male")
+            val host = seedStaff(uid = "host", roles = setOf(Capability.HOST))
+            client.provisionProfile(uid = "u1", displayName = "Alice", sex = "Female")
+            client.provisionProfile(uid = "u2", displayName = "Bob", sex = "Male")
 
-            val results = client.searchWith(host, "sex" to "Female").body<List<UserSummaryResponse>>()
+            val results = client.searchWith(token = host, "sex" to "Female").body<List<UserSummaryResponse>>()
 
             results.map { it.displayName } shouldBe listOf("Alice")
         }
@@ -269,12 +272,12 @@ class UserSearchApiIntegrationTest {
     @Test
     fun `filters by age range`() =
         withApp { client ->
-            val host = seedStaff("host", setOf(Capability.HOST))
-            client.provisionProfile("u1", "Twenties", dateOfBirth = "2000-01-01") // ~26
-            client.provisionProfile("u2", "Teen", dateOfBirth = "2012-01-01") // ~14
-            client.provisionProfile("u3", "Older", dateOfBirth = "1985-01-01") // ~41
+            val host = seedStaff(uid = "host", roles = setOf(Capability.HOST))
+            client.provisionProfile(uid = "u1", displayName = "Twenties", dateOfBirth = "2000-01-01") // ~26
+            client.provisionProfile(uid = "u2", displayName = "Teen", dateOfBirth = "2012-01-01") // ~14
+            client.provisionProfile(uid = "u3", displayName = "Older", dateOfBirth = "1985-01-01") // ~41
 
-            val results = client.searchWith(host, "age" to "(20,30]").body<List<UserSummaryResponse>>()
+            val results = client.searchWith(token = host, "age" to "(20,30]").body<List<UserSummaryResponse>>()
 
             results.map { it.displayName } shouldBe listOf("Twenties")
         }
@@ -282,13 +285,13 @@ class UserSearchApiIntegrationTest {
     @Test
     fun `filters by NTRP rating range`() =
         withApp { client ->
-            val admin = seedStaff("admin", setOf(Capability.ADMINISTRATOR))
-            val a = client.provisionProfile("u1", "Mid")
-            val b = client.provisionProfile("u2", "High")
-            client.rate(admin, a.id, "4.0")
-            client.rate(admin, b.id, "5.5")
+            val admin = seedStaff(uid = "admin", roles = setOf(Capability.ADMINISTRATOR))
+            val a = client.provisionProfile(uid = "u1", displayName = "Mid")
+            val b = client.provisionProfile(uid = "u2", displayName = "High")
+            client.rate(adminToken = admin, userId = a.id, value = "4.0")
+            client.rate(adminToken = admin, userId = b.id, value = "5.5")
 
-            val results = client.searchWith(admin, "rating" to "[3.5,4.5)").body<List<UserSummaryResponse>>()
+            val results = client.searchWith(token = admin, "rating" to "[3.5,4.5)").body<List<UserSummaryResponse>>()
 
             results.map { it.displayName } shouldBe listOf("Mid")
         }
@@ -296,12 +299,12 @@ class UserSearchApiIntegrationTest {
     @Test
     fun `combines name and sex filters`() =
         withApp { client ->
-            val host = seedStaff("host", setOf(Capability.HOST))
-            client.provisionProfile("u1", "Alice", sex = "Female")
-            client.provisionProfile("u2", "Alicia", sex = "Male")
+            val host = seedStaff(uid = "host", roles = setOf(Capability.HOST))
+            client.provisionProfile(uid = "u1", displayName = "Alice", sex = "Female")
+            client.provisionProfile(uid = "u2", displayName = "Alicia", sex = "Male")
 
             val results =
-                client.searchWith(host, "name" to "ali", "sex" to "Female").body<List<UserSummaryResponse>>()
+                client.searchWith(token = host, "name" to "ali", "sex" to "Female").body<List<UserSummaryResponse>>()
 
             results.map { it.displayName } shouldBe listOf("Alice")
         }
@@ -309,23 +312,23 @@ class UserSearchApiIntegrationTest {
     @Test
     fun `ids cannot be combined with filters`() =
         withApp { client ->
-            val host = seedStaff("host", setOf(Capability.HOST))
+            val host = seedStaff(uid = "host", roles = setOf(Capability.HOST))
             client
-                .searchWith(host, "ids" to java.util.UUID.randomUUID().toString(), "sex" to "Male")
+                .searchWith(token = host, "ids" to java.util.UUID.randomUUID().toString(), "sex" to "Male")
                 .status shouldBe HttpStatusCode.BadRequest
         }
 
     @Test
     fun `an invalid sex value is a 400`() =
         withApp { client ->
-            val host = seedStaff("host", setOf(Capability.HOST))
-            client.searchWith(host, "sex" to "Other").status shouldBe HttpStatusCode.BadRequest
+            val host = seedStaff(uid = "host", roles = setOf(Capability.HOST))
+            client.searchWith(token = host, "sex" to "Other").status shouldBe HttpStatusCode.BadRequest
         }
 
     @Test
     fun `a malformed interval is a 400`() =
         withApp { client ->
-            val host = seedStaff("host", setOf(Capability.HOST))
-            client.searchWith(host, "rating" to "3.0,4.0").status shouldBe HttpStatusCode.BadRequest
+            val host = seedStaff(uid = "host", roles = setOf(Capability.HOST))
+            client.searchWith(token = host, "rating" to "3.0,4.0").status shouldBe HttpStatusCode.BadRequest
         }
 }

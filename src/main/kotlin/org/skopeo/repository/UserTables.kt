@@ -23,52 +23,52 @@ private const val VALUE_MAX = 255 // free-text values: name value, provider_uid,
  * DB-managed columns (created_at/updated_at/verified_at/etc.) are intentionally
  * omitted so their defaults and triggers apply untouched.
  */
-internal object UsersTable : UUIDTable("users") {
-    val firebaseUid = varchar("firebase_uid", FIREBASE_UID_MAX).nullable()
-    val photoUrl = text("photo_url").nullable()
-    val dateOfBirth = date("date_of_birth").nullable()
-    val sex = varchar("sex", SEX_MAX).nullable()
-    val city = varchar("city", CITY_MAX).nullable()
-    val country = varchar("country", COUNTRY_CODE_LEN).default("PH")
-    val kycVerified = bool("kyc_verified").default(false)
-    val isActive = bool("is_active").default(true)
+internal object UsersTable : UUIDTable(name = "users") {
+    val firebaseUid = varchar(name = "firebase_uid", length = FIREBASE_UID_MAX).nullable()
+    val photoUrl = text(name = "photo_url").nullable()
+    val dateOfBirth = date(name = "date_of_birth").nullable()
+    val sex = varchar(name = "sex", length = SEX_MAX).nullable()
+    val city = varchar(name = "city", length = CITY_MAX).nullable()
+    val country = varchar(name = "country", length = COUNTRY_CODE_LEN).default(defaultValue = "PH")
+    val kycVerified = bool(name = "kyc_verified").default(defaultValue = false)
+    val isActive = bool(name = "is_active").default(defaultValue = true)
 }
 
-internal object UserNamesTable : UUIDTable("user_names") {
-    val userId = reference("user_id", UsersTable, onDelete = ReferenceOption.CASCADE)
-    val nameType = varchar("name_type", CODE_MAX)
-    val value = varchar("value", VALUE_MAX)
-    val isActive = bool("is_active").default(true)
-    val disabledAt = datetime("disabled_at").nullable()
+internal object UserNamesTable : UUIDTable(name = "user_names") {
+    val userId = reference(name = "user_id", foreign = UsersTable, onDelete = ReferenceOption.CASCADE)
+    val nameType = varchar(name = "name_type", length = CODE_MAX)
+    val value = varchar(name = "value", length = VALUE_MAX)
+    val isActive = bool(name = "is_active").default(defaultValue = true)
+    val disabledAt = datetime(name = "disabled_at").nullable()
 }
 
-internal object UserIdentitiesTable : UUIDTable("user_identities") {
-    val userId = reference("user_id", UsersTable, onDelete = ReferenceOption.CASCADE)
-    val provider = varchar("provider", CODE_MAX)
-    val providerUid = varchar("provider_uid", VALUE_MAX)
-    val isPrimary = bool("is_primary").default(false)
+internal object UserIdentitiesTable : UUIDTable(name = "user_identities") {
+    val userId = reference(name = "user_id", foreign = UsersTable, onDelete = ReferenceOption.CASCADE)
+    val provider = varchar(name = "provider", length = CODE_MAX)
+    val providerUid = varchar(name = "provider_uid", length = VALUE_MAX)
+    val isPrimary = bool(name = "is_primary").default(defaultValue = false)
 }
 
-internal object ContactInformationTable : UUIDTable("contact_information") {
-    val userId = reference("user_id", UsersTable, onDelete = ReferenceOption.CASCADE)
-    val contactType = varchar("contact_type", CONTACT_TYPE_MAX)
-    val value = varchar("value", VALUE_MAX)
-    val isPrimary = bool("is_primary").default(false)
-    val contactSource = varchar("source", CODE_MAX)
-    val verificationStatus = varchar("verification_status", CODE_MAX).default("PENDING")
-    val verificationMethod = varchar("verification_method", CODE_MAX).nullable()
-    val verifiedAt = datetime("verified_at").nullable()
-    val verifiedBy = reference("verified_by", UsersTable, onDelete = ReferenceOption.SET_NULL).nullable()
-    val isActive = bool("is_active").default(true)
-    val disabledAt = datetime("disabled_at").nullable()
+internal object ContactInformationTable : UUIDTable(name = "contact_information") {
+    val userId = reference(name = "user_id", foreign = UsersTable, onDelete = ReferenceOption.CASCADE)
+    val contactType = varchar(name = "contact_type", length = CONTACT_TYPE_MAX)
+    val value = varchar(name = "value", length = VALUE_MAX)
+    val isPrimary = bool(name = "is_primary").default(defaultValue = false)
+    val contactSource = varchar(name = "source", length = CODE_MAX)
+    val verificationStatus = varchar(name = "verification_status", length = CODE_MAX).default(defaultValue = "PENDING")
+    val verificationMethod = varchar(name = "verification_method", length = CODE_MAX).nullable()
+    val verifiedAt = datetime(name = "verified_at").nullable()
+    val verifiedBy = reference(name = "verified_by", foreign = UsersTable, onDelete = ReferenceOption.SET_NULL).nullable()
+    val isActive = bool(name = "is_active").default(defaultValue = true)
+    val disabledAt = datetime(name = "disabled_at").nullable()
 }
 
-internal object UserCapabilitiesTable : UUIDTable("user_capabilities") {
-    val userId = reference("user_id", UsersTable, onDelete = ReferenceOption.CASCADE)
-    val capability = varchar("capability", CODE_MAX)
-    val grantedBy = reference("granted_by", UsersTable, onDelete = ReferenceOption.SET_NULL).nullable()
-    val grantedAt = datetime("granted_at").nullable()
-    val isActive = bool("is_active").default(true)
-    val revokedAt = datetime("revoked_at").nullable()
-    val revokedBy = reference("revoked_by", UsersTable, onDelete = ReferenceOption.SET_NULL).nullable()
+internal object UserCapabilitiesTable : UUIDTable(name = "user_capabilities") {
+    val userId = reference(name = "user_id", foreign = UsersTable, onDelete = ReferenceOption.CASCADE)
+    val capability = varchar(name = "capability", length = CODE_MAX)
+    val grantedBy = reference(name = "granted_by", foreign = UsersTable, onDelete = ReferenceOption.SET_NULL).nullable()
+    val grantedAt = datetime(name = "granted_at").nullable()
+    val isActive = bool(name = "is_active").default(defaultValue = true)
+    val revokedAt = datetime(name = "revoked_at").nullable()
+    val revokedBy = reference(name = "revoked_by", foreign = UsersTable, onDelete = ReferenceOption.SET_NULL).nullable()
 }

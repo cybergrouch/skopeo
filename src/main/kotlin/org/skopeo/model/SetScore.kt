@@ -31,32 +31,32 @@ data class SetScore(
     val tiebreak: TiebreakScore? = null,
 ) {
     init {
-        require(games.size == 2) { "Set must have exactly 2 teams" }
-        require(winnerTeamId in games.keys) { "Winner must be one of the teams in the set" }
-        require(loserTeamId in games.keys) { "Set loser '$loserTeamId' must be one of the teams in the set" }
-        require(loserTeamId != winnerTeamId) { "Set loser '$loserTeamId' must differ from the set winner '$winnerTeamId'" }
+        require(value = games.size == 2) { "Set must have exactly 2 teams" }
+        require(value = winnerTeamId in games.keys) { "Winner must be one of the teams in the set" }
+        require(value = loserTeamId in games.keys) { "Set loser '$loserTeamId' must be one of the teams in the set" }
+        require(value = loserTeamId != winnerTeamId) { "Set loser '$loserTeamId' must differ from the set winner '$winnerTeamId'" }
 
         val winnerGames = games[winnerTeamId] ?: 0
         val loserGames = games[loserTeamId] ?: 0
 
-        require(winnerGames >= 0 && loserGames >= 0) { "Game scores must be non-negative" }
+        require(value = winnerGames >= 0 && loserGames >= 0) { "Game scores must be non-negative" }
 
         // Validate set scores
         if (tiebreak != null) {
             // The tiebreak decides the set, so its winner must be the set winner
-            require(tiebreak.winnerTeamId == winnerTeamId) {
+            require(value = tiebreak.winnerTeamId == winnerTeamId) {
                 "Tiebreak winner '${tiebreak.winnerTeamId}' must be the set winner '$winnerTeamId'"
             }
 
             // Tiebreak set (usually 7-6 or 6-7)
-            require((winnerGames == 7 && loserGames == 6) || (winnerGames == 6 && loserGames == 7)) {
+            require(value = (winnerGames == 7 && loserGames == 6) || (winnerGames == 6 && loserGames == 7)) {
                 "Tiebreak set must be 7-6 or 6-7, got $winnerGames-$loserGames"
             }
         } else {
             // Regular set - must win by 2 games, or 6-4, 6-3, etc.
-            require(winnerGames >= 6) { "Winner must have at least 6 games in a regular set" }
-            require(winnerGames - loserGames >= 2) { "Set must be won by at least 2 games" }
-            require(winnerGames <= 7) { "Games should not exceed 7 without tiebreak" }
+            require(value = winnerGames >= 6) { "Winner must have at least 6 games in a regular set" }
+            require(value = winnerGames - loserGames >= 2) { "Set must be won by at least 2 games" }
+            require(value = winnerGames <= 7) { "Games should not exceed 7 without tiebreak" }
         }
     }
 }

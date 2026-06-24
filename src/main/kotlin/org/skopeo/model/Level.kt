@@ -28,12 +28,12 @@ data class Level(
          * Calculate the level from a rating value: round down to the nearest 0.5
          * (3.00–3.49 → 3.0, 3.50–3.99 → 3.5), clamped to the NTRP range [1.0, 7.0].
          */
-        fun fromValue(value: String): Level = calculateNtrpLevel(value.toBigDecimal())
+        fun fromValue(value: String): Level = calculateNtrpLevel(rating = value.toBigDecimal())
 
-        fun fromRating(rating: Rating): Level = fromValue(rating.value)
+        fun fromRating(rating: Rating): Level = fromValue(value = rating.value)
 
         private fun calculateNtrpLevel(rating: BigDecimal): Level {
-            val clampedRating = rating.coerceIn(BigDecimal("1.0"), BigDecimal("7.0"))
+            val clampedRating = rating.coerceIn(minimumValue = BigDecimal("1.0"), maximumValue = BigDecimal("7.0"))
 
             // Round down to nearest 0.5: floor(rating * 2) / 2.
             val levelValue =
@@ -72,7 +72,7 @@ data class Level(
     }
 
     /** Human-readable description, e.g., "NTRP 4.0 (Advanced)". */
-    fun getDescription(): String = "NTRP $value (${getNtrpSkillLevel(value.toDouble())})"
+    fun getDescription(): String = "NTRP $value (${getNtrpSkillLevel(level = value.toDouble())})"
 
     private fun getNtrpSkillLevel(level: Double): String =
         when {

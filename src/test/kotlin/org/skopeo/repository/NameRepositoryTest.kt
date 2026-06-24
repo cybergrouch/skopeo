@@ -40,54 +40,55 @@ class NameRepositoryTest {
 
     private fun newUser(uid: String): UUID =
         users.provision(
-            ProvisionUserCommand(
-                firebaseUid = uid,
-                identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                names = emptyList(),
-            ),
+            command =
+                ProvisionUserCommand(
+                    firebaseUid = uid,
+                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                    names = emptyList(),
+                ),
         ).id
 
     @Test
     fun `create stores an active name`() {
-        val userId = newUser("u1")
+        val userId = newUser(uid = "u1")
 
         val name = names.create(userId = userId, type = NameType.NICKNAME, value = "Johnny")
 
         name.type shouldBe NameType.NICKNAME
         name.isActive.shouldBeTrue()
-        names.listByUser(userId).single().id shouldBe name.id
-        names.findById(name.id).shouldNotBeNull()
+        names.listByUser(userId = userId).single().id shouldBe name.id
+        names.findById(id = name.id).shouldNotBeNull()
     }
 
     @Test
     fun `findById returns null when absent`() {
-        names.findById(UUID.randomUUID()).shouldBeNull()
+        names.findById(id = UUID.randomUUID()).shouldBeNull()
     }
 
     @Test
     fun `adding a DISPLAY name disables the previous active display`() {
-        val userId = newUser("u2")
+        val userId = newUser(uid = "u2")
         val first = names.create(userId = userId, type = NameType.DISPLAY, value = "Juan")
 
         val second = names.create(userId = userId, type = NameType.DISPLAY, value = "Johnny")
 
-        names.findById(first.id)!!.isActive.shouldBeFalse()
+        names.findById(id = first.id)!!.isActive.shouldBeFalse()
         second.isActive.shouldBeTrue()
-        names.listByUser(userId).count { it.type == NameType.DISPLAY && it.isActive } shouldBe 1
+        names.listByUser(userId = userId).count { it.type == NameType.DISPLAY && it.isActive } shouldBe 1
     }
 
     @Test
     fun `multiple names of the same non-display type are allowed`() {
-        val userId = newUser("u3")
+        val userId = newUser(uid = "u3")
         names.create(userId = userId, type = NameType.NICKNAME, value = "JB")
         names.create(userId = userId, type = NameType.NICKNAME, value = "Boy")
 
-        names.listByUser(userId).size shouldBe 2
+        names.listByUser(userId = userId).size shouldBe 2
     }
 
     @Test
     fun `setActive disables then re-enables a name`() {
-        val userId = newUser("u4")
+        val userId = newUser(uid = "u4")
         val name = names.create(userId = userId, type = NameType.NICKNAME, value = "JB")
 
         val disabled = names.setActive(id = name.id, active = false, disabledAt = LocalDateTime.now())
@@ -105,7 +106,7 @@ class NameRepositoryTest {
 
     @Test
     fun `re-enabling a former display name collides with the current one`() {
-        val userId = newUser("u5")
+        val userId = newUser(uid = "u5")
         val first = names.create(userId = userId, type = NameType.DISPLAY, value = "Juan")
         names.create(userId = userId, type = NameType.DISPLAY, value = "Johnny") // disables `first`
 

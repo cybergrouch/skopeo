@@ -26,15 +26,17 @@ data class TiebreakScore(
     val loserTeamId: String = points.minBy { it.value }.key,
 ) {
     init {
-        require(points.size == 2) { "Tiebreak must have exactly 2 teams" }
-        require(winnerTeamId in points.keys) { "Tiebreak winner '$winnerTeamId' must be one of the teams in the tiebreak" }
-        require(loserTeamId in points.keys) { "Tiebreak loser '$loserTeamId' must be one of the teams in the tiebreak" }
-        require(loserTeamId != winnerTeamId) { "Tiebreak loser '$loserTeamId' must differ from the tiebreak winner '$winnerTeamId'" }
+        require(value = points.size == 2) { "Tiebreak must have exactly 2 teams" }
+        require(value = winnerTeamId in points.keys) { "Tiebreak winner '$winnerTeamId' must be one of the teams in the tiebreak" }
+        require(value = loserTeamId in points.keys) { "Tiebreak loser '$loserTeamId' must be one of the teams in the tiebreak" }
+        require(value = loserTeamId != winnerTeamId) {
+            "Tiebreak loser '$loserTeamId' must differ from the tiebreak winner '$winnerTeamId'"
+        }
 
         val winnerPoints = points[winnerTeamId] ?: 0
         val loserPoints = points[loserTeamId] ?: 0
 
-        require(winnerPoints >= 7) { "Tiebreak winner must have at least 7 points" }
-        require(winnerPoints - loserPoints >= 2) { "Tiebreak must be won by at least 2 points" }
+        require(value = winnerPoints >= 7) { "Tiebreak winner must have at least 7 points" }
+        require(value = winnerPoints - loserPoints >= 2) { "Tiebreak must be won by at least 2 points" }
     }
 }

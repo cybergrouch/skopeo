@@ -44,16 +44,17 @@ class ContactRepositoryTest {
 
     private fun newUser(uid: String): UUID =
         users.provision(
-            ProvisionUserCommand(
-                firebaseUid = uid,
-                identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                names = listOf(UserName(type = NameType.FIRST, value = "Test")),
-            ),
+            command =
+                ProvisionUserCommand(
+                    firebaseUid = uid,
+                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                    names = listOf(UserName(type = NameType.FIRST, value = "Test")),
+                ),
         ).id
 
     @Test
     fun `create stores a MANUAL PENDING contact`() {
-        val userId = newUser("u1")
+        val userId = newUser(uid = "u1")
 
         val contact = contacts.create(userId = userId, type = ContactType.PHONE, value = "+639170000000", isPrimary = true)
 
@@ -61,18 +62,18 @@ class ContactRepositoryTest {
         contact.status shouldBe VerificationStatus.PENDING
         contact.isActive.shouldBeTrue()
         contact.verifiedAt.shouldBeNull()
-        contacts.listByUser(userId).single().id shouldBe contact.id
-        contacts.findById(contact.id).shouldNotBeNull()
+        contacts.listByUser(userId = userId).single().id shouldBe contact.id
+        contacts.findById(id = contact.id).shouldNotBeNull()
     }
 
     @Test
     fun `findById returns null when absent`() {
-        contacts.findById(UUID.randomUUID()).shouldBeNull()
+        contacts.findById(id = UUID.randomUUID()).shouldBeNull()
     }
 
     @Test
     fun `setVerification stamps then clears the audit fields`() {
-        val userId = newUser("u2")
+        val userId = newUser(uid = "u2")
         val contact = contacts.create(userId = userId, type = ContactType.EMAIL, value = "u2@example.com", isPrimary = true)
 
         val verified =
@@ -106,7 +107,7 @@ class ContactRepositoryTest {
 
     @Test
     fun `setActive disables then re-enables a contact`() {
-        val userId = newUser("u3")
+        val userId = newUser(uid = "u3")
         val contact = contacts.create(userId = userId, type = ContactType.EMAIL, value = "u3@example.com", isPrimary = true)
 
         val disabled = contacts.setActive(id = contact.id, active = false, disabledAt = LocalDateTime.now())
@@ -127,7 +128,7 @@ class ContactRepositoryTest {
 
     @Test
     fun `only one active contact per type is allowed, but disabled history accumulates`() {
-        val userId = newUser("u5")
+        val userId = newUser(uid = "u5")
         val first = contacts.create(userId = userId, type = ContactType.EMAIL, value = "first@example.com", isPrimary = true)
 
         // A second active email collides with the first.
@@ -138,12 +139,12 @@ class ContactRepositoryTest {
         // Disable the first, and a new active email is accepted; both rows remain as history.
         contacts.setActive(id = first.id, active = false, disabledAt = LocalDateTime.now())
         contacts.create(userId = userId, type = ContactType.EMAIL, value = "second@example.com", isPrimary = true)
-        contacts.listByUser(userId).size shouldBe 2
+        contacts.listByUser(userId = userId).size shouldBe 2
     }
 
     @Test
     fun `a verified value is globally unique`() {
-        val userA = newUser("ua")
+        val userA = newUser(uid = "ua")
         val first = contacts.create(userId = userA, type = ContactType.EMAIL, value = "shared@example.com", isPrimary = true)
         contacts.setVerification(
             id = first.id,
@@ -153,7 +154,7 @@ class ContactRepositoryTest {
             verifiedAt = LocalDateTime.now(),
         )
 
-        val userB = newUser("ub")
+        val userB = newUser(uid = "ub")
         val second = contacts.create(userId = userB, type = ContactType.EMAIL, value = "shared@example.com", isPrimary = true)
 
         shouldThrow<ExposedSQLException> {

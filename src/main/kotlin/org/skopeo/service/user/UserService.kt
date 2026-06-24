@@ -37,23 +37,24 @@ class UserService(
         age: String?,
         rating: String?,
     ): List<User> {
-        requireStaff(token)
+        requireStaff(token = token)
         val nameTerm = name?.let { it.trim().ifEmpty { null } }
-        val sexValue = validatedSex(sex)
-        val ageRange = age?.let { NumericRange.parse(it) }
-        val ratingRange = rating?.let { NumericRange.parse(it) }
-        require(nameTerm != null || sexValue != null || ageRange != null || ratingRange != null) {
+        val sexValue = validatedSex(value = sex)
+        val ageRange = age?.let { NumericRange.parse(raw = it) }
+        val ratingRange = rating?.let { NumericRange.parse(raw = it) }
+        require(value = nameTerm != null || sexValue != null || ageRange != null || ratingRange != null) {
             "at least one filter (name, sex, age, rating) is required"
         }
-        val dob = ageRange?.let { ageRangeToDob(it, LocalDate.now()) }
+        val dob = ageRange?.let { ageRangeToDob(range = it, today = LocalDate.now()) }
         return repository.search(
-            UserSearchQuery(
-                name = nameTerm,
-                sex = sexValue,
-                dobMin = dob?.min,
-                dobMax = dob?.max,
-                rating = ratingRange,
-            ),
+            query =
+                UserSearchQuery(
+                    name = nameTerm,
+                    sex = sexValue,
+                    dobMin = dob?.min,
+                    dobMax = dob?.max,
+                    rating = ratingRange,
+                ),
         )
     }
 
@@ -66,9 +67,9 @@ class UserService(
         token: VerifiedFirebaseToken,
         ids: List<UUID>,
     ): List<User> {
-        requireStaff(token)
-        require(ids.isNotEmpty()) { "ids must not be empty" }
-        return repository.findAllByIds(ids)
+        requireStaff(token = token)
+        require(value = ids.isNotEmpty()) { "ids must not be empty" }
+        return repository.findAllByIds(ids = ids)
     }
 
     /** Outcome of provisioning: [created] distinguishes a fresh user (201) from an idempotent hit (200). */
@@ -85,19 +86,19 @@ class UserService(
         token: VerifiedFirebaseToken,
         request: CreateUserRequest,
     ): Provisioned {
-        repository.findByFirebaseUid(token.uid)?.let { return Provisioned(user = it, created = false) }
+        repository.findByFirebaseUid(firebaseUid = token.uid)?.let { return Provisioned(user = it, created = false) }
         val command = buildProvisionCommand(token = token, request = request)
-        return Provisioned(user = repository.provision(command), created = true)
+        return Provisioned(user = repository.provision(command = command), created = true)
     }
 
     /** The caller's own profile, or null if they have not been provisioned yet. */
-    fun currentUser(token: VerifiedFirebaseToken): User? = repository.findByFirebaseUid(token.uid)
+    fun currentUser(token: VerifiedFirebaseToken): User? = repository.findByFirebaseUid(firebaseUid = token.uid)
 
     fun getById(
         token: VerifiedFirebaseToken,
         id: UUID,
     ): User {
-        val target = repository.findById(id) ?: throw UserNotFoundException(id)
+        val target = repository.findById(id = id) ?: throw UserNotFoundException(id = id)
         requireAccess(token = token, target = target)
         return target
     }
@@ -107,9 +108,9 @@ class UserService(
         id: UUID,
         patch: ProfilePatch,
     ): User {
-        val target = repository.findById(id) ?: throw UserNotFoundException(id)
+        val target = repository.findById(id = id) ?: throw UserNotFoundException(id = id)
         requireAccess(token = token, target = target)
-        return repository.updateProfile(id = id, patch = patch) ?: throw UserNotFoundException(id)
+        return repository.updateProfile(id = id, patch = patch) ?: throw UserNotFoundException(id = id)
     }
 
     fun replaceProfile(
@@ -117,23 +118,23 @@ class UserService(
         id: UUID,
         patch: ProfilePatch,
     ): User {
-        val target = repository.findById(id) ?: throw UserNotFoundException(id)
+        val target = repository.findById(id = id) ?: throw UserNotFoundException(id = id)
         requireAccess(token = token, target = target)
-        return repository.replaceProfile(id = id, patch = patch) ?: throw UserNotFoundException(id)
+        return repository.replaceProfile(id = id, patch = patch) ?: throw UserNotFoundException(id = id)
     }
 
     fun deactivate(
         token: VerifiedFirebaseToken,
         id: UUID,
     ) {
-        val target = repository.findById(id) ?: throw UserNotFoundException(id)
+        val target = repository.findById(id = id) ?: throw UserNotFoundException(id = id)
         requireAccess(token = token, target = target)
-        repository.deactivate(id)
+        repository.deactivate(id = id)
     }
 
     /** Allow only HOST or ADMINISTRATOR callers. */
     private fun requireStaff(token: VerifiedFirebaseToken) {
-        val caller = repository.findByFirebaseUid(token.uid)
+        val caller = repository.findByFirebaseUid(firebaseUid = token.uid)
         if (caller == null || caller.capabilities.none { it in STAFF_ROLES }) throw ForbiddenException()
     }
 
@@ -142,9 +143,9 @@ class UserService(
         token: VerifiedFirebaseToken,
         target: User,
     ) {
-        val caller = repository.findByFirebaseUid(token.uid)
+        val caller = repository.findByFirebaseUid(firebaseUid = token.uid)
         val isSelf = caller?.id == target.id
-        val isAdmin = caller?.capabilities?.contains(Capability.ADMINISTRATOR) == true
+        val isAdmin = caller?.capabilities?.contains(element = Capability.ADMINISTRATOR) == true
         if (!isSelf && !isAdmin) throw ForbiddenException()
     }
 }

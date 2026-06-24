@@ -57,7 +57,7 @@ class ContactRepository {
                     it[contactSource] = ContactSource.MANUAL.name
                     it[verificationStatus] = VerificationStatus.PENDING.name
                 }
-            loadById(id.value)
+            loadById(id = id.value)
         }
 
     /** Enable or disable a contact (the append-only alternative to editing). */
@@ -68,11 +68,11 @@ class ContactRepository {
     ): Contact? =
         transaction {
             val updated =
-                ContactInformationTable.update({ ContactInformationTable.id eq id }) {
+                ContactInformationTable.update(where = { ContactInformationTable.id eq id }) {
                     it[isActive] = active
                     it[ContactInformationTable.disabledAt] = disabledAt
                 }
-            if (updated == 0) null else loadById(id)
+            if (updated == 0) null else loadById(id = id)
         }
 
     /**
@@ -92,13 +92,13 @@ class ContactRepository {
             val whenVerified = if (verified) verifiedAt else null
             val whoVerified = if (verified) verifiedBy else null
             val updated =
-                ContactInformationTable.update({ ContactInformationTable.id eq id }) {
+                ContactInformationTable.update(where = { ContactInformationTable.id eq id }) {
                     it[verificationStatus] = status.name
                     it[verificationMethod] = methodName
                     it[ContactInformationTable.verifiedAt] = whenVerified
                     it[ContactInformationTable.verifiedBy] = whoVerified
                 }
-            if (updated == 0) null else loadById(id)
+            if (updated == 0) null else loadById(id = id)
         }
 
     private fun loadById(id: UUID): Contact =
@@ -114,11 +114,11 @@ internal fun ResultRow.toContact(): Contact =
     Contact(
         id = this[ContactInformationTable.id].value,
         userId = this[ContactInformationTable.userId].value,
-        type = ContactType.valueOf(this[ContactInformationTable.contactType]),
+        type = ContactType.valueOf(value = this[ContactInformationTable.contactType]),
         value = this[ContactInformationTable.value],
-        source = ContactSource.valueOf(this[ContactInformationTable.contactSource]),
-        status = VerificationStatus.valueOf(this[ContactInformationTable.verificationStatus]),
-        method = this[ContactInformationTable.verificationMethod]?.let(VerificationMethod::valueOf),
+        source = ContactSource.valueOf(value = this[ContactInformationTable.contactSource]),
+        status = VerificationStatus.valueOf(value = this[ContactInformationTable.verificationStatus]),
+        method = this[ContactInformationTable.verificationMethod]?.let(block = VerificationMethod::valueOf),
         isPrimary = this[ContactInformationTable.isPrimary],
         isActive = this[ContactInformationTable.isActive],
         verifiedAt = this[ContactInformationTable.verifiedAt],

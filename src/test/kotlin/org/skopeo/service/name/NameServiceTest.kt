@@ -63,97 +63,97 @@ class NameServiceTest {
     private fun displayNameOf(
         uid: String,
         userId: UUID,
-    ) = service.list(token = token(uid), userId = userId).single { it.type == NameType.DISPLAY && it.isActive }
+    ) = service.list(token = token(uid = uid), userId = userId).single { it.type == NameType.DISPLAY && it.isActive }
 
     @Test
     fun `multiple names of the same type are allowed`() {
-        val owner = provisionUser("owner")
-        service.create(token = token("owner"), userId = owner.id, request = nickname("JB"))
-        service.create(token = token("owner"), userId = owner.id, request = nickname("Boy"))
+        val owner = provisionUser(uid = "owner")
+        service.create(token = token(uid = "owner"), userId = owner.id, request = nickname(value = "JB"))
+        service.create(token = token(uid = "owner"), userId = owner.id, request = nickname(value = "Boy"))
 
-        service.list(token = token("owner"), userId = owner.id).count { it.type == NameType.NICKNAME } shouldBe 2
+        service.list(token = token(uid = "owner"), userId = owner.id).count { it.type == NameType.NICKNAME } shouldBe 2
     }
 
     @Test
     fun `posting a new display name replaces the previous one`() {
-        val owner = provisionUser("owner")
-        val original = displayNameOf("owner", owner.id)
+        val owner = provisionUser(uid = "owner")
+        val original = displayNameOf(uid = "owner", userId = owner.id)
 
         val replacement =
             service.create(
-                token = token("owner"),
+                token = token(uid = "owner"),
                 userId = owner.id,
                 request = NameCreateRequest(type = "DISPLAY", value = "Johnny"),
             )
 
         replacement.value shouldBe "Johnny"
         // exactly one active display, and the old one is retained as disabled history
-        displayNameOf("owner", owner.id).id shouldBe replacement.id
-        service.get(token = token("owner"), userId = owner.id, nameId = original.id).isActive.shouldBeFalse()
+        displayNameOf(uid = "owner", userId = owner.id).id shouldBe replacement.id
+        service.get(token = token(uid = "owner"), userId = owner.id, nameId = original.id).isActive.shouldBeFalse()
     }
 
     @Test
     fun `the display name cannot be disabled`() {
-        val owner = provisionUser("owner")
-        val display = displayNameOf("owner", owner.id)
+        val owner = provisionUser(uid = "owner")
+        val display = displayNameOf(uid = "owner", userId = owner.id)
 
         shouldThrow<IllegalArgumentException> {
-            service.setActive(token = token("owner"), userId = owner.id, nameId = display.id, active = false)
+            service.setActive(token = token(uid = "owner"), userId = owner.id, nameId = display.id, active = false)
         }
     }
 
     @Test
     fun `re-enabling a former display name conflicts with the current one`() {
-        val owner = provisionUser("owner")
-        val original = displayNameOf("owner", owner.id)
-        service.create(token = token("owner"), userId = owner.id, request = NameCreateRequest(type = "DISPLAY", value = "Johnny"))
+        val owner = provisionUser(uid = "owner")
+        val original = displayNameOf(uid = "owner", userId = owner.id)
+        service.create(token = token(uid = "owner"), userId = owner.id, request = NameCreateRequest(type = "DISPLAY", value = "Johnny"))
 
         // `original` is now disabled history; re-enabling it collides with the active display.
         shouldThrow<NameConflictException> {
-            service.setActive(token = token("owner"), userId = owner.id, nameId = original.id, active = true)
+            service.setActive(token = token(uid = "owner"), userId = owner.id, nameId = original.id, active = true)
         }
     }
 
     @Test
     fun `owner can disable a non-display name`() {
-        val owner = provisionUser("owner")
-        val name = service.create(token = token("owner"), userId = owner.id, request = nickname("JB"))
+        val owner = provisionUser(uid = "owner")
+        val name = service.create(token = token(uid = "owner"), userId = owner.id, request = nickname(value = "JB"))
 
-        service.setActive(token = token("owner"), userId = owner.id, nameId = name.id, active = false).isActive.shouldBeFalse()
+        service.setActive(token = token(uid = "owner"), userId = owner.id, nameId = name.id, active = false).isActive.shouldBeFalse()
     }
 
     @Test
     fun `access is restricted to the owner or an administrator`() {
-        val owner = provisionUser("owner")
-        provisionUser("intruder")
-        provisionUser("root", capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
-        val name = service.create(token = token("owner"), userId = owner.id, request = nickname("JB"))
+        val owner = provisionUser(uid = "owner")
+        provisionUser(uid = "intruder")
+        provisionUser(uid = "root", capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val name = service.create(token = token(uid = "owner"), userId = owner.id, request = nickname(value = "JB"))
 
-        shouldThrow<ForbiddenException> { service.list(token = token("intruder"), userId = owner.id) }
-        shouldThrow<ForbiddenException> { service.list(token = token("ghost"), userId = owner.id) }
-        service.get(token = token("root"), userId = owner.id, nameId = name.id).id shouldBe name.id
+        shouldThrow<ForbiddenException> { service.list(token = token(uid = "intruder"), userId = owner.id) }
+        shouldThrow<ForbiddenException> { service.list(token = token(uid = "ghost"), userId = owner.id) }
+        service.get(token = token(uid = "root"), userId = owner.id, nameId = name.id).id shouldBe name.id
     }
 
     @Test
     fun `unknown or mismatched names are not found`() {
-        val owner = provisionUser("owner")
-        val other = provisionUser("other")
-        val name = service.create(token = token("other"), userId = other.id, request = nickname("JB"))
+        val owner = provisionUser(uid = "owner")
+        val other = provisionUser(uid = "other")
+        val name = service.create(token = token(uid = "other"), userId = other.id, request = nickname(value = "JB"))
 
         shouldThrow<NameNotFoundException> {
-            service.get(token = token("owner"), userId = owner.id, nameId = UUID.randomUUID())
+            service.get(token = token(uid = "owner"), userId = owner.id, nameId = UUID.randomUUID())
         }
         shouldThrow<NameNotFoundException> {
-            service.get(token = token("owner"), userId = owner.id, nameId = name.id)
+            service.get(token = token(uid = "owner"), userId = owner.id, nameId = name.id)
         }
     }
 
     @Test
     fun `invalid name type is rejected`() {
-        val owner = provisionUser("owner")
+        val owner = provisionUser(uid = "owner")
 
         shouldThrow<IllegalArgumentException> {
-            service.create(token = token("owner"), userId = owner.id, request = NameCreateRequest(type = "ALIAS", value = "x"))
+            service.create(token = token(uid = "owner"), userId = owner.id, request = NameCreateRequest(type = "ALIAS", value = "x"))
         }
     }
 }

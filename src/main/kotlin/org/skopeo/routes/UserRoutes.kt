@@ -34,11 +34,11 @@ import java.util.UUID
 fun Application.configureUserRoutes(service: UserService = UserService()) {
     routing {
         authenticate(FIREBASE_AUTH) {
-            route("/api/v1/users") {
-                searchUsers(service)
-                createUser(service)
-                currentUser(service)
-                userById(service)
+            route(path = "/api/v1/users") {
+                searchUsers(service = service)
+                createUser(service = service)
+                currentUser(service = service)
+                userById(service = service)
             }
         }
     }
@@ -54,10 +54,10 @@ private fun Route.searchUsers(service: UserService) {
             val results =
                 if (ids != null) {
                     // Id resolution is its own exclusive mode — it can't be combined with filters.
-                    require(FILTER_PARAMS.none { params[it] != null }) {
+                    require(value = FILTER_PARAMS.none { params[it] != null }) {
                         "'ids' cannot be combined with other filters"
                     }
-                    service.findByIds(token = verifiedToken(), ids = parseIds(ids))
+                    service.findByIds(token = verifiedToken(), ids = parseIds(raw = ids))
                 } else {
                     service.search(
                         token = verifiedToken(),
@@ -98,9 +98,9 @@ private fun Route.createUser(service: UserService) {
 }
 
 private fun Route.currentUser(service: UserService) {
-    get("/me") {
+    get(path = "/me") {
         respondMappingErrors {
-            val user = service.currentUser(verifiedToken())
+            val user = service.currentUser(token = verifiedToken())
             if (user == null) {
                 call.respond(
                     status = HttpStatusCode.NotFound,
@@ -114,29 +114,29 @@ private fun Route.currentUser(service: UserService) {
 }
 
 private fun Route.userById(service: UserService) {
-    get("/{id}") {
+    get(path = "/{id}") {
         respondMappingErrors {
-            val user = service.getById(token = verifiedToken(), id = uuidParam("id"))
+            val user = service.getById(token = verifiedToken(), id = uuidParam(name = "id"))
             call.respond(status = HttpStatusCode.OK, message = user.toResponse())
         }
     }
-    patch("/{id}") {
+    patch(path = "/{id}") {
         respondMappingErrors {
             val patch = call.receive<ProfileRequest>().toProfilePatch()
-            val user = service.patchProfile(token = verifiedToken(), id = uuidParam("id"), patch = patch)
+            val user = service.patchProfile(token = verifiedToken(), id = uuidParam(name = "id"), patch = patch)
             call.respond(status = HttpStatusCode.OK, message = user.toResponse())
         }
     }
-    put("/{id}") {
+    put(path = "/{id}") {
         respondMappingErrors {
             val patch = call.receive<ProfileRequest>().toProfilePatch()
-            val user = service.replaceProfile(token = verifiedToken(), id = uuidParam("id"), patch = patch)
+            val user = service.replaceProfile(token = verifiedToken(), id = uuidParam(name = "id"), patch = patch)
             call.respond(status = HttpStatusCode.OK, message = user.toResponse())
         }
     }
-    delete("/{id}") {
+    delete(path = "/{id}") {
         respondMappingErrors {
-            service.deactivate(token = verifiedToken(), id = uuidParam("id"))
+            service.deactivate(token = verifiedToken(), id = uuidParam(name = "id"))
             call.respond(status = HttpStatusCode.NoContent, message = "")
         }
     }

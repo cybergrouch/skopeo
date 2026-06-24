@@ -33,26 +33,26 @@ object DatabaseConfig {
         logger.info { "Initializing database configuration..." }
 
         // Read database configuration from application.yaml
-        val dbUrl = application.environment.config.property("database.url").getString()
-        val dbDriver = application.environment.config.property("database.driver").getString()
-        val dbUser = application.environment.config.property("database.user").getString()
-        val dbPassword = application.environment.config.property("database.password").getString()
+        val dbUrl = application.environment.config.property(path = "database.url").getString()
+        val dbDriver = application.environment.config.property(path = "database.driver").getString()
+        val dbUser = application.environment.config.property(path = "database.user").getString()
+        val dbPassword = application.environment.config.property(path = "database.password").getString()
 
         // Connection pool configuration
         val poolMaxSize =
-            application.environment.config.propertyOrNull("database.pool.maximumPoolSize")
+            application.environment.config.propertyOrNull(path = "database.pool.maximumPoolSize")
                 ?.getString()?.toInt() ?: 10
         val poolMinIdle =
-            application.environment.config.propertyOrNull("database.pool.minimumIdle")
+            application.environment.config.propertyOrNull(path = "database.pool.minimumIdle")
                 ?.getString()?.toInt() ?: 2
         val connectionTimeout =
-            application.environment.config.propertyOrNull("database.pool.connectionTimeout")
+            application.environment.config.propertyOrNull(path = "database.pool.connectionTimeout")
                 ?.getString()?.toLong() ?: 30000
         val idleTimeout =
-            application.environment.config.propertyOrNull("database.pool.idleTimeout")
+            application.environment.config.propertyOrNull(path = "database.pool.idleTimeout")
                 ?.getString()?.toLong() ?: 600000
         val maxLifetime =
-            application.environment.config.propertyOrNull("database.pool.maxLifetime")
+            application.environment.config.propertyOrNull(path = "database.pool.maxLifetime")
                 ?.getString()?.toLong() ?: 1800000
 
         logger.info { "Database URL: $dbUrl" }
@@ -74,10 +74,10 @@ object DatabaseConfig {
             )
 
         // Run Flyway migrations
-        runMigrations(dataSource!!)
+        runMigrations(dataSource = dataSource!!)
 
         // Connect Exposed ORM
-        Database.connect(dataSource!!)
+        Database.connect(datasource = dataSource!!)
 
         logger.info { "Database initialization complete" }
     }
@@ -142,7 +142,7 @@ object DatabaseConfig {
             val migrationsApplied = flyway.migrate()
             logger.info { "Flyway migrations complete. ${migrationsApplied.migrationsExecuted} migrations applied." }
         } catch (e: Exception) {
-            logger.error(e) { "Flyway migration failed" }
+            logger.error(t = e) { "Flyway migration failed" }
             throw e
         }
     }

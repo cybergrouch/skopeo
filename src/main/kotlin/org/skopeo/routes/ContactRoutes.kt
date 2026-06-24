@@ -30,11 +30,11 @@ import org.skopeo.service.contact.ContactService
 fun Application.configureContactRoutes(service: ContactService = ContactService()) {
     routing {
         authenticate(FIREBASE_AUTH) {
-            route("/api/v1/users/{userId}/contacts") {
-                listAndCreate(service)
-                byId(service)
-                state(service)
-                verification(service)
+            route(path = "/api/v1/users/{userId}/contacts") {
+                listAndCreate(service = service)
+                byId(service = service)
+                state(service = service)
+                verification(service = service)
             }
         }
     }
@@ -43,37 +43,38 @@ fun Application.configureContactRoutes(service: ContactService = ContactService(
 private fun Route.listAndCreate(service: ContactService) {
     get {
         respondMappingErrors {
-            val list = service.list(token = verifiedToken(), userId = uuidParam("userId"))
+            val list = service.list(token = verifiedToken(), userId = uuidParam(name = "userId"))
             call.respond(status = HttpStatusCode.OK, message = list.map { it.toResponse() })
         }
     }
     post {
         respondMappingErrors {
             val request = call.receive<ContactCreateRequest>()
-            val contact = service.create(token = verifiedToken(), userId = uuidParam("userId"), request = request)
+            val contact = service.create(token = verifiedToken(), userId = uuidParam(name = "userId"), request = request)
             call.respond(status = HttpStatusCode.Created, message = contact.toResponse())
         }
     }
 }
 
 private fun Route.byId(service: ContactService) {
-    get("/{id}") {
+    get(path = "/{id}") {
         respondMappingErrors {
-            val contact = service.get(token = verifiedToken(), userId = uuidParam("userId"), contactId = uuidParam("id"))
+            val contact =
+                service.get(token = verifiedToken(), userId = uuidParam(name = "userId"), contactId = uuidParam(name = "id"))
             call.respond(status = HttpStatusCode.OK, message = contact.toResponse())
         }
     }
 }
 
 private fun Route.state(service: ContactService) {
-    put("/{id}/state") {
+    put(path = "/{id}/state") {
         respondMappingErrors {
             val request = call.receive<ContactStateRequest>()
             val contact =
                 service.setActive(
                     token = verifiedToken(),
-                    userId = uuidParam("userId"),
-                    contactId = uuidParam("id"),
+                    userId = uuidParam(name = "userId"),
+                    contactId = uuidParam(name = "id"),
                     active = request.isActive,
                 )
             call.respond(status = HttpStatusCode.OK, message = contact.toResponse())
@@ -82,14 +83,14 @@ private fun Route.state(service: ContactService) {
 }
 
 private fun Route.verification(service: ContactService) {
-    put("/{id}/verification") {
+    put(path = "/{id}/verification") {
         respondMappingErrors {
             val request = call.receive<VerificationRequest>()
             val contact =
                 service.setVerification(
                     token = verifiedToken(),
-                    userId = uuidParam("userId"),
-                    contactId = uuidParam("id"),
+                    userId = uuidParam(name = "userId"),
+                    contactId = uuidParam(name = "id"),
                     request = request,
                 )
             call.respond(status = HttpStatusCode.OK, message = contact.toResponse())

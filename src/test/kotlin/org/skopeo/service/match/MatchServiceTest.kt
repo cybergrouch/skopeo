@@ -59,14 +59,22 @@ class MatchServiceTest {
     ): User {
         val user =
             users.provision(
-                ProvisionUserCommand(
-                    firebaseUid = uid,
-                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(UserName(type = NameType.DISPLAY, value = uid)),
-                    capabilities = roles,
-                ),
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = uid,
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                        names = listOf(UserName(type = NameType.DISPLAY, value = uid)),
+                        capabilities = roles,
+                    ),
             )
-        if (rated) ratings.setRating(user.id, BigDecimal("4.0"), "4.0", BigDecimal("0.50"))
+        if (rated) {
+            ratings.setRating(
+                userId = user.id,
+                rating = BigDecimal("4.0"),
+                level = "4.0",
+                confidence = BigDecimal("0.50"),
+            )
+        }
         return user
     }
 
@@ -86,16 +94,20 @@ class MatchServiceTest {
 
     private fun straightSets() =
         MatchResultRequest(
-            sets = listOf(SetScoreRequest(6, 4), SetScoreRequest(6, 3)),
+            sets =
+                listOf(
+                    SetScoreRequest(team1Games = 6, team2Games = 4),
+                    SetScoreRequest(team1Games = 6, team2Games = 3),
+                ),
         )
 
     @Test
     fun `a host can create a fixture between rated players`() {
-        provisionUser("host", roles = setOf(Capability.PLAYER, Capability.HOST))
-        val p1 = provisionUser("p1", rated = true)
-        val p2 = provisionUser("p2", rated = true)
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
 
-        val match = service.createFixture(token("host"), fixtureRequest(p1.id, p2.id))
+        val match = service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id))
 
         match.status shouldBe MatchStatus.SCHEDULED
         match.team1.userIds shouldBe listOf(p1.id)
@@ -103,37 +115,46 @@ class MatchServiceTest {
 
     @Test
     fun `non-staff cannot create a fixture`() {
-        val p1 = provisionUser("p1", rated = true)
-        val p2 = provisionUser("p2", rated = true)
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
 
-        shouldThrow<ForbiddenException> { service.createFixture(token("p1"), fixtureRequest(p1.id, p2.id)) }
-        shouldThrow<ForbiddenException> { service.createFixture(token("ghost"), fixtureRequest(p1.id, p2.id)) }
+        shouldThrow<ForbiddenException> {
+            service.createFixture(token = token(uid = "p1"), request = fixtureRequest(p1 = p1.id, p2 = p2.id))
+        }
+        shouldThrow<ForbiddenException> {
+            service.createFixture(token = token(uid = "ghost"), request = fixtureRequest(p1 = p1.id, p2 = p2.id))
+        }
     }
 
     @Test
     fun `a fixture rejects an unrated participant and bad composition`() {
-        provisionUser("host", roles = setOf(Capability.PLAYER, Capability.HOST))
-        val rated = provisionUser("p1", rated = true)
-        val unrated = provisionUser("p2", rated = false)
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val rated = provisionUser(uid = "p1", rated = true)
+        val unrated = provisionUser(uid = "p2", rated = false)
 
-        shouldThrow<IllegalArgumentException> { service.createFixture(token("host"), fixtureRequest(rated.id, unrated.id)) }
+        shouldThrow<IllegalArgumentException> {
+            service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = rated.id, p2 = unrated.id))
+        }
         // singles needs exactly one per side
         shouldThrow<IllegalArgumentException> {
             service.createFixture(
-                token("host"),
-                fixtureRequest(rated.id, rated.id).copy(team1 = listOf(rated.id.toString(), rated.id.toString())),
+                token = token(uid = "host"),
+                request =
+                    fixtureRequest(p1 = rated.id, p2 = rated.id).copy(
+                        team1 = listOf(rated.id.toString(), rated.id.toString()),
+                    ),
             )
         }
     }
 
     @Test
     fun `uploading results derives the winner and completes the match`() {
-        provisionUser("host", roles = setOf(Capability.PLAYER, Capability.HOST))
-        val p1 = provisionUser("p1", rated = true)
-        val p2 = provisionUser("p2", rated = true)
-        val match = service.createFixture(token("host"), fixtureRequest(p1.id, p2.id))
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val match = service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id))
 
-        val completed = service.uploadResult(token("host"), match.id, straightSets())
+        val completed = service.uploadResult(token = token(uid = "host"), matchId = match.id, request = straightSets())
 
         completed.status shouldBe MatchStatus.COMPLETED
         completed.winnerTeamId shouldBe match.team1.teamId // won both sets
@@ -141,80 +162,101 @@ class MatchServiceTest {
 
     @Test
     fun `uploading results twice or to a disabled match is a conflict`() {
-        provisionUser("host", roles = setOf(Capability.PLAYER, Capability.HOST))
-        val p1 = provisionUser("p1", rated = true)
-        val p2 = provisionUser("p2", rated = true)
-        val match = service.createFixture(token("host"), fixtureRequest(p1.id, p2.id))
-        service.uploadResult(token("host"), match.id, straightSets())
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val match = service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id))
+        service.uploadResult(token = token(uid = "host"), matchId = match.id, request = straightSets())
 
-        shouldThrow<MatchConflictException> { service.uploadResult(token("host"), match.id, straightSets()) }
+        shouldThrow<MatchConflictException> {
+            service.uploadResult(token = token(uid = "host"), matchId = match.id, request = straightSets())
+        }
 
-        val other = service.createFixture(token("host"), fixtureRequest(p1.id, p2.id))
-        service.setActive(token("host"), other.id, active = false)
-        shouldThrow<MatchConflictException> { service.uploadResult(token("host"), other.id, straightSets()) }
+        val other = service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id))
+        service.setActive(token = token(uid = "host"), matchId = other.id, active = false)
+        shouldThrow<MatchConflictException> {
+            service.uploadResult(token = token(uid = "host"), matchId = other.id, request = straightSets())
+        }
     }
 
     @Test
     fun `a result with no clear winner is rejected`() {
-        provisionUser("host", roles = setOf(Capability.PLAYER, Capability.HOST))
-        val p1 = provisionUser("p1", rated = true)
-        val p2 = provisionUser("p2", rated = true)
-        val match = service.createFixture(token("host"), fixtureRequest(p1.id, p2.id))
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val match = service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id))
 
         // one set each → tie, no match winner
         shouldThrow<IllegalArgumentException> {
-            service.uploadResult(token("host"), match.id, MatchResultRequest(listOf(SetScoreRequest(6, 0), SetScoreRequest(0, 6))))
+            service.uploadResult(
+                token = token(uid = "host"),
+                matchId = match.id,
+                request =
+                    MatchResultRequest(
+                        sets =
+                            listOf(
+                                SetScoreRequest(team1Games = 6, team2Games = 0),
+                                SetScoreRequest(team1Games = 0, team2Games = 6),
+                            ),
+                    ),
+            )
         }
     }
 
     @Test
     fun `a rated match cannot be disabled`() {
-        provisionUser("host", roles = setOf(Capability.PLAYER, Capability.HOST))
-        val p1 = provisionUser("p1", rated = true)
-        val p2 = provisionUser("p2", rated = true)
-        val match = service.createFixture(token("host"), fixtureRequest(p1.id, p2.id))
-        service.uploadResult(token("host"), match.id, straightSets())
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val match = service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id))
+        service.uploadResult(token = token(uid = "host"), matchId = match.id, request = straightSets())
         // simulate the calculation trigger having rated it
         transaction {
-            MatchesTable.update({ MatchesTable.id eq match.id }) {
+            MatchesTable.update(where = { MatchesTable.id eq match.id }) {
                 it[MatchesTable.ratedAt] = java.time.LocalDateTime.now()
             }
         }
 
-        shouldThrow<MatchConflictException> { service.setActive(token("host"), match.id, active = false) }
+        shouldThrow<MatchConflictException> {
+            service.setActive(token = token(uid = "host"), matchId = match.id, active = false)
+        }
     }
 
     @Test
     fun `reading a match is limited to participants and staff`() {
-        provisionUser("host", roles = setOf(Capability.PLAYER, Capability.HOST))
-        val p1 = provisionUser("p1", rated = true)
-        val p2 = provisionUser("p2", rated = true)
-        provisionUser("outsider")
-        val match = service.createFixture(token("host"), fixtureRequest(p1.id, p2.id))
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        provisionUser(uid = "outsider")
+        val match = service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id))
 
-        service.getById(token("p1"), match.id).id shouldBe match.id // participant
-        service.getById(token("host"), match.id).id shouldBe match.id // staff
-        shouldThrow<ForbiddenException> { service.getById(token("outsider"), match.id) }
-        shouldThrow<MatchNotFoundException> { service.getById(token("host"), UUID.randomUUID()) }
+        service.getById(token = token(uid = "p1"), matchId = match.id).id shouldBe match.id // participant
+        service.getById(token = token(uid = "host"), matchId = match.id).id shouldBe match.id // staff
+        shouldThrow<ForbiddenException> { service.getById(token = token(uid = "outsider"), matchId = match.id) }
+        shouldThrow<MatchNotFoundException> { service.getById(token = token(uid = "host"), matchId = UUID.randomUUID()) }
     }
 
     @Test
     fun `oversight queries are staff-only, and a host is scoped to their own fixtures`() {
-        provisionUser("root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
-        provisionUser("host", roles = setOf(Capability.PLAYER, Capability.HOST))
-        val p1 = provisionUser("p1", rated = true)
-        val p2 = provisionUser("p2", rated = true)
-        val completed = service.createFixture(token("host"), fixtureRequest(p1.id, p2.id))
-        service.uploadResult(token("host"), completed.id, straightSets())
-        val overdue = service.createFixture(token("host"), fixtureRequest(p1.id, p2.id, date = "2020-01-01"))
+        provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val completed = service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id))
+        service.uploadResult(token = token(uid = "host"), matchId = completed.id, request = straightSets())
+        val overdue =
+            service.createFixture(
+                token = token(uid = "host"),
+                request = fixtureRequest(p1 = p1.id, p2 = p2.id, date = "2020-01-01"),
+            )
 
         // Admin sees every match in the view.
-        service.query(token("root"), MatchQuery.PENDING_CALCULATION).map { it.id } shouldContain completed.id
-        service.query(token("root"), MatchQuery.AWAITING_RESULTS).map { it.id } shouldContain overdue.id
+        service.query(token = token(uid = "root"), view = MatchQuery.PENDING_CALCULATION).map { it.id } shouldContain completed.id
+        service.query(token = token(uid = "root"), view = MatchQuery.AWAITING_RESULTS).map { it.id } shouldContain overdue.id
         // The host that created them can see their own.
-        service.query(token("host"), MatchQuery.PENDING_CALCULATION).map { it.id } shouldContain completed.id
-        service.query(token("host"), MatchQuery.AWAITING_RESULTS).map { it.id } shouldContain overdue.id
+        service.query(token = token(uid = "host"), view = MatchQuery.PENDING_CALCULATION).map { it.id } shouldContain completed.id
+        service.query(token = token(uid = "host"), view = MatchQuery.AWAITING_RESULTS).map { it.id } shouldContain overdue.id
         // A non-staff player is refused.
-        shouldThrow<ForbiddenException> { service.query(token("p1"), MatchQuery.PENDING_CALCULATION) }
+        shouldThrow<ForbiddenException> { service.query(token = token(uid = "p1"), view = MatchQuery.PENDING_CALCULATION) }
     }
 }

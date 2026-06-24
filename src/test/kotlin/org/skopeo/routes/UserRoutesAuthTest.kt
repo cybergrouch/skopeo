@@ -25,7 +25,7 @@ class UserRoutesAuthTest {
         testApplication {
             application { module(initDatabase = false) }
 
-            val response = client.get("/api/v1/users/me")
+            val response = client.get(urlString = "/api/v1/users/me")
 
             response.status shouldBe HttpStatusCode.Unauthorized
         }
@@ -36,8 +36,8 @@ class UserRoutesAuthTest {
             application { module(initDatabase = false) }
 
             val response =
-                client.get("/api/v1/users/me") {
-                    header(HttpHeaders.Authorization, "Bearer not-a-real-jwt")
+                client.get(urlString = "/api/v1/users/me") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer not-a-real-jwt")
                 }
 
             response.status shouldBe HttpStatusCode.Unauthorized

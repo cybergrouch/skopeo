@@ -33,9 +33,9 @@ class NameService(
         token: VerifiedFirebaseToken,
         userId: UUID,
     ): List<Name> {
-        requireUserExists(userId)
+        requireUserExists(userId = userId)
         requireUserAccess(token = token, userId = userId)
-        return names.listByUser(userId)
+        return names.listByUser(userId = userId)
     }
 
     fun get(
@@ -54,9 +54,9 @@ class NameService(
         userId: UUID,
         request: NameCreateRequest,
     ): Name {
-        requireUserExists(userId)
+        requireUserExists(userId = userId)
         requireUserAccess(token = token, userId = userId)
-        val type = parseType(request.type)
+        val type = parseType(value = request.type)
         return names.create(userId = userId, type = type, value = request.value)
     }
 
@@ -72,41 +72,41 @@ class NameService(
     ): Name {
         val target = locate(userId = userId, nameId = nameId)
         requireUserAccess(token = token, userId = userId)
-        require(active || target.type != NameType.DISPLAY) {
+        require(value = active || target.type != NameType.DISPLAY) {
             "Cannot disable the display name; add a new display name to replace it"
         }
         val disabledAt = if (active) null else LocalDateTime.now()
         return conflictAware {
             names.setActive(id = nameId, active = active, disabledAt = disabledAt)
-        } ?: throw NameNotFoundException(nameId)
+        } ?: throw NameNotFoundException(id = nameId)
     }
 
     private fun locate(
         userId: UUID,
         nameId: UUID,
     ): Name {
-        val name = names.findById(nameId)
-        if (name == null || name.userId != userId) throw NameNotFoundException(nameId)
+        val name = names.findById(id = nameId)
+        if (name == null || name.userId != userId) throw NameNotFoundException(id = nameId)
         return name
     }
 
     private fun requireUserExists(userId: UUID) {
-        users.findById(userId) ?: throw UserNotFoundException(userId)
+        users.findById(id = userId) ?: throw UserNotFoundException(id = userId)
     }
 
     private fun requireUserAccess(
         token: VerifiedFirebaseToken,
         userId: UUID,
     ) {
-        val caller = users.findByFirebaseUid(token.uid)
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
         val isSelf = caller?.id == userId
-        val isAdmin = caller?.capabilities?.contains(Capability.ADMINISTRATOR) == true
+        val isAdmin = caller?.capabilities?.contains(element = Capability.ADMINISTRATOR) == true
         if (!isSelf && !isAdmin) throw ForbiddenException()
     }
 
     private fun parseType(value: String): NameType =
         try {
-            NameType.valueOf(value)
+            NameType.valueOf(value = value)
         } catch (e: IllegalArgumentException) {
             throw IllegalArgumentException("Invalid name type '$value'", e)
         }
@@ -115,13 +115,13 @@ class NameService(
         try {
             block()
         } catch (e: ExposedSQLException) {
-            if (isUniqueViolation(e)) {
-                throw NameConflictException("A different active display name already exists")
+            if (isUniqueViolation(e = e)) {
+                throw NameConflictException(message = "A different active display name already exists")
             } else {
                 throw e
             }
         }
 
     private fun isUniqueViolation(e: ExposedSQLException): Boolean =
-        generateSequence<Throwable>(e) { it.cause }.any { (it as? SQLException)?.sqlState == PG_UNIQUE_VIOLATION }
+        generateSequence<Throwable>(seed = e) { it.cause }.any { (it as? SQLException)?.sqlState == PG_UNIQUE_VIOLATION }
 }

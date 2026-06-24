@@ -20,7 +20,7 @@ class SkopeoApplicationTests {
                 module(initDatabase = false)
             }
 
-            val response = client.get("/")
+            val response = client.get(urlString = "/")
             response.status shouldBe HttpStatusCode.OK
             response.bodyAsText() shouldBe "Skopeo API"
         }
@@ -32,7 +32,7 @@ class SkopeoApplicationTests {
                 module(initDatabase = false)
             }
 
-            val response = client.get("/health")
+            val response = client.get(urlString = "/health")
             val body = response.bodyAsText()
 
             response.status shouldBe HttpStatusCode.OK
@@ -48,11 +48,11 @@ class SkopeoApplicationTests {
                 module(initDatabase = false)
             }
 
-            val response = client.get("/metrics")
+            val response = client.get(urlString = "/metrics")
             val body = response.bodyAsText()
 
             response.status shouldBe HttpStatusCode.OK
             body shouldNotBe ""
-            (body.contains("jvm") || body.contains("http")) shouldBe true
+            (body.contains(other = "jvm") || body.contains(other = "http")) shouldBe true
         }
 }

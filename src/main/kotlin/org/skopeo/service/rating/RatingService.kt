@@ -33,16 +33,16 @@ class RatingService(
         token: VerifiedFirebaseToken,
         userId: UUID,
     ): List<UserRating> {
-        requireUserExists(userId)
+        requireUserExists(userId = userId)
         requireSelfOrAdmin(token = token, userId = userId)
-        return ratings.findByUser(userId)
+        return ratings.findByUser(userId = userId)
     }
 
     fun getHistory(
         token: VerifiedFirebaseToken,
         userId: UUID,
     ): List<RatingHistoryEntry> {
-        requireUserExists(userId)
+        requireUserExists(userId = userId)
         requireSelfOrAdmin(token = token, userId = userId)
         return ratings.historyByUser(userId = userId)
     }
@@ -54,8 +54,8 @@ class RatingService(
         value: String,
         confidence: String?,
     ): UserRating {
-        requireAdmin(token)
-        requireUserExists(userId)
+        requireAdmin(token = token)
+        requireUserExists(userId = userId)
         // Rating.fromValue validates the NTRP range and derives the published level.
         val level =
             try {
@@ -63,7 +63,7 @@ class RatingService(
             } catch (e: IllegalArgumentException) {
                 throw IllegalArgumentException("Invalid rating '$value'", e)
             }
-        val confidenceValue = parseConfidence(confidence)
+        val confidenceValue = parseConfidence(confidence = confidence)
         return ratings.setRating(
             userId = userId,
             rating = BigDecimal(value),
@@ -73,36 +73,36 @@ class RatingService(
     }
 
     fun pendingAssessment(token: VerifiedFirebaseToken): List<PendingAssessment> {
-        requireAdmin(token)
+        requireAdmin(token = token)
         return ratings.userIdsPendingAssessment().map { id ->
             val displayName =
-                users.findById(id)?.names?.firstOrNull { it.type == NameType.DISPLAY && it.isActive }?.value
+                users.findById(id = id)?.names?.firstOrNull { it.type == NameType.DISPLAY && it.isActive }?.value
             PendingAssessment(userId = id, displayName = displayName)
         }
     }
 
     private fun parseConfidence(confidence: String?): BigDecimal {
         val value = confidence?.let { BigDecimal(it) } ?: return DEFAULT_CONFIDENCE
-        require(value >= BigDecimal.ZERO && value <= BigDecimal.ONE) { "confidence must be between 0 and 1" }
+        require(value = value >= BigDecimal.ZERO && value <= BigDecimal.ONE) { "confidence must be between 0 and 1" }
         return value
     }
 
     private fun requireUserExists(userId: UUID) {
-        users.findById(userId) ?: throw UserNotFoundException(userId)
+        users.findById(id = userId) ?: throw UserNotFoundException(id = userId)
     }
 
     private fun requireSelfOrAdmin(
         token: VerifiedFirebaseToken,
         userId: UUID,
     ) {
-        val caller = users.findByFirebaseUid(token.uid)
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
         val isSelf = caller?.id == userId
-        val isAdmin = caller?.capabilities?.contains(Capability.ADMINISTRATOR) == true
+        val isAdmin = caller?.capabilities?.contains(element = Capability.ADMINISTRATOR) == true
         if (!isSelf && !isAdmin) throw ForbiddenException()
     }
 
     private fun requireAdmin(token: VerifiedFirebaseToken) {
-        val caller = users.findByFirebaseUid(token.uid)
-        if (caller == null || !caller.capabilities.contains(Capability.ADMINISTRATOR)) throw ForbiddenException()
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+        if (caller == null || !caller.capabilities.contains(element = Capability.ADMINISTRATOR)) throw ForbiddenException()
     }
 }

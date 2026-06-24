@@ -28,8 +28,8 @@ import java.util.UUID
 class MatchRepository {
     fun createFixture(command: CreateFixtureCommand): Match =
         transaction {
-            val team1 = createTeam(command.team1Name, command.matchType, command.team1UserIds)
-            val team2 = createTeam(command.team2Name, command.matchType, command.team2UserIds)
+            val team1 = createTeam(name = command.team1Name, type = command.matchType, userIds = command.team1UserIds)
+            val team2 = createTeam(name = command.team2Name, type = command.matchType, userIds = command.team2UserIds)
             val matchId =
                 MatchesTable.insertAndGetId {
                     it[team1Id] = team1
@@ -42,7 +42,7 @@ class MatchRepository {
                     it[tournamentName] = command.tournamentName
                     it[createdBy] = command.createdBy
                 }.value
-            loadMatch(matchId)!!
+            loadMatch(id = matchId)!!
         }
 
     /** Record results on a fixture: persist sets/tiebreaks, set the winner, mark COMPLETED. */
@@ -54,7 +54,7 @@ class MatchRepository {
         completedAt: LocalDateTime,
     ): Match? =
         transaction {
-            if (loadMatch(matchId) == null) return@transaction null
+            if (loadMatch(id = matchId) == null) return@transaction null
             sets.forEach { set ->
                 val hasTb = set.tiebreakTeam1Points != null && set.tiebreakTeam2Points != null
                 val setId =
@@ -75,13 +75,13 @@ class MatchRepository {
                     }
                 }
             }
-            MatchesTable.update({ MatchesTable.id eq matchId }) {
+            MatchesTable.update(where = { MatchesTable.id eq matchId }) {
                 it[status] = MatchStatus.COMPLETED.name
                 it[MatchesTable.winnerTeamId] = winnerTeamId
                 it[MatchesTable.completedAt] = completedAt
                 it[MatchesTable.recordedBy] = recordedBy
             }
-            loadMatch(matchId)
+            loadMatch(id = matchId)
         }
 
     fun setActive(
@@ -91,14 +91,14 @@ class MatchRepository {
     ): Match? =
         transaction {
             val updated =
-                MatchesTable.update({ MatchesTable.id eq matchId }) {
+                MatchesTable.update(where = { MatchesTable.id eq matchId }) {
                     it[isActive] = active
                     it[MatchesTable.disabledAt] = disabledAt
                 }
-            if (updated == 0) null else loadMatch(matchId)
+            if (updated == 0) null else loadMatch(id = matchId)
         }
 
-    fun findById(matchId: UUID): Match? = transaction { loadMatch(matchId) }
+    fun findById(matchId: UUID): Match? = transaction { loadMatch(id = matchId) }
 
     /** Stamp a match as rating-calculated (the calculation trigger committing it). */
     fun markRated(
@@ -107,7 +107,7 @@ class MatchRepository {
         ratedBy: UUID,
     ) {
         transaction {
-            MatchesTable.update({ MatchesTable.id eq matchId }) {
+            MatchesTable.update(where = { MatchesTable.id eq matchId }) {
                 it[MatchesTable.ratedAt] = ratedAt
                 it[MatchesTable.ratedBy] = ratedBy
             }
@@ -129,7 +129,7 @@ class MatchRepository {
                             MatchesTable.ratedAt.isNull()
                     if (createdBy != null) base and (MatchesTable.createdBy eq createdBy) else base
                 }.orderBy(MatchesTable.completedAt to SortOrder.ASC)
-                .map { loadMatch(it[MatchesTable.id].value)!! }
+                .map { loadMatch(id = it[MatchesTable.id].value)!! }
         }
 
     /**
@@ -150,7 +150,7 @@ class MatchRepository {
                             (MatchesTable.matchDate less asOf)
                     if (createdBy != null) base and (MatchesTable.createdBy eq createdBy) else base
                 }.orderBy(MatchesTable.matchDate to SortOrder.ASC)
-                .map { loadMatch(it[MatchesTable.id].value)!! }
+                .map { loadMatch(id = it[MatchesTable.id].value)!! }
         }
 
     private fun createTeam(
@@ -178,14 +178,14 @@ class MatchRepository {
         val row = MatchesTable.selectAll().where { MatchesTable.id eq id }.singleOrNull() ?: return null
         return Match(
             id = id,
-            matchType = TeamType.valueOf(row[MatchesTable.matchType]),
-            matchFormat = MatchFormat.valueOf(row[MatchesTable.matchFormat]),
+            matchType = TeamType.valueOf(value = row[MatchesTable.matchType]),
+            matchFormat = MatchFormat.valueOf(value = row[MatchesTable.matchFormat]),
             matchDate = row[MatchesTable.matchDate],
-            status = MatchStatus.valueOf(row[MatchesTable.status]),
-            team1 = sideOf(row[MatchesTable.team1Id].value),
-            team2 = sideOf(row[MatchesTable.team2Id].value),
+            status = MatchStatus.valueOf(value = row[MatchesTable.status]),
+            team1 = sideOf(teamId = row[MatchesTable.team1Id].value),
+            team2 = sideOf(teamId = row[MatchesTable.team2Id].value),
             winnerTeamId = row[MatchesTable.winnerTeamId]?.value,
-            sets = setsOf(id),
+            sets = setsOf(matchId = id),
             venue = row[MatchesTable.venue],
             tournamentName = row[MatchesTable.tournamentName],
             isActive = row[MatchesTable.isActive],
@@ -221,7 +221,7 @@ private fun setsOf(matchId: UUID): List<MatchSetResult> =
                 team1Games = setRow[MatchSetsTable.team1Games],
                 team2Games = setRow[MatchSetsTable.team2Games],
                 winnerTeamId = setRow[MatchSetsTable.winnerTeamId].value,
-                tiebreakTeam1Points = tb?.get(MatchSetTiebreaksTable.team1Points),
-                tiebreakTeam2Points = tb?.get(MatchSetTiebreaksTable.team2Points),
+                tiebreakTeam1Points = tb?.get(expression = MatchSetTiebreaksTable.team1Points),
+                tiebreakTeam2Points = tb?.get(expression = MatchSetTiebreaksTable.team2Points),
             )
         }
