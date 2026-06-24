@@ -9,6 +9,7 @@ export interface AuthContextValue {
   signUpWithEmail: (email: string, password: string) => Promise<UserCredential>
   signInWithEmail: (email: string, password: string) => Promise<UserCredential>
   signInWithGoogle: () => Promise<UserCredential>
+  signInWithFacebook: () => Promise<UserCredential>
   signOut: () => Promise<void>
 }
 

@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app'
-import { getAuth, GoogleAuthProvider } from 'firebase/auth'
+import { getAuth, GoogleAuthProvider, FacebookAuthProvider } from 'firebase/auth'
 
 // All values are public client config (safe to ship to the browser); the
 // sensitive Firebase secret stays server-side in Firebase itself. Supplied via
@@ -14,3 +14,4 @@ const firebaseConfig = {
 export const firebaseApp = initializeApp(firebaseConfig)
 export const auth = getAuth(firebaseApp)
 export const googleProvider = new GoogleAuthProvider()
+export const facebookProvider = new FacebookAuthProvider()

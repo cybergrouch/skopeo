@@ -7,7 +7,7 @@ import {
   signOut as firebaseSignOut,
   type User,
 } from 'firebase/auth'
-import { auth, googleProvider } from '@/lib/firebase'
+import { auth, googleProvider, facebookProvider } from '@/lib/firebase'
 import { AuthContext, type AuthContextValue } from './auth-context'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -30,6 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signInWithEmail: (email, password) =>
         signInWithEmailAndPassword(auth, email, password),
       signInWithGoogle: () => signInWithPopup(auth, googleProvider),
+      signInWithFacebook: () => signInWithPopup(auth, facebookProvider),
       signOut: () => firebaseSignOut(auth),
     }),
     [user, initializing],
