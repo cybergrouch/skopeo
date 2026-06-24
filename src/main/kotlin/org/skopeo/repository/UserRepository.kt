@@ -88,13 +88,13 @@ class UserRepository {
                 }
             }
 
-            loadAggregate(userId.value) ?: error("Provisioned user ${userId.value} could not be read back")
+            loadAggregate(id = userId.value) ?: error(message = "Provisioned user ${userId.value} could not be read back")
         }
 
-    fun findById(id: UUID): User? = transaction { loadAggregate(id) }
+    fun findById(id: UUID): User? = transaction { loadAggregate(id = id) }
 
     /** Resolve multiple ids to their aggregates in one transaction; unknown ids are dropped. */
-    fun findAllByIds(ids: List<UUID>): List<User> = transaction { ids.distinct().mapNotNull { loadAggregate(it) } }
+    fun findAllByIds(ids: List<UUID>): List<User> = transaction { ids.distinct().mapNotNull { loadAggregate(id = it) } }
 
     /**
      * Active users matching every supplied facet of [query] (AND): a fuzzy name match (trigram
@@ -106,19 +106,19 @@ class UserRepository {
         transaction {
             val conditions =
                 buildList {
-                    add(Op.build { UsersTable.isActive eq true })
-                    query.sex?.let { sex -> add(Op.build { UsersTable.sex eq sex }) }
-                    query.dobMin?.let { min -> add(Op.build { UsersTable.dateOfBirth greaterEq min }) }
-                    query.dobMax?.let { max -> add(Op.build { UsersTable.dateOfBirth lessEq max }) }
-                    query.name?.let { name -> add(nameMatches(name)) }
-                    query.rating?.let { range -> add(ratingMatches(range)) }
+                    add(element = Op.build { UsersTable.isActive eq true })
+                    query.sex?.let { sex -> add(element = Op.build { UsersTable.sex eq sex }) }
+                    query.dobMin?.let { min -> add(element = Op.build { UsersTable.dateOfBirth greaterEq min }) }
+                    query.dobMax?.let { max -> add(element = Op.build { UsersTable.dateOfBirth lessEq max }) }
+                    query.name?.let { name -> add(element = nameMatches(name = name)) }
+                    query.rating?.let { range -> add(element = ratingMatches(range = range)) }
                 }
             UsersTable
                 .selectAll()
                 .where { conditions.reduce { acc, op -> acc and op } }
                 .orderBy(UsersTable.id to SortOrder.ASC)
-                .limit(SEARCH_LIMIT)
-                .map { loadAggregate(it[UsersTable.id].value)!! }
+                .limit(n = SEARCH_LIMIT)
+                .map { loadAggregate(id = it[UsersTable.id].value)!! }
         }
 
     fun findByFirebaseUid(firebaseUid: String): User? =
@@ -127,7 +127,7 @@ class UserRepository {
                 .selectAll()
                 .where { UsersTable.firebaseUid eq firebaseUid }
                 .singleOrNull()
-                ?.let { loadAggregate(it[UsersTable.id].value) }
+                ?.let { loadAggregate(id = it[UsersTable.id].value) }
         }
 
     fun updateProfile(
@@ -136,13 +136,13 @@ class UserRepository {
     ): User? =
         transaction {
             val updated =
-                UsersTable.update({ UsersTable.id eq id }) {
+                UsersTable.update(where = { UsersTable.id eq id }) {
                     patch.photoUrl?.let { value -> it[UsersTable.photoUrl] = value }
                     patch.dateOfBirth?.let { value -> it[UsersTable.dateOfBirth] = value }
                     patch.sex?.let { value -> it[UsersTable.sex] = value }
                     patch.city?.let { value -> it[UsersTable.city] = value }
                 }
-            if (updated == 0) null else loadAggregate(id)
+            if (updated == 0) null else loadAggregate(id = id)
         }
 
     /** Full replacement of the mutable profile fields (PUT semantics): null clears the column. */
@@ -152,19 +152,19 @@ class UserRepository {
     ): User? =
         transaction {
             val updated =
-                UsersTable.update({ UsersTable.id eq id }) {
+                UsersTable.update(where = { UsersTable.id eq id }) {
                     it[photoUrl] = patch.photoUrl
                     it[dateOfBirth] = patch.dateOfBirth
                     it[sex] = patch.sex
                     it[city] = patch.city
                 }
-            if (updated == 0) null else loadAggregate(id)
+            if (updated == 0) null else loadAggregate(id = id)
         }
 
     /** Soft-delete: flip is_active to false. Returns false if no such user. */
     fun deactivate(id: UUID): Boolean =
         transaction {
-            UsersTable.update({ UsersTable.id eq id }) { it[UsersTable.isActive] = false } > 0
+            UsersTable.update(where = { UsersTable.id eq id }) { it[UsersTable.isActive] = false } > 0
         }
 
     private fun loadAggregate(id: UUID): User? {
@@ -174,10 +174,10 @@ class UserRepository {
                 .where { UsersTable.id eq id }
                 .singleOrNull() ?: return null
         return row.toUser(
-            names = namesOf(id),
-            contacts = contactsOf(id),
-            identities = identitiesOf(id),
-            capabilities = capabilitiesOf(id),
+            names = namesOf(id = id),
+            contacts = contactsOf(id = id),
+            identities = identitiesOf(id = id),
+            capabilities = capabilitiesOf(id = id),
         )
     }
 }
@@ -186,38 +186,46 @@ class UserRepository {
 private fun nameMatches(name: String): Op<Boolean> {
     val normalized = name.lowercase()
     val nameLower = UserNamesTable.value.lowerCase()
-    val proximity = CustomFunction("SIMILARITY", FloatColumnType(), nameLower, stringParam(normalized))
+    val proximity =
+        CustomFunction(
+            functionName = "SIMILARITY",
+            columnType = FloatColumnType(),
+            nameLower,
+            stringParam(value = normalized),
+        )
     return exists(
-        UserNamesTable.selectAll().where {
-            (UserNamesTable.userId eq UsersTable.id) and UserNamesTable.isActive and
-                ((nameLower like "%$normalized%") or (proximity greaterEq SIMILARITY_THRESHOLD))
-        },
+        query =
+            UserNamesTable.selectAll().where {
+                (UserNamesTable.userId eq UsersTable.id) and UserNamesTable.isActive and
+                    ((nameLower like "%$normalized%") or (proximity greaterEq SIMILARITY_THRESHOLD))
+            },
     )
 }
 
 /** Correlated EXISTS: the user has a rating within [range] (inclusive/exclusive per bound). */
 private fun ratingMatches(range: NumericRange): Op<Boolean> =
     exists(
-        UserRatingsTable.selectAll().where {
-            var op: Op<Boolean> = UserRatingsTable.userId eq UsersTable.id
-            range.lower?.let { bound ->
-                op = op and
-                    if (bound.inclusive) {
-                        UserRatingsTable.currentRating greaterEq bound.value
-                    } else {
-                        UserRatingsTable.currentRating greater bound.value
-                    }
-            }
-            range.upper?.let { bound ->
-                op = op and
-                    if (bound.inclusive) {
-                        UserRatingsTable.currentRating lessEq bound.value
-                    } else {
-                        UserRatingsTable.currentRating less bound.value
-                    }
-            }
-            op
-        },
+        query =
+            UserRatingsTable.selectAll().where {
+                var op: Op<Boolean> = UserRatingsTable.userId eq UsersTable.id
+                range.lower?.let { bound ->
+                    op = op and
+                        if (bound.inclusive) {
+                            UserRatingsTable.currentRating greaterEq bound.value
+                        } else {
+                            UserRatingsTable.currentRating greater bound.value
+                        }
+                }
+                range.upper?.let { bound ->
+                    op = op and
+                        if (bound.inclusive) {
+                            UserRatingsTable.currentRating lessEq bound.value
+                        } else {
+                            UserRatingsTable.currentRating less bound.value
+                        }
+                }
+                op
+            },
     )
 
 private fun namesOf(id: UUID): List<Name> =
@@ -238,7 +246,7 @@ private fun identitiesOf(id: UUID): List<UserIdentity> =
         .where { UserIdentitiesTable.userId eq id }
         .map {
             UserIdentity(
-                provider = AuthProvider.valueOf(it[UserIdentitiesTable.provider]),
+                provider = AuthProvider.valueOf(value = it[UserIdentitiesTable.provider]),
                 providerUid = it[UserIdentitiesTable.providerUid],
                 isPrimary = it[UserIdentitiesTable.isPrimary],
             )
@@ -248,7 +256,7 @@ private fun capabilitiesOf(id: UUID): Set<Capability> =
     UserCapabilitiesTable
         .selectAll()
         .where { (UserCapabilitiesTable.userId eq id) and UserCapabilitiesTable.isActive }
-        .map { Capability.valueOf(it[UserCapabilitiesTable.capability]) }
+        .map { Capability.valueOf(value = it[UserCapabilitiesTable.capability]) }
         .toSet()
 
 private fun ResultRow.toUser(

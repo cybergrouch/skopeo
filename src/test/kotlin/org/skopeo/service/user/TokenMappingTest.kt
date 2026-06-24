@@ -36,31 +36,31 @@ class TokenMappingTest {
 
     @Test
     fun `maps sign-in providers`() {
-        authProviderOf("google.com") shouldBe AuthProvider.GOOGLE
-        authProviderOf("facebook.com") shouldBe AuthProvider.FACEBOOK
-        authProviderOf("password") shouldBe AuthProvider.PASSWORD
-        authProviderOf(null) shouldBe AuthProvider.PASSWORD
+        authProviderOf(signInProvider = "google.com") shouldBe AuthProvider.GOOGLE
+        authProviderOf(signInProvider = "facebook.com") shouldBe AuthProvider.FACEBOOK
+        authProviderOf(signInProvider = "password") shouldBe AuthProvider.PASSWORD
+        authProviderOf(signInProvider = null) shouldBe AuthProvider.PASSWORD
     }
 
     @Test
     fun `maps provider to contact source`() {
-        contactSourceOf(AuthProvider.GOOGLE) shouldBe ContactSource.GOOGLE
-        contactSourceOf(AuthProvider.FACEBOOK) shouldBe ContactSource.FACEBOOK
-        contactSourceOf(AuthProvider.PASSWORD) shouldBe ContactSource.MANUAL
+        contactSourceOf(provider = AuthProvider.GOOGLE) shouldBe ContactSource.GOOGLE
+        contactSourceOf(provider = AuthProvider.FACEBOOK) shouldBe ContactSource.FACEBOOK
+        contactSourceOf(provider = AuthProvider.PASSWORD) shouldBe ContactSource.MANUAL
     }
 
     @Test
     fun `validates sex`() {
-        validatedSex("Male") shouldBe "Male"
-        validatedSex(null).shouldBeNull()
-        shouldThrow<IllegalArgumentException> { validatedSex("X") }
+        validatedSex(value = "Male") shouldBe "Male"
+        validatedSex(value = null).shouldBeNull()
+        shouldThrow<IllegalArgumentException> { validatedSex(value = "X") }
     }
 
     @Test
     fun `parses date of birth`() {
-        parseDateOfBirth("1990-05-01") shouldBe LocalDate.of(1990, 5, 1)
-        parseDateOfBirth(null).shouldBeNull()
-        shouldThrow<IllegalArgumentException> { parseDateOfBirth("not-a-date") }
+        parseDateOfBirth(value = "1990-05-01") shouldBe LocalDate.of(1990, 5, 1)
+        parseDateOfBirth(value = null).shouldBeNull()
+        shouldThrow<IllegalArgumentException> { parseDateOfBirth(value = "not-a-date") }
     }
 
     @Test

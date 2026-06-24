@@ -32,18 +32,18 @@ data class MatchScore(
     val matchFormat: MatchFormat = MatchFormat.BEST_OF_THREE,
 ) {
     init {
-        require(sets.isNotEmpty()) { "Match must have at least 1 set" }
-        require(sets.size <= 5) { "Match cannot have more than 5 sets" }
+        require(value = sets.isNotEmpty()) { "Match must have at least 1 set" }
+        require(value = sets.size <= 5) { "Match cannot have more than 5 sets" }
 
         // Validate that all sets have the same teams
         val teamIds = sets.first().games.keys
-        require(sets.all { it.games.keys == teamIds }) {
+        require(value = sets.all { it.games.keys == teamIds }) {
             "All sets must have the same teams"
         }
 
-        require(winnerTeamId in teamIds) { "Match winner '$winnerTeamId' must be one of the teams: $teamIds" }
-        require(loserTeamId in teamIds) { "Match loser '$loserTeamId' must be one of the teams: $teamIds" }
-        require(loserTeamId != winnerTeamId) { "Match loser '$loserTeamId' must differ from the winner '$winnerTeamId'" }
+        require(value = winnerTeamId in teamIds) { "Match winner '$winnerTeamId' must be one of the teams: $teamIds" }
+        require(value = loserTeamId in teamIds) { "Match loser '$loserTeamId' must be one of the teams: $teamIds" }
+        require(value = loserTeamId != winnerTeamId) { "Match loser '$loserTeamId' must differ from the winner '$winnerTeamId'" }
     }
 }
 
@@ -68,4 +68,4 @@ internal val MatchScore.matchScore: String get() =
         val gamesWonByWinner = it.games[winnerTeamId] ?: 0
         val gamesWonByLoser = it.games[loserTeamId] ?: 0
         "$gamesWonByWinner-$gamesWonByLoser"
-    }.joinToString(" ")
+    }.joinToString(separator = " ")

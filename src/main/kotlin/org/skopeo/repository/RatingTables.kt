@@ -16,28 +16,33 @@ private const val CONFIDENCE_SCALE = 2
 private const val LEVEL_MAX = 10
 
 /** Current rating per user (NTRP-only). Flyway owns the DDL; this maps only what the repository touches. */
-internal object UserRatingsTable : UUIDTable("user_ratings") {
-    val userId = reference("user_id", UsersTable, onDelete = ReferenceOption.CASCADE)
-    val currentRating = decimal("current_rating", RATING_PRECISION, RATING_SCALE)
-    val currentLevel = varchar("current_level", LEVEL_MAX).nullable()
-    val confidenceScore = decimal("confidence_score", CONFIDENCE_PRECISION, CONFIDENCE_SCALE).default(java.math.BigDecimal("0.50"))
-    val matchesPlayed = integer("matches_played").default(0)
-    val lastMatchDate = date("last_match_date").nullable()
+internal object UserRatingsTable : UUIDTable(name = "user_ratings") {
+    val userId = reference(name = "user_id", foreign = UsersTable, onDelete = ReferenceOption.CASCADE)
+    val currentRating = decimal(name = "current_rating", precision = RATING_PRECISION, scale = RATING_SCALE)
+    val currentLevel = varchar(name = "current_level", length = LEVEL_MAX).nullable()
+    val confidenceScore =
+        decimal(
+            name = "confidence_score",
+            precision = CONFIDENCE_PRECISION,
+            scale = CONFIDENCE_SCALE,
+        ).default(defaultValue = java.math.BigDecimal("0.50"))
+    val matchesPlayed = integer(name = "matches_played").default(defaultValue = 0)
+    val lastMatchDate = date(name = "last_match_date").nullable()
 }
 
 /** Append-only rating-change history (match-driven, or initial assessment when match_id is null). */
-internal object UserRatingHistoryTable : UUIDTable("user_rating_history") {
-    val userId = reference("user_id", UsersTable, onDelete = ReferenceOption.CASCADE)
-    val matchId = uuid("match_id").nullable()
-    val previousRating = decimal("previous_rating", RATING_PRECISION, RATING_SCALE)
-    val newRating = decimal("new_rating", RATING_PRECISION, RATING_SCALE)
-    val ratingChange = decimal("rating_change", RATING_PRECISION, RATING_SCALE)
-    val percentChange = decimal("percent_change", RATING_PRECISION, RATING_SCALE).nullable()
-    val previousLevel = varchar("previous_level", LEVEL_MAX).nullable()
-    val newLevel = varchar("new_level", LEVEL_MAX).nullable()
-    val levelChanged = bool("level_changed").default(false)
-    val dominanceFactor = decimal("dominance_factor", RATING_PRECISION, RATING_SCALE).nullable()
-    val smoothingApplied = bool("smoothing_applied").default(false)
-    val smoothingFactor = decimal("smoothing_factor", CONFIDENCE_PRECISION, CONFIDENCE_SCALE).nullable()
-    val calculatedAt = datetime("calculated_at")
+internal object UserRatingHistoryTable : UUIDTable(name = "user_rating_history") {
+    val userId = reference(name = "user_id", foreign = UsersTable, onDelete = ReferenceOption.CASCADE)
+    val matchId = uuid(name = "match_id").nullable()
+    val previousRating = decimal(name = "previous_rating", precision = RATING_PRECISION, scale = RATING_SCALE)
+    val newRating = decimal(name = "new_rating", precision = RATING_PRECISION, scale = RATING_SCALE)
+    val ratingChange = decimal(name = "rating_change", precision = RATING_PRECISION, scale = RATING_SCALE)
+    val percentChange = decimal(name = "percent_change", precision = RATING_PRECISION, scale = RATING_SCALE).nullable()
+    val previousLevel = varchar(name = "previous_level", length = LEVEL_MAX).nullable()
+    val newLevel = varchar(name = "new_level", length = LEVEL_MAX).nullable()
+    val levelChanged = bool(name = "level_changed").default(defaultValue = false)
+    val dominanceFactor = decimal(name = "dominance_factor", precision = RATING_PRECISION, scale = RATING_SCALE).nullable()
+    val smoothingApplied = bool(name = "smoothing_applied").default(defaultValue = false)
+    val smoothingFactor = decimal(name = "smoothing_factor", precision = CONFIDENCE_PRECISION, scale = CONFIDENCE_SCALE).nullable()
+    val calculatedAt = datetime(name = "calculated_at")
 }

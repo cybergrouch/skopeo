@@ -27,20 +27,20 @@ data class NumericRange(
     companion object {
         fun parse(raw: String): NumericRange {
             val text = raw.trim()
-            require(text.length >= MIN_RANGE_LENGTH) { "Invalid range '$raw'" }
+            require(value = text.length >= MIN_RANGE_LENGTH) { "Invalid range '$raw'" }
             val open = text.first()
             val close = text.last()
-            require(open == '[' || open == '(') { "Range '$raw' must start with '[' or '('" }
-            require(close == ']' || close == ')') { "Range '$raw' must end with ']' or ')'" }
+            require(value = open == '[' || open == '(') { "Range '$raw' must start with '[' or '('" }
+            require(value = close == ']' || close == ')') { "Range '$raw' must end with ']' or ')'" }
 
-            val parts = text.substring(1, text.length - 1).split(",")
-            require(parts.size == RANGE_PARTS) { "Range '$raw' must have exactly one comma" }
+            val parts = text.substring(startIndex = 1, endIndex = text.length - 1).split(",")
+            require(value = parts.size == RANGE_PARTS) { "Range '$raw' must have exactly one comma" }
 
-            val lower = boundOf(parts[0], inclusive = open == '[', raw = raw)
-            val upper = boundOf(parts[1], inclusive = close == ']', raw = raw)
-            require(lower != null || upper != null) { "Range '$raw' must bound at least one side" }
+            val lower = boundOf(part = parts[0], inclusive = open == '[', raw = raw)
+            val upper = boundOf(part = parts[1], inclusive = close == ']', raw = raw)
+            require(value = lower != null || upper != null) { "Range '$raw' must bound at least one side" }
             if (lower != null && upper != null) {
-                require(lower.value <= upper.value) { "Range '$raw' lower bound exceeds upper" }
+                require(value = lower.value <= upper.value) { "Range '$raw' lower bound exceeds upper" }
             }
             return NumericRange(lower = lower, upper = upper)
         }
@@ -76,13 +76,13 @@ fun ageRangeToDob(
 ): DobWindow {
     val max =
         range.lower?.let { bound ->
-            val low = wholeAge(bound.value)
+            val low = wholeAge(value = bound.value)
             // age ≥ low ⟹ dob ≤ today−low years; age > low ⟹ dob ≤ today−(low+1) years.
             today.minusYears((if (bound.inclusive) low else low + 1).toLong())
         }
     val min =
         range.upper?.let { bound ->
-            val high = wholeAge(bound.value)
+            val high = wholeAge(value = bound.value)
             // age ≤ high ⟹ dob ≥ today−(high+1) years +1 day; age < high ⟹ dob ≥ today−high years +1 day.
             today.minusYears((if (bound.inclusive) high + 1 else high).toLong()).plusDays(1)
         }
@@ -90,7 +90,7 @@ fun ageRangeToDob(
 }
 
 private fun wholeAge(value: BigDecimal): Int {
-    require(value.stripTrailingZeros().scale() <= 0) { "Age bounds must be whole numbers, got $value" }
+    require(value = value.stripTrailingZeros().scale() <= 0) { "Age bounds must be whole numbers, got $value" }
     return value.toInt()
 }
 

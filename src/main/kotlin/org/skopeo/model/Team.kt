@@ -25,25 +25,25 @@ data class Team(
 ) {
     init {
         // Validation
-        require(teamId.isNotBlank() && teamId.length in 1..50) {
+        require(value = teamId.isNotBlank() && teamId.length in 1..50) {
             "Team ID must be 1-50 characters, got '$teamId'"
         }
-        require(name.isNotBlank() && name.length in 1..100) {
+        require(value = name.isNotBlank() && name.length in 1..100) {
             "Team name must be 1-100 characters, got '$name'"
         }
-        require(players.isNotEmpty()) {
+        require(value = players.isNotEmpty()) {
             "Team must have at least one player"
         }
 
         // Team type validation
         when (teamType) {
             TeamType.SINGLES -> {
-                require(players.size == 1) {
+                require(value = players.size == 1) {
                     "SINGLES team must have exactly 1 player, got ${players.size}"
                 }
             }
             TeamType.DOUBLES, TeamType.MIXED_DOUBLES -> {
-                require(players.size == 2) {
+                require(value = players.size == 2) {
                     "DOUBLES/MIXED_DOUBLES team must have exactly 2 players, got ${players.size}"
                 }
             }
@@ -55,7 +55,7 @@ data class Team(
      * Throws for doubles teams (not yet supported).
      */
     fun getSinglePlayer(): PlayerProfile {
-        require(teamType == TeamType.SINGLES && players.size == 1) {
+        require(value = teamType == TeamType.SINGLES && players.size == 1) {
             "getSinglePlayer() only works for SINGLES teams with 1 player"
         }
         return players[0]

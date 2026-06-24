@@ -140,36 +140,38 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
         val player2Id = player2.playerId
 
         audit.add(
-            AuditEntry(
-                message =
-                    "Calculating ranking for ${team1.name} (${player1.name}, ${player1.rating.value}) vs " +
-                        "${team2.name} (${player2.name}, ${player2.rating.value})",
-                context =
-                    mapOf(
-                        "team1" to team1.name,
-                        "team2" to team2.name,
-                        "player1" to player1.name,
-                        "player1Rating" to player1.rating.value,
-                        "player2" to player2.name,
-                        "player2Rating" to player2.rating.value,
-                    ),
-            ),
-        )
-
-        with(request.matchScore) {
-            audit.add(
+            entry =
                 AuditEntry(
                     message =
-                        "Match result - Winner: $winnerTeamId, Score: $matchScore",
+                        "Calculating ranking for ${team1.name} (${player1.name}, ${player1.rating.value}) vs " +
+                            "${team2.name} (${player2.name}, ${player2.rating.value})",
                     context =
                         mapOf(
-                            "winnerTeamId" to winnerTeamId,
-                            "loserTeamId" to loserTeamId,
-                            "score" to matchScore,
-                            "winnerDominanceFactor" to calculateDominanceFactor(teamId = winnerTeamId),
-                            "loserDominanceFactor" to calculateDominanceFactor(teamId = loserTeamId),
+                            "team1" to team1.name,
+                            "team2" to team2.name,
+                            "player1" to player1.name,
+                            "player1Rating" to player1.rating.value,
+                            "player2" to player2.name,
+                            "player2Rating" to player2.rating.value,
                         ),
                 ),
+        )
+
+        with(receiver = request.matchScore) {
+            audit.add(
+                entry =
+                    AuditEntry(
+                        message =
+                            "Match result - Winner: $winnerTeamId, Score: $matchScore",
+                        context =
+                            mapOf(
+                                "winnerTeamId" to winnerTeamId,
+                                "loserTeamId" to loserTeamId,
+                                "score" to matchScore,
+                                "winnerDominanceFactor" to calculateDominanceFactor(teamId = winnerTeamId),
+                                "loserDominanceFactor" to calculateDominanceFactor(teamId = loserTeamId),
+                            ),
+                    ),
             )
 
             // Calculate Elo-based rating changes
@@ -184,16 +186,17 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
                 )
 
             audit.add(
-                AuditEntry(
-                    message =
-                        "Rating changes - ${player1.name}: ${player1.rating.value} to ${player1Change.toStringPrecise()}, " +
-                            "${player2.name}: ${player2.rating.value} to ${player2Change.toStringPrecise()}",
-                    context =
-                        mapOf(
-                            "player1Change" to player1Change.toStringPrecise(),
-                            "player2Change" to player2Change.toStringPrecise(),
-                        ),
-                ),
+                entry =
+                    AuditEntry(
+                        message =
+                            "Rating changes - ${player1.name}: ${player1.rating.value} to ${player1Change.toStringPrecise()}, " +
+                                "${player2.name}: ${player2.rating.value} to ${player2Change.toStringPrecise()}",
+                        context =
+                            mapOf(
+                                "player1Change" to player1Change.toStringPrecise(),
+                                "player2Change" to player2Change.toStringPrecise(),
+                            ),
+                    ),
             )
 
             // Apply rating changes with system-specific constraints
@@ -202,8 +205,8 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
             val player2NewRating = applyRatingChange(rating = player2.rating, change = player2Change, options = options, audit = audit)
 
             // Calculate percent changes
-            val player1PercentChange = calculatePercentChange(player1.rating.value.bd, player1NewRating.value.bd)
-            val player2PercentChange = calculatePercentChange(player2.rating.value.bd, player2NewRating.value.bd)
+            val player1PercentChange = calculatePercentChange(oldValue = player1.rating.value.bd, newValue = player1NewRating.value.bd)
+            val player2PercentChange = calculatePercentChange(oldValue = player2.rating.value.bd, newValue = player2NewRating.value.bd)
 
             // Determine if published levels changed (v1: levels are embedded in Rating objects)
             val player1LevelChanged = player1.rating.publishedLevel.value != player1NewRating.publishedLevel.value
@@ -342,7 +345,7 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
 
             // Normalize rating gap as percentage of the NTRP range
             //   - 0.5 NTRP gap → 0.5/6.0 = 8.3% normalized
-            val normalizedGap = absAdvantage.divideBy(ratingRange)
+            val normalizedGap = absAdvantage.divideBy(divisor = ratingRange)
 
             // Pluggable constants
             val thresholdPct = COMPETITIVE_THRESHOLD_PCT
@@ -382,26 +385,27 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
             // Log every factor that contributed to the change, so the audit trail
             // can reconstruct the full calculation: change = K × dominance × scale × sign
             audit.add(
-                AuditEntry(
-                    message =
-                        "Adjustment factors - ${this.name}: change = K × dominance × scale × sign = " +
-                            "${ratingScale.toStringPrecise()} × ${dominanceMagnitude.toStringPrecise()} × " +
-                            "${scale.toStringPrecise()} × $signLabel = ${change.toStringPrecise()}",
-                    context =
-                        mapOf(
-                            "playerId" to this.playerId,
-                            "kFactor" to ratingScale.toStringPrecise(),
-                            "dominance" to dominance.toStringPrecise(),
-                            "ratingGap" to absAdvantage.toStringPrecise(),
-                            "normalizedGap" to normalizedGap.toStringPrecise(),
-                            "competitiveThresholdPct" to thresholdPct.toStringPrecise(),
-                            "isUpset" to isUpset.toString(),
-                            "upsetMultiplier" to upsetMultiplier.toStringPrecise(),
-                            "scale" to scale.toStringPrecise(),
-                            "sign" to signLabel,
-                            "change" to change.toStringPrecise(),
-                        ),
-                ),
+                entry =
+                    AuditEntry(
+                        message =
+                            "Adjustment factors - ${this.name}: change = K × dominance × scale × sign = " +
+                                "${ratingScale.toStringPrecise()} × ${dominanceMagnitude.toStringPrecise()} × " +
+                                "${scale.toStringPrecise()} × $signLabel = ${change.toStringPrecise()}",
+                        context =
+                            mapOf(
+                                "playerId" to this.playerId,
+                                "kFactor" to ratingScale.toStringPrecise(),
+                                "dominance" to dominance.toStringPrecise(),
+                                "ratingGap" to absAdvantage.toStringPrecise(),
+                                "normalizedGap" to normalizedGap.toStringPrecise(),
+                                "competitiveThresholdPct" to thresholdPct.toStringPrecise(),
+                                "isUpset" to isUpset.toString(),
+                                "upsetMultiplier" to upsetMultiplier.toStringPrecise(),
+                                "scale" to scale.toStringPrecise(),
+                                "sign" to signLabel,
+                                "change" to change.toStringPrecise(),
+                            ),
+                    ),
             )
 
             return change
@@ -427,15 +431,16 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
             )
 
         audit.add(
-            AuditEntry(
-                message =
-                    "Ranking Adjustment Calculation",
-                context =
-                    mapOf(
-                        "player1RankingAdjustment" to player1RankingAdjustment.toStringPrecise(),
-                        "player2RankingAdjustment" to player2RankingAdjustment.toStringPrecise(),
-                    ),
-            ),
+            entry =
+                AuditEntry(
+                    message =
+                        "Ranking Adjustment Calculation",
+                    context =
+                        mapOf(
+                            "player1RankingAdjustment" to player1RankingAdjustment.toStringPrecise(),
+                            "player2RankingAdjustment" to player2RankingAdjustment.toStringPrecise(),
+                        ),
+                ),
         )
 
         return player1RankingAdjustment to player2RankingAdjustment
@@ -547,28 +552,29 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
             }
 
         audit.add(
-            AuditEntry(
-                message =
-                    buildString {
-                        append("NTRP change: ${rating.value} + ${change.toStringPrecise()} = ")
-                        append("${calculatedValue.toStringPrecise()}")
-                        if (options.smoothingEnabled) {
-                            append(" -> smoothed ${smoothedValue.toStringPrecise()} (factor=${options.smoothingFactor})")
-                        }
-                        append(" -> clamped ${clamped.toStringPrecise()}")
-                    },
-                context =
-                    mapOf(
-                        "system" to "NTRP",
-                        "original" to rating.value,
-                        "change" to change.toStringPrecise(),
-                        "newValue" to calculatedValue.toStringPrecise(),
-                        "clamped" to clamped.toStringPrecise(),
-                        "smoothingEnabled" to options.smoothingEnabled.toString(),
-                        "smoothingFactor" to options.smoothingFactor,
-                        "smoothed" to if (options.smoothingEnabled) smoothedValue.toStringPrecise() else "N/A",
-                    ),
-            ),
+            entry =
+                AuditEntry(
+                    message =
+                        buildString {
+                            append("NTRP change: ${rating.value} + ${change.toStringPrecise()} = ")
+                            append("${calculatedValue.toStringPrecise()}")
+                            if (options.smoothingEnabled) {
+                                append(" -> smoothed ${smoothedValue.toStringPrecise()} (factor=${options.smoothingFactor})")
+                            }
+                            append(" -> clamped ${clamped.toStringPrecise()}")
+                        },
+                    context =
+                        mapOf(
+                            "system" to "NTRP",
+                            "original" to rating.value,
+                            "change" to change.toStringPrecise(),
+                            "newValue" to calculatedValue.toStringPrecise(),
+                            "clamped" to clamped.toStringPrecise(),
+                            "smoothingEnabled" to options.smoothingEnabled.toString(),
+                            "smoothingFactor" to options.smoothingFactor,
+                            "smoothed" to if (options.smoothingEnabled) smoothedValue.toStringPrecise() else "N/A",
+                        ),
+                ),
         )
 
         return Rating.fromValue(value = clamped.toStringPrecise())

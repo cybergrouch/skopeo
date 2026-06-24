@@ -22,7 +22,7 @@ class AuditTrail {
      * Add an audit entry to the trail.
      */
     fun add(entry: AuditEntry) {
-        entries.add(entry)
+        entries.add(element = entry)
     }
 
     /**

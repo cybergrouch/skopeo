@@ -30,11 +30,11 @@ internal fun errorBody(
 internal fun RoutingContext.verifiedToken(): VerifiedFirebaseToken {
     val payload = call.principal<JWTPrincipal>()!!.payload
     val firebase = payload.getClaim("firebase").asMap()
-    val signInProvider = firebase?.get("sign_in_provider") as? String
+    val signInProvider = firebase?.get(key = "sign_in_provider") as? String
 
     @Suppress("UNCHECKED_CAST")
-    val identities = firebase?.get("identities") as? Map<String, List<String>>
-    val providerUid = identities?.get(signInProvider)?.firstOrNull() ?: payload.subject
+    val identities = firebase?.get(key = "identities") as? Map<String, List<String>>
+    val providerUid = identities?.get(key = signInProvider)?.firstOrNull() ?: payload.subject
 
     return VerifiedFirebaseToken(
         uid = payload.subject,
@@ -48,11 +48,11 @@ internal fun RoutingContext.verifiedToken(): VerifiedFirebaseToken {
 }
 
 internal fun RoutingContext.uuidParam(name: String): UUID {
-    val raw = call.parameters[name] ?: throw BadRequestException("Missing path parameter '$name'")
+    val raw = call.parameters[name] ?: throw BadRequestException(message = "Missing path parameter '$name'")
     return try {
         UUID.fromString(raw)
     } catch (e: IllegalArgumentException) {
-        throw BadRequestException("Invalid $name '$raw'", e)
+        throw BadRequestException(message = "Invalid $name '$raw'", cause = e)
     }
 }
 
@@ -63,28 +63,29 @@ internal suspend fun RoutingContext.respondMappingErrors(block: suspend () -> Un
         block()
     } catch (e: ResourceNotFoundException) {
         logger.info { e.message }
-        call.respond(HttpStatusCode.NotFound, errorBody(error = "Not found", message = e.message))
+        call.respond(status = HttpStatusCode.NotFound, message = errorBody(error = "Not found", message = e.message))
     } catch (e: ForbiddenException) {
         logger.warn { "Access denied: ${e.message}" }
-        call.respond(HttpStatusCode.Forbidden, errorBody(error = "Forbidden", message = e.message))
+        call.respond(status = HttpStatusCode.Forbidden, message = errorBody(error = "Forbidden", message = e.message))
     } catch (e: ConflictException) {
         logger.warn { "Conflict: ${e.message}" }
-        call.respond(HttpStatusCode.Conflict, errorBody(error = "Conflict", message = e.message))
-    } catch (e: IllegalArgumentException) {
-        logger.warn(e) { "Invalid request" }
-        call.respond(HttpStatusCode.BadRequest, errorBody(error = "Validation error", message = e.message))
+        call.respond(status = HttpStatusCode.Conflict, message = errorBody(error = "Conflict", message = e.message))
     } catch (e: SerializationException) {
-        logger.warn(e) { "Malformed JSON" }
-        call.respond(HttpStatusCode.BadRequest, errorBody(error = "Invalid JSON", message = e.message))
+        // Must precede IllegalArgumentException: kotlinx SerializationException is a subtype of it.
+        logger.warn(t = e) { "Malformed JSON" }
+        call.respond(status = HttpStatusCode.BadRequest, message = errorBody(error = "Invalid JSON", message = e.message))
+    } catch (e: IllegalArgumentException) {
+        logger.warn(t = e) { "Invalid request" }
+        call.respond(status = HttpStatusCode.BadRequest, message = errorBody(error = "Validation error", message = e.message))
     } catch (e: BadRequestException) {
-        val rootCause = generateSequence<Throwable>(e) { it.cause }.last()
-        logger.warn(e) { "Bad request" }
-        call.respond(HttpStatusCode.BadRequest, errorBody(error = "Validation error", message = rootCause.message))
+        val rootCause = generateSequence<Throwable>(seed = e) { it.cause }.last()
+        logger.warn(t = e) { "Bad request" }
+        call.respond(status = HttpStatusCode.BadRequest, message = errorBody(error = "Validation error", message = rootCause.message))
     } catch (e: Exception) {
-        logger.error(e) { "Unexpected error handling request" }
+        logger.error(t = e) { "Unexpected error handling request" }
         call.respond(
-            HttpStatusCode.InternalServerError,
-            errorBody(error = "Internal server error", message = "An unexpected error occurred"),
+            status = HttpStatusCode.InternalServerError,
+            message = errorBody(error = "Internal server error", message = "An unexpected error occurred"),
         )
     }
 }

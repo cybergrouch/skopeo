@@ -78,7 +78,7 @@ class UserRepositoryTest {
 
     @Test
     fun `provision writes and reads back the full aggregate`() {
-        val created = repository.provision(googleSignup(email = "juan@example.com"))
+        val created = repository.provision(command = googleSignup(email = "juan@example.com"))
 
         created.firebaseUid.shouldNotBeNull()
         created.country shouldBe "PH" // defaulted by the DB
@@ -98,9 +98,9 @@ class UserRepositoryTest {
 
     @Test
     fun `findByFirebaseUid returns the aggregate`() {
-        val created = repository.provision(googleSignup(firebaseUid = "uid-lookup"))
+        val created = repository.provision(command = googleSignup(firebaseUid = "uid-lookup"))
 
-        val found = repository.findByFirebaseUid("uid-lookup")
+        val found = repository.findByFirebaseUid(firebaseUid = "uid-lookup")
 
         found.shouldNotBeNull()
         found.id shouldBe created.id
@@ -109,12 +109,12 @@ class UserRepositoryTest {
 
     @Test
     fun `findByFirebaseUid returns null when absent`() {
-        repository.findByFirebaseUid("nobody-home").shouldBe(null)
+        repository.findByFirebaseUid(firebaseUid = "nobody-home").shouldBe(expected = null)
     }
 
     @Test
     fun `findById returns null for an unknown id`() {
-        repository.findById(UUID.randomUUID()).shouldBe(null)
+        repository.findById(id = UUID.randomUUID()).shouldBe(expected = null)
     }
 
     @Test
@@ -131,7 +131,7 @@ class UserRepositoryTest {
                     ),
             )
 
-        val created = repository.provision(command)
+        val created = repository.provision(command = command)
 
         created.contacts.map { it.type }.shouldContainExactlyInAnyOrder(ContactType.EMAIL, ContactType.PHONE)
         created.country shouldBe "US"
@@ -139,9 +139,9 @@ class UserRepositoryTest {
 
     @Test
     fun `updateProfile patches only the provided fields`() {
-        val created = repository.provision(googleSignup())
+        val created = repository.provision(command = googleSignup())
 
-        val updated = repository.updateProfile(created.id, ProfilePatch(city = "Cebu", dateOfBirth = LocalDate.of(1990, 1, 2)))
+        val updated = repository.updateProfile(id = created.id, patch = ProfilePatch(city = "Cebu", dateOfBirth = LocalDate.of(1990, 1, 2)))
 
         updated.shouldNotBeNull()
         updated.city shouldBe "Cebu"
@@ -151,9 +151,9 @@ class UserRepositoryTest {
 
     @Test
     fun `updateProfile changes sex when provided`() {
-        val created = repository.provision(googleSignup()) // sex = Male
+        val created = repository.provision(command = googleSignup()) // sex = Male
 
-        val updated = repository.updateProfile(created.id, ProfilePatch(sex = "Female"))
+        val updated = repository.updateProfile(id = created.id, patch = ProfilePatch(sex = "Female"))
 
         updated.shouldNotBeNull()
         updated.sex shouldBe "Female"
@@ -161,41 +161,41 @@ class UserRepositoryTest {
 
     @Test
     fun `updateProfile returns null for an unknown id`() {
-        repository.updateProfile(UUID.randomUUID(), ProfilePatch(city = "Davao")).shouldBe(null)
+        repository.updateProfile(id = UUID.randomUUID(), patch = ProfilePatch(city = "Davao")).shouldBe(expected = null)
     }
 
     @Test
     fun `replaceProfile overwrites all mutable fields, clearing omitted ones`() {
-        val created = repository.provision(googleSignup()) // sex = Male, city = Manila
+        val created = repository.provision(command = googleSignup()) // sex = Male, city = Manila
 
-        val replaced = repository.replaceProfile(created.id, ProfilePatch(city = "Iloilo"))
+        val replaced = repository.replaceProfile(id = created.id, patch = ProfilePatch(city = "Iloilo"))
 
         replaced.shouldNotBeNull()
         replaced.city shouldBe "Iloilo"
-        replaced.sex.shouldBe(null) // omitted from the replacement → cleared
+        replaced.sex.shouldBe(expected = null) // omitted from the replacement → cleared
     }
 
     @Test
     fun `replaceProfile returns null for an unknown id`() {
-        repository.replaceProfile(UUID.randomUUID(), ProfilePatch(city = "Davao")).shouldBe(null)
+        repository.replaceProfile(id = UUID.randomUUID(), patch = ProfilePatch(city = "Davao")).shouldBe(expected = null)
     }
 
     @Test
     fun `deactivate soft-deletes the user`() {
-        val created = repository.provision(googleSignup())
+        val created = repository.provision(command = googleSignup())
 
-        repository.deactivate(created.id).shouldBeTrue()
+        repository.deactivate(id = created.id).shouldBeTrue()
 
-        repository.findById(created.id)?.isActive?.shouldBeFalse()
-        repository.deactivate(UUID.randomUUID()).shouldBeFalse()
+        repository.findById(id = created.id)?.isActive?.shouldBeFalse()
+        repository.deactivate(id = UUID.randomUUID()).shouldBeFalse()
     }
 
     @Test
     fun `a verified email is globally unique across users`() {
-        repository.provision(googleSignup(email = "shared@example.com"))
+        repository.provision(command = googleSignup(email = "shared@example.com"))
 
         assertThrows<Exception> {
-            repository.provision(googleSignup(email = "shared@example.com"))
+            repository.provision(command = googleSignup(email = "shared@example.com"))
         }
     }
 }

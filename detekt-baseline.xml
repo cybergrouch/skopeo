@@ -4,8 +4,8 @@
   <CurrentIssues>
     <ID>CognitiveComplexMethod:RatingChangeReport.kt$RatingChangeReport$@Test fun generateRatingChangeReport()</ID>
     <ID>ComplexCondition:PerformanceBasedRankingCalculatorImpl.kt$PerformanceBasedRankingCalculatorImpl$(isWinner &amp;&amp; ratingAdvantage &lt; ZERO) || (!isWinner &amp;&amp; ratingAdvantage &gt; ZERO)</ID>
-    <ID>CyclomaticComplexMethod:RatingChangeReport.kt$RatingChangeReport$@Test fun generateRatingChangeReport()</ID>
     <ID>CyclomaticComplexMethod:Rating.kt$RatingSerializer$override fun deserialize(decoder: Decoder): Rating</ID>
+    <ID>CyclomaticComplexMethod:RatingChangeReport.kt$RatingChangeReport$@Test fun generateRatingChangeReport()</ID>
     <ID>ImplicitDefaultLocale:RatingChangeReport.kt$RatingChangeReport$String.format("%+.6f (%.6f)", result.ntrpP1Delta, result.ntrpP1New)</ID>
     <ID>ImplicitDefaultLocale:RatingChangeReport.kt$RatingChangeReport$String.format("%+.6f (%.6f)", result.ntrpP2Delta, result.ntrpP2New)</ID>
     <ID>ImplicitDefaultLocale:RatingChangeReport.kt$RatingChangeReport$String.format("%+.6f (%.6f)", result.utrP1Delta, result.utrP1New)</ID>
@@ -13,7 +13,6 @@
     <ID>ImplicitDefaultLocale:RatingChangeReport.kt$RatingChangeReport$String.format("%.2f", result.ratio)</ID>
     <ID>LargeClass:RankingCalculationPayloadTest.kt$RankingCalculationPayloadTest</ID>
     <ID>LargeClass:TestScenarios.kt$TestScenarios</ID>
-    <ID>LongMethod:RatingChangeReport.kt$RatingChangeReport$@Test fun generateRatingChangeReport()</ID>
     <ID>LongMethod:PerformanceBasedRankingCalculatorImpl.kt$PerformanceBasedRankingCalculatorImpl$override fun calculate(request: RankingCalculationRequest): RankingCalculationResult</ID>
     <ID>LongMethod:RankingCalculationPayloadTest.kt$RankingCalculationPayloadTest$@Test fun testNTRP_BasicMatch_ExactPayload()</ID>
     <ID>LongMethod:RankingCalculationPayloadTest.kt$RankingCalculationPayloadTest$@Test fun testNTRP_DominantWin_ExactPayload()</ID>
@@ -22,6 +21,7 @@
     <ID>LongMethod:RankingCalculationPayloadTest.kt$RankingCalculationPayloadTest$@Test fun testNTRP_MinimumBoundary_ExactPayload()</ID>
     <ID>LongMethod:RankingCalculationPayloadTest.kt$RankingCalculationPayloadTest$@Test fun testUTR_BasicMatch_ExactPayload()</ID>
     <ID>LongMethod:RankingCalculationPayloadTest.kt$RankingCalculationPayloadTest$@Test fun testUTR_Tiebreak_ExactPayload()</ID>
+    <ID>LongMethod:RatingChangeReport.kt$RatingChangeReport$@Test fun generateRatingChangeReport()</ID>
     <ID>LongParameterList:DatabaseConfig.kt$DatabaseConfig$( url: String, driver: String, user: String, password: String, maximumPoolSize: Int, minimumIdle: Int, connectionTimeout: Long, idleTimeout: Long, maxLifetime: Long, )</ID>
     <ID>LongParameterList:PerformanceBasedRankingCalculatorImpl.kt$PerformanceBasedRankingCalculatorImpl$( player1: PlayerProfile, player2: PlayerProfile, matchScore: MatchScore, audit: AuditTrail, player1TeamId: String, player2TeamId: String, )</ID>
     <ID>LongParameterList:PerformanceBasedRankingCalculatorImplTest.kt$PerformanceBasedRankingCalculatorImplTest$( scenario: String, p1Rating: String, p2Rating: String, p1Games: Int, p2Games: Int, winner: String, expectedP1Delta: String, expectedP2Delta: String, description: String, )</ID>
@@ -48,12 +48,143 @@
     <ID>MagicNumber:Team.kt$Team$100</ID>
     <ID>MagicNumber:Team.kt$Team$50</ID>
     <ID>MagicNumber:TiebreakScore.kt$TiebreakScore$7</ID>
+    <ID>MapGetWithNotNullAssertionOperator:PerformanceBasedRankingCalculatorImpl.kt$PerformanceBasedRankingCalculatorImpl$request.teams[team1Id]!!</ID>
+    <ID>MapGetWithNotNullAssertionOperator:PerformanceBasedRankingCalculatorImpl.kt$PerformanceBasedRankingCalculatorImpl$request.teams[team2Id]!!</ID>
+    <ID>MapGetWithNotNullAssertionOperator:PerformanceBasedRankingCalculatorImplTest.kt$PerformanceBasedRankingCalculatorImplTest.RatingSmoothingTests.EdgeCases$result.response.ratingChanges["P1"]!!</ID>
+    <ID>MapGetWithNotNullAssertionOperator:PerformanceBasedRankingCalculatorImplTest.kt$PerformanceBasedRankingCalculatorImplTest.RatingSmoothingTests.EdgeCases$resultFullSmoothing.response.ratingChanges["P1"]!!</ID>
+    <ID>MapGetWithNotNullAssertionOperator:PerformanceBasedRankingCalculatorImplTest.kt$PerformanceBasedRankingCalculatorImplTest.RatingSmoothingTests.EdgeCases$resultNoSmoothing.response.ratingChanges["P1"]!!</ID>
+    <ID>MapGetWithNotNullAssertionOperator:PerformanceBasedRankingCalculatorImplTest.kt$PerformanceBasedRankingCalculatorImplTest.RatingSmoothingTests.NTRPSmoothing$result.response.ratingChanges["P1"]!!</ID>
+    <ID>MapGetWithNotNullAssertionOperator:PerformanceBasedRankingCalculatorImplTest.kt$PerformanceBasedRankingCalculatorImplTest.RatingSmoothingTests.NTRPSmoothing$result.response.ratingChanges["P2"]!!</ID>
+    <ID>MapGetWithNotNullAssertionOperator:PerformanceBasedRankingCalculatorImplTest.kt$PerformanceBasedRankingCalculatorImplTest.RatingSmoothingTests.NTRPSmoothing$resultNoSmoothing.response.ratingChanges["P1"]!!</ID>
+    <ID>MapGetWithNotNullAssertionOperator:PerformanceBasedRankingCalculatorImplTest.kt$PerformanceBasedRankingCalculatorImplTest.RatingSmoothingTests.NTRPSmoothing$resultWithSmoothing.response.ratingChanges["P1"]!!</ID>
+    <ID>NamedArguments:Application.kt$IllegalStateException("OpenAPI specification file not found")</ID>
+    <ID>NamedArguments:CalculationApiIntegrationTest.kt$CalculationApiIntegrationTest$install(ContentNegotiation) { json() }</ID>
+    <ID>NamedArguments:CalculationApiIntegrationTest.kt$CalculationApiIntegrationTest$listOf(UserName(type = NameType.DISPLAY, value = uid))</ID>
+    <ID>NamedArguments:CalculationApiIntegrationTest.kt$CalculationApiIntegrationTest$listOf(p1.id)</ID>
+    <ID>NamedArguments:CalculationApiIntegrationTest.kt$CalculationApiIntegrationTest$listOf(p2.id)</ID>
+    <ID>NamedArguments:CapabilityApiIntegrationTest.kt$CapabilityApiIntegrationTest$install(ContentNegotiation) { json() }</ID>
+    <ID>NamedArguments:CapabilityApiIntegrationTest.kt$CapabilityApiIntegrationTest$provision( ProvisionUserCommand( firebaseUid = uid, identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true), names = listOf(UserName(type = NameType.DISPLAY, value = "Admin")), capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR), ), )</ID>
+    <ID>NamedArguments:CapabilityRepositoryTest.kt$CapabilityRepositoryTest$listOf(UserName(type = NameType.DISPLAY, value = uid))</ID>
+    <ID>NamedArguments:CapabilityService.kt$CapabilityService$IllegalArgumentException("Invalid capability '$value'", e)</ID>
+    <ID>NamedArguments:CapabilityServiceTest.kt$CapabilityServiceTest$provision( ProvisionUserCommand( firebaseUid = uid, identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true), names = listOf(UserName(type = NameType.DISPLAY, value = uid)), capabilities = roles, ), )</ID>
+    <ID>NamedArguments:CapabilityServiceTest.kt$CapabilityServiceTest$setOf(Capability.PLAYER)</ID>
+    <ID>NamedArguments:ContactApiIntegrationTest.kt$ContactApiIntegrationTest$install(ContentNegotiation) { json() }</ID>
+    <ID>NamedArguments:ContactApiIntegrationTest.kt$ContactApiIntegrationTest$listOf(UserName(type = NameType.FIRST, value = "Admin"))</ID>
+    <ID>NamedArguments:ContactRepositoryTest.kt$ContactRepositoryTest$listOf(UserName(type = NameType.FIRST, value = "Test"))</ID>
+    <ID>NamedArguments:ContactService.kt$IllegalArgumentException("Invalid value '$value'", e)</ID>
+    <ID>NamedArguments:ContactServiceTest.kt$ContactServiceTest$listOf(UserName(type = NameType.FIRST, value = "N"))</ID>
+    <ID>NamedArguments:ContactServiceTest.kt$ContactServiceTest$setOf(Capability.PLAYER)</ID>
+    <ID>NamedArguments:MatchApiIntegrationTest.kt$MatchApiIntegrationTest$install(ContentNegotiation) { json() }</ID>
+    <ID>NamedArguments:MatchApiIntegrationTest.kt$MatchApiIntegrationTest$listOf(matchA.id)</ID>
+    <ID>NamedArguments:MatchApiIntegrationTest.kt$MatchApiIntegrationTest$listOf(matchB.id)</ID>
+    <ID>NamedArguments:MatchApiIntegrationTest.kt$MatchApiIntegrationTest$listOf(p1)</ID>
+    <ID>NamedArguments:MatchApiIntegrationTest.kt$MatchApiIntegrationTest$listOf(p2)</ID>
+    <ID>NamedArguments:MatchApiIntegrationTest.kt$MatchApiIntegrationTest$provision( ProvisionUserCommand( firebaseUid = uid, identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true), names = listOf(UserName(type = NameType.DISPLAY, value = uid)), capabilities = roles + Capability.PLAYER, ), )</ID>
+    <ID>NamedArguments:MatchApiIntegrationTest.kt$MatchApiIntegrationTest$setOf(Capability.ADMINISTRATOR)</ID>
+    <ID>NamedArguments:MatchApiIntegrationTest.kt$MatchApiIntegrationTest$setOf(Capability.HOST)</ID>
+    <ID>NamedArguments:MatchRepositoryTest.kt$MatchRepositoryTest$listOf(UserName(type = NameType.DISPLAY, value = uid))</ID>
+    <ID>NamedArguments:MatchRepositoryTest.kt$MatchRepositoryTest$listOf(u1)</ID>
+    <ID>NamedArguments:MatchRepositoryTest.kt$MatchRepositoryTest$listOf(u2)</ID>
+    <ID>NamedArguments:MatchRoutes.kt$IllegalArgumentException("filter must be 'pending-calculation' or 'awaiting-results'")</ID>
+    <ID>NamedArguments:MatchService.kt$IllegalArgumentException("Invalid matchDate '$value'; expected ISO-8601 (yyyy-MM-dd)", e)</ID>
+    <ID>NamedArguments:MatchService.kt$IllegalArgumentException("Invalid user id '$value'", e)</ID>
+    <ID>NamedArguments:MatchService.kt$IllegalArgumentException("Invalid value '$value'", e)</ID>
+    <ID>NamedArguments:MatchService.kt$IllegalArgumentException("set $setNumber has no clear winner")</ID>
+    <ID>NamedArguments:MatchService.kt$MatchService$IllegalArgumentException("Unknown user $id")</ID>
+    <ID>NamedArguments:MatchServiceTest.kt$MatchServiceTest$listOf(UserName(type = NameType.DISPLAY, value = uid))</ID>
+    <ID>NamedArguments:MatchServiceTest.kt$MatchServiceTest$listOf(p1.id)</ID>
+    <ID>NamedArguments:MatchServiceTest.kt$MatchServiceTest$listOf(p1.toString())</ID>
+    <ID>NamedArguments:MatchServiceTest.kt$MatchServiceTest$listOf(p2.toString())</ID>
+    <ID>NamedArguments:MatchServiceTest.kt$MatchServiceTest$setOf(Capability.PLAYER)</ID>
+    <ID>NamedArguments:NameApiIntegrationTest.kt$NameApiIntegrationTest$install(ContentNegotiation) { json() }</ID>
+    <ID>NamedArguments:NameService.kt$NameService$IllegalArgumentException("Invalid name type '$value'", e)</ID>
+    <ID>NamedArguments:NameServiceTest.kt$NameServiceTest$provision( ProvisionUserCommand( firebaseUid = uid, identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true), names = listOf(UserName(type = NameType.DISPLAY, value = "Display $uid")), capabilities = capabilities, ), )</ID>
+    <ID>NamedArguments:NameServiceTest.kt$NameServiceTest$setOf(Capability.PLAYER)</ID>
+    <ID>NamedArguments:NtrpMatchupMatrixReport.kt$NtrpMatchupMatrixReport$abs(p1 - p2)</ID>
+    <ID>NamedArguments:NtrpMatchupMatrixReport.kt$NtrpMatchupMatrixReport$abs(p1Delta + p2Delta)</ID>
+    <ID>NamedArguments:NtrpMatchupMatrixReport.kt$NtrpMatchupMatrixReport$appendLine("'*' = boundary clamping at 1.0/7.0 applied (zero-sum intentionally broken).")</ID>
+    <ID>NamedArguments:NtrpMatchupMatrixReport.kt$NtrpMatchupMatrixReport$appendLine("=== Score $gamesWon-$gamesLost (dominance ${String.format(Locale.US, "%.3f", dominance)}) ===")</ID>
+    <ID>NamedArguments:NtrpMatchupMatrixReport.kt$NtrpMatchupMatrixReport$appendLine("Below the diagonal P1 is the underdog (upset); above it P1 is the favorite.")</ID>
+    <ID>NamedArguments:NtrpMatchupMatrixReport.kt$NtrpMatchupMatrixReport$appendLine("Constants: K=$K_NTRP, threshold=$THRESHOLD_PCT, upset multiplier=$UPSET_MULTIPLIER, range=$NTRP_RANGE")</ID>
+    <ID>NamedArguments:NtrpMatchupMatrixReport.kt$NtrpMatchupMatrixReport$appendLine("NTRP MATCHUP MATRIX")</ID>
+    <ID>NamedArguments:NtrpMatchupMatrixReport.kt$NtrpMatchupMatrixReport$appendLine("P1 (row) is always the winner; columns are P2's rating; cell = P1's rating delta.")</ID>
+    <ID>NamedArguments:NtrpMatchupMatrixReport.kt$NtrpMatchupMatrixReport$appendLine("P1\\P2 " + levels.joinToString(separator = "") { level -&gt; String.format(Locale.US, "%9s", level) })</ID>
+    <ID>NamedArguments:NtrpMatchupMatrixReport.kt$NtrpMatchupMatrixReport$appendLine(String.format(Locale.US, "%-6s", p1) + cells)</ID>
+    <ID>NamedArguments:NtrpMatchupMatrixReport.kt$NtrpMatchupMatrixReport$max(0.0, (THRESHOLD_PCT - normalizedGap) / THRESHOLD_PCT)</ID>
+    <ID>NamedArguments:NtrpMatchupMatrixReport.kt$NtrpMatchupMatrixReport$max(NTRP_MIN, p2 - rawChange)</ID>
+    <ID>NamedArguments:NtrpMatchupMatrixReport.kt$NtrpMatchupMatrixReport$min(NTRP_MAX, p1 + rawChange)</ID>
+    <ID>NamedArguments:NtrpMatchupMatrixReport.kt$NtrpMatchupMatrixReport$println("\nResults written to /tmp/ntrp_matchup_matrix.txt")</ID>
+    <ID>NamedArguments:NtrpMatchupMatrixReport.kt$NtrpMatchupMatrixReport$println(output)</ID>
+    <ID>NamedArguments:OpenAPIIntegrationTest.kt$OpenAPIIntegrationTest$match(ContentType.Text.Html)</ID>
+    <ID>NamedArguments:OpenAPIIntegrationTest.kt$OpenAPIIntegrationTest$match(ContentType.Text.Plain)</ID>
+    <ID>NamedArguments:PerformanceBasedRankingCalculatorImpl.kt$PerformanceBasedRankingCalculatorImpl$listOf(updatedPlayer1)</ID>
+    <ID>NamedArguments:PerformanceBasedRankingCalculatorImpl.kt$PerformanceBasedRankingCalculatorImpl$listOf(updatedPlayer2)</ID>
+    <ID>NamedArguments:PerformanceBasedRankingCalculatorImplTest.kt$PerformanceBasedRankingCalculatorImplTest$listOf(player1)</ID>
+    <ID>NamedArguments:PerformanceBasedRankingCalculatorImplTest.kt$PerformanceBasedRankingCalculatorImplTest$listOf(player2)</ID>
+    <ID>NamedArguments:PerformanceBasedRankingCalculatorImplTest.kt$PerformanceBasedRankingCalculatorImplTest.AuditTrailTests$abs(dominance)</ID>
+    <ID>NamedArguments:PerformanceBasedRankingCalculatorImplTest.kt$PerformanceBasedRankingCalculatorImplTest.RatingSmoothingTests.NTRPSmoothing$shouldBeBetween(-0.000001, 0.000001, 0.0)</ID>
+    <ID>NamedArguments:PerformanceBasedRankingCalculatorImplTest.kt$PerformanceBasedRankingCalculatorImplTest.RatingSmoothingTests.NTRPSmoothing$shouldBeBetween(fullChange * 0.25, fullChange * 0.35, 0.0)</ID>
+    <ID>NamedArguments:PerformanceBasedRankingCalculatorImplTest.kt$PerformanceBasedRankingCalculatorImplTest.RatingSmoothingTests.NTRPSmoothing$shouldBeBetween(fullChange * 0.45, fullChange * 0.55, 0.0)</ID>
+    <ID>NamedArguments:PerformanceBasedRankingCalculatorImplTest.kt$PerformanceBasedRankingCalculatorImplTest.RatingSmoothingTests.NTRPSmoothing$shouldBeBetween(fullChange * 0.65, fullChange * 0.75, 0.0)</ID>
+    <ID>NamedArguments:PostgresTestDatabase.kt$PostgresTestDatabase$exec("TRUNCATE users CASCADE")</ID>
+    <ID>NamedArguments:RankingCalculationPayloadTest.kt$RankingCalculationPayloadTest$encodeToString(JsonElement.serializer(), element)</ID>
+    <ID>NamedArguments:RankingCalculationPayloadTest.kt$RankingCalculationPayloadTest$parseToJsonElement(jsonString)</ID>
+    <ID>NamedArguments:RankingTestCase.kt$Scenarios$mapOf( 1 to TestScore.SetScore( player1Games = player1Games, player2Games = player2Games, tieBrakeScore = tieBreakScore, ), )</ID>
+    <ID>NamedArguments:Rating.kt$Rating$IllegalArgumentException("Rating value must be a valid number, got '$value'")</ID>
+    <ID>NamedArguments:RatingApiIntegrationTest.kt$RatingApiIntegrationTest$install(ContentNegotiation) { json() }</ID>
+    <ID>NamedArguments:RatingApiIntegrationTest.kt$RatingApiIntegrationTest$listOf(UserName(type = NameType.DISPLAY, value = "Admin"))</ID>
+    <ID>NamedArguments:RatingCalculationServiceTest.kt$RatingCalculationServiceTest$listOf(loser.toString())</ID>
+    <ID>NamedArguments:RatingCalculationServiceTest.kt$RatingCalculationServiceTest$listOf(winner.toString())</ID>
+    <ID>NamedArguments:RatingCalculationServiceTest.kt$RatingCalculationServiceTest$provision( ProvisionUserCommand( firebaseUid = uid, identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true), names = listOf(UserName(type = NameType.DISPLAY, value = uid)), capabilities = roles, ), )</ID>
+    <ID>NamedArguments:RatingCalculationServiceTest.kt$RatingCalculationServiceTest$setOf(Capability.PLAYER)</ID>
+    <ID>NamedArguments:RatingRepositoryTest.kt$RatingRepositoryTest$listOf(UserName(type = NameType.DISPLAY, value = uid))</ID>
+    <ID>NamedArguments:RatingService.kt$RatingService$IllegalArgumentException("Invalid rating '$value'", e)</ID>
+    <ID>NamedArguments:RatingServiceTest.kt$RatingServiceTest$provision( ProvisionUserCommand( firebaseUid = uid, identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true), names = listOf(UserName(type = NameType.DISPLAY, value = uid)), capabilities = roles, ), )</ID>
+    <ID>NamedArguments:RatingServiceTest.kt$RatingServiceTest$setOf(Capability.PLAYER)</ID>
+    <ID>NamedArguments:SearchRanges.kt$NumericRange.Companion$IllegalArgumentException("Invalid number '$value' in range '$raw'")</ID>
+    <ID>NamedArguments:TeamTestHelpers.kt$listOf( SetScore( games = mapOf("T1" to p1Games, "T2" to p2Games), winnerTeamId = winner, tiebreak = tiebreakFor(p1Games = p1Games, p2Games = p2Games, winner = winner), ), )</ID>
+    <ID>NamedArguments:TeamTestHelpers.kt$listOf(player1)</ID>
+    <ID>NamedArguments:TeamTestHelpers.kt$listOf(player2)</ID>
+    <ID>NamedArguments:TestFirebaseAuth.kt$TestFirebaseAuth$mapOf(signInProvider to listOf(uid))</ID>
+    <ID>NamedArguments:TestScenarios.kt$TestScenarios$add(generatedScenario(id = "CG$index", group = "Competitive", ntrpP1 = p1, ntrpP2 = p2, score = score))</ID>
+    <ID>NamedArguments:TestScenarios.kt$TestScenarios$add(generatedScenario(id = "EX$index", group = "Extreme", ntrpP1 = p1, ntrpP2 = p2, score = score))</ID>
+    <ID>NamedArguments:TestScenarios.kt$TestScenarios$add(generatedScenario(id = "PL$index", group = "Published", ntrpP1 = p1, ntrpP2 = p2, score = score))</ID>
+    <ID>NamedArguments:TestScenarios.kt$TestScenarios$coerceIn(constants.minRating, constants.maxRating)</ID>
+    <ID>NamedArguments:TokenMapping.kt$IllegalArgumentException("A display name is required")</ID>
+    <ID>NamedArguments:TokenMapping.kt$IllegalArgumentException("Invalid dateOfBirth '$value'; expected ISO-8601 (yyyy-MM-dd)", e)</ID>
+    <ID>NamedArguments:TokenMapping.kt$listOf(UserName(type = NameType.DISPLAY, value = value))</ID>
+    <ID>NamedArguments:UserApiIntegrationTest.kt$UserApiIntegrationTest$TextContent(json, ContentType.Application.Json)</ID>
+    <ID>NamedArguments:UserApiIntegrationTest.kt$UserApiIntegrationTest$install(ContentNegotiation) { json() }</ID>
+    <ID>NamedArguments:UserApiIntegrationTest.kt$UserApiIntegrationTest$listOf("PLAYER")</ID>
+    <ID>NamedArguments:UserDomain.kt$ProvisionUserCommand$setOf(Capability.PLAYER)</ID>
+    <ID>NamedArguments:UserRepositoryTest.kt$UserRepositoryTest$setOf(Capability.PLAYER)</ID>
+    <ID>NamedArguments:UserRoutes.kt$IllegalArgumentException("Invalid user id '$value'", e)</ID>
+    <ID>NamedArguments:UserSearchApiIntegrationTest.kt$UserSearchApiIntegrationTest$listOf("Alice")</ID>
+    <ID>NamedArguments:UserSearchApiIntegrationTest.kt$UserSearchApiIntegrationTest$listOf("Mid")</ID>
+    <ID>NamedArguments:UserSearchApiIntegrationTest.kt$UserSearchApiIntegrationTest$listOf("Twenties")</ID>
+    <ID>NamedArguments:UserSearchApiIntegrationTest.kt$UserSearchApiIntegrationTest$listOf(UserName(type = NameType.DISPLAY, value = uid))</ID>
+    <ID>NamedArguments:UserSearchApiIntegrationTest.kt$UserSearchApiIntegrationTest$setOf(Capability.ADMINISTRATOR)</ID>
+    <ID>NamedArguments:UserSearchApiIntegrationTest.kt$UserSearchApiIntegrationTest$setOf(Capability.HOST)</ID>
+    <ID>NamedArguments:UserSearchApiIntegrationTest.kt$UserSearchApiIntegrationTest$setOf(Capability.PLAYER)</ID>
+    <ID>NamedArguments:UserServiceTest.kt$UserServiceTest$listOf(UserName(type = org.skopeo.model.NameType.FIRST, value = "Root"))</ID>
+    <ID>NamedArguments:UserServiceTest.kt$UserServiceTest$setOf(Capability.PLAYER)</ID>
     <ID>ReturnCount:Level.kt$Level.Companion$fun isWithinLevel( rating: Rating, level: Level, ): Boolean</ID>
     <ID>TooGenericExceptionCaught:DatabaseConfig.kt$DatabaseConfig$e: Exception</ID>
     <ID>TooGenericExceptionCaught:RankingRoutes.kt$e: Exception</ID>
     <ID>TopLevelPropertyNaming:Application.kt$private val logger = KotlinLogging.logger {}</ID>
     <ID>TopLevelPropertyNaming:DatabaseConfig.kt$private val logger = KotlinLogging.logger {}</ID>
     <ID>TopLevelPropertyNaming:RankingRoutes.kt$private val logger = KotlinLogging.logger {}</ID>
+    <ID>UnsafeCallOnNullableType:DatabaseConfig.kt$DatabaseConfig$dataSource!!</ID>
+    <ID>UnsafeCallOnNullableType:MatchRepository.kt$MatchRepository$loadMatch(id = it[MatchesTable.id].value)!!</ID>
+    <ID>UnsafeCallOnNullableType:MatchRepository.kt$MatchRepository$loadMatch(id = matchId)!!</ID>
+    <ID>UnsafeCallOnNullableType:MatchRepository.kt$MatchRepository$set.tiebreakTeam1Points!!</ID>
+    <ID>UnsafeCallOnNullableType:MatchRepository.kt$MatchRepository$set.tiebreakTeam2Points!!</ID>
+    <ID>UnsafeCallOnNullableType:PerformanceBasedRankingCalculatorImpl.kt$PerformanceBasedRankingCalculatorImpl$request.teams[team1Id]!!</ID>
+    <ID>UnsafeCallOnNullableType:PerformanceBasedRankingCalculatorImpl.kt$PerformanceBasedRankingCalculatorImpl$request.teams[team2Id]!!</ID>
+    <ID>UnsafeCallOnNullableType:Rating.kt$RatingSerializer$jsonObject["publishedLevel"]!!</ID>
+    <ID>UnsafeCallOnNullableType:RatingRepository.kt$RatingRepository$ratingRow(userId = userId)!!</ID>
+    <ID>UnsafeCallOnNullableType:RouteSupport.kt$call.principal&lt;JWTPrincipal&gt;()!!</ID>
+    <ID>UnsafeCallOnNullableType:UserRepository.kt$UserRepository$loadAggregate(id = it[UsersTable.id].value)!!</ID>
     <ID>UnusedParameter:PerformanceBasedRankingCalculatorImplTest.kt$PerformanceBasedRankingCalculatorImplTest$description: String</ID>
     <ID>UseCheckOrError:Application.kt$throw IllegalStateException("OpenAPI specification file not found")</ID>
   </CurrentIssues>

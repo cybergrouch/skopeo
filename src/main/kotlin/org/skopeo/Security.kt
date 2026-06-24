@@ -53,16 +53,16 @@ class FirebaseAuthSettings(
 fun Application.configureSecurity(settings: FirebaseAuthSettings? = null) {
     val resolved = settings ?: firebaseAuthSettingsFromConfig()
 
-    install(Authentication) {
-        jwt(FIREBASE_AUTH) {
+    install(plugin = Authentication) {
+        jwt(name = FIREBASE_AUTH) {
             realm = "skopeo"
-            verifier(resolved.jwkProvider, resolved.issuer) {
+            verifier(jwkProvider = resolved.jwkProvider, issuer = resolved.issuer) {
                 withAudience(resolved.audience)
                 withIssuer(resolved.issuer)
             }
             validate { credential ->
-                if (credential.payload.subject != null && credential.payload.audience.contains(resolved.audience)) {
-                    JWTPrincipal(credential.payload)
+                if (credential.payload.subject != null && credential.payload.audience.contains(element = resolved.audience)) {
+                    JWTPrincipal(payload = credential.payload)
                 } else {
                     null
                 }
@@ -80,7 +80,7 @@ fun Application.configureSecurity(settings: FirebaseAuthSettings? = null) {
 private fun Application.firebaseAuthSettingsFromConfig(): FirebaseAuthSettings {
     // propertyOrNull so tests (which run without application.yaml loaded) fall back to a
     // placeholder; real environments supply firebase.projectId via FIREBASE_PROJECT_ID.
-    val projectId = environment.config.propertyOrNull("firebase.projectId")?.getString() ?: "skopeo-dev"
+    val projectId = environment.config.propertyOrNull(path = "firebase.projectId")?.getString() ?: "skopeo-dev"
     val issuer = "https://securetoken.google.com/$projectId"
     val jwkProvider =
         JwkProviderBuilder(URI(FIREBASE_JWK_URL).toURL())

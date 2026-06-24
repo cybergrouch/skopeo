@@ -31,9 +31,9 @@ import org.skopeo.service.match.MatchService
 fun Application.configureMatchRoutes(service: MatchService = MatchService()) {
     routing {
         authenticate(FIREBASE_AUTH) {
-            route("/api/v1/matches") {
-                listAndCreate(service)
-                byId(service)
+            route(path = "/api/v1/matches") {
+                listAndCreate(service = service)
+                byId(service = service)
             }
         }
     }
@@ -42,7 +42,7 @@ fun Application.configureMatchRoutes(service: MatchService = MatchService()) {
 private fun Route.listAndCreate(service: MatchService) {
     get {
         respondMappingErrors {
-            val view = matchQueryOf(call.request.queryParameters["filter"])
+            val view = matchQueryOf(value = call.request.queryParameters["filter"])
             val list = service.query(token = verifiedToken(), view = view)
             call.respond(status = HttpStatusCode.OK, message = list.map { it.toResponse() })
         }
@@ -57,23 +57,23 @@ private fun Route.listAndCreate(service: MatchService) {
 }
 
 private fun Route.byId(service: MatchService) {
-    get("/{id}") {
+    get(path = "/{id}") {
         respondMappingErrors {
-            val match = service.getById(token = verifiedToken(), matchId = uuidParam("id"))
+            val match = service.getById(token = verifiedToken(), matchId = uuidParam(name = "id"))
             call.respond(status = HttpStatusCode.OK, message = match.toResponse())
         }
     }
-    post("/{id}/result") {
+    post(path = "/{id}/result") {
         respondMappingErrors {
             val request = call.receive<MatchResultRequest>()
-            val match = service.uploadResult(token = verifiedToken(), matchId = uuidParam("id"), request = request)
+            val match = service.uploadResult(token = verifiedToken(), matchId = uuidParam(name = "id"), request = request)
             call.respond(status = HttpStatusCode.OK, message = match.toResponse())
         }
     }
-    put("/{id}/state") {
+    put(path = "/{id}/state") {
         respondMappingErrors {
             val request = call.receive<MatchStateRequest>()
-            val match = service.setActive(token = verifiedToken(), matchId = uuidParam("id"), active = request.isActive)
+            val match = service.setActive(token = verifiedToken(), matchId = uuidParam(name = "id"), active = request.isActive)
             call.respond(status = HttpStatusCode.OK, message = match.toResponse())
         }
     }

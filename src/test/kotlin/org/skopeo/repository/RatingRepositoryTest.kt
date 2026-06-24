@@ -38,45 +38,46 @@ class RatingRepositoryTest {
 
     private fun newUser(uid: String): UUID =
         users.provision(
-            ProvisionUserCommand(
-                firebaseUid = uid,
-                identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                names = listOf(UserName(type = NameType.DISPLAY, value = uid)),
-            ),
+            command =
+                ProvisionUserCommand(
+                    firebaseUid = uid,
+                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                    names = listOf(UserName(type = NameType.DISPLAY, value = uid)),
+                ),
         ).id
 
     @Test
     fun `setRating inserts then updates, per system`() {
-        val userId = newUser("u1")
+        val userId = newUser(uid = "u1")
 
-        ratings.setRating(userId, BigDecimal("3.5"), "3.5", BigDecimal("0.50"))
-        ratings.findCurrentRating(userId)!!.let {
+        ratings.setRating(userId = userId, rating = BigDecimal("3.5"), level = "3.5", confidence = BigDecimal("0.50"))
+        ratings.findCurrentRating(userId = userId)!!.let {
             it.currentRating shouldBe BigDecimal("3.500000")
             it.currentLevel shouldBe "3.5"
             it.matchesPlayed shouldBe 0
         }
 
-        ratings.setRating(userId, BigDecimal("4.0"), "4.0", BigDecimal("0.60"))
-        ratings.findCurrentRating(userId)!!.currentRating shouldBe BigDecimal("4.000000")
-        ratings.findByUser(userId).size shouldBe 1
+        ratings.setRating(userId = userId, rating = BigDecimal("4.0"), level = "4.0", confidence = BigDecimal("0.60"))
+        ratings.findCurrentRating(userId = userId)!!.currentRating shouldBe BigDecimal("4.000000")
+        ratings.findByUser(userId = userId).size shouldBe 1
     }
 
     @Test
     fun `findByUserAndSystem is null when absent`() {
-        ratings.findCurrentRating(UUID.randomUUID()).shouldBeNull()
+        ratings.findCurrentRating(userId = UUID.randomUUID()).shouldBeNull()
     }
 
     @Test
     fun `history is empty for a new user (both filters)`() {
-        val userId = newUser("u2")
-        ratings.historyByUser(userId) shouldBe emptyList()
+        val userId = newUser(uid = "u2")
+        ratings.historyByUser(userId = userId) shouldBe emptyList()
     }
 
     @Test
     fun `pending assessment lists active users without a rating`() {
-        val unrated = newUser("unrated")
-        val rated = newUser("rated")
-        ratings.setRating(rated, BigDecimal("3.0"), "3.0", BigDecimal("0.50"))
+        val unrated = newUser(uid = "unrated")
+        val rated = newUser(uid = "rated")
+        ratings.setRating(userId = rated, rating = BigDecimal("3.0"), level = "3.0", confidence = BigDecimal("0.50"))
 
         val pending = ratings.userIdsPendingAssessment()
         pending shouldContain unrated

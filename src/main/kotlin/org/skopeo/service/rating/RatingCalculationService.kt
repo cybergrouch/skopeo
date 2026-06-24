@@ -67,9 +67,9 @@ class RatingCalculationService(
         token: VerifiedFirebaseToken,
         dryRun: Boolean,
     ): CalculationOutcome {
-        val adminId = requireAdmin(token)
+        val adminId = requireAdmin(token = token)
         val snapshot = mutableMapOf<UUID, BigDecimal>()
-        val processed = matches.listPendingCalculation().map { processMatch(it, snapshot) }
+        val processed = matches.listPendingCalculation().map { processMatch(match = it, snapshot = snapshot) }
 
         if (!dryRun) commit(processed = processed, ratedBy = adminId)
         return CalculationOutcome(dryRun = dryRun, matches = processed)
@@ -90,18 +90,19 @@ class RatingCalculationService(
                         matchDate = calc.matchDate,
                     )
                     ratings.appendHistory(
-                        RatingHistoryWrite(
-                            userId = change.userId,
-                            matchId = calc.matchId,
-                            previousRating = change.previousRating,
-                            newRating = change.newRating,
-                            ratingChange = change.change,
-                            percentChange = change.percentChange,
-                            previousLevel = change.previousLevel,
-                            newLevel = change.newLevel,
-                            levelChanged = change.levelChanged,
-                            calculatedAt = now,
-                        ),
+                        write =
+                            RatingHistoryWrite(
+                                userId = change.userId,
+                                matchId = calc.matchId,
+                                previousRating = change.previousRating,
+                                newRating = change.newRating,
+                                ratingChange = change.change,
+                                percentChange = change.percentChange,
+                                previousLevel = change.previousLevel,
+                                newLevel = change.newLevel,
+                                levelChanged = change.levelChanged,
+                                calculatedAt = now,
+                            ),
                     )
                 }
                 matches.markRated(matchId = calc.matchId, ratedAt = now, ratedBy = ratedBy)
@@ -113,18 +114,18 @@ class RatingCalculationService(
         match: Match,
         snapshot: MutableMap<UUID, BigDecimal>,
     ): MatchCalculation {
-        require(match.matchType == TeamType.SINGLES) {
+        require(value = match.matchType == TeamType.SINGLES) {
             "Only SINGLES matches can be calculated currently (match ${match.id})"
         }
         val u1 = match.team1.userIds.single()
         val u2 = match.team2.userIds.single()
-        val r1 = currentRating(u1, snapshot)
-        val r2 = currentRating(u2, snapshot)
+        val r1 = currentRating(userId = u1, snapshot = snapshot)
+        val r2 = currentRating(userId = u2, snapshot = snapshot)
 
         val request = buildRequest(match = match, r1 = r1, r2 = r2)
-        val response = calculator.calculate(request).response
+        val response = calculator.calculate(request = request).response
 
-        val changes = listOf(playerChange(u1, response), playerChange(u2, response))
+        val changes = listOf(playerChange(userId = u1, response = response), playerChange(userId = u2, response = response))
         changes.forEach { snapshot[it.userId] = it.newRating }
         return MatchCalculation(matchId = match.id, matchDate = match.matchDate, changes = changes)
     }
@@ -133,8 +134,8 @@ class RatingCalculationService(
         userId: UUID,
         snapshot: MutableMap<UUID, BigDecimal>,
     ): BigDecimal =
-        snapshot.getOrPut(userId) {
-            requireNotNull(ratings.findCurrentRating(userId)) {
+        snapshot.getOrPut(key = userId) {
+            requireNotNull(value = ratings.findCurrentRating(userId = userId)) {
                 "User $userId has no rating (pending assessment)"
             }.currentRating
         }
@@ -144,7 +145,7 @@ class RatingCalculationService(
         response: org.skopeo.dto.RankingCalculationResponse,
     ): PlayerChange {
         val rc =
-            requireNotNull(response.ratingChanges[userId.toString()]) {
+            requireNotNull(value = response.ratingChanges[userId.toString()]) {
                 "calculator returned no change for player $userId"
             }
         return PlayerChange(
@@ -152,7 +153,7 @@ class RatingCalculationService(
             previousRating = BigDecimal(rc.previousRating.value),
             newRating = BigDecimal(rc.newRating.value),
             change = BigDecimal(rc.change),
-            percentChange = BigDecimal(rc.percentChange.removeSuffix("%")),
+            percentChange = BigDecimal(rc.percentChange.removeSuffix(suffix = "%")),
             previousLevel = rc.previousRating.publishedLevel.value,
             newLevel = rc.newRating.publishedLevel.value,
             levelChanged = rc.levelChanged,
@@ -160,8 +161,8 @@ class RatingCalculationService(
     }
 
     private fun requireAdmin(token: VerifiedFirebaseToken): UUID {
-        val caller = users.findByFirebaseUid(token.uid)
-        if (caller == null || !caller.capabilities.contains(Capability.ADMINISTRATOR)) throw ForbiddenException()
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+        if (caller == null || !caller.capabilities.contains(element = Capability.ADMINISTRATOR)) throw ForbiddenException()
         return caller.id
     }
 }
@@ -177,8 +178,8 @@ private fun buildRequest(
     val t2 = match.team2.teamId.toString()
     val teams =
         mapOf(
-            t1 to singlesTeam(t1, u1, r1),
-            t2 to singlesTeam(t2, u2, r2),
+            t1 to singlesTeam(teamId = t1, userId = u1, rating = r1),
+            t2 to singlesTeam(teamId = t2, userId = u2, rating = r2),
         )
     val sets =
         match.sets.map { set ->
@@ -214,7 +215,12 @@ private fun singlesTeam(
         name = teamId,
         players =
             listOf(
-                PlayerProfile(playerId = userId.toString(), name = "Player", rating = Rating.fromValue(rating.toPlainString())),
+                element =
+                    PlayerProfile(
+                        playerId = userId.toString(),
+                        name = "Player",
+                        rating = Rating.fromValue(value = rating.toPlainString()),
+                    ),
             ),
         teamType = TeamType.SINGLES,
     )

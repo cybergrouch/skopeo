@@ -35,9 +35,9 @@ class ContactService(
         token: VerifiedFirebaseToken,
         userId: UUID,
     ): List<Contact> {
-        requireUserExists(userId)
+        requireUserExists(userId = userId)
         requireUserAccess(token = token, userId = userId)
-        return contacts.listByUser(userId)
+        return contacts.listByUser(userId = userId)
     }
 
     fun get(
@@ -55,9 +55,9 @@ class ContactService(
         userId: UUID,
         request: ContactCreateRequest,
     ): Contact {
-        requireUserExists(userId)
+        requireUserExists(userId = userId)
         requireUserAccess(token = token, userId = userId)
-        val type = parseType(request.type)
+        val type = parseType(value = request.type)
         return conflictAware(message = "A ${type.name} contact already exists for this user") {
             contacts.create(userId = userId, type = type, value = request.value, isPrimary = request.isPrimary)
         }
@@ -78,7 +78,7 @@ class ContactService(
         val disabledAt = if (active) null else LocalDateTime.now()
         return conflictAware(message = "Another active contact of that type already exists") {
             contacts.setActive(id = contactId, active = active, disabledAt = disabledAt)
-        } ?: throw ContactNotFoundException(contactId)
+        } ?: throw ContactNotFoundException(id = contactId)
     }
 
     /** The ADMINISTRATOR-only verification action; records who verified and when. */
@@ -89,12 +89,12 @@ class ContactService(
         request: VerificationRequest,
     ): Contact {
         val contact = locate(userId = userId, contactId = contactId)
-        val adminId = requireAdmin(token)
-        require(contact.isActive) { "Cannot change verification of a disabled contact" }
-        val status = parseStatus(request.status)
+        val adminId = requireAdmin(token = token)
+        require(value = contact.isActive) { "Cannot change verification of a disabled contact" }
+        val status = parseStatus(value = request.status)
         val method =
             if (status == VerificationStatus.VERIFIED) {
-                request.method?.let(::parseMethod) ?: VerificationMethod.ADMIN_OVERRIDE
+                request.method?.let(block = ::parseMethod) ?: VerificationMethod.ADMIN_OVERRIDE
             } else {
                 null
             }
@@ -106,44 +106,44 @@ class ContactService(
                 verifiedBy = adminId,
                 verifiedAt = LocalDateTime.now(),
             )
-        } ?: throw ContactNotFoundException(contactId)
+        } ?: throw ContactNotFoundException(id = contactId)
     }
 
     private fun locate(
         userId: UUID,
         contactId: UUID,
     ): Contact {
-        val contact = contacts.findById(contactId)
-        if (contact == null || contact.userId != userId) throw ContactNotFoundException(contactId)
+        val contact = contacts.findById(id = contactId)
+        if (contact == null || contact.userId != userId) throw ContactNotFoundException(id = contactId)
         return contact
     }
 
     private fun requireUserExists(userId: UUID) {
-        users.findById(userId) ?: throw UserNotFoundException(userId)
+        users.findById(id = userId) ?: throw UserNotFoundException(id = userId)
     }
 
     private fun requireUserAccess(
         token: VerifiedFirebaseToken,
         userId: UUID,
     ) {
-        val caller = users.findByFirebaseUid(token.uid)
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
         val isSelf = caller?.id == userId
-        val isAdmin = caller?.capabilities?.contains(Capability.ADMINISTRATOR) == true
+        val isAdmin = caller?.capabilities?.contains(element = Capability.ADMINISTRATOR) == true
         if (!isSelf && !isAdmin) throw ForbiddenException()
     }
 
     private fun requireAdmin(token: VerifiedFirebaseToken): UUID {
-        val caller = users.findByFirebaseUid(token.uid)
-        if (caller == null || !caller.capabilities.contains(Capability.ADMINISTRATOR)) throw ForbiddenException()
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+        if (caller == null || !caller.capabilities.contains(element = Capability.ADMINISTRATOR)) throw ForbiddenException()
         return caller.id
     }
 }
 
-private fun parseType(value: String): ContactType = parseEnum(value) { ContactType.valueOf(it) }
+private fun parseType(value: String): ContactType = parseEnum(value = value) { ContactType.valueOf(value = it) }
 
-private fun parseStatus(value: String): VerificationStatus = parseEnum(value) { VerificationStatus.valueOf(it) }
+private fun parseStatus(value: String): VerificationStatus = parseEnum(value = value) { VerificationStatus.valueOf(value = it) }
 
-private fun parseMethod(value: String): VerificationMethod = parseEnum(value) { VerificationMethod.valueOf(it) }
+private fun parseMethod(value: String): VerificationMethod = parseEnum(value = value) { VerificationMethod.valueOf(value = it) }
 
 private fun <T> parseEnum(
     value: String,
@@ -162,8 +162,8 @@ private fun <T> conflictAware(
     try {
         block()
     } catch (e: ExposedSQLException) {
-        if (isUniqueViolation(e)) throw ContactConflictException(message) else throw e
+        if (isUniqueViolation(e = e)) throw ContactConflictException(message = message) else throw e
     }
 
 private fun isUniqueViolation(e: ExposedSQLException): Boolean =
-    generateSequence<Throwable>(e) { it.cause }.any { (it as? SQLException)?.sqlState == PG_UNIQUE_VIOLATION }
+    generateSequence<Throwable>(seed = e) { it.cause }.any { (it as? SQLException)?.sqlState == PG_UNIQUE_VIOLATION }

@@ -34,14 +34,14 @@ fun Application.configureRatingRoutes(
     routing {
         authenticate(FIREBASE_AUTH) {
             // Constant path — registered alongside /users/{id}; Ktor prefers the constant segment.
-            get("/api/v1/users/pending-assessment") {
+            get(path = "/api/v1/users/pending-assessment") {
                 respondMappingErrors {
-                    val pending = service.pendingAssessment(verifiedToken())
+                    val pending = service.pendingAssessment(token = verifiedToken())
                     call.respond(status = HttpStatusCode.OK, message = pending.map { it.toResponse() })
                 }
             }
             // Calculation trigger (ADMINISTRATOR). dryRun defaults true; an empty body is a dry run.
-            post("/api/v1/ratings/calculations") {
+            post(path = "/api/v1/ratings/calculations") {
                 respondMappingErrors {
                     // No/unparseable body → a dry run (the safe default; only an explicit
                     // {"dryRun": false} commits).
@@ -50,33 +50,33 @@ fun Application.configureRatingRoutes(
                     call.respond(status = HttpStatusCode.OK, message = outcome.toResponse())
                 }
             }
-            route("/api/v1/users/{userId}") {
-                ratings(service)
+            route(path = "/api/v1/users/{userId}") {
+                ratings(service = service)
             }
         }
     }
 }
 
 private fun Route.ratings(service: RatingService) {
-    get("/ratings") {
+    get(path = "/ratings") {
         respondMappingErrors {
-            val list = service.getRatings(token = verifiedToken(), userId = uuidParam("userId"))
+            val list = service.getRatings(token = verifiedToken(), userId = uuidParam(name = "userId"))
             call.respond(status = HttpStatusCode.OK, message = list.map { it.toResponse() })
         }
     }
-    get("/rating-history") {
+    get(path = "/rating-history") {
         respondMappingErrors {
-            val history = service.getHistory(token = verifiedToken(), userId = uuidParam("userId"))
+            val history = service.getHistory(token = verifiedToken(), userId = uuidParam(name = "userId"))
             call.respond(status = HttpStatusCode.OK, message = history.map { it.toResponse() })
         }
     }
-    put("/ratings") {
+    put(path = "/ratings") {
         respondMappingErrors {
             val request = call.receive<SetRatingRequest>()
             val rating =
                 service.setRating(
                     token = verifiedToken(),
-                    userId = uuidParam("userId"),
+                    userId = uuidParam(name = "userId"),
                     value = request.value,
                     confidence = request.confidence,
                 )

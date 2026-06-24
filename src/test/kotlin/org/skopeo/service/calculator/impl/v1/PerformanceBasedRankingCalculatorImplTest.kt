@@ -217,9 +217,9 @@ class PerformanceBasedRankingCalculatorImplTest {
         @DisplayName("Contains calculation start with player info")
         fun testAuditTrailContainsCalculationStart() {
             val request = createAuditTestRequest()
-            val result = calculator.calculate(request)
+            val result = calculator.calculate(request = request)
 
-            val startEntry = result.audit.find { it.message.contains("Calculating ranking") }
+            val startEntry = result.audit.find { it.message.contains(other = "Calculating ranking") }
 
             startEntry shouldNotBe null
             startEntry!!.context["player1"] shouldBe "John Doe"
@@ -232,9 +232,9 @@ class PerformanceBasedRankingCalculatorImplTest {
         @DisplayName("Contains match result with dominance factors")
         fun testAuditTrailContainsMatchResult() {
             val request = createAuditTestRequest()
-            val result = calculator.calculate(request)
+            val result = calculator.calculate(request = request)
 
-            val matchResultEntry = result.audit.find { it.message.contains("Match result") }
+            val matchResultEntry = result.audit.find { it.message.contains(other = "Match result") }
 
             matchResultEntry shouldNotBe null
             matchResultEntry!!.context shouldContainKey "winnerTeamId"
@@ -246,9 +246,9 @@ class PerformanceBasedRankingCalculatorImplTest {
         @DisplayName("Contains ranking adjustment calculation (zero-sum)")
         fun testAuditTrailContainsRankingAdjustment() {
             val request = createAuditTestRequest()
-            val result = calculator.calculate(request)
+            val result = calculator.calculate(request = request)
 
-            val rankingAdjustmentEntry = result.audit.find { it.message.contains("Ranking Adjustment Calculation") }
+            val rankingAdjustmentEntry = result.audit.find { it.message.contains(other = "Ranking Adjustment Calculation") }
 
             rankingAdjustmentEntry shouldNotBe null
             rankingAdjustmentEntry!!.context shouldContainKey "player1RankingAdjustment"
@@ -264,9 +264,9 @@ class PerformanceBasedRankingCalculatorImplTest {
         @DisplayName("Contains rating changes (zero-sum)")
         fun testAuditTrailContainsRatingChanges() {
             val request = createAuditTestRequest()
-            val result = calculator.calculate(request)
+            val result = calculator.calculate(request = request)
 
-            val ratingChangesEntry = result.audit.find { it.message.contains("Rating changes") }
+            val ratingChangesEntry = result.audit.find { it.message.contains(other = "Rating changes") }
 
             ratingChangesEntry shouldNotBe null
             ratingChangesEntry!!.context shouldContainKey "player1Change"
@@ -282,9 +282,9 @@ class PerformanceBasedRankingCalculatorImplTest {
         @DisplayName("Contains NTRP system-specific changes")
         fun testAuditTrailContainsSystemSpecificChanges() {
             val request = createAuditTestRequest()
-            val result = calculator.calculate(request)
+            val result = calculator.calculate(request = request)
 
-            val ntrpChanges = result.audit.filter { it.message.contains("NTRP change") }
+            val ntrpChanges = result.audit.filter { it.message.contains(other = "NTRP change") }
 
             ntrpChanges.size shouldBe 2
 
@@ -301,14 +301,14 @@ class PerformanceBasedRankingCalculatorImplTest {
         @DisplayName("Audit entries are in correct order")
         fun testAuditTrailOrder() {
             val request = createAuditTestRequest()
-            val result = calculator.calculate(request)
+            val result = calculator.calculate(request = request)
 
             val messages = result.audit.map { it.message }
 
-            val calculatingIndex = messages.indexOfFirst { it.contains("Calculating ranking") }
-            val matchResultIndex = messages.indexOfFirst { it.contains("Match result") }
-            val rankingAdjustmentIndex = messages.indexOfFirst { it.contains("Ranking Adjustment Calculation") }
-            val ratingChangesIndex = messages.indexOfFirst { it.contains("Rating changes") }
+            val calculatingIndex = messages.indexOfFirst { it.contains(other = "Calculating ranking") }
+            val matchResultIndex = messages.indexOfFirst { it.contains(other = "Match result") }
+            val rankingAdjustmentIndex = messages.indexOfFirst { it.contains(other = "Ranking Adjustment Calculation") }
+            val ratingChangesIndex = messages.indexOfFirst { it.contains(other = "Rating changes") }
 
             calculatingIndex shouldBeGreaterThanOrEqualTo 0
             matchResultIndex shouldBeGreaterThanOrEqualTo 0
@@ -325,7 +325,7 @@ class PerformanceBasedRankingCalculatorImplTest {
         @DisplayName("Audit context data is valid")
         fun testAuditContextData() {
             val request = createAuditTestRequest()
-            val result = calculator.calculate(request)
+            val result = calculator.calculate(request = request)
 
             result.audit.forEach { entry ->
                 entry.context.values.forEach { value ->
@@ -338,9 +338,9 @@ class PerformanceBasedRankingCalculatorImplTest {
         @DisplayName("Contains adjustment factors for both players")
         fun testAuditTrailContainsAdjustmentFactors() {
             val request = createAuditTestRequest()
-            val result = calculator.calculate(request)
+            val result = calculator.calculate(request = request)
 
-            val factorEntries = result.audit.filter { it.message.contains("Adjustment factors") }
+            val factorEntries = result.audit.filter { it.message.contains(other = "Adjustment factors") }
 
             factorEntries.size shouldBe 2
 
@@ -363,9 +363,9 @@ class PerformanceBasedRankingCalculatorImplTest {
         @DisplayName("Adjustment factors reproduce the master formula: change = K × |dominance| × scale × sign")
         fun testAdjustmentFactorsReproduceChange() {
             val request = createAuditTestRequest()
-            val result = calculator.calculate(request)
+            val result = calculator.calculate(request = request)
 
-            val factorEntries = result.audit.filter { it.message.contains("Adjustment factors") }
+            val factorEntries = result.audit.filter { it.message.contains(other = "Adjustment factors") }
 
             factorEntries.forEach { entry ->
                 val k = (entry.context["kFactor"] as String).toDouble()
@@ -383,10 +383,10 @@ class PerformanceBasedRankingCalculatorImplTest {
         fun testAdjustmentFactorsForExpectedWin() {
             // 4.5 vs 4.0 NTRP favorite wins 6-4, 6-3: gap normalizes just past the threshold → scale 0
             val request = createAuditTestRequest()
-            val result = calculator.calculate(request)
+            val result = calculator.calculate(request = request)
 
             val winnerEntry =
-                result.audit.first { it.message.contains("Adjustment factors") && it.context["sign"] == "+1" }
+                result.audit.first { it.message.contains(other = "Adjustment factors") && it.context["sign"] == "+1" }
 
             winnerEntry.context["playerId"] shouldBe "P123"
             winnerEntry.context["kFactor"] shouldBe "0.160000"
@@ -411,9 +411,9 @@ class PerformanceBasedRankingCalculatorImplTest {
                     p2Games = 0,
                     winner = "T1",
                 )
-            val result = calculator.calculate(request)
+            val result = calculator.calculate(request = request)
 
-            val factorEntries = result.audit.filter { it.message.contains("Adjustment factors") }
+            val factorEntries = result.audit.filter { it.message.contains(other = "Adjustment factors") }
 
             factorEntries.size shouldBe 2
 
@@ -591,7 +591,7 @@ class PerformanceBasedRankingCalculatorImplTest {
 
                 val result = calculator.calculate(request = request)
 
-                val ntrpChanges = result.audit.filter { it.message.contains("NTRP change") }
+                val ntrpChanges = result.audit.filter { it.message.contains(other = "NTRP change") }
 
                 ntrpChanges.forEach { entry ->
                     // Should have smoothing context
@@ -604,7 +604,7 @@ class PerformanceBasedRankingCalculatorImplTest {
                     entry.context["smoothingFactor"] shouldBe 0.5
 
                     // Message should mention smoothing
-                    entry.message.contains("smoothed") shouldBe true
+                    entry.message.contains(other = "smoothed") shouldBe true
                 }
             }
         }

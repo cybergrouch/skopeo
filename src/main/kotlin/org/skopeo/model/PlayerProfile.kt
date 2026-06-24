@@ -12,9 +12,9 @@ data class PlayerProfile(
     val rating: Rating,
 ) {
     init {
-        require(playerId.isNotBlank()) { "Player ID must not be blank" }
-        require(playerId.length <= 50) { "Player ID must be at most 50 characters" }
-        require(name.isNotBlank()) { "Player name must not be blank" }
-        require(name.length <= 100) { "Player name must be at most 100 characters" }
+        require(value = playerId.isNotBlank()) { "Player ID must not be blank" }
+        require(value = playerId.length <= 50) { "Player ID must be at most 50 characters" }
+        require(value = name.isNotBlank()) { "Player name must not be blank" }
+        require(value = name.length <= 100) { "Player name must be at most 100 characters" }
     }
 }

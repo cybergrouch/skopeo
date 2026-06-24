@@ -128,6 +128,13 @@ tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
     }
 }
 
+// Enforce detekt WITH type resolution. The default `detekt` task runs without a classpath,
+// so type-resolution-only rules (e.g. NamedArguments, UnsafeCallOnNullableType) are silently
+// skipped. `detektMain`/`detektTest` analyze with the compile classpath, so `check`/CI catch them.
+tasks.named("check") {
+    dependsOn("detektMain", "detektTest")
+}
+
 // Install Git pre-commit hook that runs ktlint format
 tasks.register("installGitHooks") {
     description = "Install Git pre-commit hook for automatic code formatting"

@@ -32,7 +32,7 @@ class UserServiceTest {
     }
 
     private val repository = UserRepository()
-    private val service = UserService(repository)
+    private val service = UserService(repository = repository)
 
     @BeforeEach
     fun reset() {
@@ -76,11 +76,11 @@ class UserServiceTest {
 
     @Test
     fun `currentUser is null before provisioning and present after`() {
-        service.currentUser(token(uid = "ghost")).shouldBeNull()
+        service.currentUser(token = token(uid = "ghost")).shouldBeNull()
 
         val created = service.provision(token = token(uid = "u2"), request = request).user
 
-        service.currentUser(token(uid = "u2"))!!.id shouldBe created.id
+        service.currentUser(token = token(uid = "u2"))!!.id shouldBe created.id
     }
 
     @Test
@@ -96,12 +96,13 @@ class UserServiceTest {
     @Test
     fun `an ADMINISTRATOR may access another user`() {
         repository.provision(
-            ProvisionUserCommand(
-                firebaseUid = "root",
-                identity = UserIdentity(provider = org.skopeo.model.AuthProvider.GOOGLE, providerUid = "root", isPrimary = true),
-                names = listOf(UserName(type = org.skopeo.model.NameType.FIRST, value = "Root")),
-                capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
-            ),
+            command =
+                ProvisionUserCommand(
+                    firebaseUid = "root",
+                    identity = UserIdentity(provider = org.skopeo.model.AuthProvider.GOOGLE, providerUid = "root", isPrimary = true),
+                    names = listOf(UserName(type = org.skopeo.model.NameType.FIRST, value = "Root")),
+                    capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
+                ),
         )
         val target = service.provision(token = token(uid = "member"), request = request).user
 

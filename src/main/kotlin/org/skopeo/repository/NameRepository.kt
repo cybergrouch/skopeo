@@ -45,14 +45,14 @@ class NameRepository {
         value: String,
     ): Name =
         transaction {
-            if (type == NameType.DISPLAY) disableActiveDisplay(userId)
+            if (type == NameType.DISPLAY) disableActiveDisplay(userId = userId)
             val id =
                 UserNamesTable.insertAndGetId {
                     it[UserNamesTable.userId] = userId
                     it[nameType] = type.name
                     it[UserNamesTable.value] = value
                 }
-            loadById(id.value)
+            loadById(id = id.value)
         }
 
     fun setActive(
@@ -62,16 +62,16 @@ class NameRepository {
     ): Name? =
         transaction {
             val updated =
-                UserNamesTable.update({ UserNamesTable.id eq id }) {
+                UserNamesTable.update(where = { UserNamesTable.id eq id }) {
                     it[isActive] = active
                     it[UserNamesTable.disabledAt] = disabledAt
                 }
-            if (updated == 0) null else loadById(id)
+            if (updated == 0) null else loadById(id = id)
         }
 
     private fun disableActiveDisplay(userId: UUID) {
         UserNamesTable.update(
-            {
+            where = {
                 (UserNamesTable.userId eq userId) and
                     UserNamesTable.isActive and
                     (UserNamesTable.nameType eq NameType.DISPLAY.name)
@@ -95,7 +95,7 @@ internal fun ResultRow.toName(): Name =
     Name(
         id = this[UserNamesTable.id].value,
         userId = this[UserNamesTable.userId].value,
-        type = NameType.valueOf(this[UserNamesTable.nameType]),
+        type = NameType.valueOf(value = this[UserNamesTable.nameType]),
         value = this[UserNamesTable.value],
         isActive = this[UserNamesTable.isActive],
         disabledAt = this[UserNamesTable.disabledAt],

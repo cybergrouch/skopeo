@@ -30,12 +30,12 @@ data class Rating(
         val numericValue =
             value.toDoubleOrNull()
                 ?: throw IllegalArgumentException("Rating value must be a valid number, got '$value'")
-        require(numericValue in 1.0..7.0) { "NTRP rating must be between 1.0 and 7.0, got $value" }
+        require(value = numericValue in 1.0..7.0) { "NTRP rating must be between 1.0 and 7.0, got $value" }
     }
 
     companion object {
         /** Create a Rating with its published level derived from the value (v1 stateless). */
-        fun fromValue(value: String): Rating = Rating(value = value, publishedLevel = Level.fromValue(value))
+        fun fromValue(value: String): Rating = Rating(value = value, publishedLevel = Level.fromValue(value = value))
     }
 }
 
@@ -45,18 +45,18 @@ data class Rating(
  */
 object RatingSerializer : KSerializer<Rating> {
     override val descriptor: SerialDescriptor =
-        buildClassSerialDescriptor("Rating") {
-            element<String>("value")
-            element<Level>("publishedLevel")
+        buildClassSerialDescriptor(serialName = "Rating") {
+            element<String>(elementName = "value")
+            element<Level>(elementName = "publishedLevel")
         }
 
     override fun serialize(
         encoder: Encoder,
         value: Rating,
     ) {
-        encoder.encodeStructure(descriptor) {
-            encodeStringElement(descriptor, 0, value.value)
-            encodeSerializableElement(descriptor, 1, Level.serializer(), value.publishedLevel)
+        encoder.encodeStructure(descriptor = descriptor) {
+            encodeStringElement(descriptor = descriptor, index = 0, value = value.value)
+            encodeSerializableElement(descriptor = descriptor, index = 1, serializer = Level.serializer(), value = value.publishedLevel)
         }
     }
 
@@ -66,33 +66,35 @@ object RatingSerializer : KSerializer<Rating> {
 
             val value =
                 jsonObject["value"]?.jsonPrimitive?.content
-                    ?: throw SerializationException("Missing 'value' field in Rating")
+                    ?: throw SerializationException(message = "Missing 'value' field in Rating")
 
             val publishedLevel =
-                if (jsonObject.containsKey("publishedLevel")) {
-                    decoder.json.decodeFromJsonElement(Level.serializer(), jsonObject["publishedLevel"]!!)
+                if (jsonObject.containsKey(key = "publishedLevel")) {
+                    decoder.json.decodeFromJsonElement(deserializer = Level.serializer(), element = jsonObject["publishedLevel"]!!)
                 } else {
-                    Level.fromValue(value)
+                    Level.fromValue(value = value)
                 }
 
             Rating(value = value, publishedLevel = publishedLevel)
         } else {
-            decoder.decodeStructure(descriptor) {
+            decoder.decodeStructure(descriptor = descriptor) {
                 var value: String? = null
                 var publishedLevel: Level? = null
 
                 while (true) {
-                    when (val index = decodeElementIndex(descriptor)) {
-                        0 -> value = decodeStringElement(descriptor, 0)
-                        1 -> publishedLevel = decodeSerializableElement(descriptor, 1, Level.serializer())
+                    when (val index = decodeElementIndex(descriptor = descriptor)) {
+                        0 -> value = decodeStringElement(descriptor = descriptor, index = 0)
+                        1 ->
+                            publishedLevel =
+                                decodeSerializableElement(descriptor = descriptor, index = 1, deserializer = Level.serializer())
                         -1 -> break
-                        else -> error("Unexpected index: $index")
+                        else -> error(message = "Unexpected index: $index")
                     }
                 }
 
                 Rating(
-                    value = value ?: throw SerializationException("Missing value"),
-                    publishedLevel = publishedLevel ?: throw SerializationException("Missing publishedLevel"),
+                    value = value ?: throw SerializationException(message = "Missing value"),
+                    publishedLevel = publishedLevel ?: throw SerializationException(message = "Missing publishedLevel"),
                 )
             }
         }

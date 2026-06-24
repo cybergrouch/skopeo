@@ -99,9 +99,9 @@ class RankingCalculationPayloadTest {
                 """
 
             val response =
-                client.post("/api/v1/calculate-ranking") {
-                    contentType(ContentType.Application.Json)
-                    setBody(requestJson.trimIndent())
+                client.post(urlString = "/api/v1/calculate-ranking") {
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = requestJson.trimIndent())
                 }
 
             response.status shouldBe HttpStatusCode.OK
@@ -274,9 +274,9 @@ class RankingCalculationPayloadTest {
                 """
 
             val response =
-                client.post("/api/v1/calculate-ranking") {
-                    contentType(ContentType.Application.Json)
-                    setBody(requestJson.trimIndent())
+                client.post(urlString = "/api/v1/calculate-ranking") {
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = requestJson.trimIndent())
                 }
 
             response.status shouldBe HttpStatusCode.OK
@@ -456,9 +456,9 @@ class RankingCalculationPayloadTest {
                 """
 
             val response =
-                client.post("/api/v1/calculate-ranking") {
-                    contentType(ContentType.Application.Json)
-                    setBody(requestJson.trimIndent())
+                client.post(urlString = "/api/v1/calculate-ranking") {
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = requestJson.trimIndent())
                 }
 
             response.status shouldBe HttpStatusCode.OK
@@ -631,9 +631,9 @@ class RankingCalculationPayloadTest {
                 """
 
             val response =
-                client.post("/api/v1/calculate-ranking") {
-                    contentType(ContentType.Application.Json)
-                    setBody(requestJson.trimIndent())
+                client.post(urlString = "/api/v1/calculate-ranking") {
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = requestJson.trimIndent())
                 }
 
             response.status shouldBe HttpStatusCode.OK
@@ -809,9 +809,9 @@ class RankingCalculationPayloadTest {
                 """
 
             val response =
-                client.post("/api/v1/calculate-ranking") {
-                    contentType(ContentType.Application.Json)
-                    setBody(requestJson.trimIndent())
+                client.post(urlString = "/api/v1/calculate-ranking") {
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = requestJson.trimIndent())
                 }
 
             response.status shouldBe HttpStatusCode.OK

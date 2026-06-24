@@ -21,7 +21,7 @@ class OpenAPIIntegrationTest {
                 module(initDatabase = false)
             }
 
-            val response = client.get("/openapi.yaml")
+            val response = client.get(urlString = "/openapi.yaml")
 
             response.status shouldBe HttpStatusCode.OK
             // OpenAPI YAML file should be served as plain text
@@ -41,13 +41,13 @@ class OpenAPIIntegrationTest {
                 module(initDatabase = false)
             }
 
-            val response = client.get("/swagger")
+            val response = client.get(urlString = "/swagger")
 
             response.status shouldBe HttpStatusCode.OK
             response.contentType()?.match(ContentType.Text.Html) shouldBe true
 
             val body = response.bodyAsText()
             // Verify it's actually Swagger UI
-            (body.contains("swagger-ui") || body.contains("Swagger UI")) shouldBe true
+            (body.contains(other = "swagger-ui") || body.contains(other = "Swagger UI")) shouldBe true
         }
 }

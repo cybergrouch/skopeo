@@ -33,9 +33,9 @@ class CapabilityService(
         token: VerifiedFirebaseToken,
         userId: UUID,
     ): List<CapabilityGrant> {
-        requireAdmin(token)
-        requireUserExists(userId)
-        return capabilities.listByUser(userId)
+        requireAdmin(token = token)
+        requireUserExists(userId = userId)
+        return capabilities.listByUser(userId = userId)
     }
 
     fun grant(
@@ -43,9 +43,9 @@ class CapabilityService(
         userId: UUID,
         capabilityName: String,
     ): Granted {
-        val adminId = requireAdmin(token)
-        requireUserExists(userId)
-        val capability = parseCapability(capabilityName)
+        val adminId = requireAdmin(token = token)
+        requireUserExists(userId = userId)
+        val capability = parseCapability(value = capabilityName)
         capabilities.findActive(userId = userId, capability = capability)?.let { return Granted(grant = it, created = false) }
         return Granted(grant = capabilities.grant(userId = userId, capability = capability, grantedBy = adminId), created = true)
     }
@@ -56,23 +56,23 @@ class CapabilityService(
         userId: UUID,
         capabilityName: String,
     ) {
-        val adminId = requireAdmin(token)
-        requireUserExists(userId)
-        val capability = parseCapability(capabilityName)
+        val adminId = requireAdmin(token = token)
+        requireUserExists(userId = userId)
+        val capability = parseCapability(value = capabilityName)
 
         if (capability == Capability.PLAYER) {
-            throw ConflictException("The PLAYER role cannot be revoked")
+            throw ConflictException(message = "The PLAYER role cannot be revoked")
         }
         capabilities.findActive(userId = userId, capability = capability)
-            ?: throw CapabilityNotFoundException(userId, capability)
+            ?: throw CapabilityNotFoundException(userId = userId, capability = capability)
         if (capability == Capability.ADMINISTRATOR) {
             // Last-admin check precedes the self-check: dropping to zero admins is only possible
             // by revoking the sole (necessarily one's own) admin grant.
             if (capabilities.countActiveAdministrators() <= 1) {
-                throw ConflictException("Cannot revoke the last ADMINISTRATOR")
+                throw ConflictException(message = "Cannot revoke the last ADMINISTRATOR")
             }
             if (userId == adminId) {
-                throw ForbiddenException("You cannot revoke your own ADMINISTRATOR role")
+                throw ForbiddenException(message = "You cannot revoke your own ADMINISTRATOR role")
             }
         }
 
@@ -80,19 +80,19 @@ class CapabilityService(
     }
 
     private fun requireUserExists(userId: UUID) {
-        users.findById(userId) ?: throw UserNotFoundException(userId)
+        users.findById(id = userId) ?: throw UserNotFoundException(id = userId)
     }
 
     /** Every capability operation requires the caller to be an ADMINISTRATOR; returns their id. */
     private fun requireAdmin(token: VerifiedFirebaseToken): UUID {
-        val caller = users.findByFirebaseUid(token.uid)
-        if (caller == null || !caller.capabilities.contains(Capability.ADMINISTRATOR)) throw ForbiddenException()
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+        if (caller == null || !caller.capabilities.contains(element = Capability.ADMINISTRATOR)) throw ForbiddenException()
         return caller.id
     }
 
     private fun parseCapability(value: String): Capability =
         try {
-            Capability.valueOf(value)
+            Capability.valueOf(value = value)
         } catch (e: IllegalArgumentException) {
             throw IllegalArgumentException("Invalid capability '$value'", e)
         }

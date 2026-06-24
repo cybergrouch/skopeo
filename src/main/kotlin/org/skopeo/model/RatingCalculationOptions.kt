@@ -49,7 +49,7 @@ data class RatingCalculationOptions(
     val smoothingFactor: Double = 0.5,
 ) {
     init {
-        require(smoothingFactor in 0.0..1.0) {
+        require(value = smoothingFactor in 0.0..1.0) {
             "Smoothing factor must be between 0.0 and 1.0, got $smoothingFactor"
         }
     }

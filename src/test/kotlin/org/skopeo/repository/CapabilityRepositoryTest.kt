@@ -42,18 +42,19 @@ class CapabilityRepositoryTest {
 
     private fun newUser(uid: String): UUID =
         users.provision(
-            ProvisionUserCommand(
-                firebaseUid = uid,
-                identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                names = listOf(UserName(type = NameType.DISPLAY, value = uid)),
-                capabilities = emptySet(),
-            ),
+            command =
+                ProvisionUserCommand(
+                    firebaseUid = uid,
+                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                    names = listOf(UserName(type = NameType.DISPLAY, value = uid)),
+                    capabilities = emptySet(),
+                ),
         ).id
 
     @Test
     fun `grant inserts an active grant with audit`() {
-        val userId = newUser("u1")
-        val admin = newUser("admin")
+        val userId = newUser(uid = "u1")
+        val admin = newUser(uid = "admin")
 
         val grant = capabilities.grant(userId = userId, capability = Capability.HOST, grantedBy = admin)
 
@@ -61,19 +62,19 @@ class CapabilityRepositoryTest {
         grant.isActive.shouldBeTrue()
         grant.grantedBy shouldBe admin
         grant.grantedAt.shouldNotBeNull()
-        capabilities.findActive(userId, Capability.HOST).shouldNotBeNull()
+        capabilities.findActive(userId = userId, capability = Capability.HOST).shouldNotBeNull()
     }
 
     @Test
     fun `findActive returns null when not held`() {
-        val userId = newUser("u2")
-        capabilities.findActive(userId, Capability.HOST).shouldBeNull()
+        val userId = newUser(uid = "u2")
+        capabilities.findActive(userId = userId, capability = Capability.HOST).shouldBeNull()
     }
 
     @Test
     fun `revoke disables the active grant with audit, and re-granting adds a fresh row`() {
-        val userId = newUser("u3")
-        val admin = newUser("admin")
+        val userId = newUser(uid = "u3")
+        val admin = newUser(uid = "admin")
         capabilities.grant(userId = userId, capability = Capability.HOST, grantedBy = admin)
 
         val revoked = capabilities.revoke(userId = userId, capability = Capability.HOST, revokedBy = admin, revokedAt = LocalDateTime.now())
@@ -81,25 +82,25 @@ class CapabilityRepositoryTest {
         revoked.isActive.shouldBeFalse()
         revoked.revokedBy shouldBe admin
         revoked.revokedAt.shouldNotBeNull()
-        capabilities.findActive(userId, Capability.HOST).shouldBeNull()
+        capabilities.findActive(userId = userId, capability = Capability.HOST).shouldBeNull()
 
         capabilities.grant(userId = userId, capability = Capability.HOST, grantedBy = admin)
-        capabilities.findActive(userId, Capability.HOST).shouldNotBeNull()
+        capabilities.findActive(userId = userId, capability = Capability.HOST).shouldNotBeNull()
         // one revoked + one active row in history
-        capabilities.listByUser(userId).count { it.capability == Capability.HOST } shouldBe 2
+        capabilities.listByUser(userId = userId).count { it.capability == Capability.HOST } shouldBe 2
     }
 
     @Test
     fun `revoke reports absence`() {
-        val userId = newUser("u4")
+        val userId = newUser(uid = "u4")
         capabilities.revoke(userId = userId, capability = Capability.HOST, revokedBy = userId, revokedAt = LocalDateTime.now())
             .shouldBeNull()
     }
 
     @Test
     fun `two active grants of the same capability are rejected`() {
-        val userId = newUser("u5")
-        val admin = newUser("admin")
+        val userId = newUser(uid = "u5")
+        val admin = newUser(uid = "admin")
         capabilities.grant(userId = userId, capability = Capability.HOST, grantedBy = admin)
 
         shouldThrow<ExposedSQLException> {
@@ -109,8 +110,8 @@ class CapabilityRepositoryTest {
 
     @Test
     fun `countActiveAdministrators counts active admin grants only`() {
-        val admin = newUser("admin")
-        val other = newUser("other")
+        val admin = newUser(uid = "admin")
+        val other = newUser(uid = "other")
         capabilities.grant(userId = admin, capability = Capability.ADMINISTRATOR, grantedBy = admin)
         capabilities.grant(userId = other, capability = Capability.ADMINISTRATOR, grantedBy = admin)
         capabilities.countActiveAdministrators() shouldBe 2L
