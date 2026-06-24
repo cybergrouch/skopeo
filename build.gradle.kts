@@ -325,3 +325,13 @@ tasks.register<JavaExec>("generateMatchupReport") {
     classpath = sourceSets.getByName("test").runtimeClasspath
     mainClass.set("org.skopeo.service.calculator.impl.v1.NtrpMatchupMatrixReportKt")
 }
+
+// Run the NTRP rating Monte Carlo simulation (a program, not a test). Writes
+// /tmp/ntrp_montecarlo.txt and presentations/ntrp_montecarlo.md.  Usage: ./gradlew generateMonteCarloReport
+tasks.register<JavaExec>("generateMonteCarloReport") {
+    group = "reports"
+    description = "Monte Carlo simulation of NTRP rating evolution over N matches"
+    dependsOn(tasks.named("testClasses"))
+    classpath = sourceSets.getByName("test").runtimeClasspath
+    mainClass.set("org.skopeo.service.calculator.impl.v1.NtrpMonteCarloReportKt")
+}
