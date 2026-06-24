@@ -314,3 +314,14 @@ tasks.test {
 // - Manual/ad-hoc: use the Flyway CLI Docker image (see docs/engineering/operations/database-setup.md).
 // The official Flyway *Gradle plugin* is intentionally NOT used — it relies on
 // JavaPluginConvention, removed in Gradle 9, and is effectively unmaintained.
+
+// Run the NTRP matchup matrix report (a program, not a test — lives in test sources because
+// it reuses the test calculator helpers). Writes /tmp/ntrp_matchup_matrix.txt and
+// presentations/ntrp_matchup_matrix.md.  Usage: ./gradlew generateMatchupReport
+tasks.register<JavaExec>("generateMatchupReport") {
+    group = "reports"
+    description = "Generate the NTRP matchup matrix report (text + Markdown)"
+    dependsOn(tasks.named("testClasses"))
+    classpath = sourceSets.getByName("test").runtimeClasspath
+    mainClass.set("org.skopeo.service.calculator.impl.v1.NtrpMatchupMatrixReportKt")
+}

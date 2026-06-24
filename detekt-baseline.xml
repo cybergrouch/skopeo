@@ -102,21 +102,6 @@
     <ID>NamedArguments:NameService.kt$NameService$IllegalArgumentException("Invalid name type '$value'", e)</ID>
     <ID>NamedArguments:NameServiceTest.kt$NameServiceTest$provision( ProvisionUserCommand( firebaseUid = uid, identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true), names = listOf(UserName(type = NameType.DISPLAY, value = "Display $uid")), capabilities = capabilities, ), )</ID>
     <ID>NamedArguments:NameServiceTest.kt$NameServiceTest$setOf(Capability.PLAYER)</ID>
-    <ID>NamedArguments:NtrpMatchupMatrixReport.kt$NtrpMatchupMatrixReport$abs(p1 - p2)</ID>
-    <ID>NamedArguments:NtrpMatchupMatrixReport.kt$NtrpMatchupMatrixReport$abs(p1Delta + p2Delta)</ID>
-    <ID>NamedArguments:NtrpMatchupMatrixReport.kt$NtrpMatchupMatrixReport$appendLine("'*' = boundary clamping at 1.0/7.0 applied (zero-sum intentionally broken).")</ID>
-    <ID>NamedArguments:NtrpMatchupMatrixReport.kt$NtrpMatchupMatrixReport$appendLine("=== Score $gamesWon-$gamesLost (dominance ${String.format(Locale.US, "%.3f", dominance)}) ===")</ID>
-    <ID>NamedArguments:NtrpMatchupMatrixReport.kt$NtrpMatchupMatrixReport$appendLine("Below the diagonal P1 is the underdog (upset); above it P1 is the favorite.")</ID>
-    <ID>NamedArguments:NtrpMatchupMatrixReport.kt$NtrpMatchupMatrixReport$appendLine("Constants: K=$K_NTRP, threshold=$THRESHOLD_PCT, upset multiplier=$UPSET_MULTIPLIER, range=$NTRP_RANGE")</ID>
-    <ID>NamedArguments:NtrpMatchupMatrixReport.kt$NtrpMatchupMatrixReport$appendLine("NTRP MATCHUP MATRIX")</ID>
-    <ID>NamedArguments:NtrpMatchupMatrixReport.kt$NtrpMatchupMatrixReport$appendLine("P1 (row) is always the winner; columns are P2's rating; cell = P1's rating delta.")</ID>
-    <ID>NamedArguments:NtrpMatchupMatrixReport.kt$NtrpMatchupMatrixReport$appendLine("P1\\P2 " + levels.joinToString(separator = "") { level -&gt; String.format(Locale.US, "%9s", level) })</ID>
-    <ID>NamedArguments:NtrpMatchupMatrixReport.kt$NtrpMatchupMatrixReport$appendLine(String.format(Locale.US, "%-6s", p1) + cells)</ID>
-    <ID>NamedArguments:NtrpMatchupMatrixReport.kt$NtrpMatchupMatrixReport$max(0.0, (THRESHOLD_PCT - normalizedGap) / THRESHOLD_PCT)</ID>
-    <ID>NamedArguments:NtrpMatchupMatrixReport.kt$NtrpMatchupMatrixReport$max(NTRP_MIN, p2 - rawChange)</ID>
-    <ID>NamedArguments:NtrpMatchupMatrixReport.kt$NtrpMatchupMatrixReport$min(NTRP_MAX, p1 + rawChange)</ID>
-    <ID>NamedArguments:NtrpMatchupMatrixReport.kt$NtrpMatchupMatrixReport$println("\nResults written to /tmp/ntrp_matchup_matrix.txt")</ID>
-    <ID>NamedArguments:NtrpMatchupMatrixReport.kt$NtrpMatchupMatrixReport$println(output)</ID>
     <ID>NamedArguments:OpenAPIIntegrationTest.kt$OpenAPIIntegrationTest$match(ContentType.Text.Html)</ID>
     <ID>NamedArguments:OpenAPIIntegrationTest.kt$OpenAPIIntegrationTest$match(ContentType.Text.Plain)</ID>
     <ID>NamedArguments:PerformanceBasedRankingCalculatorImpl.kt$PerformanceBasedRankingCalculatorImpl$listOf(updatedPlayer1)</ID>
