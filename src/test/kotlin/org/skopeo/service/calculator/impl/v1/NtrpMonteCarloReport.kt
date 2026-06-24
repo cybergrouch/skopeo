@@ -3,8 +3,16 @@
 
 package org.skopeo.service.calculator.impl.v1
 
+import java.awt.BasicStroke
+import java.awt.Color
+import java.awt.Font
+import java.awt.Graphics2D
+import java.awt.RenderingHints
+import java.awt.image.BufferedImage
 import java.io.File
 import java.util.Locale
+import javax.imageio.ImageIO
+import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
@@ -26,7 +34,8 @@ import kotlin.random.Random
  * of a dominant win — the player is crushed, e.g. 0-6/1-6/2-6). Dominant scores have a margin ≥ 0.5
  * (6-0/6-1/6-2), competitive ≤ 0.333 (6-3/6-4/7-5). Every result runs through the real calculator.
  *
- * Outputs: /tmp/ntrp_montecarlo.txt and presentations/ntrp_montecarlo.md.
+ * Outputs: /tmp/ntrp_montecarlo.txt, presentations/ntrp_montecarlo.md, and two PNG charts in
+ * presentations/ (a class-effect heatmap and an Analysis-1 median-vs-start check).
  */
 class NtrpMonteCarloReport {
     private val calculator = PerformanceBasedRankingCalculatorImpl()
@@ -53,6 +62,13 @@ class NtrpMonteCarloReport {
 
         private val PERCENTILES = listOf(5, 25, 50, 75, 95)
         private const val PERCENT = 100.0
+
+        private const val CHART_HEATMAP = "montecarlo_class_heatmap.png"
+        private const val CHART_MEDIAN = "montecarlo_median_check.png"
+        private val INK = Color(33, 33, 33)
+        private val AXIS = Color(90, 90, 90)
+        private val GRID = Color(232, 232, 232)
+        private val GRID_DARK = Color(150, 150, 150)
     }
 
     enum class Scenario(
@@ -121,7 +137,10 @@ class NtrpMonteCarloReport {
         mdFile.parentFile?.mkdirs()
         mdFile.writeText(text = markdown)
 
-        println(message = "\nResults written to /tmp/ntrp_montecarlo.txt and ${mdFile.path}")
+        drawClassHeatmap(classResults = classResults, file = File(mdFile.parentFile, CHART_HEATMAP))
+        drawMedianCheck(results = results, file = File(mdFile.parentFile, CHART_MEDIAN))
+
+        println(message = "\nResults written to /tmp/ntrp_montecarlo.txt, ${mdFile.path}, and 2 PNG charts in presentations/")
     }
 
     // --- Analysis 1: gap-driven scenarios ---
@@ -271,6 +290,197 @@ class NtrpMonteCarloReport {
         return Stats(mean = mean, sd = sqrt(x = variance), min = sorted.first(), max = sorted.last(), percentiles = percentiles)
     }
 
+    // --- Charts (java.awt, no external dependency) ---
+
+    /**
+     * Diverging heatmap of the outcome-class experiment: rows = starting level, columns = class,
+     * each cell coloured green (rating rises) → white (~unchanged) → red (rating falls).
+     */
+    private fun drawClassHeatmap(
+        classResults: List<Pair<String, Map<OutcomeClass, ClassResult>>>,
+        file: File,
+    ) {
+        val classes = OutcomeClass.entries
+        val cellW = 96
+        val cellH = 38
+        val left = 64
+        val top = 100
+        val width = left + classes.size * cellW + 24
+        val height = top + classResults.size * cellH + 24
+        val img = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
+        val g = newCanvas(img = img, width = width, height = height)
+
+        g.color = INK
+        g.font = Font("SansSerif", Font.BOLD, 16)
+        g.drawString("Effect of performance on rating: mean Δ after $MATCHES matches", 16, 30)
+        g.font = Font("SansSerif", Font.PLAIN, 12)
+        g.drawString("Green = rating rises, red = rating falls. Rows = starting NTRP level; columns = performance class.", 16, 52)
+
+        val maxAbs = classResults.maxOf { (_, byClass) -> classes.maxOf { c -> abs(x = byClass.getValue(key = c).meanChange) } }
+
+        g.font = Font("SansSerif", Font.BOLD, 12)
+        classes.forEachIndexed { ci, c ->
+            drawCentered(g = g, text = c.short, cx = left + ci * cellW + cellW / 2, cy = top - 10)
+        }
+        classResults.forEachIndexed { ri, (level, byClass) ->
+            val y = top + ri * cellH
+            g.color = INK
+            g.font = Font("SansSerif", Font.BOLD, 12)
+            g.drawString(level, 16, y + cellH / 2 + 4)
+            classes.forEachIndexed { ci, c ->
+                val x = left + ci * cellW
+                val v = byClass.getValue(key = c).meanChange
+                g.color = divergingColor(value = v, maxAbs = maxAbs)
+                g.fillRect(x, y, cellW - 2, cellH - 2)
+                g.color = if (abs(x = v) / maxAbs > 0.55) Color.WHITE else INK
+                g.font = Font("SansSerif", Font.PLAIN, 12)
+                drawCentered(g = g, text = String.format(Locale.US, "%+.2f", v), cx = x + (cellW - 2) / 2, cy = y + cellH / 2 + 4)
+            }
+        }
+        g.dispose()
+        ImageIO.write(img, "png", file)
+    }
+
+    /**
+     * Analysis-1 expectation check: median final rating vs starting level for both opponent mixes,
+     * against the dashed y = x "no change" line. Interior points landing on the line show the
+     * ratings are unbiased on average; the ends bend inward (boundary regression at 1.0 / 7.0).
+     */
+    private fun drawMedianCheck(
+        results: Map<Scenario, List<LevelResult>>,
+        file: File,
+    ) {
+        val width = 720
+        val height = 560
+        val left = 70
+        val top = 70
+        val plotW = width - left - 40
+        val plotH = height - top - 70
+        val img = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
+        val g = newCanvas(img = img, width = width, height = height)
+
+        fun sx(v: Double): Int = (left + (v - NTRP_MIN) / (NTRP_MAX - NTRP_MIN) * plotW).roundToInt()
+
+        fun sy(v: Double): Int = (top + plotH - (v - NTRP_MIN) / (NTRP_MAX - NTRP_MIN) * plotH).roundToInt()
+
+        g.color = INK
+        g.font = Font("SansSerif", Font.BOLD, 16)
+        g.drawString("Analysis 1 check: median final rating vs starting level", 16, 30)
+        g.font = Font("SansSerif", Font.PLAIN, 12)
+        g.drawString("Dashed line = no change (y = x). Interior medians sit on it: ratings are unbiased on average.", 16, 52)
+
+        g.font = Font("SansSerif", Font.PLAIN, 11)
+        for (tick in 1..NTRP_MAX.toInt()) {
+            val gx = sx(v = tick.toDouble())
+            val gy = sy(v = tick.toDouble())
+            g.color = GRID
+            g.drawLine(gx, top, gx, top + plotH)
+            g.drawLine(left, gy, left + plotW, gy)
+            g.color = AXIS
+            drawCentered(g = g, text = tick.toString(), cx = gx, cy = top + plotH + 18)
+            g.drawString(tick.toString(), left - 22, gy + 4)
+        }
+        g.color = AXIS
+        g.drawRect(left, top, plotW, plotH)
+        drawCentered(g = g, text = "Starting NTRP level", cx = left + plotW / 2, cy = height - 24)
+        val pivotY = (top + plotH / 2).toDouble()
+        g.rotate(-Math.PI / 2.0, 18.0, pivotY)
+        drawCentered(g = g, text = "Median final rating", cx = (top + plotH / 2), cy = 22)
+        g.rotate(Math.PI / 2.0, 18.0, pivotY)
+
+        g.color = GRID_DARK
+        g.stroke = BasicStroke(1.5f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 1f, floatArrayOf(6f, 6f), 0f)
+        g.drawLine(sx(v = NTRP_MIN), sy(v = NTRP_MIN), sx(v = NTRP_MAX), sy(v = NTRP_MAX))
+        g.stroke = BasicStroke(2.5f)
+
+        val palette = listOf(Color(33, 118, 199), Color(214, 118, 32))
+        results.entries.forEachIndexed { si, (_, levels) ->
+            g.color = palette[si % palette.size]
+            var prevX = -1
+            var prevY = -1
+            levels.forEach { lr ->
+                val px = sx(v = lr.startLevel.toDouble())
+                val py = sy(v = lr.stats.percentiles[50] ?: lr.stats.mean)
+                if (prevX >= 0) {
+                    g.drawLine(prevX, prevY, px, py)
+                }
+                g.fillOval(px - 4, py - 4, 8, 8)
+                prevX = px
+                prevY = py
+            }
+        }
+
+        g.font = Font("SansSerif", Font.PLAIN, 12)
+        drawScenarioLegend(g = g, x = left + plotW - 232, yTop = top + 8, palette = palette, labels = results.keys.map { it.label })
+        g.dispose()
+        ImageIO.write(img, "png", file)
+    }
+
+    private fun drawScenarioLegend(
+        g: Graphics2D,
+        x: Int,
+        yTop: Int,
+        palette: List<Color>,
+        labels: List<String>,
+    ) {
+        labels.forEachIndexed { i, label ->
+            val ly = yTop + i * 22
+            g.color = palette[i % palette.size]
+            g.fillRect(x, ly, 14, 14)
+            g.color = INK
+            g.drawString(label, x + 20, ly + 12)
+        }
+    }
+
+    private fun newCanvas(
+        img: BufferedImage,
+        width: Int,
+        height: Int,
+    ): Graphics2D {
+        val g = img.createGraphics()
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
+        g.color = Color.WHITE
+        g.fillRect(0, 0, width, height)
+        return g
+    }
+
+    private fun drawCentered(
+        g: Graphics2D,
+        text: String,
+        cx: Int,
+        cy: Int,
+    ) {
+        g.drawString(text, cx - g.fontMetrics.stringWidth(text) / 2, cy)
+    }
+
+    private fun divergingColor(
+        value: Double,
+        maxAbs: Double,
+    ): Color {
+        val t = (abs(x = value) / maxAbs).coerceIn(minimumValue = 0.0, maximumValue = 1.0)
+        return if (value >= 0) {
+            Color(lerp(a = 255, b = 56, t = t), lerp(a = 255, b = 158, t = t), lerp(a = 255, b = 92, t = t))
+        } else {
+            Color(lerp(a = 255, b = 200, t = t), lerp(a = 255, b = 64, t = t), lerp(a = 255, b = 64, t = t))
+        }
+    }
+
+    private fun lerp(
+        a: Int,
+        b: Int,
+        t: Double,
+    ): Int = (a + (b - a) * t).roundToInt()
+
+    private fun emojiFor(value: Double): String =
+        when {
+            value >= 0.6 -> "🟩🟩"
+            value >= 0.15 -> "🟩"
+            value > -0.15 -> "⬜"
+            value > -0.6 -> "🟥"
+            else -> "🟥🟥"
+        }
+
     // --- Rendering ---
 
     private fun renderText(
@@ -374,6 +584,18 @@ class NtrpMonteCarloReport {
             appendLine(value = "players finished *below* that rating. So p5/p95 bracket the middle 90% of outcomes,")
             appendLine(value = "p25/p75 the middle 50% (interquartile range), and p50 is the median.")
             appendLine()
+            appendLine(value = "## Summary charts")
+            appendLine()
+            appendLine(value = "**What raises vs lowers a rating** — green cells push the rating up, red cells pull it down.")
+            appendLine(value = "Bigger margins move it more: dominant wins (+DWin) climb fastest, being dominated (+Domd) falls fastest.")
+            appendLine()
+            appendLine(value = "![Outcome-class heatmap]($CHART_HEATMAP)")
+            appendLine()
+            appendLine(value = "**Analysis 1 is as expected on average** — interior medians land on the dashed y = x line")
+            appendLine(value = "(rating unchanged on average); only the 1.0 / 7.0 boundaries bend inward.")
+            appendLine()
+            appendLine(value = "![Analysis 1 median check]($CHART_MEDIAN)")
+            appendLine()
             appendLine(value = "# Analysis 1 — gap-driven scenarios")
             results.forEach { (scenario, levels) ->
                 appendLine()
@@ -419,6 +641,20 @@ class NtrpMonteCarloReport {
             appendLine(value = "Mean rating change (Δ) after $MATCHES matches, by starting level × class:")
             appendLine()
             appendClassMatrix(classResults = classResults, signed = true) { it.meanChange }
+            appendLine()
+            appendLine(value = "At a glance (🟩 rating rises · ⬜ ~unchanged · 🟥 rating falls; doubled = strong move):")
+            appendLine()
+            appendLine(value = "| Start | " + OutcomeClass.entries.joinToString(separator = " | ") { c -> c.short } + " |")
+            appendLine(value = "|---|" + "---|".repeat(n = OutcomeClass.entries.size))
+            classResults.forEach { (level, byClass) ->
+                appendLine(
+                    value =
+                        "| **$level** | " +
+                            OutcomeClass.entries.joinToString(separator = " | ") { c ->
+                                emojiFor(value = byClass.getValue(key = c).meanChange)
+                            } + " |",
+                )
+            }
             appendLine()
             appendLine(value = "Mean end rating, by starting level × class:")
             appendLine()
