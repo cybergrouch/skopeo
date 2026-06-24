@@ -10,6 +10,8 @@ import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.update
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -121,6 +123,68 @@ class MatchRepositoryTest {
         completed.completedAt.shouldNotBeNull()
         completed.sets.size shouldBe 2
         completed.sets[1].tiebreakTeam1Points shouldBe 7
+    }
+
+    @Test
+    fun `addResult on an unknown match returns null`() {
+        matches.addResult(
+            matchId = UUID.randomUUID(),
+            sets = listOf(MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 0, winnerTeamId = UUID.randomUUID())),
+            winnerTeamId = UUID.randomUUID(),
+            recordedBy = UUID.randomUUID(),
+            completedAt = LocalDateTime.now(),
+        ).shouldBeNull()
+    }
+
+    @Test
+    fun `addResult treats a half-specified tiebreak as no tiebreak`() {
+        val u1 = newUser(uid = "u1")
+        val u2 = newUser(uid = "u2")
+        val match = fixture(u1 = u1, u2 = u2)
+        val t1 = match.team1.teamId
+
+        // only one tiebreak side supplied -> hasTb is false (short-circuits before persisting a tiebreak)
+        val completed =
+            matches.addResult(
+                matchId = match.id,
+                sets =
+                    listOf(
+                        MatchSetResult(
+                            setNumber = 1,
+                            team1Games = 7,
+                            team2Games = 6,
+                            winnerTeamId = t1,
+                            tiebreakTeam1Points = 7,
+                            tiebreakTeam2Points = null,
+                        ),
+                    ),
+                winnerTeamId = t1,
+                recordedBy = u1,
+                completedAt = LocalDateTime.now(),
+            )
+
+        completed.shouldNotBeNull()
+        completed.sets.size shouldBe 1
+        completed.sets[0].tiebreakTeam1Points.shouldBeNull()
+        completed.sets[0].tiebreakTeam2Points.shouldBeNull()
+    }
+
+    @Test
+    fun `setActive on an unknown match returns null`() {
+        matches.setActive(matchId = UUID.randomUUID(), active = false, disabledAt = LocalDateTime.now()).shouldBeNull()
+    }
+
+    @Test
+    fun `findById tolerates a match whose creator was cleared`() {
+        val match = fixture(u1 = newUser(uid = "c1"), u2 = newUser(uid = "c2"))
+        transaction {
+            MatchesTable.update(where = { MatchesTable.id eq match.id }) { it[createdBy] = null }
+        }
+
+        val reloaded = matches.findById(matchId = match.id)
+
+        reloaded.shouldNotBeNull()
+        reloaded.createdBy.shouldBeNull()
     }
 
     @Test

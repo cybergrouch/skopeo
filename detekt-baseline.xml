@@ -82,6 +82,8 @@
     <ID>NamedArguments:MatchApiIntegrationTest.kt$MatchApiIntegrationTest$provision( ProvisionUserCommand( firebaseUid = uid, identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true), names = listOf(UserName(type = NameType.DISPLAY, value = uid)), capabilities = roles + Capability.PLAYER, ), )</ID>
     <ID>NamedArguments:MatchApiIntegrationTest.kt$MatchApiIntegrationTest$setOf(Capability.ADMINISTRATOR)</ID>
     <ID>NamedArguments:MatchApiIntegrationTest.kt$MatchApiIntegrationTest$setOf(Capability.HOST)</ID>
+    <ID>NamedArguments:MatchRepositoryTest.kt$MatchRepositoryTest$listOf( MatchSetResult( setNumber = 1, team1Games = 7, team2Games = 6, winnerTeamId = t1, tiebreakTeam1Points = 7, tiebreakTeam2Points = null, ), )</ID>
+    <ID>NamedArguments:MatchRepositoryTest.kt$MatchRepositoryTest$listOf(MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 0, winnerTeamId = UUID.randomUUID()))</ID>
     <ID>NamedArguments:MatchRepositoryTest.kt$MatchRepositoryTest$listOf(UserName(type = NameType.DISPLAY, value = uid))</ID>
     <ID>NamedArguments:MatchRepositoryTest.kt$MatchRepositoryTest$listOf(u1)</ID>
     <ID>NamedArguments:MatchRepositoryTest.kt$MatchRepositoryTest$listOf(u2)</ID>
@@ -139,6 +141,7 @@
     <ID>NamedArguments:RatingCalculationServiceTest.kt$RatingCalculationServiceTest$setOf(Capability.PLAYER)</ID>
     <ID>NamedArguments:RatingRepositoryTest.kt$RatingRepositoryTest$listOf(UserName(type = NameType.DISPLAY, value = uid))</ID>
     <ID>NamedArguments:RatingService.kt$RatingService$IllegalArgumentException("Invalid rating '$value'", e)</ID>
+    <ID>NamedArguments:RatingServiceTest.kt$RatingServiceTest$listOf(UserName(type = NameType.FIRST, value = "First"))</ID>
     <ID>NamedArguments:RatingServiceTest.kt$RatingServiceTest$provision( ProvisionUserCommand( firebaseUid = uid, identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true), names = listOf(UserName(type = NameType.DISPLAY, value = uid)), capabilities = roles, ), )</ID>
     <ID>NamedArguments:RatingServiceTest.kt$RatingServiceTest$setOf(Capability.PLAYER)</ID>
     <ID>NamedArguments:SearchRanges.kt$NumericRange.Companion$IllegalArgumentException("Invalid number '$value' in range '$raw'")</ID>

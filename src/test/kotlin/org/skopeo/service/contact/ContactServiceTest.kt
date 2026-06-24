@@ -24,6 +24,7 @@ import org.skopeo.model.VerificationStatus
 import org.skopeo.repository.ContactRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.user.ForbiddenException
+import org.skopeo.service.user.UserNotFoundException
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.util.UUID
@@ -228,6 +229,65 @@ class ContactServiceTest {
         // contact exists but belongs to a different user than the path
         shouldThrow<ContactNotFoundException> {
             service.get(token = token(uid = "owner"), userId = owner.id, contactId = contact.id)
+        }
+    }
+
+    @Test
+    fun `disabling then re-enabling the only contact succeeds`() {
+        val owner = provisionUser(uid = "owner")
+        val contact = service.create(token = token(uid = "owner"), userId = owner.id, request = email())
+        service.setActive(token = token(uid = "owner"), userId = owner.id, contactId = contact.id, active = false)
+
+        val reenabled = service.setActive(token = token(uid = "owner"), userId = owner.id, contactId = contact.id, active = true)
+
+        reenabled.isActive.shouldBeTrue()
+        reenabled.disabledAt.shouldBe(expected = null)
+    }
+
+    @Test
+    fun `an explicit verification method is honored over the default`() {
+        val owner = provisionUser(uid = "owner")
+        provisionUser(uid = "root", capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val contact = service.create(token = token(uid = "owner"), userId = owner.id, request = email())
+
+        val verified =
+            service.setVerification(
+                token = token(uid = "root"),
+                userId = owner.id,
+                contactId = contact.id,
+                request = VerificationRequest(status = "VERIFIED", method = "EMAIL_LINK"),
+            )
+
+        verified.status shouldBe VerificationStatus.VERIFIED
+        verified.method shouldBe VerificationMethod.EMAIL_LINK
+    }
+
+    @Test
+    fun `creating a contact for a non-existent user is not found`() {
+        val owner = provisionUser(uid = "owner")
+
+        shouldThrow<UserNotFoundException> {
+            service.create(token = token(uid = "owner"), userId = UUID.randomUUID(), request = email())
+        }
+    }
+
+    @Test
+    fun `listing contacts for a non-existent user is not found`() {
+        provisionUser(uid = "owner")
+
+        shouldThrow<UserNotFoundException> {
+            service.list(token = token(uid = "owner"), userId = UUID.randomUUID())
+        }
+    }
+
+    @Test
+    fun `a provisioned non-admin self cannot verify but reaches the capability check`() {
+        val owner = provisionUser(uid = "owner")
+        val contact = service.create(token = token(uid = "owner"), userId = owner.id, request = email())
+
+        // The caller is provisioned (non-null) but lacks ADMINISTRATOR -> capability branch is false.
+        shouldThrow<ForbiddenException> {
+            verify(adminUid = "owner", userId = owner.id, contactId = contact.id)
         }
     }
 

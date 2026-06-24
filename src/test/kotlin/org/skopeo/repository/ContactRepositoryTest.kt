@@ -106,6 +106,38 @@ class ContactRepositoryTest {
     }
 
     @Test
+    fun `setVerification with VERIFIED status but no method leaves the method null`() {
+        val userId = newUser(uid = "u2b")
+        val contact = contacts.create(userId = userId, type = ContactType.EMAIL, value = "u2b@example.com", isPrimary = true)
+
+        val verified =
+            contacts.setVerification(
+                id = contact.id,
+                status = VerificationStatus.VERIFIED,
+                method = null,
+                verifiedBy = userId,
+                verifiedAt = LocalDateTime.now(),
+            )
+
+        verified.shouldNotBeNull()
+        verified.status shouldBe VerificationStatus.VERIFIED
+        verified.method.shouldBeNull()
+        verified.verifiedAt.shouldNotBeNull()
+        verified.verifiedBy shouldBe userId
+    }
+
+    @Test
+    fun `setVerification reports absence`() {
+        contacts.setVerification(
+            id = UUID.randomUUID(),
+            status = VerificationStatus.VERIFIED,
+            method = VerificationMethod.ADMIN_OVERRIDE,
+            verifiedBy = UUID.randomUUID(),
+            verifiedAt = LocalDateTime.now(),
+        ).shouldBeNull()
+    }
+
+    @Test
     fun `setActive disables then re-enables a contact`() {
         val userId = newUser(uid = "u3")
         val contact = contacts.create(userId = userId, type = ContactType.EMAIL, value = "u3@example.com", isPrimary = true)

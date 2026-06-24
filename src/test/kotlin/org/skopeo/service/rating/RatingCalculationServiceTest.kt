@@ -14,6 +14,8 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.dto.RankingCalculationRequest
+import org.skopeo.dto.RankingCalculationResponse
 import org.skopeo.dto.match.CreateFixtureRequest
 import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.dto.match.SetScoreRequest
@@ -28,6 +30,8 @@ import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRatingsTable
 import org.skopeo.repository.UserRepository
+import org.skopeo.service.calculator.RankingCalculationResult
+import org.skopeo.service.calculator.RankingCalculator
 import org.skopeo.service.match.MatchService
 import org.skopeo.service.user.ForbiddenException
 import org.skopeo.service.user.VerifiedFirebaseToken
@@ -182,6 +186,70 @@ class RatingCalculationServiceTest {
 
         shouldThrow<ForbiddenException> { calc.calculate(token = token(uid = "host"), dryRun = true) }
         shouldThrow<ForbiddenException> { calc.calculate(token = token(uid = "ghost"), dryRun = false) }
+    }
+
+    @Test
+    fun `a non-SINGLES pending match cannot be calculated`() {
+        provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val a1 = provisionUser(uid = "a1", rated = true)
+        val a2 = provisionUser(uid = "a2", rated = true)
+        val b1 = provisionUser(uid = "b1", rated = true)
+        val b2 = provisionUser(uid = "b2", rated = true)
+
+        val match =
+            matchService.createFixture(
+                token = token(uid = "root"),
+                request =
+                    CreateFixtureRequest(
+                        matchType = "DOUBLES",
+                        matchFormat = "BEST_OF_THREE",
+                        matchDate = "2026-01-01",
+                        team1 = listOf(a1.id.toString(), a2.id.toString()),
+                        team2 = listOf(b1.id.toString(), b2.id.toString()),
+                    ),
+            )
+        matchService.uploadResult(
+            token = token(uid = "root"),
+            matchId = match.id,
+            request =
+                MatchResultRequest(
+                    sets =
+                        listOf(
+                            SetScoreRequest(team1Games = 6, team2Games = 4),
+                            SetScoreRequest(team1Games = 6, team2Games = 2),
+                        ),
+                ),
+        )
+
+        shouldThrow<IllegalArgumentException> { calc.calculate(token = token(uid = "root"), dryRun = true) }
+    }
+
+    @Test
+    fun `a calculator that omits a player's change is rejected`() {
+        provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        playedMatch(admin = "root", winner = p1.id, loser = p2.id)
+
+        // A calculator that returns no rating changes simulates the defensive guard for a player
+        // missing from the calculator's response.
+        val emptyCalculator =
+            object : RankingCalculator {
+                override fun calculate(request: RankingCalculationRequest): RankingCalculationResult =
+                    RankingCalculationResult(
+                        response =
+                            RankingCalculationResponse(
+                                ratingChanges = emptyMap(),
+                                players = emptyMap(),
+                                teams = emptyMap(),
+                            ),
+                        audit = emptyList(),
+                    )
+            }
+        val calcWithEmpty =
+            RatingCalculationService(matches = matchRepo, ratings = ratings, users = users, calculator = emptyCalculator)
+
+        shouldThrow<IllegalArgumentException> { calcWithEmpty.calculate(token = token(uid = "root"), dryRun = true) }
     }
 
     @Test
