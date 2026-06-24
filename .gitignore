@@ -85,7 +85,7 @@ ehthumbs.db
 Desktop.ini
 
 # Pitch deck — kept local (contains personal contact details)
-presentation/
+presentations/
 
 # Firebase CLI local artifacts
 .firebase/
