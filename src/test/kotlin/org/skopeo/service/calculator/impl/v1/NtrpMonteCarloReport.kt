@@ -597,6 +597,7 @@ class NtrpMonteCarloReport {
             appendLine(value = "![Analysis 1 median check]($CHART_MEDIAN)")
             appendLine()
             appendLine(value = "# Analysis 1 — gap-driven scenarios")
+            appendLine(value = mermaidSection(results = results))
             results.forEach { (scenario, levels) ->
                 appendLine()
                 appendLine(value = "## ${scenario.label} (P[opponent within 0.5] = ${scenario.pWithinHalf})")
@@ -614,6 +615,42 @@ class NtrpMonteCarloReport {
                 levels.forEach { lr -> appendLine(value = markdownOutcomeRow(lr = lr)) }
             }
             appendLine(value = classSectionMarkdown(classResults = classResults))
+        }
+
+    /**
+     * A GitHub-renderable Mermaid summary of Analysis 1: the final-rating p5/median/p95 band vs
+     * starting level for the representative scenario. The band holds 90% of players; the median
+     * line tracking the diagonal is the "unbiased on average" result.
+     */
+    private fun mermaidSection(results: Map<Scenario, List<LevelResult>>): String =
+        buildString {
+            val scenario = Scenario.WITHIN_HALF
+            val levels = results.getValue(key = scenario)
+            val axis = levels.joinToString(separator = ", ") { lr -> "\"${lr.startLevel}\"" }
+            appendLine()
+            appendLine(value = "## Distribution at a glance — ${scenario.label}")
+            appendLine()
+            appendLine(value = "The band between the p5 and p95 lines holds 90% of players; the median is the middle line.")
+            appendLine(value = "The median tracks the starting level (unbiased on average) and the band stays roughly ±0.5")
+            appendLine(value = "wide, compressing only at the 1.0 / 7.0 boundaries. The other scenario is nearly identical.")
+            appendLine()
+            appendLine(value = "```mermaid")
+            appendLine(value = "xychart-beta")
+            appendLine(value = "    title \"Final rating after $MATCHES matches — p95 (top), median, p5 (bottom)\"")
+            appendLine(value = "    x-axis \"Starting NTRP level\" [$axis]")
+            appendLine(value = "    y-axis \"Final rating\" 1 --> 7")
+            appendLine(value = "    line ${mermaidSeries(levels = levels) { lr -> lr.stats.percentiles[95] }}")
+            appendLine(value = "    line ${mermaidSeries(levels = levels) { lr -> lr.stats.percentiles[50] }}")
+            appendLine(value = "    line ${mermaidSeries(levels = levels) { lr -> lr.stats.percentiles[5] }}")
+            appendLine(value = "```")
+        }
+
+    private fun mermaidSeries(
+        levels: List<LevelResult>,
+        value: (LevelResult) -> Double?,
+    ): String =
+        levels.joinToString(separator = ", ", prefix = "[", postfix = "]") { lr ->
+            String.format(Locale.US, "%.3f", value(lr) ?: 0.0)
         }
 
     private fun classSectionMarkdown(classResults: List<Pair<String, Map<OutcomeClass, ClassResult>>>): String =
