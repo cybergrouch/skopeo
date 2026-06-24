@@ -124,7 +124,7 @@ unverified inputs, and limit how much a noisy newcomer perturbs everyone else.**
 ### K-factor calibration (proposal — keep for a later item)
 
 Today the calibration anchor is `K = 0.16` for NTRP; see
-[`RATING_CALCULATION_ALGORITHM.md`](RATING_CALCULATION_ALGORITHM.md) §3.3. A shutout between
+[`RATING_CALCULATION_ALGORITHM.md`](../../product/RATING_CALCULATION_ALGORITHM.md) §3.3. A shutout between
 equals moves a rating by the full `±0.160`, which may be **too large a step** for an established
 player.
 

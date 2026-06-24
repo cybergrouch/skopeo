@@ -196,7 +196,7 @@ The original `./gradlew build` failure masked several unrelated problems,
 documented here for completeness:
 
 1. **Integration tests required a live PostgreSQL.** The database setup
-   (2026-06-09, see [IMPLEMENTATION_LOG.md](IMPLEMENTATION_LOG.md)) made
+   (2026-06-09, see [IMPLEMENTATION_LOG.md](../IMPLEMENTATION_LOG.md)) made
    `Application.module()` unconditionally initialize HikariCP/Flyway. All
    `testApplication`-based tests failed with
    `Property database.url not found`. Fixed by adding an

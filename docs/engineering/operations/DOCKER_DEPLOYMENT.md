@@ -676,10 +676,10 @@ docker system prune -a
 
 ## Related Documentation
 
-- [API Documentation](./API_DOCUMENTATION.md)
-- [Testing Strategy](./TESTING_STRATEGY.md)
-- [Code Coverage](./CODE_COVERAGE.md)
-- [Rating Calculation Algorithm](./RATING_CALCULATION_ALGORITHM.md)
+- [API Documentation](../api/API_DOCUMENTATION.md)
+- [Testing Strategy](../quality/TESTING_STRATEGY.md)
+- [Code Coverage](../quality/CODE_COVERAGE.md)
+- [Rating Calculation Algorithm](../../product/RATING_CALCULATION_ALGORITHM.md)
 
 ---
 

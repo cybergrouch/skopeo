@@ -203,7 +203,7 @@ This is deliberately easy to add later: the engine and routes work unauthenticat
 
 **Production:** Firebase Hosting — free tier, global CDN, automatic SSL, one-command deploy (`firebase deploy`), run from `web/`. Effectively ₱0 at pilot scale. (Cloud-agnostic alternatives: Cloudflare Pages, Netlify, Vercel; AWS equivalent: S3 + CloudFront.)
 
-The API deploys separately to Cloud Run as documented in [DEPLOYMENT_GCP.md](DEPLOYMENT_GCP.md). The two never share a deploy command.
+The API deploys separately to Cloud Run as documented in [DEPLOYMENT_GCP.md](../operations/DEPLOYMENT_GCP.md). The two never share a deploy command.
 
 **Local development:**
 
@@ -282,4 +282,4 @@ The implementation plan assumes these; confirm or adjust:
 
 - [Capacitor — web to native](https://capacitorjs.com/) · [Ionic PWA → native guide](https://ionic.io/blog/take-your-web-app-further-with-capacitor)
 - [Best frontend frameworks 2026 (overview)](https://strapi.io/blog/best-javascript-frameworks)
-- Related: [DEPLOYMENT_GCP.md](DEPLOYMENT_GCP.md) (API + DB on GCP) · [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md) · [API_DOCUMENTATION.md](API_DOCUMENTATION.md)
+- Related: [DEPLOYMENT_GCP.md](../operations/DEPLOYMENT_GCP.md) (API + DB on GCP) · [DOCKER_DEPLOYMENT.md](../operations/DOCKER_DEPLOYMENT.md) · [API_DOCUMENTATION.md](../api/API_DOCUMENTATION.md)

@@ -570,7 +570,7 @@ Possible future refinements (historical weighting, time decay, set-depth weighti
 | Algorithm (all of §1–§3, §5) | `src/main/kotlin/org/skopeo/service/calculator/impl/v1/PerformanceBasedRankingCalculatorImpl.kt` |
 | Dominance factor | `calculateDominanceFactor()` in `src/main/kotlin/org/skopeo/model/MatchScore.kt` |
 | BigDecimal precision helpers | `src/main/kotlin/org/skopeo/service/calculator/impl/BigDecimalUtils.kt` |
-| Audit trail (every step logged) | `src/main/kotlin/org/skopeo/service/calculator/AuditTrail.kt` — see [AUDIT_TRAIL.md](AUDIT_TRAIL.md) |
+| Audit trail (every step logged) | `src/main/kotlin/org/skopeo/service/calculator/AuditTrail.kt` — see [AUDIT_TRAIL.md](../engineering/architecture/AUDIT_TRAIL.md) |
 
 Key methods in the calculator:
 
@@ -639,7 +639,7 @@ The discrete, public-facing rating bucket (NTRP in 0.5 steps) derived from the c
 - **Elo Rating System**: [Wikipedia](https://en.wikipedia.org/wiki/Elo_rating_system)
 - **NTRP**: USTA National Tennis Rating Program (1.0–7.0 scale, 0.5-step published levels)
 - **Rating smoothing**: [RATING_SMOOTHING.md](RATING_SMOOTHING.md)
-- **Audit trail design**: [AUDIT_TRAIL.md](AUDIT_TRAIL.md)
+- **Audit trail design**: [AUDIT_TRAIL.md](../engineering/architecture/AUDIT_TRAIL.md)
 
 ---
 

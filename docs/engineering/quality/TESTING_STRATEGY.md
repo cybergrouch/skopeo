@@ -356,7 +356,7 @@ fun test() {
 ### Coverage Targets
 
 The enforced JaCoCo gate is **75% line / 70% branch** over the measured
-(service-layer) code; see [CODE_COVERAGE.md](./CODE_COVERAGE.md) for what is
+(service-layer) code; see [CODE_COVERAGE.md](CODE_COVERAGE.md) for what is
 measured vs excluded, and the CI coverage summary for current figures.
 
 ---
@@ -461,7 +461,7 @@ open build/reports/jacoco/test/html/index.html
 ./gradlew jacocoTestCoverageVerification
 ```
 
-See [CODE_COVERAGE.md](./CODE_COVERAGE.md) for detailed coverage documentation.
+See [CODE_COVERAGE.md](CODE_COVERAGE.md) for detailed coverage documentation.
 
 ### Fast Feedback (Unit Tests Only)
 
@@ -491,7 +491,7 @@ See [CODE_COVERAGE.md](./CODE_COVERAGE.md) for detailed coverage documentation.
 
 The actual workflow runs `./gradlew check` (which chains compile → ktlint →
 detekt → tests → coverage verification) plus a separate `web` job that runs the
-Vitest suite. See [CICD.md](./CICD.md) and `.github/workflows/ci.yml` for the
+Vitest suite. See [CICD.md](../operations/CICD.md) and `.github/workflows/ci.yml` for the
 canonical configuration; a simplified illustration:
 
 ```yaml
@@ -583,9 +583,9 @@ Test Report" checks rather than a fixed number here.
 
 ## Related Documentation
 
-- [AUDIT_TRAIL.md](./AUDIT_TRAIL.md) - Audit trail design and testing
-- [RATING_CALCULATION_ALGORITHM.md](./RATING_CALCULATION_ALGORITHM.md) - Algorithm implementation
-- [API_DOCUMENTATION.md](./API_DOCUMENTATION.md) - API specifications
+- [AUDIT_TRAIL.md](../architecture/AUDIT_TRAIL.md) - Audit trail design and testing
+- [RATING_CALCULATION_ALGORITHM.md](../../product/RATING_CALCULATION_ALGORITHM.md) - Algorithm implementation
+- [API_DOCUMENTATION.md](../api/API_DOCUMENTATION.md) - API specifications
 
 ---
 

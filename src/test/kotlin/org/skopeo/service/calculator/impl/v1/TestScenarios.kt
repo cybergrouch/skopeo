@@ -1038,7 +1038,7 @@ object TestScenarios {
 
     /**
      * Build a scenario whose expected deltas come from the documented master formula
-     * (docs/RATING_CALCULATION_ALGORITHM.md) computed independently with the same
+     * (docs/product/RATING_CALCULATION_ALGORITHM.md) computed independently with the same
      * 6-decimal BigDecimal precision as the calculator. UTR ratings mirror the NTRP
      * matchup via utr = ntrp × 2.5 − 1.5, which preserves the 2.5× gap scaling and
      * maps 7.0 → 16.0 (both ceilings).
