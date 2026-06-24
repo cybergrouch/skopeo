@@ -10,15 +10,16 @@ steps for reference (you do **not** need them — the project already exists).
 
 ---
 
-## Before you start — what's already set up, and what to know
+## Before you start — what to know
 
-1. **The Firebase project already exists (`skopeo-prod`).** You do **not** need to create one.
-   The web config values are in Step 1 below; the original "create a project" steps are kept in
-   [Appendix A](#appendix-a-firebase-project-setup-reference) only for reference.
-2. **No `FIREBASE_PROJECT_ID` override is needed.** The API defaults `firebase.projectId` to
-   `skopeo-prod` (its built-in default), which is exactly this project — so the web's
-   `VITE_FIREBASE_PROJECT_ID` and the API's project already match. (If you ever point at a
-   *different* Firebase project, set `FIREBASE_PROJECT_ID` on the API, or every login returns 401.)
+1. **You supply your own Firebase project config.** Use an existing Firebase project (ask a
+   maintainer for access) or create one ([Appendix A](#appendix-a-firebase-project-setup-reference)).
+   Its web config (apiKey, authDomain, projectId, appId) is **per-environment and must not be
+   committed** — put it only in `web/.env.local` (which is git-ignored). This guide uses
+   placeholders; fill in your project's real values locally.
+2. **Keep the project IDs in sync.** The API reads `firebase.projectId` from `application.yaml`
+   (override with the `FIREBASE_PROJECT_ID` env var). The web's `VITE_FIREBASE_PROJECT_ID` must
+   match the project the API verifies tokens against — if they differ, every login returns 401.
 3. **Facebook requires one operator step.** Facebook sign-up/login is implemented in the web UI,
    but for it to work at runtime the **Facebook provider must be enabled in the Firebase console**
    (needs a Facebook app's App ID + secret from developers.facebook.com). Until then, Google and
@@ -54,21 +55,21 @@ API container (:8080)  ───────►  PostgreSQL container (:5432)
 
 # Part 1 — Local setup (Docker DB + API, web dev server)
 
-## Step 1 — Firebase config (already provisioned)
+## Step 1 — Firebase config (your project)
 
-The project `skopeo-prod` is already set up. Just confirm/verify the values below in the Firebase
-console if anything looks off. These are **public client values** (safe to expose in the browser).
+Get your project's web config from the Firebase console (**Project settings ⚙ → General → Your
+apps → Web app**). Keep these values out of git — they go only in `web/.env.local` (Step 3).
 
-- [ ] Project ID: `skopeo-prod`
+- [ ] Project ID: `<your-project-id>`
 - [ ] Auth providers enabled (Build → Authentication → Sign-in method):
   - [ ] **Email/Password**
   - [ ] **Google**
   - [ ] **Facebook** — required only for Test 3 (see note 3 above)
-- [ ] Web config:
-  - `apiKey`: `AIzaSyCwx5JCXhbPShjsXzQfSoWRUAJ2QK9mtzM`
-  - `authDomain`: `skopeo-prod.firebaseapp.com`
-  - `projectId`: `skopeo-prod`
-  - `appId`: `1:680245910471:web:857e0eed4c40d54a0d57e2`
+- [ ] Web config (from the console; do **not** commit):
+  - `apiKey`: `<your-api-key>`
+  - `authDomain`: `<your-project-id>.firebaseapp.com`
+  - `projectId`: `<your-project-id>`
+  - `appId`: `<your-app-id>`
 
 > `localhost` is an authorized domain by default, so the Google/Facebook popups work locally with
 > no extra configuration.
@@ -76,8 +77,8 @@ console if anything looks off. These are **public client values** (safe to expos
 ## Step 2 — Run PostgreSQL + API in Docker
 
 `docker-compose.yml` builds and runs both the database (`postgres`, :5432) and the API
-(`skopeo`, :8080). The API already defaults `FIREBASE_PROJECT_ID` to `skopeo-prod` — **this
-project** — so there is nothing to override.
+(`skopeo`, :8080). The API reads its Firebase project from `application.yaml`; if that built-in
+default already matches your project you can skip the override below.
 
 - [ ] 2.1 Build and start:
 
@@ -105,9 +106,8 @@ docker compose --profile tools up -d pgadmin
 # http://localhost:5050  —  login admin@skopeo.com / admin
 ```
 
-> *(Only if you ever switch to a different Firebase project)* create `docker-compose.override.yml`
-> at the repo root with `services: { skopeo: { environment: { FIREBASE_PROJECT_ID: "your-id" } } }`.
-> Not needed for `skopeo-prod`.
+> *(Only if the API's default project doesn't match yours)* create `docker-compose.override.yml`
+> at the repo root with `services: { skopeo: { environment: { FIREBASE_PROJECT_ID: "<your-project-id>" } } }`.
 
 ## Step 3 — Run the web UI (dev server)
 
@@ -126,10 +126,10 @@ cp .env.example .env.local
       empty** so it uses the dev proxy to `:8080`:
 
 ```
-VITE_FIREBASE_API_KEY=AIzaSyCwx5JCXhbPShjsXzQfSoWRUAJ2QK9mtzM
-VITE_FIREBASE_AUTH_DOMAIN=skopeo-prod.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=skopeo-prod
-VITE_FIREBASE_APP_ID=1:680245910471:web:857e0eed4c40d54a0d57e2
+VITE_FIREBASE_API_KEY=<your-api-key>
+VITE_FIREBASE_AUTH_DOMAIN=<your-project-id>.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=<your-project-id>
+VITE_FIREBASE_APP_ID=<your-app-id>
 VITE_API_BASE_URL=
 ```
 
@@ -254,7 +254,7 @@ Vite dev proxy.
 
 ## Deployment sequence
 
-- [ ] **2.1 Project & APIs** — `gcloud projects create …` (or use `skopeo-prod`), enable
+- [ ] **2.1 Project & APIs** — `gcloud projects create …` (or use your existing project), enable
       run/sqladmin/secretmanager/cloudbuild/artifactregistry.
 - [ ] **2.2 Database (Cloud SQL)** — create the instance + `SkopeoDb` + user; store the password in
       Secret Manager. Note the private IP.
@@ -263,12 +263,12 @@ Vite dev proxy.
 ```bash
 gcloud run deploy skopeo \
   --source . --allow-unauthenticated \
-  --set-env-vars="DATABASE_URL=jdbc:postgresql://<PRIVATE_IP>:5432/SkopeoDb,DATABASE_USER=skopeo,FIREBASE_PROJECT_ID=skopeo-prod" \
+  --set-env-vars="DATABASE_URL=jdbc:postgresql://<PRIVATE_IP>:5432/SkopeoDb,DATABASE_USER=skopeo,FIREBASE_PROJECT_ID=<your-project-id>" \
   --set-secrets="DATABASE_PASSWORD=skopeo-db-password:latest"
 ```
 
-  `FIREBASE_PROJECT_ID=skopeo-prod` matches the API default, so it's optional — included for
-  explicitness so the project stays pinned even if the default changes. Record the Cloud Run URL.
+  Set `FIREBASE_PROJECT_ID` to your Firebase project (optional if it already matches the
+  `application.yaml` default; explicit is safer so the project stays pinned). Record the Cloud Run URL.
 
 - [ ] **2.4 Web (Firebase Hosting)** — set GitHub repo **Variables** `VITE_FIREBASE_*` and
       `VITE_API_BASE_URL` (= the Cloud Run URL), plus the **Secret** `FIREBASE_SERVICE_ACCOUNT`;
@@ -289,7 +289,7 @@ gcloud run deploy skopeo \
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| Sign-up/login returns **401** | API/web project IDs differ | Both should be `skopeo-prod`; only an issue if you switched projects without setting `FIREBASE_PROJECT_ID` on the API |
+| Sign-up/login returns **401** | API/web project IDs differ | Make the web's `VITE_FIREBASE_PROJECT_ID` match the API's project (set `FIREBASE_PROJECT_ID` on the API if it differs from the `application.yaml` default) |
 | Facebook button errors / "provider disabled" | Facebook not enabled in Firebase | Enable the Facebook provider (App ID + secret) in the Firebase console |
 | "account exists with different credential" | Email already registered via another provider | Sign in with the original method; expected Firebase behavior |
 | Popup: "auth domain not authorized" | Domain not authorized | Add it under Firebase Auth → Settings → Authorized domains (`localhost` is there by default) |
@@ -301,8 +301,9 @@ gcloud run deploy skopeo \
 
 # Appendix A — Firebase project setup (reference)
 
-You do **not** need this — `skopeo-prod` already exists. Kept only for recreating a project from
-scratch (e.g. a separate `skopeo-dev`).
+Use this if you need to create your own Firebase project (or set up a separate one, e.g. a
+`*-dev` project). Its config values are per-environment secrets — keep them in `web/.env.local`,
+never in git.
 
 1. <https://console.firebase.google.com> → **Add project**; note the **Project ID**.
 2. **Build → Authentication → Get started**.

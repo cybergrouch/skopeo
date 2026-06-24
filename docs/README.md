@@ -26,7 +26,7 @@ Docs are grouped by audience, then by topic.
 
 ### `operations/` — deploy, run, tooling
 
-- [MANUAL_TESTING_GUIDE.md](engineering/operations/MANUAL_TESTING_GUIDE.md) — printable end-to-end manual test runbook (local Docker + GCP); [PDF](engineering/operations/MANUAL_TESTING_GUIDE.pdf).
+- [MANUAL_TESTING_GUIDE.md](engineering/operations/MANUAL_TESTING_GUIDE.md) — end-to-end manual test runbook (local Docker + GCP).
 - [DEPLOYMENT_GCP.md](engineering/operations/DEPLOYMENT_GCP.md) — Cloud Run + Cloud SQL + Firebase Hosting deployment.
 - [DOCKER_DEPLOYMENT.md](engineering/operations/DOCKER_DEPLOYMENT.md) — container build & local Docker run.
 - [database-setup.md](engineering/operations/database-setup.md) — local DB setup, migrations, sample queries.
