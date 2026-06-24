@@ -27,10 +27,10 @@ import kotlin.random.Random
  *   - P(player wins) = logistic(δ / [WIN_SCALE]).
  *   - Given the outcome, the match is *dominant* with logistic(±δ / [DOM_SCALE]) (the favorite is
  *     more likely to dominate), otherwise *competitive*. This yields the four buckets requested:
- *     DOMINANT_WIN (dominance > 0.6), COMPETITIVE_WIN (≈0.5), COMPETITIVE_LOSS, DOMINANT_LOSS.
- *   - A bucket maps to a concrete set score ([DOMINANT_SCORES] / [COMPETITIVE_SCORES]); NTRP's
- *     0.5 game-margin discretization means there is no integer score strictly between 0.5 and 0.6,
- *     so "dominant" is ≥0.714 (6-1/6-0) and "competitive" is ≤0.5 (6-2/6-3/6-4/7-5).
+ *     DOMINANT_WIN, COMPETITIVE_WIN, COMPETITIVE_LOSS, and DOMINATED — the last being the inverse
+ *     of a dominant win (the player is crushed, e.g. 0-6/1-6/2-6).
+ *   - A bucket maps to a concrete set score ([DOMINANT_SCORES] / [COMPETITIVE_SCORES]): "dominant"
+ *     is a margin ≥ 0.5 (6-0/6-1/6-2) and "competitive" is ≤ 0.333 (6-3/6-4/7-5).
  *
  * The run is seeded ([SEED]) so the report is reproducible. Outputs: /tmp/ntrp_montecarlo.txt and
  * presentations/ntrp_montecarlo.md.
@@ -54,8 +54,8 @@ class NtrpMonteCarloReport {
         private const val P_WITHIN_HALF_FAR = 0.3 // "majority 0.5–1.0"
 
         // (winnerGames, loserGames) per bucket — dominance = (w-l)/(w+l).
-        private val DOMINANT_SCORES = listOf(6 to 0, 6 to 1) // 1.000, 0.714
-        private val COMPETITIVE_SCORES = listOf(6 to 2, 6 to 3, 6 to 4, 7 to 5) // 0.500, 0.333, 0.200, 0.167
+        private val DOMINANT_SCORES = listOf(6 to 0, 6 to 1, 6 to 2) // 1.000, 0.714, 0.500
+        private val COMPETITIVE_SCORES = listOf(6 to 3, 6 to 4, 7 to 5) // 0.333, 0.200, 0.167
 
         private val PERCENTILES = listOf(5, 25, 50, 75, 95)
         private const val PERCENT = 100.0
@@ -73,7 +73,7 @@ class NtrpMonteCarloReport {
         DOMINANT_WIN(label = "Dominant win"),
         COMPETITIVE_WIN(label = "Competitive win"),
         COMPETITIVE_LOSS(label = "Competitive loss"),
-        DOMINANT_LOSS(label = "Dominant loss"),
+        DOMINATED(label = "Dominated"),
     }
 
     private data class Stats(
@@ -152,7 +152,7 @@ class NtrpMonteCarloReport {
             winner = "T1"
         } else {
             val opponentDominant = rng.nextDouble() < logistic(x = -delta, scale = DOM_SCALE)
-            outcome = if (opponentDominant) Outcome.DOMINANT_LOSS else Outcome.COMPETITIVE_LOSS
+            outcome = if (opponentDominant) Outcome.DOMINATED else Outcome.COMPETITIVE_LOSS
             val (w, l) = pickScore(dominant = opponentDominant, rng = rng)
             p1Games = l
             p2Games = w
@@ -224,6 +224,7 @@ class NtrpMonteCarloReport {
             appendLine(value = "NTRP RATING MONTE CARLO ($TRIALS players × $MATCHES matches each, seed $SEED)")
             appendLine(value = "Final-rating distribution by starting level.")
             appendLine(value = "Win prob = logistic(δ/$WIN_SCALE); dominance split via δ/$DOM_SCALE.")
+            appendLine(value = "pN = Nth percentile of final rating (pN = N% of players finished below it); [p5,p95] is a 90% band.")
             results.forEach { (scenario, levels) ->
                 appendLine()
                 appendLine(value = "=== Scenario: ${scenario.label} (P[within 0.5]=${scenario.pWithinHalf}) ===")
@@ -232,7 +233,7 @@ class NtrpMonteCarloReport {
                     appendLine(value = textRow(lr = lr))
                 }
                 appendLine(value = "-- outcome mix (share of all matches) --")
-                appendLine(value = "start   domWin  compWin compLoss domLoss")
+                appendLine(value = "start   domWin  compWin compLoss dominated")
                 levels.forEach { lr ->
                     appendLine(
                         value =
@@ -268,7 +269,12 @@ class NtrpMonteCarloReport {
             appendLine(value = "$TRIALS simulated players per starting level, each playing $MATCHES randomized matches")
             appendLine(value = "(seed $SEED, reproducible). Win probability is `logistic(δ / $WIN_SCALE)` where δ = player − opponent;")
             appendLine(value = "given the outcome the match is dominant with `logistic(±δ / $DOM_SCALE)`, else competitive.")
-            appendLine(value = "Dominant scores ≥ 0.714 (6-1/6-0); competitive ≤ 0.5 (6-2/6-3/6-4/7-5).")
+            appendLine(value = "Dominant scores ≥ 0.5 (6-0/6-1/6-2); competitive ≤ 0.333 (6-3/6-4/7-5).")
+            appendLine(value = "'Dominated' = the player loses by a dominant score (the inverse of a dominant win).")
+            appendLine()
+            appendLine(value = "**Percentiles** (`pN`) describe the spread of final ratings: `pN` = N% of simulated")
+            appendLine(value = "players finished *below* that rating. So p5/p95 bracket the middle 90% of outcomes,")
+            appendLine(value = "p25/p75 the middle 50% (interquartile range), and p50 is the median.")
             results.forEach { (scenario, levels) ->
                 appendLine()
                 appendLine(value = "## ${scenario.label} (P[opponent within 0.5] = ${scenario.pWithinHalf})")
@@ -281,7 +287,7 @@ class NtrpMonteCarloReport {
                 appendLine()
                 appendLine(value = "Outcome mix (share of all matches played):")
                 appendLine()
-                appendLine(value = "| Start | Dominant win | Competitive win | Competitive loss | Dominant loss |")
+                appendLine(value = "| Start | Dominant win | Competitive win | Competitive loss | Dominated |")
                 appendLine(value = "|---|---|---|---|---|")
                 levels.forEach { lr -> appendLine(value = markdownOutcomeRow(lr = lr)) }
             }
