@@ -7,8 +7,10 @@ import {
 } from 'react-router-dom'
 import { AuthProvider } from '@/auth/AuthProvider'
 import { RequireAuth } from '@/auth/RequireAuth'
+import { RequireProfile } from '@/auth/RequireProfile'
 import { SignUpPage } from '@/routes/SignUpPage'
 import { LoginPage } from '@/routes/LoginPage'
+import { CompleteProfilePage } from '@/routes/CompleteProfilePage'
 import { DashboardPage } from '@/routes/DashboardPage'
 
 const queryClient = new QueryClient({
@@ -26,10 +28,20 @@ function App() {
             <Route path="/signup" element={<SignUpPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route
+              path="/complete-profile"
+              element={
+                <RequireAuth>
+                  <CompleteProfilePage />
+                </RequireAuth>
+              }
+            />
+            <Route
               path="/dashboard"
               element={
                 <RequireAuth>
-                  <DashboardPage />
+                  <RequireProfile>
+                    <DashboardPage />
+                  </RequireProfile>
                 </RequireAuth>
               }
             />
