@@ -60,8 +60,11 @@ private fun displayName(
     token: VerifiedFirebaseToken,
     request: CreateUserRequest,
 ): List<UserName> {
+    // Treat a blank/whitespace value as absent (the web sends null, but a direct API
+    // call could send "" or "  "); fall back to the provider's token name, else reject.
     val value =
-        request.displayName ?: token.name
+        request.displayName?.trim()?.ifBlank { null }
+            ?: token.name?.trim()?.ifBlank { null }
             ?: throw IllegalArgumentException("A display name is required")
     return listOf(UserName(type = NameType.DISPLAY, value = value))
 }

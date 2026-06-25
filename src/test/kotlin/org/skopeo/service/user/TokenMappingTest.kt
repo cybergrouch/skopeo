@@ -117,6 +117,38 @@ class TokenMappingTest {
     }
 
     @Test
+    fun `a surrounding-whitespace display name is trimmed`() {
+        val command =
+            buildProvisionCommand(
+                token = token(name = "from-provider"),
+                request = CreateUserRequest(displayName = "  Juan  ", dateOfBirth = "2000-01-01", sex = "Male"),
+            )
+
+        command.names.single().value shouldBe "Juan"
+    }
+
+    @Test
+    fun `a blank display name falls back to the token name`() {
+        val command =
+            buildProvisionCommand(
+                token = token(name = "from-provider"),
+                request = CreateUserRequest(displayName = "   ", dateOfBirth = "2000-01-01", sex = "Male"),
+            )
+
+        command.names.single().value shouldBe "from-provider"
+    }
+
+    @Test
+    fun `a blank display name with no token name is rejected`() {
+        shouldThrow<IllegalArgumentException> {
+            buildProvisionCommand(
+                token = token(name = null),
+                request = CreateUserRequest(displayName = "   ", dateOfBirth = "2000-01-01", sex = "Male"),
+            )
+        }
+    }
+
+    @Test
     fun `rejects a missing display name, bad sex, and bad date`() {
         // No request display name and no token name.
         shouldThrow<IllegalArgumentException> {

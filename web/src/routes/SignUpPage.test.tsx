@@ -78,22 +78,10 @@ describe('SignUpPage', () => {
     expect(navigateMock).toHaveBeenCalledWith('/dashboard', { replace: true })
   })
 
-  it('provisions with a null display name when the name is left blank', async () => {
-    signUpWithEmail.mockResolvedValue({})
-    mutateAsync.mockResolvedValue({})
-    const user = userEvent.setup()
+  it('requires a display name on the manual form', () => {
     renderSignUp()
-
-    await fillProfile(user)
-    await user.type(screen.getByLabelText('Email'), 'roger@example.com')
-    await user.type(screen.getByLabelText('Password'), 'secret123')
-    await user.click(screen.getByRole('button', { name: /create account/i }))
-
-    await waitFor(() =>
-      expect(mutateAsync).toHaveBeenCalledWith({
-        data: { displayName: null, sex: 'Male', dateOfBirth: '2000-01-01' },
-      }),
-    )
+    // Manual sign-up must capture a display name (OAuth derives one from the provider).
+    expect(screen.getByLabelText('Display name')).toBeRequired()
   })
 
   it('shows a friendly error and does not navigate on a generic sign-up failure', async () => {
@@ -103,6 +91,7 @@ describe('SignUpPage', () => {
     const user = userEvent.setup()
     renderSignUp()
 
+    await user.type(screen.getByLabelText('Display name'), 'Roger F.')
     await fillProfile(user)
     await user.type(screen.getByLabelText('Email'), 'roger@example.com')
     await user.type(screen.getByLabelText('Password'), 'short')
@@ -125,6 +114,7 @@ describe('SignUpPage', () => {
     const user = userEvent.setup()
     renderSignUp()
 
+    await user.type(screen.getByLabelText('Display name'), 'Roger F.')
     await fillProfile(user)
     await user.type(screen.getByLabelText('Email'), 'orphan@example.com')
     await user.type(screen.getByLabelText('Password'), 'secret123')
@@ -134,7 +124,7 @@ describe('SignUpPage', () => {
       expect(signInWithEmail).toHaveBeenCalledWith('orphan@example.com', 'secret123'),
     )
     expect(mutateAsync).toHaveBeenCalledWith({
-      data: { displayName: null, sex: 'Male', dateOfBirth: '2000-01-01' },
+      data: { displayName: 'Roger F.', sex: 'Male', dateOfBirth: '2000-01-01' },
     })
     expect(navigateMock).toHaveBeenCalledWith('/dashboard', { replace: true })
   })
@@ -149,6 +139,7 @@ describe('SignUpPage', () => {
     const user = userEvent.setup()
     renderSignUp()
 
+    await user.type(screen.getByLabelText('Display name'), 'Roger F.')
     await fillProfile(user)
     await user.type(screen.getByLabelText('Email'), 'taken@example.com')
     await user.type(screen.getByLabelText('Password'), 'wrongpass')
@@ -170,6 +161,7 @@ describe('SignUpPage', () => {
     const user = userEvent.setup()
     renderSignUp()
 
+    await user.type(screen.getByLabelText('Display name'), 'Roger F.')
     await fillProfile(user)
     await user.type(screen.getByLabelText('Email'), 'orphan@example.com')
     await user.type(screen.getByLabelText('Password'), 'secret123')
