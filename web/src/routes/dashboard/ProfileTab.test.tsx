@@ -62,6 +62,21 @@ describe('ProfileTab', () => {
     expect(screen.getByText('Player')).toBeInTheDocument()
   })
 
+  it('shows the provider avatar when a photo URL is present', () => {
+    useAuthMock.mockReturnValue({
+      user: {
+        displayName: 'Roger F.',
+        email: 'roger@example.com',
+        photoURL: 'https://example.com/avatar.jpg',
+      },
+    })
+    const { container } = renderProfile()
+    expect(container.querySelector('img')).toHaveAttribute(
+      'src',
+      'https://example.com/avatar.jpg',
+    )
+  })
+
   it('shows the pending notice when there is no rating', () => {
     renderProfile()
     expect(screen.getByText('Pending assessment')).toBeInTheDocument()

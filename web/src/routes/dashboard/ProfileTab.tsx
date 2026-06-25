@@ -36,10 +36,30 @@ export function ProfileTab({ userId, capabilities }: ProfileTabProps) {
     <div className="grid gap-4">
       <Card>
         <CardHeader>
-          <CardTitle>
-            {user?.displayName ?? user?.email ?? 'Player'}
-          </CardTitle>
-          <CardDescription>{user?.email}</CardDescription>
+          <div className="flex items-center gap-3">
+            {user?.photoURL ? (
+              <img
+                src={user.photoURL}
+                alt=""
+                referrerPolicy="no-referrer"
+                className="h-12 w-12 shrink-0 rounded-full object-cover"
+              />
+            ) : (
+              // No upload support: Google/Facebook supply a photo; everyone else gets initials.
+              <div
+                aria-hidden="true"
+                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-muted text-lg font-medium text-muted-foreground"
+              >
+                {(user?.displayName ?? user?.email ?? 'P').charAt(0).toUpperCase()}
+              </div>
+            )}
+            <div className="min-w-0">
+              <CardTitle>
+                {user?.displayName ?? user?.email ?? 'Player'}
+              </CardTitle>
+              <CardDescription>{user?.email}</CardDescription>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
           {capabilities.map((capability) => (
