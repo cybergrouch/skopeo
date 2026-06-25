@@ -87,6 +87,10 @@ Desktop.ini
 # Pitch deck — kept local (contains personal contact details)
 presentations/
 
+# Local Docker Compose overrides (e.g. ADMIN_EMAILS) — keep machine-specific config out of git
+docker-compose.override.yml
+docker-compose.override.yaml
+
 # Firebase CLI local artifacts
 .firebase/
 firebase-debug.log

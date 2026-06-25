@@ -105,6 +105,29 @@ describe('CreateFixtureSection', () => {
     expect(await screen.findByText('Fixture scheduled.')).toBeInTheDocument()
   })
 
+  it('offers the single-set format and submits it', async () => {
+    renderSection()
+    expect(
+      screen.getByRole('option', { name: 'Single set' }),
+    ).toBeInTheDocument()
+    const user = await pickPlayersAndDate()
+    await user.selectOptions(screen.getByLabelText('Format'), 'SINGLE_SET')
+
+    await user.click(screen.getByRole('button', { name: /schedule fixture/i }))
+
+    await waitFor(() =>
+      expect(mutateAsync).toHaveBeenCalledWith({
+        data: {
+          matchType: 'SINGLES',
+          matchFormat: 'SINGLE_SET',
+          matchDate: '2026-07-01',
+          team1: ['p1'],
+          team2: ['p2'],
+        },
+      }),
+    )
+  })
+
   it('ignores a submit with players missing', () => {
     const { container } = renderSection()
     const form = container.querySelector('form')
