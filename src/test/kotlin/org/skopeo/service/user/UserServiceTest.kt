@@ -56,6 +56,8 @@ class UserServiceTest {
 
     private val request = CreateUserRequest(displayName = "Juan", dateOfBirth = "2000-01-01", sex = "Male")
 
+    private val bootstrapService = UserService(repository = repository, adminEmails = setOf(element = "admin@example.com"))
+
     @Test
     fun `provision creates a player then is idempotent`() {
         val first =
@@ -175,5 +177,49 @@ class UserServiceTest {
 
         // The caller's token has no user row, so requireAccess sees caller == null (isAdmin == false).
         shouldThrow<ForbiddenException> { service.getById(token = token(uid = "no-such-user"), id = user.id) }
+    }
+
+    @Test
+    fun `provision bootstraps a verified allowlisted email to ADMINISTRATOR`() {
+        val result =
+            bootstrapService.provision(
+                token =
+                    token(uid = "boss", email = "admin@example.com", emailVerified = true, name = "Boss", signInProvider = "google.com"),
+                request = CreateUserRequest(dateOfBirth = "2000-01-01", sex = "Male"),
+            )
+
+        result.user.capabilities shouldBe setOf(Capability.PLAYER, Capability.ADMINISTRATOR)
+    }
+
+    @Test
+    fun `currentUser promotes a user later added to the allowlist, idempotently`() {
+        // Signed up before being allowlisted (unverified at provision -> plain PLAYER).
+        val created =
+            bootstrapService.provision(
+                token = token(uid = "later", email = "admin@example.com", emailVerified = false, name = "Later"),
+                request = CreateUserRequest(dateOfBirth = "2000-01-01", sex = "Male"),
+            )
+        created.user.capabilities shouldBe setOf(Capability.PLAYER)
+
+        // Logs in with a verified email -> promoted.
+        bootstrapService.currentUser(token = token(uid = "later", email = "admin@example.com", emailVerified = true))!!
+            .capabilities shouldBe setOf(Capability.PLAYER, Capability.ADMINISTRATOR)
+
+        // A second login does not double-grant.
+        bootstrapService.currentUser(token = token(uid = "later", email = "admin@example.com", emailVerified = true))!!
+            .capabilities shouldBe setOf(Capability.PLAYER, Capability.ADMINISTRATOR)
+        repository.findByFirebaseUid(firebaseUid = "later")!!
+            .capabilities shouldBe setOf(Capability.PLAYER, Capability.ADMINISTRATOR)
+    }
+
+    @Test
+    fun `currentUser does not promote an UNVERIFIED allowlisted email (verified-email gate)`() {
+        bootstrapService.provision(
+            token = token(uid = "unv", email = "admin@example.com", emailVerified = false, name = "Unv"),
+            request = CreateUserRequest(dateOfBirth = "2000-01-01", sex = "Male"),
+        )
+
+        bootstrapService.currentUser(token = token(uid = "unv", email = "admin@example.com", emailVerified = false))!!
+            .capabilities shouldBe setOf(Capability.PLAYER)
     }
 }

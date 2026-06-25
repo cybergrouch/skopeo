@@ -13,6 +13,13 @@ firebase:
   # FIREBASE_PROJECT_ID. (A project id is public, not a secret.)
   projectId: "$FIREBASE_PROJECT_ID:skopeo-prod"
 
+admin:
+  # Comma-separated allowlist of emails auto-granted ADMINISTRATOR on sign-up/login, but ONLY when
+  # the email is provider-verified (the verified-email gate). Bootstrap / break-glass only — everyday
+  # admin grants go through the API. Source from Secret Manager; empty/unset = no auto-admins.
+  # See docs/engineering/architecture/ADMIN_BOOTSTRAP.md.
+  emails: "$ADMIN_EMAILS:"
+
 database:
   url: "$DATABASE_URL:jdbc:postgresql://localhost:5432/SkopeoDb"
   driver: org.postgresql.Driver

@@ -3,6 +3,7 @@
 
 package org.skopeo.service.user
 
+import mu.KotlinLogging
 import org.skopeo.dto.user.CreateUserRequest
 import org.skopeo.model.Capability
 import org.skopeo.model.NumericRange
@@ -10,9 +11,12 @@ import org.skopeo.model.ProfilePatch
 import org.skopeo.model.User
 import org.skopeo.model.UserSearchQuery
 import org.skopeo.model.ageRangeToDob
+import org.skopeo.repository.CapabilityRepository
 import org.skopeo.repository.UserRepository
 import java.time.LocalDate
 import java.util.UUID
+
+private val logger = KotlinLogging.logger {}
 
 private val STAFF_ROLES = setOf(Capability.HOST, Capability.ADMINISTRATOR)
 
@@ -23,6 +27,9 @@ private val STAFF_ROLES = setOf(Capability.HOST, Capability.ADMINISTRATOR)
  */
 class UserService(
     private val repository: UserRepository = UserRepository(),
+    private val capabilities: CapabilityRepository = CapabilityRepository(),
+    // Verified-email allowlist for the ADMINISTRATOR bootstrap (from ADMIN_EMAILS); empty = none.
+    private val adminEmails: Set<String> = emptySet(),
 ) {
     /**
      * Staff search (HOST/ADMINISTRATOR) backing the player-picker, role-grants, and player
@@ -86,13 +93,19 @@ class UserService(
         token: VerifiedFirebaseToken,
         request: CreateUserRequest,
     ): Provisioned {
-        repository.findByFirebaseUid(firebaseUid = token.uid)?.let { return Provisioned(user = it, created = false) }
-        val command = buildProvisionCommand(token = token, request = request)
+        repository.findByFirebaseUid(firebaseUid = token.uid)?.let {
+            val promoted = promoteIfBootstrapAdmin(token = token, user = it, adminEmails = adminEmails, capabilities = capabilities)
+            return Provisioned(user = promoted, created = false)
+        }
+        val command = buildProvisionCommand(token = token, request = request, adminEmails = adminEmails)
         return Provisioned(user = repository.provision(command = command), created = true)
     }
 
     /** The caller's own profile, or null if they have not been provisioned yet. */
-    fun currentUser(token: VerifiedFirebaseToken): User? = repository.findByFirebaseUid(firebaseUid = token.uid)
+    fun currentUser(token: VerifiedFirebaseToken): User? =
+        repository.findByFirebaseUid(firebaseUid = token.uid)?.let {
+            promoteIfBootstrapAdmin(token = token, user = it, adminEmails = adminEmails, capabilities = capabilities)
+        }
 
     fun getById(
         token: VerifiedFirebaseToken,
@@ -148,4 +161,24 @@ class UserService(
         val isAdmin = caller?.capabilities?.contains(element = Capability.ADMINISTRATOR) == true
         if (!isSelf && !isAdmin) throw ForbiddenException()
     }
+}
+
+/**
+ * Idempotently grant ADMINISTRATOR to an already-provisioned user whose verified email is on the
+ * bootstrap allowlist — covering emails added to the list after the user first signed up. Grant-only
+ * (removing an email never revokes); the grant is recorded with a null grantedBy (a system source).
+ * See docs/engineering/architecture/ADMIN_BOOTSTRAP.md.
+ */
+private fun promoteIfBootstrapAdmin(
+    token: VerifiedFirebaseToken,
+    user: User,
+    adminEmails: Set<String>,
+    capabilities: CapabilityRepository,
+): User {
+    if (Capability.ADMINISTRATOR in user.capabilities || !isBootstrapAdmin(token = token, adminEmails = adminEmails)) {
+        return user
+    }
+    capabilities.grant(userId = user.id, capability = Capability.ADMINISTRATOR)
+    logger.info { "Bootstrap allowlist: granted ADMINISTRATOR to user ${user.id}" }
+    return user.copy(capabilities = user.capabilities + Capability.ADMINISTRATOR)
 }

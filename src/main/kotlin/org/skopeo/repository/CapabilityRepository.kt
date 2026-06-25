@@ -39,7 +39,8 @@ class CapabilityRepository {
     fun grant(
         userId: UUID,
         capability: Capability,
-        grantedBy: UUID,
+        // Null = a system grant (e.g. the verified-email bootstrap allowlist), not an admin action.
+        grantedBy: UUID? = null,
     ): CapabilityGrant =
         transaction {
             val id =

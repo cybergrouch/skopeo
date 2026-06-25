@@ -6,6 +6,7 @@ package org.skopeo.service.user
 import org.skopeo.dto.user.CreateUserRequest
 import org.skopeo.dto.user.ProfileRequest
 import org.skopeo.model.AuthProvider
+import org.skopeo.model.Capability
 import org.skopeo.model.ContactInfo
 import org.skopeo.model.ContactSource
 import org.skopeo.model.ContactType
@@ -77,6 +78,7 @@ private fun displayName(
 internal fun buildProvisionCommand(
     token: VerifiedFirebaseToken,
     request: CreateUserRequest,
+    adminEmails: Set<String> = emptySet(),
 ): ProvisionUserCommand {
     val provider = authProviderOf(signInProvider = token.signInProvider)
     val email =
@@ -111,8 +113,26 @@ internal fun buildProvisionCommand(
         sex = validatedSex(value = request.sex),
         city = request.city,
         country = request.country,
+        capabilities =
+            if (isBootstrapAdmin(token = token, adminEmails = adminEmails)) {
+                setOf(Capability.PLAYER, Capability.ADMINISTRATOR)
+            } else {
+                setOf(element = Capability.PLAYER)
+            },
     )
 }
+
+/**
+ * Whether this sign-in should be promoted to ADMINISTRATOR via the bootstrap allowlist.
+ * The verified-email gate is the security crux: a manual email/password account is NOT
+ * email-verified at sign-up, so it can only become admin after verifying the address —
+ * otherwise anyone could register an allowlisted email and self-promote. See
+ * docs/engineering/architecture/ADMIN_BOOTSTRAP.md.
+ */
+internal fun isBootstrapAdmin(
+    token: VerifiedFirebaseToken,
+    adminEmails: Set<String>,
+): Boolean = token.emailVerified && token.email?.trim()?.lowercase() in adminEmails
 
 internal fun ProfileRequest.toProfilePatch(): ProfilePatch =
     ProfilePatch(

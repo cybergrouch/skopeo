@@ -160,6 +160,7 @@
     <ID>TooGenericExceptionCaught:DatabaseConfig.kt$DatabaseConfig$e: Exception</ID>
     <ID>TooGenericExceptionCaught:RankingRoutes.kt$e: Exception</ID>
     <ID>TopLevelPropertyNaming:Application.kt$private val logger = KotlinLogging.logger {}</ID>
+    <ID>TopLevelPropertyNaming:UserService.kt$private val logger = KotlinLogging.logger {}</ID>
     <ID>TopLevelPropertyNaming:DatabaseConfig.kt$private val logger = KotlinLogging.logger {}</ID>
     <ID>TopLevelPropertyNaming:RankingRoutes.kt$private val logger = KotlinLogging.logger {}</ID>
     <ID>UnsafeCallOnNullableType:DatabaseConfig.kt$DatabaseConfig$dataSource!!</ID>
