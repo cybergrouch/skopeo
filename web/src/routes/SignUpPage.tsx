@@ -42,7 +42,8 @@ export function SignUpPage() {
     setBusy(true)
     try {
       await signUpWithEmail(email, password)
-      await provisionAndContinue(name.trim() || null)
+      // Manual sign-up requires a display name (the field is `required`), so no null fallback.
+      await provisionAndContinue(name.trim())
     } catch (err) {
       // A Firebase user already exists for this email. If the password is correct,
       // this is either a returning user or an orphaned auth user whose profile never
@@ -58,7 +59,7 @@ export function SignUpPage() {
           return
         }
         try {
-          await provisionAndContinue(name.trim() || null)
+          await provisionAndContinue(name.trim())
         } catch (provisionErr) {
           setError(authErrorMessage(provisionErr))
           setBusy(false)
@@ -106,6 +107,7 @@ export function SignUpPage() {
           <Label htmlFor="name">Display name</Label>
           <Input
             id="name"
+            required
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Roger F."
