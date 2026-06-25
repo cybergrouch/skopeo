@@ -11,20 +11,41 @@
 # createTestUser.sh.
 #
 # Usage:
-#   ./scripts/testing/deleteTestUser.sh [email] [password] [db_service] [db_name] [db_user]
-#   WEB_API_KEY=AIza... ./scripts/testing/deleteTestUser.sh [email] ...   # if web/.env.local is absent
+#   ./scripts/testing/deleteTestUser.sh <email> <password> [db_service] [db_name] [db_user]
+#   WEB_API_KEY=AIza... ./scripts/testing/deleteTestUser.sh <email> ...   # if web/.env.local is absent
 #
-#   email        default: test@skopeo.dev
-#   password     default: Test12345   (needed to sign in so the Firebase account can be deleted)
-#   db_service   docker compose service (default: postgres)
-#   db_name      database name          (default: SkopeoDb)
-#   db_user      database user          (default: postgres)
+#   email        required
+#   password     required  (needed to sign in so the Firebase account can be deleted)
+#   db_service   optional  docker compose service (default: postgres)
+#   db_name      optional  database name          (default: SkopeoDb)
+#   db_user      optional  database user          (default: postgres)
 #
 # Note: the email is interpolated into SQL — use it only with trusted test emails.
 
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+usage() {
+  cat >&2 <<'USAGE'
+Usage:
+  ./scripts/testing/deleteTestUser.sh <email> <password> [db_service] [db_name] [db_user]
+
+  email        required
+  password     required  (needed to sign in so the Firebase account can be deleted)
+  db_service   optional  docker compose service (default: postgres)
+  db_name      optional  database name          (default: SkopeoDb)
+  db_user      optional  database user          (default: postgres)
+
+The Firebase Web API key is read from web/.env.local (VITE_FIREBASE_API_KEY),
+or pass it via the WEB_API_KEY environment variable.
+USAGE
+}
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  usage
+  exit 0
+fi
 
 # Resolve the Firebase Web API key: explicit WEB_API_KEY env var wins, else web/.env.local.
 resolve_web_api_key() {
@@ -48,11 +69,18 @@ if [[ -z "${WEB_API_KEY:-}" ]]; then
   exit 1
 fi
 
-EMAIL="${1:-test@skopeo.dev}"
-PASSWORD="${2:-Test12345}"
+EMAIL="${1:-}"
+PASSWORD="${2:-}"
 DB_SERVICE="${3:-postgres}"
 DB_NAME="${4:-SkopeoDb}"
 DB_USER="${5:-postgres}"
+
+if [[ -z "$EMAIL" || -z "$PASSWORD" ]]; then
+  echo "Error: missing required arguments." >&2
+  echo >&2
+  usage
+  exit 1
+fi
 
 IDENTITY="https://identitytoolkit.googleapis.com/v1"
 

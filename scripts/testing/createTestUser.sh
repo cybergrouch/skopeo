@@ -9,15 +9,15 @@
 # file is missing, provide the key via the WEB_API_KEY environment variable.
 #
 # Usage:
-#   ./scripts/testing/createTestUser.sh [email] [password] [displayName] [sex] [dateOfBirth] [base_url]
-#   WEB_API_KEY=AIza... ./scripts/testing/createTestUser.sh [email] ...   # if web/.env.local is absent
+#   ./scripts/testing/createTestUser.sh <email> <password> <displayName> <sex> <dateOfBirth> [base_url]
+#   WEB_API_KEY=AIza... ./scripts/testing/createTestUser.sh <email> ...   # if web/.env.local is absent
 #
-#   email        default: test@skopeo.dev
-#   password     default: Test12345
-#   displayName  default: "Test User"
-#   sex          Male | Female (default: Male)
-#   dateOfBirth  yyyy-MM-dd    (default: 2000-01-01)
-#   base_url     API base URL  (default: http://localhost:8080)
+#   email        required
+#   password     required
+#   displayName  required
+#   sex          required  Male | Female
+#   dateOfBirth  required  yyyy-MM-dd
+#   base_url     optional  API base URL (default: http://localhost:8080)
 #
 # Prints the created Skopeo profile JSON (includes id and publicCode) to stdout.
 #
@@ -27,6 +27,28 @@
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+usage() {
+  cat >&2 <<'USAGE'
+Usage:
+  ./scripts/testing/createTestUser.sh <email> <password> <displayName> <sex> <dateOfBirth> [base_url]
+
+  email        required
+  password     required
+  displayName  required
+  sex          required  Male | Female
+  dateOfBirth  required  yyyy-MM-dd
+  base_url     optional  API base URL (default: http://localhost:8080)
+
+The Firebase Web API key is read from web/.env.local (VITE_FIREBASE_API_KEY),
+or pass it via the WEB_API_KEY environment variable.
+USAGE
+}
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  usage
+  exit 0
+fi
 
 # Resolve the Firebase Web API key: explicit WEB_API_KEY env var wins, else web/.env.local.
 resolve_web_api_key() {
@@ -50,12 +72,19 @@ if [[ -z "${WEB_API_KEY:-}" ]]; then
   exit 1
 fi
 
-EMAIL="${1:-test@skopeo.dev}"
-PASSWORD="${2:-Test12345}"
-DISPLAY_NAME="${3:-Test User}"
-SEX="${4:-Male}"
-DOB="${5:-2000-01-01}"
+EMAIL="${1:-}"
+PASSWORD="${2:-}"
+DISPLAY_NAME="${3:-}"
+SEX="${4:-}"
+DOB="${5:-}"
 BASE_URL="${6:-http://localhost:8080}"
+
+if [[ -z "$EMAIL" || -z "$PASSWORD" || -z "$DISPLAY_NAME" || -z "$SEX" || -z "$DOB" ]]; then
+  echo "Error: missing required arguments." >&2
+  echo >&2
+  usage
+  exit 1
+fi
 
 IDENTITY="https://identitytoolkit.googleapis.com/v1"
 
