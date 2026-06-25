@@ -244,4 +244,23 @@ class UserServiceTest {
             service.search(token = token(uid = "staff"), filters = UserSearchFilters(code = member.publicCode.lowercase()))
         found.single().id shouldBe member.id
     }
+
+    @Test
+    fun `search treats a blank code as no filter and rejects an all-empty query`() {
+        repository.provision(
+            command =
+                ProvisionUserCommand(
+                    firebaseUid = "staff2",
+                    identity =
+                        UserIdentity(provider = org.skopeo.model.AuthProvider.GOOGLE, providerUid = "staff2", isPrimary = true),
+                    names = listOf(element = UserName(type = org.skopeo.model.NameType.DISPLAY, value = "Staff2")),
+                    capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
+                ),
+        )
+
+        // "   " trims to empty -> treated as no code, so with no other facet the search is rejected.
+        shouldThrow<IllegalArgumentException> {
+            service.search(token = token(uid = "staff2"), filters = UserSearchFilters(code = "   "))
+        }
+    }
 }
