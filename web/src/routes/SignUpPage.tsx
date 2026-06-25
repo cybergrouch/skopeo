@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { FirebaseError } from 'firebase/app'
 import { AuthLayout } from '@/components/AuthLayout'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,7 +14,8 @@ const SEXES = ['Male', 'Female'] as const
 
 export function SignUpPage() {
   const navigate = useNavigate()
-  const { signUpWithEmail, signInWithGoogle, signInWithFacebook } = useAuth()
+  const { signUpWithEmail, signInWithEmail, signInWithGoogle, signInWithFacebook } =
+    useAuth()
   const provision = usePostApiV1Users()
 
   const [name, setName] = useState('')
@@ -42,6 +44,27 @@ export function SignUpPage() {
       await signUpWithEmail(email, password)
       await provisionAndContinue(name.trim() || null)
     } catch (err) {
+      // A Firebase user already exists for this email. If the password is correct,
+      // this is either a returning user or an orphaned auth user whose profile never
+      // provisioned (e.g. provisioning failed after the Firebase account was created).
+      // Sign in and re-run the idempotent provision to recover instead of dead-ending.
+      if (err instanceof FirebaseError && err.code === 'auth/email-already-in-use') {
+        try {
+          await signInWithEmail(email, password)
+        } catch {
+          // Wrong password (or another account) — point them at sign-in.
+          setError(authErrorMessage(err))
+          setBusy(false)
+          return
+        }
+        try {
+          await provisionAndContinue(name.trim() || null)
+        } catch (provisionErr) {
+          setError(authErrorMessage(provisionErr))
+          setBusy(false)
+        }
+        return
+      }
       setError(authErrorMessage(err))
       setBusy(false)
     }

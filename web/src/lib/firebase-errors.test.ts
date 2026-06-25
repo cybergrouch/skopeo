@@ -6,7 +6,7 @@ describe('authErrorMessage', () => {
   it('maps a known Firebase auth code to a friendly message', () => {
     const error = new FirebaseError('auth/email-already-in-use', 'raw')
     expect(authErrorMessage(error)).toBe(
-      'An account with this email already exists.',
+      'This email is already registered. Try signing in instead.',
     )
   })
 
