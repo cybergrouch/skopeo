@@ -18,7 +18,12 @@ import {
 import { GetApiV1MatchesFilter } from '@/api/generated/model'
 import type { UserSummaryResponse } from '@/api/generated/model'
 
-const FORMATS = ['BEST_OF_THREE', 'BEST_OF_FIVE'] as const
+const FORMATS = ['BEST_OF_THREE', 'BEST_OF_FIVE', 'SINGLE_SET'] as const
+const FORMAT_LABELS: Record<(typeof FORMATS)[number], string> = {
+  BEST_OF_THREE: 'Best of three',
+  BEST_OF_FIVE: 'Best of five',
+  SINGLE_SET: 'Single set',
+}
 const AWAITING = { filter: GetApiV1MatchesFilter['awaiting-results'] }
 
 function PickedPlayer({
@@ -121,7 +126,7 @@ export function CreateFixtureSection() {
               >
                 {FORMATS.map((f) => (
                   <option key={f} value={f}>
-                    {f.replace('BEST_OF_', 'Best of ').toLowerCase()}
+                    {FORMAT_LABELS[f]}
                   </option>
                 ))}
               </select>

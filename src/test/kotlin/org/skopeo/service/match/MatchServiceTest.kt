@@ -84,9 +84,10 @@ class MatchServiceTest {
         p1: UUID,
         p2: UUID,
         date: String = "2026-01-01",
+        matchFormat: String = "BEST_OF_THREE",
     ) = CreateFixtureRequest(
         matchType = "SINGLES",
-        matchFormat = "BEST_OF_THREE",
+        matchFormat = matchFormat,
         matchDate = date,
         team1 = listOf(p1.toString()),
         team2 = listOf(p2.toString()),
@@ -158,6 +159,45 @@ class MatchServiceTest {
 
         completed.status shouldBe MatchStatus.COMPLETED
         completed.winnerTeamId shouldBe match.team1.teamId // won both sets
+    }
+
+    @Test
+    fun `a single-set fixture accepts a one-set result with any winning score`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val match =
+            service.createFixture(
+                token = token(uid = "host"),
+                request = fixtureRequest(p1 = p1.id, p2 = p2.id, matchFormat = "SINGLE_SET"),
+            )
+
+        // 4-3 is a valid single-set win (the host decides what counts as a win).
+        val completed =
+            service.uploadResult(
+                token = token(uid = "host"),
+                matchId = match.id,
+                request = MatchResultRequest(sets = listOf(element = SetScoreRequest(team1Games = 4, team2Games = 3))),
+            )
+
+        completed.status shouldBe MatchStatus.COMPLETED
+        completed.winnerTeamId shouldBe match.team1.teamId
+    }
+
+    @Test
+    fun `a single-set match rejects a result with more than one set`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val match =
+            service.createFixture(
+                token = token(uid = "host"),
+                request = fixtureRequest(p1 = p1.id, p2 = p2.id, matchFormat = "SINGLE_SET"),
+            )
+
+        shouldThrow<IllegalArgumentException> {
+            service.uploadResult(token = token(uid = "host"), matchId = match.id, request = straightSets())
+        }
     }
 
     @Test

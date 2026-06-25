@@ -26,7 +26,7 @@ import java.time.format.DateTimeParseException
 import java.util.UUID
 
 private val STAFF_ROLES = setOf(Capability.HOST, Capability.ADMINISTRATOR)
-private val ALLOWED_FORMATS = setOf(MatchFormat.BEST_OF_THREE, MatchFormat.BEST_OF_FIVE)
+private val ALLOWED_FORMATS = setOf(MatchFormat.BEST_OF_THREE, MatchFormat.BEST_OF_FIVE, MatchFormat.SINGLE_SET)
 
 /**
  * Match fixtures & results. Creating fixtures, uploading results, and disabling are
@@ -47,7 +47,7 @@ class MatchService(
         val createdBy = requireStaff(token = token)
         val type = parseEnum(value = request.matchType) { TeamType.valueOf(value = it) }
         val format = parseEnum(value = request.matchFormat) { MatchFormat.valueOf(value = it) }
-        require(value = format in ALLOWED_FORMATS) { "matchFormat must be BEST_OF_THREE or BEST_OF_FIVE" }
+        require(value = format in ALLOWED_FORMATS) { "matchFormat must be one of $ALLOWED_FORMATS" }
         val matchDate = parseDate(value = request.matchDate)
         val team1Ids = request.team1.map(transform = ::parseUuid)
         val team2Ids = request.team2.map(transform = ::parseUuid)
@@ -83,7 +83,12 @@ class MatchService(
         if (!match.isActive) throw MatchConflictException(message = "Match is disabled")
         if (match.status != MatchStatus.SCHEDULED) throw MatchConflictException(message = "Match already has results")
         val (resolvedSets, winner) =
-            deriveOutcome(team1Id = match.team1.teamId, team2Id = match.team2.teamId, request = request)
+            deriveOutcome(
+                team1Id = match.team1.teamId,
+                team2Id = match.team2.teamId,
+                request = request,
+                format = match.matchFormat,
+            )
         return matches.addResult(
             matchId = matchId,
             sets = resolvedSets,
@@ -172,8 +177,14 @@ private fun deriveOutcome(
     team1Id: UUID,
     team2Id: UUID,
     request: MatchResultRequest,
+    format: MatchFormat,
 ): Pair<List<MatchSetResult>, UUID> {
     require(value = request.sets.isNotEmpty()) { "at least one set is required" }
+    // A single-set match is exactly one set; the winner is simply the side with more games
+    // (or the tiebreak), so any score the host enters (4-3, 6-5, 7-6, …) is accepted.
+    require(value = format != MatchFormat.SINGLE_SET || request.sets.size == 1) {
+        "a single-set match must have exactly one set"
+    }
     var team1Sets = 0
     var team2Sets = 0
     val resolved =

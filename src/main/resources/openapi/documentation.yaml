@@ -1170,7 +1170,7 @@ components:
           description: Team ID of the match loser. Defaults to the team that lost the most sets when omitted; must differ from the winner and be one of the teams.
         matchFormat:
           type: string
-          enum: [BEST_OF_THREE, BEST_OF_FIVE, SINGLE_SET, ADVANTAGE_SET]
+          enum: [BEST_OF_THREE, BEST_OF_FIVE, SINGLE_SET]
           default: BEST_OF_THREE
 
     SetScore:
@@ -1736,7 +1736,7 @@ components:
           enum: [SINGLES, DOUBLES, MIXED_DOUBLES]
         matchFormat:
           type: string
-          enum: [BEST_OF_THREE, BEST_OF_FIVE]
+          enum: [BEST_OF_THREE, BEST_OF_FIVE, SINGLE_SET]
         matchDate:
           type: string
           format: date
@@ -1852,7 +1852,7 @@ components:
           enum: [SINGLES, DOUBLES, MIXED_DOUBLES]
         matchFormat:
           type: string
-          enum: [BEST_OF_THREE, BEST_OF_FIVE]
+          enum: [BEST_OF_THREE, BEST_OF_FIVE, SINGLE_SET]
         matchDate:
           type: string
           format: date
