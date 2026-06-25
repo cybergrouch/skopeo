@@ -239,6 +239,23 @@ docker compose down            # stop API + DB (keeps data volume)
 docker compose down -v         # stop AND wipe the database (fresh start next time)
 ```
 
+### Deleting a single test account — remove it from *both* systems
+
+A user exists in two places: the **app database** *and* **Firebase Authentication**. Deleting only
+one leaves an orphan. In particular, if you delete only the database row, re-signing-up with that
+email fails with *"This email is already registered"* because the Firebase auth account still exists.
+
+1. **App database** — cascades to names, contacts, ratings, etc. Run via pgAdmin, or:
+
+   ```bash
+   docker compose exec postgres psql -U postgres -d SkopeoDb -c \
+   "DELETE FROM users WHERE id IN (SELECT user_id FROM contact_information WHERE value = 'you@example.com');"
+   ```
+
+2. **Firebase Authentication** — delete the matching user in **Firebase Console → Authentication →
+   Users** (or via the Admin SDK). Skipping this is the usual cause of a confusing "already
+   registered" error on re-test.
+
 ---
 
 # Part 2 — Deploying the three components to GCP

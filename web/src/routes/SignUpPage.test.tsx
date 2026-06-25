@@ -7,12 +7,14 @@ import { SignUpPage } from './SignUpPage'
 
 const {
   signUpWithEmail,
+  signInWithEmail,
   signInWithGoogle,
   signInWithFacebook,
   mutateAsync,
   navigateMock,
 } = vi.hoisted(() => ({
   signUpWithEmail: vi.fn(),
+  signInWithEmail: vi.fn(),
   signInWithGoogle: vi.fn(),
   signInWithFacebook: vi.fn(),
   mutateAsync: vi.fn(),
@@ -20,7 +22,12 @@ const {
 }))
 
 vi.mock('@/auth/useAuth', () => ({
-  useAuth: () => ({ signUpWithEmail, signInWithGoogle, signInWithFacebook }),
+  useAuth: () => ({
+    signUpWithEmail,
+    signInWithEmail,
+    signInWithGoogle,
+    signInWithFacebook,
+  }),
 }))
 vi.mock('@/api/generated/users/users', () => ({
   usePostApiV1Users: () => ({ mutateAsync }),
@@ -89,22 +96,86 @@ describe('SignUpPage', () => {
     )
   })
 
-  it('shows a friendly error and does not navigate when sign-up fails', async () => {
+  it('shows a friendly error and does not navigate on a generic sign-up failure', async () => {
+    signUpWithEmail.mockRejectedValue(
+      new FirebaseError('auth/weak-password', 'raw'),
+    )
+    const user = userEvent.setup()
+    renderSignUp()
+
+    await fillProfile(user)
+    await user.type(screen.getByLabelText('Email'), 'roger@example.com')
+    await user.type(screen.getByLabelText('Password'), 'short')
+    await user.click(screen.getByRole('button', { name: /create account/i }))
+
+    expect(
+      await screen.findByText('Password should be at least 6 characters.'),
+    ).toBeInTheDocument()
+    expect(signInWithEmail).not.toHaveBeenCalled()
+    expect(mutateAsync).not.toHaveBeenCalled()
+    expect(navigateMock).not.toHaveBeenCalled()
+  })
+
+  it('recovers an orphaned account: on email-already-in-use, signs in and provisions', async () => {
     signUpWithEmail.mockRejectedValue(
       new FirebaseError('auth/email-already-in-use', 'raw'),
+    )
+    signInWithEmail.mockResolvedValue({})
+    mutateAsync.mockResolvedValue({})
+    const user = userEvent.setup()
+    renderSignUp()
+
+    await fillProfile(user)
+    await user.type(screen.getByLabelText('Email'), 'orphan@example.com')
+    await user.type(screen.getByLabelText('Password'), 'secret123')
+    await user.click(screen.getByRole('button', { name: /create account/i }))
+
+    await waitFor(() =>
+      expect(signInWithEmail).toHaveBeenCalledWith('orphan@example.com', 'secret123'),
+    )
+    expect(mutateAsync).toHaveBeenCalledWith({
+      data: { displayName: null, sex: 'Male', dateOfBirth: '2000-01-01' },
+    })
+    expect(navigateMock).toHaveBeenCalledWith('/dashboard', { replace: true })
+  })
+
+  it('points an existing account at sign-in when the password is wrong', async () => {
+    signUpWithEmail.mockRejectedValue(
+      new FirebaseError('auth/email-already-in-use', 'raw'),
+    )
+    signInWithEmail.mockRejectedValue(
+      new FirebaseError('auth/wrong-password', 'raw'),
     )
     const user = userEvent.setup()
     renderSignUp()
 
     await fillProfile(user)
     await user.type(screen.getByLabelText('Email'), 'taken@example.com')
-    await user.type(screen.getByLabelText('Password'), 'secret123')
+    await user.type(screen.getByLabelText('Password'), 'wrongpass')
     await user.click(screen.getByRole('button', { name: /create account/i }))
 
     expect(
-      await screen.findByText('An account with this email already exists.'),
+      await screen.findByText('This email is already registered. Try signing in instead.'),
     ).toBeInTheDocument()
     expect(mutateAsync).not.toHaveBeenCalled()
+    expect(navigateMock).not.toHaveBeenCalled()
+  })
+
+  it('surfaces a provisioning failure during orphan recovery', async () => {
+    signUpWithEmail.mockRejectedValue(
+      new FirebaseError('auth/email-already-in-use', 'raw'),
+    )
+    signInWithEmail.mockResolvedValue({})
+    mutateAsync.mockRejectedValue(new Error('provision boom'))
+    const user = userEvent.setup()
+    renderSignUp()
+
+    await fillProfile(user)
+    await user.type(screen.getByLabelText('Email'), 'orphan@example.com')
+    await user.type(screen.getByLabelText('Password'), 'secret123')
+    await user.click(screen.getByRole('button', { name: /create account/i }))
+
+    expect(await screen.findByText('provision boom')).toBeInTheDocument()
     expect(navigateMock).not.toHaveBeenCalled()
   })
 
