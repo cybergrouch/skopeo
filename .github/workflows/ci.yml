@@ -74,6 +74,22 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
+  # Secret scan: block commits that introduce API keys, tokens, or credentials.
+  # gitleaks-action scans the commits in the push / PR (not full history), reads
+  # .gitleaks.toml (which allowlists the already-rotated historical leak), and
+  # fails the job on a finding. Mirrors the local pre-commit hook (installGitHooks).
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # full history so the action can diff the commit range
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   # Web client (web/): the orval client is generated from the backend OpenAPI
   # spec via npm pre-hooks (pretypecheck/prebuild), so typecheck and build prove
   # the frontend stays in sync with the API contract.

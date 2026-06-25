@@ -2,7 +2,7 @@
 
 ## Overview
 
-This project uses Git pre-commit hooks to automatically format and verify code style before each commit, ensuring consistent code quality across the team.
+This project uses a Git pre-commit hook to scan staged changes for secrets and to automatically format and verify code style before each commit — ensuring consistent code quality and keeping API keys/credentials out of the repository.
 
 ---
 
@@ -22,10 +22,16 @@ That's it! The hook will now run automatically before every commit.
 
 When you run `git commit`, the pre-commit hook automatically:
 
-1. **Auto-formats your code** with ktlint
-2. **Auto-stages the formatted files**
-3. **Runs style verification** with ktlintCheck
-4. **Aborts the commit** if unfixable style violations are found
+1. **Scans staged changes for secrets** with [gitleaks](https://github.com/gitleaks/gitleaks) and **aborts the commit** if one is found (skipped with a notice if gitleaks isn't installed — CI still enforces it)
+2. **Auto-formats your code** with ktlint
+3. **Auto-stages the formatted files**
+4. **Runs style verification** with ktlintCheck
+5. **Aborts the commit** if unfixable style violations are found
+
+> **Secret scanning** uses the rules in `.gitleaks.toml`. To get the local check, install gitleaks
+> (`brew install gitleaks`) and re-run `./gradlew installGitHooks`. The CI **Secret scan** job runs
+> gitleaks on every push/PR regardless, so a secret never reaches `main`. Real keys belong only in
+> git-ignored env files (e.g. `web/.env.local`), never in tracked files.
 
 ### Example Commit Flow
 
