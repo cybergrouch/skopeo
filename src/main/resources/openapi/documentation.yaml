@@ -227,6 +227,32 @@ paths:
         '404':
           description: Caller has not been provisioned yet (POST /api/v1/users first)
 
+  /api/v1/players/{code}:
+    get:
+      summary: Resolve a player's shareable public profile by code (auth-gated, not public)
+      tags:
+        - Users
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The player's shareable public code (case-insensitive).
+      responses:
+        '200':
+          description: The player's limited public profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicPlayerResponse'
+        '401':
+          description: Missing or invalid Firebase token
+        '404':
+          description: No active player with that code
+
   /api/v1/users/{id}:
     parameters:
       - name: id
@@ -1380,6 +1406,33 @@ components:
         city:
           type: string
           nullable: true
+
+    PublicPlayerResponse:
+      type: object
+      description: Privacy-conscious player card resolved from a public code (auth-gated deep link).
+      required:
+        - publicCode
+      properties:
+        publicCode:
+          type: string
+          description: Short, human-readable, shareable player code (e.g. "K7Q2MX").
+        displayName:
+          type: string
+          nullable: true
+        photoUrl:
+          type: string
+          nullable: true
+        rating:
+          nullable: true
+          type: object
+          required:
+            - value
+          properties:
+            value:
+              type: string
+            level:
+              type: string
+              nullable: true
 
     UserSummaryResponse:
       type: object

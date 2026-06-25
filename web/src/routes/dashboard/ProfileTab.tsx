@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { QRCodeSVG } from 'qrcode.react'
 import {
   Card,
   CardContent,
@@ -6,6 +8,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { useAuth } from '@/auth/useAuth'
 import type { Capability } from '@/auth/capabilities'
 import {
@@ -29,6 +32,15 @@ export function ProfileTab({ userId, capabilities, publicCode }: ProfileTabProps
   const historyQuery = useGetApiV1UsersUserIdRatingHistory(userId, {
     query: { enabled },
   })
+
+  const [copied, setCopied] = useState(false)
+  const shareUrl = publicCode
+    ? `${window.location.origin}/players/${publicCode}`
+    : ''
+  function copyLink() {
+    void navigator.clipboard.writeText(shareUrl)
+    setCopied(true)
+  }
 
   const ratings = ratingsQuery.data ?? []
   const history = historyQuery.data ?? []
@@ -79,6 +91,24 @@ export function ProfileTab({ userId, capabilities, publicCode }: ProfileTabProps
           ))}
         </CardContent>
       </Card>
+
+      {publicCode ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Share your profile</CardTitle>
+            <CardDescription>
+              Anyone signed in can scan this code or open the link to view your
+              profile.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col items-center gap-3">
+            <QRCodeSVG value={shareUrl} size={144} />
+            <Button type="button" variant="outline" size="sm" onClick={copyLink}>
+              {copied ? 'Copied!' : 'Copy link'}
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>

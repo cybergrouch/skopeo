@@ -138,6 +138,16 @@ class UserRepository {
                 ?.let { loadAggregate(id = it[UsersTable.id].value) }
         }
 
+    /** Resolve a user by their shareable public code (exact match; caller normalizes case). */
+    fun findByPublicCode(code: String): User? =
+        transaction {
+            UsersTable
+                .selectAll()
+                .where { UsersTable.publicCode eq code }
+                .singleOrNull()
+                ?.let { loadAggregate(id = it[UsersTable.id].value) }
+        }
+
     fun updateProfile(
         id: UUID,
         patch: ProfilePatch,
