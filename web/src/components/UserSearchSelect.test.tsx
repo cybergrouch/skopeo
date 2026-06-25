@@ -8,8 +8,8 @@ vi.mock('@/api/generated/users/users', () => ({ useGetApiV1Users }))
 // Identity debounce so typing reflects immediately in tests.
 vi.mock('@/hooks/useDebouncedValue', () => ({ useDebouncedValue: (v: string) => v }))
 
-const alice = { id: 'u1', displayName: 'Alice', capabilities: [] }
-const bob = { id: 'u2', displayName: 'Bob', capabilities: [] }
+const alice = { id: 'u1', publicCode: 'ABC234', displayName: 'Alice', capabilities: [] }
+const bob = { id: 'u2', publicCode: 'XYZ789', displayName: 'Bob', capabilities: [] }
 
 describe('UserSearchSelect', () => {
   beforeEach(() => {
@@ -32,7 +32,7 @@ describe('UserSearchSelect', () => {
     const input = screen.getByLabelText('Player 1')
     await user.type(input, 'al')
 
-    await user.click(screen.getByRole('button', { name: 'Alice' }))
+    await user.click(screen.getByRole('button', { name: /Alice/ }))
 
     expect(onSelect).toHaveBeenCalledWith(alice)
     expect((input as HTMLInputElement).value).toBe('')
@@ -44,8 +44,8 @@ describe('UserSearchSelect', () => {
       <UserSearchSelect label="Player 1" excludeIds={['u2']} onSelect={vi.fn()} />,
     )
     await user.type(screen.getByLabelText('Player 1'), 'al')
-    expect(screen.getByRole('button', { name: 'Alice' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Bob' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Alice/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Bob/ })).not.toBeInTheDocument()
   })
 
   it('shows neither a list nor a note while loading with no data yet', async () => {
@@ -59,13 +59,13 @@ describe('UserSearchSelect', () => {
 
   it('falls back to the id when a result has no display name', async () => {
     useGetApiV1Users.mockReturnValue({
-      data: [{ id: 'u9', displayName: null, capabilities: [] }],
+      data: [{ id: 'u9', publicCode: 'QRS567', displayName: null, capabilities: [] }],
       isLoading: false,
     })
     const user = userEvent.setup()
     render(<UserSearchSelect label="Player 1" onSelect={vi.fn()} />)
     await user.type(screen.getByLabelText('Player 1'), 'al')
-    expect(screen.getByRole('button', { name: 'u9' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /u9/ })).toBeInTheDocument()
   })
 
   it('shows a no-matches note when the search is empty', async () => {
@@ -74,5 +74,22 @@ describe('UserSearchSelect', () => {
     render(<UserSearchSelect label="Player 1" onSelect={vi.fn()} />)
     await user.type(screen.getByLabelText('Player 1'), 'zz')
     expect(screen.getByText('No matches.')).toBeInTheDocument()
+  })
+
+  it('searches by player ID (uppercased) when the input looks like a code', async () => {
+    const user = userEvent.setup()
+    render(<UserSearchSelect label="Player 1" onSelect={vi.fn()} />)
+    await user.type(screen.getByLabelText('Player 1'), 'abc234')
+    expect(useGetApiV1Users).toHaveBeenCalledWith(
+      { code: 'ABC234' },
+      expect.anything(),
+    )
+    // a name fragment still searches by name
+    await user.clear(screen.getByLabelText('Player 1'))
+    await user.type(screen.getByLabelText('Player 1'), 'ali')
+    expect(useGetApiV1Users).toHaveBeenCalledWith(
+      { name: 'ali' },
+      expect.anything(),
+    )
   })
 })

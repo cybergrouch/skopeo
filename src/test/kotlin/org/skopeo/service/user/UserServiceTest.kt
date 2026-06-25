@@ -222,4 +222,26 @@ class UserServiceTest {
         bootstrapService.currentUser(token = token(uid = "unv", email = "admin@example.com", emailVerified = false))!!
             .capabilities shouldBe setOf(Capability.PLAYER)
     }
+
+    @Test
+    fun `provision assigns a short public code, and search finds a user by it (case-insensitive)`() {
+        // A staff caller is required for search.
+        repository.provision(
+            command =
+                ProvisionUserCommand(
+                    firebaseUid = "staff",
+                    identity =
+                        UserIdentity(provider = org.skopeo.model.AuthProvider.GOOGLE, providerUid = "staff", isPrimary = true),
+                    names = listOf(element = UserName(type = org.skopeo.model.NameType.DISPLAY, value = "Staff")),
+                    capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
+                ),
+        )
+        val member = service.provision(token = token(uid = "m1"), request = request).user
+
+        member.publicCode.length shouldBe 6
+
+        val found =
+            service.search(token = token(uid = "staff"), filters = UserSearchFilters(code = member.publicCode.lowercase()))
+        found.single().id shouldBe member.id
+    }
 }

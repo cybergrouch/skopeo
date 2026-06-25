@@ -73,6 +73,7 @@ data class ProfileRequest(
 @Serializable
 data class UserResponse(
     val id: String,
+    val publicCode: String,
     val firebaseUid: String?,
     val photoUrl: String?,
     val dateOfBirth: String?,
@@ -90,6 +91,7 @@ data class UserResponse(
 fun User.toResponse(): UserResponse =
     UserResponse(
         id = id.toString(),
+        publicCode = publicCode,
         firebaseUid = firebaseUid,
         photoUrl = photoUrl,
         dateOfBirth = dateOfBirth?.toString(),
@@ -131,6 +133,7 @@ fun User.toResponse(): UserResponse =
 @Serializable
 data class UserSummaryResponse(
     val id: String,
+    val publicCode: String,
     val displayName: String?,
     val sex: String?,
     val dateOfBirth: String?,
@@ -140,6 +143,7 @@ data class UserSummaryResponse(
 fun User.toSummary(): UserSummaryResponse =
     UserSummaryResponse(
         id = id.toString(),
+        publicCode = publicCode,
         displayName = names.firstOrNull { it.type == NameType.DISPLAY && it.isActive }?.value,
         sex = sex,
         dateOfBirth = dateOfBirth?.toString(),

@@ -16,9 +16,11 @@ import {
 interface ProfileTabProps {
   userId: string
   capabilities: readonly Capability[]
+  /** Short, shareable player code (e.g. "K7Q2MX") others can search to find this player. */
+  publicCode?: string
 }
 
-export function ProfileTab({ userId, capabilities }: ProfileTabProps) {
+export function ProfileTab({ userId, capabilities, publicCode }: ProfileTabProps) {
   const { user } = useAuth()
   const enabled = Boolean(userId)
   const ratingsQuery = useGetApiV1UsersUserIdRatings(userId, {
@@ -58,6 +60,14 @@ export function ProfileTab({ userId, capabilities }: ProfileTabProps) {
                 {user?.displayName ?? user?.email ?? 'Player'}
               </CardTitle>
               <CardDescription>{user?.email}</CardDescription>
+              {publicCode ? (
+                <CardDescription className="mt-1">
+                  Player ID:{' '}
+                  <code className="select-all font-mono font-medium text-foreground">
+                    {publicCode}
+                  </code>
+                </CardDescription>
+              ) : null}
             </div>
           </div>
         </CardHeader>

@@ -6,6 +6,8 @@ import { useGetApiV1Users } from '@/api/generated/users/users'
 import type { UserSummaryResponse } from '@/api/generated/model'
 
 const MIN_QUERY = 2
+// A player code is 6 chars from the Crockford-style alphabet (no I/L/O/U), case-insensitive.
+const CODE_RE = /^[0-9A-HJKMNP-TV-Z]{6}$/i
 
 interface UserSearchSelectProps {
   label: string
@@ -25,9 +27,11 @@ export function UserSearchSelect({
   const [term, setTerm] = useState('')
   const debounced = useDebouncedValue(term).trim()
   const enabled = debounced.length >= MIN_QUERY
+  // Exact match by player ID when the input looks like a code; otherwise fuzzy name search.
+  const isCode = CODE_RE.test(debounced)
 
   const query = useGetApiV1Users(
-    { name: debounced },
+    isCode ? { code: debounced.toUpperCase() } : { name: debounced },
     { query: { enabled } },
   )
   const results = (query.data ?? []).filter((u) => !excludeIds.includes(u.id))
@@ -43,7 +47,7 @@ export function UserSearchSelect({
       <Input
         id={`search-${label}`}
         value={term}
-        placeholder={placeholder ?? 'Search by name…'}
+        placeholder={placeholder ?? 'Search by name or player ID…'}
         onChange={(e) => setTerm(e.target.value)}
       />
       {enabled && results.length > 0 ? (
@@ -55,7 +59,10 @@ export function UserSearchSelect({
                 className="block w-full px-3 py-2 text-left text-sm hover:bg-accent"
                 onClick={() => pick(user)}
               >
-                {user.displayName ?? user.id}
+                {user.displayName ?? user.id}{' '}
+                <span className="text-muted-foreground">
+                  · {user.publicCode}
+                </span>
               </button>
             </li>
           ))}

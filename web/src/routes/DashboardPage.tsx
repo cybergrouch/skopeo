@@ -56,7 +56,11 @@ export function DashboardPage() {
             </TabsList>
 
             <TabsContent value="profile">
-              <ProfileTab userId={me?.id ?? ''} capabilities={capabilities} />
+              <ProfileTab
+                userId={me?.id ?? ''}
+                capabilities={capabilities}
+                publicCode={me?.publicCode}
+              />
             </TabsContent>
             <TabsContent value="research">
               <ResearchTab />

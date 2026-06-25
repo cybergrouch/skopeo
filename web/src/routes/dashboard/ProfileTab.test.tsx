@@ -19,8 +19,13 @@ vi.mock('@/api/generated/ratings/ratings', () => ({
 }))
 vi.mock('@/auth/useAuth', () => ({ useAuth: useAuthMock }))
 
-function renderProfile(capabilities: Capability[] = [Capability.PLAYER]) {
-  return render(<ProfileTab userId="u1" capabilities={capabilities} />)
+function renderProfile(
+  capabilities: Capability[] = [Capability.PLAYER],
+  publicCode?: string,
+) {
+  return render(
+    <ProfileTab userId="u1" capabilities={capabilities} publicCode={publicCode} />,
+  )
 }
 
 describe('ProfileTab', () => {
@@ -60,6 +65,11 @@ describe('ProfileTab', () => {
     useAuthMock.mockReturnValue({ user: null })
     renderProfile()
     expect(screen.getByText('Player')).toBeInTheDocument()
+  })
+
+  it('shows the shareable player code when provided', () => {
+    renderProfile([Capability.PLAYER], 'K7Q2MX')
+    expect(screen.getByText('K7Q2MX')).toBeInTheDocument()
   })
 
   it('shows the provider avatar when a photo URL is present', () => {
