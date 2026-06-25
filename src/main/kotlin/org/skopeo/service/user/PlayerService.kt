@@ -5,7 +5,7 @@ package org.skopeo.service.user
 
 import org.skopeo.dto.user.PublicPlayerResponse
 import org.skopeo.dto.user.PublicRatingDto
-import org.skopeo.model.NameType
+import org.skopeo.model.displayName
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.ResourceNotFoundException
@@ -27,7 +27,7 @@ class PlayerService(
         val rating = ratings.findCurrentRating(userId = user.id)
         return PublicPlayerResponse(
             publicCode = user.publicCode,
-            displayName = user.names.firstOrNull { it.type == NameType.DISPLAY && it.isActive }?.value,
+            displayName = user.displayName(),
             photoUrl = user.photoUrl,
             rating = rating?.let { PublicRatingDto(value = it.currentRating.toPlainString(), level = it.currentLevel) },
         )
