@@ -26,7 +26,6 @@ import java.time.format.DateTimeParseException
 import java.util.UUID
 
 private val STAFF_ROLES = setOf(Capability.HOST, Capability.ADMINISTRATOR)
-private val ALLOWED_FORMATS = setOf(MatchFormat.BEST_OF_THREE, MatchFormat.BEST_OF_FIVE, MatchFormat.SINGLE_SET)
 
 /**
  * Match fixtures & results. Creating fixtures, uploading results, and disabling are
@@ -46,8 +45,9 @@ class MatchService(
     ): Match {
         val createdBy = requireStaff(token = token)
         val type = parseEnum(value = request.matchType) { TeamType.valueOf(value = it) }
+        // Every MatchFormat value is supported; parseEnum already rejects unknown strings (400),
+        // so no further allowlist check is needed (it would be unreachable dead code).
         val format = parseEnum(value = request.matchFormat) { MatchFormat.valueOf(value = it) }
-        require(value = format in ALLOWED_FORMATS) { "matchFormat must be one of $ALLOWED_FORMATS" }
         val matchDate = parseDate(value = request.matchDate)
         val team1Ids = request.team1.map(transform = ::parseUuid)
         val team2Ids = request.team2.map(transform = ::parseUuid)
