@@ -258,19 +258,21 @@ Expected dashboard per capability:
 
 | Capability      | How it's set         | Tabs shown                        | Notes                                            |
 |-----------------|----------------------|-----------------------------------|--------------------------------------------------|
-| `PLAYER`        | automatic at sign-up | Profile                           | base role; cannot be revoked                     |
-| `HOST`          | grant via SQL        | Profile, Matches, Research        | match management                                 |
-| `CLUB_OWNER`    | grant via SQL        | Profile only                      | defined in the model but has no dedicated UI yet |
-| `ADMINISTRATOR` | grant via SQL        | Profile, Matches, Research, Admin | full access                                      |
+| `PLAYER`        | automatic at sign-up | Profile, Research                 | base role; cannot be revoked                     |
+| `HOST`          | grant via SQL        | Profile, Research, Matches        | match management (hosts are players)             |
+| `CLUB_OWNER`    | grant via SQL        | Profile, Research, Matches        | same as host for now; more is added as it evolves |
+| `ADMINISTRATOR` | grant via SQL        | Profile, Research, Matches, Admin | full access                                      |
 
-- [ ] **Player** — a fresh account (Tests 1–3) shows **Profile only** with a `PLAYER` badge.
-- [ ] **Host** — grant `HOST`, refresh → **Matches** and **Research** tabs appear; **no Admin** tab.
-- [ ] **Club owner** — grant `CLUB_OWNER`, refresh → **still Profile only** (no extra tab). This is
-      expected: the capability exists but no UI is wired to it yet. Revoke when done.
-- [ ] **Administrator** — grant `ADMINISTRATOR`, refresh → **Matches, Research, and Admin** tabs all
-      appear.
+- [ ] **Player** — a fresh account (Tests 1–3) shows **Profile** and **Research** with a `PLAYER`
+      badge; **no Matches or Admin** tab.
+- [ ] **Host** — grant `HOST`, refresh → **Matches** tab appears alongside Profile/Research; **no
+      Admin** tab.
+- [ ] **Club owner** — grant `CLUB_OWNER`, refresh → **same as a host** (Profile, Research, Matches;
+      no Admin). Revoke when done.
+- [ ] **Administrator** — grant `ADMINISTRATOR`, refresh → **all four tabs** (Profile, Research,
+      Matches, Admin).
 - [ ] **Additive** — with both `HOST` and `ADMINISTRATOR`, all tabs show; revoke `ADMINISTRATOR` and
-      refresh → Admin disappears while Matches/Research remain (HOST still present).
+      refresh → Admin disappears while Matches/Research/Profile remain (HOST still present).
 
 > Granting capabilities through the database is a temporary testing shortcut. Doing it through the
 > **Administrator → role grants** UI is a separate test, covered once an admin is bootstrapped (see

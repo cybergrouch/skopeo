@@ -15,11 +15,11 @@ describe('capabilities', () => {
     expect(hasCapability(undefined, Capability.PLAYER)).toBe(false)
   })
 
-  it('canManageMatches is true for hosts and administrators only', () => {
+  it('canManageMatches is true for hosts, club owners, and administrators', () => {
     expect(canManageMatches([Capability.PLAYER])).toBe(false)
     expect(canManageMatches([Capability.HOST])).toBe(true)
+    expect(canManageMatches([Capability.CLUB_OWNER])).toBe(true)
     expect(canManageMatches([Capability.ADMINISTRATOR])).toBe(true)
-    expect(canManageMatches([Capability.CLUB_OWNER])).toBe(false)
   })
 
   it('isAdministrator is true only for administrators', () => {

@@ -46,11 +46,9 @@ export function DashboardPage() {
           <Tabs defaultValue="profile">
             <TabsList>
               <TabsTrigger value="profile">Profile</TabsTrigger>
+              <TabsTrigger value="research">Research</TabsTrigger>
               {showMatches ? (
                 <TabsTrigger value="matches">Matches</TabsTrigger>
-              ) : null}
-              {showMatches ? (
-                <TabsTrigger value="research">Research</TabsTrigger>
               ) : null}
               {showAdmin ? (
                 <TabsTrigger value="admin">Admin</TabsTrigger>
@@ -60,14 +58,12 @@ export function DashboardPage() {
             <TabsContent value="profile">
               <ProfileTab userId={me?.id ?? ''} capabilities={capabilities} />
             </TabsContent>
+            <TabsContent value="research">
+              <ResearchTab />
+            </TabsContent>
             {showMatches ? (
               <TabsContent value="matches">
                 <MatchesTab />
-              </TabsContent>
-            ) : null}
-            {showMatches ? (
-              <TabsContent value="research">
-                <ResearchTab />
               </TabsContent>
             ) : null}
             {showAdmin ? (
