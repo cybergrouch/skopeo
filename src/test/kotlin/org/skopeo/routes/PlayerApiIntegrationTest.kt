@@ -1,0 +1,95 @@
+// SPDX-FileCopyrightText: 2026 Lange Pantoja
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+package org.skopeo.routes
+
+import io.kotest.matchers.shouldBe
+import io.ktor.client.HttpClient
+import io.ktor.client.call.body
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.request.get
+import io.ktor.client.request.header
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.client.statement.HttpResponse
+import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.contentType
+import io.ktor.serialization.kotlinx.json.json
+import io.ktor.server.testing.ApplicationTestBuilder
+import io.ktor.server.testing.testApplication
+import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.skopeo.dto.user.CreateUserRequest
+import org.skopeo.dto.user.PublicPlayerResponse
+import org.skopeo.dto.user.UserResponse
+import org.skopeo.module
+import org.skopeo.testsupport.PostgresTestDatabase
+import org.skopeo.testsupport.TestFirebaseAuth
+
+/** End-to-end exercise of the auth-gated player-profile-by-code endpoint (issue #61). */
+class PlayerApiIntegrationTest {
+    companion object {
+        @BeforeAll
+        @JvmStatic
+        fun connect() {
+            PostgresTestDatabase.start()
+        }
+    }
+
+    @BeforeEach
+    fun reset() {
+        PostgresTestDatabase.truncate()
+    }
+
+    private fun ApplicationTestBuilder.jsonClient(): HttpClient = createClient { install(plugin = ContentNegotiation) { json() } }
+
+    private fun withApp(block: suspend (HttpClient) -> Unit) =
+        testApplication {
+            application { module(initDatabase = false, firebaseAuth = TestFirebaseAuth.settings) }
+            block(jsonClient())
+        }
+
+    private suspend fun HttpClient.createUser(token: String): HttpResponse =
+        post(urlString = "/api/v1/users") {
+            header(key = HttpHeaders.Authorization, value = "Bearer $token")
+            contentType(type = ContentType.Application.Json)
+            setBody(body = CreateUserRequest(displayName = "Ana", dateOfBirth = "2000-01-01", sex = "Male"))
+        }
+
+    @Test
+    fun `any authenticated user can resolve a player's public profile by code`() =
+        withApp { client ->
+            val owner = client.createUser(token = TestFirebaseAuth.mintToken(uid = "owner")).body<UserResponse>()
+            val viewerToken = TestFirebaseAuth.mintToken(uid = "viewer") // a different, unprovisioned caller
+
+            val response =
+                client.get(urlString = "/api/v1/players/${owner.publicCode.lowercase()}") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $viewerToken")
+                }
+
+            response.status shouldBe HttpStatusCode.OK
+            val profile = response.body<PublicPlayerResponse>()
+            profile.publicCode shouldBe owner.publicCode
+            profile.displayName shouldBe "Ana"
+        }
+
+    @Test
+    fun `an unknown code returns 404`() =
+        withApp { client ->
+            val token = TestFirebaseAuth.mintToken(uid = "u1")
+            val response =
+                client.get(urlString = "/api/v1/players/ZZZZZZ") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $token")
+                }
+            response.status shouldBe HttpStatusCode.NotFound
+        }
+
+    @Test
+    fun `the endpoint requires authentication`() =
+        withApp { client ->
+            client.get(urlString = "/api/v1/players/ABC234").status shouldBe HttpStatusCode.Unauthorized
+        }
+}

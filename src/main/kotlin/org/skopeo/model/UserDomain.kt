@@ -118,6 +118,9 @@ data class User(
     val capabilities: Set<Capability>,
 )
 
+/** The user's single active display name, if any (names include disabled ones). */
+fun User.displayName(): String? = names.firstOrNull { it.type == NameType.DISPLAY && it.isActive }?.value
+
 /** Everything needed to provision a new user in one transaction (e.g. on first sign-in). */
 data class ProvisionUserCommand(
     val firebaseUid: String,

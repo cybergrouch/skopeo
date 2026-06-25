@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { Capability } from '@/auth/capabilities'
 import { ProfileTab } from './ProfileTab'
 
@@ -70,6 +70,30 @@ describe('ProfileTab', () => {
   it('shows the shareable player code when provided', () => {
     renderProfile([Capability.PLAYER], 'K7Q2MX')
     expect(screen.getByText('K7Q2MX')).toBeInTheDocument()
+  })
+
+  it('shows a QR code and a copy-link button when a public code is present', () => {
+    const { container } = renderProfile([Capability.PLAYER], 'K7Q2MX')
+    expect(screen.getByRole('button', { name: 'Copy link' })).toBeInTheDocument()
+    expect(container.querySelector('svg')).toBeInTheDocument()
+  })
+
+  it('copies the share link to the clipboard and shows feedback', () => {
+    const writeText = vi.fn()
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    })
+    renderProfile([Capability.PLAYER], 'K7Q2MX')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy link' }))
+
+    expect(writeText).toHaveBeenCalledWith(
+      `${window.location.origin}/players/K7Q2MX`,
+    )
+    expect(
+      screen.getByRole('button', { name: 'Copied!' }),
+    ).toBeInTheDocument()
   })
 
   it('shows the provider avatar when a photo URL is present', () => {

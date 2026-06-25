@@ -12,6 +12,7 @@ import { SignUpPage } from '@/routes/SignUpPage'
 import { LoginPage } from '@/routes/LoginPage'
 import { CompleteProfilePage } from '@/routes/CompleteProfilePage'
 import { DashboardPage } from '@/routes/DashboardPage'
+import { PlayerProfilePage } from '@/routes/PlayerProfilePage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -41,6 +42,16 @@ function App() {
                 <RequireAuth>
                   <RequireProfile>
                     <DashboardPage />
+                  </RequireProfile>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/players/:code"
+              element={
+                <RequireAuth>
+                  <RequireProfile>
+                    <PlayerProfilePage />
                   </RequireProfile>
                 </RequireAuth>
               }
