@@ -280,6 +280,38 @@ Expected dashboard per capability:
 
 ---
 
+## Player profile deep links & QR codes
+
+Every player has a short shareable code (shown on their **Profile** tab as **Player ID**). It powers
+an auth-gated deep link to that player's profile and a QR code for scanning from another device.
+
+### Deep link
+
+- [ ] On any account's **Profile** tab, note the **Player ID** (e.g. `K7Q2MX`).
+- [ ] In the browser, open `http://localhost:5173/players/<PLAYER_ID>` → you land on that player's
+      profile (display name, avatar, and NTRP rating if they have one). Codes are case-insensitive.
+- [ ] **Auth gate:** sign out (or use a private window) and open the same link → you're redirected to
+      **login**; after signing in you land back on that player's profile. It is never visible to
+      logged-out users.
+- [ ] **Unknown code:** open `/players/ZZZZZZ` → "We couldn't find or load this player."
+- [ ] **Privacy:** the page shows only display name, avatar, and rating — no email, contacts, or date
+      of birth.
+
+### QR code
+
+- [ ] On your own **Profile** tab, the **Share your profile** card shows a **QR code** and a **Copy
+      link** button.
+- [ ] Click **Copy link**, paste it in a new tab → it opens your own player profile.
+- [ ] **Scan from a phone:** point a phone camera at the QR → it opens the deep link.
+
+> **Local-dev caveat for phone scanning.** Locally the QR/link encodes `http://localhost:5173/…`,
+> which a phone on another device can't reach. To test scanning, either (a) run the web on your
+> machine's LAN IP and use that origin, or (b) test on the deployed site, where the QR encodes the
+> Firebase Hosting URL. On the same machine, the Copy-link → paste check above verifies the URL is
+> correct regardless.
+
+---
+
 ## Teardown / reset
 
 ```bash
