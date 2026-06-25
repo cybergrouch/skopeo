@@ -11,12 +11,17 @@ export function hasCapability(
   return Boolean(capabilities?.includes(capability))
 }
 
-/** Match-management tabs are for hosts and administrators. */
+/**
+ * The Matches tab is for match managers: hosts, club owners, and administrators.
+ * (Profile and Research are available to every player; the Admin tab is
+ * administrators-only — see {@link isAdministrator}.)
+ */
 export function canManageMatches(
   capabilities: readonly Capability[] | undefined,
 ): boolean {
   return (
     hasCapability(capabilities, Capability.HOST) ||
+    hasCapability(capabilities, Capability.CLUB_OWNER) ||
     hasCapability(capabilities, Capability.ADMINISTRATOR)
   )
 }

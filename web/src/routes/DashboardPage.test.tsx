@@ -49,21 +49,32 @@ describe('DashboardPage', () => {
     expect(screen.getByText('Loading your dashboard…')).toBeInTheDocument()
   })
 
-  it('shows only the Profile tab for a plain player', () => {
+  it('shows Profile and Research (but not Matches/Admin) for a plain player', () => {
     useGetApiV1UsersMe.mockReturnValue({
       data: { id: 'u1', capabilities: ['PLAYER'] },
       isLoading: false,
     })
     renderDashboard()
     expect(screen.getByRole('tab', { name: 'Profile' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Research' })).toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: 'Matches' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('tab', { name: 'Research' })).not.toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: 'Admin' })).not.toBeInTheDocument()
   })
 
-  it('shows the Matches tab for a host', () => {
+  it('shows the Matches tab for a host (plus Profile/Research, no Admin)', () => {
     useGetApiV1UsersMe.mockReturnValue({
       data: { id: 'u1', capabilities: ['PLAYER', 'HOST'] },
+      isLoading: false,
+    })
+    renderDashboard()
+    expect(screen.getByRole('tab', { name: 'Matches' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Research' })).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Admin' })).not.toBeInTheDocument()
+  })
+
+  it('shows the Matches tab for a club owner (same as a host, no Admin)', () => {
+    useGetApiV1UsersMe.mockReturnValue({
+      data: { id: 'u1', capabilities: ['PLAYER', 'CLUB_OWNER'] },
       isLoading: false,
     })
     renderDashboard()

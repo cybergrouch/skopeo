@@ -229,6 +229,55 @@ docker compose exec postgres psql -U postgres -d SkopeoDb -c \
 > `LIMIT 1` grabs whichever user row exists first. With several test users, target a specific one
 > by joining through `contact_information` on the email.
 
+## Capability display tests (Player / Host / Club owner / Administrator)
+
+Authorization is capability-based, and the dashboard shows different tabs per capability. Until the
+Administrator UI for granting roles is tested separately, grant/revoke capabilities **directly in the
+database** to simulate each role. Capabilities are additive — a user keeps `PLAYER` and gains others.
+
+**Grant** a capability to a test account (replace the role and email):
+
+```bash
+docker compose exec postgres psql -U postgres -d SkopeoDb -c \
+"INSERT INTO user_capabilities (user_id, capability)
+ SELECT user_id, 'HOST' FROM contact_information WHERE value = 'you@example.com';"
+```
+
+**Revoke** it again (to reset between scenarios):
+
+```bash
+docker compose exec postgres psql -U postgres -d SkopeoDb -c \
+"DELETE FROM user_capabilities
+ WHERE capability = 'HOST'
+   AND user_id IN (SELECT user_id FROM contact_information WHERE value = 'you@example.com');"
+```
+
+After each change, **hard-refresh the browser** (the dashboard refetches `GET /api/v1/users/me`).
+
+Expected dashboard per capability:
+
+| Capability      | How it's set         | Tabs shown                        | Notes                                            |
+|-----------------|----------------------|-----------------------------------|--------------------------------------------------|
+| `PLAYER`        | automatic at sign-up | Profile, Research                 | base role; cannot be revoked                     |
+| `HOST`          | grant via SQL        | Profile, Research, Matches        | match management (hosts are players)             |
+| `CLUB_OWNER`    | grant via SQL        | Profile, Research, Matches        | same as host for now; more is added as it evolves |
+| `ADMINISTRATOR` | grant via SQL        | Profile, Research, Matches, Admin | full access                                      |
+
+- [ ] **Player** — a fresh account (Tests 1–3) shows **Profile** and **Research** with a `PLAYER`
+      badge; **no Matches or Admin** tab.
+- [ ] **Host** — grant `HOST`, refresh → **Matches** tab appears alongside Profile/Research; **no
+      Admin** tab.
+- [ ] **Club owner** — grant `CLUB_OWNER`, refresh → **same as a host** (Profile, Research, Matches;
+      no Admin). Revoke when done.
+- [ ] **Administrator** — grant `ADMINISTRATOR`, refresh → **all four tabs** (Profile, Research,
+      Matches, Admin).
+- [ ] **Additive** — with both `HOST` and `ADMINISTRATOR`, all tabs show; revoke `ADMINISTRATOR` and
+      refresh → Admin disappears while Matches/Research/Profile remain (HOST still present).
+
+> Granting capabilities through the database is a temporary testing shortcut. Doing it through the
+> **Administrator → role grants** UI is a separate test, covered once an admin is bootstrapped (see
+> "Optional — see the richer dashboards" above).
+
 ---
 
 ## Teardown / reset
