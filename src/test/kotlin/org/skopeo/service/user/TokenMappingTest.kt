@@ -9,6 +9,7 @@ import io.kotest.matchers.shouldBe
 import org.skopeo.dto.user.CreateUserRequest
 import org.skopeo.dto.user.ProfileRequest
 import org.skopeo.model.AuthProvider
+import org.skopeo.model.Capability
 import org.skopeo.model.ContactSource
 import org.skopeo.model.ContactType
 import org.skopeo.model.NameType
@@ -171,5 +172,45 @@ class TokenMappingTest {
         patch.dateOfBirth shouldBe LocalDate.of(2000, 1, 1)
         patch.sex shouldBe "Female"
         shouldThrow<IllegalArgumentException> { ProfileRequest(sex = "Z").toProfilePatch() }
+    }
+
+    @Test
+    fun `default capabilities are PLAYER only`() {
+        val command =
+            buildProvisionCommand(token = token(name = "Ana"), request = CreateUserRequest(dateOfBirth = "2000-01-01", sex = "Male"))
+        command.capabilities shouldBe setOf(element = Capability.PLAYER)
+    }
+
+    @Test
+    fun `a verified allowlisted email is bootstrapped to ADMINISTRATOR (case-insensitive)`() {
+        val command =
+            buildProvisionCommand(
+                token = token(email = "Admin@Example.com", emailVerified = true, name = "Ana"),
+                request = CreateUserRequest(dateOfBirth = "2000-01-01", sex = "Male"),
+                adminEmails = setOf(element = "admin@example.com"),
+            )
+        command.capabilities shouldBe setOf(Capability.PLAYER, Capability.ADMINISTRATOR)
+    }
+
+    @Test
+    fun `an allowlisted but UNVERIFIED email is not bootstrapped (verified-email gate)`() {
+        val command =
+            buildProvisionCommand(
+                token = token(email = "admin@example.com", emailVerified = false, name = "Ana"),
+                request = CreateUserRequest(dateOfBirth = "2000-01-01", sex = "Male"),
+                adminEmails = setOf(element = "admin@example.com"),
+            )
+        command.capabilities shouldBe setOf(element = Capability.PLAYER)
+    }
+
+    @Test
+    fun `a verified email not on the allowlist is not bootstrapped`() {
+        val command =
+            buildProvisionCommand(
+                token = token(email = "player@example.com", emailVerified = true, name = "Ana"),
+                request = CreateUserRequest(dateOfBirth = "2000-01-01", sex = "Male"),
+                adminEmails = setOf(element = "admin@example.com"),
+            )
+        command.capabilities shouldBe setOf(element = Capability.PLAYER)
     }
 }

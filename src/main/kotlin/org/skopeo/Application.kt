@@ -34,6 +34,7 @@ import org.skopeo.routes.configureNameRoutes
 import org.skopeo.routes.configureRankingRoutes
 import org.skopeo.routes.configureRatingRoutes
 import org.skopeo.routes.configureUserRoutes
+import org.skopeo.service.user.UserService
 import org.slf4j.event.Level
 
 private val logger = KotlinLogging.logger {}
@@ -65,7 +66,7 @@ fun Application.module(
     configureOpenAPI()
     configureRouting()
     configureRankingRoutes()
-    configureUserRoutes()
+    configureUserRoutes(service = UserService(adminEmails = adminEmails()))
     configureContactRoutes()
     configureNameRoutes()
     configureCapabilityRoutes()
@@ -178,3 +179,15 @@ fun Application.configureRouting() {
     }
     logger.info { "Routing configured with endpoints: /, /health, /metrics, /api/v1/calculate-ranking" }
 }
+
+/**
+ * The ADMIN_EMAILS allowlist (config `admin.emails`), normalized to a lowercase/trimmed set.
+ * Empty/unset ⇒ no auto-admins. See docs/engineering/architecture/ADMIN_BOOTSTRAP.md.
+ */
+private fun Application.adminEmails(): Set<String> =
+    environment.config.propertyOrNull(path = "admin.emails")?.getString()
+        ?.split(",")
+        ?.map { it.trim().lowercase() }
+        ?.filter { it.isNotEmpty() }
+        ?.toSet()
+        .orEmpty()
