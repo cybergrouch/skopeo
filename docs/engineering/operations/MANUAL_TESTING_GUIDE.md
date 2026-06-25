@@ -385,6 +385,18 @@ never in git.
    `apiKey`, `authDomain`, `projectId`, `appId` into `web/.env.local` (and the GitHub repo
    variables for deploys). The API only needs the project ID via `FIREBASE_PROJECT_ID`.
 5. Add any non-localhost domains under **Authentication → Settings → Authorized domains**.
+6. **Restrict the web API key** (recommended, and again after any key rotation). In **Google Cloud
+   Console → APIs & Services → Credentials**, open the key and set:
+   - **Application restrictions → Websites (HTTP referrers)**: your origins only —
+     `localhost:5173/*`, `<project>.firebaseapp.com/*`, `<project>.web.app/*`, and your custom
+     domain when it exists.
+   - **API restrictions → Restrict key**: Identity Toolkit API + Token Service API + Firebase
+     Installations API, plus any other product APIs you use (Firestore / Storage / FCM / Analytics).
+     Over-restricting silently breaks Firebase — add only what you use.
+
+   A Firebase web API key is a public client identifier, not a secret, so this caps abuse rather
+   than hiding the key; the real enforcement is **Firebase App Check** + **Security Rules**. See
+   `DEPLOYMENT_GCP.md` §7 ("Harden the Firebase web API key") for the full checklist.
 
 ---
 
