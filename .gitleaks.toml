@@ -1,0 +1,21 @@
+# gitleaks configuration — prevents secrets (API keys, tokens, credentials) from
+# being committed. Used by the CI "Secret scan" job and the pre-commit hook.
+# Docs: https://github.com/gitleaks/gitleaks
+title = "Skopeo gitleaks config"
+
+[extend]
+# Start from gitleaks' built-in ruleset (Google API keys, AWS, JWTs, etc.).
+useDefault = true
+
+[allowlist]
+description = """
+The Firebase web API key leaked in PR #36 has been ROTATED and the old key DELETED
+in Google Cloud, so the value still present in those two historical commits is dead.
+History was intentionally not rewritten; these commits are allowlisted so the scan
+passes on the (now-inert) historical value. Live keys live only in git-ignored env
+files (web/.env.local) and never in tracked files.
+"""
+commits = [
+  "15f1e5bab79f1e589a76d9089ed1f2536cc0fcf2",
+  "dbbbd2a96c7dc14009fc7f98e6b23e8623a2f13f",
+]

@@ -153,6 +153,20 @@ tasks.register("installGitHooks") {
             #!/bin/bash
             # Auto-format code before commit
 
+            # Block staged secrets (API keys, tokens, credentials) before they are committed.
+            # Mirrors the CI "Secret scan" job. No-op (with a notice) if gitleaks isn't installed.
+            if command -v gitleaks >/dev/null 2>&1; then
+                echo "🔑 Scanning staged changes for secrets (gitleaks)..."
+                if ! gitleaks protect --staged --redact --config .gitleaks.toml; then
+                    echo "❌ gitleaks found a potential secret in staged changes."
+                    echo "   Remove/unstage it (real keys belong only in git-ignored env files) and retry."
+                    exit 1
+                fi
+            else
+                echo "ℹ️  gitleaks not installed — skipping local secret scan (CI still enforces it)."
+                echo "   Install it to catch secrets before pushing: https://github.com/gitleaks/gitleaks#installing"
+            fi
+
             echo "🎨 Running ktlint format..."
             ./gradlew ktlintFormat --quiet
 
