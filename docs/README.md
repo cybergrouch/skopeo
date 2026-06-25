@@ -20,6 +20,7 @@ Docs are grouped by audience, then by topic.
 ### `architecture/` — design & decisions
 
 - [AUTHENTICATION.md](engineering/architecture/AUTHENTICATION.md) — Firebase auth (IDaaS) + in-house capability authorization.
+- [ADMIN_BOOTSTRAP.md](engineering/architecture/ADMIN_BOOTSTRAP.md) — how the first/break-glass administrator is established (verified-email allowlist via env).
 - [AUDIT_TRAIL.md](engineering/architecture/AUDIT_TRAIL.md) — the pure-function-plus-audit-trail calculator pattern.
 - [WEB_UI_ARCHITECTURE.md](engineering/architecture/WEB_UI_ARCHITECTURE.md) — React/Vite web UI decisions and roadmap.
 - [ORM_EVALUATION.md](engineering/architecture/ORM_EVALUATION.md) — Exposed vs jOOQ vs Jimmer decision record.
