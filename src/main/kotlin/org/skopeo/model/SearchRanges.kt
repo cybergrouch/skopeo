@@ -97,6 +97,7 @@ private fun wholeAge(value: BigDecimal): Int {
 /** Resolved repository-level user search: any non-null facet is an AND filter. */
 data class UserSearchQuery(
     val name: String?,
+    val code: String?,
     val sex: String?,
     val dobMin: LocalDate?,
     val dobMax: LocalDate?,

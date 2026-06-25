@@ -29,8 +29,14 @@ import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserSearchQuery
 import java.util.UUID
+import kotlin.random.Random
 
 private const val SEARCH_LIMIT = 20
+
+// Shareable player code (issue #56): 6 chars from a Crockford-style base32 alphabet (no I/L/O/U).
+private const val PUBLIC_CODE_LENGTH = 6
+private const val PUBLIC_CODE_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+private const val PUBLIC_CODE_MAX_TRIES = 10
 
 // pg_trgm similarity floor for fuzzy name matches (0..1); the substring match below it is
 // still included via OR. 0.3 is pg_trgm's own default — typo-tolerant without much noise.
@@ -46,6 +52,7 @@ class UserRepository {
         transaction {
             val userId =
                 UsersTable.insertAndGetId {
+                    it[UsersTable.publicCode] = generateUniquePublicCode()
                     it[UsersTable.firebaseUid] = command.firebaseUid
                     it[UsersTable.photoUrl] = command.photoUrl
                     it[UsersTable.dateOfBirth] = command.dateOfBirth
@@ -111,6 +118,7 @@ class UserRepository {
                     query.dobMin?.let { min -> add(element = Op.build { UsersTable.dateOfBirth greaterEq min }) }
                     query.dobMax?.let { max -> add(element = Op.build { UsersTable.dateOfBirth lessEq max }) }
                     query.name?.let { name -> add(element = nameMatches(name = name)) }
+                    query.code?.let { code -> add(element = Op.build { UsersTable.publicCode eq code }) }
                     query.rating?.let { range -> add(element = ratingMatches(range = range)) }
                 }
             UsersTable
@@ -267,6 +275,7 @@ private fun ResultRow.toUser(
 ): User =
     User(
         id = this[UsersTable.id].value,
+        publicCode = this[UsersTable.publicCode],
         firebaseUid = this[UsersTable.firebaseUid],
         photoUrl = this[UsersTable.photoUrl],
         dateOfBirth = this[UsersTable.dateOfBirth],
@@ -280,3 +289,15 @@ private fun ResultRow.toUser(
         identities = identities,
         capabilities = capabilities,
     )
+
+/** Generate a unique shareable player code, retrying on the (rare) collision. Must run in a transaction. */
+private fun generateUniquePublicCode(): String {
+    repeat(times = PUBLIC_CODE_MAX_TRIES) {
+        val code =
+            (1..PUBLIC_CODE_LENGTH)
+                .map { PUBLIC_CODE_ALPHABET[Random.nextInt(until = PUBLIC_CODE_ALPHABET.length)] }
+                .joinToString(separator = "")
+        if (UsersTable.selectAll().where { UsersTable.publicCode eq code }.none()) return code
+    }
+    error(message = "could not generate a unique public code after $PUBLIC_CODE_MAX_TRIES tries")
+}

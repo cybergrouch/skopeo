@@ -102,6 +102,8 @@ data class UserIdentity(
 /** The user aggregate as stored across users / user_names / contact_information / user_identities / user_capabilities. */
 data class User(
     val id: UUID,
+    // Short, human-readable, shareable player code (e.g. "K7Q2MX"); unique. See issue #56.
+    val publicCode: String,
     val firebaseUid: String?,
     val photoUrl: String?,
     val dateOfBirth: LocalDate?,

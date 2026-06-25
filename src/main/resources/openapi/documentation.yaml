@@ -119,6 +119,12 @@ paths:
           schema:
             type: string
           description: Fuzzy name fragment (search mode).
+        - name: code
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Exact shareable player code, case-insensitive (search mode).
         - name: sex
           in: query
           required: false
@@ -1380,11 +1386,15 @@ components:
       description: Slim user shape for search results (player picker, role grants, research).
       required:
         - id
+        - publicCode
         - capabilities
       properties:
         id:
           type: string
           format: uuid
+        publicCode:
+          type: string
+          description: Short, human-readable, shareable player code (e.g. "K7Q2MX").
         displayName:
           type: string
           nullable: true
@@ -1406,6 +1416,7 @@ components:
       type: object
       required:
         - id
+        - publicCode
         - country
         - kycVerified
         - isActive
@@ -1417,6 +1428,9 @@ components:
         id:
           type: string
           format: uuid
+        publicCode:
+          type: string
+          description: Short, human-readable, shareable player code (e.g. "K7Q2MX").
         firebaseUid:
           type: string
           nullable: true

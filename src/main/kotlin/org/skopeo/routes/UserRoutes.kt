@@ -22,6 +22,7 @@ import org.skopeo.dto.user.CreateUserRequest
 import org.skopeo.dto.user.ProfileRequest
 import org.skopeo.dto.user.toResponse
 import org.skopeo.dto.user.toSummary
+import org.skopeo.service.user.UserSearchFilters
 import org.skopeo.service.user.UserService
 import org.skopeo.service.user.toProfilePatch
 import java.util.UUID
@@ -44,7 +45,7 @@ fun Application.configureUserRoutes(service: UserService = UserService()) {
     }
 }
 
-private val FILTER_PARAMS = listOf("name", "sex", "age", "rating")
+private val FILTER_PARAMS = listOf("name", "code", "sex", "age", "rating")
 
 private fun Route.searchUsers(service: UserService) {
     get {
@@ -61,10 +62,14 @@ private fun Route.searchUsers(service: UserService) {
                 } else {
                     service.search(
                         token = verifiedToken(),
-                        name = params["name"],
-                        sex = params["sex"],
-                        age = params["age"],
-                        rating = params["rating"],
+                        filters =
+                            UserSearchFilters(
+                                name = params["name"],
+                                code = params["code"],
+                                sex = params["sex"],
+                                age = params["age"],
+                                rating = params["rating"],
+                            ),
                     )
                 }
             call.respond(status = HttpStatusCode.OK, message = results.map { it.toSummary() })
