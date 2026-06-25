@@ -156,7 +156,35 @@ Swagger UI is served at `$SERVICE_URL/swagger`.
 
 ---
 
-## 7. Day-2 Operations
+## 7. Harden the Firebase web API key
+
+The web app (Firebase Hosting, static SPA) ships its Firebase config — including the
+`VITE_FIREBASE_API_KEY` — to the browser. A Firebase **web** API key is a client-side
+identifier, *not* a secret, so it can't be hidden; "securing" it means restricting **where**
+and **what** it can be used for to cap abuse (quota, account creation on unauthorized origins).
+
+Do this once per environment in the **Google Cloud Console** (also after any key rotation):
+
+- [ ] **Open the key** — Console → project → **APIs & Services → Credentials** → click the key
+      (usually "Browser key (auto created by Firebase)").
+- [ ] **Application restrictions → Websites (HTTP referrers)** — allow only your origins:
+  - `localhost:5173/*` (local dev)
+  - `<project>.firebaseapp.com/*` and `<project>.web.app/*` (Firebase Hosting defaults)
+  - your custom domain when it exists (e.g. `app.example.com/*`)
+- [ ] **API restrictions → Restrict key** — select only the APIs the web app calls. For Firebase
+      Auth: **Identity Toolkit API** + **Token Service API**, plus **Firebase Installations API**
+      and any other product APIs in use (Firestore / Storage / FCM / Analytics). Over-restricting
+      silently breaks Firebase — add what you use.
+- [ ] **Save**, wait ~5 min to propagate, then **test sign-in locally and on the deployed site**.
+
+> HTTP-referrer restrictions are advisory (referrers can be spoofed). The real enforcement for a
+> web app is **Firebase App Check** (Console → Build → App Check) plus **Firebase Security Rules** —
+> enable App Check for strong protection. Rotated keys must also be updated in `web/.env.local`
+> (local) and the Firebase Hosting build's env (CI/deploy), never committed.
+
+---
+
+## 8. Day-2 Operations
 
 ```bash
 # Logs (includes the calculation audit trail entries)
@@ -180,7 +208,7 @@ Scaling path as adoption grows: `min-instances=1` (kill cold starts) → `db-g1-
 
 ---
 
-## 8. Teardown
+## 9. Teardown
 
 ```bash
 gcloud run services delete skopeo --region=asia-southeast1
@@ -192,7 +220,7 @@ gcloud projects delete skopeo-prod
 
 ---
 
-## 9. If AWS Is Required Instead
+## 10. If AWS Is Required Instead
 
 The same container deploys to AWS without code changes:
 
