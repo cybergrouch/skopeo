@@ -6,13 +6,14 @@
 #   - Database: DELETE FROM users by email (cascades to names/contacts/ratings/...),
 #     via `docker compose exec` on the local Postgres container.
 #
-# Run from the repo root (so docker compose finds the service). Pairs with createTestUser.sh.
+# The Firebase Web API key is read from web/.env.local (VITE_FIREBASE_API_KEY). If that
+# file is missing, provide the key via the WEB_API_KEY environment variable. Pairs with
+# createTestUser.sh.
 #
 # Usage:
-#   ./scripts/firebase-integration/deleteTestUser.sh <WEB_API_KEY> [email] [password] \
-#       [db_service] [db_name] [db_user]
+#   ./scripts/testing/deleteTestUser.sh [email] [password] [db_service] [db_name] [db_user]
+#   WEB_API_KEY=AIza... ./scripts/testing/deleteTestUser.sh [email] ...   # if web/.env.local is absent
 #
-#   WEB_API_KEY  Firebase Web API Key ("AIza...") — REQUIRED (kept out of source).
 #   email        default: test@skopeo.dev
 #   password     default: Test12345   (needed to sign in so the Firebase account can be deleted)
 #   db_service   docker compose service (default: postgres)
@@ -23,18 +24,35 @@
 
 set -uo pipefail
 
-WEB_API_KEY="${1:-}"
-EMAIL="${2:-test@skopeo.dev}"
-PASSWORD="${3:-Test12345}"
-DB_SERVICE="${4:-postgres}"
-DB_NAME="${5:-SkopeoDb}"
-DB_USER="${6:-postgres}"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
-if [[ -z "$WEB_API_KEY" ]]; then
-  echo "Error: missing Firebase Web API Key." >&2
-  echo "Usage: $0 <WEB_API_KEY> [email] [password] [db_service] [db_name] [db_user]" >&2
+# Resolve the Firebase Web API key: explicit WEB_API_KEY env var wins, else web/.env.local.
+resolve_web_api_key() {
+  if [[ -n "${WEB_API_KEY:-}" ]]; then
+    printf '%s' "$WEB_API_KEY"
+    return 0
+  fi
+  local env_file="$REPO_ROOT/web/.env.local"
+  if [[ -f "$env_file" ]]; then
+    awk -F= '/^VITE_FIREBASE_API_KEY=/{sub(/^VITE_FIREBASE_API_KEY=/, ""); gsub(/["'"'"' \r]/, ""); print; exit}' "$env_file"
+    return 0
+  fi
+  return 1
+}
+
+WEB_API_KEY="$(resolve_web_api_key)"
+if [[ -z "${WEB_API_KEY:-}" ]]; then
+  echo "Error: no Firebase Web API key found." >&2
+  echo "  Put it in web/.env.local (VITE_FIREBASE_API_KEY=AIza...), or run with:" >&2
+  echo "    WEB_API_KEY=AIza... $0 [email] [password] ..." >&2
   exit 1
 fi
+
+EMAIL="${1:-test@skopeo.dev}"
+PASSWORD="${2:-Test12345}"
+DB_SERVICE="${3:-postgres}"
+DB_NAME="${4:-SkopeoDb}"
+DB_USER="${5:-postgres}"
 
 IDENTITY="https://identitytoolkit.googleapis.com/v1"
 
@@ -58,5 +76,5 @@ else
 fi
 
 echo "2/2 Deleting DB profile for '$EMAIL' (cascades) ..." >&2
-docker compose exec -T "$DB_SERVICE" psql -U "$DB_USER" -d "$DB_NAME" -c \
+docker compose --project-directory "$REPO_ROOT" exec -T "$DB_SERVICE" psql -U "$DB_USER" -d "$DB_NAME" -c \
   "DELETE FROM users WHERE id IN (SELECT user_id FROM contact_information WHERE value = '${EMAIL}');"

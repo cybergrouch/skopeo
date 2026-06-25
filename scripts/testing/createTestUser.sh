@@ -5,12 +5,13 @@
 # Firebase user already exists it signs in instead, then (re)provisions the profile
 # (provisioning is idempotent). Pairs with deleteTestUser.sh.
 #
-# Usage:
-#   ./scripts/firebase-integration/createTestUser.sh <WEB_API_KEY> [email] [password] \
-#       [displayName] [sex] [dateOfBirth] [base_url]
+# The Firebase Web API key is read from web/.env.local (VITE_FIREBASE_API_KEY). If that
+# file is missing, provide the key via the WEB_API_KEY environment variable.
 #
-#   WEB_API_KEY  Firebase Web API Key ("AIza...") — REQUIRED (kept out of source).
-#                Firebase console -> Project settings -> General (Web API Key).
+# Usage:
+#   ./scripts/testing/createTestUser.sh [email] [password] [displayName] [sex] [dateOfBirth] [base_url]
+#   WEB_API_KEY=AIza... ./scripts/testing/createTestUser.sh [email] ...   # if web/.env.local is absent
+#
 #   email        default: test@skopeo.dev
 #   password     default: Test12345
 #   displayName  default: "Test User"
@@ -20,24 +21,41 @@
 #
 # Prints the created Skopeo profile JSON (includes id and publicCode) to stdout.
 #
-# Note: Firebase signUp creates an UNVERIFIED email, so this user is NOT eligible for
-# the ADMIN_EMAILS bootstrap (that requires a verified email — use Google sign-in for an admin).
+# Note: Firebase signUp creates an UNVERIFIED email, so this user is NOT eligible for the
+# ADMIN_EMAILS bootstrap (that requires a verified email — use Google sign-in for an admin).
 
 set -uo pipefail
 
-WEB_API_KEY="${1:-}"
-EMAIL="${2:-test@skopeo.dev}"
-PASSWORD="${3:-Test12345}"
-DISPLAY_NAME="${4:-Test User}"
-SEX="${5:-Male}"
-DOB="${6:-2000-01-01}"
-BASE_URL="${7:-http://localhost:8080}"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
-if [[ -z "$WEB_API_KEY" ]]; then
-  echo "Error: missing Firebase Web API Key." >&2
-  echo "Usage: $0 <WEB_API_KEY> [email] [password] [displayName] [sex] [dateOfBirth] [base_url]" >&2
+# Resolve the Firebase Web API key: explicit WEB_API_KEY env var wins, else web/.env.local.
+resolve_web_api_key() {
+  if [[ -n "${WEB_API_KEY:-}" ]]; then
+    printf '%s' "$WEB_API_KEY"
+    return 0
+  fi
+  local env_file="$REPO_ROOT/web/.env.local"
+  if [[ -f "$env_file" ]]; then
+    awk -F= '/^VITE_FIREBASE_API_KEY=/{sub(/^VITE_FIREBASE_API_KEY=/, ""); gsub(/["'"'"' \r]/, ""); print; exit}' "$env_file"
+    return 0
+  fi
+  return 1
+}
+
+WEB_API_KEY="$(resolve_web_api_key)"
+if [[ -z "${WEB_API_KEY:-}" ]]; then
+  echo "Error: no Firebase Web API key found." >&2
+  echo "  Put it in web/.env.local (VITE_FIREBASE_API_KEY=AIza...), or run with:" >&2
+  echo "    WEB_API_KEY=AIza... $0 [email] [password] ..." >&2
   exit 1
 fi
+
+EMAIL="${1:-test@skopeo.dev}"
+PASSWORD="${2:-Test12345}"
+DISPLAY_NAME="${3:-Test User}"
+SEX="${4:-Male}"
+DOB="${5:-2000-01-01}"
+BASE_URL="${6:-http://localhost:8080}"
 
 IDENTITY="https://identitytoolkit.googleapis.com/v1"
 
