@@ -11,8 +11,8 @@ vi.mock('./admin/PendingAssessmentSection', () => ({
 vi.mock('./admin/PendingCalculationSection', () => ({
   PendingCalculationSection: () => <div>pending calculation section</div>,
 }))
-vi.mock('./admin/RoleGrantsSection', () => ({
-  RoleGrantsSection: () => <div>role grants section</div>,
+vi.mock('./admin/ManagePlayerSection', () => ({
+  ManagePlayerSection: () => <div>manage player section</div>,
 }))
 
 describe('AdminTab', () => {
@@ -20,7 +20,7 @@ describe('AdminTab', () => {
     render(<AdminTab />)
     expect(screen.getByText('invites section')).toBeInTheDocument()
     expect(screen.getByText('pending assessment section')).toBeInTheDocument()
-    expect(screen.getByText('role grants section')).toBeInTheDocument()
+    expect(screen.getByText('manage player section')).toBeInTheDocument()
     expect(screen.getByText('pending calculation section')).toBeInTheDocument()
   })
 })

@@ -77,6 +77,29 @@ class RatingServiceTest {
     }
 
     @Test
+    fun `the initial assessment writes no history, but a later override is recorded (#96)`() {
+        admin(uid = "root")
+        val player = provisionUser(uid = "player")
+
+        // Initial assessment — the baseline, no history row.
+        service.setRating(token = token(uid = "root"), userId = player.id, value = "4.0", confidence = null)
+        service.getHistory(token = token(uid = "root"), userId = player.id) shouldBe emptyList()
+
+        // Override — recorded as a manual (matchId = null) history entry.
+        service.setRating(token = token(uid = "root"), userId = player.id, value = "4.6", confidence = null)
+        val history = service.getHistory(token = token(uid = "root"), userId = player.id)
+        history shouldHaveSize 1
+        history.single().let {
+            it.matchId shouldBe null
+            it.previousRating.toPlainString() shouldBe "4.000000"
+            it.newRating.toPlainString() shouldBe "4.600000"
+            it.previousLevel shouldBe "4.0"
+            it.newLevel shouldBe "4.5"
+            it.levelChanged shouldBe true
+        }
+    }
+
+    @Test
     fun `only an admin may set a rating`() {
         admin(uid = "root")
         val player = provisionUser(uid = "player")

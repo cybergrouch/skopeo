@@ -103,10 +103,13 @@ data class PendingAssessmentPage(
     val total: Int,
 )
 
-/** A rating-history row to append when the calculation trigger commits a match. */
+/**
+ * A rating-history row to append. [matchId] is the match that drove the change, or null for a
+ * manual admin override (#96) / non-match assessment.
+ */
 data class RatingHistoryWrite(
     val userId: UUID,
-    val matchId: UUID,
+    val matchId: UUID?,
     val previousRating: BigDecimal,
     val newRating: BigDecimal,
     val ratingChange: BigDecimal,
