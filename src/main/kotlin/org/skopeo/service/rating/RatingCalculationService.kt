@@ -5,6 +5,7 @@ package org.skopeo.service.rating
 
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.skopeo.dto.RankingCalculationRequest
+import org.skopeo.model.CalculationBreakdownSnapshot
 import org.skopeo.model.Capability
 import org.skopeo.model.Match
 import org.skopeo.model.MatchScore
@@ -115,6 +116,7 @@ class RatingCalculationService(
                                 previousLevel = change.previousLevel,
                                 newLevel = change.newLevel,
                                 levelChanged = change.levelChanged,
+                                breakdown = change.breakdown.toSnapshot(),
                                 calculatedAt = now,
                             ),
                     )
@@ -212,6 +214,19 @@ class RatingCalculationService(
 
 /** Read an audit-context value (always a precise string for the adjustment-factor entries). */
 private fun Map<String, Any>.factor(key: String): String = this.getValue(key = key) as String
+
+/** Persist-ready form of the in-memory breakdown (#97): precise strings become [BigDecimal] columns. */
+private fun RatingCalculationService.CalculationBreakdown.toSnapshot(): CalculationBreakdownSnapshot =
+    CalculationBreakdownSnapshot(
+        dominance = BigDecimal(dominance),
+        scale = BigDecimal(scale),
+        ratingGap = BigDecimal(ratingGap),
+        normalizedGap = BigDecimal(normalizedGap),
+        competitiveThresholdPct = BigDecimal(competitiveThresholdPct),
+        isUpset = isUpset,
+        upsetMultiplier = BigDecimal(upsetMultiplier),
+        kFactor = BigDecimal(kFactor),
+    )
 
 private fun buildRequest(
     match: Match,

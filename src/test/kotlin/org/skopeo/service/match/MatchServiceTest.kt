@@ -5,6 +5,7 @@ package org.skopeo.service.match
 
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldContain
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
@@ -27,6 +28,8 @@ import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.MatchesTable
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
+import org.skopeo.service.ResourceNotFoundException
+import org.skopeo.service.rating.RatingCalculationService
 import org.skopeo.service.user.ForbiddenException
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.testsupport.PostgresTestDatabase
@@ -46,6 +49,7 @@ class MatchServiceTest {
     private val ratings = RatingRepository()
     private val matchRepo = MatchRepository()
     private val service = MatchService(matches = matchRepo, ratings = ratings, users = users)
+    private val calc = RatingCalculationService(matches = matchRepo, ratings = ratings, users = users)
 
     @BeforeEach
     fun reset() {
@@ -274,6 +278,50 @@ class MatchServiceTest {
         service.getById(token = token(uid = "host"), matchId = match.id).id shouldBe match.id // staff
         shouldThrow<ForbiddenException> { service.getById(token = token(uid = "outsider"), matchId = match.id) }
         shouldThrow<MatchNotFoundException> { service.getById(token = token(uid = "host"), matchId = UUID.randomUUID()) }
+    }
+
+    @Test
+    fun `calculationDetail returns the match plus the stored per-player calculation`() {
+        provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val match = service.createFixture(token = token(uid = "root"), request = fixtureRequest(p1 = p1.id, p2 = p2.id))
+        service.uploadResult(token = token(uid = "root"), matchId = match.id, request = straightSets())
+        calc.calculate(token = token(uid = "root"), dryRun = false) // commit, persisting the breakdown
+
+        // A participant can read their own match's calculation detail.
+        val detail = service.calculationDetail(token = token(uid = "p1"), matchId = match.id)
+        detail.match.id shouldBe match.id
+        detail.players.map { it.userId } shouldBe listOf(p1.id, p2.id) // team1-then-team2 order
+
+        val winner = detail.players.first { it.userId == p1.id }
+        winner.displayName shouldBe "p1"
+        winner.history.kFactor.shouldNotBeNull().toPlainString() shouldBe "0.160000"
+        winner.history.competitiveThresholdPct.shouldNotBeNull().toPlainString() shouldBe "0.083000"
+        winner.history.isUpset shouldBe false
+        // The persisted new rating matches the committed history (faithful, not recomputed).
+        winner.history.newRating shouldBe ratings.findCurrentRating(userId = p1.id)!!.currentRating
+    }
+
+    @Test
+    fun `calculationDetail is gated to participants and staff and 404s without a calculation`() {
+        provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        provisionUser(uid = "outsider")
+        val match = service.createFixture(token = token(uid = "root"), request = fixtureRequest(p1 = p1.id, p2 = p2.id))
+        service.uploadResult(token = token(uid = "root"), matchId = match.id, request = straightSets())
+
+        // Completed but not yet calculated → no stored calculation to show.
+        shouldThrow<ResourceNotFoundException> {
+            service.calculationDetail(token = token(uid = "root"), matchId = match.id)
+        }
+
+        calc.calculate(token = token(uid = "root"), dryRun = false)
+        // A non-participant, non-staff caller is refused.
+        shouldThrow<ForbiddenException> {
+            service.calculationDetail(token = token(uid = "outsider"), matchId = match.id)
+        }
     }
 
     @Test

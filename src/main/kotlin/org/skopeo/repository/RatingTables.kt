@@ -44,5 +44,16 @@ internal object UserRatingHistoryTable : UUIDTable(name = "user_rating_history")
     val dominanceFactor = decimal(name = "dominance_factor", precision = RATING_PRECISION, scale = RATING_SCALE).nullable()
     val smoothingApplied = bool(name = "smoothing_applied").default(defaultValue = false)
     val smoothingFactor = decimal(name = "smoothing_factor", precision = CONFIDENCE_PRECISION, scale = CONFIDENCE_SCALE).nullable()
+
+    // Persisted calculation breakdown (#97): stored at commit so the calculation behind a rating
+    // can be shown faithfully without recomputation (which would drift if constants change).
+    val scale = decimal(name = "scale", precision = RATING_PRECISION, scale = RATING_SCALE).nullable()
+    val ratingGap = decimal(name = "rating_gap", precision = RATING_PRECISION, scale = RATING_SCALE).nullable()
+    val normalizedGap = decimal(name = "normalized_gap", precision = RATING_PRECISION, scale = RATING_SCALE).nullable()
+    val competitiveThresholdPct =
+        decimal(name = "competitive_threshold_pct", precision = RATING_PRECISION, scale = RATING_SCALE).nullable()
+    val isUpset = bool(name = "is_upset").nullable()
+    val upsetMultiplier = decimal(name = "upset_multiplier", precision = RATING_PRECISION, scale = RATING_SCALE).nullable()
+    val kFactor = decimal(name = "k_factor", precision = RATING_PRECISION, scale = RATING_SCALE).nullable()
     val calculatedAt = datetime(name = "calculated_at")
 }

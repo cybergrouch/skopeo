@@ -8,7 +8,9 @@ import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.model.Capability
 import org.skopeo.model.CreateFixtureCommand
 import org.skopeo.model.Match
+import org.skopeo.model.MatchCalculationDetail
 import org.skopeo.model.MatchFormat
+import org.skopeo.model.MatchPlayerCalculation
 import org.skopeo.model.MatchQuery
 import org.skopeo.model.MatchSetResult
 import org.skopeo.model.MatchStatus
@@ -18,6 +20,7 @@ import org.skopeo.model.User
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
+import org.skopeo.service.ResourceNotFoundException
 import org.skopeo.service.user.ForbiddenException
 import org.skopeo.service.user.VerifiedFirebaseToken
 import java.time.LocalDate
@@ -125,6 +128,37 @@ class MatchService(
         if (!isStaff && !isParticipant) throw ForbiddenException()
         return match
     }
+
+    /**
+     * The match result plus the stored per-player calculation behind it (#97), for the detail view
+     * a rating-history entry links to. Same participant-or-staff access as [getById]. Reads the
+     * breakdown persisted at commit time — never recomputed — so it stays faithful even if the
+     * algorithm constants change. Throws when the match has no committed calculation yet.
+     */
+    fun calculationDetail(
+        token: VerifiedFirebaseToken,
+        matchId: UUID,
+    ): MatchCalculationDetail {
+        val match = getById(token = token, matchId = matchId)
+        val byUser = ratings.historyForMatches(matchIds = listOf(element = matchId)).associateBy { it.userId }
+        if (byUser.isEmpty()) {
+            throw ResourceNotFoundException(message = "No rating calculation has been recorded for match $matchId")
+        }
+        val names = displayNames(userIds = byUser.keys.toList())
+        // Order players team1-then-team2 for a stable, intuitive presentation.
+        val players =
+            (match.team1.userIds + match.team2.userIds).mapNotNull { userId ->
+                byUser[userId]?.let { entry ->
+                    MatchPlayerCalculation(userId = userId, displayName = names[userId], history = entry)
+                }
+            }
+        return MatchCalculationDetail(match = match, players = players)
+    }
+
+    private fun displayNames(userIds: List<UUID>): Map<UUID, String?> =
+        users.findAllByIds(ids = userIds).associate { user ->
+            user.id to user.names.firstOrNull { it.type == NameType.DISPLAY && it.isActive }?.value
+        }
 
     /**
      * Oversight lists for staff. An ADMINISTRATOR sees every match in the view; a HOST sees only

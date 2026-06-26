@@ -20,6 +20,7 @@ import org.skopeo.dto.match.CreateFixtureRequest
 import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.dto.match.MatchStateRequest
 import org.skopeo.dto.match.toResponse
+import org.skopeo.dto.rating.toResponse
 import org.skopeo.model.MatchQuery
 import org.skopeo.service.match.MatchService
 
@@ -61,6 +62,12 @@ private fun Route.byId(service: MatchService) {
         respondMappingErrors {
             val match = service.getById(token = verifiedToken(), matchId = uuidParam(name = "id"))
             call.respond(status = HttpStatusCode.OK, message = match.toResponse())
+        }
+    }
+    get(path = "/{id}/calculation") {
+        respondMappingErrors {
+            val detail = service.calculationDetail(token = verifiedToken(), matchId = uuidParam(name = "id"))
+            call.respond(status = HttpStatusCode.OK, message = detail.toResponse())
         }
     }
     post(path = "/{id}/result") {
