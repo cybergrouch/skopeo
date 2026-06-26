@@ -103,6 +103,9 @@ else
   fi
 fi
 
-echo "2/2 Deleting DB profile for '$EMAIL' (cascades) ..." >&2
+echo "2/2 Deleting DB profile and any invite for '$EMAIL' (cascades) ..." >&2
 docker compose --project-directory "$REPO_ROOT" exec -T "$DB_SERVICE" psql -U "$DB_USER" -d "$DB_NAME" -c \
   "DELETE FROM users WHERE id IN (SELECT user_id FROM contact_information WHERE value = '${EMAIL}');"
+# Invites are keyed by email (no FK to users), so remove them too — matches createTestUser's seed (#74).
+docker compose --project-directory "$REPO_ROOT" exec -T "$DB_SERVICE" psql -U "$DB_USER" -d "$DB_NAME" -c \
+  "DELETE FROM invites WHERE email = lower('${EMAIL}');"
