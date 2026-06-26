@@ -6,16 +6,21 @@ import { ProfileTab } from './ProfileTab'
 const {
   useGetApiV1UsersUserIdRatings,
   useGetApiV1UsersUserIdRatingHistory,
+  useGetApiV1PlayersCodeMatchHistory,
   useAuthMock,
 } = vi.hoisted(() => ({
   useGetApiV1UsersUserIdRatings: vi.fn(),
   useGetApiV1UsersUserIdRatingHistory: vi.fn(),
+  useGetApiV1PlayersCodeMatchHistory: vi.fn(),
   useAuthMock: vi.fn(),
 }))
 
 vi.mock('@/api/generated/ratings/ratings', () => ({
   useGetApiV1UsersUserIdRatings,
   useGetApiV1UsersUserIdRatingHistory,
+}))
+vi.mock('@/api/generated/users/users', () => ({
+  useGetApiV1PlayersCodeMatchHistory,
 }))
 vi.mock('@/auth/useAuth', () => ({ useAuth: useAuthMock }))
 
@@ -40,6 +45,10 @@ describe('ProfileTab', () => {
     })
     useGetApiV1UsersUserIdRatingHistory.mockReturnValue({
       data: undefined,
+      isLoading: false,
+    })
+    useGetApiV1PlayersCodeMatchHistory.mockReturnValue({
+      data: [],
       isLoading: false,
     })
   })
@@ -125,7 +134,10 @@ describe('ProfileTab', () => {
       isLoading: false,
     })
     renderProfile()
-    expect(screen.getByText('4.000000 · 4.0')).toBeInTheDocument()
+    // Band only — never the 6-decimal value when a level is present.
+    expect(screen.getByText('4.0')).toBeInTheDocument()
+    expect(screen.queryByText('4.000000 · 4.0')).not.toBeInTheDocument()
+    // Falls back to the value when there's no published level.
     expect(screen.getByText('8.500000')).toBeInTheDocument()
     expect(screen.queryByText('Pending assessment')).not.toBeInTheDocument()
   })

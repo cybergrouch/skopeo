@@ -7,6 +7,7 @@ import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.insertAndGetId
+import org.jetbrains.exposed.sql.or
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
@@ -148,6 +149,30 @@ class MatchRepository {
                     if (createdBy != null) base and (MatchesTable.createdBy eq createdBy) else base
                 }.orderBy(MatchesTable.matchDate to SortOrder.ASC)
                 .map { loadMatch(id = it[MatchesTable.id].value)!! }
+        }
+
+    /**
+     * Every active match the user took part in (either side), newest match date first — the
+     * basis for their match history. Includes scheduled, completed, and rated fixtures alike.
+     */
+    fun listByUser(userId: UUID): List<Match> =
+        transaction {
+            val teamIds =
+                TeamUsersTable
+                    .selectAll()
+                    .where { TeamUsersTable.userId eq userId }
+                    .map { it[TeamUsersTable.teamId].value }
+            if (teamIds.isEmpty()) {
+                emptyList()
+            } else {
+                MatchesTable
+                    .selectAll()
+                    .where {
+                        MatchesTable.isActive and
+                            ((MatchesTable.team1Id inList teamIds) or (MatchesTable.team2Id inList teamIds))
+                    }.orderBy(MatchesTable.matchDate to SortOrder.DESC)
+                    .map { loadMatch(id = it[MatchesTable.id].value)!! }
+            }
         }
 
     private fun createTeam(

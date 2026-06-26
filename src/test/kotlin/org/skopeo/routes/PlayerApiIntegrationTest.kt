@@ -23,6 +23,7 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.dto.user.CreateUserRequest
+import org.skopeo.dto.user.PlayerMatchHistoryEntry
 import org.skopeo.dto.user.PublicPlayerResponse
 import org.skopeo.dto.user.UserResponse
 import org.skopeo.module
@@ -91,5 +92,31 @@ class PlayerApiIntegrationTest {
     fun `the endpoint requires authentication`() =
         withApp { client ->
             client.get(urlString = "/api/v1/players/ABC234").status shouldBe HttpStatusCode.Unauthorized
+        }
+
+    @Test
+    fun `match history resolves by code and is empty for a player with no matches`() =
+        withApp { client ->
+            val owner = client.createUser(token = TestFirebaseAuth.mintToken(uid = "owner")).body<UserResponse>()
+            val viewerToken = TestFirebaseAuth.mintToken(uid = "viewer")
+
+            val response =
+                client.get(urlString = "/api/v1/players/${owner.publicCode}/match-history") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $viewerToken")
+                }
+
+            response.status shouldBe HttpStatusCode.OK
+            response.body<List<PlayerMatchHistoryEntry>>() shouldBe emptyList()
+        }
+
+    @Test
+    fun `match history for an unknown code returns 404`() =
+        withApp { client ->
+            val token = TestFirebaseAuth.mintToken(uid = "u1")
+            val response =
+                client.get(urlString = "/api/v1/players/ZZZZZZ/match-history") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $token")
+                }
+            response.status shouldBe HttpStatusCode.NotFound
         }
 }

@@ -3,10 +3,16 @@ import { render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { PlayerProfilePage } from './PlayerProfilePage'
 
-const { useGetApiV1PlayersCode } = vi.hoisted(() => ({
-  useGetApiV1PlayersCode: vi.fn(),
+const { useGetApiV1PlayersCode, useGetApiV1PlayersCodeMatchHistory } = vi.hoisted(
+  () => ({
+    useGetApiV1PlayersCode: vi.fn(),
+    useGetApiV1PlayersCodeMatchHistory: vi.fn(),
+  }),
+)
+vi.mock('@/api/generated/users/users', () => ({
+  useGetApiV1PlayersCode,
+  useGetApiV1PlayersCodeMatchHistory,
 }))
-vi.mock('@/api/generated/users/users', () => ({ useGetApiV1PlayersCode }))
 
 function renderAt(code = 'ABC234') {
   return render(
@@ -19,7 +25,13 @@ function renderAt(code = 'ABC234') {
 }
 
 describe('PlayerProfilePage', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    useGetApiV1PlayersCodeMatchHistory.mockReturnValue({
+      data: [],
+      isLoading: false,
+    })
+  })
 
   it('shows a loading state', () => {
     useGetApiV1PlayersCode.mockReturnValue({ isLoading: true, isError: false })
@@ -47,7 +59,9 @@ describe('PlayerProfilePage', () => {
     const { container } = renderAt()
     expect(screen.getByText('Ana')).toBeInTheDocument()
     expect(screen.getByText('ABC234')).toBeInTheDocument()
-    expect(screen.getByText('4.000000 · 4.0')).toBeInTheDocument()
+    // Band only — never the 6-decimal value.
+    expect(screen.getByText('4.0')).toBeInTheDocument()
+    expect(screen.queryByText('4.000000 · 4.0')).not.toBeInTheDocument()
     expect(container.querySelector('img')).toHaveAttribute(
       'src',
       'https://example.com/a.jpg',
