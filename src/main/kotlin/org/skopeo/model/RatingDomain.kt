@@ -55,6 +55,8 @@ data class PendingAssessment(
     val sex: String?,
     val dateOfBirth: LocalDate?,
     val age: Int?,
+    // The user's self-reported NTRP band at sign-up (issue #75), if any — admins approve or override it.
+    val proposedRating: String?,
 )
 
 /** A page of pending assessments plus the total count of all pending users (for pagination). */

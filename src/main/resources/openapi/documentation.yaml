@@ -1430,6 +1430,10 @@ components:
           type: string
           nullable: true
           description: ISO 3166-1 alpha-2 (defaults to PH)
+        proposedRating:
+          type: string
+          nullable: true
+          description: Optional self-reported NTRP rating (1.0–7.0) for an admin to approve/override.
 
     ProfileRequest:
       type: object
@@ -1905,6 +1909,10 @@ components:
           type: integer
           nullable: true
           description: Whole years as of today, computed from dateOfBirth.
+        proposedRating:
+          type: string
+          nullable: true
+          description: The player's self-reported NTRP band at sign-up, if any (admins approve/override).
 
     PendingAssessmentPageResponse:
       type: object

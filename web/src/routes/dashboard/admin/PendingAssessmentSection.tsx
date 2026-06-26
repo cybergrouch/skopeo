@@ -34,7 +34,8 @@ function metaLine(user: PendingAssessmentResponse): string {
 
 function PendingRow({ user }: { user: PendingAssessmentResponse }) {
   const queryClient = useQueryClient()
-  const [value, setValue] = useState('')
+  // Prefill with the self-reported rating so the admin can approve it as-is (or override).
+  const [value, setValue] = useState(user.proposedRating ?? '')
   const [error, setError] = useState<string | null>(null)
 
   const setRating = usePutApiV1UsersUserIdRatings({
@@ -85,6 +86,14 @@ function PendingRow({ user }: { user: PendingAssessmentResponse }) {
           </Link>
           {meta ? (
             <div className="text-xs text-muted-foreground">{meta}</div>
+          ) : null}
+          {user.proposedRating ? (
+            <div className="text-xs text-muted-foreground">
+              Self-rated:{' '}
+              <span className="font-medium text-foreground">
+                {user.proposedRating}
+              </span>
+            </div>
           ) : null}
         </div>
       </div>

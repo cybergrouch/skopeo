@@ -21,6 +21,7 @@ import org.skopeo.repository.UserRepository
 import org.skopeo.service.user.ForbiddenException
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.testsupport.PostgresTestDatabase
+import java.math.BigDecimal
 import java.time.LocalDate
 import java.util.UUID
 
@@ -166,6 +167,27 @@ class RatingServiceTest {
         entry.dateOfBirth shouldBe dob
         entry.age shouldBe 30
         page.total shouldBe 2 // the new player plus the unrated admin
+    }
+
+    @Test
+    fun `pending assessment surfaces a self-reported rating as its NTRP band`() {
+        admin(uid = "root")
+        val selfRated =
+            users.provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = "self",
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "self", isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = "Self")),
+                        proposedRating = BigDecimal("3.5"),
+                        capabilities = setOf(element = Capability.PLAYER),
+                    ),
+            )
+        val plain = provisionUser(uid = "plain")
+
+        val items = service.pendingAssessment(token = token(uid = "root"), limit = 50, offset = 0).items
+        items.single { it.userId == selfRated.id }.proposedRating shouldBe "3.5"
+        items.single { it.userId == plain.id }.proposedRating shouldBe null
     }
 
     @Test

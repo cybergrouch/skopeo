@@ -12,6 +12,12 @@ import { authErrorMessage } from '@/lib/firebase-errors'
 
 const SEXES = ['Male', 'Female'] as const
 
+// NTRP bands 1.0–7.0; an optional self-rating an admin later approves or overrides (#75).
+const NTRP_LEVELS = [
+  '1.0', '1.5', '2.0', '2.5', '3.0', '3.5', '4.0',
+  '4.5', '5.0', '5.5', '6.0', '6.5', '7.0',
+] as const
+
 export function SignUpPage() {
   const navigate = useNavigate()
   const { signUpWithEmail, signInWithEmail, signInWithGoogle, signInWithFacebook } =
@@ -23,6 +29,7 @@ export function SignUpPage() {
   const [password, setPassword] = useState('')
   const [sex, setSex] = useState('')
   const [dateOfBirth, setDateOfBirth] = useState('')
+  const [proposedRating, setProposedRating] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -31,7 +38,12 @@ export function SignUpPage() {
   // tournament-category eligibility — so they ride along from the form.
   async function provisionAndContinue(displayName: string | null) {
     await provision.mutateAsync({
-      data: { displayName, sex: sex as CreateUserRequestSex, dateOfBirth },
+      data: {
+        displayName,
+        sex: sex as CreateUserRequestSex,
+        dateOfBirth,
+        proposedRating: proposedRating || null,
+      },
     })
     navigate('/dashboard', { replace: true })
   }
@@ -139,6 +151,22 @@ export function SignUpPage() {
             {SEXES.map((s) => (
               <option key={s} value={s}>
                 {s}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="proposedRating">NTRP self-rating (optional)</Label>
+          <select
+            id="proposedRating"
+            value={proposedRating}
+            onChange={(e) => setProposedRating(e.target.value)}
+            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+          >
+            <option value="">Not sure — an admin will set it</option>
+            {NTRP_LEVELS.map((level) => (
+              <option key={level} value={level}>
+                {level}
               </option>
             ))}
           </select>

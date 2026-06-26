@@ -3,6 +3,7 @@
 
 package org.skopeo.model
 
+import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.Period
@@ -113,6 +114,9 @@ data class User(
     val country: String,
     val kycVerified: Boolean,
     val isActive: Boolean,
+    // Optional self-reported NTRP rating from sign-up (issue #75) — a proposal for an admin to
+    // approve/override, not an authoritative rating; the user stays pending until one is set.
+    val proposedRating: BigDecimal? = null,
     val names: List<Name>,
     val contacts: List<Contact>,
     val identities: List<UserIdentity>,
@@ -140,6 +144,7 @@ data class ProvisionUserCommand(
     val sex: String? = null,
     val city: String? = null,
     val country: String? = null,
+    val proposedRating: BigDecimal? = null,
     val capabilities: Set<Capability> = setOf(Capability.PLAYER),
 )
 

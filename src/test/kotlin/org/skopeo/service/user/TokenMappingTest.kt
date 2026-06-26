@@ -15,6 +15,7 @@ import org.skopeo.model.ContactType
 import org.skopeo.model.NameType
 import org.skopeo.model.VerificationMethod
 import org.skopeo.model.VerificationStatus
+import java.math.BigDecimal
 import java.time.LocalDate
 import kotlin.test.Test
 
@@ -62,6 +63,25 @@ class TokenMappingTest {
         parseDateOfBirth(value = "1990-05-01") shouldBe LocalDate.of(1990, 5, 1)
         parseDateOfBirth(value = null).shouldBeNull()
         shouldThrow<IllegalArgumentException> { parseDateOfBirth(value = "not-a-date") }
+    }
+
+    @Test
+    fun `parses an optional proposed rating, validating the NTRP range`() {
+        parseProposedRating(value = "4.0") shouldBe BigDecimal("4.0")
+        parseProposedRating(value = null).shouldBeNull()
+        parseProposedRating(value = "  ").shouldBeNull() // blank is treated as absent
+        shouldThrow<IllegalArgumentException> { parseProposedRating(value = "9.0") } // out of 1.0..7.0
+        shouldThrow<IllegalArgumentException> { parseProposedRating(value = "abc") } // non-numeric
+    }
+
+    @Test
+    fun `carries a self-reported proposed rating into the command`() {
+        val command =
+            buildProvisionCommand(
+                token = token(name = "Ana"),
+                request = CreateUserRequest(dateOfBirth = "2000-01-01", sex = "Female", proposedRating = "3.5"),
+            )
+        command.proposedRating shouldBe BigDecimal("3.5")
     }
 
     @Test

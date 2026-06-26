@@ -73,9 +73,37 @@ describe('SignUpPage', () => {
       expect(signUpWithEmail).toHaveBeenCalledWith('roger@example.com', 'secret123'),
     )
     expect(mutateAsync).toHaveBeenCalledWith({
-      data: { displayName: 'Roger F.', sex: 'Male', dateOfBirth: '2000-01-01' },
+      data: { displayName: 'Roger F.', sex: 'Male', dateOfBirth: '2000-01-01', proposedRating: null },
     })
     expect(navigateMock).toHaveBeenCalledWith('/dashboard', { replace: true })
+  })
+
+  it('includes an optional NTRP self-rating when one is chosen', async () => {
+    signUpWithEmail.mockResolvedValue({})
+    mutateAsync.mockResolvedValue({})
+    const user = userEvent.setup()
+    renderSignUp()
+
+    await user.type(screen.getByLabelText('Display name'), 'Roger F.')
+    await fillProfile(user)
+    await user.selectOptions(
+      screen.getByLabelText('NTRP self-rating (optional)'),
+      '4.0',
+    )
+    await user.type(screen.getByLabelText('Email'), 'roger@example.com')
+    await user.type(screen.getByLabelText('Password'), 'secret123')
+    await user.click(screen.getByRole('button', { name: /create account/i }))
+
+    await waitFor(() =>
+      expect(mutateAsync).toHaveBeenCalledWith({
+        data: {
+          displayName: 'Roger F.',
+          sex: 'Male',
+          dateOfBirth: '2000-01-01',
+          proposedRating: '4.0',
+        },
+      }),
+    )
   })
 
   it('requires a display name on the manual form', () => {
@@ -124,7 +152,7 @@ describe('SignUpPage', () => {
       expect(signInWithEmail).toHaveBeenCalledWith('orphan@example.com', 'secret123'),
     )
     expect(mutateAsync).toHaveBeenCalledWith({
-      data: { displayName: 'Roger F.', sex: 'Male', dateOfBirth: '2000-01-01' },
+      data: { displayName: 'Roger F.', sex: 'Male', dateOfBirth: '2000-01-01', proposedRating: null },
     })
     expect(navigateMock).toHaveBeenCalledWith('/dashboard', { replace: true })
   })
@@ -182,7 +210,7 @@ describe('SignUpPage', () => {
 
     await waitFor(() => expect(signInWithGoogle).toHaveBeenCalled())
     expect(mutateAsync).toHaveBeenCalledWith({
-      data: { displayName: null, sex: 'Male', dateOfBirth: '2000-01-01' },
+      data: { displayName: null, sex: 'Male', dateOfBirth: '2000-01-01', proposedRating: null },
     })
     expect(navigateMock).toHaveBeenCalledWith('/dashboard', { replace: true })
   })
@@ -200,7 +228,7 @@ describe('SignUpPage', () => {
 
     await waitFor(() => expect(signInWithFacebook).toHaveBeenCalled())
     expect(mutateAsync).toHaveBeenCalledWith({
-      data: { displayName: null, sex: 'Male', dateOfBirth: '2000-01-01' },
+      data: { displayName: null, sex: 'Male', dateOfBirth: '2000-01-01', proposedRating: null },
     })
     expect(navigateMock).toHaveBeenCalledWith('/dashboard', { replace: true })
   })
