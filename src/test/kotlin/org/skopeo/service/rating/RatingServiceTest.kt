@@ -100,6 +100,21 @@ class RatingServiceTest {
     }
 
     @Test
+    fun `an override within the same NTRP band records levelChanged false`() {
+        admin(uid = "root")
+        val player = provisionUser(uid = "player")
+        service.setRating(token = token(uid = "root"), userId = player.id, value = "4.0", confidence = null) // initial
+        // 4.0 and 4.2 both publish as the "4.0" band, so the override doesn't cross a level.
+        service.setRating(token = token(uid = "root"), userId = player.id, value = "4.2", confidence = null)
+
+        service.getHistory(token = token(uid = "root"), userId = player.id).single().let {
+            it.previousLevel shouldBe "4.0"
+            it.newLevel shouldBe "4.0"
+            it.levelChanged shouldBe false
+        }
+    }
+
+    @Test
     fun `only an admin may set a rating`() {
         admin(uid = "root")
         val player = provisionUser(uid = "player")
