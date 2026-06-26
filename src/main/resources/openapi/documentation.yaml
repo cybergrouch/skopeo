@@ -253,6 +253,38 @@ paths:
         '404':
           description: No active player with that code
 
+  /api/v1/players/{code}/match-history:
+    get:
+      summary: A player's match history by code (auth-gated, privacy-conscious)
+      description: >-
+        Every active match the player took part in (scheduled, completed, and rated), newest first.
+        Ratings appear only as the published NTRP band at the time of the match, and only for rated
+        matches; `rated` indicates the match has contributed to the current rating.
+      tags:
+        - Users
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The player's shareable public code (case-insensitive).
+      responses:
+        '200':
+          description: The player's match history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PlayerMatchHistoryEntry'
+        '401':
+          description: Missing or invalid Firebase token
+        '404':
+          description: No active player with that code
+
   /api/v1/users/{id}:
     parameters:
       - name: id
@@ -1433,6 +1465,60 @@ components:
             level:
               type: string
               nullable: true
+
+    PlayerMatchHistoryEntry:
+      type: object
+      description: One row of a player's match history. Ratings shown only as the published NTRP band, and only when rated.
+      required:
+        - matchId
+        - matchDate
+        - status
+        - rated
+        - setScores
+      properties:
+        matchId:
+          type: string
+          format: uuid
+        matchDate:
+          type: string
+          format: date
+        status:
+          type: string
+          description: Match lifecycle status (SCHEDULED, IN_PROGRESS, COMPLETED, CANCELLED).
+        rated:
+          type: boolean
+          description: True once the match has been calculated and contributes to the current rating.
+        result:
+          type: string
+          nullable: true
+          description: WIN or LOSS from this player's perspective; null when there is no recorded winner yet.
+        setScores:
+          type: array
+          description: Set scores oriented as "playerGames-opponentGames"; empty until a result is recorded.
+          items:
+            type: string
+        opponent:
+          nullable: true
+          type: object
+          required:
+            - publicCode
+          properties:
+            publicCode:
+              type: string
+            displayName:
+              type: string
+              nullable: true
+            photoUrl:
+              type: string
+              nullable: true
+        playerLevelAtMatch:
+          type: string
+          nullable: true
+          description: This player's published NTRP band at the time of the match (rated matches only).
+        opponentLevelAtMatch:
+          type: string
+          nullable: true
+          description: The opponent's published NTRP band at the time of the match (rated matches only).
 
     UserSummaryResponse:
       type: object

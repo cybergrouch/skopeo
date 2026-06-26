@@ -7,6 +7,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { useGetApiV1PlayersCode } from '@/api/generated/users/users'
+import { MatchHistoryCard } from '@/components/MatchHistoryCard'
 
 /**
  * Auth-gated player profile reached via the shareable deep link `/players/:code` (issue #61).
@@ -69,8 +70,8 @@ export function PlayerProfilePage() {
             <CardContent>
               {player.rating ? (
                 <p className="text-sm">
-                  <span className="font-medium">NTRP</span> {player.rating.value}
-                  {player.rating.level ? ` · ${player.rating.level}` : ''}
+                  <span className="font-medium">NTRP</span>{' '}
+                  {player.rating.level ?? player.rating.value}
                 </p>
               ) : (
                 <p className="text-sm text-muted-foreground">No rating yet.</p>
@@ -78,6 +79,8 @@ export function PlayerProfilePage() {
             </CardContent>
           </Card>
         ) : null}
+
+        {player ? <MatchHistoryCard code={player.publicCode} /> : null}
       </div>
     </div>
   )

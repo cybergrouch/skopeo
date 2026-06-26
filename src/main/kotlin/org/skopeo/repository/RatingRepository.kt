@@ -68,6 +68,22 @@ class RatingRepository {
                 .map { it.toRatingHistory() }
         }
 
+    /**
+     * Every rating-history row tied to any of [matchIds] (across all users). Used to reconstruct
+     * each side's at-the-time band for match history. Returns empty when [matchIds] is empty.
+     */
+    fun historyForMatches(matchIds: List<UUID>): List<RatingHistoryEntry> =
+        transaction {
+            if (matchIds.isEmpty()) {
+                emptyList()
+            } else {
+                UserRatingHistoryTable
+                    .selectAll()
+                    .where { UserRatingHistoryTable.matchId inList matchIds }
+                    .map { it.toRatingHistory() }
+            }
+        }
+
     /** Active users with no rating on record yet — pending an administrator's initial assessment. */
     fun userIdsPendingAssessment(): List<UUID> =
         transaction {

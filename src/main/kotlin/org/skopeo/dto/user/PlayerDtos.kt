@@ -22,3 +22,31 @@ data class PublicRatingDto(
     val value: String,
     val level: String?,
 )
+
+/**
+ * One row of a player's match history (issue #65), shown on their own Profile tab and on the
+ * shareable public profile alike. Ratings are surfaced only as the published NTRP band
+ * ([playerLevelAtMatch]/[opponentLevelAtMatch] — the level at the time the match was rated), never
+ * the precise value. [rated] indicates the match has been calculated and contributes to the
+ * current rating; scheduled and unrated-completed matches carry null levels.
+ */
+@Serializable
+data class PlayerMatchHistoryEntry(
+    val matchId: String,
+    val matchDate: String,
+    val status: String,
+    val rated: Boolean,
+    val result: String?,
+    val setScores: List<String>,
+    val opponent: OpponentSummary?,
+    val playerLevelAtMatch: String?,
+    val opponentLevelAtMatch: String?,
+)
+
+/** The opposing player on a match-history row — identified the same privacy-conscious way as a public profile. */
+@Serializable
+data class OpponentSummary(
+    val publicCode: String,
+    val displayName: String?,
+    val photoUrl: String?,
+)

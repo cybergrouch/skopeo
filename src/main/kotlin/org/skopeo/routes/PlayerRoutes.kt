@@ -29,6 +29,12 @@ fun Application.configurePlayerRoutes(service: PlayerService = PlayerService()) 
                         call.respond(status = HttpStatusCode.OK, message = service.publicProfile(code = code))
                     }
                 }
+                get(path = "/{code}/match-history") {
+                    respondMappingErrors {
+                        val code = call.parameters["code"].orEmpty()
+                        call.respond(status = HttpStatusCode.OK, message = service.matchHistory(code = code))
+                    }
+                }
             }
         }
     }

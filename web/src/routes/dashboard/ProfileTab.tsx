@@ -10,6 +10,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/auth/useAuth'
+import { MatchHistoryCard } from '@/components/MatchHistoryCard'
 import type { Capability } from '@/auth/capabilities'
 import {
   useGetApiV1UsersUserIdRatingHistory,
@@ -130,10 +131,7 @@ export function ProfileTab({ userId, capabilities, publicCode }: ProfileTabProps
                   className="flex items-center justify-between rounded-lg border p-3 text-sm"
                 >
                   <span className="font-medium">NTRP</span>
-                  <span>
-                    {rating.value}
-                    {rating.level ? ` · ${rating.level}` : ''}
-                  </span>
+                  <span>{rating.level ?? rating.value}</span>
                 </li>
               ))}
             </ul>
@@ -183,6 +181,8 @@ export function ProfileTab({ userId, capabilities, publicCode }: ProfileTabProps
           )}
         </CardContent>
       </Card>
+
+      {publicCode ? <MatchHistoryCard code={publicCode} /> : null}
     </div>
   )
 }
