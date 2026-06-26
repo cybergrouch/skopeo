@@ -5,7 +5,7 @@ import { AuthProvider } from './AuthProvider'
 import { useAuth } from './useAuth'
 
 const fb = vi.hoisted(() => ({
-  authObj: { name: 'auth' },
+  authObj: { name: 'auth', currentUser: null as unknown },
   googleObj: { name: 'google' },
   facebookObj: { name: 'facebook' },
   createUserWithEmailAndPassword: vi.fn(),
@@ -13,6 +13,10 @@ const fb = vi.hoisted(() => ({
   signInWithPopup: vi.fn(),
   signOut: vi.fn(),
   onAuthStateChanged: vi.fn(),
+  sendSignInLinkToEmail: vi.fn(),
+  isSignInWithEmailLink: vi.fn(),
+  signInWithEmailLink: vi.fn(),
+  updatePassword: vi.fn(),
 }))
 
 vi.mock('@/lib/firebase', () => ({
@@ -26,6 +30,10 @@ vi.mock('firebase/auth', () => ({
   signInWithPopup: fb.signInWithPopup,
   signOut: fb.signOut,
   onAuthStateChanged: fb.onAuthStateChanged,
+  sendSignInLinkToEmail: fb.sendSignInLinkToEmail,
+  isSignInWithEmailLink: fb.isSignInWithEmailLink,
+  signInWithEmailLink: fb.signInWithEmailLink,
+  updatePassword: fb.updatePassword,
 }))
 
 function Consumer() {
@@ -44,6 +52,12 @@ function Consumer() {
       <button onClick={() => void actions.signInWithGoogle()}>google</button>
       <button onClick={() => void actions.signInWithFacebook()}>facebook</button>
       <button onClick={() => void actions.signOut()}>signout</button>
+      <button onClick={() => void actions.sendSignInLink('inv@b.co')}>sendlink</button>
+      <button onClick={() => void actions.isSignInLink('http://x/link')}>islink</button>
+      <button onClick={() => void actions.completeSignInLink('inv@b.co', 'http://x/link')}>
+        complete
+      </button>
+      <button onClick={() => void actions.setPassword('newpass')}>setpw</button>
     </div>
   )
 }
@@ -110,6 +124,35 @@ describe('AuthProvider', () => {
 
     await user.click(screen.getByText('signout'))
     expect(fb.signOut).toHaveBeenCalledWith(fb.authObj)
+  })
+
+  it('wires the email-link and set-password actions', async () => {
+    const user = userEvent.setup()
+    fb.sendSignInLinkToEmail.mockResolvedValue(undefined)
+    fb.signInWithEmailLink.mockResolvedValue({})
+    fb.isSignInWithEmailLink.mockReturnValue(true)
+    fb.updatePassword.mockResolvedValue(undefined)
+    fb.authObj.currentUser = { uid: 'u1' }
+    renderProvider()
+
+    await user.click(screen.getByText('sendlink'))
+    expect(fb.sendSignInLinkToEmail).toHaveBeenCalledWith(
+      fb.authObj,
+      'inv@b.co',
+      expect.objectContaining({
+        handleCodeInApp: true,
+        url: expect.stringContaining('inv%40b.co'),
+      }),
+    )
+
+    await user.click(screen.getByText('islink'))
+    expect(fb.isSignInWithEmailLink).toHaveBeenCalledWith(fb.authObj, 'http://x/link')
+
+    await user.click(screen.getByText('complete'))
+    expect(fb.signInWithEmailLink).toHaveBeenCalledWith(fb.authObj, 'inv@b.co', 'http://x/link')
+
+    await user.click(screen.getByText('setpw'))
+    expect(fb.updatePassword).toHaveBeenCalledWith(fb.authObj.currentUser, 'newpass')
   })
 
   it('unsubscribes on unmount', () => {

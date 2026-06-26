@@ -10,6 +10,7 @@ import { RequireAuth } from '@/auth/RequireAuth'
 import { RequireProfile } from '@/auth/RequireProfile'
 import { SignUpPage } from '@/routes/SignUpPage'
 import { LoginPage } from '@/routes/LoginPage'
+import { InviteAcceptPage } from '@/routes/InviteAcceptPage'
 import { CompleteProfilePage } from '@/routes/CompleteProfilePage'
 import { DashboardPage } from '@/routes/DashboardPage'
 import { PlayerProfilePage } from '@/routes/PlayerProfilePage'
@@ -28,6 +29,7 @@ function App() {
           <Routes>
             <Route path="/signup" element={<SignUpPage />} />
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/invite" element={<InviteAcceptPage />} />
             <Route
               path="/complete-profile"
               element={
