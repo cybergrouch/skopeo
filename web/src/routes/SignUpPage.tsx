@@ -1,6 +1,5 @@
-import { useState, type FormEvent } from 'react'
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { FirebaseError } from 'firebase/app'
 import { AuthLayout } from '@/components/AuthLayout'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,73 +17,25 @@ const NTRP_LEVELS = [
   '4.5', '5.0', '5.5', '6.0', '6.5', '7.0',
 ] as const
 
+/**
+ * Self-serve sign-up is OAuth-only (Google/Facebook), which arrives email-verified. Manual
+ * (email/password) sign-up was retired in favour of admin invites (issue #74): invited members
+ * onboard via the email-link on the /invite page, then sign in with email+password thereafter.
+ */
 export function SignUpPage() {
   const navigate = useNavigate()
-  const { signUpWithEmail, signInWithEmail, signInWithGoogle, signInWithFacebook } =
-    useAuth()
+  const { signInWithGoogle, signInWithFacebook } = useAuth()
   const provision = usePostApiV1Users()
 
   const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
   const [sex, setSex] = useState('')
   const [dateOfBirth, setDateOfBirth] = useState('')
   const [proposedRating, setProposedRating] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  // Provisioning the Skopeo profile is the final, idempotent step of sign-up
-  // (POST /api/v1/users). Sex and date of birth are required — they drive
-  // tournament-category eligibility — so they ride along from the form.
-  async function provisionAndContinue(displayName: string | null) {
-    await provision.mutateAsync({
-      data: {
-        displayName,
-        sex: sex as CreateUserRequestSex,
-        dateOfBirth,
-        proposedRating: proposedRating || null,
-      },
-    })
-    navigate('/dashboard', { replace: true })
-  }
-
-  async function onEmailSubmit(event: FormEvent) {
-    event.preventDefault()
-    setError(null)
-    setBusy(true)
-    try {
-      await signUpWithEmail(email, password)
-      // Manual sign-up requires a display name (the field is `required`), so no null fallback.
-      await provisionAndContinue(name.trim())
-    } catch (err) {
-      // A Firebase user already exists for this email. If the password is correct,
-      // this is either a returning user or an orphaned auth user whose profile never
-      // provisioned (e.g. provisioning failed after the Firebase account was created).
-      // Sign in and re-run the idempotent provision to recover instead of dead-ending.
-      if (err instanceof FirebaseError && err.code === 'auth/email-already-in-use') {
-        try {
-          await signInWithEmail(email, password)
-        } catch {
-          // Wrong password (or another account) — point them at sign-in.
-          setError(authErrorMessage(err))
-          setBusy(false)
-          return
-        }
-        try {
-          await provisionAndContinue(name.trim())
-        } catch (provisionErr) {
-          setError(authErrorMessage(provisionErr))
-          setBusy(false)
-        }
-        return
-      }
-      setError(authErrorMessage(err))
-      setBusy(false)
-    }
-  }
-
-  // Google and Facebook share the flow: sex + date of birth are required up front
-  // (the popup yields no such fields), then provision the profile from the token.
+  // Sex + date of birth are required up front (the OAuth popup yields neither), then the profile
+  // is provisioned from the verified token.
   async function onOAuth(signIn: () => Promise<unknown>, provider: string) {
     if (!sex || !dateOfBirth) {
       setError(`Please enter your date of birth and sex before continuing with ${provider}.`)
@@ -94,7 +45,15 @@ export function SignUpPage() {
     setBusy(true)
     try {
       await signIn()
-      await provisionAndContinue(name.trim() || null)
+      await provision.mutateAsync({
+        data: {
+          displayName: name.trim() || null,
+          sex: sex as CreateUserRequestSex,
+          dateOfBirth,
+          proposedRating: proposedRating || null,
+        },
+      })
+      navigate('/dashboard', { replace: true })
     } catch (err) {
       setError(authErrorMessage(err))
       setBusy(false)
@@ -104,7 +63,7 @@ export function SignUpPage() {
   return (
     <AuthLayout
       title="Create your account"
-      description="Join Skopeo to track your tennis rating"
+      description="Sign up with Google or Facebook to track your tennis rating."
       footer={
         <>
           Already have an account?{' '}
@@ -114,12 +73,11 @@ export function SignUpPage() {
         </>
       }
     >
-      <form onSubmit={onEmailSubmit} className="space-y-4">
+      <div className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="name">Display name</Label>
+          <Label htmlFor="name">Display name (optional)</Label>
           <Input
             id="name"
-            required
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Roger F."
@@ -171,68 +129,35 @@ export function SignUpPage() {
             ))}
           </select>
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
-          <Input
-            id="email"
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            autoComplete="email"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="password">Password</Label>
-          <Input
-            id="password"
-            type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="At least 6 characters"
-            autoComplete="new-password"
-          />
-        </div>
         {error ? (
           <p className="text-sm text-destructive" role="alert">
             {error}
           </p>
         ) : null}
-        <Button type="submit" className="w-full" disabled={busy}>
-          {busy ? 'Creating account…' : 'Create account'}
+
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          onClick={() => void onOAuth(signInWithGoogle, 'Google')}
+          disabled={busy}
+        >
+          Continue with Google
         </Button>
-      </form>
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          onClick={() => void onOAuth(signInWithFacebook, 'Facebook')}
+          disabled={busy}
+        >
+          Continue with Facebook
+        </Button>
 
-      <div className="relative">
-        <div className="absolute inset-0 flex items-center">
-          <span className="w-full border-t" />
-        </div>
-        <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-card px-2 text-muted-foreground">or</span>
-        </div>
+        <p className="text-center text-xs text-muted-foreground">
+          Invited by an administrator? Use the sign-in link in your email.
+        </p>
       </div>
-
-      <Button
-        type="button"
-        variant="outline"
-        className="w-full"
-        onClick={() => void onOAuth(signInWithGoogle, 'Google')}
-        disabled={busy}
-      >
-        Continue with Google
-      </Button>
-
-      <Button
-        type="button"
-        variant="outline"
-        className="w-full"
-        onClick={() => void onOAuth(signInWithFacebook, 'Facebook')}
-        disabled={busy}
-      >
-        Continue with Facebook
-      </Button>
     </AuthLayout>
   )
 }

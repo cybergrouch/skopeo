@@ -2,6 +2,9 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { AdminTab } from './AdminTab'
 
+vi.mock('./admin/InvitesSection', () => ({
+  InvitesSection: () => <div>invites section</div>,
+}))
 vi.mock('./admin/PendingAssessmentSection', () => ({
   PendingAssessmentSection: () => <div>pending assessment section</div>,
 }))
@@ -15,6 +18,7 @@ vi.mock('./admin/RoleGrantsSection', () => ({
 describe('AdminTab', () => {
   it('renders the admin sections', () => {
     render(<AdminTab />)
+    expect(screen.getByText('invites section')).toBeInTheDocument()
     expect(screen.getByText('pending assessment section')).toBeInTheDocument()
     expect(screen.getByText('role grants section')).toBeInTheDocument()
     expect(screen.getByText('pending calculation section')).toBeInTheDocument()
