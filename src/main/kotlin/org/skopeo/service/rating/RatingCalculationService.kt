@@ -18,6 +18,7 @@ import org.skopeo.model.TiebreakScore
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
+import org.skopeo.service.calculator.AuditEntry
 import org.skopeo.service.calculator.RankingCalculator
 import org.skopeo.service.calculator.impl.v1.PerformanceBasedRankingCalculatorImpl
 import org.skopeo.service.user.ForbiddenException
@@ -40,6 +41,18 @@ class RatingCalculationService(
     private val users: UserRepository = UserRepository(),
     private val calculator: RankingCalculator = PerformanceBasedRankingCalculatorImpl(),
 ) {
+    /** The internal calculator derivatives behind one player's change (issue #89), as precise strings. */
+    data class CalculationBreakdown(
+        val dominance: String,
+        val scale: String,
+        val ratingGap: String,
+        val normalizedGap: String,
+        val competitiveThresholdPct: String,
+        val isUpset: Boolean,
+        val upsetMultiplier: String,
+        val kFactor: String,
+    )
+
     /** One player's computed change within a processed match. */
     data class PlayerChange(
         val userId: UUID,
@@ -50,6 +63,7 @@ class RatingCalculationService(
         val previousLevel: String?,
         val newLevel: String?,
         val levelChanged: Boolean,
+        val breakdown: CalculationBreakdown,
     )
 
     data class MatchCalculation(
@@ -123,12 +137,36 @@ class RatingCalculationService(
         val r2 = currentRating(userId = u2, snapshot = snapshot)
 
         val request = buildRequest(match = match, r1 = r1, r2 = r2)
-        val response = calculator.calculate(request = request).response
+        val result = calculator.calculate(request = request)
+        val breakdowns = breakdownsByPlayer(audit = result.audit)
 
-        val changes = listOf(playerChange(userId = u1, response = response), playerChange(userId = u2, response = response))
+        val changes =
+            listOf(
+                playerChange(userId = u1, response = result.response, breakdowns = breakdowns),
+                playerChange(userId = u2, response = result.response, breakdowns = breakdowns),
+            )
         changes.forEach { snapshot[it.userId] = it.newRating }
         return MatchCalculation(matchId = match.id, matchDate = match.matchDate, changes = changes)
     }
+
+    /** Pull the per-player calculator derivatives out of the audit trail, keyed by player id. */
+    private fun breakdownsByPlayer(audit: List<AuditEntry>): Map<String, CalculationBreakdown> =
+        audit
+            .filter { it.context.containsKey(key = "playerId") && it.context.containsKey(key = "dominance") }
+            .associate { entry ->
+                val ctx = entry.context
+                (ctx.getValue(key = "playerId") as String) to
+                    CalculationBreakdown(
+                        dominance = ctx.factor(key = "dominance"),
+                        scale = ctx.factor(key = "scale"),
+                        ratingGap = ctx.factor(key = "ratingGap"),
+                        normalizedGap = ctx.factor(key = "normalizedGap"),
+                        competitiveThresholdPct = ctx.factor(key = "competitiveThresholdPct"),
+                        isUpset = ctx.factor(key = "isUpset").toBoolean(),
+                        upsetMultiplier = ctx.factor(key = "upsetMultiplier"),
+                        kFactor = ctx.factor(key = "kFactor"),
+                    )
+            }
 
     private fun currentRating(
         userId: UUID,
@@ -143,6 +181,7 @@ class RatingCalculationService(
     private fun playerChange(
         userId: UUID,
         response: org.skopeo.dto.RankingCalculationResponse,
+        breakdowns: Map<String, CalculationBreakdown>,
     ): PlayerChange {
         val rc =
             requireNotNull(value = response.ratingChanges[userId.toString()]) {
@@ -157,6 +196,10 @@ class RatingCalculationService(
             previousLevel = rc.previousRating.publishedLevel.value,
             newLevel = rc.newRating.publishedLevel.value,
             levelChanged = rc.levelChanged,
+            breakdown =
+                requireNotNull(value = breakdowns[userId.toString()]) {
+                    "calculator returned no breakdown for player $userId"
+                },
         )
     }
 
@@ -166,6 +209,9 @@ class RatingCalculationService(
         return caller.id
     }
 }
+
+/** Read an audit-context value (always a precise string for the adjustment-factor entries). */
+private fun Map<String, Any>.factor(key: String): String = this.getValue(key = key) as String
 
 private fun buildRequest(
     match: Match,

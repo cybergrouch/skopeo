@@ -133,6 +133,12 @@ class RatingCalculationServiceTest {
         dry.matches.single().changes.first { it.userId == p1.id }.let {
             it.previousRating shouldBe BigDecimal("4.000000")
             (it.newRating > BigDecimal("4.000000")).shouldBeTrue() // winner gains
+            // The calculator derivatives are surfaced for the detail view (#89).
+            it.breakdown.kFactor shouldBe "0.160000"
+            it.breakdown.competitiveThresholdPct shouldBe "0.083000"
+            it.breakdown.isUpset.shouldBeFalse() // equal ratings, favourite-ish win is not an upset
+            it.breakdown.dominance.isNotBlank().shouldBeTrue()
+            it.breakdown.scale.isNotBlank().shouldBeTrue()
         }
         // nothing persisted
         ratings.findCurrentRating(userId = p1.id)!!.currentRating shouldBe BigDecimal("4.000000")

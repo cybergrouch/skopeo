@@ -34,6 +34,7 @@ export function PendingCalculationSection() {
   const queryClient = useQueryClient()
   const [preview, setPreview] = useState<CalculationResponse | null>(null)
   const [committed, setCommitted] = useState<number | null>(null)
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
   const matchesQuery = useGetApiV1Matches(PENDING_FILTER)
   const pending = matchesQuery.data ?? []
@@ -45,6 +46,21 @@ export function PendingCalculationSection() {
   )
   const nameById = new Map((usersQuery.data ?? []).map((u) => [u.id, u.displayName ?? u.id]))
   const nameOf = (userId: string) => nameById.get(userId) ?? userId.slice(0, 8)
+
+  // The dry-run preview, keyed by match id, so each card can show its own projection + breakdown.
+  const previewByMatch = new Map((preview?.matches ?? []).map((m) => [m.matchId, m]))
+
+  function toggle(id: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }
 
   const calculate = usePostApiV1RatingsCalculations({
     mutation: {
@@ -89,16 +105,57 @@ export function PendingCalculationSection() {
               const player2 = match.team2.userIds.map(nameOf).join(', ')
               const scores = match.sets.map((s) => `${s.team1Games}-${s.team2Games}`).join(' ')
               const winner = winnerName(match, nameOf)
+              const isOpen = expanded.has(match.id)
+              const matchPreview = previewByMatch.get(match.id)
               return (
-                <li key={match.id} className="rounded-lg border p-3 text-sm">
-                  <div className="font-medium">
-                    {player1} vs {player2}
-                  </div>
-                  <div className="text-muted-foreground">
-                    {match.matchDate}
-                    {scores ? ` · ${scores}` : ''}
-                    {winner ? ` · Winner: ${winner}` : ''}
-                  </div>
+                <li key={match.id} className="rounded-lg border text-sm">
+                  <button
+                    type="button"
+                    className="flex w-full items-start justify-between gap-2 p-3 text-left hover:bg-muted/50"
+                    aria-expanded={isOpen}
+                    onClick={() => toggle(match.id)}
+                  >
+                    <span className="min-w-0">
+                      <span className="block font-medium">
+                        {player1} vs {player2}
+                      </span>
+                      <span className="block text-muted-foreground">
+                        {match.matchDate}
+                        {scores ? ` · ${scores}` : ''}
+                        {winner ? ` · Winner: ${winner}` : ''}
+                      </span>
+                    </span>
+                    <span aria-hidden="true" className="shrink-0 text-muted-foreground">
+                      {isOpen ? '▾' : '▸'}
+                    </span>
+                  </button>
+                  {isOpen ? (
+                    <div className="border-t px-3 py-2">
+                      {matchPreview ? (
+                        <ul className="space-y-2">
+                          {matchPreview.changes.map((change) => (
+                            <li key={change.userId}>
+                              <div>
+                                {nameOf(change.userId)}: {change.previousRating} →{' '}
+                                {change.newRating} ({change.change})
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                dominance {change.breakdown.dominance} · scale{' '}
+                                {change.breakdown.scale} · gap {change.breakdown.ratingGap}/
+                                {change.breakdown.competitiveThresholdPct} ·{' '}
+                                {change.breakdown.isUpset ? 'upset' : 'expected'} · K{' '}
+                                {change.breakdown.kFactor}
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          Run Preview to see the projected ratings and how they're calculated.
+                        </p>
+                      )}
+                    </div>
+                  ) : null}
                 </li>
               )
             })}
@@ -142,35 +199,15 @@ export function PendingCalculationSection() {
         ) : null}
 
         {preview ? (
-          <div className="space-y-3" data-testid="calculation-preview">
-            <p className="text-sm text-muted-foreground">
-              Preview — {preview.matchesProcessed} match
-              {plural(preview.matchesProcessed)}, no changes saved yet.
-            </p>
-            {preview.matches.map((match) => (
-              <div key={match.matchId} className="rounded-lg border p-3">
-                <p className="mb-2 text-xs text-muted-foreground">
-                  {match.matchDate}
-                </p>
-                <ul className="space-y-1 text-sm">
-                  {match.changes.map((change) => (
-                    <li
-                      key={change.userId}
-                      className="flex items-center justify-between"
-                    >
-                      <span className="text-muted-foreground">
-                        {change.userId.slice(0, 8)}
-                      </span>
-                      <span>
-                        {change.previousRating} → {change.newRating} (
-                        {change.change})
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
+          <p
+            className="text-sm text-muted-foreground"
+            data-testid="calculation-preview"
+            role="status"
+          >
+            Preview ready — {preview.matchesProcessed} match
+            {plural(preview.matchesProcessed)}, no changes saved yet. Expand a match
+            to see its projection and how it's calculated.
+          </p>
         ) : null}
       </CardContent>
     </Card>
