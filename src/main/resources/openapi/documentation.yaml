@@ -2256,6 +2256,7 @@ components:
         - change
         - percentChange
         - levelChanged
+        - breakdown
       properties:
         userId:
           type: string
@@ -2276,6 +2277,42 @@ components:
           nullable: true
         levelChanged:
           type: boolean
+        breakdown:
+          $ref: '#/components/schemas/CalculationBreakdownResponse'
+
+    CalculationBreakdownResponse:
+      type: object
+      description: Internal calculator derivatives behind a player's change (issue #89); all values are precise decimal strings.
+      required:
+        - dominance
+        - scale
+        - ratingGap
+        - normalizedGap
+        - competitiveThresholdPct
+        - isUpset
+        - upsetMultiplier
+        - kFactor
+      properties:
+        dominance:
+          type: string
+          description: Average per-set game-margin dominance, -1.0..1.0.
+        scale:
+          type: string
+          description: Upset factor (underdog won) or competitive factor (otherwise).
+        ratingGap:
+          type: string
+        normalizedGap:
+          type: string
+          description: ratingGap / NTRP range.
+        competitiveThresholdPct:
+          type: string
+          description: Competitive threshold as a fraction of the NTRP range (0.083 ≈ 0.5 points).
+        isUpset:
+          type: boolean
+        upsetMultiplier:
+          type: string
+        kFactor:
+          type: string
 
     MatchCalculationResponse:
       type: object

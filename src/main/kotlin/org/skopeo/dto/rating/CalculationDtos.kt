@@ -25,6 +25,20 @@ data class PlayerChangeResponse(
     val previousLevel: String? = null,
     val newLevel: String? = null,
     val levelChanged: Boolean,
+    val breakdown: CalculationBreakdownResponse,
+)
+
+/** The internal calculator derivatives behind a player's change (issue #89). */
+@Serializable
+data class CalculationBreakdownResponse(
+    val dominance: String,
+    val scale: String,
+    val ratingGap: String,
+    val normalizedGap: String,
+    val competitiveThresholdPct: String,
+    val isUpset: Boolean,
+    val upsetMultiplier: String,
+    val kFactor: String,
 )
 
 @Serializable
@@ -61,6 +75,17 @@ fun RatingCalculationService.CalculationOutcome.toResponse(): CalculationRespons
                                 previousLevel = it.previousLevel,
                                 newLevel = it.newLevel,
                                 levelChanged = it.levelChanged,
+                                breakdown =
+                                    CalculationBreakdownResponse(
+                                        dominance = it.breakdown.dominance,
+                                        scale = it.breakdown.scale,
+                                        ratingGap = it.breakdown.ratingGap,
+                                        normalizedGap = it.breakdown.normalizedGap,
+                                        competitiveThresholdPct = it.breakdown.competitiveThresholdPct,
+                                        isUpset = it.breakdown.isUpset,
+                                        upsetMultiplier = it.breakdown.upsetMultiplier,
+                                        kFactor = it.breakdown.kFactor,
+                                    ),
                             )
                         },
                 )

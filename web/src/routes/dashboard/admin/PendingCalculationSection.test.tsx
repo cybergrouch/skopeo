@@ -51,6 +51,16 @@ const PREVIEW = {
           change: '0.100000',
           percentChange: '2.5%',
           levelChanged: false,
+          breakdown: {
+            dominance: '0.200000',
+            scale: '1.000000',
+            ratingGap: '0.000000',
+            normalizedGap: '0.000000',
+            competitiveThresholdPct: '0.083000',
+            isUpset: false,
+            upsetMultiplier: '2.000000',
+            kFactor: '0.160000',
+          },
         },
       ],
     },
@@ -146,13 +156,17 @@ describe('PendingCalculationSection', () => {
     expect(screen.getByRole('button', { name: 'Preview' })).toBeDisabled()
   })
 
-  it('previews a dry run, then commits', async () => {
+  it('previews a dry run, shows the per-match projection + breakdown on expand, then commits', async () => {
     const user = userEvent.setup()
     renderSection()
 
     await user.click(screen.getByRole('button', { name: 'Preview' }))
     expect(screen.getByTestId('calculation-preview')).toBeInTheDocument()
-    expect(screen.getByText('4.000000 → 4.100000 (0.100000)')).toBeInTheDocument()
+
+    // Expand the match card to reveal its projection and the calculation breakdown.
+    await user.click(screen.getByRole('button', { name: /Alice vs Bob/ }))
+    expect(screen.getByText(/4\.000000 → 4\.100000 \(0\.100000\)/)).toBeInTheDocument()
+    expect(screen.getByText(/dominance 0\.200000 · scale 1\.000000/)).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Commit' }))
     await waitFor(() =>
@@ -161,6 +175,34 @@ describe('PendingCalculationSection', () => {
       ).toBeInTheDocument(),
     )
     expect(screen.queryByTestId('calculation-preview')).not.toBeInTheDocument()
+  })
+
+  it('labels an upset in the breakdown', async () => {
+    const change = { ...PREVIEW.matches[0].changes[0], breakdown: { ...PREVIEW.matches[0].changes[0].breakdown, isUpset: true } }
+    const upset = { ...PREVIEW, matches: [{ ...PREVIEW.matches[0], changes: [change] }] }
+    usePostApiV1RatingsCalculations.mockImplementation(
+      (options: { mutation: { onSuccess: (data: typeof upset) => void } }) => ({
+        isPending: false,
+        mutate: () => options.mutation.onSuccess(upset),
+      }),
+    )
+    const user = userEvent.setup()
+    renderSection()
+    await user.click(screen.getByRole('button', { name: 'Preview' }))
+    await user.click(screen.getByRole('button', { name: /Alice vs Bob/ }))
+    expect(screen.getByText(/· upset · K/)).toBeInTheDocument()
+  })
+
+  it('expands a card to prompt for a preview, and collapses it again', async () => {
+    const user = userEvent.setup()
+    renderSection()
+    const card = screen.getByRole('button', { name: /Alice vs Bob/ })
+
+    await user.click(card)
+    expect(screen.getByText(/Run Preview to see the projected ratings/i)).toBeInTheDocument()
+
+    await user.click(card) // collapse
+    expect(screen.queryByText(/Run Preview to see the projected ratings/i)).not.toBeInTheDocument()
   })
 
   it('discards a preview without committing', async () => {
