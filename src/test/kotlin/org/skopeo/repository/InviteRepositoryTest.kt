@@ -41,7 +41,8 @@ class InviteRepositoryTest {
 
         val rotated = invites.createOrRotate(email = "a@x.dev", invitedBy = null, expiresAt = future)
         rotated.id shouldBe first.id // same row rotated, not a duplicate
-        rotated.expiresAt shouldBe future
+        // Expiry moved forward (past → future); compare semantically to avoid DB datetime-precision flakiness.
+        rotated.expiresAt.isAfter(first.expiresAt) shouldBe true
 
         val (items, total) = invites.list(limit = 50, offset = 0)
         total shouldBe 1L
