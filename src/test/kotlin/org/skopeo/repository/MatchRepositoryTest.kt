@@ -220,12 +220,14 @@ class MatchRepositoryTest {
     }
 
     @Test
-    fun `awaiting-results lists overdue scheduled fixtures`() {
+    fun `awaiting-results lists scheduled fixtures regardless of match date`() {
         val overdue = fixture(u1 = newUser(uid = "o1"), u2 = newUser(uid = "o2"), date = LocalDate.of(2020, 1, 1))
+        val today = fixture(u1 = newUser(uid = "t1"), u2 = newUser(uid = "t2"), date = LocalDate.now())
         val future = fixture(u1 = newUser(uid = "f1"), u2 = newUser(uid = "f2"), date = LocalDate.of(2999, 1, 1))
 
-        val awaiting = matches.listAwaitingResults(asOf = LocalDate.of(2026, 6, 23)).map { it.id }
+        val awaiting = matches.listAwaitingResults().map { it.id }
         awaiting shouldContain overdue.id
-        awaiting shouldNotContain future.id
+        awaiting shouldContain today.id
+        awaiting shouldContain future.id
     }
 }

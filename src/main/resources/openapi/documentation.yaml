@@ -912,7 +912,7 @@ paths:
           schema:
             type: string
             enum: [pending-calculation, awaiting-results]
-          description: pending-calculation = completed & unrated; awaiting-results = scheduled & overdue.
+          description: pending-calculation = completed & unrated; awaiting-results = scheduled, any match date.
       responses:
         '200':
           description: Matching fixtures

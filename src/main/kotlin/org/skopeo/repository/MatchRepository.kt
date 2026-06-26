@@ -17,7 +17,6 @@ import org.skopeo.model.MatchSetResult
 import org.skopeo.model.MatchSide
 import org.skopeo.model.MatchStatus
 import org.skopeo.model.TeamType
-import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -133,21 +132,19 @@ class MatchRepository {
         }
 
     /**
-     * Active fixtures still scheduled whose match date is before [asOf] — overdue for results.
-     * When [createdBy] is non-null, scoped to fixtures that user created (HOST oversight).
+     * Active fixtures still scheduled and awaiting result entry, regardless of match date.
+     * The schedule is only suggestive — a fixture can be played anytime, so it is eligible for
+     * results as soon as it exists. When [createdBy] is non-null, scoped to fixtures that user
+     * created (HOST oversight). Ordered oldest match date first so overdue fixtures surface on top.
      */
-    fun listAwaitingResults(
-        asOf: LocalDate,
-        createdBy: UUID? = null,
-    ): List<Match> =
+    fun listAwaitingResults(createdBy: UUID? = null): List<Match> =
         transaction {
             MatchesTable
                 .selectAll()
                 .where {
                     val base =
                         MatchesTable.isActive and
-                            (MatchesTable.status eq MatchStatus.SCHEDULED.name) and
-                            (MatchesTable.matchDate less asOf)
+                            (MatchesTable.status eq MatchStatus.SCHEDULED.name)
                     if (createdBy != null) base and (MatchesTable.createdBy eq createdBy) else base
                 }.orderBy(MatchesTable.matchDate to SortOrder.ASC)
                 .map { loadMatch(id = it[MatchesTable.id].value)!! }
