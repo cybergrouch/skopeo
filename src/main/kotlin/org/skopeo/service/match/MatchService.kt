@@ -17,6 +17,7 @@ import org.skopeo.model.MatchStatus
 import org.skopeo.model.NameType
 import org.skopeo.model.TeamType
 import org.skopeo.model.User
+import org.skopeo.model.displayName
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
@@ -145,20 +146,17 @@ class MatchService(
             throw ResourceNotFoundException(message = "No rating calculation has been recorded for match $matchId")
         }
         val names = displayNames(userIds = byUser.keys.toList())
-        // Order players team1-then-team2 for a stable, intuitive presentation.
+        // Present players in team1-then-team2 order for a stable, intuitive layout.
+        val order = match.team1.userIds + match.team2.userIds
         val players =
-            (match.team1.userIds + match.team2.userIds).mapNotNull { userId ->
-                byUser[userId]?.let { entry ->
-                    MatchPlayerCalculation(userId = userId, displayName = names[userId], history = entry)
-                }
-            }
+            byUser.values
+                .sortedBy { order.indexOf(element = it.userId) }
+                .map { entry -> MatchPlayerCalculation(userId = entry.userId, displayName = names[entry.userId], history = entry) }
         return MatchCalculationDetail(match = match, players = players)
     }
 
     private fun displayNames(userIds: List<UUID>): Map<UUID, String?> =
-        users.findAllByIds(ids = userIds).associate { user ->
-            user.id to user.names.firstOrNull { it.type == NameType.DISPLAY && it.isActive }?.value
-        }
+        users.findAllByIds(ids = userIds).associate { it.id to it.displayName() }
 
     /**
      * Oversight lists for staff. An ADMINISTRATOR sees every match in the view; a HOST sees only
