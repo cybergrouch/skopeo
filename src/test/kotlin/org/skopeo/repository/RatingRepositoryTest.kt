@@ -4,6 +4,7 @@
 package org.skopeo.repository
 
 import io.kotest.matchers.collections.shouldContain
+import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
@@ -74,13 +75,30 @@ class RatingRepositoryTest {
     }
 
     @Test
-    fun `pending assessment lists active users without a rating`() {
+    fun `pending assessment lists active users without a rating, with a total`() {
         val unrated = newUser(uid = "unrated")
         val rated = newUser(uid = "rated")
         ratings.setRating(userId = rated, rating = BigDecimal("3.0"), level = "3.0", confidence = BigDecimal("0.50"))
 
-        val pending = ratings.userIdsPendingAssessment()
-        pending shouldContain unrated
-        pending shouldNotContain rated
+        val (ids, total) = ratings.userIdsPendingAssessment(limit = 50, offset = 0)
+        ids shouldContain unrated
+        ids shouldNotContain rated
+        total shouldBe 1L
+    }
+
+    @Test
+    fun `pending assessment paginates by limit and offset into disjoint, complete pages`() {
+        val all = (1..5).map { newUser(uid = "p$it") }.toSet()
+
+        val (page1, total) = ratings.userIdsPendingAssessment(limit = 2, offset = 0)
+        val (page2, _) = ratings.userIdsPendingAssessment(limit = 2, offset = 2)
+        val (page3, _) = ratings.userIdsPendingAssessment(limit = 2, offset = 4)
+
+        total shouldBe 5L
+        page1 shouldHaveSize 2
+        page2 shouldHaveSize 2
+        page3 shouldHaveSize 1
+        // Pages are disjoint and together cover every pending user (stable order, no gaps/dupes).
+        (page1 + page2 + page3).toSet() shouldBe all
     }
 }

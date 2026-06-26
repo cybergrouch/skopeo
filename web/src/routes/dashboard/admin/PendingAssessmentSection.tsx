@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   Card,
@@ -17,6 +18,19 @@ import {
 } from '@/api/generated/ratings/ratings'
 import type { PendingAssessmentResponse } from '@/api/generated/model'
 
+const PAGE_SIZE = 20
+
+/** "Female · 34 (1990-03-15)" — sex, then age with the birth date, omitting whatever is missing. */
+function metaLine(user: PendingAssessmentResponse): string {
+  const parts: string[] = []
+  if (user.sex) parts.push(user.sex)
+  if (user.age != null) {
+    parts.push(user.dateOfBirth ? `${user.age} (${user.dateOfBirth})` : String(user.age))
+  } else if (user.dateOfBirth) {
+    parts.push(user.dateOfBirth)
+  }
+  return parts.join(' · ')
+}
 
 function PendingRow({ user }: { user: PendingAssessmentResponse }) {
   const queryClient = useQueryClient()
@@ -42,10 +56,37 @@ function PendingRow({ user }: { user: PendingAssessmentResponse }) {
     }
   }
 
+  const meta = metaLine(user)
+
   return (
     <li className="rounded-lg border p-3">
-      <div className="mb-2 text-sm font-medium">
-        {user.displayName ?? user.userId}
+      <div className="mb-2 flex items-center gap-3">
+        {user.photoUrl ? (
+          <img
+            src={user.photoUrl}
+            alt=""
+            referrerPolicy="no-referrer"
+            className="h-9 w-9 shrink-0 rounded-full object-cover"
+          />
+        ) : (
+          <div
+            aria-hidden="true"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-muted-foreground"
+          >
+            {(user.displayName ?? 'P').charAt(0).toUpperCase()}
+          </div>
+        )}
+        <div className="min-w-0">
+          <Link
+            to={`/players/${user.publicCode}`}
+            className="text-sm font-medium hover:underline"
+          >
+            {user.displayName ?? user.userId}
+          </Link>
+          {meta ? (
+            <div className="text-xs text-muted-foreground">{meta}</div>
+          ) : null}
+        </div>
       </div>
       <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-2">
         <div className="space-y-1">
@@ -75,8 +116,14 @@ function PendingRow({ user }: { user: PendingAssessmentResponse }) {
 }
 
 export function PendingAssessmentSection() {
-  const pendingQuery = useGetApiV1UsersPendingAssessment()
-  const pending = pendingQuery.data ?? []
+  const [page, setPage] = useState(0)
+  const pendingQuery = useGetApiV1UsersPendingAssessment({
+    limit: PAGE_SIZE,
+    offset: page * PAGE_SIZE,
+  })
+  const items = pendingQuery.data?.items ?? []
+  const total = pendingQuery.data?.total ?? 0
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   return (
     <Card>
@@ -90,12 +137,39 @@ export function PendingAssessmentSection() {
       <CardContent>
         {pendingQuery.isLoading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
-        ) : pending.length > 0 ? (
-          <ul className="space-y-3">
-            {pending.map((user) => (
-              <PendingRow key={user.userId} user={user} />
-            ))}
-          </ul>
+        ) : items.length > 0 ? (
+          <>
+            <ul className="space-y-3">
+              {items.map((user) => (
+                <PendingRow key={user.userId} user={user} />
+              ))}
+            </ul>
+            {total > PAGE_SIZE ? (
+              <div className="mt-4 flex items-center justify-between text-sm">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={page === 0}
+                  onClick={() => setPage((p) => p - 1)}
+                >
+                  Previous
+                </Button>
+                <span className="text-muted-foreground">
+                  Page {page + 1} of {pageCount} · {total} total
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= pageCount - 1}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Next
+                </Button>
+              </div>
+            ) : null}
+          </>
         ) : (
           <p className="text-sm text-muted-foreground">
             No players are pending assessment.

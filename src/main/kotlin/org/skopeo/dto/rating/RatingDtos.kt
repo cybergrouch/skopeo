@@ -5,6 +5,7 @@ package org.skopeo.dto.rating
 
 import kotlinx.serialization.Serializable
 import org.skopeo.model.PendingAssessment
+import org.skopeo.model.PendingAssessmentPage
 import org.skopeo.model.RatingHistoryEntry
 import org.skopeo.model.UserRating
 
@@ -44,7 +45,19 @@ data class RatingHistoryResponse(
 @Serializable
 data class PendingAssessmentResponse(
     val userId: String,
+    val publicCode: String,
     val displayName: String? = null,
+    val photoUrl: String? = null,
+    val sex: String? = null,
+    val dateOfBirth: String? = null,
+    val age: Int? = null,
+)
+
+/** A page of pending assessments with the total count, so the admin UI can paginate. */
+@Serializable
+data class PendingAssessmentPageResponse(
+    val items: List<PendingAssessmentResponse>,
+    val total: Int,
 )
 
 fun UserRating.toResponse(): UserRatingResponse =
@@ -74,4 +87,15 @@ fun RatingHistoryEntry.toResponse(): RatingHistoryResponse =
     )
 
 fun PendingAssessment.toResponse(): PendingAssessmentResponse =
-    PendingAssessmentResponse(userId = userId.toString(), displayName = displayName)
+    PendingAssessmentResponse(
+        userId = userId.toString(),
+        publicCode = publicCode,
+        displayName = displayName,
+        photoUrl = photoUrl,
+        sex = sex,
+        dateOfBirth = dateOfBirth?.toString(),
+        age = age,
+    )
+
+fun PendingAssessmentPage.toResponse(): PendingAssessmentPageResponse =
+    PendingAssessmentPageResponse(items = items.map { it.toResponse() }, total = total)

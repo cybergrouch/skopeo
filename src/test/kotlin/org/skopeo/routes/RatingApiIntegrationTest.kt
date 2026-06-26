@@ -22,7 +22,7 @@ import io.ktor.server.testing.testApplication
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.skopeo.dto.rating.PendingAssessmentResponse
+import org.skopeo.dto.rating.PendingAssessmentPageResponse
 import org.skopeo.dto.rating.SetRatingRequest
 import org.skopeo.dto.rating.UserRatingResponse
 import org.skopeo.dto.user.CreateUserRequest
@@ -123,7 +123,9 @@ class RatingApiIntegrationTest {
                     header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
                 }
             pending.status shouldBe HttpStatusCode.OK
-            pending.body<List<PendingAssessmentResponse>>().any { it.userId == user.id } shouldBe true
+            val page = pending.body<PendingAssessmentPageResponse>()
+            page.items.any { it.userId == user.id } shouldBe true
+            page.total shouldBe page.items.size // single small page: total equals what's returned
 
             // A normal user cannot list pending assessments.
             client.get(urlString = "/api/v1/users/pending-assessment") {
