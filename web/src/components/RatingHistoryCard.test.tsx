@@ -10,6 +10,7 @@ const entry = (overrides = {}) => ({
   previousLevel: '4.0',
   newLevel: '4.0',
   levelChanged: false,
+  smoothingApplied: false,
   calculatedAt: '2026-06-01T12:00:00',
   ...overrides,
 })
