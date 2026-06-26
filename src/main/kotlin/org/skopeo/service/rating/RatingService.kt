@@ -9,6 +9,7 @@ import org.skopeo.model.PendingAssessment
 import org.skopeo.model.PendingAssessmentPage
 import org.skopeo.model.Rating
 import org.skopeo.model.RatingHistoryEntry
+import org.skopeo.model.RatingHistoryWrite
 import org.skopeo.model.User
 import org.skopeo.model.UserRating
 import org.skopeo.model.ageInYears
@@ -20,6 +21,7 @@ import org.skopeo.service.user.UserNotFoundException
 import org.skopeo.service.user.VerifiedFirebaseToken
 import java.math.BigDecimal
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.util.UUID
 
 private val DEFAULT_CONFIDENCE = BigDecimal("0.50")
@@ -70,12 +72,35 @@ class RatingService(
                 throw IllegalArgumentException("Invalid rating '$value'", e)
             }
         val confidenceValue = parseConfidence(confidence = confidence)
-        return ratings.setRating(
-            userId = userId,
-            rating = BigDecimal(value),
-            level = level,
-            confidence = confidenceValue,
-        )
+        val previous = ratings.findCurrentRating(userId = userId)
+        val updated =
+            ratings.setRating(
+                userId = userId,
+                rating = BigDecimal(value),
+                level = level,
+                confidence = confidenceValue,
+            )
+        // A manual override of an existing rating is recorded in history for traceability (#96);
+        // the initial assessment (no prior rating) is the baseline and writes no history row.
+        if (previous != null) {
+            ratings.appendHistory(
+                write =
+                    RatingHistoryWrite(
+                        userId = userId,
+                        matchId = null,
+                        previousRating = previous.currentRating,
+                        newRating = updated.currentRating,
+                        ratingChange = updated.currentRating.subtract(previous.currentRating),
+                        percentChange = null,
+                        previousLevel = previous.currentLevel,
+                        newLevel = updated.currentLevel,
+                        levelChanged = previous.currentLevel != updated.currentLevel,
+                        breakdown = null,
+                        calculatedAt = LocalDateTime.now(),
+                    ),
+            )
+        }
+        return updated
     }
 
     fun pendingAssessment(
