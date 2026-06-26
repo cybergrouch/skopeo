@@ -18,10 +18,12 @@ import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.model.VerificationStatus
+import org.skopeo.repository.InviteRepository
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.math.BigDecimal
+import java.time.LocalDateTime
 import java.util.UUID
 
 class UserServiceTest {
@@ -34,7 +36,11 @@ class UserServiceTest {
     }
 
     private val repository = UserRepository()
+    private val invites = InviteRepository()
     private val service = UserService(repository = repository)
+
+    /** Seed an open invite so a manual (password/email-link) sign-up for [email] is admitted (#74). */
+    private fun invite(email: String) = invites.createOrRotate(email = email, invitedBy = null, expiresAt = LocalDateTime.now().plusDays(7))
 
     @BeforeEach
     fun reset() {
@@ -70,6 +76,41 @@ class UserServiceTest {
 
         map.keys shouldBe setOf(element = rated.id)
         map[rated.id]?.currentLevel shouldBe "4.0"
+    }
+
+    @Test
+    fun `a manual sign-up requires an open invite, which is marked accepted on success`() {
+        invite(email = "invitee@example.com")
+
+        service.provision(token = token(uid = "inv", email = "invitee@example.com"), request = request)
+
+        // The invite is consumed (no longer open) once the profile is provisioned.
+        invites.findOpenByEmail(email = "invitee@example.com", asOf = LocalDateTime.now()).shouldBeNull()
+    }
+
+    @Test
+    fun `a manual sign-up without an invite is forbidden`() {
+        shouldThrow<ForbiddenException> {
+            service.provision(token = token(uid = "x", email = "noinvite@example.com"), request = request)
+        }
+    }
+
+    @Test
+    fun `an expired invite does not admit a manual sign-up`() {
+        invites.createOrRotate(email = "exp@example.com", invitedBy = null, expiresAt = LocalDateTime.now().minusDays(1))
+        shouldThrow<ForbiddenException> {
+            service.provision(token = token(uid = "e", email = "exp@example.com"), request = request)
+        }
+    }
+
+    @Test
+    fun `an OAuth sign-up does not require an invite`() {
+        val user =
+            service.provision(
+                token = token(uid = "g", email = "g@example.com", emailVerified = true, signInProvider = "google.com"),
+                request = request,
+            ).user
+        user.capabilities shouldBe setOf(element = Capability.PLAYER)
     }
 
     @Test
@@ -208,6 +249,7 @@ class UserServiceTest {
     @Test
     fun `currentUser promotes a user later added to the allowlist, idempotently`() {
         // Signed up before being allowlisted (unverified at provision -> plain PLAYER).
+        invite(email = "admin@example.com")
         val created =
             bootstrapService.provision(
                 token = token(uid = "later", email = "admin@example.com", emailVerified = false, name = "Later"),
@@ -228,6 +270,7 @@ class UserServiceTest {
 
     @Test
     fun `currentUser does not promote an UNVERIFIED allowlisted email (verified-email gate)`() {
+        invite(email = "admin@example.com")
         bootstrapService.provision(
             token = token(uid = "unv", email = "admin@example.com", emailVerified = false, name = "Unv"),
             request = CreateUserRequest(dateOfBirth = "2000-01-01", sex = "Male"),

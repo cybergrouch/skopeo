@@ -23,6 +23,8 @@ tags:
     description: Player ratings & assessment; initial ratings are administrator-set
   - name: Matches
     description: Match fixtures & results (append-only); ratings calculated separately
+  - name: Invites
+    description: Admin onboarding invites for manual (email-link) sign-ups
 
 paths:
   /api/v1/calculate-ranking:
@@ -207,6 +209,10 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: Missing or invalid Firebase token
+        '403':
+          description: >-
+            A manual (password/email-link) sign-up whose email has no open invite (issue #74).
+            OAuth sign-ups are exempt.
 
   /api/v1/users/me:
     get:
@@ -1132,6 +1138,87 @@ paths:
           description: No such match
         '409':
           description: Cannot disable a match that has already been rated
+
+  /api/v1/invites:
+    post:
+      summary: Invite an email to onboard (ADMINISTRATOR only)
+      description: >-
+        Records an onboarding invite for an email. Re-inviting a still-pending email rotates its
+        7-day expiry (the "resend" affordance). The email-link itself is sent client-side via
+        Firebase; this only records the invite the provisioning gate checks.
+      tags:
+        - Invites
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInviteRequest'
+      responses:
+        '201':
+          description: Invite created (or the pending one rotated)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InviteResponse'
+        '400':
+          description: Invalid email
+        '403':
+          description: Caller is not an ADMINISTRATOR
+    get:
+      summary: List invites, paged (ADMINISTRATOR only)
+      tags:
+        - Invites
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+          description: Page size (clamped to 1..100).
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+          description: Number of rows to skip (clamped to >= 0).
+      responses:
+        '200':
+          description: A page of invites plus the total count
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitePageResponse'
+        '403':
+          description: Caller is not an ADMINISTRATOR
+
+  /api/v1/invites/{id}:
+    delete:
+      summary: Revoke an invite (ADMINISTRATOR only)
+      tags:
+        - Invites
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Invite revoked
+        '403':
+          description: Caller is not an ADMINISTRATOR
+        '404':
+          description: No such invite
 
 components:
   securitySchemes:
@@ -2223,3 +2310,59 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/MatchCalculationResponse'
+
+    CreateInviteRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          description: The email to invite (normalized to lowercase server-side).
+
+    InviteResponse:
+      type: object
+      required:
+        - id
+        - email
+        - status
+        - expiresAt
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, ACCEPTED, REVOKED, EXPIRED]
+          description: EXPIRED is derived from expiresAt, not stored.
+        invitedBy:
+          type: string
+          format: uuid
+          nullable: true
+        expiresAt:
+          type: string
+          format: date-time
+        acceptedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    InvitePageResponse:
+      type: object
+      description: A page of invites plus the total count of all invites.
+      required:
+        - items
+        - total
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/InviteResponse'
+        total:
+          type: integer
