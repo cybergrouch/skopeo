@@ -5,6 +5,7 @@ package org.skopeo.service.user
 
 import mu.KotlinLogging
 import org.skopeo.dto.user.CreateUserRequest
+import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.NumericRange
 import org.skopeo.model.ProfilePatch
@@ -13,9 +14,11 @@ import org.skopeo.model.UserRating
 import org.skopeo.model.UserSearchQuery
 import org.skopeo.model.ageRangeToDob
 import org.skopeo.repository.CapabilityRepository
+import org.skopeo.repository.InviteRepository
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.util.UUID
 
 private val logger = KotlinLogging.logger {}
@@ -40,6 +43,7 @@ class UserService(
     private val repository: UserRepository = UserRepository(),
     private val capabilities: CapabilityRepository = CapabilityRepository(),
     private val ratings: RatingRepository = RatingRepository(),
+    private val invites: InviteRepository = InviteRepository(),
     // Verified-email allowlist for the ADMINISTRATOR bootstrap (from ADMIN_EMAILS); empty = none.
     private val adminEmails: Set<String> = emptySet(),
 ) {
@@ -114,8 +118,13 @@ class UserService(
             val promoted = promoteIfBootstrapAdmin(token = token, user = it, adminEmails = adminEmails, capabilities = capabilities)
             return Provisioned(user = promoted, created = false)
         }
+        // Manual (password/email-link) sign-ups are invite-only; OAuth is exempt. Returns the gated
+        // email so we can mark its invite accepted once the profile is created.
+        val invitedEmail = requireInviteForManualSignup(invites = invites, token = token)
         val command = buildProvisionCommand(token = token, request = request, adminEmails = adminEmails)
-        return Provisioned(user = repository.provision(command = command), created = true)
+        val user = repository.provision(command = command)
+        if (invitedEmail != null) invites.markAccepted(email = invitedEmail, acceptedAt = LocalDateTime.now())
+        return Provisioned(user = user, created = true)
     }
 
     /** The caller's own profile, or null if they have not been provisioned yet. */
@@ -201,4 +210,21 @@ private fun requireStaff(
 ) {
     val caller = repository.findByFirebaseUid(firebaseUid = token.uid)
     if (caller == null || caller.capabilities.none { it in STAFF_ROLES }) throw ForbiddenException()
+}
+
+/**
+ * Enforce invite-only manual onboarding (issue #74): a password/email-link token must have an open
+ * invite for its email; OAuth (and the unrealistic no-email password token) is exempt. Returns the
+ * gated, normalized email (null when the gate doesn't apply) so the caller can mark it accepted.
+ */
+private fun requireInviteForManualSignup(
+    invites: InviteRepository,
+    token: VerifiedFirebaseToken,
+): String? {
+    val isManual = authProviderOf(signInProvider = token.signInProvider) == AuthProvider.PASSWORD
+    val email = token.email?.trim()?.lowercase()
+    if (!isManual || email == null) return null
+    invites.findOpenByEmail(email = email, asOf = LocalDateTime.now())
+        ?: throw ForbiddenException(message = "An invitation is required to register $email")
+    return email
 }
