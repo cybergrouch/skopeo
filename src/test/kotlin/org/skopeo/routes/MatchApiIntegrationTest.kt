@@ -27,6 +27,8 @@ import org.skopeo.dto.match.CreateFixtureRequest
 import org.skopeo.dto.match.MatchResponse
 import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.dto.match.SetScoreRequest
+import org.skopeo.dto.rating.CalculationRequest
+import org.skopeo.dto.rating.MatchCalculationDetailResponse
 import org.skopeo.dto.rating.SetRatingRequest
 import org.skopeo.dto.user.CreateUserRequest
 import org.skopeo.dto.user.UserResponse
@@ -218,6 +220,46 @@ class MatchApiIntegrationTest {
             pendingCalculation(token = host1) shouldBe listOf(matchA.id)
             pendingCalculation(token = host2) shouldBe emptyList()
             pendingCalculation(token = adminToken) shouldBe listOf(matchA.id)
+        }
+
+    @Test
+    fun `a participant can read a rated match's stored calculation detail`() =
+        withApp { client ->
+            val adminToken = seedStaff(uid = "admin", roles = setOf(Capability.ADMINISTRATOR))
+            val p1 = client.provisionSelf(token = TestFirebaseAuth.mintToken(uid = "p1"))
+            val p2 = client.provisionSelf(token = TestFirebaseAuth.mintToken(uid = "p2"))
+            client.rate(adminToken = adminToken, userId = p1.id)
+            client.rate(adminToken = adminToken, userId = p2.id)
+            val match = client.createFixture(token = adminToken, p1 = p1.id, p2 = p2.id).body<MatchResponse>()
+            client.post(urlString = "/api/v1/matches/${match.id}/result") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                contentType(type = ContentType.Application.Json)
+                setBody(
+                    body =
+                        MatchResultRequest(
+                            sets = listOf(SetScoreRequest(team1Games = 6, team2Games = 4), SetScoreRequest(team1Games = 6, team2Games = 2)),
+                        ),
+                )
+            }
+            // Commit the calculation so the breakdown is persisted.
+            client.post(urlString = "/api/v1/ratings/calculations") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                contentType(type = ContentType.Application.Json)
+                setBody(body = CalculationRequest(dryRun = false))
+            }
+
+            val detail =
+                client.get(urlString = "/api/v1/matches/${match.id}/calculation") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer ${TestFirebaseAuth.mintToken(uid = "p1")}")
+                }
+            detail.status shouldBe HttpStatusCode.OK
+            detail.body<MatchCalculationDetailResponse>().let { body ->
+                body.match.id shouldBe match.id
+                body.changes.map { it.userId }.toSet() shouldBe setOf(p1.id, p2.id)
+                val winner = body.changes.first { it.userId == p1.id }
+                winner.displayName shouldBe "Player"
+                winner.breakdown?.kFactor shouldBe "0.160000"
+            }
         }
 
     @Test

@@ -160,7 +160,13 @@ class RatingCalculationServiceTest {
             (it.currentRating > BigDecimal("4.000000")).shouldBeTrue()
             it.matchesPlayed shouldBe 1
         }
-        ratings.historyByUser(userId = p1.id).single().matchId shouldBe matchId
+        ratings.historyByUser(userId = p1.id).single().let {
+            it.matchId shouldBe matchId
+            // The calculation breakdown is persisted at commit, not recomputed later (#97).
+            it.kFactor.shouldNotBeNull().toPlainString() shouldBe "0.160000"
+            it.competitiveThresholdPct.shouldNotBeNull().toPlainString() shouldBe "0.083000"
+            it.isUpset shouldBe false
+        }
         matchRepo.findById(matchId = matchId)!!.ratedAt.shouldNotBeNull()
         matchRepo.listPendingCalculation().shouldBe(expected = emptyList())
 

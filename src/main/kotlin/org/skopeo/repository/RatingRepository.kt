@@ -148,6 +148,15 @@ class RatingRepository {
                 it[previousLevel] = write.previousLevel
                 it[newLevel] = write.newLevel
                 it[levelChanged] = write.levelChanged
+                // Persist the calculation breakdown (#97); dominance reuses the dominance_factor column.
+                it[dominanceFactor] = write.breakdown?.dominance
+                it[scale] = write.breakdown?.scale
+                it[ratingGap] = write.breakdown?.ratingGap
+                it[normalizedGap] = write.breakdown?.normalizedGap
+                it[competitiveThresholdPct] = write.breakdown?.competitiveThresholdPct
+                it[isUpset] = write.breakdown?.isUpset
+                it[upsetMultiplier] = write.breakdown?.upsetMultiplier
+                it[kFactor] = write.breakdown?.kFactor
                 it[calculatedAt] = write.calculatedAt
             }
         }
@@ -185,5 +194,12 @@ internal fun ResultRow.toRatingHistory(): RatingHistoryEntry =
         dominanceFactor = this[UserRatingHistoryTable.dominanceFactor],
         smoothingApplied = this[UserRatingHistoryTable.smoothingApplied],
         smoothingFactor = this[UserRatingHistoryTable.smoothingFactor],
+        scale = this[UserRatingHistoryTable.scale],
+        ratingGap = this[UserRatingHistoryTable.ratingGap],
+        normalizedGap = this[UserRatingHistoryTable.normalizedGap],
+        competitiveThresholdPct = this[UserRatingHistoryTable.competitiveThresholdPct],
+        isUpset = this[UserRatingHistoryTable.isUpset],
+        upsetMultiplier = this[UserRatingHistoryTable.upsetMultiplier],
+        kFactor = this[UserRatingHistoryTable.kFactor],
         calculatedAt = this[UserRatingHistoryTable.calculatedAt],
     )

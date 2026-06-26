@@ -4,6 +4,11 @@
 package org.skopeo.dto.rating
 
 import kotlinx.serialization.Serializable
+import org.skopeo.dto.match.MatchResponse
+import org.skopeo.dto.match.toResponse
+import org.skopeo.model.MatchCalculationDetail
+import org.skopeo.model.MatchPlayerCalculation
+import org.skopeo.model.RatingHistoryEntry
 import org.skopeo.service.rating.RatingCalculationService
 
 /**
@@ -46,6 +51,29 @@ data class MatchCalculationResponse(
     val matchId: String,
     val matchDate: String,
     val changes: List<PlayerChangeResponse>,
+)
+
+/** The detail behind a rating-history entry (#97): the match result plus the stored calculation. */
+@Serializable
+data class MatchCalculationDetailResponse(
+    val match: MatchResponse,
+    val changes: List<MatchPlayerCalculationResponse>,
+)
+
+/** One player's stored calculation for a rated match, with their display name. */
+@Serializable
+data class MatchPlayerCalculationResponse(
+    val userId: String,
+    val displayName: String? = null,
+    val previousRating: String,
+    val newRating: String,
+    val change: String,
+    val percentChange: String? = null,
+    val previousLevel: String? = null,
+    val newLevel: String? = null,
+    val levelChanged: Boolean,
+    // Absent for rows that predate the persisted breakdown (#97) or initial assessments.
+    val breakdown: CalculationBreakdownResponse? = null,
 )
 
 @Serializable
@@ -91,3 +119,42 @@ fun RatingCalculationService.CalculationOutcome.toResponse(): CalculationRespons
                 )
             },
     )
+
+fun MatchCalculationDetail.toResponse(): MatchCalculationDetailResponse =
+    MatchCalculationDetailResponse(
+        match = match.toResponse(),
+        changes = players.map { it.toResponse() },
+    )
+
+private fun MatchPlayerCalculation.toResponse(): MatchPlayerCalculationResponse =
+    MatchPlayerCalculationResponse(
+        userId = userId.toString(),
+        displayName = displayName,
+        previousRating = history.previousRating.toPlainString(),
+        newRating = history.newRating.toPlainString(),
+        change = history.ratingChange.toPlainString(),
+        percentChange = history.percentChange?.toPlainString(),
+        previousLevel = history.previousLevel,
+        newLevel = history.newLevel,
+        levelChanged = history.levelChanged,
+        breakdown = history.toBreakdownResponse(),
+    )
+
+/**
+ * Assemble the persisted breakdown (#97) into its response, or null when absent (initial
+ * assessments and pre-#97 rows). The columns are written atomically at commit, so [kFactor]
+ * present implies the rest are too; the elvis fallbacks are unreachable guards.
+ */
+private fun RatingHistoryEntry.toBreakdownResponse(): CalculationBreakdownResponse? =
+    kFactor?.let { k ->
+        CalculationBreakdownResponse(
+            dominance = dominanceFactor?.toPlainString().orEmpty(),
+            scale = scale?.toPlainString().orEmpty(),
+            ratingGap = ratingGap?.toPlainString().orEmpty(),
+            normalizedGap = normalizedGap?.toPlainString().orEmpty(),
+            competitiveThresholdPct = competitiveThresholdPct?.toPlainString().orEmpty(),
+            isUpset = isUpset ?: false,
+            upsetMultiplier = upsetMultiplier?.toPlainString().orEmpty(),
+            kFactor = k.toPlainString(),
+        )
+    }

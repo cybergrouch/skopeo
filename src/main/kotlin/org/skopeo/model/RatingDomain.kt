@@ -40,7 +40,45 @@ data class RatingHistoryEntry(
     val dominanceFactor: BigDecimal? = null,
     val smoothingApplied: Boolean = false,
     val smoothingFactor: BigDecimal? = null,
+    // Persisted calculation breakdown (#97); all null for initial assessments and pre-#97 rows.
+    // dominance is carried by [dominanceFactor]. The DTO layer assembles these into a breakdown.
+    val scale: BigDecimal? = null,
+    val ratingGap: BigDecimal? = null,
+    val normalizedGap: BigDecimal? = null,
+    val competitiveThresholdPct: BigDecimal? = null,
+    val isUpset: Boolean? = null,
+    val upsetMultiplier: BigDecimal? = null,
+    val kFactor: BigDecimal? = null,
     val calculatedAt: LocalDateTime,
+)
+
+/**
+ * The calculator derivatives behind a single rating change (#89), captured at commit time (#97) so
+ * the calculation can be shown faithfully later without recomputation. [dominance] is stored in the
+ * pre-existing `dominance_factor` column.
+ */
+data class CalculationBreakdownSnapshot(
+    val dominance: BigDecimal,
+    val scale: BigDecimal,
+    val ratingGap: BigDecimal,
+    val normalizedGap: BigDecimal,
+    val competitiveThresholdPct: BigDecimal,
+    val isUpset: Boolean,
+    val upsetMultiplier: BigDecimal,
+    val kFactor: BigDecimal,
+)
+
+/** The match result plus the stored per-player calculation behind a rated match (#97). */
+data class MatchCalculationDetail(
+    val match: Match,
+    val players: List<MatchPlayerCalculation>,
+)
+
+/** One player's stored calculation within a rated match, with their display name for presentation. */
+data class MatchPlayerCalculation(
+    val userId: UUID,
+    val displayName: String?,
+    val history: RatingHistoryEntry,
 )
 
 /**
@@ -76,5 +114,7 @@ data class RatingHistoryWrite(
     val previousLevel: String?,
     val newLevel: String?,
     val levelChanged: Boolean,
+    // The calculation breakdown to persist alongside the change (#97).
+    val breakdown: CalculationBreakdownSnapshot?,
     val calculatedAt: LocalDateTime,
 )

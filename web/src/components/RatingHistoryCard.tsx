@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import type { RatingHistoryResponse } from '@/api/generated/model'
+import { useGetApiV1MatchesIdCalculation } from '@/api/generated/matches/matches'
 import {
   Card,
   CardContent,
@@ -16,15 +18,95 @@ interface RatingHistoryCardProps {
 }
 
 /**
+ * The match result + the calculation that produced a rating change (issue #97), shown when a
+ * match-driven history entry is expanded. The breakdown is read from what was persisted at commit
+ * time (never recomputed), so it stays faithful even if the algorithm constants change.
+ */
+function MatchCalculationDetail({ matchId }: { matchId: string }) {
+  const { data, isLoading } = useGetApiV1MatchesIdCalculation(matchId, {
+    query: { enabled: Boolean(matchId) },
+  })
+
+  if (isLoading) {
+    return <p className="text-xs text-muted-foreground">Loading…</p>
+  }
+  if (!data) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        Calculation details aren’t available for this entry.
+      </p>
+    )
+  }
+
+  const nameOf = (id: string) =>
+    data.changes.find((c) => c.userId === id)?.displayName ?? id.slice(0, 8)
+  const scores = data.match.sets
+    .map((s) => `${s.team1Games}-${s.team2Games}`)
+    .join(' ')
+  const winnerSide =
+    data.match.winnerTeamId === data.match.team1.teamId
+      ? data.match.team1
+      : data.match.winnerTeamId === data.match.team2.teamId
+        ? data.match.team2
+        : null
+  const winner = winnerSide ? winnerSide.userIds.map(nameOf).join(', ') : null
+
+  return (
+    <div className="space-y-2 text-sm">
+      <div className="text-muted-foreground">
+        {data.match.matchDate}
+        {scores ? ` · ${scores}` : ''}
+        {winner ? ` · Winner: ${winner}` : ''}
+      </div>
+      <ul className="space-y-2">
+        {data.changes.map((change) => (
+          <li key={change.userId}>
+            <div>
+              {nameOf(change.userId)}: {change.previousRating} →{' '}
+              {change.newRating} ({change.change})
+            </div>
+            {change.breakdown ? (
+              <div className="text-xs text-muted-foreground">
+                dominance {change.breakdown.dominance} · scale{' '}
+                {change.breakdown.scale} · gap {change.breakdown.ratingGap}/
+                {change.breakdown.competitiveThresholdPct} ·{' '}
+                {change.breakdown.isUpset ? 'upset' : 'expected'} · K{' '}
+                {change.breakdown.kFactor}
+              </div>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+/**
  * Rating history (issue #73): the precise, audit-style view shown on the owner's Profile tab and,
  * for admins, on a player's public profile. Unlike match history this shows the full rating value
- * alongside the published NTRP band, and highlights rows where the band changed.
+ * alongside the published NTRP band, and highlights rows where the band changed. A match-driven
+ * entry is clickable and expands to show that match's result and calculation (issue #97); an
+ * initial assessment (no match) is not clickable.
  */
 export function RatingHistoryCard({
   entries,
   isLoading = false,
   description = 'Changes from rated matches.',
 }: RatingHistoryCardProps) {
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+
+  function toggle(id: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -39,23 +121,52 @@ export function RatingHistoryCard({
             {entries.map((entry) => {
               const prevBand = entry.previousLevel ?? '—'
               const newBand = entry.newLevel ?? '—'
-              return (
-                <li
-                  key={entry.id}
-                  className={`rounded-lg border p-3 text-sm ${
-                    entry.levelChanged ? 'border-primary bg-primary/5' : ''
-                  }`}
-                >
+              const isOpen = expanded.has(entry.id)
+              const content = (
+                <>
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-muted-foreground">
                       {entry.calculatedAt.slice(0, 10)}
                     </span>
-                    {entry.levelChanged ? (
-                      <Badge variant="secondary">{`Band ${prevBand} → ${newBand}`}</Badge>
-                    ) : null}
+                    <span className="flex items-center gap-2">
+                      {entry.levelChanged ? (
+                        <Badge variant="secondary">{`Band ${prevBand} → ${newBand}`}</Badge>
+                      ) : null}
+                      {entry.matchId ? (
+                        <span aria-hidden="true" className="text-muted-foreground">
+                          {isOpen ? '▾' : '▸'}
+                        </span>
+                      ) : null}
+                    </span>
                   </div>
                   <div className="mt-1">{`${entry.previousRating} → ${entry.newRating}`}</div>
                   <div className="text-muted-foreground">{`NTRP ${prevBand} → ${newBand}`}</div>
+                </>
+              )
+              return (
+                <li
+                  key={entry.id}
+                  className={`rounded-lg border text-sm ${
+                    entry.levelChanged ? 'border-primary bg-primary/5' : ''
+                  }`}
+                >
+                  {entry.matchId ? (
+                    <button
+                      type="button"
+                      className="block w-full p-3 text-left hover:bg-muted/50"
+                      aria-expanded={isOpen}
+                      onClick={() => toggle(entry.id)}
+                    >
+                      {content}
+                    </button>
+                  ) : (
+                    <div className="p-3">{content}</div>
+                  )}
+                  {entry.matchId && isOpen ? (
+                    <div className="border-t px-3 py-2">
+                      <MatchCalculationDetail matchId={entry.matchId} />
+                    </div>
+                  ) : null}
                 </li>
               )
             })}

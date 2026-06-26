@@ -1073,6 +1073,37 @@ paths:
         '404':
           description: No such match
 
+  /api/v1/matches/{id}/calculation:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      summary: Get a rated match's result with its stored rating calculation
+      description: >-
+        The match result plus the per-player calculation breakdown persisted at commit time
+        (issue #97) — what a rating-history entry links to. Reads stored values; never recomputed,
+        so it stays faithful if the algorithm constants change. Limited to a participant or
+        HOST/ADMINISTRATOR.
+      tags:
+        - Matches
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The match result and stored calculation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchCalculationDetailResponse'
+        '403':
+          description: Forbidden
+        '404':
+          description: No such match, or no calculation has been committed for it
+
   /api/v1/matches/{id}/result:
     parameters:
       - name: id
@@ -2366,6 +2397,59 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/MatchCalculationResponse'
+
+    MatchCalculationDetailResponse:
+      type: object
+      description: A rated match's result with its stored per-player calculation (issue #97).
+      required:
+        - match
+        - changes
+      properties:
+        match:
+          $ref: '#/components/schemas/MatchResponse'
+        changes:
+          type: array
+          items:
+            $ref: '#/components/schemas/MatchPlayerCalculationResponse'
+
+    MatchPlayerCalculationResponse:
+      type: object
+      description: One player's stored calculation for a rated match, with their display name.
+      required:
+        - userId
+        - previousRating
+        - newRating
+        - change
+        - levelChanged
+      properties:
+        userId:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+          nullable: true
+        previousRating:
+          type: string
+        newRating:
+          type: string
+        change:
+          type: string
+        percentChange:
+          type: string
+          nullable: true
+        previousLevel:
+          type: string
+          nullable: true
+        newLevel:
+          type: string
+          nullable: true
+        levelChanged:
+          type: boolean
+        breakdown:
+          description: Absent for initial assessments and rows committed before the breakdown was persisted.
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/CalculationBreakdownResponse'
 
     CreateInviteRequest:
       type: object
