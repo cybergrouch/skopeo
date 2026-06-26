@@ -133,7 +133,7 @@ describe('InvitesSection', () => {
     expect(screen.getByText('Page 1 of 3 · 45 total')).toBeInTheDocument()
   })
 
-  it('shows loading and empty states', () => {
+  it('shows loading and empty states', async () => {
     useGetApiV1Invites.mockReturnValue({ data: undefined, isLoading: true })
     const { rerender } = renderSection()
     expect(screen.getByText('Loading…')).toBeInTheDocument()
@@ -144,6 +144,58 @@ describe('InvitesSection', () => {
         <InvitesSection />
       </QueryClientProvider>,
     )
+    // The default (actionable) filter shows a filter-scoped empty message…
+    expect(screen.getByText('No invites match this filter.')).toBeInTheDocument()
+
+    // …and only the unfiltered "All" view says there are none at all.
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: 'All' }))
     expect(screen.getByText('No invites yet.')).toBeInTheDocument()
+  })
+
+  it('defaults to the actionable filter and switches the status query', async () => {
+    useGetApiV1Invites.mockReturnValue(page([pending]))
+    const user = userEvent.setup()
+    renderSection()
+
+    expect(useGetApiV1Invites).toHaveBeenLastCalledWith({
+      limit: 20,
+      offset: 0,
+      status: 'PENDING',
+    })
+    expect(screen.getByRole('button', { name: 'Actionable' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Accepted' }))
+    expect(useGetApiV1Invites).toHaveBeenLastCalledWith({
+      limit: 20,
+      offset: 0,
+      status: 'ACCEPTED',
+    })
+
+    await user.click(screen.getByRole('button', { name: 'All' }))
+    expect(useGetApiV1Invites).toHaveBeenLastCalledWith({
+      limit: 20,
+      offset: 0,
+      status: undefined,
+    })
+  })
+
+  it('resets to the first page when the filter changes', async () => {
+    useGetApiV1Invites.mockReturnValue(page([pending], 45))
+    const user = userEvent.setup()
+    renderSection()
+
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    expect(screen.getByText('Page 2 of 3 · 45 total')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Revoked' }))
+    expect(useGetApiV1Invites).toHaveBeenLastCalledWith({
+      limit: 20,
+      offset: 0,
+      status: 'REVOKED',
+    })
   })
 })

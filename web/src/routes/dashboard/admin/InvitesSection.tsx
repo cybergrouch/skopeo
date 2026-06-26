@@ -22,6 +22,17 @@ import { useAuth } from '@/auth/useAuth'
 
 const PAGE_SIZE = 20
 
+// ACCEPTED & REVOKED invites persist indefinitely, so the list defaults to actionable invites
+// (stored PENDING, which also covers derived-EXPIRED) and lets admins switch to the rest (#85).
+const FILTERS = [
+  { value: 'PENDING', label: 'Actionable' },
+  { value: 'ACCEPTED', label: 'Accepted' },
+  { value: 'REVOKED', label: 'Revoked' },
+  { value: 'ALL', label: 'All' },
+] as const
+
+type InviteFilter = (typeof FILTERS)[number]['value']
+
 const BADGE_VARIANT: Record<string, 'default' | 'secondary' | 'outline'> = {
   PENDING: 'default',
   ACCEPTED: 'secondary',
@@ -88,14 +99,24 @@ export function InvitesSection() {
   const { sendSignInLink } = useAuth()
   const [email, setEmail] = useState('')
   const [page, setPage] = useState(0)
+  const [filter, setFilter] = useState<InviteFilter>('PENDING')
   const [error, setError] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
 
   const create = usePostApiV1Invites()
-  const invitesQuery = useGetApiV1Invites({ limit: PAGE_SIZE, offset: page * PAGE_SIZE })
+  const invitesQuery = useGetApiV1Invites({
+    limit: PAGE_SIZE,
+    offset: page * PAGE_SIZE,
+    status: filter === 'ALL' ? undefined : filter,
+  })
   const items = invitesQuery.data?.items ?? []
   const total = invitesQuery.data?.total ?? 0
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
+
+  function changeFilter(next: InviteFilter) {
+    setFilter(next)
+    setPage(0)
+  }
 
   async function invite(address: string) {
     // Record the invite, then send the Firebase email-link. The record is what the provisioning
@@ -165,6 +186,21 @@ export function InvitesSection() {
           </p>
         ) : null}
 
+        <div className="flex flex-wrap gap-1" role="group" aria-label="Filter invites by status">
+          {FILTERS.map((f) => (
+            <Button
+              key={f.value}
+              type="button"
+              size="sm"
+              variant={filter === f.value ? 'default' : 'outline'}
+              aria-pressed={filter === f.value}
+              onClick={() => changeFilter(f.value)}
+            >
+              {f.label}
+            </Button>
+          ))}
+        </div>
+
         {invitesQuery.isLoading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : items.length > 0 ? (
@@ -206,7 +242,9 @@ export function InvitesSection() {
             ) : null}
           </>
         ) : (
-          <p className="text-sm text-muted-foreground">No invites yet.</p>
+          <p className="text-sm text-muted-foreground">
+            {filter === 'ALL' ? 'No invites yet.' : 'No invites match this filter.'}
+          </p>
         )}
       </CardContent>
     </Card>

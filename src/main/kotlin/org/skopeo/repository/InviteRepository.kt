@@ -86,16 +86,26 @@ class InviteRepository {
             if (updated == 0) null else loadById(id = id)
         }
 
-    /** One page of invites (newest first) plus the total count. */
+    /**
+     * One page of invites (newest first) plus the total count. When [status] is given, only invites
+     * with that stored status are returned (EXPIRED is not stored — it is a derived view of PENDING,
+     * so `status = PENDING` covers both pending and expired invites). See issue #85.
+     */
     fun list(
         limit: Int,
         offset: Int,
+        status: InviteStatus? = null,
     ): Pair<List<Invite>, Long> =
         transaction {
-            val total = InvitesTable.selectAll().count()
+            fun query() =
+                if (status == null) {
+                    InvitesTable.selectAll()
+                } else {
+                    InvitesTable.selectAll().where { InvitesTable.status eq status.name }
+                }
+            val total = query().count()
             val items =
-                InvitesTable
-                    .selectAll()
+                query()
                     .orderBy(InvitesTable.createdAt to SortOrder.DESC)
                     .limit(n = limit, offset = offset.toLong())
                     .map { it.toInvite() }
