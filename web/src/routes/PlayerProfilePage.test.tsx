@@ -143,6 +143,29 @@ describe('PlayerProfilePage', () => {
     ).not.toBeInTheDocument()
   })
 
+  it('treats a viewer whose own profile is still loading as non-admin', () => {
+    useGetApiV1PlayersCode.mockReturnValue(loadedPlayer)
+    useGetApiV1UsersMe.mockReturnValue({ data: undefined })
+    renderAt()
+    expect(
+      screen.queryByText('Full rating history (admin view).'),
+    ).not.toBeInTheDocument()
+  })
+
+  it('shows a loading state for an admin while rating history resolves', () => {
+    useGetApiV1PlayersCode.mockReturnValue(loadedPlayer)
+    useGetApiV1UsersMe.mockReturnValue({
+      data: { capabilities: ['PLAYER', 'ADMINISTRATOR'] },
+    })
+    useGetApiV1PlayersCodeRatingHistory.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+    })
+    renderAt()
+    expect(screen.getByText('Full rating history (admin view).')).toBeInTheDocument()
+    expect(screen.getByText('Loading…')).toBeInTheDocument()
+  })
+
   it('handles a missing code param without crashing', () => {
     useGetApiV1PlayersCode.mockReturnValue({ isLoading: true, isError: false })
     render(

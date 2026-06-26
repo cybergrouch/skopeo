@@ -30,7 +30,7 @@ export function PlayerProfilePage() {
   const meQuery = useGetApiV1UsersMe()
   const isAdmin = isAdministrator(meQuery.data?.capabilities)
   const ratingHistoryQuery = useGetApiV1PlayersCodeRatingHistory(code, {
-    query: { enabled: isAdmin && Boolean(code) },
+    query: { enabled: isAdmin },
   })
 
   return (

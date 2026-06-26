@@ -79,7 +79,7 @@ class PlayerService(
 
     private fun requireAdmin(token: VerifiedFirebaseToken) {
         val caller = users.findByFirebaseUid(firebaseUid = token.uid)
-        if (caller?.capabilities?.contains(element = Capability.ADMINISTRATOR) != true) throw ForbiddenException()
+        if (caller == null || Capability.ADMINISTRATOR !in caller.capabilities) throw ForbiddenException()
     }
 
     private fun resolve(code: String): User {
