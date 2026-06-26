@@ -60,6 +60,8 @@ export function DashboardPage() {
                 userId={me?.id ?? ''}
                 capabilities={capabilities}
                 publicCode={me?.publicCode}
+                dateOfBirth={me?.dateOfBirth}
+                sex={me?.sex}
               />
             </TabsContent>
             <TabsContent value="research">

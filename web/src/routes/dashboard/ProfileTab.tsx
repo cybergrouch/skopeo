@@ -23,9 +23,26 @@ interface ProfileTabProps {
   capabilities: readonly Capability[]
   /** Short, shareable player code (e.g. "K7Q2MX") others can search to find this player. */
   publicCode?: string
+  /** ISO date string (yyyy-MM-dd); shown read-only on the owner's profile (#95). */
+  dateOfBirth?: string | null
+  /** "Male" | "Female"; shown read-only on the owner's profile (#95). */
+  sex?: string | null
 }
 
-export function ProfileTab({ userId, capabilities, publicCode }: ProfileTabProps) {
+/** Render an ISO date (yyyy-MM-dd) in the viewer's locale, falling back to a dash. */
+function formatDate(value?: string | null): string {
+  if (!value) return '—'
+  const parsed = new Date(`${value}T00:00:00`)
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString()
+}
+
+export function ProfileTab({
+  userId,
+  capabilities,
+  publicCode,
+  dateOfBirth,
+  sex,
+}: ProfileTabProps) {
   const { user } = useAuth()
   const enabled = Boolean(userId)
   const ratingsQuery = useGetApiV1UsersUserIdRatings(userId, {
@@ -91,6 +108,25 @@ export function ProfileTab({ userId, capabilities, publicCode }: ProfileTabProps
               {capability}
             </Badge>
           ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Profile details</CardTitle>
+          <CardDescription>
+            Your date of birth and sex, as recorded at sign-up.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          <div className="flex items-center justify-between">
+            <span className="font-medium">Date of birth</span>
+            <span>{formatDate(dateOfBirth)}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="font-medium">Sex</span>
+            <span>{sex ?? '—'}</span>
+          </div>
         </CardContent>
       </Card>
 
