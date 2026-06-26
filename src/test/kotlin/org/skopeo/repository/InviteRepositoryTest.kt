@@ -90,4 +90,27 @@ class InviteRepositoryTest {
         firstPage shouldHaveSize 2
         secondPage shouldHaveSize 1
     }
+
+    @Test
+    fun `list filters by stored status, scoping the total to the filter`() {
+        invites.createOrRotate(email = "pending@x.dev", invitedBy = null, expiresAt = future)
+        invites.createOrRotate(email = "expired@x.dev", invitedBy = null, expiresAt = past) // still stored PENDING
+        invites.createOrRotate(email = "acc@x.dev", invitedBy = null, expiresAt = future)
+        invites.markAccepted(email = "acc@x.dev", acceptedAt = LocalDateTime.now())
+        val revoked = invites.createOrRotate(email = "rev@x.dev", invitedBy = null, expiresAt = future)
+        invites.revoke(id = revoked.id)
+
+        // PENDING covers both pending and expired (expired is a derived view of PENDING).
+        val (pending, pendingTotal) = invites.list(limit = 50, offset = 0, status = InviteStatus.PENDING)
+        pendingTotal shouldBe 2L
+        pending.map { it.email }.toSet() shouldBe setOf("pending@x.dev", "expired@x.dev")
+
+        val (accepted, acceptedTotal) = invites.list(limit = 50, offset = 0, status = InviteStatus.ACCEPTED)
+        acceptedTotal shouldBe 1L
+        accepted.single().email shouldBe "acc@x.dev"
+
+        val (all, allTotal) = invites.list(limit = 50, offset = 0)
+        allTotal shouldBe 4L
+        all shouldHaveSize 4
+    }
 }

@@ -115,6 +115,30 @@ class InviteApiIntegrationTest {
         }
 
     @Test
+    fun `listing accepts a status filter and rejects an unknown status`() =
+        withApp { client ->
+            val adminToken = seedToken(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+            client.createInvite(token = adminToken, email = "pending@example.com")
+            val toRevoke = client.createInvite(token = adminToken, email = "revoked@example.com").body<InviteResponse>()
+            client.delete(urlString = "/api/v1/invites/${toRevoke.id}") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+            }
+
+            val pending =
+                client.get(urlString = "/api/v1/invites?status=PENDING") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                }
+            pending.status shouldBe HttpStatusCode.OK
+            pending.body<InvitePageResponse>().items.map { it.email } shouldBe listOf(element = "pending@example.com")
+
+            val bad =
+                client.get(urlString = "/api/v1/invites?status=BOGUS") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                }
+            bad.status shouldBe HttpStatusCode.BadRequest
+        }
+
+    @Test
     fun `a manual sign-up is admitted only when its email has an open invite`() =
         withApp { client ->
             val adminToken = seedToken(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))

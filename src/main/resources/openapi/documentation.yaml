@@ -1188,6 +1188,15 @@ paths:
             type: integer
             default: 0
           description: Number of rows to skip (clamped to >= 0).
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [PENDING, ACCEPTED, REVOKED]
+          description: >-
+            Filter to a single stored status. EXPIRED is not stored (it is a derived view of
+            PENDING past its expiry), so use PENDING to scope to actionable invites. Omit for all.
       responses:
         '200':
           description: A page of invites plus the total count

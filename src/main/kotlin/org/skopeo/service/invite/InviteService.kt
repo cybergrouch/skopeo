@@ -6,6 +6,7 @@ package org.skopeo.service.invite
 import org.skopeo.model.Capability
 import org.skopeo.model.Invite
 import org.skopeo.model.InvitePage
+import org.skopeo.model.InviteStatus
 import org.skopeo.repository.InviteRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.ResourceNotFoundException
@@ -43,12 +44,14 @@ class InviteService(
         token: VerifiedFirebaseToken,
         limit: Int,
         offset: Int,
+        status: InviteStatus? = null,
     ): InvitePage {
         requireAdmin(token = token)
         val (items, total) =
             invites.list(
                 limit = limit.coerceIn(minimumValue = 1, maximumValue = MAX_PAGE_SIZE),
                 offset = offset.coerceAtLeast(minimumValue = 0),
+                status = status,
             )
         return InvitePage(items = items, total = total.toInt())
     }

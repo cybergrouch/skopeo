@@ -17,9 +17,20 @@ import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.invite.CreateInviteRequest
 import org.skopeo.dto.invite.toResponse
+import org.skopeo.model.InviteStatus
 import org.skopeo.service.invite.InviteService
 
 private const val DEFAULT_INVITE_PAGE_SIZE = 20
+
+/**
+ * Parse a `status` filter to a stored [InviteStatus] (issue #85). EXPIRED is a derived view of
+ * PENDING, not a stored value, so only PENDING/ACCEPTED/REVOKED are accepted; anything else is a
+ * 400 via the thrown [IllegalArgumentException].
+ */
+private fun parseInviteStatus(raw: String): InviteStatus =
+    requireNotNull(value = InviteStatus.entries.find { it.name == raw.uppercase() }) {
+        "Unknown invite status '$raw'; expected one of ${InviteStatus.entries.joinToString { it.name }}"
+    }
 
 /**
  * Admin-only onboarding invites (issue #74). All endpoints require ADMINISTRATOR (enforced in
@@ -45,6 +56,7 @@ fun Application.configureInviteRoutes(service: InviteService = InviteService()) 
                                 token = verifiedToken(),
                                 limit = params["limit"]?.toIntOrNull() ?: DEFAULT_INVITE_PAGE_SIZE,
                                 offset = params["offset"]?.toIntOrNull() ?: 0,
+                                status = params["status"]?.let { parseInviteStatus(raw = it) },
                             )
                         call.respond(status = HttpStatusCode.OK, message = page.toResponse())
                     }

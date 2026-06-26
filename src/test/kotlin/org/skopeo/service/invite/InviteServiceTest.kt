@@ -95,6 +95,21 @@ class InviteServiceTest {
     }
 
     @Test
+    fun `list scopes to a status filter when given`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        service.create(token = token(uid = "admin"), email = "pending@example.com")
+        val accepted = service.create(token = token(uid = "admin"), email = "acc@example.com")
+        invites.markAccepted(email = accepted.email, acceptedAt = java.time.LocalDateTime.now())
+
+        val pending = service.list(token = token(uid = "admin"), limit = 50, offset = 0, status = InviteStatus.PENDING)
+        pending.items.single().email shouldBe "pending@example.com"
+        pending.total shouldBe 1
+
+        val all = service.list(token = token(uid = "admin"), limit = 50, offset = 0)
+        all.total shouldBe 2
+    }
+
+    @Test
     fun `an invalid email is rejected`() {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         shouldThrow<IllegalArgumentException> { service.create(token = token(uid = "admin"), email = "not-an-email") }
