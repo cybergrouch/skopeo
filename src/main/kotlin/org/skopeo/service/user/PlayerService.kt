@@ -7,7 +7,9 @@ import org.skopeo.dto.user.OpponentSummary
 import org.skopeo.dto.user.PlayerMatchHistoryEntry
 import org.skopeo.dto.user.PublicPlayerResponse
 import org.skopeo.dto.user.PublicRatingDto
+import org.skopeo.model.Capability
 import org.skopeo.model.Match
+import org.skopeo.model.RatingHistoryEntry
 import org.skopeo.model.User
 import org.skopeo.model.displayName
 import org.skopeo.repository.MatchRepository
@@ -59,6 +61,25 @@ class PlayerService(
         return played.map { match ->
             entry(match = match, playerId = user.id, opponents = opponents, levels = levelByMatchAndUser[match.id])
         }
+    }
+
+    /**
+     * A player's full rating history by code, for ADMINISTRATORs only (issue #73). The owner reads
+     * their own history via the user-id endpoint; this code-based variant exists so an admin viewing
+     * a public profile can see it. Unlike match history, this is the precise audit view.
+     */
+    fun ratingHistory(
+        token: VerifiedFirebaseToken,
+        code: String,
+    ): List<RatingHistoryEntry> {
+        requireAdmin(token = token)
+        val user = resolve(code = code)
+        return ratings.historyByUser(userId = user.id)
+    }
+
+    private fun requireAdmin(token: VerifiedFirebaseToken) {
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+        if (caller == null || Capability.ADMINISTRATOR !in caller.capabilities) throw ForbiddenException()
     }
 
     private fun resolve(code: String): User {

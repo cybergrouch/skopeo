@@ -6,8 +6,14 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { useGetApiV1PlayersCode } from '@/api/generated/users/users'
+import {
+  useGetApiV1PlayersCode,
+  useGetApiV1PlayersCodeRatingHistory,
+  useGetApiV1UsersMe,
+} from '@/api/generated/users/users'
 import { MatchHistoryCard } from '@/components/MatchHistoryCard'
+import { RatingHistoryCard } from '@/components/RatingHistoryCard'
+import { isAdministrator } from '@/auth/capabilities'
 
 /**
  * Auth-gated player profile reached via the shareable deep link `/players/:code` (issue #61).
@@ -18,6 +24,14 @@ export function PlayerProfilePage() {
   const { code = '' } = useParams()
   const query = useGetApiV1PlayersCode(code)
   const player = query.data
+
+  // Rating history is admin-only on the public profile (issue #73): load the viewer's own profile
+  // to check capability, then fetch the precise history only when they're an ADMINISTRATOR.
+  const meQuery = useGetApiV1UsersMe()
+  const isAdmin = isAdministrator(meQuery.data?.capabilities)
+  const ratingHistoryQuery = useGetApiV1PlayersCodeRatingHistory(code, {
+    query: { enabled: isAdmin },
+  })
 
   return (
     <div className="flex min-h-svh items-start justify-center bg-muted/40 p-4">
@@ -81,6 +95,14 @@ export function PlayerProfilePage() {
         ) : null}
 
         {player ? <MatchHistoryCard code={player.publicCode} /> : null}
+
+        {player && isAdmin ? (
+          <RatingHistoryCard
+            entries={ratingHistoryQuery.data ?? []}
+            isLoading={ratingHistoryQuery.isLoading}
+            description="Full rating history (admin view)."
+          />
+        ) : null}
       </div>
     </div>
   )

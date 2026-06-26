@@ -12,6 +12,7 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
+import org.skopeo.dto.rating.toResponse
 import org.skopeo.service.user.PlayerService
 
 /**
@@ -33,6 +34,14 @@ fun Application.configurePlayerRoutes(service: PlayerService = PlayerService()) 
                     respondMappingErrors {
                         val code = call.parameters["code"].orEmpty()
                         call.respond(status = HttpStatusCode.OK, message = service.matchHistory(code = code))
+                    }
+                }
+                // ADMINISTRATOR only — the precise rating-history audit view for any player by code.
+                get(path = "/{code}/rating-history") {
+                    respondMappingErrors {
+                        val code = call.parameters["code"].orEmpty()
+                        val history = service.ratingHistory(token = verifiedToken(), code = code)
+                        call.respond(status = HttpStatusCode.OK, message = history.map { it.toResponse() })
                     }
                 }
             }
