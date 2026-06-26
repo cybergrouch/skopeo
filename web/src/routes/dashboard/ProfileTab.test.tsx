@@ -32,9 +32,16 @@ vi.mock('@/auth/useAuth', () => ({ useAuth: useAuthMock }))
 function renderProfile(
   capabilities: Capability[] = [Capability.PLAYER],
   publicCode?: string,
+  details: { dateOfBirth?: string | null; sex?: string | null } = {},
 ) {
   return render(
-    <ProfileTab userId="u1" capabilities={capabilities} publicCode={publicCode} />,
+    <ProfileTab
+      userId="u1"
+      capabilities={capabilities}
+      publicCode={publicCode}
+      dateOfBirth={details.dateOfBirth}
+      sex={details.sex}
+    />,
   )
 }
 
@@ -123,6 +130,26 @@ describe('ProfileTab', () => {
       'src',
       'https://example.com/avatar.jpg',
     )
+  })
+
+  it('shows date of birth and sex read-only, formatting the date for the viewer', () => {
+    renderProfile([Capability.PLAYER], undefined, { dateOfBirth: '2000-01-15', sex: 'Male' })
+    const expectedDate = new Date('2000-01-15T00:00:00').toLocaleDateString()
+    expect(screen.getByText('Date of birth')).toBeInTheDocument()
+    expect(screen.getByText(expectedDate)).toBeInTheDocument()
+    expect(screen.getByText('Sex')).toBeInTheDocument()
+    expect(screen.getByText('Male')).toBeInTheDocument()
+  })
+
+  it('falls back to a dash when date of birth or sex is missing', () => {
+    renderProfile()
+    // Both profile-detail rows render an em dash.
+    expect(screen.getAllByText('—')).toHaveLength(2)
+  })
+
+  it('shows the raw value when the date of birth cannot be parsed', () => {
+    renderProfile([Capability.PLAYER], undefined, { dateOfBirth: 'not-a-date', sex: 'Female' })
+    expect(screen.getByText('not-a-date')).toBeInTheDocument()
   })
 
   it('shows the pending notice when there is no rating', () => {
