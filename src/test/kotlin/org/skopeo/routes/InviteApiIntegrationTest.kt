@@ -89,7 +89,7 @@ class InviteApiIntegrationTest {
     fun `an admin can create, list, and revoke invites, and a non-admin cannot`() =
         withApp { client ->
             val adminToken = seedToken(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
-            val playerToken = seedToken(uid = "player", roles = setOf(Capability.PLAYER))
+            val playerToken = seedToken(uid = "player", roles = setOf(element = Capability.PLAYER))
 
             val created = client.createInvite(token = adminToken, email = "invitee@example.com")
             created.status shouldBe HttpStatusCode.Created

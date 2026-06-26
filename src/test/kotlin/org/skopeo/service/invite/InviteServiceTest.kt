@@ -74,7 +74,7 @@ class InviteServiceTest {
 
     @Test
     fun `a non-admin cannot create, list, or revoke invites`() {
-        provision(uid = "player", roles = setOf(Capability.PLAYER))
+        provision(uid = "player", roles = setOf(element = Capability.PLAYER))
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val invite = service.create(token = token(uid = "admin"), email = "x@example.com")
 
