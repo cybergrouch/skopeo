@@ -98,6 +98,25 @@ describe('AwaitingResultsSection', () => {
     expect(screen.getByText('p1 vs Bob')).toBeInTheDocument()
   })
 
+  it('badges an overdue fixture, a fixture today, and an upcoming one', () => {
+    const now = new Date()
+    const isoToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+
+    useGetApiV1Matches.mockReturnValue({
+      data: [
+        { ...match, id: 'past', matchDate: '2020-01-01' },
+        { ...match, id: 'today', matchDate: isoToday },
+        { ...match, id: 'future', matchDate: '2999-12-31' },
+      ],
+      isLoading: false,
+    })
+    renderSection()
+
+    expect(screen.getByText('Overdue')).toBeInTheDocument()
+    expect(screen.getByText('Today')).toBeInTheDocument()
+    expect(screen.getByText('Upcoming')).toBeInTheDocument()
+  })
+
   it('records a result from the entered set scores', async () => {
     const user = userEvent.setup()
     renderSection()

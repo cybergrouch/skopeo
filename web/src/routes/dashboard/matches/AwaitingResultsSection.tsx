@@ -7,6 +7,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -20,6 +21,30 @@ import type { MatchResponse, SetScoreRequest } from '@/api/generated/model'
 
 const AWAITING = { filter: GetApiV1MatchesFilter['awaiting-results'] }
 const MAX_SETS = 5
+
+/** Today's local date as yyyy-MM-dd, comparable lexicographically with a match's matchDate. */
+function todayIso(): string {
+  const now = new Date()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${now.getFullYear()}-${month}-${day}`
+}
+
+type BadgeVariant = 'default' | 'secondary' | 'outline'
+
+/**
+ * Where a scheduled fixture sits relative to today (issue #71). The schedule is only suggestive —
+ * fixtures aren't filtered by date — so this is just an at-a-glance cue. matchDate and today are
+ * zero-padded yyyy-MM-dd, so string comparison is chronological.
+ */
+function scheduleBadge(
+  matchDate: string,
+  today: string,
+): { label: string; variant: BadgeVariant } {
+  if (matchDate < today) return { label: 'Overdue', variant: 'default' }
+  if (matchDate === today) return { label: 'Today', variant: 'secondary' }
+  return { label: 'Upcoming', variant: 'outline' }
+}
 
 interface SetRow {
   t1: string
@@ -73,14 +98,16 @@ function MatchResultRow({
 
   const player1 = match.team1.userIds.map(nameOf).join(', ')
   const player2 = match.team2.userIds.map(nameOf).join(', ')
+  const badge = scheduleBadge(match.matchDate, todayIso())
 
   return (
     <div className="rounded-lg border p-3">
-      <div className="mb-2 text-sm">
+      <div className="mb-2 flex items-center gap-2 text-sm">
         <span className="font-medium">
           {player1} vs {player2}
         </span>
-        <span className="text-muted-foreground"> · {match.matchDate}</span>
+        <span className="text-muted-foreground">· {match.matchDate}</span>
+        <Badge variant={badge.variant}>{badge.label}</Badge>
       </div>
       <div className="space-y-2">
         {rows.map((row, index) => (
