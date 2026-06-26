@@ -10,7 +10,6 @@ import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
-import org.skopeo.service.calculator.impl.toStringPrecise
 
 @DisplayName("MatchScore dominance factor")
 class MatchScoreTest {
