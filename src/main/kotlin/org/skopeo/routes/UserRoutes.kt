@@ -45,7 +45,7 @@ fun Application.configureUserRoutes(service: UserService = UserService()) {
     }
 }
 
-private val FILTER_PARAMS = listOf("name", "code", "sex", "age", "rating")
+private val FILTER_PARAMS = listOf("name", "code", "q", "sex", "age", "rating")
 
 private fun Route.searchUsers(service: UserService) {
     get {
@@ -66,6 +66,7 @@ private fun Route.searchUsers(service: UserService) {
                             UserSearchFilters(
                                 name = params["name"],
                                 code = params["code"],
+                                q = params["q"],
                                 sex = params["sex"],
                                 age = params["age"],
                                 rating = params["rating"],

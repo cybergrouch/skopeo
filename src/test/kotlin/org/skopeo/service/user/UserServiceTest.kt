@@ -6,6 +6,7 @@ package org.skopeo.service.user
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.BeforeAll
@@ -300,6 +301,52 @@ class UserServiceTest {
         val found =
             service.search(token = token(uid = "staff"), filters = UserSearchFilters(code = member.publicCode.lowercase()))
         found.single().id shouldBe member.id
+    }
+
+    @Test
+    fun `search matches a partial code as a case-insensitive prefix`() {
+        repository.provision(
+            command =
+                ProvisionUserCommand(
+                    firebaseUid = "staff3",
+                    identity =
+                        UserIdentity(provider = org.skopeo.model.AuthProvider.GOOGLE, providerUid = "staff3", isPrimary = true),
+                    names = listOf(element = UserName(type = org.skopeo.model.NameType.DISPLAY, value = "Staff3")),
+                    capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
+                ),
+        )
+        val member = service.provision(token = token(uid = "m2"), request = request).user
+
+        // A short prefix (here 3 of 6 chars), lowercased, surfaces the member incrementally —
+        // an exact match would return nothing for a partial code.
+        val prefix = member.publicCode.take(n = 3).lowercase()
+        val found = service.search(token = token(uid = "staff3"), filters = UserSearchFilters(code = prefix))
+        found.map { it.id } shouldContain member.id
+    }
+
+    @Test
+    fun `the unified q term matches a fuzzy name or a code prefix`() {
+        repository.provision(
+            command =
+                ProvisionUserCommand(
+                    firebaseUid = "staff4",
+                    identity =
+                        UserIdentity(provider = org.skopeo.model.AuthProvider.GOOGLE, providerUid = "staff4", isPrimary = true),
+                    names = listOf(element = UserName(type = org.skopeo.model.NameType.DISPLAY, value = "Staff4")),
+                    capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
+                ),
+        )
+        val member = service.provision(token = token(uid = "m3"), request = request).user // display name "Juan"
+
+        val byName = service.search(token = token(uid = "staff4"), filters = UserSearchFilters(q = "jua"))
+        byName.map { it.id } shouldContain member.id
+
+        val byCodePrefix =
+            service.search(
+                token = token(uid = "staff4"),
+                filters = UserSearchFilters(q = member.publicCode.take(n = 3).lowercase()),
+            )
+        byCodePrefix.map { it.id } shouldContain member.id
     }
 
     @Test

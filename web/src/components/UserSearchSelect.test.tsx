@@ -107,20 +107,17 @@ describe('UserSearchSelect', () => {
     expect(screen.getByText('Male · 41 · NTRP 8.500000')).toBeInTheDocument()
   })
 
-  it('searches by player ID (uppercased) when the input looks like a code', async () => {
+  it('sends a single unified term so partial codes and names both search incrementally (#86)', async () => {
     const user = userEvent.setup()
     render(<UserSearchSelect label="Player 1" onSelect={vi.fn()} />)
-    await user.type(screen.getByLabelText('Player 1'), 'abc234')
-    expect(useGetApiV1Users).toHaveBeenCalledWith(
-      { code: 'ABC234' },
-      expect.anything(),
-    )
-    // a name fragment still searches by name
+
+    // A partial code searches immediately, without waiting for the full 6-char code.
+    await user.type(screen.getByLabelText('Player 1'), 'abc')
+    expect(useGetApiV1Users).toHaveBeenCalledWith({ q: 'abc' }, expect.anything())
+
+    // A name fragment uses the same unified term.
     await user.clear(screen.getByLabelText('Player 1'))
     await user.type(screen.getByLabelText('Player 1'), 'ali')
-    expect(useGetApiV1Users).toHaveBeenCalledWith(
-      { name: 'ali' },
-      expect.anything(),
-    )
+    expect(useGetApiV1Users).toHaveBeenCalledWith({ q: 'ali' }, expect.anything())
   })
 })

@@ -107,8 +107,10 @@ class UserRepository {
     /**
      * Active users matching every supplied facet of [query] (AND): a fuzzy name match (trigram
      * similarity, so "Alyce" finds "Alice", plus substring) across any of a profile's names; an
-     * exact [UserSearchQuery.sex]; a date-of-birth window (from an age range); and an NTRP rating
-     * range. Querying the users table keeps results one-per-profile; capped at [SEARCH_LIMIT].
+     * exact [UserSearchQuery.sex]; a date-of-birth window (from an age range); a prefix match on the
+     * shareable player [UserSearchQuery.code] (so partial codes surface incrementally, issue #86);
+     * and an NTRP rating range. Querying the users table keeps results one-per-profile; capped at
+     * [SEARCH_LIMIT].
      */
     fun search(query: UserSearchQuery): List<User> =
         transaction {
@@ -119,7 +121,10 @@ class UserRepository {
                     query.dobMin?.let { min -> add(element = Op.build { UsersTable.dateOfBirth greaterEq min }) }
                     query.dobMax?.let { max -> add(element = Op.build { UsersTable.dateOfBirth lessEq max }) }
                     query.name?.let { name -> add(element = nameMatches(name = name)) }
-                    query.code?.let { code -> add(element = Op.build { UsersTable.publicCode eq code }) }
+                    // Prefix match (#86): the service uppercases the term and codes are stored
+                    // uppercase, so a plain LIKE 'PREFIX%' matches partial codes case-insensitively.
+                    query.code?.let { code -> add(element = Op.build { UsersTable.publicCode like "$code%" }) }
+                    query.q?.let { term -> add(element = nameOrCodeMatches(term = term)) }
                     query.rating?.let { range -> add(element = ratingMatches(range = range)) }
                 }
             UsersTable
@@ -200,6 +205,14 @@ class UserRepository {
         )
     }
 }
+
+/**
+ * The unified picker term (#86): a fuzzy name match OR a player-code prefix, OR-combined so typing
+ * either a name or a partial code surfaces players incrementally. Codes are stored uppercase, so the
+ * prefix is uppercased; the name part normalizes case itself.
+ */
+private fun nameOrCodeMatches(term: String): Op<Boolean> =
+    nameMatches(name = term) or Op.build { UsersTable.publicCode like "${term.uppercase()}%" }
 
 /** Correlated EXISTS: the user has an active name fuzzily matching [name]. */
 private fun nameMatches(name: String): Op<Boolean> {

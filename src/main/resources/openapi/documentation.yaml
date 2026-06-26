@@ -104,9 +104,11 @@ paths:
           - **Id resolution** — `ids` (comma-separated UUIDs) resolves known ids to summaries
             (match rosters, rating history, calculation previews). Exclusive: it cannot be
             combined with the search filters below.
-          - **Search** — any combination of `name`, `sex`, `age`, `rating` (AND-combined; at
-            least one required). `name` is a fuzzy, partial match across all of a profile's
-            names. `age` and `rating` are interval strings: `[` / `]` inclusive, `(` / `)`
+          - **Search** — any combination of `name`, `code`, `q`, `sex`, `age`, `rating`
+            (AND-combined; at least one required). `name` is a fuzzy, partial match across all of
+            a profile's names; `code` is a player-code prefix; `q` is a unified term matching a
+            fuzzy name OR a code prefix. `age` and `rating` are interval strings: `[` / `]`
+            inclusive, `(` / `)`
             exclusive, an empty side is unbounded — e.g. `(3.0,4.0)`, `[3.0,4.0)`, `(20,30]`,
             `[3.0,)`. Rating filters the NTRP rating.
         Returns slim summaries (no contacts/identities); capped server-side.
@@ -126,7 +128,15 @@ paths:
           required: false
           schema:
             type: string
-          description: Exact shareable player code, case-insensitive (search mode).
+          description: Shareable player-code prefix, case-insensitive (search mode).
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+          description: >-
+            Unified picker term — matches a fuzzy name OR a player-code prefix (search mode), so
+            typing either surfaces players incrementally.
         - name: sex
           in: query
           required: false
