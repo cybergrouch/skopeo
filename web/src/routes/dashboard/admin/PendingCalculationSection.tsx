@@ -13,11 +13,22 @@ import {
   useGetApiV1Matches,
 } from '@/api/generated/matches/matches'
 import { usePostApiV1RatingsCalculations } from '@/api/generated/ratings/ratings'
+import { useGetApiV1Users } from '@/api/generated/users/users'
 import { GetApiV1MatchesFilter } from '@/api/generated/model'
-import type { CalculationResponse } from '@/api/generated/model'
+import type { CalculationResponse, MatchResponse } from '@/api/generated/model'
 import { plural } from '@/lib/plural'
 
 const PENDING_FILTER = { filter: GetApiV1MatchesFilter['pending-calculation'] }
+
+/** The winning side's resolved name for a completed match, or null if no winner is recorded. */
+function winnerName(
+  match: MatchResponse,
+  nameOf: (id: string) => string,
+): string | null {
+  if (match.winnerTeamId === match.team1.teamId) return match.team1.userIds.map(nameOf).join(', ')
+  if (match.winnerTeamId === match.team2.teamId) return match.team2.userIds.map(nameOf).join(', ')
+  return null
+}
 
 export function PendingCalculationSection() {
   const queryClient = useQueryClient()
@@ -26,6 +37,14 @@ export function PendingCalculationSection() {
 
   const matchesQuery = useGetApiV1Matches(PENDING_FILTER)
   const pending = matchesQuery.data ?? []
+
+  const ids = [...new Set(pending.flatMap((m) => [...m.team1.userIds, ...m.team2.userIds]))]
+  const usersQuery = useGetApiV1Users(
+    { ids: ids.join(',') },
+    { query: { enabled: ids.length > 0 } },
+  )
+  const nameById = new Map((usersQuery.data ?? []).map((u) => [u.id, u.displayName ?? u.id]))
+  const nameOf = (userId: string) => nameById.get(userId) ?? userId.slice(0, 8)
 
   const calculate = usePostApiV1RatingsCalculations({
     mutation: {
@@ -62,6 +81,29 @@ export function PendingCalculationSection() {
             {plural(pending.length)} pending calculation.
           </p>
         )}
+
+        {pending.length > 0 ? (
+          <ul className="space-y-2">
+            {pending.map((match) => {
+              const player1 = match.team1.userIds.map(nameOf).join(', ')
+              const player2 = match.team2.userIds.map(nameOf).join(', ')
+              const scores = match.sets.map((s) => `${s.team1Games}-${s.team2Games}`).join(' ')
+              const winner = winnerName(match, nameOf)
+              return (
+                <li key={match.id} className="rounded-lg border p-3 text-sm">
+                  <div className="font-medium">
+                    {player1} vs {player2}
+                  </div>
+                  <div className="text-muted-foreground">
+                    {match.matchDate}
+                    {scores ? ` · ${scores}` : ''}
+                    {winner ? ` · Winner: ${winner}` : ''}
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        ) : null}
 
         <div className="flex flex-wrap gap-2">
           <Button

@@ -9,6 +9,15 @@ const MIN_QUERY = 2
 // A player code is 6 chars from the Crockford-style alphabet (no I/L/O/U), case-insensitive.
 const CODE_RE = /^[0-9A-HJKMNP-TV-Z]{6}$/i
 
+/** Secondary suggestion line — sex · age · NTRP band — to disambiguate similar names (#87). */
+function detailLine(user: UserSummaryResponse): string {
+  const parts: string[] = []
+  if (user.sex) parts.push(user.sex)
+  if (user.age != null) parts.push(String(user.age))
+  if (user.rating) parts.push(`NTRP ${user.rating.level ?? user.rating.value}`)
+  return parts.join(' · ')
+}
+
 interface UserSearchSelectProps {
   label: string
   placeholder?: string
@@ -52,20 +61,30 @@ export function UserSearchSelect({
       />
       {enabled && results.length > 0 ? (
         <ul className="rounded-md border" role="listbox">
-          {results.map((user) => (
-            <li key={user.id}>
-              <button
-                type="button"
-                className="block w-full px-3 py-2 text-left text-sm hover:bg-accent"
-                onClick={() => pick(user)}
-              >
-                {user.displayName ?? user.id}{' '}
-                <span className="text-muted-foreground">
-                  · {user.publicCode}
-                </span>
-              </button>
-            </li>
-          ))}
+          {results.map((user) => {
+            const detail = detailLine(user)
+            return (
+              <li key={user.id}>
+                <button
+                  type="button"
+                  className="block w-full px-3 py-2 text-left text-sm hover:bg-accent"
+                  onClick={() => pick(user)}
+                >
+                  <span className="font-medium">
+                    {user.displayName ?? user.id}
+                  </span>{' '}
+                  <span className="text-muted-foreground">
+                    · {user.publicCode}
+                  </span>
+                  {detail ? (
+                    <span className="block text-xs text-muted-foreground">
+                      {detail}
+                    </span>
+                  ) : null}
+                </button>
+              </li>
+            )
+          })}
         </ul>
       ) : null}
       {enabled && !query.isLoading && results.length === 0 ? (
