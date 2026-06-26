@@ -246,6 +246,18 @@ CREATE TABLE user_rating_history (
     dominance_factor NUMERIC(10, 6),
     smoothing_applied BOOLEAN DEFAULT FALSE,
     smoothing_factor NUMERIC(3, 2),
+    -- Persisted calculation breakdown (issue #97): the per-match derivatives (#89) stored at commit
+    -- time so the calculation behind a committed rating can be shown faithfully later — recomputing
+    -- on demand would drift if the algorithm constants (K-factor, competitive threshold, upset
+    -- multiplier) ever change. Nullable: initial admin-set assessments (match_id IS NULL) have none.
+    -- The dominance term reuses dominance_factor above.
+    scale NUMERIC(10, 6),
+    rating_gap NUMERIC(10, 6),
+    normalized_gap NUMERIC(10, 6),
+    competitive_threshold_pct NUMERIC(10, 6),
+    is_upset BOOLEAN,
+    upset_multiplier NUMERIC(10, 6),
+    k_factor NUMERIC(10, 6),
     calculated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT fk_rating_history_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
