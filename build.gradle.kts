@@ -85,6 +85,10 @@ dependencies {
     // Integration tests against a real PostgreSQL (applies the Flyway migration)
     testImplementation("org.testcontainers:postgresql:1.20.4")
     testImplementation("org.testcontainers:junit-jupiter:1.20.4")
+
+    // Architecture tests — enforce layered package dependencies (issue #69). Bytecode-based, so
+    // it's robust against Kotlin compiler versions (unlike source-scanning tools).
+    testImplementation("com.tngtech.archunit:archunit:1.3.0")
 }
 
 kotlin {

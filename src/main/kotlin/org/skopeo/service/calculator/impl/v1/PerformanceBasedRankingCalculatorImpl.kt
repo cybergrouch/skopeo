@@ -9,15 +9,15 @@ import org.skopeo.dto.RatingChange
 import org.skopeo.model.MatchScore
 import org.skopeo.model.PlayerProfile
 import org.skopeo.model.Rating
+import org.skopeo.model.bd
 import org.skopeo.model.calculateDominanceFactor
+import org.skopeo.model.divideBy
 import org.skopeo.model.matchScore
+import org.skopeo.model.toStringPrecise
 import org.skopeo.service.calculator.AuditEntry
 import org.skopeo.service.calculator.AuditTrail
 import org.skopeo.service.calculator.RankingCalculationResult
 import org.skopeo.service.calculator.RankingCalculator
-import org.skopeo.service.calculator.impl.bd
-import org.skopeo.service.calculator.impl.divideBy
-import org.skopeo.service.calculator.impl.toStringPrecise
 import java.math.BigDecimal
 
 /**

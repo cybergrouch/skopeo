@@ -4,8 +4,6 @@
 package org.skopeo.model
 
 import kotlinx.serialization.Serializable
-import org.skopeo.service.calculator.impl.bd
-import org.skopeo.service.calculator.impl.divideBy
 import java.math.BigDecimal
 
 /**

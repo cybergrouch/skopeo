@@ -65,3 +65,4 @@ Helper scripts in `scripts/`: `start-server.sh`, `stop-server.sh`, `test-api.sh`
 - Shared test fixtures: `TestScenarios.kt`, `TeamTestHelpers.kt`, `RankingTestCase.kt` under `src/test/.../calculator/impl/`.
 - JaCoCo excludes `dto/`, `model/`, `config/`, and `Application` from coverage; `check` fails below 75% line / 70% branch coverage on what remains.
 - The OpenAPI spec (`src/main/resources/openapi/documentation.yaml`) is hand-maintained and verified by `OpenAPIIntegrationTest` — update it when changing the API.
+- Layered package dependencies are enforced by `LayeredArchitectureTest` (ArchUnit): `repository` reaches up to nothing, `model` is pure domain, `dto` never touches `routes`/`repository`, `service` never touches `routes`. See `docs/engineering/architecture/LAYERED_ARCHITECTURE.md`.

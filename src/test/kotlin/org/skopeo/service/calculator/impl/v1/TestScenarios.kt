@@ -3,9 +3,9 @@
 
 package org.skopeo.service.calculator.impl.v1
 
-import org.skopeo.service.calculator.impl.bd
-import org.skopeo.service.calculator.impl.divideBy
-import org.skopeo.service.calculator.impl.toStringPrecise
+import org.skopeo.model.bd
+import org.skopeo.model.divideBy
+import org.skopeo.model.toStringPrecise
 import java.math.BigDecimal
 
 /**
