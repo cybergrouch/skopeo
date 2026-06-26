@@ -22,6 +22,11 @@ vi.mock('@/api/generated/ratings/ratings', () => ({
 vi.mock('@/api/generated/users/users', () => ({
   useGetApiV1PlayersCodeMatchHistory,
 }))
+// RatingHistoryCard pulls in the matches API (axios → firebase); mock it so the real Firebase
+// client never initializes in tests.
+vi.mock('@/api/generated/matches/matches', () => ({
+  useGetApiV1MatchesIdCalculation: vi.fn(() => ({ data: undefined, isLoading: false })),
+}))
 vi.mock('@/auth/useAuth', () => ({ useAuth: useAuthMock }))
 
 function renderProfile(
