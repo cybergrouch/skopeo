@@ -54,7 +54,7 @@ class PlayerService(
                 .mapValues { (_, rows) -> rows.associate { it.userId to it.previousLevel } }
         val opponents =
             users
-                .findAllByIds(ids = played.mapNotNull { opponentId(match = it, playerId = user.id) })
+                .findAllByIds(ids = played.map { opponentId(match = it, playerId = user.id) })
                 .associateBy { it.id }
         return played.map { match ->
             entry(match = match, playerId = user.id, opponents = opponents, levels = levelByMatchAndUser[match.id])
@@ -76,7 +76,7 @@ class PlayerService(
         val onTeam1 = playerId in match.team1.userIds
         val playerTeamId = if (onTeam1) match.team1.teamId else match.team2.teamId
         val oppId = opponentId(match = match, playerId = playerId)
-        val opp = oppId?.let { opponents[it] }
+        val opp = opponents.getValue(key = oppId)
         return PlayerMatchHistoryEntry(
             matchId = match.id.toString(),
             matchDate = match.matchDate.toString(),
@@ -89,20 +89,18 @@ class PlayerService(
                     val opponentGames = if (onTeam1) set.team2Games else set.team1Games
                     "$playerGames-$opponentGames"
                 },
-            opponent =
-                opp?.let {
-                    OpponentSummary(publicCode = it.publicCode, displayName = it.displayName(), photoUrl = it.photoUrl)
-                },
+            opponent = OpponentSummary(publicCode = opp.publicCode, displayName = opp.displayName(), photoUrl = opp.photoUrl),
             playerLevelAtMatch = levels?.get(key = playerId),
-            opponentLevelAtMatch = oppId?.let { levels?.get(key = it) },
+            opponentLevelAtMatch = levels?.get(key = oppId),
         )
     }
 
+    /** The opposing player's id. A singles match always has exactly one opponent (enforced on creation). */
     private fun opponentId(
         match: Match,
         playerId: UUID,
-    ): UUID? {
+    ): UUID {
         val otherSide = if (playerId in match.team1.userIds) match.team2 else match.team1
-        return otherSide.userIds.firstOrNull()
+        return otherSide.userIds.first()
     }
 }
