@@ -138,6 +138,33 @@ describe('PendingAssessmentSection', () => {
     expect(screen.getByText('1985-01-01')).toBeInTheDocument()
   })
 
+  it('prefills the rating input with a self-reported value and shows it', async () => {
+    useGetApiV1UsersPendingAssessment.mockReturnValue(
+      page([
+        {
+          userId: 'u6',
+          publicCode: 'FFF666',
+          displayName: 'Eve',
+          proposedRating: '3.5',
+        },
+      ]),
+    )
+    const user = userEvent.setup()
+    renderSection()
+
+    expect(screen.getByText('Self-rated:')).toBeInTheDocument()
+    expect(screen.getByLabelText('Rating')).toHaveValue('3.5')
+
+    // Approving as-is submits the prefilled value.
+    await user.click(screen.getByRole('button', { name: 'Set rating' }))
+    await waitFor(() =>
+      expect(mutateAsync).toHaveBeenCalledWith({
+        userId: 'u6',
+        data: { value: '3.5' },
+      }),
+    )
+  })
+
   it('paginates: shows controls and steps pages when total exceeds a page', async () => {
     // 45 total with a page of items → 3 pages; controls appear.
     useGetApiV1UsersPendingAssessment.mockReturnValue(

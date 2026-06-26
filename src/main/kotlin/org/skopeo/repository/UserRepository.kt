@@ -59,6 +59,7 @@ class UserRepository {
                     it[UsersTable.sex] = command.sex
                     it[UsersTable.city] = command.city
                     it[UsersTable.country] = command.country ?: "PH"
+                    it[UsersTable.proposedRating] = command.proposedRating
                 }
 
             command.names.forEach { name ->
@@ -294,6 +295,7 @@ private fun ResultRow.toUser(
         country = this[UsersTable.country],
         kycVerified = this[UsersTable.kycVerified],
         isActive = this[UsersTable.isActive],
+        proposedRating = this[UsersTable.proposedRating],
         names = names,
         contacts = contacts,
         identities = identities,

@@ -56,6 +56,8 @@ data class CreateUserRequest(
     val phone: String? = null,
     val city: String? = null,
     val country: String? = null,
+    // Optional self-reported NTRP rating (issue #75) — a proposal for an admin to approve/override.
+    val proposedRating: String? = null,
 )
 
 /**

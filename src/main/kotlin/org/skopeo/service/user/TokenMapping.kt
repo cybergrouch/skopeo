@@ -13,10 +13,12 @@ import org.skopeo.model.ContactType
 import org.skopeo.model.NameType
 import org.skopeo.model.ProfilePatch
 import org.skopeo.model.ProvisionUserCommand
+import org.skopeo.model.Rating
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.model.VerificationMethod
 import org.skopeo.model.VerificationStatus
+import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.format.DateTimeParseException
 
@@ -51,6 +53,13 @@ internal fun parseDateOfBirth(value: String?): LocalDate? {
     } catch (e: DateTimeParseException) {
         throw IllegalArgumentException("Invalid dateOfBirth '$value'; expected ISO-8601 (yyyy-MM-dd)", e)
     }
+}
+
+/** Validate an optional self-reported NTRP rating against the 1.0–7.0 range; blank means absent. */
+internal fun parseProposedRating(value: String?): BigDecimal? {
+    if (value.isNullOrBlank()) return null
+    Rating.fromValue(value = value) // throws IllegalArgumentException if non-numeric or out of NTRP range
+    return BigDecimal(value)
 }
 
 /**
@@ -113,6 +122,7 @@ internal fun buildProvisionCommand(
         sex = validatedSex(value = request.sex),
         city = request.city,
         country = request.country,
+        proposedRating = parseProposedRating(value = request.proposedRating),
         capabilities =
             if (isBootstrapAdmin(token = token, adminEmails = adminEmails)) {
                 setOf(Capability.PLAYER, Capability.ADMINISTRATOR)

@@ -4,6 +4,7 @@
 package org.skopeo.service.rating
 
 import org.skopeo.model.Capability
+import org.skopeo.model.Level
 import org.skopeo.model.PendingAssessment
 import org.skopeo.model.PendingAssessmentPage
 import org.skopeo.model.Rating
@@ -103,6 +104,8 @@ class RatingService(
             sex = sex,
             dateOfBirth = dateOfBirth,
             age = dateOfBirth?.let { ageInYears(dateOfBirth = it, asOf = today) },
+            // Surface the self-reported value as its published NTRP band (e.g. "4.0"), not the raw decimal.
+            proposedRating = proposedRating?.let { Level.fromValue(value = it.toPlainString()).value },
         )
 
     private fun parseConfidence(confidence: String?): BigDecimal {

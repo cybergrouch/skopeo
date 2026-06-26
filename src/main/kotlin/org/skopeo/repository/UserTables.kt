@@ -17,6 +17,8 @@ private const val CONTACT_TYPE_MAX = 10
 private const val CODE_MAX = 20 // enum-like codes: name_type, provider, source, verification_*, capability
 private const val VALUE_MAX = 255 // free-text values: name value, provider_uid, contact value
 private const val PUBLIC_CODE_LEN = 6 // shareable player code
+private const val RATING_PRECISION = 10 // NUMERIC(10,6), mirrors user_ratings.current_rating
+private const val RATING_SCALE = 6
 
 /**
  * Exposed mappings over the V1 schema. Flyway owns the DDL (these objects never
@@ -34,6 +36,7 @@ internal object UsersTable : UUIDTable(name = "users") {
     val kycVerified = bool(name = "kyc_verified").default(defaultValue = false)
     val isActive = bool(name = "is_active").default(defaultValue = true)
     val publicCode = varchar(name = "public_code", length = PUBLIC_CODE_LEN)
+    val proposedRating = decimal(name = "proposed_rating", precision = RATING_PRECISION, scale = RATING_SCALE).nullable()
 }
 
 internal object UserNamesTable : UUIDTable(name = "user_names") {

@@ -51,6 +51,7 @@ data class PendingAssessmentResponse(
     val sex: String? = null,
     val dateOfBirth: String? = null,
     val age: Int? = null,
+    val proposedRating: String? = null,
 )
 
 /** A page of pending assessments with the total count, so the admin UI can paginate. */
@@ -95,6 +96,7 @@ fun PendingAssessment.toResponse(): PendingAssessmentResponse =
         sex = sex,
         dateOfBirth = dateOfBirth?.toString(),
         age = age,
+        proposedRating = proposedRating,
     )
 
 fun PendingAssessmentPage.toResponse(): PendingAssessmentPageResponse =
