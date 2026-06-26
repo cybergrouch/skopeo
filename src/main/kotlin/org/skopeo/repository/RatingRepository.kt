@@ -6,6 +6,7 @@ package org.skopeo.repository
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.SqlExpressionBuilder
+import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -84,15 +85,25 @@ class RatingRepository {
             }
         }
 
-    /** Active users with no rating on record yet — pending an administrator's initial assessment. */
-    fun userIdsPendingAssessment(): List<UUID> =
+    /**
+     * One page of active users with no rating on record yet — pending an administrator's initial
+     * assessment — paired with the total count of all such users (for pagination). Ordered by id
+     * for a stable page boundary.
+     */
+    fun userIdsPendingAssessment(
+        limit: Int,
+        offset: Int,
+    ): Pair<List<UUID>, Long> =
         transaction {
-            val rated = UserRatingsTable.selectAll().map { it[UserRatingsTable.userId].value }.toSet()
-            UsersTable
-                .selectAll()
-                .where { UsersTable.isActive eq true }
-                .map { it[UsersTable.id].value }
-                .filterNot { it in rated }
+            val rated = UserRatingsTable.selectAll().map { it[UserRatingsTable.userId].value }
+            val pending = { UsersTable.selectAll().where { (UsersTable.isActive eq true) and (UsersTable.id notInList rated) } }
+            val total = pending().count()
+            val ids =
+                pending()
+                    .orderBy(UsersTable.id to SortOrder.ASC)
+                    .limit(n = limit, offset = offset.toLong())
+                    .map { it[UsersTable.id].value }
+            ids to total
         }
 
     /** Apply a match-driven rating update: set the new rating/level, bump matches played + last match date. */

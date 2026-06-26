@@ -824,20 +824,33 @@ paths:
 
   /api/v1/users/pending-assessment:
     get:
-      summary: List users pending an initial rating (ADMINISTRATOR only)
+      summary: List users pending an initial rating, paged (ADMINISTRATOR only)
       tags:
         - Ratings
       security:
         - firebaseAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+          description: Page size (clamped to 1..100).
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+          description: Number of rows to skip (clamped to >= 0).
       responses:
         '200':
-          description: Active users with no rating on record
+          description: A page of active users with no rating on record, plus the total count
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/PendingAssessmentResponse'
+                $ref: '#/components/schemas/PendingAssessmentPageResponse'
         '403':
           description: Caller is not an ADMINISTRATOR
 
@@ -1867,13 +1880,45 @@ components:
       type: object
       required:
         - userId
+        - publicCode
       properties:
         userId:
           type: string
           format: uuid
+        publicCode:
+          type: string
+          description: Short shareable player code; link the card to /players/{publicCode}.
         displayName:
           type: string
           nullable: true
+        photoUrl:
+          type: string
+          nullable: true
+        sex:
+          type: string
+          nullable: true
+        dateOfBirth:
+          type: string
+          format: date
+          nullable: true
+        age:
+          type: integer
+          nullable: true
+          description: Whole years as of today, computed from dateOfBirth.
+
+    PendingAssessmentPageResponse:
+      type: object
+      description: A page of pending assessments plus the total count of all pending users.
+      required:
+        - items
+        - total
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PendingAssessmentResponse'
+        total:
+          type: integer
 
     CreateFixtureRequest:
       type: object

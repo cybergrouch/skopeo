@@ -5,6 +5,7 @@ package org.skopeo.model
 
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.Period
 import java.util.UUID
 
 /** Authorization roles granted to a user (broad for now; devolvable to fine-grained capabilities later). */
@@ -120,6 +121,12 @@ data class User(
 
 /** The user's single active display name, if any (names include disabled ones). */
 fun User.displayName(): String? = names.firstOrNull { it.type == NameType.DISPLAY && it.isActive }?.value
+
+/** Whole years between [dateOfBirth] and [asOf]. */
+fun ageInYears(
+    dateOfBirth: LocalDate,
+    asOf: LocalDate,
+): Int = Period.between(dateOfBirth, asOf).years
 
 /** Everything needed to provision a new user in one transaction (e.g. on first sign-in). */
 data class ProvisionUserCommand(

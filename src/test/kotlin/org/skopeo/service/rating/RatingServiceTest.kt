@@ -4,6 +4,7 @@
 package org.skopeo.service.rating
 
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
@@ -20,6 +21,7 @@ import org.skopeo.repository.UserRepository
 import org.skopeo.service.user.ForbiddenException
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.testsupport.PostgresTestDatabase
+import java.time.LocalDate
 import java.util.UUID
 
 class RatingServiceTest {
@@ -132,11 +134,52 @@ class RatingServiceTest {
         val rated = provisionUser(uid = "rated")
         service.setRating(token = token(uid = "root"), userId = rated.id, value = "3.0", confidence = null)
 
-        val pending = service.pendingAssessment(token = token(uid = "root")).map { it.userId }
+        val pending = service.pendingAssessment(token = token(uid = "root"), limit = 50, offset = 0).items.map { it.userId }
         (unrated.id in pending) shouldBe true
         (rated.id in pending) shouldBe false
 
-        shouldThrow<ForbiddenException> { service.pendingAssessment(token = token(uid = "unrated")) }
+        shouldThrow<ForbiddenException> { service.pendingAssessment(token = token(uid = "unrated"), limit = 50, offset = 0) }
+    }
+
+    @Test
+    fun `pending assessment enriches each entry with public code, sex and computed age`() {
+        admin(uid = "root")
+        val dob = LocalDate.now().minusYears(30).minusDays(1) // 30 years and a day ago → age 30
+        val player =
+            users.provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = "rich",
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "rich", isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = "Rich")),
+                        dateOfBirth = dob,
+                        sex = "Female",
+                        capabilities = setOf(element = Capability.PLAYER),
+                    ),
+            )
+
+        val page = service.pendingAssessment(token = token(uid = "root"), limit = 50, offset = 0)
+        val entry = page.items.single { it.userId == player.id }
+        entry.publicCode shouldBe player.publicCode
+        entry.displayName shouldBe "Rich"
+        entry.sex shouldBe "Female"
+        entry.dateOfBirth shouldBe dob
+        entry.age shouldBe 30
+        page.total shouldBe 2 // the new player plus the unrated admin
+    }
+
+    @Test
+    fun `pending assessment paginates and clamps an oversized limit`() {
+        admin(uid = "root") // 1 pending (the admin has no rating)
+        (1..3).forEach { provisionUser(uid = "p$it") } // 3 more pending → 4 total
+
+        val firstTwo = service.pendingAssessment(token = token(uid = "root"), limit = 2, offset = 0)
+        firstTwo.items shouldHaveSize 2
+        firstTwo.total shouldBe 4
+
+        // Limit is clamped to the max page size, so an oversized request still returns everyone.
+        val clamped = service.pendingAssessment(token = token(uid = "root"), limit = 9999, offset = 0)
+        clamped.items shouldHaveSize 4
     }
 
     @Test
@@ -163,7 +206,7 @@ class RatingServiceTest {
                     ),
             )
 
-        val entry = service.pendingAssessment(token = token(uid = "root")).single { it.userId == nameless.id }
+        val entry = service.pendingAssessment(token = token(uid = "root"), limit = 50, offset = 0).items.single { it.userId == nameless.id }
         entry.displayName shouldBe null
     }
 

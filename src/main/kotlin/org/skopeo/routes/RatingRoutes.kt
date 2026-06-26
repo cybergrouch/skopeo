@@ -23,6 +23,8 @@ import org.skopeo.dto.rating.toResponse
 import org.skopeo.service.rating.RatingCalculationService
 import org.skopeo.service.rating.RatingService
 
+private const val DEFAULT_PENDING_PAGE_SIZE = 20
+
 /**
  * Rating & assessment API. Reads are self-or-ADMINISTRATOR; setting a rating and the
  * pending-assessment list are ADMINISTRATOR-only (enforced in [RatingService]). Routes stay thin.
@@ -36,8 +38,14 @@ fun Application.configureRatingRoutes(
             // Constant path — registered alongside /users/{id}; Ktor prefers the constant segment.
             get(path = "/api/v1/users/pending-assessment") {
                 respondMappingErrors {
-                    val pending = service.pendingAssessment(token = verifiedToken())
-                    call.respond(status = HttpStatusCode.OK, message = pending.map { it.toResponse() })
+                    val params = call.request.queryParameters
+                    val page =
+                        service.pendingAssessment(
+                            token = verifiedToken(),
+                            limit = params["limit"]?.toIntOrNull() ?: DEFAULT_PENDING_PAGE_SIZE,
+                            offset = params["offset"]?.toIntOrNull() ?: 0,
+                        )
+                    call.respond(status = HttpStatusCode.OK, message = page.toResponse())
                 }
             }
             // Calculation trigger (ADMINISTRATOR). dryRun defaults true; an empty body is a dry run.

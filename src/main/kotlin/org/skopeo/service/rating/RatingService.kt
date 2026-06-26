@@ -4,20 +4,25 @@
 package org.skopeo.service.rating
 
 import org.skopeo.model.Capability
-import org.skopeo.model.NameType
 import org.skopeo.model.PendingAssessment
+import org.skopeo.model.PendingAssessmentPage
 import org.skopeo.model.Rating
 import org.skopeo.model.RatingHistoryEntry
+import org.skopeo.model.User
 import org.skopeo.model.UserRating
+import org.skopeo.model.ageInYears
+import org.skopeo.model.displayName
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.user.ForbiddenException
 import org.skopeo.service.user.UserNotFoundException
 import org.skopeo.service.user.VerifiedFirebaseToken
 import java.math.BigDecimal
+import java.time.LocalDate
 import java.util.UUID
 
 private val DEFAULT_CONFIDENCE = BigDecimal("0.50")
+private const val MAX_PAGE_SIZE = 100
 
 /**
  * Reading ratings/history is self-or-ADMINISTRATOR; setting a rating (the initial
@@ -72,14 +77,33 @@ class RatingService(
         )
     }
 
-    fun pendingAssessment(token: VerifiedFirebaseToken): List<PendingAssessment> {
+    fun pendingAssessment(
+        token: VerifiedFirebaseToken,
+        limit: Int,
+        offset: Int,
+    ): PendingAssessmentPage {
         requireAdmin(token = token)
-        return ratings.userIdsPendingAssessment().map { id ->
-            val displayName =
-                users.findById(id = id)?.names?.firstOrNull { it.type == NameType.DISPLAY && it.isActive }?.value
-            PendingAssessment(userId = id, displayName = displayName)
-        }
+        val (ids, total) =
+            ratings.userIdsPendingAssessment(
+                limit = limit.coerceIn(minimumValue = 1, maximumValue = MAX_PAGE_SIZE),
+                offset = offset.coerceAtLeast(minimumValue = 0),
+            )
+        val today = LocalDate.now()
+        // findAllByIds preserves the id order, so the page order is the repository's stable order.
+        val items = users.findAllByIds(ids = ids).map { it.toPendingAssessment(today = today) }
+        return PendingAssessmentPage(items = items, total = total.toInt())
     }
+
+    private fun User.toPendingAssessment(today: LocalDate): PendingAssessment =
+        PendingAssessment(
+            userId = id,
+            publicCode = publicCode,
+            displayName = displayName(),
+            photoUrl = photoUrl,
+            sex = sex,
+            dateOfBirth = dateOfBirth,
+            age = dateOfBirth?.let { ageInYears(dateOfBirth = it, asOf = today) },
+        )
 
     private fun parseConfidence(confidence: String?): BigDecimal {
         val value = confidence?.let { BigDecimal(it) } ?: return DEFAULT_CONFIDENCE

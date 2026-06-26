@@ -43,10 +43,24 @@ data class RatingHistoryEntry(
     val calculatedAt: LocalDateTime,
 )
 
-/** A user awaiting their initial rating (no rating on record) — surfaced to administrators. */
+/**
+ * A user awaiting their initial rating (no rating on record) — surfaced to administrators with
+ * enough context to recall and assess the player (avatar, sex, age) and a link to their profile.
+ */
 data class PendingAssessment(
     val userId: UUID,
+    val publicCode: String,
     val displayName: String?,
+    val photoUrl: String?,
+    val sex: String?,
+    val dateOfBirth: LocalDate?,
+    val age: Int?,
+)
+
+/** A page of pending assessments plus the total count of all pending users (for pagination). */
+data class PendingAssessmentPage(
+    val items: List<PendingAssessment>,
+    val total: Int,
 )
 
 /** A rating-history row to append when the calculation trigger commits a match. */

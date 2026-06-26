@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { PendingAssessmentSection } from './PendingAssessmentSection'
 
@@ -31,19 +32,24 @@ function renderSection() {
   const client = new QueryClient()
   return render(
     <QueryClientProvider client={client}>
-      <PendingAssessmentSection />
+      <MemoryRouter>
+        <PendingAssessmentSection />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
+}
+
+function page(items: unknown[], total = items.length) {
+  return { data: { items, total }, isLoading: false }
 }
 
 describe('PendingAssessmentSection', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     setRatingState.isPending = false
-    useGetApiV1UsersPendingAssessment.mockReturnValue({
-      data: [{ userId: 'u1', displayName: 'Roger F.' }],
-      isLoading: false,
-    })
+    useGetApiV1UsersPendingAssessment.mockReturnValue(
+      page([{ userId: 'u1', publicCode: 'AAA111', displayName: 'Roger F.' }]),
+    )
     mutateAsync.mockResolvedValue({})
   })
 
@@ -57,10 +63,7 @@ describe('PendingAssessmentSection', () => {
   })
 
   it('shows an empty state when no one is pending', () => {
-    useGetApiV1UsersPendingAssessment.mockReturnValue({
-      data: [],
-      isLoading: false,
-    })
+    useGetApiV1UsersPendingAssessment.mockReturnValue(page([]))
     renderSection()
     expect(
       screen.getByText('No players are pending assessment.'),
@@ -68,12 +71,95 @@ describe('PendingAssessmentSection', () => {
   })
 
   it('falls back to the user id when there is no display name', () => {
-    useGetApiV1UsersPendingAssessment.mockReturnValue({
-      data: [{ userId: 'u-no-name', displayName: null }],
-      isLoading: false,
-    })
+    useGetApiV1UsersPendingAssessment.mockReturnValue(
+      page([{ userId: 'u-no-name', publicCode: 'BBB222', displayName: null }]),
+    )
     renderSection()
     expect(screen.getByText('u-no-name')).toBeInTheDocument()
+  })
+
+  it('shows an avatar, sex+age(+dob), and links the name to the public profile', () => {
+    useGetApiV1UsersPendingAssessment.mockReturnValue(
+      page([
+        {
+          userId: 'u2',
+          publicCode: 'K7Q2MX',
+          displayName: 'Ana',
+          photoUrl: 'https://example.com/ana.jpg',
+          sex: 'Female',
+          dateOfBirth: '1990-03-15',
+          age: 34,
+        },
+      ]),
+    )
+    const { container } = renderSection()
+    expect(screen.getByText('Female · 34 (1990-03-15)')).toBeInTheDocument()
+    expect(container.querySelector('img')).toHaveAttribute(
+      'src',
+      'https://example.com/ana.jpg',
+    )
+    expect(screen.getByRole('link', { name: 'Ana' })).toHaveAttribute(
+      'href',
+      '/players/K7Q2MX',
+    )
+  })
+
+  it('omits the meta line when there is no sex/age/dob, using initials for the avatar', () => {
+    useGetApiV1UsersPendingAssessment.mockReturnValue(
+      page([{ userId: 'u3', publicCode: 'CCC333', displayName: 'Bea' }]),
+    )
+    const { container } = renderSection()
+    expect(container.querySelector('img')).toBeNull()
+    expect(screen.getByText('B')).toBeInTheDocument()
+  })
+
+  it('shows the age alone when the date of birth is absent', () => {
+    useGetApiV1UsersPendingAssessment.mockReturnValue(
+      page([
+        { userId: 'u5', publicCode: 'EEE555', displayName: 'Dee', sex: 'Male', age: 41 },
+      ]),
+    )
+    renderSection()
+    expect(screen.getByText('Male · 41')).toBeInTheDocument()
+  })
+
+  it('shows the date of birth alone when age is absent', () => {
+    useGetApiV1UsersPendingAssessment.mockReturnValue(
+      page([
+        {
+          userId: 'u4',
+          publicCode: 'DDD444',
+          displayName: 'Cy',
+          dateOfBirth: '1985-01-01',
+        },
+      ]),
+    )
+    renderSection()
+    expect(screen.getByText('1985-01-01')).toBeInTheDocument()
+  })
+
+  it('paginates: shows controls and steps pages when total exceeds a page', async () => {
+    // 45 total with a page of items → 3 pages; controls appear.
+    useGetApiV1UsersPendingAssessment.mockReturnValue(
+      page([{ userId: 'u1', publicCode: 'AAA111', displayName: 'Roger F.' }], 45),
+    )
+    const user = userEvent.setup()
+    renderSection()
+
+    expect(screen.getByText('Page 1 of 3 · 45 total')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled()
+
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    expect(screen.getByText('Page 2 of 3 · 45 total')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Previous' })).toBeEnabled()
+
+    await user.click(screen.getByRole('button', { name: 'Previous' }))
+    expect(screen.getByText('Page 1 of 3 · 45 total')).toBeInTheDocument()
+  })
+
+  it('hides pagination controls when everyone fits on one page', () => {
+    renderSection()
+    expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument()
   })
 
   it('assigns a rating with the entered value', async () => {
