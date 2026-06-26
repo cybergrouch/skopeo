@@ -50,7 +50,7 @@ class PlayerService(
         val levelByMatchAndUser =
             ratings
                 .historyForMatches(matchIds = ratedMatchIds)
-                .groupBy { it.matchId!! }
+                .groupBy { it.matchId }
                 .mapValues { (_, rows) -> rows.associate { it.userId to it.previousLevel } }
         val opponents =
             users
@@ -93,8 +93,8 @@ class PlayerService(
                 opp?.let {
                     OpponentSummary(publicCode = it.publicCode, displayName = it.displayName(), photoUrl = it.photoUrl)
                 },
-            playerLevelAtMatch = levels?.get(playerId),
-            opponentLevelAtMatch = oppId?.let { levels?.get(it) },
+            playerLevelAtMatch = levels?.get(key = playerId),
+            opponentLevelAtMatch = oppId?.let { levels?.get(key = it) },
         )
     }
 
