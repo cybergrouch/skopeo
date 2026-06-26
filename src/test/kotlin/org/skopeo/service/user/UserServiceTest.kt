@@ -18,8 +18,10 @@ import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.model.VerificationStatus
+import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
+import java.math.BigDecimal
 import java.util.UUID
 
 class UserServiceTest {
@@ -57,6 +59,18 @@ class UserServiceTest {
     private val request = CreateUserRequest(displayName = "Juan", dateOfBirth = "2000-01-01", sex = "Male")
 
     private val bootstrapService = UserService(repository = repository, adminEmails = setOf(element = "admin@example.com"))
+
+    @Test
+    fun `currentRatings returns the current rating per user, omitting the unrated`() {
+        val rated = service.provision(token = token(uid = "r"), request = request).user
+        val unrated = service.provision(token = token(uid = "u"), request = request).user
+        RatingRepository().setRating(userId = rated.id, rating = BigDecimal("4.0"), level = "4.0", confidence = BigDecimal("0.50"))
+
+        val map = service.currentRatings(ids = listOf(rated.id, unrated.id))
+
+        map.keys shouldBe setOf(element = rated.id)
+        map[rated.id]?.currentLevel shouldBe "4.0"
+    }
 
     @Test
     fun `provision creates a player then is idempotent`() {

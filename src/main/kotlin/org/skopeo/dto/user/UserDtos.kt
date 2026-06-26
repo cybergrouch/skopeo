@@ -6,6 +6,9 @@ package org.skopeo.dto.user
 import kotlinx.serialization.Serializable
 import org.skopeo.model.NameType
 import org.skopeo.model.User
+import org.skopeo.model.UserRating
+import org.skopeo.model.ageInYears
+import java.time.LocalDate
 
 /**
  * Request/response shapes for the user-management API.
@@ -131,23 +134,31 @@ fun User.toResponse(): UserResponse =
         capabilities = capabilities.map { it.name }.sorted(),
     )
 
-/** Slim user shape for search results (player picker, role grants, research) — no contacts. */
+/**
+ * Slim user shape for search results (player picker, role grants, research) — no contacts.
+ * Carries the player's current NTRP [rating] and a computed [age] (raw date of birth is withheld,
+ * mirroring the public-profile privacy stance — see issue #64).
+ */
 @Serializable
 data class UserSummaryResponse(
     val id: String,
     val publicCode: String,
     val displayName: String?,
+    val photoUrl: String?,
     val sex: String?,
-    val dateOfBirth: String?,
+    val age: Int?,
+    val rating: PublicRatingDto?,
     val capabilities: List<String>,
 )
 
-fun User.toSummary(): UserSummaryResponse =
+fun User.toSummary(rating: UserRating? = null): UserSummaryResponse =
     UserSummaryResponse(
         id = id.toString(),
         publicCode = publicCode,
         displayName = names.firstOrNull { it.type == NameType.DISPLAY && it.isActive }?.value,
+        photoUrl = photoUrl,
         sex = sex,
-        dateOfBirth = dateOfBirth?.toString(),
+        age = dateOfBirth?.let { ageInYears(dateOfBirth = it, asOf = LocalDate.now()) },
+        rating = rating?.let { PublicRatingDto(value = it.currentRating.toPlainString(), level = it.currentLevel) },
         capabilities = capabilities.map { it.name }.sorted(),
     )

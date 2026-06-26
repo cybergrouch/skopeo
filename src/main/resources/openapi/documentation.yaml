@@ -1573,7 +1573,9 @@ components:
 
     UserSummaryResponse:
       type: object
-      description: Slim user shape for search results (player picker, role grants, research).
+      description: >-
+        Slim user shape for search results (player picker, role grants, research). Carries the
+        current NTRP rating and a computed age; raw date of birth is withheld for privacy (#64).
       required:
         - id
         - publicCode
@@ -1588,14 +1590,28 @@ components:
         displayName:
           type: string
           nullable: true
+        photoUrl:
+          type: string
+          nullable: true
         sex:
           type: string
           nullable: true
           enum: [Male, Female]
-        dateOfBirth:
-          type: string
-          format: date
+        age:
+          type: integer
           nullable: true
+          description: Whole years as of today, computed from date of birth.
+        rating:
+          nullable: true
+          type: object
+          required:
+            - value
+          properties:
+            value:
+              type: string
+            level:
+              type: string
+              nullable: true
         capabilities:
           type: array
           items:

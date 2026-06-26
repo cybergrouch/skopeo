@@ -35,6 +35,19 @@ class RatingRepository {
 
     fun findCurrentRating(userId: UUID): UserRating? = transaction { ratingRow(userId = userId)?.toUserRating() }
 
+    /** Current ratings for many users at once, keyed by user id; users without a rating are absent. */
+    fun findCurrentRatings(userIds: List<UUID>): Map<UUID, UserRating> =
+        transaction {
+            if (userIds.isEmpty()) {
+                emptyMap()
+            } else {
+                UserRatingsTable
+                    .selectAll()
+                    .where { UserRatingsTable.userId inList userIds }
+                    .associate { row -> row.toUserRating().let { it.userId to it } }
+            }
+        }
+
     /** Insert or update the user's rating (admin assessment). */
     fun setRating(
         userId: UUID,

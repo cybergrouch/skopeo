@@ -9,9 +9,11 @@ import org.skopeo.model.Capability
 import org.skopeo.model.NumericRange
 import org.skopeo.model.ProfilePatch
 import org.skopeo.model.User
+import org.skopeo.model.UserRating
 import org.skopeo.model.UserSearchQuery
 import org.skopeo.model.ageRangeToDob
 import org.skopeo.repository.CapabilityRepository
+import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import java.time.LocalDate
 import java.util.UUID
@@ -37,9 +39,13 @@ data class UserSearchFilters(
 class UserService(
     private val repository: UserRepository = UserRepository(),
     private val capabilities: CapabilityRepository = CapabilityRepository(),
+    private val ratings: RatingRepository = RatingRepository(),
     // Verified-email allowlist for the ADMINISTRATOR bootstrap (from ADMIN_EMAILS); empty = none.
     private val adminEmails: Set<String> = emptySet(),
 ) {
+    /** Current ratings for the given users, keyed by id — enriches search summaries (issue #64). */
+    fun currentRatings(ids: List<UUID>): Map<UUID, UserRating> = ratings.findCurrentRatings(userIds = ids)
+
     /**
      * Staff search (HOST/ADMINISTRATOR) backing the player-picker, role-grants, and player
      * research. Any combination of facets is allowed and AND-combined; at least one is required.
@@ -51,7 +57,7 @@ class UserService(
         token: VerifiedFirebaseToken,
         filters: UserSearchFilters,
     ): List<User> {
-        requireStaff(token = token)
+        requireStaff(repository = repository, token = token)
         val nameTerm = filters.name?.let { it.trim().ifEmpty { null } }
         val codeTerm = filters.code?.let { it.trim().uppercase().ifEmpty { null } }
         val sexValue = validatedSex(value = filters.sex)
@@ -85,7 +91,7 @@ class UserService(
         token: VerifiedFirebaseToken,
         ids: List<UUID>,
     ): List<User> {
-        requireStaff(token = token)
+        requireStaff(repository = repository, token = token)
         require(value = ids.isNotEmpty()) { "ids must not be empty" }
         return repository.findAllByIds(ids = ids)
     }
@@ -156,12 +162,6 @@ class UserService(
         repository.deactivate(id = id)
     }
 
-    /** Allow only HOST or ADMINISTRATOR callers. */
-    private fun requireStaff(token: VerifiedFirebaseToken) {
-        val caller = repository.findByFirebaseUid(firebaseUid = token.uid)
-        if (caller == null || caller.capabilities.none { it in STAFF_ROLES }) throw ForbiddenException()
-    }
-
     /** Allow only the target user themselves or an ADMINISTRATOR. */
     private fun requireAccess(
         token: VerifiedFirebaseToken,
@@ -192,4 +192,13 @@ private fun promoteIfBootstrapAdmin(
     capabilities.grant(userId = user.id, capability = Capability.ADMINISTRATOR)
     logger.info { "Bootstrap allowlist: granted ADMINISTRATOR to user ${user.id}" }
     return user.copy(capabilities = user.capabilities + Capability.ADMINISTRATOR)
+}
+
+/** Allow only HOST or ADMINISTRATOR callers. */
+private fun requireStaff(
+    repository: UserRepository,
+    token: VerifiedFirebaseToken,
+) {
+    val caller = repository.findByFirebaseUid(firebaseUid = token.uid)
+    if (caller == null || caller.capabilities.none { it in STAFF_ROLES }) throw ForbiddenException()
 }
