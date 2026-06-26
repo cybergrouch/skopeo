@@ -155,8 +155,9 @@ export function AwaitingResultsSection() {
       <CardHeader>
         <CardTitle>Awaiting results</CardTitle>
         <CardDescription>
-          Your scheduled fixtures whose date has passed. Record the set scores; the
-          server derives the winner.
+          Your scheduled fixtures awaiting results — they can be played anytime, so
+          record the set scores whenever the match happens; the server derives the
+          winner.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">

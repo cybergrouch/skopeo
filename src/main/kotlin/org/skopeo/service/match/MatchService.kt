@@ -138,7 +138,7 @@ class MatchService(
         val scopedTo = if (caller.capabilities.contains(element = Capability.ADMINISTRATOR)) null else caller.id
         return when (view) {
             MatchQuery.PENDING_CALCULATION -> matches.listPendingCalculation(createdBy = scopedTo)
-            MatchQuery.AWAITING_RESULTS -> matches.listAwaitingResults(asOf = LocalDate.now(), createdBy = scopedTo)
+            MatchQuery.AWAITING_RESULTS -> matches.listAwaitingResults(createdBy = scopedTo)
         }
     }
 
