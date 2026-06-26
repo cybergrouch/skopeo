@@ -6,8 +6,6 @@ import { useGetApiV1Users } from '@/api/generated/users/users'
 import type { UserSummaryResponse } from '@/api/generated/model'
 
 const MIN_QUERY = 2
-// A player code is 6 chars from the Crockford-style alphabet (no I/L/O/U), case-insensitive.
-const CODE_RE = /^[0-9A-HJKMNP-TV-Z]{6}$/i
 
 /** Secondary suggestion line — sex · age · NTRP band — to disambiguate similar names (#87). */
 function detailLine(user: UserSummaryResponse): string {
@@ -36,13 +34,10 @@ export function UserSearchSelect({
   const [term, setTerm] = useState('')
   const debounced = useDebouncedValue(term).trim()
   const enabled = debounced.length >= MIN_QUERY
-  // Exact match by player ID when the input looks like a code; otherwise fuzzy name search.
-  const isCode = CODE_RE.test(debounced)
 
-  const query = useGetApiV1Users(
-    isCode ? { code: debounced.toUpperCase() } : { name: debounced },
-    { query: { enabled } },
-  )
+  // Unified search (#86): the backend matches the term against names (fuzzy) OR a player-code
+  // prefix, so partial codes and names both surface incrementally without client-side guessing.
+  const query = useGetApiV1Users({ q: debounced }, { query: { enabled } })
   const results = (query.data ?? []).filter((u) => !excludeIds.includes(u.id))
 
   function pick(user: UserSummaryResponse) {

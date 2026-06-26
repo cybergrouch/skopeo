@@ -94,10 +94,15 @@ private fun wholeAge(value: BigDecimal): Int {
     return value.toInt()
 }
 
-/** Resolved repository-level user search: any non-null facet is an AND filter. */
+/**
+ * Resolved repository-level user search: any non-null facet is an AND filter. [q] is the unified
+ * picker term — it matches a fuzzy name OR a player-code prefix in a single OR clause (issue #86),
+ * so typing either surfaces players incrementally without the client having to guess.
+ */
 data class UserSearchQuery(
     val name: String?,
     val code: String?,
+    val q: String?,
     val sex: String?,
     val dobMin: LocalDate?,
     val dobMax: LocalDate?,
