@@ -76,6 +76,37 @@ describe('UserSearchSelect', () => {
     expect(screen.getByText('No matches.')).toBeInTheDocument()
   })
 
+  it('shows sex, age, and NTRP band in suggestions, with the value as a band fallback', async () => {
+    useGetApiV1Users.mockReturnValue({
+      data: [
+        {
+          id: 'u1',
+          publicCode: 'ABC234',
+          displayName: 'Alice',
+          sex: 'Female',
+          age: 34,
+          rating: { value: '4.000000', level: '4.0' },
+          capabilities: [],
+        },
+        {
+          id: 'u2',
+          publicCode: 'XYZ789',
+          displayName: 'Bob',
+          sex: 'Male',
+          age: 41,
+          rating: { value: '8.500000', level: null },
+          capabilities: [],
+        },
+      ],
+      isLoading: false,
+    })
+    const user = userEvent.setup()
+    render(<UserSearchSelect label="Player 1" onSelect={vi.fn()} />)
+    await user.type(screen.getByLabelText('Player 1'), 'al')
+    expect(screen.getByText('Female · 34 · NTRP 4.0')).toBeInTheDocument()
+    expect(screen.getByText('Male · 41 · NTRP 8.500000')).toBeInTheDocument()
+  })
+
   it('searches by player ID (uppercased) when the input looks like a code', async () => {
     const user = userEvent.setup()
     render(<UserSearchSelect label="Player 1" onSelect={vi.fn()} />)
