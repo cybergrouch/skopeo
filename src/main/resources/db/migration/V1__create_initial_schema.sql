@@ -2,6 +2,9 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
 
 -- Skopeo Schema (single consolidated migration)
+-- Pre-production baseline: V2–V5 have been folded in here (single-set match format #54,
+-- public_code #56, proposed_rating #75, invites #74). Once a production database exists this
+-- file is frozen — never edit an applied migration; add a new V2 instead.
 -- Core tables for:
 -- - User management: profile, names, auth identities, contacts, capabilities
 -- - Player Identity Verification (Philippine KYC)
@@ -44,6 +47,10 @@ CREATE TABLE users (
     kyc_verified BOOLEAN DEFAULT FALSE,
     kyc_verified_at TIMESTAMP,
     is_active BOOLEAN DEFAULT TRUE,
+    -- Short, human-readable, shareable player code (#56): 6 Crockford-base32 chars; app-generated, unique.
+    public_code VARCHAR(6) NOT NULL,
+    -- Optional self-reported NTRP rating at sign-up (#75); a proposal only — an admin approves/overrides.
+    proposed_rating NUMERIC(10, 6),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
@@ -52,6 +59,7 @@ CREATE TABLE users (
 
 CREATE INDEX idx_users_created_at ON users(created_at);
 CREATE INDEX idx_users_is_active ON users(is_active);
+CREATE UNIQUE INDEX uq_users_public_code ON users (public_code);
 
 -- User Names (append-only; Filipino nicknames are distinct from legal names).
 -- Name values are immutable: instead of editing, a name is disabled and a new one
@@ -319,7 +327,7 @@ CREATE TABLE matches (
     CONSTRAINT fk_matches_recorded_by FOREIGN KEY (recorded_by) REFERENCES users(id) ON DELETE SET NULL,
     CONSTRAINT fk_matches_rated_by FOREIGN KEY (rated_by) REFERENCES users(id) ON DELETE SET NULL,
     CONSTRAINT chk_match_type CHECK (match_type IN ('SINGLES', 'DOUBLES', 'MIXED_DOUBLES')),
-    CONSTRAINT chk_match_format CHECK (match_format IN ('BEST_OF_THREE', 'BEST_OF_FIVE')),
+    CONSTRAINT chk_match_format CHECK (match_format IN ('BEST_OF_THREE', 'BEST_OF_FIVE', 'SINGLE_SET')),
     CONSTRAINT chk_match_status CHECK (status IN ('SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED')),
     CONSTRAINT chk_match_teams_different CHECK (team1_id != team2_id)
 );
@@ -440,3 +448,22 @@ COMMENT ON COLUMN teams.is_temporary IS 'TRUE for ad-hoc teams, FALSE for establ
 COMMENT ON COLUMN matches.metadata IS 'Flexible JSON field for additional match data';
 COMMENT ON COLUMN matches.completed_at IS 'When results were uploaded; ordering key for the rating-calculation trigger';
 COMMENT ON COLUMN matches.rated_at IS 'When the rating calculation finalized this match (null = pending calculation)';
+
+-- Admin invitations for manual (email/password & email-link) onboarding (issue #74). Manual sign-ups
+-- are invite-only: an admin records an invite for an email here, and profile provisioning is refused
+-- for a password/email-link token whose email has no open invite. OAuth sign-ups are exempt.
+-- status: PENDING | ACCEPTED | REVOKED (EXPIRED is derived from expires_at, not stored).
+CREATE TABLE invites (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    email VARCHAR(255) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    invited_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    expires_at TIMESTAMP NOT NULL,
+    accepted_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_invites_email ON invites (email);
+
+COMMENT ON TABLE invites IS 'Admin onboarding invitations; the provisioning gate admits a manual sign-up only with an open (PENDING, unexpired) invite for the email (#74)';
