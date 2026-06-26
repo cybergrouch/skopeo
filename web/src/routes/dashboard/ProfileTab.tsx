@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/auth/useAuth'
 import { MatchHistoryCard } from '@/components/MatchHistoryCard'
+import { RatingHistoryCard } from '@/components/RatingHistoryCard'
 import type { Capability } from '@/auth/capabilities'
 import {
   useGetApiV1UsersUserIdRatingHistory,
@@ -147,40 +148,11 @@ export function ProfileTab({ userId, capabilities, publicCode }: ProfileTabProps
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Rating history</CardTitle>
-          <CardDescription>Changes from your rated matches.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {historyQuery.isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
-          ) : history.length > 0 ? (
-            <ul className="space-y-2">
-              {history.map((entry) => (
-                <li
-                  key={entry.id}
-                  className="flex items-center justify-between rounded-lg border p-3 text-sm"
-                >
-                  <span className="text-muted-foreground">
-                    {entry.calculatedAt.slice(0, 10)}
-                  </span>
-                  <span>
-                    {entry.previousRating} → {entry.newRating}
-                    {entry.levelChanged && entry.newLevel
-                      ? ` (${entry.newLevel})`
-                      : ''}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              No rating changes yet.
-            </p>
-          )}
-        </CardContent>
-      </Card>
+      <RatingHistoryCard
+        entries={history}
+        isLoading={historyQuery.isLoading}
+        description="Changes from your rated matches."
+      />
 
       {publicCode ? <MatchHistoryCard code={publicCode} /> : null}
     </div>

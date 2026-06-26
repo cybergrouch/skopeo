@@ -285,6 +285,40 @@ paths:
         '404':
           description: No active player with that code
 
+  /api/v1/players/{code}/rating-history:
+    get:
+      summary: A player's rating history by code (ADMINISTRATOR only)
+      description: >-
+        The precise rating-history audit view for any player, resolved by public code. Unlike match
+        history this exposes full rating values alongside the published bands, so it is restricted to
+        ADMINISTRATORs (the owner reads their own history via /api/v1/users/{id}/rating-history).
+      tags:
+        - Users
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The player's shareable public code (case-insensitive).
+      responses:
+        '200':
+          description: The player's rating history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RatingHistoryResponse'
+        '401':
+          description: Missing or invalid Firebase token
+        '403':
+          description: Caller is not an ADMINISTRATOR
+        '404':
+          description: No active player with that code
+
   /api/v1/users/{id}:
     parameters:
       - name: id

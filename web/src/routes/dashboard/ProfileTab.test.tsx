@@ -167,7 +167,8 @@ describe('ProfileTab', () => {
       isLoading: false,
     })
     renderProfile()
-    expect(screen.getByText('4.000000 → 4.100000 (4.5)')).toBeInTheDocument()
+    // Full value lines (band transitions are rendered separately and covered in RatingHistoryCard).
+    expect(screen.getByText('4.000000 → 4.100000')).toBeInTheDocument()
     expect(screen.getByText('4.100000 → 4.050000')).toBeInTheDocument()
   })
 

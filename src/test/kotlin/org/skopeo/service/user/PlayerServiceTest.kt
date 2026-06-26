@@ -11,6 +11,7 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.model.AuthProvider
+import org.skopeo.model.Capability
 import org.skopeo.model.CreateFixtureCommand
 import org.skopeo.model.MatchFormat
 import org.skopeo.model.MatchSetResult
@@ -64,6 +65,19 @@ class PlayerServiceTest {
         )
 
     private fun display(name: String): List<UserName> = listOf(element = UserName(type = NameType.DISPLAY, value = name))
+
+    private fun newAdmin(uid: String): User =
+        users.provision(
+            command =
+                ProvisionUserCommand(
+                    firebaseUid = uid,
+                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                    names = display(name = "Admin"),
+                    capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
+                ),
+        )
+
+    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
     private fun fixture(
         u1: UUID,
@@ -222,5 +236,29 @@ class PlayerServiceTest {
     @Test
     fun `match history for an unknown code is a not-found`() {
         shouldThrow<ResourceNotFoundException> { service.matchHistory(code = "ZZZZZZ") }
+    }
+
+    @Test
+    fun `an admin reads a player's rating history by code, and a non-admin is forbidden`() {
+        newAdmin(uid = "admin")
+        val player = newUser(uid = "p", names = display(name = "Ana"))
+        val other = newUser(uid = "o", names = display(name = "Bob"))
+        val match = fixture(u1 = player.id, u2 = other.id, date = LocalDate.of(2026, 1, 1))
+        history(userId = player.id, matchId = match.id, previousLevel = "3.5")
+
+        service.ratingHistory(token = token(uid = "admin"), code = player.publicCode.lowercase()) shouldHaveSize 1
+
+        // A plain player cannot read anyone's rating history by code.
+        newUser(uid = "plain", names = display(name = "Plain"))
+        shouldThrow<ForbiddenException> { service.ratingHistory(token = token(uid = "plain"), code = player.publicCode) }
+    }
+
+    @Test
+    fun `rating history by code rejects an unknown caller and an unknown code`() {
+        newAdmin(uid = "admin")
+        // No provisioned user for this token → not an admin → forbidden.
+        shouldThrow<ForbiddenException> { service.ratingHistory(token = token(uid = "ghost"), code = "ABC234") }
+        // Admin, but the code resolves to nobody.
+        shouldThrow<ResourceNotFoundException> { service.ratingHistory(token = token(uid = "admin"), code = "ZZZZZZ") }
     }
 }

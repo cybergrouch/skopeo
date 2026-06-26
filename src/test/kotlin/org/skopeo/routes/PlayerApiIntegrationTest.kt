@@ -22,11 +22,19 @@ import io.ktor.server.testing.testApplication
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.dto.rating.RatingHistoryResponse
 import org.skopeo.dto.user.CreateUserRequest
 import org.skopeo.dto.user.PlayerMatchHistoryEntry
 import org.skopeo.dto.user.PublicPlayerResponse
 import org.skopeo.dto.user.UserResponse
+import org.skopeo.model.AuthProvider
+import org.skopeo.model.Capability
+import org.skopeo.model.NameType
+import org.skopeo.model.ProvisionUserCommand
+import org.skopeo.model.UserIdentity
+import org.skopeo.model.UserName
 import org.skopeo.module
+import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
 import org.skopeo.testsupport.TestFirebaseAuth
 
@@ -59,6 +67,19 @@ class PlayerApiIntegrationTest {
             contentType(type = ContentType.Application.Json)
             setBody(body = CreateUserRequest(displayName = "Ana", dateOfBirth = "2000-01-01", sex = "Male"))
         }
+
+    private fun seedAdminToken(uid: String = "admin"): String {
+        UserRepository().provision(
+            command =
+                ProvisionUserCommand(
+                    firebaseUid = uid,
+                    identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
+                    names = listOf(element = UserName(type = NameType.DISPLAY, value = "Admin")),
+                    capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
+                ),
+        )
+        return TestFirebaseAuth.mintToken(uid = uid)
+    }
 
     @Test
     fun `any authenticated user can resolve a player's public profile by code`() =
@@ -118,5 +139,24 @@ class PlayerApiIntegrationTest {
                     header(key = HttpHeaders.Authorization, value = "Bearer $token")
                 }
             response.status shouldBe HttpStatusCode.NotFound
+        }
+
+    @Test
+    fun `rating history by code is readable by an admin but forbidden to a plain player`() =
+        withApp { client ->
+            val adminToken = seedAdminToken()
+            val player = client.createUser(token = TestFirebaseAuth.mintToken(uid = "player")).body<UserResponse>()
+
+            val asAdmin =
+                client.get(urlString = "/api/v1/players/${player.publicCode}/rating-history") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                }
+            asAdmin.status shouldBe HttpStatusCode.OK
+            asAdmin.body<List<RatingHistoryResponse>>() shouldBe emptyList() // no calculations yet
+
+            // The player themselves is not an admin → forbidden on the code-based admin view.
+            client.get(urlString = "/api/v1/players/${player.publicCode}/rating-history") {
+                header(key = HttpHeaders.Authorization, value = "Bearer ${TestFirebaseAuth.mintToken(uid = "player")}")
+            }.status shouldBe HttpStatusCode.Forbidden
         }
 }

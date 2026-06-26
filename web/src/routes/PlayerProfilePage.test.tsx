@@ -3,15 +3,22 @@ import { render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { PlayerProfilePage } from './PlayerProfilePage'
 
-const { useGetApiV1PlayersCode, useGetApiV1PlayersCodeMatchHistory } = vi.hoisted(
-  () => ({
-    useGetApiV1PlayersCode: vi.fn(),
-    useGetApiV1PlayersCodeMatchHistory: vi.fn(),
-  }),
-)
+const {
+  useGetApiV1PlayersCode,
+  useGetApiV1PlayersCodeMatchHistory,
+  useGetApiV1PlayersCodeRatingHistory,
+  useGetApiV1UsersMe,
+} = vi.hoisted(() => ({
+  useGetApiV1PlayersCode: vi.fn(),
+  useGetApiV1PlayersCodeMatchHistory: vi.fn(),
+  useGetApiV1PlayersCodeRatingHistory: vi.fn(),
+  useGetApiV1UsersMe: vi.fn(),
+}))
 vi.mock('@/api/generated/users/users', () => ({
   useGetApiV1PlayersCode,
   useGetApiV1PlayersCodeMatchHistory,
+  useGetApiV1PlayersCodeRatingHistory,
+  useGetApiV1UsersMe,
 }))
 
 function renderAt(code = 'ABC234') {
@@ -31,7 +38,19 @@ describe('PlayerProfilePage', () => {
       data: [],
       isLoading: false,
     })
+    // Default viewer: a plain player (no admin capability).
+    useGetApiV1UsersMe.mockReturnValue({ data: { capabilities: ['PLAYER'] } })
+    useGetApiV1PlayersCodeRatingHistory.mockReturnValue({
+      data: [],
+      isLoading: false,
+    })
   })
+
+  const loadedPlayer = {
+    isLoading: false,
+    isError: false,
+    data: { publicCode: 'ABC234', displayName: 'Ana', photoUrl: null, rating: undefined },
+  }
 
   it('shows a loading state', () => {
     useGetApiV1PlayersCode.mockReturnValue({ isLoading: true, isError: false })
@@ -88,6 +107,40 @@ describe('PlayerProfilePage', () => {
     expect(screen.getByText('Player')).toBeInTheDocument()
     expect(screen.getByText('No rating yet.')).toBeInTheDocument()
     expect(container.querySelector('img')).toBeNull()
+  })
+
+  it('shows rating history to an ADMINISTRATOR viewing the profile', () => {
+    useGetApiV1PlayersCode.mockReturnValue(loadedPlayer)
+    useGetApiV1UsersMe.mockReturnValue({
+      data: { capabilities: ['PLAYER', 'ADMINISTRATOR'] },
+    })
+    useGetApiV1PlayersCodeRatingHistory.mockReturnValue({
+      isLoading: false,
+      data: [
+        {
+          id: 'h1',
+          previousRating: '4.000000',
+          newRating: '4.300000',
+          ratingChange: '0.300000',
+          previousLevel: '4.0',
+          newLevel: '4.5',
+          levelChanged: true,
+          calculatedAt: '2026-06-01T12:00:00',
+        },
+      ],
+    })
+    renderAt()
+    expect(screen.getByText('Full rating history (admin view).')).toBeInTheDocument()
+    expect(screen.getByText('4.000000 → 4.300000')).toBeInTheDocument()
+  })
+
+  it('hides rating history from a non-admin viewer', () => {
+    useGetApiV1PlayersCode.mockReturnValue(loadedPlayer)
+    // viewer defaults to PLAYER only (set in beforeEach)
+    renderAt()
+    expect(
+      screen.queryByText('Full rating history (admin view).'),
+    ).not.toBeInTheDocument()
   })
 
   it('handles a missing code param without crashing', () => {
