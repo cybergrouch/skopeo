@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import {
   Card,
   CardContent,
@@ -9,11 +10,21 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import { useGetApiV1Users } from '@/api/generated/users/users'
-import type { GetApiV1UsersParams } from '@/api/generated/model'
+import type {
+  GetApiV1UsersParams,
+  UserSummaryResponse,
+} from '@/api/generated/model'
 
 const SEXES = ['Male', 'Female'] as const
+
+/** "Female · 34" — sex and age, omitting whatever is missing. */
+function metaLine(user: UserSummaryResponse): string {
+  const parts: string[] = []
+  if (user.sex) parts.push(user.sex)
+  if (user.age != null) parts.push(String(user.age))
+  return parts.join(' · ')
+}
 
 /** Build inclusive interval notation from optional min/max (e.g. "[3.0,4.0]", "[3.0,)", "(,30]"). */
 function interval(min: string, max: string): string | undefined {
@@ -147,23 +158,46 @@ export function ResearchTab() {
               </p>
             ) : results.length > 0 ? (
               <ul className="space-y-2">
-                {results.map((user) => (
-                  <li
-                    key={user.id}
-                    className="flex items-center justify-between rounded-lg border p-3 text-sm"
-                  >
-                    <span className="font-medium">{user.displayName ?? user.id}</span>
-                    <span className="flex items-center gap-2 text-muted-foreground">
-                      {user.sex ? <span>{user.sex}</span> : null}
-                      {user.dateOfBirth ? <span>{user.dateOfBirth}</span> : null}
-                      {user.capabilities.map((c) => (
-                        <Badge key={c} variant="secondary">
-                          {c}
-                        </Badge>
-                      ))}
-                    </span>
-                  </li>
-                ))}
+                {results.map((user) => {
+                  const meta = metaLine(user)
+                  return (
+                    <li key={user.id}>
+                      <Link
+                        to={`/players/${user.publicCode}`}
+                        className="flex items-center gap-3 rounded-lg border p-3 text-sm hover:bg-muted/50"
+                      >
+                        {user.photoUrl ? (
+                          <img
+                            src={user.photoUrl}
+                            alt=""
+                            referrerPolicy="no-referrer"
+                            className="h-9 w-9 shrink-0 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div
+                            aria-hidden="true"
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-muted-foreground"
+                          >
+                            {(user.displayName ?? 'P').charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium">
+                            {user.displayName ?? user.id}
+                          </div>
+                          {meta ? (
+                            <div className="text-muted-foreground">{meta}</div>
+                          ) : null}
+                        </div>
+                        {user.rating ? (
+                          <span className="shrink-0 font-medium">
+                            NTRP {user.rating.level ?? user.rating.value}
+                          </span>
+                        ) : null}
+                      </Link>
+                    </li>
+                  )
+                })}
               </ul>
             ) : (
               <p className="text-sm text-muted-foreground">No matching players.</p>

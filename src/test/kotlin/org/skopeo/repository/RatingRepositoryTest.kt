@@ -75,6 +75,19 @@ class RatingRepositoryTest {
     }
 
     @Test
+    fun `findCurrentRatings returns a map keyed by user, omitting the unrated and the empty input`() {
+        val rated = newUser(uid = "rated")
+        val unrated = newUser(uid = "unrated")
+        ratings.setRating(userId = rated, rating = BigDecimal("4.5"), level = "4.5", confidence = BigDecimal("0.50"))
+
+        val map = ratings.findCurrentRatings(userIds = listOf(rated, unrated))
+        map.keys shouldBe setOf(element = rated)
+        map[rated]?.currentLevel shouldBe "4.5"
+
+        ratings.findCurrentRatings(userIds = emptyList()) shouldBe emptyMap()
+    }
+
+    @Test
     fun `pending assessment lists active users without a rating, with a total`() {
         val unrated = newUser(uid = "unrated")
         val rated = newUser(uid = "rated")

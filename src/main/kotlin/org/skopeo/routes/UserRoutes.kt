@@ -72,7 +72,8 @@ private fun Route.searchUsers(service: UserService) {
                             ),
                     )
                 }
-            call.respond(status = HttpStatusCode.OK, message = results.map { it.toSummary() })
+            val ratings = service.currentRatings(ids = results.map { it.id })
+            call.respond(status = HttpStatusCode.OK, message = results.map { it.toSummary(rating = ratings[it.id]) })
         }
     }
 }
