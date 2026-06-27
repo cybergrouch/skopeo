@@ -11,12 +11,19 @@ import java.util.UUID
  * single audit log captures every traceable action; domain tables don't reference it.
  */
 enum class AuditAction {
+    USER_CREATED,
+    NAME_ADDED,
+    NAME_UPDATED,
+    CONTACT_ADDED,
+    CONTACT_UPDATED,
     CAPABILITY_GRANTED,
     CAPABILITY_REVOKED,
     RATING_SET,
     RATING_OVERRIDDEN,
     INVITE_CREATED,
     INVITE_REVOKED,
+    MATCH_FIXTURE_CREATED,
+    MATCH_RESULT_RECORDED,
 }
 
 /** The kind of entity an [AuditAction] concerns. */
@@ -47,9 +54,14 @@ enum class AuditCategory {
 val AuditAction.category: AuditCategory
     get() =
         when (this) {
+            AuditAction.USER_CREATED -> AuditCategory.USER_CREATION
+            AuditAction.NAME_ADDED, AuditAction.NAME_UPDATED -> AuditCategory.NAME_CHANGE
+            AuditAction.CONTACT_ADDED, AuditAction.CONTACT_UPDATED -> AuditCategory.CONTACT_CHANGE
             AuditAction.CAPABILITY_GRANTED, AuditAction.CAPABILITY_REVOKED -> AuditCategory.CAPABILITY_CHANGE
             AuditAction.RATING_SET, AuditAction.RATING_OVERRIDDEN -> AuditCategory.RATING_CHANGE
             AuditAction.INVITE_CREATED, AuditAction.INVITE_REVOKED -> AuditCategory.INVITE
+            AuditAction.MATCH_FIXTURE_CREATED -> AuditCategory.MATCH_FIXTURE
+            AuditAction.MATCH_RESULT_RECORDED -> AuditCategory.MATCH_RESULT
         }
 
 /** The actions that roll up into a category (empty for categories whose events aren't wired yet). */

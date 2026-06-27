@@ -6,6 +6,9 @@ package org.skopeo.service.contact
 import org.jetbrains.exposed.exceptions.ExposedSQLException
 import org.skopeo.dto.contact.ContactCreateRequest
 import org.skopeo.dto.contact.VerificationRequest
+import org.skopeo.model.AuditAction
+import org.skopeo.model.AuditEntityType
+import org.skopeo.model.AuditWrite
 import org.skopeo.model.Capability
 import org.skopeo.model.Contact
 import org.skopeo.model.ContactType
@@ -13,6 +16,7 @@ import org.skopeo.model.VerificationMethod
 import org.skopeo.model.VerificationStatus
 import org.skopeo.repository.ContactRepository
 import org.skopeo.repository.UserRepository
+import org.skopeo.service.audit.AuditService
 import org.skopeo.service.user.ForbiddenException
 import org.skopeo.service.user.UserNotFoundException
 import org.skopeo.service.user.VerifiedFirebaseToken
@@ -30,6 +34,7 @@ private const val PG_UNIQUE_VIOLATION = "23505"
 class ContactService(
     private val contacts: ContactRepository = ContactRepository(),
     private val users: UserRepository = UserRepository(),
+    private val audit: AuditService = AuditService(),
 ) {
     fun list(
         token: VerifiedFirebaseToken,
@@ -56,11 +61,24 @@ class ContactService(
         request: ContactCreateRequest,
     ): Contact {
         requireUserExists(userId = userId)
-        requireUserAccess(token = token, userId = userId)
+        val actor = requireUserAccess(token = token, userId = userId)
         val type = parseType(value = request.type)
-        return conflictAware(message = "A ${type.name} contact already exists for this user") {
-            contacts.create(userId = userId, type = type, value = request.value, isPrimary = request.isPrimary)
-        }
+        val contact =
+            conflictAware(message = "A ${type.name} contact already exists for this user") {
+                contacts.create(userId = userId, type = type, value = request.value, isPrimary = request.isPrimary)
+            }
+        audit.record(
+            write =
+                AuditWrite(
+                    actorUserId = actor,
+                    action = AuditAction.CONTACT_ADDED,
+                    entityType = AuditEntityType.USER,
+                    entityId = userId,
+                    summary = "Added ${type.name} ${request.value}",
+                    details = mapOf("contactType" to type.name, "value" to request.value),
+                ),
+        )
+        return contact
     }
 
     /**
@@ -73,12 +91,25 @@ class ContactService(
         contactId: UUID,
         active: Boolean,
     ): Contact {
-        locate(userId = userId, contactId = contactId)
-        requireUserAccess(token = token, userId = userId)
+        val contact = locate(userId = userId, contactId = contactId)
+        val actor = requireUserAccess(token = token, userId = userId)
         val disabledAt = if (active) null else LocalDateTime.now()
-        return conflictAware(message = "Another active contact of that type already exists") {
-            contacts.setActive(id = contactId, active = active, disabledAt = disabledAt)
-        } ?: throw ContactNotFoundException(id = contactId)
+        val updated =
+            conflictAware(message = "Another active contact of that type already exists") {
+                contacts.setActive(id = contactId, active = active, disabledAt = disabledAt)
+            } ?: throw ContactNotFoundException(id = contactId)
+        audit.record(
+            write =
+                AuditWrite(
+                    actorUserId = actor,
+                    action = AuditAction.CONTACT_UPDATED,
+                    entityType = AuditEntityType.USER,
+                    entityId = userId,
+                    summary = "${if (active) "Enabled" else "Disabled"} ${contact.type.name} ${contact.value}",
+                    details = mapOf("contactId" to contactId.toString(), "active" to active.toString()),
+                ),
+        )
+        return updated
     }
 
     /** The ADMINISTRATOR-only verification action; records who verified and when. */
@@ -122,14 +153,16 @@ class ContactService(
         users.findById(id = userId) ?: throw UserNotFoundException(id = userId)
     }
 
+    /** Self-or-ADMINISTRATOR access; returns the caller's id (the audit actor). */
     private fun requireUserAccess(
         token: VerifiedFirebaseToken,
         userId: UUID,
-    ) {
+    ): UUID {
         val caller = users.findByFirebaseUid(firebaseUid = token.uid)
         val isSelf = caller?.id == userId
         val isAdmin = caller?.capabilities?.contains(element = Capability.ADMINISTRATOR) == true
-        if (!isSelf && !isAdmin) throw ForbiddenException()
+        if (caller == null || (!isSelf && !isAdmin)) throw ForbiddenException()
+        return caller.id
     }
 
     private fun requireAdmin(token: VerifiedFirebaseToken): UUID {

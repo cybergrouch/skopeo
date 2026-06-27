@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test
 import org.skopeo.dto.match.CreateFixtureRequest
 import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.dto.match.SetScoreRequest
+import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.MatchQuery
@@ -24,6 +25,7 @@ import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
+import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.MatchesTable
 import org.skopeo.repository.RatingRepository
@@ -278,6 +280,26 @@ class MatchServiceTest {
         service.getById(token = token(uid = "host"), matchId = match.id).id shouldBe match.id // staff
         shouldThrow<ForbiddenException> { service.getById(token = token(uid = "outsider"), matchId = match.id) }
         shouldThrow<MatchNotFoundException> { service.getById(token = token(uid = "host"), matchId = UUID.randomUUID()) }
+    }
+
+    @Test
+    fun `creating a fixture and uploading a result write audit-log entries (#100)`() {
+        val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val match = service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id))
+        service.uploadResult(token = token(uid = "host"), matchId = match.id, request = straightSets())
+
+        val audit = AuditRepository()
+        audit.list(actions = listOf(element = AuditAction.MATCH_FIXTURE_CREATED), limit = 10, offset = 0).first.single().let {
+            it.actorUserId shouldBe host.id
+            it.entityId shouldBe match.id
+            it.summary shouldBe "Created a SINGLES fixture on 2026-01-01"
+        }
+        audit.list(actions = listOf(element = AuditAction.MATCH_RESULT_RECORDED), limit = 10, offset = 0).first.single().let {
+            it.actorUserId shouldBe host.id
+            it.entityId shouldBe match.id
+        }
     }
 
     @Test

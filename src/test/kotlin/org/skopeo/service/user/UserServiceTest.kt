@@ -13,12 +13,14 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.dto.user.CreateUserRequest
+import org.skopeo.model.AuditAction
 import org.skopeo.model.Capability
 import org.skopeo.model.ProfilePatch
 import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.model.VerificationStatus
+import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.InviteRepository
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
@@ -66,6 +68,17 @@ class UserServiceTest {
     private val request = CreateUserRequest(displayName = "Juan", dateOfBirth = "2000-01-01", sex = "Male")
 
     private val bootstrapService = UserService(repository = repository, adminEmails = setOf(element = "admin@example.com"))
+
+    @Test
+    fun `provisioning a new user writes a USER_CREATED audit entry (#100)`() {
+        val provisioned = service.provision(token = token(uid = "newbie"), request = request)
+
+        AuditRepository().list(actions = listOf(element = AuditAction.USER_CREATED), limit = 10, offset = 0).first.single().let {
+            it.actorUserId shouldBe provisioned.user.id
+            it.entityId shouldBe provisioned.user.id
+            it.summary shouldBe "Signed up"
+        }
+    }
 
     @Test
     fun `currentRatings returns the current rating per user, omitting the unrated`() {
