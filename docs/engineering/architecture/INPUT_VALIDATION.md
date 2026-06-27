@@ -33,7 +33,7 @@ via `respondMappingErrors`); prefer the route boundary for new validation.
 | **ContactService** | ~~`parseType` (ContactType), `parseStatus` (VerificationStatus), `parseMethod` (VerificationMethod)~~ ✅ migrated | self-or-admin (edit) / admin-only (verify); contact exists; active-to-verify; VERIFIED→ADMIN_OVERRIDE default |
 | **RatingService** | ~~`parseConfidence` (0..1 range); NTRP value range/format~~ ✅ migrated | admin-only; user exists. (Level *derivation* stays in the service.) |
 | **MatchService** | `matchType`/`matchFormat` enums, `matchDate` date, team-id UUIDs, composition (players/side), score validity (non-negative games, single-set count, clear winner) | staff-only; participants/staff read; not-disabled; not-already-completed; rated-lock. **Coordinate with #108** (removes `matchFormat`). |
-| **UserService.search** | `validatedSex` (enum), `age`/`rating` interval parsing, "at least one filter required" | staff-only |
+| **UserService.search** | ~~`validatedSex` (enum), `age`/`rating` interval parsing~~ ✅ migrated | staff-only; "at least one filter" + term normalization (trim/uppercase) stay in the service — the presence check is coupled to normalization |
 | **InviteService** | `normalizeEmail` (email shape) | admin-only |
 
 ✅ = migrated in this PR. The rest follow incrementally, one service/route at a time, preserving the
