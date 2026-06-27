@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { LogOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { BrandLogo } from '@/components/BrandLogo'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuth } from '@/auth/useAuth'
 import { canManageMatches, isAdministrator } from '@/auth/capabilities'
@@ -28,7 +29,7 @@ export function DashboardPage() {
   return (
     <div className="min-h-svh bg-muted/40">
       <header className="flex items-center justify-between border-b bg-background px-4 py-3">
-        <span className="text-lg font-semibold">Skopeo</span>
+        <BrandLogo className="text-lg" />
         <Button
           variant="ghost"
           size="icon"
