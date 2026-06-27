@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.dto.contact.ContactCreateRequest
 import org.skopeo.dto.contact.VerificationRequest
+import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.NameType
@@ -21,6 +22,7 @@ import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.model.VerificationMethod
 import org.skopeo.model.VerificationStatus
+import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.ContactRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.user.ForbiddenException
@@ -76,6 +78,25 @@ class ContactServiceTest {
         contactId = contactId,
         request = VerificationRequest(status = status),
     )
+
+    @Test
+    fun `adding and disabling a contact write audit-log entries (#100)`() {
+        val owner = provisionUser(uid = "owner")
+        val created = service.create(token = token(uid = "owner"), userId = owner.id, request = email(value = "a@b.dev"))
+        service.setActive(token = token(uid = "owner"), userId = owner.id, contactId = created.id, active = false)
+        service.setActive(token = token(uid = "owner"), userId = owner.id, contactId = created.id, active = true)
+
+        val audit = AuditRepository()
+        audit.list(actions = listOf(element = AuditAction.CONTACT_ADDED), limit = 10, offset = 0).first.single().let {
+            it.actorUserId shouldBe owner.id
+            it.entityId shouldBe owner.id
+            it.summary shouldBe "Added EMAIL a@b.dev"
+        }
+        // Both the disable and the re-enable are recorded.
+        val updates =
+            audit.list(actions = listOf(element = AuditAction.CONTACT_UPDATED), limit = 10, offset = 0).first.map { it.summary }
+        updates.toSet() shouldBe setOf("Disabled EMAIL a@b.dev", "Enabled EMAIL a@b.dev")
+    }
 
     @Test
     fun `owner can create, list, get and disable own contacts`() {

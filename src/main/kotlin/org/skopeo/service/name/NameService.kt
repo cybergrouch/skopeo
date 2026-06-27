@@ -5,11 +5,15 @@ package org.skopeo.service.name
 
 import org.jetbrains.exposed.exceptions.ExposedSQLException
 import org.skopeo.dto.name.NameCreateRequest
+import org.skopeo.model.AuditAction
+import org.skopeo.model.AuditEntityType
+import org.skopeo.model.AuditWrite
 import org.skopeo.model.Capability
 import org.skopeo.model.Name
 import org.skopeo.model.NameType
 import org.skopeo.repository.NameRepository
 import org.skopeo.repository.UserRepository
+import org.skopeo.service.audit.AuditService
 import org.skopeo.service.user.ForbiddenException
 import org.skopeo.service.user.UserNotFoundException
 import org.skopeo.service.user.VerifiedFirebaseToken
@@ -28,6 +32,7 @@ private const val PG_UNIQUE_VIOLATION = "23505"
 class NameService(
     private val names: NameRepository = NameRepository(),
     private val users: UserRepository = UserRepository(),
+    private val audit: AuditService = AuditService(),
 ) {
     fun list(
         token: VerifiedFirebaseToken,
@@ -55,9 +60,21 @@ class NameService(
         request: NameCreateRequest,
     ): Name {
         requireUserExists(userId = userId)
-        requireUserAccess(token = token, userId = userId)
+        val actor = requireUserAccess(token = token, userId = userId)
         val type = parseType(value = request.type)
-        return names.create(userId = userId, type = type, value = request.value)
+        val name = names.create(userId = userId, type = type, value = request.value)
+        audit.record(
+            write =
+                AuditWrite(
+                    actorUserId = actor,
+                    action = AuditAction.NAME_ADDED,
+                    entityType = AuditEntityType.USER,
+                    entityId = userId,
+                    summary = "Added ${type.name} name '${request.value}'",
+                    details = mapOf("nameType" to type.name, "value" to request.value),
+                ),
+        )
+        return name
     }
 
     /**
@@ -71,14 +88,26 @@ class NameService(
         active: Boolean,
     ): Name {
         val target = locate(userId = userId, nameId = nameId)
-        requireUserAccess(token = token, userId = userId)
+        val actor = requireUserAccess(token = token, userId = userId)
         require(value = active || target.type != NameType.DISPLAY) {
             "Cannot disable the display name; add a new display name to replace it"
         }
         val disabledAt = if (active) null else LocalDateTime.now()
-        return conflictAware {
-            names.setActive(id = nameId, active = active, disabledAt = disabledAt)
-        } ?: throw NameNotFoundException(id = nameId)
+        // locate() already proved the name exists, so the update can't be a no-op; conflictAware
+        // still surfaces the display-name uniqueness conflict when re-enabling a former display name.
+        conflictAware { names.setActive(id = nameId, active = active, disabledAt = disabledAt) }
+        audit.record(
+            write =
+                AuditWrite(
+                    actorUserId = actor,
+                    action = AuditAction.NAME_UPDATED,
+                    entityType = AuditEntityType.USER,
+                    entityId = userId,
+                    summary = "${if (active) "Enabled" else "Disabled"} ${target.type.name} name '${target.value}'",
+                    details = mapOf("nameId" to nameId.toString(), "active" to active.toString()),
+                ),
+        )
+        return target.copy(isActive = active, disabledAt = disabledAt)
     }
 
     private fun locate(
@@ -94,14 +123,16 @@ class NameService(
         users.findById(id = userId) ?: throw UserNotFoundException(id = userId)
     }
 
+    /** Self-or-ADMINISTRATOR access; returns the caller's id (the audit actor). */
     private fun requireUserAccess(
         token: VerifiedFirebaseToken,
         userId: UUID,
-    ) {
+    ): UUID {
         val caller = users.findByFirebaseUid(firebaseUid = token.uid)
         val isSelf = caller?.id == userId
         val isAdmin = caller?.capabilities?.contains(element = Capability.ADMINISTRATOR) == true
-        if (!isSelf && !isAdmin) throw ForbiddenException()
+        if (caller == null || (!isSelf && !isAdmin)) throw ForbiddenException()
+        return caller.id
     }
 
     private fun parseType(value: String): NameType =

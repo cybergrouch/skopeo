@@ -5,6 +5,9 @@ package org.skopeo.service.user
 
 import mu.KotlinLogging
 import org.skopeo.dto.user.CreateUserRequest
+import org.skopeo.model.AuditAction
+import org.skopeo.model.AuditEntityType
+import org.skopeo.model.AuditWrite
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.NumericRange
@@ -17,6 +20,7 @@ import org.skopeo.repository.CapabilityRepository
 import org.skopeo.repository.InviteRepository
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
+import org.skopeo.service.audit.AuditService
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
@@ -45,6 +49,7 @@ class UserService(
     private val capabilities: CapabilityRepository = CapabilityRepository(),
     private val ratings: RatingRepository = RatingRepository(),
     private val invites: InviteRepository = InviteRepository(),
+    private val audit: AuditService = AuditService(),
     // Verified-email allowlist for the ADMINISTRATOR bootstrap (from ADMIN_EMAILS); empty = none.
     private val adminEmails: Set<String> = emptySet(),
 ) {
@@ -130,6 +135,17 @@ class UserService(
         val command = buildProvisionCommand(token = token, request = request, adminEmails = adminEmails)
         val user = repository.provision(command = command)
         if (invitedEmail != null) invites.markAccepted(email = invitedEmail, acceptedAt = LocalDateTime.now())
+        audit.record(
+            // Self sign-up: the new user is the actor.
+            write =
+                AuditWrite(
+                    actorUserId = user.id,
+                    action = AuditAction.USER_CREATED,
+                    entityType = AuditEntityType.USER,
+                    entityId = user.id,
+                    summary = "Signed up",
+                ),
+        )
         return Provisioned(user = user, created = true)
     }
 

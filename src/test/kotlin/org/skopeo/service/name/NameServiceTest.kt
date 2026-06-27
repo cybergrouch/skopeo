@@ -10,6 +10,7 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.dto.name.NameCreateRequest
+import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.NameType
@@ -17,6 +18,7 @@ import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
+import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.NameRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.user.ForbiddenException
@@ -65,6 +67,25 @@ class NameServiceTest {
         uid: String,
         userId: UUID,
     ) = service.list(token = token(uid = uid), userId = userId).single { it.type == NameType.DISPLAY && it.isActive }
+
+    @Test
+    fun `adding and disabling a name write audit-log entries (#100)`() {
+        val owner = provisionUser(uid = "owner")
+        val added = service.create(token = token(uid = "owner"), userId = owner.id, request = nickname(value = "JB"))
+        service.setActive(token = token(uid = "owner"), userId = owner.id, nameId = added.id, active = false)
+        service.setActive(token = token(uid = "owner"), userId = owner.id, nameId = added.id, active = true)
+
+        val audit = AuditRepository()
+        audit.list(actions = listOf(element = AuditAction.NAME_ADDED), limit = 10, offset = 0).first.single().let {
+            it.actorUserId shouldBe owner.id
+            it.entityId shouldBe owner.id
+            it.summary shouldBe "Added NICKNAME name 'JB'"
+        }
+        // Both the disable and the re-enable are recorded.
+        val updates =
+            audit.list(actions = listOf(element = AuditAction.NAME_UPDATED), limit = 10, offset = 0).first.map { it.summary }
+        updates.toSet() shouldBe setOf("Disabled NICKNAME name 'JB'", "Enabled NICKNAME name 'JB'")
+    }
 
     @Test
     fun `multiple names of the same type are allowed`() {

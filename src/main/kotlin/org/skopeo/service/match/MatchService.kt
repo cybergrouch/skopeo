@@ -5,6 +5,9 @@ package org.skopeo.service.match
 
 import org.skopeo.dto.match.CreateFixtureRequest
 import org.skopeo.dto.match.MatchResultRequest
+import org.skopeo.model.AuditAction
+import org.skopeo.model.AuditEntityType
+import org.skopeo.model.AuditWrite
 import org.skopeo.model.Capability
 import org.skopeo.model.CreateFixtureCommand
 import org.skopeo.model.Match
@@ -22,6 +25,7 @@ import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.ResourceNotFoundException
+import org.skopeo.service.audit.AuditService
 import org.skopeo.service.user.ForbiddenException
 import org.skopeo.service.user.VerifiedFirebaseToken
 import java.time.LocalDate
@@ -42,6 +46,7 @@ class MatchService(
     private val matches: MatchRepository = MatchRepository(),
     private val ratings: RatingRepository = RatingRepository(),
     private val users: UserRepository = UserRepository(),
+    private val audit: AuditService = AuditService(),
 ) {
     fun createFixture(
         token: VerifiedFirebaseToken,
@@ -59,21 +64,34 @@ class MatchService(
         val team1Users = resolveRatedParticipants(ids = team1Ids)
         val team2Users = resolveRatedParticipants(ids = team2Ids)
 
-        return matches.createFixture(
-            command =
-                CreateFixtureCommand(
-                    matchType = type,
-                    matchFormat = format,
-                    matchDate = matchDate,
-                    team1UserIds = team1Ids,
-                    team2UserIds = team2Ids,
-                    team1Name = teamName(users = team1Users),
-                    team2Name = teamName(users = team2Users),
-                    createdBy = createdBy,
-                    venue = request.venue,
-                    tournamentName = request.tournamentName,
+        val match =
+            matches.createFixture(
+                command =
+                    CreateFixtureCommand(
+                        matchType = type,
+                        matchFormat = format,
+                        matchDate = matchDate,
+                        team1UserIds = team1Ids,
+                        team2UserIds = team2Ids,
+                        team1Name = teamName(users = team1Users),
+                        team2Name = teamName(users = team2Users),
+                        createdBy = createdBy,
+                        venue = request.venue,
+                        tournamentName = request.tournamentName,
+                    ),
+            )
+        audit.record(
+            write =
+                AuditWrite(
+                    actorUserId = createdBy,
+                    action = AuditAction.MATCH_FIXTURE_CREATED,
+                    entityType = AuditEntityType.MATCH,
+                    entityId = match.id,
+                    summary = "Created a ${type.name} fixture on ${match.matchDate}",
+                    details = mapOf("matchType" to type.name, "matchDate" to match.matchDate.toString()),
                 ),
         )
+        return match
     }
 
     @Suppress("ThrowsCount") // distinct guardrails: not-found, disabled, already-completed
@@ -93,6 +111,19 @@ class MatchService(
                 request = request,
                 format = match.matchFormat,
             )
+        // All reachable validations have passed; record before persisting (the located, SCHEDULED
+        // match means addResult below won't be a no-op).
+        audit.record(
+            write =
+                AuditWrite(
+                    actorUserId = recordedBy,
+                    action = AuditAction.MATCH_RESULT_RECORDED,
+                    entityType = AuditEntityType.MATCH,
+                    entityId = matchId,
+                    summary = "Recorded a match result",
+                    details = mapOf("matchId" to matchId.toString(), "winnerTeamId" to winner.toString()),
+                ),
+        )
         return matches.addResult(
             matchId = matchId,
             sets = resolvedSets,
