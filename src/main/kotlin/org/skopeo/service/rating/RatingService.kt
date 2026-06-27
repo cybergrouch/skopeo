@@ -60,28 +60,25 @@ class RatingService(
         return ratings.historyByUser(userId = userId)
     }
 
-    /** Set (or adjust) a user's rating — ADMINISTRATOR only. Computes the published level. */
+    /**
+     * Set (or adjust) a user's rating — ADMINISTRATOR only. Computes the published level. The route
+     * has already validated the NTRP range and confidence bounds (#116); this trusts them.
+     */
     fun setRating(
         token: VerifiedFirebaseToken,
         userId: UUID,
-        value: String,
-        confidence: String?,
+        value: BigDecimal,
+        confidence: BigDecimal?,
     ): UserRating {
         val adminId = requireAdmin(token = token)
         requireUserExists(userId = userId)
-        // Rating.fromValue validates the NTRP range and derives the published level.
-        val level =
-            try {
-                Rating.fromValue(value = value).publishedLevel.value
-            } catch (e: IllegalArgumentException) {
-                throw IllegalArgumentException("Invalid rating '$value'", e)
-            }
-        val confidenceValue = parseConfidence(confidence = confidence)
+        val level = Rating.fromValue(value = value.toPlainString()).publishedLevel.value
+        val confidenceValue = confidence ?: DEFAULT_CONFIDENCE
         val previous = ratings.findCurrentRating(userId = userId)
         val updated =
             ratings.setRating(
                 userId = userId,
-                rating = BigDecimal(value),
+                rating = value,
                 level = level,
                 confidence = confidenceValue,
             )
@@ -167,12 +164,6 @@ class RatingService(
             // Surface the self-reported value as its published NTRP band (e.g. "4.0"), not the raw decimal.
             proposedRating = proposedRating?.let { Level.fromValue(value = it.toPlainString()).value },
         )
-
-    private fun parseConfidence(confidence: String?): BigDecimal {
-        val value = confidence?.let { BigDecimal(it) } ?: return DEFAULT_CONFIDENCE
-        require(value = value >= BigDecimal.ZERO && value <= BigDecimal.ONE) { "confidence must be between 0 and 1" }
-        return value
-    }
 
     private fun requireUserExists(userId: UUID) {
         users.findById(id = userId) ?: throw UserNotFoundException(id = userId)

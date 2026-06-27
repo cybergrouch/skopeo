@@ -112,6 +112,26 @@ class RatingApiIntegrationTest {
         }
 
     @Test
+    fun `an out-of-range rating or confidence is rejected at the route with a 400 (#116)`() =
+        withApp { client ->
+            val adminToken = seedAdminToken()
+            val user = client.provisionSelf(token = TestFirebaseAuth.mintToken(uid = "fb-bad"))
+
+            suspend fun setRating(request: SetRatingRequest) =
+                client.put(urlString = "/api/v1/users/${user.id}/ratings") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = request)
+                }.status
+
+            // Value outside the NTRP 1.0–7.0 range, a non-numeric value, and confidence outside [0, 1].
+            setRating(request = SetRatingRequest(value = "9.0")) shouldBe HttpStatusCode.BadRequest
+            setRating(request = SetRatingRequest(value = "not-a-number")) shouldBe HttpStatusCode.BadRequest
+            setRating(request = SetRatingRequest(value = "4.0", confidence = "1.5")) shouldBe HttpStatusCode.BadRequest
+            setRating(request = SetRatingRequest(value = "4.0", confidence = "-0.1")) shouldBe HttpStatusCode.BadRequest
+        }
+
+    @Test
     fun `pending-assessment lists an unrated user (admin only)`() =
         withApp { client ->
             val adminToken = seedAdminToken()
