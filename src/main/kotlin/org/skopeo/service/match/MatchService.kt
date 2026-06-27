@@ -111,14 +111,8 @@ class MatchService(
                 request = request,
                 format = match.matchFormat,
             )
-        val completed =
-            matches.addResult(
-                matchId = matchId,
-                sets = resolvedSets,
-                winnerTeamId = winner,
-                recordedBy = recordedBy,
-                completedAt = LocalDateTime.now(),
-            ) ?: throw MatchNotFoundException(id = matchId)
+        // All reachable validations have passed; record before persisting (the located, SCHEDULED
+        // match means addResult below won't be a no-op).
         audit.record(
             write =
                 AuditWrite(
@@ -130,7 +124,13 @@ class MatchService(
                     details = mapOf("matchId" to matchId.toString(), "winnerTeamId" to winner.toString()),
                 ),
         )
-        return completed
+        return matches.addResult(
+            matchId = matchId,
+            sets = resolvedSets,
+            winnerTeamId = winner,
+            recordedBy = recordedBy,
+            completedAt = LocalDateTime.now(),
+        ) ?: throw MatchNotFoundException(id = matchId)
     }
 
     @Suppress("ThrowsCount") // distinct guardrails: not-found, rated-lock, not-found-on-update

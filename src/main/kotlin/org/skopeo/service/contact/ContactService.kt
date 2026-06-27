@@ -94,10 +94,11 @@ class ContactService(
         val contact = locate(userId = userId, contactId = contactId)
         val actor = requireUserAccess(token = token, userId = userId)
         val disabledAt = if (active) null else LocalDateTime.now()
-        val updated =
-            conflictAware(message = "Another active contact of that type already exists") {
-                contacts.setActive(id = contactId, active = active, disabledAt = disabledAt)
-            } ?: throw ContactNotFoundException(id = contactId)
+        // locate() already proved the contact exists, so the update can't be a no-op; conflictAware
+        // still surfaces the "another active contact of that type" conflict when re-enabling.
+        conflictAware(message = "Another active contact of that type already exists") {
+            contacts.setActive(id = contactId, active = active, disabledAt = disabledAt)
+        }
         audit.record(
             write =
                 AuditWrite(
@@ -109,7 +110,7 @@ class ContactService(
                     details = mapOf("contactId" to contactId.toString(), "active" to active.toString()),
                 ),
         )
-        return updated
+        return contact.copy(isActive = active, disabledAt = disabledAt)
     }
 
     /** The ADMINISTRATOR-only verification action; records who verified and when. */

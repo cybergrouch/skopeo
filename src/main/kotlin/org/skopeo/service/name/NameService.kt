@@ -93,10 +93,9 @@ class NameService(
             "Cannot disable the display name; add a new display name to replace it"
         }
         val disabledAt = if (active) null else LocalDateTime.now()
-        val updated =
-            conflictAware {
-                names.setActive(id = nameId, active = active, disabledAt = disabledAt)
-            } ?: throw NameNotFoundException(id = nameId)
+        // locate() already proved the name exists, so the update can't be a no-op; conflictAware
+        // still surfaces the display-name uniqueness conflict when re-enabling a former display name.
+        conflictAware { names.setActive(id = nameId, active = active, disabledAt = disabledAt) }
         audit.record(
             write =
                 AuditWrite(
@@ -108,7 +107,7 @@ class NameService(
                     details = mapOf("nameId" to nameId.toString(), "active" to active.toString()),
                 ),
         )
-        return updated
+        return target.copy(isActive = active, disabledAt = disabledAt)
     }
 
     private fun locate(
