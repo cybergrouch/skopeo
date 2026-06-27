@@ -87,10 +87,9 @@
     <ID>NamedArguments:MatchRepositoryTest.kt$MatchRepositoryTest$listOf(UserName(type = NameType.DISPLAY, value = uid))</ID>
     <ID>NamedArguments:MatchRepositoryTest.kt$MatchRepositoryTest$listOf(u1)</ID>
     <ID>NamedArguments:MatchRepositoryTest.kt$MatchRepositoryTest$listOf(u2)</ID>
+    <ID>NamedArguments:MatchRoutes.kt$IllegalArgumentException("Invalid matchDate '$value'; expected ISO-8601 (yyyy-MM-dd)", e)</ID>
+    <ID>NamedArguments:MatchRoutes.kt$IllegalArgumentException("Invalid user id '$value'", e)</ID>
     <ID>NamedArguments:MatchRoutes.kt$IllegalArgumentException("filter must be 'pending-calculation' or 'awaiting-results'")</ID>
-    <ID>NamedArguments:MatchService.kt$IllegalArgumentException("Invalid matchDate '$value'; expected ISO-8601 (yyyy-MM-dd)", e)</ID>
-    <ID>NamedArguments:MatchService.kt$IllegalArgumentException("Invalid user id '$value'", e)</ID>
-    <ID>NamedArguments:MatchService.kt$IllegalArgumentException("Invalid value '$value'", e)</ID>
     <ID>NamedArguments:MatchService.kt$IllegalArgumentException("set $setNumber has no clear winner")</ID>
     <ID>NamedArguments:MatchService.kt$MatchService$IllegalArgumentException("Unknown user $id")</ID>
     <ID>NamedArguments:MatchServiceTest.kt$MatchServiceTest$listOf(UserName(type = NameType.DISPLAY, value = uid))</ID>

@@ -16,13 +16,14 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.dto.RankingCalculationRequest
 import org.skopeo.dto.RankingCalculationResponse
-import org.skopeo.dto.match.CreateFixtureRequest
 import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.dto.match.SetScoreRequest
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
+import org.skopeo.model.MatchFormat
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
+import org.skopeo.model.TeamType
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
@@ -32,11 +33,13 @@ import org.skopeo.repository.UserRatingsTable
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.calculator.RankingCalculationResult
 import org.skopeo.service.calculator.RankingCalculator
+import org.skopeo.service.match.FixtureInput
 import org.skopeo.service.match.MatchService
 import org.skopeo.service.user.ForbiddenException
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.math.BigDecimal
+import java.time.LocalDate
 import java.util.UUID
 
 class RatingCalculationServiceTest {
@@ -96,12 +99,12 @@ class RatingCalculationServiceTest {
             matchService.createFixture(
                 token = token(uid = admin),
                 request =
-                    CreateFixtureRequest(
-                        matchType = "SINGLES",
-                        matchFormat = "BEST_OF_THREE",
-                        matchDate = "2026-01-01",
-                        team1 = listOf(winner.toString()),
-                        team2 = listOf(loser.toString()),
+                    FixtureInput(
+                        matchType = TeamType.SINGLES,
+                        matchFormat = MatchFormat.BEST_OF_THREE,
+                        matchDate = LocalDate.parse("2026-01-01"),
+                        team1 = listOf(element = winner),
+                        team2 = listOf(element = loser),
                     ),
             )
         matchService.uploadResult(
@@ -212,12 +215,12 @@ class RatingCalculationServiceTest {
             matchService.createFixture(
                 token = token(uid = "root"),
                 request =
-                    CreateFixtureRequest(
-                        matchType = "DOUBLES",
-                        matchFormat = "BEST_OF_THREE",
-                        matchDate = "2026-01-01",
-                        team1 = listOf(a1.id.toString(), a2.id.toString()),
-                        team2 = listOf(b1.id.toString(), b2.id.toString()),
+                    FixtureInput(
+                        matchType = TeamType.DOUBLES,
+                        matchFormat = MatchFormat.BEST_OF_THREE,
+                        matchDate = LocalDate.parse("2026-01-01"),
+                        team1 = listOf(a1.id, a2.id),
+                        team2 = listOf(b1.id, b2.id),
                     ),
             )
         matchService.uploadResult(

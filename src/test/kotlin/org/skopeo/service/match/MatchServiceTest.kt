@@ -12,16 +12,17 @@ import org.jetbrains.exposed.sql.update
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.skopeo.dto.match.CreateFixtureRequest
 import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.dto.match.SetScoreRequest
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
+import org.skopeo.model.MatchFormat
 import org.skopeo.model.MatchQuery
 import org.skopeo.model.MatchStatus
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
+import org.skopeo.model.TeamType
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
@@ -36,6 +37,7 @@ import org.skopeo.service.user.ForbiddenException
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.math.BigDecimal
+import java.time.LocalDate
 import java.util.UUID
 
 class MatchServiceTest {
@@ -89,14 +91,14 @@ class MatchServiceTest {
     private fun fixtureRequest(
         p1: UUID,
         p2: UUID,
-        date: String = "2026-01-01",
-        matchFormat: String = "BEST_OF_THREE",
-    ) = CreateFixtureRequest(
-        matchType = "SINGLES",
+        date: LocalDate = LocalDate.parse("2026-01-01"),
+        matchFormat: MatchFormat = MatchFormat.BEST_OF_THREE,
+    ) = FixtureInput(
+        matchType = TeamType.SINGLES,
         matchFormat = matchFormat,
         matchDate = date,
-        team1 = listOf(p1.toString()),
-        team2 = listOf(p2.toString()),
+        team1 = listOf(element = p1),
+        team2 = listOf(element = p2),
     )
 
     private fun straightSets() =
@@ -134,23 +136,15 @@ class MatchServiceTest {
     }
 
     @Test
-    fun `a fixture rejects an unrated participant and bad composition`() {
+    fun `a fixture rejects an unrated participant`() {
         provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val rated = provisionUser(uid = "p1", rated = true)
         val unrated = provisionUser(uid = "p2", rated = false)
 
+        // Composition validation (players-per-side, no repeats) is now a route concern (#116); the
+        // service still enforces the business rule that every participant must already have a rating.
         shouldThrow<IllegalArgumentException> {
             service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = rated.id, p2 = unrated.id))
-        }
-        // singles needs exactly one per side
-        shouldThrow<IllegalArgumentException> {
-            service.createFixture(
-                token = token(uid = "host"),
-                request =
-                    fixtureRequest(p1 = rated.id, p2 = rated.id).copy(
-                        team1 = listOf(rated.id.toString(), rated.id.toString()),
-                    ),
-            )
         }
     }
 
@@ -175,7 +169,7 @@ class MatchServiceTest {
         val match =
             service.createFixture(
                 token = token(uid = "host"),
-                request = fixtureRequest(p1 = p1.id, p2 = p2.id, matchFormat = "SINGLE_SET"),
+                request = fixtureRequest(p1 = p1.id, p2 = p2.id, matchFormat = MatchFormat.SINGLE_SET),
             )
 
         // 4-3 is a valid single-set win (the host decides what counts as a win).
@@ -198,7 +192,7 @@ class MatchServiceTest {
         val match =
             service.createFixture(
                 token = token(uid = "host"),
-                request = fixtureRequest(p1 = p1.id, p2 = p2.id, matchFormat = "SINGLE_SET"),
+                request = fixtureRequest(p1 = p1.id, p2 = p2.id, matchFormat = MatchFormat.SINGLE_SET),
             )
 
         shouldThrow<IllegalArgumentException> {
@@ -347,20 +341,6 @@ class MatchServiceTest {
     }
 
     @Test
-    fun `a fixture rejects a disallowed match format`() {
-        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
-        val p1 = provisionUser(uid = "p1", rated = true)
-        val p2 = provisionUser(uid = "p2", rated = true)
-
-        shouldThrow<IllegalArgumentException> {
-            service.createFixture(
-                token = token(uid = "host"),
-                request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(matchFormat = "BEST_OF_ONE"),
-            )
-        }
-    }
-
-    @Test
     fun `a fixture rejects an unknown participant id`() {
         provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val p1 = provisionUser(uid = "p1", rated = true)
@@ -433,7 +413,7 @@ class MatchServiceTest {
         val overdue =
             service.createFixture(
                 token = token(uid = "host"),
-                request = fixtureRequest(p1 = p1.id, p2 = p2.id, date = "2020-01-01"),
+                request = fixtureRequest(p1 = p1.id, p2 = p2.id, date = LocalDate.parse("2020-01-01")),
             )
 
         // Admin sees every match in the view.

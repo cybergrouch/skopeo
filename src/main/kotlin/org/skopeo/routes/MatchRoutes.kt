@@ -21,8 +21,14 @@ import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.dto.match.MatchStateRequest
 import org.skopeo.dto.match.toResponse
 import org.skopeo.dto.rating.toResponse
+import org.skopeo.model.MatchFormat
 import org.skopeo.model.MatchQuery
+import org.skopeo.model.TeamType
+import org.skopeo.service.match.FixtureInput
 import org.skopeo.service.match.MatchService
+import java.time.LocalDate
+import java.time.format.DateTimeParseException
+import java.util.UUID
 
 /**
  * Match fixtures & results. Create/result/disable are HOST/ADMINISTRATOR; the oversight list
@@ -51,11 +57,53 @@ private fun Route.listAndCreate(service: MatchService) {
     post {
         respondMappingErrors {
             val request = call.receive<CreateFixtureRequest>()
-            val match = service.createFixture(token = verifiedToken(), request = request)
+            val match = service.createFixture(token = verifiedToken(), request = toFixtureInput(request = request))
             call.respond(status = HttpStatusCode.Created, message = match.toResponse())
         }
     }
 }
+
+/** Parse + validate the fixture request shape at the boundary (#116): enums, date, ids, composition. */
+private fun toFixtureInput(request: CreateFixtureRequest): FixtureInput {
+    val matchType = parseEnumParam<TeamType>(value = request.matchType, field = "matchType")
+    val team1 = request.team1.map { parseUserId(value = it) }
+    val team2 = request.team2.map { parseUserId(value = it) }
+    validateComposition(type = matchType, team1 = team1, team2 = team2)
+    return FixtureInput(
+        matchType = matchType,
+        matchFormat = parseEnumParam<MatchFormat>(value = request.matchFormat, field = "matchFormat"),
+        matchDate = parseMatchDate(value = request.matchDate),
+        team1 = team1,
+        team2 = team2,
+        venue = request.venue,
+        tournamentName = request.tournamentName,
+    )
+}
+
+private fun validateComposition(
+    type: TeamType,
+    team1: List<UUID>,
+    team2: List<UUID>,
+) {
+    val expected = if (type == TeamType.SINGLES) 1 else 2
+    require(value = team1.size == expected && team2.size == expected) { "$type needs $expected player(s) per side" }
+    val all = team1 + team2
+    require(value = all.toSet().size == all.size) { "a player cannot appear more than once in a match" }
+}
+
+private fun parseUserId(value: String): UUID =
+    try {
+        UUID.fromString(value)
+    } catch (e: IllegalArgumentException) {
+        throw IllegalArgumentException("Invalid user id '$value'", e)
+    }
+
+private fun parseMatchDate(value: String): LocalDate =
+    try {
+        LocalDate.parse(value)
+    } catch (e: DateTimeParseException) {
+        throw IllegalArgumentException("Invalid matchDate '$value'; expected ISO-8601 (yyyy-MM-dd)", e)
+    }
 
 private fun Route.byId(service: MatchService) {
     get(path = "/{id}") {
