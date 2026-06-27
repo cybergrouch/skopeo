@@ -1270,6 +1270,88 @@ paths:
         '404':
           description: No such invite
 
+  /api/v1/audit:
+    get:
+      summary: Read the audit log, newest first (ADMINISTRATOR only)
+      description: >-
+        The admin trace viewer (#102). Returns provenance entries newest-first, optionally scoped
+        to a category, with actor (and user-typed target) ids resolved to display name + player
+        code, and `occurredAt` as a UTC instant for the client to render in the viewer's timezone.
+      tags:
+        - Audit
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - USER_CREATION
+              - NAME_CHANGE
+              - CONTACT_CHANGE
+              - INVITE
+              - MATCH_FIXTURE
+              - MATCH_RESULT
+              - CAPABILITY_CHANGE
+              - RATING_CHANGE
+          description: Scope to a single category; omit for all.
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 5
+          description: Page size (clamped to 1..100).
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+          description: Rows to skip (clamped to >= 0).
+      responses:
+        '200':
+          description: A page of audit entries plus the total count
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLogResponse'
+        '400':
+          description: Unknown category
+        '403':
+          description: Caller is not an ADMINISTRATOR
+
+  /api/v1/audit/{id}/comment:
+    patch:
+      summary: Set or clear an administrator's note on an audit entry (ADMINISTRATOR only)
+      description: The one mutable, un-audited field on an entry (#100). A blank comment clears it.
+      tags:
+        - Audit
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuditCommentRequest'
+      responses:
+        '204':
+          description: Comment set or cleared
+        '403':
+          description: Caller is not an ADMINISTRATOR
+        '404':
+          description: No such audit entry
+
 components:
   securitySchemes:
     firebaseAuth:
@@ -2504,5 +2586,88 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/InviteResponse'
+        total:
+          type: integer
+
+    AuditCommentRequest:
+      type: object
+      description: Set or clear an admin note on an audit entry (a blank/absent value clears it).
+      properties:
+        comment:
+          type: string
+          nullable: true
+
+    AuditPersonResponse:
+      type: object
+      description: A user resolved to a display name + player code (or just the id if unresolved).
+      required:
+        - userId
+      properties:
+        userId:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+          nullable: true
+        publicCode:
+          type: string
+          nullable: true
+
+    AuditEntryResponse:
+      type: object
+      required:
+        - id
+        - occurredAt
+        - category
+        - action
+        - entityType
+        - summary
+      properties:
+        id:
+          type: string
+          format: uuid
+        occurredAt:
+          type: string
+          format: date-time
+          description: ISO-8601 UTC instant; the client renders it in the viewer's timezone.
+        category:
+          type: string
+        action:
+          type: string
+        entityType:
+          type: string
+        entityId:
+          type: string
+          format: uuid
+          nullable: true
+        summary:
+          type: string
+        details:
+          type: object
+          additionalProperties:
+            type: string
+            nullable: true
+        comment:
+          type: string
+          nullable: true
+        actor:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/AuditPersonResponse'
+        target:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/AuditPersonResponse'
+
+    AuditLogResponse:
+      type: object
+      required:
+        - items
+        - total
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEntryResponse'
         total:
           type: integer

@@ -27,6 +27,7 @@ import io.micrometer.prometheus.PrometheusConfig
 import io.micrometer.prometheus.PrometheusMeterRegistry
 import mu.KotlinLogging
 import org.skopeo.config.DatabaseConfig
+import org.skopeo.routes.configureAuditRoutes
 import org.skopeo.routes.configureCapabilityRoutes
 import org.skopeo.routes.configureContactRoutes
 import org.skopeo.routes.configureInviteRoutes
@@ -76,6 +77,7 @@ fun Application.module(
     configureRatingRoutes()
     configureMatchRoutes()
     configureInviteRoutes()
+    configureAuditRoutes()
     logger.info { "Skopeo API started successfully on port 8080" }
 }
 

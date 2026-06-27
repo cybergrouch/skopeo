@@ -52,18 +52,23 @@ class AuditRepository {
             AuditLogTable.update(where = { AuditLogTable.id eq id }) { it[AuditLogTable.comment] = comment } > 0
         }
 
-    /** One page of entries (newest first) plus the total, optionally scoped to a single [action]. */
+    /**
+     * One page of entries (newest first) plus the total. [actions] = null means no filter (all);
+     * a non-null collection scopes to those actions (an empty collection matches nothing).
+     */
     fun list(
-        action: AuditAction?,
+        actions: Collection<AuditAction>?,
         limit: Int,
         offset: Int,
     ): Pair<List<AuditEntry>, Long> =
         transaction {
+            val names = actions?.map { it.name }
+
             fun query() =
-                if (action == null) {
+                if (names == null) {
                     AuditLogTable.selectAll()
                 } else {
-                    AuditLogTable.selectAll().where { AuditLogTable.action eq action.name }
+                    AuditLogTable.selectAll().where { AuditLogTable.action inList names }
                 }
             val total = query().count()
             val items =

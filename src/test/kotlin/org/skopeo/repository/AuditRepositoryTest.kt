@@ -68,7 +68,7 @@ class AuditRepositoryTest {
                 ),
         )
 
-        val entry = audit.list(action = null, limit = 10, offset = 0).first.single()
+        val entry = audit.list(actions = null, limit = 10, offset = 0).first.single()
         entry.actorUserId shouldBe actor
         entry.action shouldBe AuditAction.RATING_SET
         entry.entityType shouldBe AuditEntityType.RATING
@@ -92,7 +92,7 @@ class AuditRepositoryTest {
                     summary = "Revoked invite x@y.dev",
                 ),
         )
-        val entry = audit.list(action = null, limit = 10, offset = 0).first.single()
+        val entry = audit.list(actions = null, limit = 10, offset = 0).first.single()
         entry.actorUserId.shouldBeNull()
         entry.details shouldBe emptyMap()
     }
@@ -123,12 +123,12 @@ class AuditRepositoryTest {
                 ),
         )
 
-        val (granted, grantedTotal) = audit.list(action = AuditAction.CAPABILITY_GRANTED, limit = 1, offset = 0)
+        val (granted, grantedTotal) = audit.list(actions = listOf(element = AuditAction.CAPABILITY_GRANTED), limit = 1, offset = 0)
         grantedTotal shouldBe 2L
         granted shouldHaveSize 1
         granted.single().action shouldBe AuditAction.CAPABILITY_GRANTED
 
-        audit.list(action = null, limit = 10, offset = 0).second shouldBe 3L
+        audit.list(actions = null, limit = 10, offset = 0).second shouldBe 3L
     }
 
     @Test
@@ -165,10 +165,10 @@ class AuditRepositoryTest {
                     summary = "Overrode rating 4.0 → 4.5",
                 ),
         )
-        val id = audit.list(action = null, limit = 1, offset = 0).first.single().id
+        val id = audit.list(actions = null, limit = 1, offset = 0).first.single().id
 
         audit.updateComment(id = id, comment = "Corrected after review").shouldBeTrue()
-        audit.list(action = null, limit = 1, offset = 0).first.single().comment shouldBe "Corrected after review"
+        audit.list(actions = null, limit = 1, offset = 0).first.single().comment shouldBe "Corrected after review"
 
         audit.updateComment(id = UUID.randomUUID(), comment = "x").shouldBeFalse()
     }
