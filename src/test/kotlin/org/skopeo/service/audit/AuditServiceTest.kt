@@ -4,6 +4,7 @@
 package org.skopeo.service.audit
 
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
@@ -146,13 +147,46 @@ class AuditServiceTest {
         service.list(token = token(uid = "admin"), category = null, limit = 1, offset = 0)
             .items.single().entry.comment shouldBe "Looks intentional"
 
-        // A blank comment clears the note.
+        // A blank comment clears the note; a null comment likewise leaves none.
         service.setComment(token = token(uid = "admin"), id = id, comment = "   ")
+        service.list(token = token(uid = "admin"), category = null, limit = 1, offset = 0).items.single().entry.comment.shouldBeNull()
+        service.setComment(token = token(uid = "admin"), id = id, comment = null)
         service.list(token = token(uid = "admin"), category = null, limit = 1, offset = 0).items.single().entry.comment.shouldBeNull()
 
         shouldThrow<ForbiddenException> { service.setComment(token = token(uid = "player"), id = id, comment = "x") }
         shouldThrow<ResourceNotFoundException> {
             service.setComment(token = token(uid = "admin"), id = UUID.randomUUID(), comment = "x")
         }
+    }
+
+    @Test
+    fun `list tolerates a system actor and an entity without a user id`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        // A system action (null actor) and a RATING entry whose entityId is absent.
+        service.record(
+            write =
+                AuditWrite(
+                    actorUserId = null,
+                    action = AuditAction.INVITE_REVOKED,
+                    entityType = AuditEntityType.INVITE,
+                    entityId = UUID.randomUUID(),
+                    summary = "Revoked invite x@y.dev",
+                ),
+        )
+        service.record(
+            write =
+                AuditWrite(
+                    actorUserId = null,
+                    action = AuditAction.RATING_SET,
+                    entityType = AuditEntityType.RATING,
+                    entityId = null,
+                    summary = "Set rating to 4.0",
+                ),
+        )
+
+        val views = service.list(token = token(uid = "admin"), category = null, limit = 10, offset = 0)
+        views.items.all { it.actor == null }.shouldBeTrue() // null actor → no resolved actor
+        // A RATING entry with no entityId resolves to no target.
+        views.items.first { it.entry.action == AuditAction.RATING_SET }.target.shouldBeNull()
     }
 }

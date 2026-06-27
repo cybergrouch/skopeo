@@ -134,6 +134,7 @@ class AuditRepositoryTest {
     @Test
     fun `the jsonb column type maps text both ways, treating a null payload as empty`() {
         val type = JsonbColumnType()
+        type.sqlType() shouldBe "jsonb"
         (type.valueToDB(value = "{\"a\":\"b\"}") as PGobject).value shouldBe "{\"a\":\"b\"}"
         type.valueFromDB(
             value =
