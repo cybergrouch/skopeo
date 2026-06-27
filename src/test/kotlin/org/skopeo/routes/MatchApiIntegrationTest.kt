@@ -115,7 +115,7 @@ class MatchApiIntegrationTest {
                 body =
                     CreateFixtureRequest(
                         matchType = "SINGLES",
-                        matchFormat = "BEST_OF_THREE",
+                        occasion = "OPEN_PLAY",
                         matchDate = "2026-01-01",
                         team1 = listOf(p1),
                         team2 = listOf(p2),
@@ -127,7 +127,7 @@ class MatchApiIntegrationTest {
     private suspend fun HttpClient.postFixture(
         token: String,
         matchType: String = "SINGLES",
-        matchFormat: String = "BEST_OF_THREE",
+        occasion: String = "OPEN_PLAY",
         matchDate: String = "2026-01-01",
         team1: List<String>,
         team2: List<String>,
@@ -139,7 +139,7 @@ class MatchApiIntegrationTest {
                 body =
                     CreateFixtureRequest(
                         matchType = matchType,
-                        matchFormat = matchFormat,
+                        occasion = occasion,
                         matchDate = matchDate,
                         team1 = team1,
                         team2 = team2,
@@ -173,6 +173,7 @@ class MatchApiIntegrationTest {
             created.status shouldBe HttpStatusCode.Created
             val match = created.body<MatchResponse>()
             match.status shouldBe "SCHEDULED"
+            match.occasion shouldBe "OPEN_PLAY" // round-trips through persistence (#108)
 
             val completed =
                 client.post(urlString = "/api/v1/matches/${match.id}/result") {
@@ -334,10 +335,10 @@ class MatchApiIntegrationTest {
             val one = listOf(element = p1.id)
             val two = listOf(element = p2.id)
 
-            // Invalid match type / format enums, a malformed date, and a malformed participant id.
+            // Invalid match type / occasion enums, a malformed date, and a malformed participant id.
             client.postFixture(token = adminToken, matchType = "TRIPLES", team1 = one, team2 = two).status shouldBe
                 HttpStatusCode.BadRequest
-            client.postFixture(token = adminToken, matchFormat = "BEST_OF_ONE", team1 = one, team2 = two).status shouldBe
+            client.postFixture(token = adminToken, occasion = "FRIENDLY", team1 = one, team2 = two).status shouldBe
                 HttpStatusCode.BadRequest
             client.postFixture(token = adminToken, matchDate = "01-01-2026", team1 = one, team2 = two).status shouldBe
                 HttpStatusCode.BadRequest
@@ -347,6 +348,12 @@ class MatchApiIntegrationTest {
             client.postFixture(token = adminToken, team1 = listOf(p1.id, p2.id), team2 = two).status shouldBe
                 HttpStatusCode.BadRequest
             client.postFixture(token = adminToken, team1 = one, team2 = one).status shouldBe HttpStatusCode.BadRequest
+            // A missing occasion (required, no default) is rejected at deserialization.
+            client.post(urlString = "/api/v1/matches") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                contentType(type = ContentType.Application.Json)
+                setBody(body = """{"matchType":"SINGLES","matchDate":"2026-01-01","team1":["${p1.id}"],"team2":["${p2.id}"]}""")
+            }.status shouldBe HttpStatusCode.BadRequest
         }
 
     @Test

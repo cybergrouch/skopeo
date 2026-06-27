@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.CreateFixtureCommand
-import org.skopeo.model.MatchFormat
+import org.skopeo.model.MatchOccasion
 import org.skopeo.model.MatchSetResult
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
@@ -87,7 +87,7 @@ class PlayerServiceTest {
         command =
             CreateFixtureCommand(
                 matchType = TeamType.SINGLES,
-                matchFormat = MatchFormat.BEST_OF_THREE,
+                occasion = MatchOccasion.OPEN_PLAY,
                 matchDate = date,
                 team1UserIds = listOf(element = u1),
                 team2UserIds = listOf(element = u2),

@@ -13,7 +13,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.model.CreateFixtureCommand
 import org.skopeo.model.Match
-import org.skopeo.model.MatchFormat
+import org.skopeo.model.MatchOccasion
 import org.skopeo.model.MatchSetResult
 import org.skopeo.model.MatchSide
 import org.skopeo.model.MatchStatus
@@ -35,7 +35,7 @@ class MatchRepository {
                     it[team1Id] = team1
                     it[team2Id] = team2
                     it[matchType] = command.matchType.name
-                    it[matchFormat] = command.matchFormat.name
+                    it[occasion] = command.occasion.name
                     it[matchDate] = command.matchDate
                     it[status] = MatchStatus.SCHEDULED.name
                     it[venue] = command.venue
@@ -201,7 +201,7 @@ class MatchRepository {
         return Match(
             id = id,
             matchType = TeamType.valueOf(value = row[MatchesTable.matchType]),
-            matchFormat = MatchFormat.valueOf(value = row[MatchesTable.matchFormat]),
+            occasion = MatchOccasion.valueOf(value = row[MatchesTable.occasion]),
             matchDate = row[MatchesTable.matchDate],
             status = MatchStatus.valueOf(value = row[MatchesTable.status]),
             team1 = sideOf(teamId = row[MatchesTable.team1Id].value),

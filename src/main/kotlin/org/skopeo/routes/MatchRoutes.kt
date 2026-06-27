@@ -21,7 +21,7 @@ import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.dto.match.MatchStateRequest
 import org.skopeo.dto.match.toResponse
 import org.skopeo.dto.rating.toResponse
-import org.skopeo.model.MatchFormat
+import org.skopeo.model.MatchOccasion
 import org.skopeo.model.MatchQuery
 import org.skopeo.model.TeamType
 import org.skopeo.service.match.FixtureInput
@@ -71,7 +71,7 @@ private fun toFixtureInput(request: CreateFixtureRequest): FixtureInput {
     validateComposition(type = matchType, team1 = team1, team2 = team2)
     return FixtureInput(
         matchType = matchType,
-        matchFormat = parseEnumParam<MatchFormat>(value = request.matchFormat, field = "matchFormat"),
+        occasion = parseEnumParam<MatchOccasion>(value = request.occasion, field = "occasion"),
         matchDate = parseMatchDate(value = request.matchDate),
         team1 = team1,
         team2 = team2,

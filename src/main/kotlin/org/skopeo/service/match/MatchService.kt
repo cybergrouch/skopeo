@@ -11,7 +11,7 @@ import org.skopeo.model.Capability
 import org.skopeo.model.CreateFixtureCommand
 import org.skopeo.model.Match
 import org.skopeo.model.MatchCalculationDetail
-import org.skopeo.model.MatchFormat
+import org.skopeo.model.MatchOccasion
 import org.skopeo.model.MatchPlayerCalculation
 import org.skopeo.model.MatchQuery
 import org.skopeo.model.MatchSetResult
@@ -34,14 +34,14 @@ import java.util.UUID
 private val STAFF_ROLES = setOf(Capability.HOST, Capability.ADMINISTRATOR)
 
 /**
- * Fixture-creation input resolved at the route boundary (#116): the match type/format enums are
+ * Fixture-creation input resolved at the route boundary (#116): the match type/occasion enums are
  * parsed, the date is parsed, the participant ids are valid UUIDs, and the team composition (players
  * per side, no repeats) is validated. The service then enforces only business rules (staff auth,
  * participant existence/active/rated).
  */
 data class FixtureInput(
     val matchType: TeamType,
-    val matchFormat: MatchFormat,
+    val occasion: MatchOccasion,
     val matchDate: LocalDate,
     val team1: List<UUID>,
     val team2: List<UUID>,
@@ -76,7 +76,7 @@ class MatchService(
                 command =
                     CreateFixtureCommand(
                         matchType = request.matchType,
-                        matchFormat = request.matchFormat,
+                        occasion = request.occasion,
                         matchDate = request.matchDate,
                         team1UserIds = request.team1,
                         team2UserIds = request.team2,
@@ -116,7 +116,6 @@ class MatchService(
                 team1Id = match.team1.teamId,
                 team2Id = match.team2.teamId,
                 request = request,
-                format = match.matchFormat,
             )
         // All reachable validations have passed; record before persisting (the located, SCHEDULED
         // match means addResult below won't be a no-op).
@@ -234,20 +233,14 @@ class MatchService(
 /**
  * Derive per-set winners and the match winner from the raw scores. The score *shape* (non-negative
  * games, at least one set) is validated at the boundary (#116, in the DTO); what remains here is
- * outcome derivation against the persisted match — a single-set match must be exactly one set (the
- * stored [format]), each set must have a decisive score, and the sets must not be tied.
+ * outcome derivation against the persisted match — each set must have a decisive score, and the sets
+ * must not be tied (whoever wins more sets wins the match).
  */
 private fun deriveOutcome(
     team1Id: UUID,
     team2Id: UUID,
     request: MatchResultRequest,
-    format: MatchFormat,
 ): Pair<List<MatchSetResult>, UUID> {
-    // A single-set match is exactly one set; the winner is simply the side with more games
-    // (or the tiebreak), so any score the host enters (4-3, 6-5, 7-6, …) is accepted.
-    require(value = format != MatchFormat.SINGLE_SET || request.sets.size == 1) {
-        "a single-set match must have exactly one set"
-    }
     var team1Sets = 0
     var team2Sets = 0
     val resolved =

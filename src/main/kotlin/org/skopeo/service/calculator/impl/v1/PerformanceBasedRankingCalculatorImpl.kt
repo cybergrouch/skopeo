@@ -174,6 +174,8 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
                     ),
             )
 
+            val options = request.options ?: org.skopeo.model.RatingCalculationOptions()
+
             // Calculate Elo-based rating changes
             val (player1Change, player2Change) =
                 calculateRatingAdjustments(
@@ -183,6 +185,7 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
                     audit = audit,
                     player1TeamId = team1Id,
                     player2TeamId = team2Id,
+                    occasionFactor = options.occasionFactor.bd,
                 )
 
             audit.add(
@@ -200,7 +203,6 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
             )
 
             // Apply rating changes with system-specific constraints
-            val options = request.options ?: org.skopeo.model.RatingCalculationOptions()
             val player1NewRating = applyRatingChange(rating = player1.rating, change = player1Change, options = options, audit = audit)
             val player2NewRating = applyRatingChange(rating = player2.rating, change = player2Change, options = options, audit = audit)
 
@@ -295,6 +297,7 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
         audit: AuditTrail,
         player1TeamId: String,
         player2TeamId: String,
+        occasionFactor: BigDecimal,
     ): Pair<BigDecimal, BigDecimal> {
         /**
          * Calculate rating adjustment using simplified formula with normalized gaps.
@@ -363,13 +366,15 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
             val upsetMultiplier = "2.0".bd
 
             val isUpset = (isWinner && ratingAdvantage < ZERO) || (!isWinner && ratingAdvantage > ZERO)
+            // Fold the per-occasion factor (#108) into scale, so the change formula and the audited
+            // scale both reflect the match's competitive context. Default factor 1.0 = no effect.
             val scale =
                 calculateScale(
                     isUpset = isUpset,
                     normalizedGap = normalizedGap,
                     thresholdPct = thresholdPct,
                     upsetMultiplier = upsetMultiplier,
-                )
+                ) * occasionFactor
 
             val sign = if (isWinner) ONE else -ONE
             val signLabel = if (isWinner) "+1" else "-1"

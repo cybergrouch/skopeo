@@ -1498,10 +1498,6 @@ components:
         loserTeamId:
           type: string
           description: Team ID of the match loser. Defaults to the team that lost the most sets when omitted; must differ from the winner and be one of the teams.
-        matchFormat:
-          type: string
-          enum: [BEST_OF_THREE, BEST_OF_FIVE, SINGLE_SET]
-          default: BEST_OF_THREE
 
     SetScore:
       type: object
@@ -2201,7 +2197,7 @@ components:
       type: object
       required:
         - matchType
-        - matchFormat
+        - occasion
         - matchDate
         - team1
         - team2
@@ -2209,9 +2205,10 @@ components:
         matchType:
           type: string
           enum: [SINGLES, DOUBLES, MIXED_DOUBLES]
-        matchFormat:
+        occasion:
           type: string
-          enum: [BEST_OF_THREE, BEST_OF_FIVE, SINGLE_SET]
+          enum: [OPEN_PLAY, LEAGUE_PLAY, TOURNAMENT_INITIAL_ROUND, LEAGUE_PLAYOFFS, TOURNAMENT_PLAYOFFS]
+          description: The competitive context; scales the calculated rating change by a per-occasion factor (#108).
         matchDate:
           type: string
           format: date
@@ -2311,7 +2308,7 @@ components:
       required:
         - id
         - matchType
-        - matchFormat
+        - occasion
         - matchDate
         - status
         - team1
@@ -2325,9 +2322,10 @@ components:
         matchType:
           type: string
           enum: [SINGLES, DOUBLES, MIXED_DOUBLES]
-        matchFormat:
+        occasion:
           type: string
-          enum: [BEST_OF_THREE, BEST_OF_FIVE, SINGLE_SET]
+          enum: [OPEN_PLAY, LEAGUE_PLAY, TOURNAMENT_INITIAL_ROUND, LEAGUE_PLAYOFFS, TOURNAMENT_PLAYOFFS]
+          description: The competitive context the match was played under (#108).
         matchDate:
           type: string
           format: date

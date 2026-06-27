@@ -18,11 +18,19 @@ import {
 import { GetApiV1MatchesFilter } from '@/api/generated/model'
 import type { UserSummaryResponse } from '@/api/generated/model'
 
-const FORMATS = ['BEST_OF_THREE', 'BEST_OF_FIVE', 'SINGLE_SET'] as const
-const FORMAT_LABELS: Record<(typeof FORMATS)[number], string> = {
-  BEST_OF_THREE: 'Best of three',
-  BEST_OF_FIVE: 'Best of five',
-  SINGLE_SET: 'Single set',
+const OCCASIONS = [
+  'OPEN_PLAY',
+  'LEAGUE_PLAY',
+  'TOURNAMENT_INITIAL_ROUND',
+  'LEAGUE_PLAYOFFS',
+  'TOURNAMENT_PLAYOFFS',
+] as const
+const OCCASION_LABELS: Record<(typeof OCCASIONS)[number], string> = {
+  OPEN_PLAY: 'Open play',
+  LEAGUE_PLAY: 'League play',
+  TOURNAMENT_INITIAL_ROUND: 'Tournament — initial round',
+  LEAGUE_PLAYOFFS: 'League playoffs',
+  TOURNAMENT_PLAYOFFS: 'Tournament playoffs',
 }
 const AWAITING = { filter: GetApiV1MatchesFilter['awaiting-results'] }
 
@@ -47,7 +55,7 @@ export function CreateFixtureSection() {
   const queryClient = useQueryClient()
   const [player1, setPlayer1] = useState<UserSummaryResponse | null>(null)
   const [player2, setPlayer2] = useState<UserSummaryResponse | null>(null)
-  const [format, setFormat] = useState<(typeof FORMATS)[number]>('BEST_OF_THREE')
+  const [occasion, setOccasion] = useState<(typeof OCCASIONS)[number]>('OPEN_PLAY')
   const [date, setDate] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [created, setCreated] = useState(false)
@@ -74,7 +82,7 @@ export function CreateFixtureSection() {
       await create.mutateAsync({
         data: {
           matchType: 'SINGLES',
-          matchFormat: format,
+          occasion,
           matchDate: date,
           team1: [player1.id],
           team2: [player2.id],
@@ -117,16 +125,16 @@ export function CreateFixtureSection() {
 
           <div className="flex flex-wrap gap-3">
             <div className="space-y-1">
-              <Label htmlFor="format">Format</Label>
+              <Label htmlFor="occasion">Occasion</Label>
               <select
-                id="format"
-                value={format}
-                onChange={(e) => setFormat(e.target.value as (typeof FORMATS)[number])}
+                id="occasion"
+                value={occasion}
+                onChange={(e) => setOccasion(e.target.value as (typeof OCCASIONS)[number])}
                 className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
               >
-                {FORMATS.map((f) => (
-                  <option key={f} value={f}>
-                    {FORMAT_LABELS[f]}
+                {OCCASIONS.map((o) => (
+                  <option key={o} value={o}>
+                    {OCCASION_LABELS[o]}
                   </option>
                 ))}
               </select>

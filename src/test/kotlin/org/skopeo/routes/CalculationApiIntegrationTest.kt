@@ -124,7 +124,7 @@ class CalculationApiIntegrationTest {
                         body =
                             CreateFixtureRequest(
                                 matchType = "SINGLES",
-                                matchFormat = "BEST_OF_THREE",
+                                occasion = "OPEN_PLAY",
                                 matchDate = "2026-01-01",
                                 team1 = listOf(p1.id),
                                 team2 = listOf(p2.id),

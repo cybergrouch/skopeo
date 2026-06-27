@@ -35,7 +35,7 @@ data class MatchSetResult(
 data class Match(
     val id: UUID,
     val matchType: TeamType,
-    val matchFormat: MatchFormat,
+    val occasion: MatchOccasion,
     val matchDate: LocalDate,
     val status: MatchStatus,
     val team1: MatchSide,
@@ -54,7 +54,7 @@ data class Match(
 /** Everything needed to create a fixture (the result is uploaded separately). */
 data class CreateFixtureCommand(
     val matchType: TeamType,
-    val matchFormat: MatchFormat,
+    val occasion: MatchOccasion,
     val matchDate: LocalDate,
     val team1UserIds: List<UUID>,
     val team2UserIds: List<UUID>,
