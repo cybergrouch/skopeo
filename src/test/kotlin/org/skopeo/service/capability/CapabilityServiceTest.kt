@@ -10,6 +10,7 @@ import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.NameType
@@ -17,6 +18,7 @@ import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
+import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.CapabilityRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.ConflictException
@@ -83,6 +85,26 @@ class CapabilityServiceTest {
 
         val again = service.grant(token = token(uid = "root"), userId = player.id, capabilityName = "HOST")
         again.created.shouldBeFalse()
+    }
+
+    @Test
+    fun `granting and revoking write audit-log entries (#100)`() {
+        val root = admin(uid = "root")
+        val player = provisionUser(uid = "player")
+        service.grant(token = token(uid = "root"), userId = player.id, capabilityName = "HOST")
+        service.revoke(token = token(uid = "root"), userId = player.id, capabilityName = "HOST")
+
+        val audit = AuditRepository()
+        audit.list(action = AuditAction.CAPABILITY_GRANTED, limit = 10, offset = 0).let { (items, total) ->
+            total shouldBe 1L
+            items.single().let {
+                it.actorUserId shouldBe root.id
+                it.entityId shouldBe player.id
+                it.summary shouldBe "Granted HOST role"
+                it.details["capability"] shouldBe "HOST"
+            }
+        }
+        audit.list(action = AuditAction.CAPABILITY_REVOKED, limit = 10, offset = 0).second shouldBe 1L
     }
 
     @Test

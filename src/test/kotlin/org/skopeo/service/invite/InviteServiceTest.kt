@@ -9,6 +9,7 @@ import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.InviteStatus
@@ -17,6 +18,7 @@ import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
+import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.InviteRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.ResourceNotFoundException
@@ -70,6 +72,22 @@ class InviteServiceTest {
 
         service.create(token = token(uid = "admin"), email = "new@example.com") // resend → rotate
         service.list(token = token(uid = "admin"), limit = 50, offset = 0).items shouldHaveSize 1
+    }
+
+    @Test
+    fun `creating and revoking an invite write audit-log entries (#100)`() {
+        val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val invite = service.create(token = token(uid = "admin"), email = "newbie@example.com")
+        service.revoke(token = token(uid = "admin"), id = invite.id)
+
+        val audit = AuditRepository()
+        audit.list(action = AuditAction.INVITE_CREATED, limit = 10, offset = 0).first.single().let {
+            it.actorUserId shouldBe admin.id
+            it.entityId shouldBe invite.id
+            it.summary shouldBe "Invited newbie@example.com"
+            it.details["email"] shouldBe "newbie@example.com"
+        }
+        audit.list(action = AuditAction.INVITE_REVOKED, limit = 10, offset = 0).second shouldBe 1L
     }
 
     @Test

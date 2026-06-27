@@ -3,11 +3,15 @@
 
 package org.skopeo.service.capability
 
+import org.skopeo.model.AuditAction
+import org.skopeo.model.AuditEntityType
+import org.skopeo.model.AuditWrite
 import org.skopeo.model.Capability
 import org.skopeo.model.CapabilityGrant
 import org.skopeo.repository.CapabilityRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.ConflictException
+import org.skopeo.service.audit.AuditService
 import org.skopeo.service.user.ForbiddenException
 import org.skopeo.service.user.UserNotFoundException
 import org.skopeo.service.user.VerifiedFirebaseToken
@@ -22,6 +26,7 @@ import java.util.UUID
 class CapabilityService(
     private val capabilities: CapabilityRepository = CapabilityRepository(),
     private val users: UserRepository = UserRepository(),
+    private val audit: AuditService = AuditService(),
 ) {
     /** Outcome of a grant: [created] distinguishes a fresh grant (201) from an idempotent hit (200). */
     data class Granted(
@@ -47,7 +52,19 @@ class CapabilityService(
         requireUserExists(userId = userId)
         val capability = parseCapability(value = capabilityName)
         capabilities.findActive(userId = userId, capability = capability)?.let { return Granted(grant = it, created = false) }
-        return Granted(grant = capabilities.grant(userId = userId, capability = capability, grantedBy = adminId), created = true)
+        val grant = capabilities.grant(userId = userId, capability = capability, grantedBy = adminId)
+        audit.record(
+            write =
+                AuditWrite(
+                    actorUserId = adminId,
+                    action = AuditAction.CAPABILITY_GRANTED,
+                    entityType = AuditEntityType.CAPABILITY,
+                    entityId = userId,
+                    summary = "Granted ${capability.name} role",
+                    details = mapOf("userId" to userId.toString(), "capability" to capability.name),
+                ),
+        )
+        return Granted(grant = grant, created = true)
     }
 
     @Suppress("ThrowsCount") // each throw is a distinct guardrail with its own status code
@@ -77,6 +94,17 @@ class CapabilityService(
         }
 
         capabilities.revoke(userId = userId, capability = capability, revokedBy = adminId, revokedAt = LocalDateTime.now())
+        audit.record(
+            write =
+                AuditWrite(
+                    actorUserId = adminId,
+                    action = AuditAction.CAPABILITY_REVOKED,
+                    entityType = AuditEntityType.CAPABILITY,
+                    entityId = userId,
+                    summary = "Revoked ${capability.name} role",
+                    details = mapOf("userId" to userId.toString(), "capability" to capability.name),
+                ),
+        )
     }
 
     private fun requireUserExists(userId: UUID) {

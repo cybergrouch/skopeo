@@ -3,6 +3,9 @@
 
 package org.skopeo.service.invite
 
+import org.skopeo.model.AuditAction
+import org.skopeo.model.AuditEntityType
+import org.skopeo.model.AuditWrite
 import org.skopeo.model.Capability
 import org.skopeo.model.Invite
 import org.skopeo.model.InvitePage
@@ -10,6 +13,7 @@ import org.skopeo.model.InviteStatus
 import org.skopeo.repository.InviteRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.ResourceNotFoundException
+import org.skopeo.service.audit.AuditService
 import org.skopeo.service.user.ForbiddenException
 import org.skopeo.service.user.VerifiedFirebaseToken
 import java.time.LocalDateTime
@@ -27,17 +31,31 @@ private const val INVITE_TTL_DAYS = 7L
 class InviteService(
     private val invites: InviteRepository = InviteRepository(),
     private val users: UserRepository = UserRepository(),
+    private val audit: AuditService = AuditService(),
 ) {
     fun create(
         token: VerifiedFirebaseToken,
         email: String,
     ): Invite {
         val adminId = requireAdmin(token = token)
-        return invites.createOrRotate(
-            email = normalizeEmail(email = email),
-            invitedBy = adminId,
-            expiresAt = LocalDateTime.now().plusDays(INVITE_TTL_DAYS),
+        val invite =
+            invites.createOrRotate(
+                email = normalizeEmail(email = email),
+                invitedBy = adminId,
+                expiresAt = LocalDateTime.now().plusDays(INVITE_TTL_DAYS),
+            )
+        audit.record(
+            write =
+                AuditWrite(
+                    actorUserId = adminId,
+                    action = AuditAction.INVITE_CREATED,
+                    entityType = AuditEntityType.INVITE,
+                    entityId = invite.id,
+                    summary = "Invited ${invite.email}",
+                    details = mapOf("email" to invite.email, "status" to invite.status.name),
+                ),
         )
+        return invite
     }
 
     fun list(
@@ -60,8 +78,19 @@ class InviteService(
         token: VerifiedFirebaseToken,
         id: UUID,
     ) {
-        requireAdmin(token = token)
-        invites.revoke(id = id) ?: throw ResourceNotFoundException(message = "No invite $id")
+        val adminId = requireAdmin(token = token)
+        val revoked = invites.revoke(id = id) ?: throw ResourceNotFoundException(message = "No invite $id")
+        audit.record(
+            write =
+                AuditWrite(
+                    actorUserId = adminId,
+                    action = AuditAction.INVITE_REVOKED,
+                    entityType = AuditEntityType.INVITE,
+                    entityId = id,
+                    summary = "Revoked invite ${revoked.email}",
+                    details = mapOf("email" to revoked.email, "inviteId" to id.toString()),
+                ),
+        )
     }
 
     private fun requireAdmin(token: VerifiedFirebaseToken): UUID {
