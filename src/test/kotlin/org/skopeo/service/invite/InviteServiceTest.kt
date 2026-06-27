@@ -81,13 +81,13 @@ class InviteServiceTest {
         service.revoke(token = token(uid = "admin"), id = invite.id)
 
         val audit = AuditRepository()
-        audit.list(action = AuditAction.INVITE_CREATED, limit = 10, offset = 0).first.single().let {
+        audit.list(actions = listOf(element = AuditAction.INVITE_CREATED), limit = 10, offset = 0).first.single().let {
             it.actorUserId shouldBe admin.id
             it.entityId shouldBe invite.id
             it.summary shouldBe "Invited newbie@example.com"
             it.details["email"] shouldBe "newbie@example.com"
         }
-        audit.list(action = AuditAction.INVITE_REVOKED, limit = 10, offset = 0).second shouldBe 1L
+        audit.list(actions = listOf(element = AuditAction.INVITE_REVOKED), limit = 10, offset = 0).second shouldBe 1L
     }
 
     @Test

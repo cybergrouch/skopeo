@@ -95,7 +95,7 @@ class CapabilityServiceTest {
         service.revoke(token = token(uid = "root"), userId = player.id, capabilityName = "HOST")
 
         val audit = AuditRepository()
-        audit.list(action = AuditAction.CAPABILITY_GRANTED, limit = 10, offset = 0).let { (items, total) ->
+        audit.list(actions = listOf(element = AuditAction.CAPABILITY_GRANTED), limit = 10, offset = 0).let { (items, total) ->
             total shouldBe 1L
             items.single().let {
                 it.actorUserId shouldBe root.id
@@ -104,7 +104,7 @@ class CapabilityServiceTest {
                 it.details["capability"] shouldBe "HOST"
             }
         }
-        audit.list(action = AuditAction.CAPABILITY_REVOKED, limit = 10, offset = 0).second shouldBe 1L
+        audit.list(actions = listOf(element = AuditAction.CAPABILITY_REVOKED), limit = 10, offset = 0).second shouldBe 1L
     }
 
     @Test

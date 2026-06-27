@@ -109,12 +109,12 @@ class RatingServiceTest {
         service.setRating(token = token(uid = "root"), userId = player.id, value = "4.5", confidence = null) // override
 
         val audit = AuditRepository()
-        audit.list(action = AuditAction.RATING_SET, limit = 10, offset = 0).first.single().let {
+        audit.list(actions = listOf(element = AuditAction.RATING_SET), limit = 10, offset = 0).first.single().let {
             it.actorUserId shouldBe root.id
             it.entityId shouldBe player.id
             it.summary shouldBe "Set rating to 4.0"
         }
-        audit.list(action = AuditAction.RATING_OVERRIDDEN, limit = 10, offset = 0).first.single().let {
+        audit.list(actions = listOf(element = AuditAction.RATING_OVERRIDDEN), limit = 10, offset = 0).first.single().let {
             it.summary shouldBe "Overrode rating 4.0 → 4.5"
             it.details["previousRating"] shouldBe "4.000000"
             it.details["newRating"] shouldBe "4.500000"

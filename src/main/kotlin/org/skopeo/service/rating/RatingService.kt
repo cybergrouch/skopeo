@@ -115,7 +115,9 @@ class RatingService(
         previous: UserRating?,
         updated: UserRating,
     ): AuditWrite {
-        val newLabel = updated.currentLevel ?: updated.currentRating.toPlainString()
+        // Bands derived from the (non-null) rating value — same labels, without a dead null fallback.
+        val newBand = Level.fromValue(value = updated.currentRating.toPlainString()).value
+        val previousBand = previous?.let { Level.fromValue(value = it.currentRating.toPlainString()).value }
         return AuditWrite(
             actorUserId = actorId,
             action = if (previous == null) AuditAction.RATING_SET else AuditAction.RATING_OVERRIDDEN,
@@ -123,14 +125,14 @@ class RatingService(
             entityId = userId,
             summary =
                 if (previous == null) {
-                    "Set rating to $newLabel"
+                    "Set rating to $newBand"
                 } else {
-                    "Overrode rating ${previous.currentLevel ?: previous.currentRating.toPlainString()} → $newLabel"
+                    "Overrode rating $previousBand → $newBand"
                 },
             details =
                 mapOf(
                     "userId" to userId.toString(),
-                    "previousRating" to previous?.currentRating?.toPlainString(),
+                    "previousRating" to previous?.let { it.currentRating.toPlainString() },
                     "newRating" to updated.currentRating.toPlainString(),
                 ),
         )
