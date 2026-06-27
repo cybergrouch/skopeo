@@ -62,10 +62,11 @@ class InviteServiceTest {
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
     @Test
-    fun `an admin creates an invite (normalized, pending, attributed) and re-inviting rotates it`() {
+    fun `an admin creates an invite (pending, attributed) and re-inviting rotates it`() {
         val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
 
-        val invite = service.create(token = token(uid = "admin"), email = "  New@Example.com ")
+        // The route normalizes the email before the service sees it (#116); here it arrives normalized.
+        val invite = service.create(token = token(uid = "admin"), email = "new@example.com")
         invite.email shouldBe "new@example.com"
         invite.status shouldBe InviteStatus.PENDING
         invite.invitedBy shouldBe admin.id
@@ -125,11 +126,5 @@ class InviteServiceTest {
 
         val all = service.list(token = token(uid = "admin"), limit = 50, offset = 0)
         all.total shouldBe 2
-    }
-
-    @Test
-    fun `an invalid email is rejected`() {
-        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
-        shouldThrow<IllegalArgumentException> { service.create(token = token(uid = "admin"), email = "not-an-email") }
     }
 }
