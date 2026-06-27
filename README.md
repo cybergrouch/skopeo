@@ -1,4 +1,4 @@
-# Skopeo
+# <img src="web/public/favicon.svg" alt="" height="32" align="top" /> Skopeo
 
 A Ktor API for dynamic calculation of tennis rankings based on match results.
 
