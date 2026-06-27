@@ -9,6 +9,7 @@ import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.NameType
@@ -16,6 +17,7 @@ import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
+import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.user.ForbiddenException
@@ -96,6 +98,26 @@ class RatingServiceTest {
             it.previousLevel shouldBe "4.0"
             it.newLevel shouldBe "4.5"
             it.levelChanged shouldBe true
+        }
+    }
+
+    @Test
+    fun `setting then overriding a rating write audit-log entries (#100)`() {
+        val root = admin(uid = "root")
+        val player = provisionUser(uid = "player")
+        service.setRating(token = token(uid = "root"), userId = player.id, value = "4.0", confidence = null) // initial
+        service.setRating(token = token(uid = "root"), userId = player.id, value = "4.5", confidence = null) // override
+
+        val audit = AuditRepository()
+        audit.list(action = AuditAction.RATING_SET, limit = 10, offset = 0).first.single().let {
+            it.actorUserId shouldBe root.id
+            it.entityId shouldBe player.id
+            it.summary shouldBe "Set rating to 4.0"
+        }
+        audit.list(action = AuditAction.RATING_OVERRIDDEN, limit = 10, offset = 0).first.single().let {
+            it.summary shouldBe "Overrode rating 4.0 → 4.5"
+            it.details["previousRating"] shouldBe "4.000000"
+            it.details["newRating"] shouldBe "4.500000"
         }
     }
 

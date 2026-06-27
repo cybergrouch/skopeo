@@ -3,6 +3,9 @@
 
 package org.skopeo.service.rating
 
+import org.skopeo.model.AuditAction
+import org.skopeo.model.AuditEntityType
+import org.skopeo.model.AuditWrite
 import org.skopeo.model.Capability
 import org.skopeo.model.Level
 import org.skopeo.model.PendingAssessment
@@ -16,6 +19,7 @@ import org.skopeo.model.ageInYears
 import org.skopeo.model.displayName
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
+import org.skopeo.service.audit.AuditService
 import org.skopeo.service.user.ForbiddenException
 import org.skopeo.service.user.UserNotFoundException
 import org.skopeo.service.user.VerifiedFirebaseToken
@@ -36,6 +40,7 @@ private const val MAX_PAGE_SIZE = 100
 class RatingService(
     private val ratings: RatingRepository = RatingRepository(),
     private val users: UserRepository = UserRepository(),
+    private val audit: AuditService = AuditService(),
 ) {
     fun getRatings(
         token: VerifiedFirebaseToken,
@@ -62,7 +67,7 @@ class RatingService(
         value: String,
         confidence: String?,
     ): UserRating {
-        requireAdmin(token = token)
+        val adminId = requireAdmin(token = token)
         requireUserExists(userId = userId)
         // Rating.fromValue validates the NTRP range and derives the published level.
         val level =
@@ -100,7 +105,35 @@ class RatingService(
                     ),
             )
         }
+        audit.record(write = ratingAudit(actorId = adminId, userId = userId, previous = previous, updated = updated))
         return updated
+    }
+
+    private fun ratingAudit(
+        actorId: UUID,
+        userId: UUID,
+        previous: UserRating?,
+        updated: UserRating,
+    ): AuditWrite {
+        val newLabel = updated.currentLevel ?: updated.currentRating.toPlainString()
+        return AuditWrite(
+            actorUserId = actorId,
+            action = if (previous == null) AuditAction.RATING_SET else AuditAction.RATING_OVERRIDDEN,
+            entityType = AuditEntityType.RATING,
+            entityId = userId,
+            summary =
+                if (previous == null) {
+                    "Set rating to $newLabel"
+                } else {
+                    "Overrode rating ${previous.currentLevel ?: previous.currentRating.toPlainString()} → $newLabel"
+                },
+            details =
+                mapOf(
+                    "userId" to userId.toString(),
+                    "previousRating" to previous?.currentRating?.toPlainString(),
+                    "newRating" to updated.currentRating.toPlainString(),
+                ),
+        )
     }
 
     fun pendingAssessment(
@@ -153,8 +186,9 @@ class RatingService(
         if (!isSelf && !isAdmin) throw ForbiddenException()
     }
 
-    private fun requireAdmin(token: VerifiedFirebaseToken) {
+    private fun requireAdmin(token: VerifiedFirebaseToken): UUID {
         val caller = users.findByFirebaseUid(firebaseUid = token.uid)
         if (caller == null || !caller.capabilities.contains(element = Capability.ADMINISTRATOR)) throw ForbiddenException()
+        return caller.id
     }
 }
