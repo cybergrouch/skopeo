@@ -20,6 +20,9 @@ import org.skopeo.dto.contact.ContactCreateRequest
 import org.skopeo.dto.contact.ContactStateRequest
 import org.skopeo.dto.contact.VerificationRequest
 import org.skopeo.dto.contact.toResponse
+import org.skopeo.model.ContactType
+import org.skopeo.model.VerificationMethod
+import org.skopeo.model.VerificationStatus
 import org.skopeo.service.contact.ContactService
 
 /**
@@ -50,7 +53,14 @@ private fun Route.listAndCreate(service: ContactService) {
     post {
         respondMappingErrors {
             val request = call.receive<ContactCreateRequest>()
-            val contact = service.create(token = verifiedToken(), userId = uuidParam(name = "userId"), request = request)
+            val contact =
+                service.create(
+                    token = verifiedToken(),
+                    userId = uuidParam(name = "userId"),
+                    type = parseEnumParam<ContactType>(value = request.type, field = "type"),
+                    value = request.value,
+                    isPrimary = request.isPrimary,
+                )
             call.respond(status = HttpStatusCode.Created, message = contact.toResponse())
         }
     }
@@ -91,7 +101,8 @@ private fun Route.verification(service: ContactService) {
                     token = verifiedToken(),
                     userId = uuidParam(name = "userId"),
                     contactId = uuidParam(name = "id"),
-                    request = request,
+                    status = parseEnumParam<VerificationStatus>(value = request.status, field = "status"),
+                    method = request.method?.let { parseEnumParam<VerificationMethod>(value = it, field = "method") },
                 )
             call.respond(status = HttpStatusCode.OK, message = contact.toResponse())
         }

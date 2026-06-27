@@ -29,8 +29,8 @@ via `respondMappingErrors`); prefer the route boundary for new validation.
 | Service | Input validation (→ route) | Business rules (stay) |
 |---|---|---|
 | **CapabilityService** | ~~`parseCapability` (enum)~~ ✅ migrated | admin-only; PLAYER not revocable; last/own ADMINISTRATOR guards; user exists |
-| **NameService** | `parseType` (NameType enum) | self-or-admin; display-name can't be disabled; name exists |
-| **ContactService** | `parseType` (ContactType), `parseStatus` (VerificationStatus), `parseMethod` (VerificationMethod) | self-or-admin (edit) / admin-only (verify); contact exists; active-to-verify |
+| **NameService** | ~~`parseType` (NameType enum)~~ ✅ migrated | self-or-admin; display-name can't be disabled; name exists |
+| **ContactService** | ~~`parseType` (ContactType), `parseStatus` (VerificationStatus), `parseMethod` (VerificationMethod)~~ ✅ migrated | self-or-admin (edit) / admin-only (verify); contact exists; active-to-verify; VERIFIED→ADMIN_OVERRIDE default |
 | **RatingService** | `parseConfidence` (0..1 range); NTRP range from `Rating.fromValue` | admin-only; user exists. (Level *derivation* stays in the service.) |
 | **MatchService** | `matchType`/`matchFormat` enums, `matchDate` date, team-id UUIDs, composition (players/side), score validity (non-negative games, single-set count, clear winner) | staff-only; participants/staff read; not-disabled; not-already-completed; rated-lock. **Coordinate with #108** (removes `matchFormat`). |
 | **UserService.search** | `validatedSex` (enum), `age`/`rating` interval parsing, "at least one filter required" | staff-only |

@@ -86,6 +86,16 @@ class NameApiIntegrationTest {
         }.body()
 
     @Test
+    fun `an invalid name type is rejected at the route with a 400 (#116)`() =
+        withApp { client ->
+            val token = TestFirebaseAuth.mintToken(uid = "fb-bad")
+            val user = client.provisionSelf(token = token)
+
+            client.addName(token = token, userId = user.id, request = NameCreateRequest(type = "ALIAS", value = "x"))
+                .status shouldBe HttpStatusCode.BadRequest
+        }
+
+    @Test
     fun `add multiple names of a type and replace the display name`() =
         withApp { client ->
             val token = TestFirebaseAuth.mintToken(uid = "fb-1")
