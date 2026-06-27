@@ -17,9 +17,9 @@ import org.skopeo.dto.match.SetScoreRequest
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
-import org.skopeo.model.MatchFormat
 import org.skopeo.model.MatchQuery
 import org.skopeo.model.MatchStatus
+import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.TeamType
@@ -92,10 +92,10 @@ class MatchServiceTest {
         p1: UUID,
         p2: UUID,
         date: LocalDate = LocalDate.parse("2026-01-01"),
-        matchFormat: MatchFormat = MatchFormat.BEST_OF_THREE,
+        matchType: MatchType = MatchType.OPEN_PLAY,
     ) = FixtureInput(
-        matchType = TeamType.SINGLES,
-        matchFormat = matchFormat,
+        matchFormat = TeamType.SINGLES,
+        matchType = matchType,
         matchDate = date,
         team1 = listOf(element = p1),
         team2 = listOf(element = p2),
@@ -162,17 +162,13 @@ class MatchServiceTest {
     }
 
     @Test
-    fun `a single-set fixture accepts a one-set result with any winning score`() {
+    fun `a one-set result is accepted, decided by that set`() {
         provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val p1 = provisionUser(uid = "p1", rated = true)
         val p2 = provisionUser(uid = "p2", rated = true)
-        val match =
-            service.createFixture(
-                token = token(uid = "host"),
-                request = fixtureRequest(p1 = p1.id, p2 = p2.id, matchFormat = MatchFormat.SINGLE_SET),
-            )
+        val match = service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id))
 
-        // 4-3 is a valid single-set win (the host decides what counts as a win).
+        // A match is decided by set majority; a single set (4-3) is a valid result.
         val completed =
             service.uploadResult(
                 token = token(uid = "host"),
@@ -182,22 +178,6 @@ class MatchServiceTest {
 
         completed.status shouldBe MatchStatus.COMPLETED
         completed.winnerTeamId shouldBe match.team1.teamId
-    }
-
-    @Test
-    fun `a single-set match rejects a result with more than one set`() {
-        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
-        val p1 = provisionUser(uid = "p1", rated = true)
-        val p2 = provisionUser(uid = "p2", rated = true)
-        val match =
-            service.createFixture(
-                token = token(uid = "host"),
-                request = fixtureRequest(p1 = p1.id, p2 = p2.id, matchFormat = MatchFormat.SINGLE_SET),
-            )
-
-        shouldThrow<IllegalArgumentException> {
-            service.uploadResult(token = token(uid = "host"), matchId = match.id, request = straightSets())
-        }
     }
 
     @Test

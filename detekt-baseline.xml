@@ -23,7 +23,7 @@
     <ID>LongMethod:RankingCalculationPayloadTest.kt$RankingCalculationPayloadTest$@Test fun testUTR_Tiebreak_ExactPayload()</ID>
     <ID>LongMethod:RatingChangeReport.kt$RatingChangeReport$@Test fun generateRatingChangeReport()</ID>
     <ID>LongParameterList:DatabaseConfig.kt$DatabaseConfig$( url: String, driver: String, user: String, password: String, maximumPoolSize: Int, minimumIdle: Int, connectionTimeout: Long, idleTimeout: Long, maxLifetime: Long, )</ID>
-    <ID>LongParameterList:PerformanceBasedRankingCalculatorImpl.kt$PerformanceBasedRankingCalculatorImpl$( player1: PlayerProfile, player2: PlayerProfile, matchScore: MatchScore, audit: AuditTrail, player1TeamId: String, player2TeamId: String, )</ID>
+    <ID>LongParameterList:PerformanceBasedRankingCalculatorImpl.kt$PerformanceBasedRankingCalculatorImpl$( player1: PlayerProfile, player2: PlayerProfile, matchScore: MatchScore, audit: AuditTrail, player1TeamId: String, player2TeamId: String, matchTypeFactor: BigDecimal, )</ID>
     <ID>LongParameterList:PerformanceBasedRankingCalculatorImplTest.kt$PerformanceBasedRankingCalculatorImplTest$( scenario: String, p1Rating: String, p2Rating: String, p1Games: Int, p2Games: Int, winner: String, expectedP1Delta: String, expectedP2Delta: String, description: String, )</ID>
     <ID>LongParameterList:TeamTestHelpers.kt$( p1Rating: String, p2Rating: String, system: RatingSystem, p1Games: Int, p2Games: Int, // "T1" or "T2" winner: String, smoothingEnabled: Boolean = false, smoothingFactor: Double = 0.5, )</ID>
     <ID>MagicNumber:DatabaseConfig.kt$DatabaseConfig$10</ID>

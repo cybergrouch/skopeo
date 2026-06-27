@@ -41,6 +41,7 @@ Two consequences worth internalizing before reading further:
 
 - **Any factor at zero kills the change.** A result exactly at expectation (`scale = 0`) changes nothing, no matter how dominant the score.
 - **Before boundary clamping the result is [zero-sum](#zero-sum)**: the winner's gain equals the loser's loss, because both players share the same `K × dominance × scale` and differ only in `sign`.
+- **Match type rescales everything.** `scale` is multiplied by a per-match-type factor (open play … tournament playoffs) *before* the formula runs, so the competitive context amplifies or dampens the whole change — see [§2.5](#25-matchtype--the-competitive-context-multiplier).
 
 The raw `change` then passes through a short [post-processing pipeline](#5-the-post-processing-pipeline) (optional smoothing → boundary clamping) before becoming the player's new rating.
 
@@ -149,6 +150,38 @@ sign = +1 if this player won the match, −1 otherwise
 ```
 
 This is the only factor that differs between the two players, which is what makes the raw changes [zero-sum](#zero-sum): `change₁ + change₂ = 0` before clamping.
+
+### 2.5 `matchType` — the competitive-context multiplier
+
+Beyond the on-court result, *where* a match was played carries information about how indicative it is of true skill (issue #108). A casual open-play set is noisier evidence than a tournament-playoff match, where both players are under pressure to perform at their best. The **match type** captures this and contributes a multiplier that is **folded into `scale`** before the master formula runs:
+
+```
+scale = baseScale × matchTypeFactor
+```
+
+where `baseScale` is the surprise factor from [§2.3](#23-scale--how-surprising) (Path A or B). Because it multiplies `scale`, the match-type factor scales the *entire* rating change — the same on-court result moves ratings more in a higher-pressure context and less in a casual one — while preserving every other property (zero-sum, "any factor at zero kills the change", and both players sharing one path).
+
+| Match type | Factor | Rationale |
+|---|---|---|
+| `OPEN_PLAY` | 0.5 | Casual; least indicative of true skill |
+| `LEAGUE_PLAY` | 0.8 | Season-long, lower stakes per match |
+| `TOURNAMENT_INITIAL_ROUND` | 1.0 | Tournament pressure; the neutral baseline |
+| `LEAGUE_PLAYOFFS` | 1.1 | Playoff stakes within a league |
+| `TOURNAMENT_PLAYOFFS` | 1.2 | Highest pressure; most indicative |
+
+Worked example — two identical 6-4 wins between equal 4.0 players (`baseScale = 1.0`, `dominance = 0.2`):
+
+```
+open play:           change = 0.16 × 0.2 × (1.0 × 0.5) × (+1) = +0.016
+tournament playoffs: change = 0.16 × 0.2 × (1.0 × 1.2) × (+1) = +0.0384
+```
+
+The playoff result moves the rating 2.4× as much (`1.2 / 0.5`), purely from the context — the games on court were identical.
+
+Two implementation notes:
+
+- The factor is applied inside the calculator, so the **audited and persisted `scale`** already includes it: the per-match breakdown ([#97](#)) reflects the context-adjusted value, and stored history stays faithful even if the factors are later retuned.
+- It reaches the calculator via `RatingCalculationOptions.matchTypeFactor` (default **1.0** — no effect). The persistence flow supplies `match.matchType.factor`; the stateless what-if endpoint leaves it at the default. The factors live on the `MatchType` enum as the single tuning knob.
 
 ---
 

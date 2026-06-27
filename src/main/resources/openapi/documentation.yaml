@@ -1498,10 +1498,6 @@ components:
         loserTeamId:
           type: string
           description: Team ID of the match loser. Defaults to the team that lost the most sets when omitted; must differ from the winner and be one of the teams.
-        matchFormat:
-          type: string
-          enum: [BEST_OF_THREE, BEST_OF_FIVE, SINGLE_SET]
-          default: BEST_OF_THREE
 
     SetScore:
       type: object
@@ -2200,18 +2196,19 @@ components:
     CreateFixtureRequest:
       type: object
       required:
-        - matchType
         - matchFormat
+        - matchType
         - matchDate
         - team1
         - team2
       properties:
-        matchType:
-          type: string
-          enum: [SINGLES, DOUBLES, MIXED_DOUBLES]
         matchFormat:
           type: string
-          enum: [BEST_OF_THREE, BEST_OF_FIVE, SINGLE_SET]
+          enum: [SINGLES, DOUBLES, MIXED_DOUBLES]
+        matchType:
+          type: string
+          enum: [OPEN_PLAY, LEAGUE_PLAY, TOURNAMENT_INITIAL_ROUND, LEAGUE_PLAYOFFS, TOURNAMENT_PLAYOFFS]
+          description: The competitive context; scales the calculated rating change by a per-match-type factor (#108).
         matchDate:
           type: string
           format: date
@@ -2310,8 +2307,8 @@ components:
       type: object
       required:
         - id
-        - matchType
         - matchFormat
+        - matchType
         - matchDate
         - status
         - team1
@@ -2322,12 +2319,13 @@ components:
         id:
           type: string
           format: uuid
-        matchType:
-          type: string
-          enum: [SINGLES, DOUBLES, MIXED_DOUBLES]
         matchFormat:
           type: string
-          enum: [BEST_OF_THREE, BEST_OF_FIVE, SINGLE_SET]
+          enum: [SINGLES, DOUBLES, MIXED_DOUBLES]
+        matchType:
+          type: string
+          enum: [OPEN_PLAY, LEAGUE_PLAY, TOURNAMENT_INITIAL_ROUND, LEAGUE_PLAYOFFS, TOURNAMENT_PLAYOFFS]
+          description: The competitive context the match was played under (#108).
         matchDate:
           type: string
           format: date

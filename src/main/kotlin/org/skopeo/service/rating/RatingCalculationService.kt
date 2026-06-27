@@ -11,6 +11,7 @@ import org.skopeo.model.Match
 import org.skopeo.model.MatchScore
 import org.skopeo.model.PlayerProfile
 import org.skopeo.model.Rating
+import org.skopeo.model.RatingCalculationOptions
 import org.skopeo.model.RatingHistoryWrite
 import org.skopeo.model.SetScore
 import org.skopeo.model.Team
@@ -130,7 +131,7 @@ class RatingCalculationService(
         match: Match,
         snapshot: MutableMap<UUID, BigDecimal>,
     ): MatchCalculation {
-        require(value = match.matchType == TeamType.SINGLES) {
+        require(value = match.matchFormat == TeamType.SINGLES) {
             "Only SINGLES matches can be calculated currently (match ${match.id})"
         }
         val u1 = match.team1.userIds.single()
@@ -261,8 +262,10 @@ private fun buildRequest(
         }
     return RankingCalculationRequest(
         teams = teams,
-        matchScore = MatchScore(sets = sets, winnerTeamId = match.winnerTeamId.toString(), matchFormat = match.matchFormat),
+        matchScore = MatchScore(sets = sets, winnerTeamId = match.winnerTeamId.toString()),
         matchDate = match.matchDate.toString(),
+        // The match-type factor (#108) is folded into the rating change via the calculator's scale term.
+        options = RatingCalculationOptions(matchTypeFactor = match.matchType.factor),
     )
 }
 

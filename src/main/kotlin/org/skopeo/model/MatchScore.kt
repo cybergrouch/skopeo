@@ -20,14 +20,12 @@ import java.math.BigDecimal
  *   the most sets when omitted, so payloads may state both explicitly or leave them out.
  *   A stated winner that contradicts the set majority therefore collides with the
  *   derived loser and is rejected
- * @property matchFormat Format of the match (best of 3 or 5)
  */
 @Serializable
 data class MatchScore(
     val sets: List<SetScore>,
     val winnerTeamId: String = sets.groupingBy { it.winnerTeamId }.eachCount().maxBy { it.value }.key,
     val loserTeamId: String = sets.groupingBy { it.loserTeamId }.eachCount().maxBy { it.value }.key,
-    val matchFormat: MatchFormat = MatchFormat.BEST_OF_THREE,
 ) {
     init {
         require(value = sets.isNotEmpty()) { "Match must have at least 1 set" }

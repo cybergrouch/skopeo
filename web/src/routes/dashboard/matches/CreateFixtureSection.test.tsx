@@ -84,18 +84,18 @@ describe('CreateFixtureSection', () => {
     expect(button).toBeEnabled()
   })
 
-  it('creates a fixture with the chosen players, format, and date', async () => {
+  it('creates a fixture with the chosen players, match type, and date', async () => {
     renderSection()
     const user = await pickPlayersAndDate()
-    await user.selectOptions(screen.getByLabelText('Format'), 'BEST_OF_FIVE')
+    await user.selectOptions(screen.getByLabelText('Match type'), 'LEAGUE_PLAY')
 
     await user.click(screen.getByRole('button', { name: /schedule fixture/i }))
 
     await waitFor(() =>
       expect(mutateAsync).toHaveBeenCalledWith({
         data: {
-          matchType: 'SINGLES',
-          matchFormat: 'BEST_OF_FIVE',
+          matchFormat: 'SINGLES',
+          matchType: 'LEAGUE_PLAY',
           matchDate: '2026-07-01',
           team1: ['p1'],
           team2: ['p2'],
@@ -105,21 +105,21 @@ describe('CreateFixtureSection', () => {
     expect(await screen.findByText('Fixture scheduled.')).toBeInTheDocument()
   })
 
-  it('offers the single-set format and submits it', async () => {
+  it('offers the tournament-playoffs match type and submits it', async () => {
     renderSection()
     expect(
-      screen.getByRole('option', { name: 'Single set' }),
+      screen.getByRole('option', { name: 'Tournament playoffs' }),
     ).toBeInTheDocument()
     const user = await pickPlayersAndDate()
-    await user.selectOptions(screen.getByLabelText('Format'), 'SINGLE_SET')
+    await user.selectOptions(screen.getByLabelText('Match type'), 'TOURNAMENT_PLAYOFFS')
 
     await user.click(screen.getByRole('button', { name: /schedule fixture/i }))
 
     await waitFor(() =>
       expect(mutateAsync).toHaveBeenCalledWith({
         data: {
-          matchType: 'SINGLES',
-          matchFormat: 'SINGLE_SET',
+          matchFormat: 'SINGLES',
+          matchType: 'TOURNAMENT_PLAYOFFS',
           matchDate: '2026-07-01',
           team1: ['p1'],
           team2: ['p2'],

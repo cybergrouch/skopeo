@@ -18,11 +18,19 @@ import {
 import { GetApiV1MatchesFilter } from '@/api/generated/model'
 import type { UserSummaryResponse } from '@/api/generated/model'
 
-const FORMATS = ['BEST_OF_THREE', 'BEST_OF_FIVE', 'SINGLE_SET'] as const
-const FORMAT_LABELS: Record<(typeof FORMATS)[number], string> = {
-  BEST_OF_THREE: 'Best of three',
-  BEST_OF_FIVE: 'Best of five',
-  SINGLE_SET: 'Single set',
+const MATCH_TYPES = [
+  'OPEN_PLAY',
+  'LEAGUE_PLAY',
+  'TOURNAMENT_INITIAL_ROUND',
+  'LEAGUE_PLAYOFFS',
+  'TOURNAMENT_PLAYOFFS',
+] as const
+const MATCH_TYPE_LABELS: Record<(typeof MATCH_TYPES)[number], string> = {
+  OPEN_PLAY: 'Open play',
+  LEAGUE_PLAY: 'League play',
+  TOURNAMENT_INITIAL_ROUND: 'Tournament — initial round',
+  LEAGUE_PLAYOFFS: 'League playoffs',
+  TOURNAMENT_PLAYOFFS: 'Tournament playoffs',
 }
 const AWAITING = { filter: GetApiV1MatchesFilter['awaiting-results'] }
 
@@ -47,7 +55,7 @@ export function CreateFixtureSection() {
   const queryClient = useQueryClient()
   const [player1, setPlayer1] = useState<UserSummaryResponse | null>(null)
   const [player2, setPlayer2] = useState<UserSummaryResponse | null>(null)
-  const [format, setFormat] = useState<(typeof FORMATS)[number]>('BEST_OF_THREE')
+  const [matchType, setMatchType] = useState<(typeof MATCH_TYPES)[number]>('OPEN_PLAY')
   const [date, setDate] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [created, setCreated] = useState(false)
@@ -73,8 +81,8 @@ export function CreateFixtureSection() {
     try {
       await create.mutateAsync({
         data: {
-          matchType: 'SINGLES',
-          matchFormat: format,
+          matchFormat: 'SINGLES',
+          matchType,
           matchDate: date,
           team1: [player1.id],
           team2: [player2.id],
@@ -117,16 +125,16 @@ export function CreateFixtureSection() {
 
           <div className="flex flex-wrap gap-3">
             <div className="space-y-1">
-              <Label htmlFor="format">Format</Label>
+              <Label htmlFor="matchType">Match type</Label>
               <select
-                id="format"
-                value={format}
-                onChange={(e) => setFormat(e.target.value as (typeof FORMATS)[number])}
+                id="matchType"
+                value={matchType}
+                onChange={(e) => setMatchType(e.target.value as (typeof MATCH_TYPES)[number])}
                 className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
               >
-                {FORMATS.map((f) => (
-                  <option key={f} value={f}>
-                    {FORMAT_LABELS[f]}
+                {MATCH_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {MATCH_TYPE_LABELS[t]}
                   </option>
                 ))}
               </select>
