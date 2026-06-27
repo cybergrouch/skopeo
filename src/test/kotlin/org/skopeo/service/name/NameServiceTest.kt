@@ -9,7 +9,6 @@ import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.skopeo.dto.name.NameCreateRequest
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
@@ -61,8 +60,6 @@ class NameServiceTest {
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
-    private fun nickname(value: String) = NameCreateRequest(type = "NICKNAME", value = value)
-
     private fun displayNameOf(
         uid: String,
         userId: UUID,
@@ -71,7 +68,7 @@ class NameServiceTest {
     @Test
     fun `adding and disabling a name write audit-log entries (#100)`() {
         val owner = provisionUser(uid = "owner")
-        val added = service.create(token = token(uid = "owner"), userId = owner.id, request = nickname(value = "JB"))
+        val added = service.create(token = token(uid = "owner"), userId = owner.id, type = NameType.NICKNAME, value = "JB")
         service.setActive(token = token(uid = "owner"), userId = owner.id, nameId = added.id, active = false)
         service.setActive(token = token(uid = "owner"), userId = owner.id, nameId = added.id, active = true)
 
@@ -90,8 +87,8 @@ class NameServiceTest {
     @Test
     fun `multiple names of the same type are allowed`() {
         val owner = provisionUser(uid = "owner")
-        service.create(token = token(uid = "owner"), userId = owner.id, request = nickname(value = "JB"))
-        service.create(token = token(uid = "owner"), userId = owner.id, request = nickname(value = "Boy"))
+        service.create(token = token(uid = "owner"), userId = owner.id, type = NameType.NICKNAME, value = "JB")
+        service.create(token = token(uid = "owner"), userId = owner.id, type = NameType.NICKNAME, value = "Boy")
 
         service.list(token = token(uid = "owner"), userId = owner.id).count { it.type == NameType.NICKNAME } shouldBe 2
     }
@@ -105,7 +102,8 @@ class NameServiceTest {
             service.create(
                 token = token(uid = "owner"),
                 userId = owner.id,
-                request = NameCreateRequest(type = "DISPLAY", value = "Johnny"),
+                type = NameType.DISPLAY,
+                value = "Johnny",
             )
 
         replacement.value shouldBe "Johnny"
@@ -128,7 +126,7 @@ class NameServiceTest {
     fun `re-enabling a former display name conflicts with the current one`() {
         val owner = provisionUser(uid = "owner")
         val original = displayNameOf(uid = "owner", userId = owner.id)
-        service.create(token = token(uid = "owner"), userId = owner.id, request = NameCreateRequest(type = "DISPLAY", value = "Johnny"))
+        service.create(token = token(uid = "owner"), userId = owner.id, type = NameType.DISPLAY, value = "Johnny")
 
         // `original` is now disabled history; re-enabling it collides with the active display.
         shouldThrow<NameConflictException> {
@@ -139,7 +137,7 @@ class NameServiceTest {
     @Test
     fun `owner can disable a non-display name`() {
         val owner = provisionUser(uid = "owner")
-        val name = service.create(token = token(uid = "owner"), userId = owner.id, request = nickname(value = "JB"))
+        val name = service.create(token = token(uid = "owner"), userId = owner.id, type = NameType.NICKNAME, value = "JB")
 
         service.setActive(token = token(uid = "owner"), userId = owner.id, nameId = name.id, active = false).isActive.shouldBeFalse()
     }
@@ -149,7 +147,7 @@ class NameServiceTest {
         val owner = provisionUser(uid = "owner")
         provisionUser(uid = "intruder")
         provisionUser(uid = "root", capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
-        val name = service.create(token = token(uid = "owner"), userId = owner.id, request = nickname(value = "JB"))
+        val name = service.create(token = token(uid = "owner"), userId = owner.id, type = NameType.NICKNAME, value = "JB")
 
         shouldThrow<ForbiddenException> { service.list(token = token(uid = "intruder"), userId = owner.id) }
         shouldThrow<ForbiddenException> { service.list(token = token(uid = "ghost"), userId = owner.id) }
@@ -160,7 +158,7 @@ class NameServiceTest {
     fun `unknown or mismatched names are not found`() {
         val owner = provisionUser(uid = "owner")
         val other = provisionUser(uid = "other")
-        val name = service.create(token = token(uid = "other"), userId = other.id, request = nickname(value = "JB"))
+        val name = service.create(token = token(uid = "other"), userId = other.id, type = NameType.NICKNAME, value = "JB")
 
         shouldThrow<NameNotFoundException> {
             service.get(token = token(uid = "owner"), userId = owner.id, nameId = UUID.randomUUID())
@@ -184,7 +182,7 @@ class NameServiceTest {
         provisionUser(uid = "owner")
 
         shouldThrow<UserNotFoundException> {
-            service.create(token = token(uid = "owner"), userId = UUID.randomUUID(), request = nickname(value = "JB"))
+            service.create(token = token(uid = "owner"), userId = UUID.randomUUID(), type = NameType.NICKNAME, value = "JB")
         }
     }
 
@@ -192,17 +190,8 @@ class NameServiceTest {
     fun `an administrator can list another user's names`() {
         val owner = provisionUser(uid = "owner")
         provisionUser(uid = "root", capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
-        service.create(token = token(uid = "owner"), userId = owner.id, request = nickname(value = "JB"))
+        service.create(token = token(uid = "owner"), userId = owner.id, type = NameType.NICKNAME, value = "JB")
 
         service.list(token = token(uid = "root"), userId = owner.id).count { it.type == NameType.NICKNAME } shouldBe 1
-    }
-
-    @Test
-    fun `invalid name type is rejected`() {
-        val owner = provisionUser(uid = "owner")
-
-        shouldThrow<IllegalArgumentException> {
-            service.create(token = token(uid = "owner"), userId = owner.id, request = NameCreateRequest(type = "ALIAS", value = "x"))
-        }
     }
 }

@@ -4,7 +4,6 @@
 package org.skopeo.service.name
 
 import org.jetbrains.exposed.exceptions.ExposedSQLException
-import org.skopeo.dto.name.NameCreateRequest
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -57,12 +56,12 @@ class NameService(
     fun create(
         token: VerifiedFirebaseToken,
         userId: UUID,
-        request: NameCreateRequest,
+        type: NameType,
+        value: String,
     ): Name {
         requireUserExists(userId = userId)
         val actor = requireUserAccess(token = token, userId = userId)
-        val type = parseType(value = request.type)
-        val name = names.create(userId = userId, type = type, value = request.value)
+        val name = names.create(userId = userId, type = type, value = value)
         audit.record(
             write =
                 AuditWrite(
@@ -70,8 +69,8 @@ class NameService(
                     action = AuditAction.NAME_ADDED,
                     entityType = AuditEntityType.USER,
                     entityId = userId,
-                    summary = "Added ${type.name} name '${request.value}'",
-                    details = mapOf("nameType" to type.name, "value" to request.value),
+                    summary = "Added ${type.name} name '$value'",
+                    details = mapOf("nameType" to type.name, "value" to value),
                 ),
         )
         return name
@@ -134,13 +133,6 @@ class NameService(
         if (caller == null || (!isSelf && !isAdmin)) throw ForbiddenException()
         return caller.id
     }
-
-    private fun parseType(value: String): NameType =
-        try {
-            NameType.valueOf(value = value)
-        } catch (e: IllegalArgumentException) {
-            throw IllegalArgumentException("Invalid name type '$value'", e)
-        }
 
     private fun <T> conflictAware(block: () -> T): T =
         try {

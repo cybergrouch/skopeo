@@ -19,6 +19,7 @@ import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.name.NameCreateRequest
 import org.skopeo.dto.name.NameStateRequest
 import org.skopeo.dto.name.toResponse
+import org.skopeo.model.NameType
 import org.skopeo.service.name.NameService
 
 /**
@@ -48,7 +49,13 @@ private fun Route.listAndCreate(service: NameService) {
     post {
         respondMappingErrors {
             val request = call.receive<NameCreateRequest>()
-            val name = service.create(token = verifiedToken(), userId = uuidParam(name = "userId"), request = request)
+            val name =
+                service.create(
+                    token = verifiedToken(),
+                    userId = uuidParam(name = "userId"),
+                    type = parseEnumParam<NameType>(value = request.type, field = "type"),
+                    value = request.value,
+                )
             call.respond(status = HttpStatusCode.Created, message = name.toResponse())
         }
     }

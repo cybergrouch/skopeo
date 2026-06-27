@@ -4,8 +4,6 @@
 package org.skopeo.service.contact
 
 import org.jetbrains.exposed.exceptions.ExposedSQLException
-import org.skopeo.dto.contact.ContactCreateRequest
-import org.skopeo.dto.contact.VerificationRequest
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -58,14 +56,15 @@ class ContactService(
     fun create(
         token: VerifiedFirebaseToken,
         userId: UUID,
-        request: ContactCreateRequest,
+        type: ContactType,
+        value: String,
+        isPrimary: Boolean,
     ): Contact {
         requireUserExists(userId = userId)
         val actor = requireUserAccess(token = token, userId = userId)
-        val type = parseType(value = request.type)
         val contact =
             conflictAware(message = "A ${type.name} contact already exists for this user") {
-                contacts.create(userId = userId, type = type, value = request.value, isPrimary = request.isPrimary)
+                contacts.create(userId = userId, type = type, value = value, isPrimary = isPrimary)
             }
         audit.record(
             write =
@@ -74,8 +73,8 @@ class ContactService(
                     action = AuditAction.CONTACT_ADDED,
                     entityType = AuditEntityType.USER,
                     entityId = userId,
-                    summary = "Added ${type.name} ${request.value}",
-                    details = mapOf("contactType" to type.name, "value" to request.value),
+                    summary = "Added ${type.name} $value",
+                    details = mapOf("contactType" to type.name, "value" to value),
                 ),
         )
         return contact
@@ -118,23 +117,19 @@ class ContactService(
         token: VerifiedFirebaseToken,
         userId: UUID,
         contactId: UUID,
-        request: VerificationRequest,
+        status: VerificationStatus,
+        method: VerificationMethod?,
     ): Contact {
         val contact = locate(userId = userId, contactId = contactId)
         val adminId = requireAdmin(token = token)
         require(value = contact.isActive) { "Cannot change verification of a disabled contact" }
-        val status = parseStatus(value = request.status)
-        val method =
-            if (status == VerificationStatus.VERIFIED) {
-                request.method?.let(block = ::parseMethod) ?: VerificationMethod.ADMIN_OVERRIDE
-            } else {
-                null
-            }
+        // Business rule: a VERIFIED status defaults to ADMIN_OVERRIDE; a non-verified status has no method.
+        val resolvedMethod = if (status == VerificationStatus.VERIFIED) method ?: VerificationMethod.ADMIN_OVERRIDE else null
         return conflictAware(message = "This value is already verified for another account") {
             contacts.setVerification(
                 id = contactId,
                 status = status,
-                method = method,
+                method = resolvedMethod,
                 verifiedBy = adminId,
                 verifiedAt = LocalDateTime.now(),
             )
@@ -172,22 +167,6 @@ class ContactService(
         return caller.id
     }
 }
-
-private fun parseType(value: String): ContactType = parseEnum(value = value) { ContactType.valueOf(value = it) }
-
-private fun parseStatus(value: String): VerificationStatus = parseEnum(value = value) { VerificationStatus.valueOf(value = it) }
-
-private fun parseMethod(value: String): VerificationMethod = parseEnum(value = value) { VerificationMethod.valueOf(value = it) }
-
-private fun <T> parseEnum(
-    value: String,
-    parse: (String) -> T,
-): T =
-    try {
-        parse(value)
-    } catch (e: IllegalArgumentException) {
-        throw IllegalArgumentException("Invalid value '$value'", e)
-    }
 
 private fun <T> conflictAware(
     message: String,
