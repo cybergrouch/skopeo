@@ -24,13 +24,23 @@ data class SetScoreRequest(
     val team2Games: Int,
     val tiebreakTeam1Points: Int? = null,
     val tiebreakTeam2Points: Int? = null,
-)
+) {
+    init {
+        // Shape validation at the boundary (#116): games can never be negative.
+        require(value = team1Games >= 0 && team2Games >= 0) { "games must be non-negative" }
+    }
+}
 
 /** Body for `POST /api/v1/matches/{id}/result` — upload the set scores. */
 @Serializable
 data class MatchResultRequest(
     val sets: List<SetScoreRequest>,
-)
+) {
+    init {
+        // Shape validation at the boundary (#116): a result must report at least one set.
+        require(value = sets.isNotEmpty()) { "at least one set is required" }
+    }
+}
 
 /** Body for `PUT /api/v1/matches/{id}/state` — enable/disable (append-only corrections). */
 @Serializable

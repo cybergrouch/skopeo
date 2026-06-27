@@ -3,7 +3,6 @@
 
 package org.skopeo.service.match
 
-import org.skopeo.dto.match.CreateFixtureRequest
 import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
@@ -30,10 +29,25 @@ import org.skopeo.service.user.ForbiddenException
 import org.skopeo.service.user.VerifiedFirebaseToken
 import java.time.LocalDate
 import java.time.LocalDateTime
-import java.time.format.DateTimeParseException
 import java.util.UUID
 
 private val STAFF_ROLES = setOf(Capability.HOST, Capability.ADMINISTRATOR)
+
+/**
+ * Fixture-creation input resolved at the route boundary (#116): the match type/format enums are
+ * parsed, the date is parsed, the participant ids are valid UUIDs, and the team composition (players
+ * per side, no repeats) is validated. The service then enforces only business rules (staff auth,
+ * participant existence/active/rated).
+ */
+data class FixtureInput(
+    val matchType: TeamType,
+    val matchFormat: MatchFormat,
+    val matchDate: LocalDate,
+    val team1: List<UUID>,
+    val team2: List<UUID>,
+    val venue: String? = null,
+    val tournamentName: String? = null,
+)
 
 /**
  * Match fixtures & results. Creating fixtures, uploading results, and disabling are
@@ -48,31 +62,24 @@ class MatchService(
     private val users: UserRepository = UserRepository(),
     private val audit: AuditService = AuditService(),
 ) {
+    /** [request] is parsed, range-checked, and composition-validated at the route boundary (#116). */
     fun createFixture(
         token: VerifiedFirebaseToken,
-        request: CreateFixtureRequest,
+        request: FixtureInput,
     ): Match {
         val createdBy = requireStaff(token = token)
-        val type = parseEnum(value = request.matchType) { TeamType.valueOf(value = it) }
-        // Every MatchFormat value is supported; parseEnum already rejects unknown strings (400),
-        // so no further allowlist check is needed (it would be unreachable dead code).
-        val format = parseEnum(value = request.matchFormat) { MatchFormat.valueOf(value = it) }
-        val matchDate = parseDate(value = request.matchDate)
-        val team1Ids = request.team1.map(transform = ::parseUuid)
-        val team2Ids = request.team2.map(transform = ::parseUuid)
-        validateComposition(type = type, team1 = team1Ids, team2 = team2Ids)
-        val team1Users = resolveRatedParticipants(ids = team1Ids)
-        val team2Users = resolveRatedParticipants(ids = team2Ids)
+        val team1Users = resolveRatedParticipants(ids = request.team1)
+        val team2Users = resolveRatedParticipants(ids = request.team2)
 
         val match =
             matches.createFixture(
                 command =
                     CreateFixtureCommand(
-                        matchType = type,
-                        matchFormat = format,
-                        matchDate = matchDate,
-                        team1UserIds = team1Ids,
-                        team2UserIds = team2Ids,
+                        matchType = request.matchType,
+                        matchFormat = request.matchFormat,
+                        matchDate = request.matchDate,
+                        team1UserIds = request.team1,
+                        team2UserIds = request.team2,
                         team1Name = teamName(users = team1Users),
                         team2Name = teamName(users = team2Users),
                         createdBy = createdBy,
@@ -87,8 +94,8 @@ class MatchService(
                     action = AuditAction.MATCH_FIXTURE_CREATED,
                     entityType = AuditEntityType.MATCH,
                     entityId = match.id,
-                    summary = "Created a ${type.name} fixture on ${match.matchDate}",
-                    details = mapOf("matchType" to type.name, "matchDate" to match.matchDate.toString()),
+                    summary = "Created a ${request.matchType.name} fixture on ${match.matchDate}",
+                    details = mapOf("matchType" to request.matchType.name, "matchDate" to match.matchDate.toString()),
                 ),
         )
         return match
@@ -224,25 +231,18 @@ class MatchService(
         }
 }
 
-private fun validateComposition(
-    type: TeamType,
-    team1: List<UUID>,
-    team2: List<UUID>,
-) {
-    val expected = if (type == TeamType.SINGLES) 1 else 2
-    require(value = team1.size == expected && team2.size == expected) { "$type needs $expected player(s) per side" }
-    val all = team1 + team2
-    require(value = all.toSet().size == all.size) { "a player cannot appear more than once in a match" }
-}
-
-/** Derive per-set winners and the match winner from the raw scores; validates a clear outcome. */
+/**
+ * Derive per-set winners and the match winner from the raw scores. The score *shape* (non-negative
+ * games, at least one set) is validated at the boundary (#116, in the DTO); what remains here is
+ * outcome derivation against the persisted match — a single-set match must be exactly one set (the
+ * stored [format]), each set must have a decisive score, and the sets must not be tied.
+ */
 private fun deriveOutcome(
     team1Id: UUID,
     team2Id: UUID,
     request: MatchResultRequest,
     format: MatchFormat,
 ): Pair<List<MatchSetResult>, UUID> {
-    require(value = request.sets.isNotEmpty()) { "at least one set is required" }
     // A single-set match is exactly one set; the winner is simply the side with more games
     // (or the tiebreak), so any score the host enters (4-3, 6-5, 7-6, …) is accepted.
     require(value = format != MatchFormat.SINGLE_SET || request.sets.size == 1) {
@@ -252,7 +252,6 @@ private fun deriveOutcome(
     var team2Sets = 0
     val resolved =
         request.sets.mapIndexed { index, set ->
-            require(value = set.team1Games >= 0 && set.team2Games >= 0) { "set ${index + 1}: games must be non-negative" }
             val winner = setWinner(team1Id = team1Id, team2Id = team2Id, set = set, setNumber = index + 1)
             if (winner == team1Id) team1Sets++ else team2Sets++
             MatchSetResult(
@@ -286,28 +285,4 @@ private fun setWinner(
 private fun teamName(users: List<User>): String =
     users.joinToString(separator = "/") { user ->
         user.names.firstOrNull { it.type == NameType.DISPLAY && it.isActive }?.value ?: "Player"
-    }
-
-private fun parseUuid(value: String): UUID =
-    try {
-        UUID.fromString(value)
-    } catch (e: IllegalArgumentException) {
-        throw IllegalArgumentException("Invalid user id '$value'", e)
-    }
-
-private fun parseDate(value: String): LocalDate =
-    try {
-        LocalDate.parse(value)
-    } catch (e: DateTimeParseException) {
-        throw IllegalArgumentException("Invalid matchDate '$value'; expected ISO-8601 (yyyy-MM-dd)", e)
-    }
-
-private fun <T> parseEnum(
-    value: String,
-    parse: (String) -> T,
-): T =
-    try {
-        parse(value)
-    } catch (e: IllegalArgumentException) {
-        throw IllegalArgumentException("Invalid value '$value'", e)
     }

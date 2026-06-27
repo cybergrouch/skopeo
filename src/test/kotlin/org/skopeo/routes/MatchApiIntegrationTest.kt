@@ -123,6 +123,42 @@ class MatchApiIntegrationTest {
             )
         }
 
+    @Suppress("LongParameterList") // a faithful raw fixture body for exercising route-level shape validation
+    private suspend fun HttpClient.postFixture(
+        token: String,
+        matchType: String = "SINGLES",
+        matchFormat: String = "BEST_OF_THREE",
+        matchDate: String = "2026-01-01",
+        team1: List<String>,
+        team2: List<String>,
+    ): HttpResponse =
+        post(urlString = "/api/v1/matches") {
+            header(key = HttpHeaders.Authorization, value = "Bearer $token")
+            contentType(type = ContentType.Application.Json)
+            setBody(
+                body =
+                    CreateFixtureRequest(
+                        matchType = matchType,
+                        matchFormat = matchFormat,
+                        matchDate = matchDate,
+                        team1 = team1,
+                        team2 = team2,
+                    ),
+            )
+        }
+
+    /** Post a raw JSON result body — bypasses the DTO init so we can exercise the wire-level 400. */
+    private suspend fun HttpClient.postRawResult(
+        token: String,
+        matchId: String,
+        json: String,
+    ): HttpResponse =
+        post(urlString = "/api/v1/matches/$matchId/result") {
+            header(key = HttpHeaders.Authorization, value = "Bearer $token")
+            contentType(type = ContentType.Application.Json)
+            setBody(body = json)
+        }
+
     @Test
     fun `host creates a fixture, uploads results, admin sees it pending calculation`() =
         withApp { client ->
@@ -287,5 +323,42 @@ class MatchApiIntegrationTest {
             client
                 .createFixture(token = TestFirebaseAuth.mintToken(uid = "p1"), p1 = p1.id, p2 = p2.id)
                 .status shouldBe HttpStatusCode.Forbidden
+        }
+
+    @Test
+    fun `fixture creation rejects bad request shape at the route with a 400 (#116)`() =
+        withApp { client ->
+            val adminToken = seedStaff(uid = "admin", roles = setOf(Capability.ADMINISTRATOR))
+            val p1 = client.provisionSelf(token = TestFirebaseAuth.mintToken(uid = "p1"))
+            val p2 = client.provisionSelf(token = TestFirebaseAuth.mintToken(uid = "p2"))
+            val one = listOf(element = p1.id)
+            val two = listOf(element = p2.id)
+
+            // Invalid match type / format enums, a malformed date, and a malformed participant id.
+            client.postFixture(token = adminToken, matchType = "TRIPLES", team1 = one, team2 = two).status shouldBe
+                HttpStatusCode.BadRequest
+            client.postFixture(token = adminToken, matchFormat = "BEST_OF_ONE", team1 = one, team2 = two).status shouldBe
+                HttpStatusCode.BadRequest
+            client.postFixture(token = adminToken, matchDate = "01-01-2026", team1 = one, team2 = two).status shouldBe
+                HttpStatusCode.BadRequest
+            client.postFixture(token = adminToken, team1 = listOf(element = "not-a-uuid"), team2 = two).status shouldBe
+                HttpStatusCode.BadRequest
+            // Bad composition: singles needs exactly one per side, and a player can't appear twice.
+            client.postFixture(token = adminToken, team1 = listOf(p1.id, p2.id), team2 = two).status shouldBe
+                HttpStatusCode.BadRequest
+            client.postFixture(token = adminToken, team1 = one, team2 = one).status shouldBe HttpStatusCode.BadRequest
+        }
+
+    @Test
+    fun `result upload rejects bad score shape at the route with a 400 (#116)`() =
+        withApp { client ->
+            val adminToken = seedStaff(uid = "admin", roles = setOf(Capability.ADMINISTRATOR))
+            val matchId = java.util.UUID.randomUUID().toString()
+
+            // Negative games and an empty set list are rejected at deserialization, before any match lookup.
+            client.postRawResult(token = adminToken, matchId = matchId, json = """{"sets":[{"team1Games":-1,"team2Games":6}]}""")
+                .status shouldBe HttpStatusCode.BadRequest
+            client.postRawResult(token = adminToken, matchId = matchId, json = """{"sets":[]}""").status shouldBe
+                HttpStatusCode.BadRequest
         }
 }
