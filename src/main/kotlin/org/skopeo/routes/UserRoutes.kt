@@ -22,6 +22,7 @@ import org.skopeo.dto.user.CreateUserRequest
 import org.skopeo.dto.user.ProfileRequest
 import org.skopeo.dto.user.toResponse
 import org.skopeo.dto.user.toSummary
+import org.skopeo.model.NumericRange
 import org.skopeo.service.user.UserSearchFilters
 import org.skopeo.service.user.UserService
 import org.skopeo.service.user.toProfilePatch
@@ -67,9 +68,9 @@ private fun Route.searchUsers(service: UserService) {
                                 name = params["name"],
                                 code = params["code"],
                                 q = params["q"],
-                                sex = params["sex"],
-                                age = params["age"],
-                                rating = params["rating"],
+                                sex = validatedSex(value = params["sex"]),
+                                age = params["age"]?.let { NumericRange.parse(raw = it) },
+                                rating = params["rating"]?.let { NumericRange.parse(raw = it) },
                             ),
                     )
                 }
@@ -77,6 +78,15 @@ private fun Route.searchUsers(service: UserService) {
             call.respond(status = HttpStatusCode.OK, message = results.map { it.toSummary(rating = ratings[it.id]) })
         }
     }
+}
+
+private val ALLOWED_SEXES = setOf("Male", "Female")
+
+/** Validate the sex facet at the boundary (#116): absent, or one of the allowed values; else a 400. */
+private fun validatedSex(value: String?): String? {
+    if (value == null) return null
+    require(value = value in ALLOWED_SEXES) { "Invalid sex '$value'; expected one of $ALLOWED_SEXES" }
+    return value
 }
 
 /** Parse a comma-separated list of UUIDs; any malformed id is a 400. */

@@ -29,14 +29,17 @@ private val logger = KotlinLogging.logger {}
 
 private val STAFF_ROLES = setOf(Capability.HOST, Capability.ADMINISTRATOR)
 
-/** Raw user-search filter strings from the transport layer; parsed/validated in [UserService.search]. */
+/**
+ * User-search facets resolved at the route boundary (#116): [sex] is already validated and the
+ * [age]/[rating] intervals are already parsed. The service trims the free-text terms and AND-combines.
+ */
 data class UserSearchFilters(
     val name: String? = null,
     val code: String? = null,
     val q: String? = null,
     val sex: String? = null,
-    val age: String? = null,
-    val rating: String? = null,
+    val age: NumericRange? = null,
+    val rating: NumericRange? = null,
 )
 
 /**
@@ -59,10 +62,10 @@ class UserService(
     /**
      * Staff search (HOST/ADMINISTRATOR) backing the player-picker, role-grants, and player
      * research. Any combination of facets is allowed and AND-combined; at least one is required.
-     * [name] is a fuzzy match; [code] is a shareable player-code prefix (case-insensitive, #86); [q]
-     * is the unified picker term matching a fuzzy name OR a code prefix (#86); [sex] is Male/Female;
-     * [age]/[rating] are interval strings ("[3.0,4.0)", "(20,30]") — age maps to a date-of-birth
-     * window, rating filters NTRP.
+     * [UserSearchFilters.name] is a fuzzy match; [UserSearchFilters.code] is a shareable player-code
+     * prefix (case-insensitive, #86); [UserSearchFilters.q] is the unified picker term matching a
+     * fuzzy name OR a code prefix (#86). Sex and the age/rating intervals are validated at the route;
+     * age maps to a date-of-birth window, rating filters NTRP.
      */
     fun search(
         token: VerifiedFirebaseToken,
@@ -72,27 +75,24 @@ class UserService(
         val nameTerm = filters.name?.let { it.trim().ifEmpty { null } }
         val codeTerm = filters.code?.let { it.trim().uppercase().ifEmpty { null } }
         val qTerm = filters.q?.let { it.trim().ifEmpty { null } }
-        val sexValue = validatedSex(value = filters.sex)
-        val ageRange = filters.age?.let { NumericRange.parse(raw = it) }
-        val ratingRange = filters.rating?.let { NumericRange.parse(raw = it) }
         require(
             value =
                 nameTerm != null || codeTerm != null || qTerm != null ||
-                    sexValue != null || ageRange != null || ratingRange != null,
+                    filters.sex != null || filters.age != null || filters.rating != null,
         ) {
             "at least one filter (name, code, q, sex, age, rating) is required"
         }
-        val dob = ageRange?.let { ageRangeToDob(range = it, today = LocalDate.now()) }
+        val dob = filters.age?.let { ageRangeToDob(range = it, today = LocalDate.now()) }
         return repository.search(
             query =
                 UserSearchQuery(
                     name = nameTerm,
                     code = codeTerm,
                     q = qTerm,
-                    sex = sexValue,
+                    sex = filters.sex,
                     dobMin = dob?.min,
                     dobMax = dob?.max,
-                    rating = ratingRange,
+                    rating = filters.rating,
                 ),
         )
     }
