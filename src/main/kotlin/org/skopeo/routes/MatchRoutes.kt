@@ -21,8 +21,8 @@ import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.dto.match.MatchStateRequest
 import org.skopeo.dto.match.toResponse
 import org.skopeo.dto.rating.toResponse
-import org.skopeo.model.MatchOccasion
 import org.skopeo.model.MatchQuery
+import org.skopeo.model.MatchType
 import org.skopeo.model.TeamType
 import org.skopeo.service.match.FixtureInput
 import org.skopeo.service.match.MatchService
@@ -65,13 +65,13 @@ private fun Route.listAndCreate(service: MatchService) {
 
 /** Parse + validate the fixture request shape at the boundary (#116): enums, date, ids, composition. */
 private fun toFixtureInput(request: CreateFixtureRequest): FixtureInput {
-    val matchType = parseEnumParam<TeamType>(value = request.matchType, field = "matchType")
+    val matchFormat = parseEnumParam<TeamType>(value = request.matchFormat, field = "matchFormat")
     val team1 = request.team1.map { parseUserId(value = it) }
     val team2 = request.team2.map { parseUserId(value = it) }
-    validateComposition(type = matchType, team1 = team1, team2 = team2)
+    validateComposition(type = matchFormat, team1 = team1, team2 = team2)
     return FixtureInput(
-        matchType = matchType,
-        occasion = parseEnumParam<MatchOccasion>(value = request.occasion, field = "occasion"),
+        matchFormat = matchFormat,
+        matchType = parseEnumParam<MatchType>(value = request.matchType, field = "matchType"),
         matchDate = parseMatchDate(value = request.matchDate),
         team1 = team1,
         team2 = team2,

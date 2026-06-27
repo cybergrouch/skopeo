@@ -11,11 +11,11 @@ import org.skopeo.model.Capability
 import org.skopeo.model.CreateFixtureCommand
 import org.skopeo.model.Match
 import org.skopeo.model.MatchCalculationDetail
-import org.skopeo.model.MatchOccasion
 import org.skopeo.model.MatchPlayerCalculation
 import org.skopeo.model.MatchQuery
 import org.skopeo.model.MatchSetResult
 import org.skopeo.model.MatchStatus
+import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
 import org.skopeo.model.TeamType
 import org.skopeo.model.User
@@ -34,14 +34,15 @@ import java.util.UUID
 private val STAFF_ROLES = setOf(Capability.HOST, Capability.ADMINISTRATOR)
 
 /**
- * Fixture-creation input resolved at the route boundary (#116): the match type/occasion enums are
+ * Fixture-creation input resolved at the route boundary (#116): the match format/type enums are
  * parsed, the date is parsed, the participant ids are valid UUIDs, and the team composition (players
  * per side, no repeats) is validated. The service then enforces only business rules (staff auth,
- * participant existence/active/rated).
+ * participant existence/active/rated). [matchFormat] is SINGLES/DOUBLES; [matchType] is the
+ * competitive context (open play, league, tournament, …) that scales the rating change (#108).
  */
 data class FixtureInput(
-    val matchType: TeamType,
-    val occasion: MatchOccasion,
+    val matchFormat: TeamType,
+    val matchType: MatchType,
     val matchDate: LocalDate,
     val team1: List<UUID>,
     val team2: List<UUID>,
@@ -75,8 +76,8 @@ class MatchService(
             matches.createFixture(
                 command =
                     CreateFixtureCommand(
+                        matchFormat = request.matchFormat,
                         matchType = request.matchType,
-                        occasion = request.occasion,
                         matchDate = request.matchDate,
                         team1UserIds = request.team1,
                         team2UserIds = request.team2,
@@ -94,8 +95,13 @@ class MatchService(
                     action = AuditAction.MATCH_FIXTURE_CREATED,
                     entityType = AuditEntityType.MATCH,
                     entityId = match.id,
-                    summary = "Created a ${request.matchType.name} fixture on ${match.matchDate}",
-                    details = mapOf("matchType" to request.matchType.name, "matchDate" to match.matchDate.toString()),
+                    summary = "Created a ${request.matchFormat.name} fixture on ${match.matchDate}",
+                    details =
+                        mapOf(
+                            "matchFormat" to request.matchFormat.name,
+                            "matchType" to request.matchType.name,
+                            "matchDate" to match.matchDate.toString(),
+                        ),
                 ),
         )
         return match

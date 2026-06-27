@@ -20,7 +20,7 @@ import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.dto.match.SetScoreRequest
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
-import org.skopeo.model.MatchOccasion
+import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.TeamType
@@ -94,15 +94,15 @@ class RatingCalculationServiceTest {
         admin: String,
         winner: UUID,
         loser: UUID,
-        occasion: MatchOccasion = MatchOccasion.OPEN_PLAY,
+        matchType: MatchType = MatchType.OPEN_PLAY,
     ): UUID {
         val match =
             matchService.createFixture(
                 token = token(uid = admin),
                 request =
                     FixtureInput(
-                        matchType = TeamType.SINGLES,
-                        occasion = occasion,
+                        matchFormat = TeamType.SINGLES,
+                        matchType = matchType,
                         matchDate = LocalDate.parse("2026-01-01"),
                         team1 = listOf(element = winner),
                         team2 = listOf(element = loser),
@@ -151,15 +151,15 @@ class RatingCalculationServiceTest {
     }
 
     @Test
-    fun `a higher-pressure occasion moves ratings more than open play (#108)`() {
+    fun `a higher-pressure match type moves ratings more than open play (#108)`() {
         provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val a1 = provisionUser(uid = "a1", rated = true)
         val a2 = provisionUser(uid = "a2", rated = true)
         val b1 = provisionUser(uid = "b1", rated = true)
         val b2 = provisionUser(uid = "b2", rated = true)
-        // Two identical matches (equal 4.0 players, same score) differing only by occasion.
-        playedMatch(admin = "root", winner = a1.id, loser = a2.id, occasion = MatchOccasion.OPEN_PLAY)
-        playedMatch(admin = "root", winner = b1.id, loser = b2.id, occasion = MatchOccasion.TOURNAMENT_PLAYOFFS)
+        // Two identical matches (equal 4.0 players, same score) differing only by match type.
+        playedMatch(admin = "root", winner = a1.id, loser = a2.id, matchType = MatchType.OPEN_PLAY)
+        playedMatch(admin = "root", winner = b1.id, loser = b2.id, matchType = MatchType.TOURNAMENT_PLAYOFFS)
 
         val changes = calc.calculate(token = token(uid = "root"), dryRun = true).matches.flatMap { it.changes }
         val openGain = changes.first { it.userId == a1.id }.let { it.newRating - it.previousRating }
@@ -237,8 +237,8 @@ class RatingCalculationServiceTest {
                 token = token(uid = "root"),
                 request =
                     FixtureInput(
-                        matchType = TeamType.DOUBLES,
-                        occasion = MatchOccasion.OPEN_PLAY,
+                        matchFormat = TeamType.DOUBLES,
+                        matchType = MatchType.OPEN_PLAY,
                         matchDate = LocalDate.parse("2026-01-01"),
                         team1 = listOf(a1.id, a2.id),
                         team2 = listOf(b1.id, b2.id),

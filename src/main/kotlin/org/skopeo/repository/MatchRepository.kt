@@ -13,10 +13,10 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.model.CreateFixtureCommand
 import org.skopeo.model.Match
-import org.skopeo.model.MatchOccasion
 import org.skopeo.model.MatchSetResult
 import org.skopeo.model.MatchSide
 import org.skopeo.model.MatchStatus
+import org.skopeo.model.MatchType
 import org.skopeo.model.TeamType
 import java.time.LocalDateTime
 import java.util.UUID
@@ -28,14 +28,14 @@ import java.util.UUID
 class MatchRepository {
     fun createFixture(command: CreateFixtureCommand): Match =
         transaction {
-            val team1 = createTeam(name = command.team1Name, type = command.matchType, userIds = command.team1UserIds)
-            val team2 = createTeam(name = command.team2Name, type = command.matchType, userIds = command.team2UserIds)
+            val team1 = createTeam(name = command.team1Name, type = command.matchFormat, userIds = command.team1UserIds)
+            val team2 = createTeam(name = command.team2Name, type = command.matchFormat, userIds = command.team2UserIds)
             val matchId =
                 MatchesTable.insertAndGetId {
                     it[team1Id] = team1
                     it[team2Id] = team2
+                    it[matchFormat] = command.matchFormat.name
                     it[matchType] = command.matchType.name
-                    it[occasion] = command.occasion.name
                     it[matchDate] = command.matchDate
                     it[status] = MatchStatus.SCHEDULED.name
                     it[venue] = command.venue
@@ -200,8 +200,8 @@ class MatchRepository {
         val row = MatchesTable.selectAll().where { MatchesTable.id eq id }.singleOrNull() ?: return null
         return Match(
             id = id,
-            matchType = TeamType.valueOf(value = row[MatchesTable.matchType]),
-            occasion = MatchOccasion.valueOf(value = row[MatchesTable.occasion]),
+            matchFormat = TeamType.valueOf(value = row[MatchesTable.matchFormat]),
+            matchType = MatchType.valueOf(value = row[MatchesTable.matchType]),
             matchDate = row[MatchesTable.matchDate],
             status = MatchStatus.valueOf(value = row[MatchesTable.status]),
             team1 = sideOf(teamId = row[MatchesTable.team1Id].value),

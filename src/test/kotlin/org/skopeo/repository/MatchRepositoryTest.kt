@@ -17,9 +17,9 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.CreateFixtureCommand
-import org.skopeo.model.MatchOccasion
 import org.skopeo.model.MatchSetResult
 import org.skopeo.model.MatchStatus
+import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.TeamType
@@ -64,8 +64,8 @@ class MatchRepositoryTest {
     ) = matches.createFixture(
         command =
             CreateFixtureCommand(
-                matchType = TeamType.SINGLES,
-                occasion = MatchOccasion.OPEN_PLAY,
+                matchFormat = TeamType.SINGLES,
+                matchType = MatchType.OPEN_PLAY,
                 matchDate = date,
                 team1UserIds = listOf(u1),
                 team2UserIds = listOf(u2),

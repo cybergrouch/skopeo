@@ -17,9 +17,9 @@ import org.skopeo.dto.match.SetScoreRequest
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
-import org.skopeo.model.MatchOccasion
 import org.skopeo.model.MatchQuery
 import org.skopeo.model.MatchStatus
+import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.TeamType
@@ -92,10 +92,10 @@ class MatchServiceTest {
         p1: UUID,
         p2: UUID,
         date: LocalDate = LocalDate.parse("2026-01-01"),
-        occasion: MatchOccasion = MatchOccasion.OPEN_PLAY,
+        matchType: MatchType = MatchType.OPEN_PLAY,
     ) = FixtureInput(
-        matchType = TeamType.SINGLES,
-        occasion = occasion,
+        matchFormat = TeamType.SINGLES,
+        matchType = matchType,
         matchDate = date,
         team1 = listOf(element = p1),
         team2 = listOf(element = p2),

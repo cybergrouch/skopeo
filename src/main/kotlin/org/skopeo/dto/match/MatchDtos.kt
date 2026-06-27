@@ -9,8 +9,8 @@ import org.skopeo.model.Match
 /** Body for `POST /api/v1/matches` — create a fixture (no results yet). */
 @Serializable
 data class CreateFixtureRequest(
+    val matchFormat: String,
     val matchType: String,
-    val occasion: String,
     val matchDate: String,
     val team1: List<String>,
     val team2: List<String>,
@@ -67,8 +67,8 @@ data class MatchSetResponse(
 @Serializable
 data class MatchResponse(
     val id: String,
+    val matchFormat: String,
     val matchType: String,
-    val occasion: String,
     val matchDate: String,
     val status: String,
     val team1: MatchSideResponse,
@@ -87,8 +87,8 @@ data class MatchResponse(
 fun Match.toResponse(): MatchResponse =
     MatchResponse(
         id = id.toString(),
+        matchFormat = matchFormat.name,
         matchType = matchType.name,
-        occasion = occasion.name,
         matchDate = matchDate.toString(),
         status = status.name,
         team1 = MatchSideResponse(teamId = team1.teamId.toString(), userIds = team1.userIds.map { it.toString() }),

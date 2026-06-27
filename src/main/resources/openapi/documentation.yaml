@@ -2196,19 +2196,19 @@ components:
     CreateFixtureRequest:
       type: object
       required:
+        - matchFormat
         - matchType
-        - occasion
         - matchDate
         - team1
         - team2
       properties:
-        matchType:
+        matchFormat:
           type: string
           enum: [SINGLES, DOUBLES, MIXED_DOUBLES]
-        occasion:
+        matchType:
           type: string
           enum: [OPEN_PLAY, LEAGUE_PLAY, TOURNAMENT_INITIAL_ROUND, LEAGUE_PLAYOFFS, TOURNAMENT_PLAYOFFS]
-          description: The competitive context; scales the calculated rating change by a per-occasion factor (#108).
+          description: The competitive context; scales the calculated rating change by a per-match-type factor (#108).
         matchDate:
           type: string
           format: date
@@ -2307,8 +2307,8 @@ components:
       type: object
       required:
         - id
+        - matchFormat
         - matchType
-        - occasion
         - matchDate
         - status
         - team1
@@ -2319,10 +2319,10 @@ components:
         id:
           type: string
           format: uuid
-        matchType:
+        matchFormat:
           type: string
           enum: [SINGLES, DOUBLES, MIXED_DOUBLES]
-        occasion:
+        matchType:
           type: string
           enum: [OPEN_PLAY, LEAGUE_PLAY, TOURNAMENT_INITIAL_ROUND, LEAGUE_PLAYOFFS, TOURNAMENT_PLAYOFFS]
           description: The competitive context the match was played under (#108).
