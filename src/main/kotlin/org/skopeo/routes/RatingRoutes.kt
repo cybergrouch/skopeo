@@ -20,8 +20,10 @@ import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.rating.CalculationRequest
 import org.skopeo.dto.rating.SetRatingRequest
 import org.skopeo.dto.rating.toResponse
+import org.skopeo.model.Rating
 import org.skopeo.service.rating.RatingCalculationService
 import org.skopeo.service.rating.RatingService
+import java.math.BigDecimal
 
 private const val DEFAULT_PENDING_PAGE_SIZE = 20
 
@@ -85,10 +87,23 @@ private fun Route.ratings(service: RatingService) {
                 service.setRating(
                     token = verifiedToken(),
                     userId = uuidParam(name = "userId"),
-                    value = request.value,
-                    confidence = request.confidence,
+                    value = validatedRating(raw = request.value),
+                    confidence = validatedConfidence(raw = request.confidence),
                 )
             call.respond(status = HttpStatusCode.OK, message = rating.toResponse())
         }
     }
+}
+
+/** Validate the NTRP value at the boundary (#116): a valid number in the 1.0–7.0 range, or a 400. */
+private fun validatedRating(raw: String): BigDecimal {
+    Rating.fromValue(value = raw)
+    return BigDecimal(raw)
+}
+
+/** Validate confidence at the boundary (#116): absent, or a number in [0, 1]; otherwise a 400. */
+private fun validatedConfidence(raw: String?): BigDecimal? {
+    val value = raw?.let { BigDecimal(it) } ?: return null
+    require(value = value in BigDecimal.ZERO..BigDecimal.ONE) { "confidence must be between 0 and 1" }
+    return value
 }
