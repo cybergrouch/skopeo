@@ -129,6 +129,23 @@ class CapabilityApiIntegrationTest {
         }
 
     @Test
+    fun `an invalid capability is rejected at the route with a 400 (#116)`() =
+        withApp { client ->
+            val adminToken = seedAdminToken()
+            val user = client.provisionSelf(token = TestFirebaseAuth.mintToken(uid = "fb-3"))
+
+            client.post(urlString = "/api/v1/users/${user.id}/capabilities") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                contentType(type = ContentType.Application.Json)
+                setBody(body = CapabilityGrantRequest(capability = "WIZARD"))
+            }.status shouldBe HttpStatusCode.BadRequest
+
+            client.delete(urlString = "/api/v1/users/${user.id}/capabilities/WIZARD") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+            }.status shouldBe HttpStatusCode.BadRequest
+        }
+
+    @Test
     fun `the last administrator cannot be revoked`() =
         withApp { client ->
             val adminToken = seedAdminToken()

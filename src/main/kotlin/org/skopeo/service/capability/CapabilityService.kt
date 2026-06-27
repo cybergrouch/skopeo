@@ -46,11 +46,10 @@ class CapabilityService(
     fun grant(
         token: VerifiedFirebaseToken,
         userId: UUID,
-        capabilityName: String,
+        capability: Capability,
     ): Granted {
         val adminId = requireAdmin(token = token)
         requireUserExists(userId = userId)
-        val capability = parseCapability(value = capabilityName)
         capabilities.findActive(userId = userId, capability = capability)?.let { return Granted(grant = it, created = false) }
         val grant = capabilities.grant(userId = userId, capability = capability, grantedBy = adminId)
         audit.record(
@@ -71,11 +70,10 @@ class CapabilityService(
     fun revoke(
         token: VerifiedFirebaseToken,
         userId: UUID,
-        capabilityName: String,
+        capability: Capability,
     ) {
         val adminId = requireAdmin(token = token)
         requireUserExists(userId = userId)
-        val capability = parseCapability(value = capabilityName)
 
         if (capability == Capability.PLAYER) {
             throw ConflictException(message = "The PLAYER role cannot be revoked")
@@ -117,11 +115,4 @@ class CapabilityService(
         if (caller == null || !caller.capabilities.contains(element = Capability.ADMINISTRATOR)) throw ForbiddenException()
         return caller.id
     }
-
-    private fun parseCapability(value: String): Capability =
-        try {
-            Capability.valueOf(value = value)
-        } catch (e: IllegalArgumentException) {
-            throw IllegalArgumentException("Invalid capability '$value'", e)
-        }
 }

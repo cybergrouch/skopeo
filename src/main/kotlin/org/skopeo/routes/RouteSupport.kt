@@ -56,6 +56,19 @@ internal fun RoutingContext.uuidParam(name: String): UUID {
     }
 }
 
+/**
+ * Parse [value] into enum [T] at the request boundary (issue #116) — a 400 when it isn't a valid
+ * member. Services then receive the typed value and don't re-validate the request shape.
+ */
+internal inline fun <reified T : Enum<T>> parseEnumParam(
+    value: String,
+    field: String,
+): T =
+    enumValues<T>().firstOrNull { it.name == value }
+        ?: throw BadRequestException(
+            message = "Invalid $field '$value'; expected one of ${enumValues<T>().joinToString { it.name }}",
+        )
+
 /** Run a handler, mapping domain/parse failures to the right status code. */
 @Suppress("TooGenericExceptionCaught") // intentional catch-all that maps to a 500
 internal suspend fun RoutingContext.respondMappingErrors(block: suspend () -> Unit) {
