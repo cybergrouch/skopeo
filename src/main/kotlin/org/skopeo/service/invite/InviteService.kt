@@ -33,6 +33,7 @@ class InviteService(
     private val users: UserRepository = UserRepository(),
     private val audit: AuditService = AuditService(),
 ) {
+    /** [email] is validated and normalized (trimmed, lower-cased) at the route boundary (#116). */
     fun create(
         token: VerifiedFirebaseToken,
         email: String,
@@ -40,7 +41,7 @@ class InviteService(
         val adminId = requireAdmin(token = token)
         val invite =
             invites.createOrRotate(
-                email = normalizeEmail(email = email),
+                email = email,
                 invitedBy = adminId,
                 expiresAt = LocalDateTime.now().plusDays(INVITE_TTL_DAYS),
             )
@@ -98,10 +99,4 @@ class InviteService(
         if (caller == null || !caller.capabilities.contains(element = Capability.ADMINISTRATOR)) throw ForbiddenException()
         return caller.id
     }
-}
-
-private fun normalizeEmail(email: String): String {
-    val normalized = email.trim().lowercase()
-    require(value = normalized.isNotBlank() && normalized.contains(char = '@')) { "A valid email is required" }
-    return normalized
 }

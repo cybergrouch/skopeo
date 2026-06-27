@@ -115,6 +115,25 @@ class InviteApiIntegrationTest {
         }
 
     @Test
+    fun `the route normalizes the email (trim + lowercase) before storing (#116)`() =
+        withApp { client ->
+            val adminToken = seedToken(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+
+            val created = client.createInvite(token = adminToken, email = "  New@Example.com ")
+            created.status shouldBe HttpStatusCode.Created
+            created.body<InviteResponse>().email shouldBe "new@example.com"
+        }
+
+    @Test
+    fun `an invalid email is rejected at the route with a 400 (#116)`() =
+        withApp { client ->
+            val adminToken = seedToken(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+
+            client.createInvite(token = adminToken, email = "not-an-email").status shouldBe HttpStatusCode.BadRequest
+            client.createInvite(token = adminToken, email = "   ").status shouldBe HttpStatusCode.BadRequest
+        }
+
+    @Test
     fun `listing accepts a status filter and rejects an unknown status`() =
         withApp { client ->
             val adminToken = seedToken(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))

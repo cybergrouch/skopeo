@@ -32,6 +32,13 @@ private fun parseInviteStatus(raw: String): InviteStatus =
         "Unknown invite status '$raw'; expected one of ${InviteStatus.entries.joinToString { it.name }}"
     }
 
+/** Validate + normalize the invite email at the boundary (#116): trimmed, lower-cased, with an '@'; else a 400. */
+private fun validatedEmail(raw: String): String {
+    val normalized = raw.trim().lowercase()
+    require(value = normalized.isNotBlank() && normalized.contains(char = '@')) { "A valid email is required" }
+    return normalized
+}
+
 /**
  * Admin-only onboarding invites (issue #74). All endpoints require ADMINISTRATOR (enforced in
  * [InviteService]). The email-link itself is sent client-side via Firebase; these routes only
@@ -44,7 +51,7 @@ fun Application.configureInviteRoutes(service: InviteService = InviteService()) 
                 post {
                     respondMappingErrors {
                         val request = call.receive<CreateInviteRequest>()
-                        val invite = service.create(token = verifiedToken(), email = request.email)
+                        val invite = service.create(token = verifiedToken(), email = validatedEmail(raw = request.email))
                         call.respond(status = HttpStatusCode.Created, message = invite.toResponse())
                     }
                 }
