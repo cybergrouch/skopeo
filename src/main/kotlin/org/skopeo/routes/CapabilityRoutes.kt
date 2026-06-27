@@ -19,6 +19,7 @@ import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.capability.CapabilityGrantRequest
 import org.skopeo.dto.capability.toResponse
+import org.skopeo.model.Capability
 import org.skopeo.service.capability.CapabilityService
 
 /**
@@ -47,7 +48,12 @@ private fun Route.listAndGrant(service: CapabilityService) {
     post {
         respondMappingErrors {
             val request = call.receive<CapabilityGrantRequest>()
-            val result = service.grant(token = verifiedToken(), userId = uuidParam(name = "userId"), capabilityName = request.capability)
+            val result =
+                service.grant(
+                    token = verifiedToken(),
+                    userId = uuidParam(name = "userId"),
+                    capability = parseEnumParam<Capability>(value = request.capability, field = "capability"),
+                )
             val status = if (result.created) HttpStatusCode.Created else HttpStatusCode.OK
             call.respond(status = status, message = result.grant.toResponse())
         }
@@ -57,8 +63,12 @@ private fun Route.listAndGrant(service: CapabilityService) {
 private fun Route.revoke(service: CapabilityService) {
     delete(path = "/{capability}") {
         respondMappingErrors {
-            val capability = call.parameters["capability"] ?: throw BadRequestException(message = "Missing capability")
-            service.revoke(token = verifiedToken(), userId = uuidParam(name = "userId"), capabilityName = capability)
+            val raw = call.parameters["capability"] ?: throw BadRequestException(message = "Missing capability")
+            service.revoke(
+                token = verifiedToken(),
+                userId = uuidParam(name = "userId"),
+                capability = parseEnumParam<Capability>(value = raw, field = "capability"),
+            )
             call.respond(status = HttpStatusCode.NoContent, message = "")
         }
     }
