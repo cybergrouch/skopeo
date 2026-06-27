@@ -161,6 +161,38 @@ class PlayerServiceTest {
     }
 
     @Test
+    fun `a disabled duplicate's public profile is a merged card linking to the canonical (#124)`() {
+        val canonical = newUser(uid = "keep", names = display(name = "Real"))
+        val dup = newUser(uid = "dup", names = display(name = "Dupe"))
+        users.markDuplicates(canonicalId = canonical.id, duplicateIds = listOf(element = dup.id))
+
+        val profile = service.publicProfile(code = dup.publicCode.lowercase())
+
+        profile.isDisabled shouldBe true
+        profile.canonical?.publicCode shouldBe canonical.publicCode
+        profile.canonical?.displayName shouldBe "Real"
+        profile.rating.shouldBeNull()
+    }
+
+    @Test
+    fun `the canonical's match history includes a duplicate's matches (#124)`() {
+        val canonical = newUser(uid = "keep", names = display(name = "Real"))
+        val dup = newUser(uid = "dup", names = display(name = "Dupe"))
+        val opp = newUser(uid = "opp", names = display(name = "Opp"))
+        // A match the DUPLICATE played, then the duplicate is folded into the canonical.
+        val match = fixture(u1 = dup.id, u2 = opp.id, date = LocalDate.of(2026, 1, 1))
+        users.markDuplicates(canonicalId = canonical.id, duplicateIds = listOf(element = dup.id))
+
+        val history = service.matchHistory(code = canonical.publicCode)
+
+        history shouldHaveSize 1
+        history.single().let {
+            it.matchId shouldBe match.id.toString()
+            it.opponent?.displayName shouldBe "Opp"
+        }
+    }
+
+    @Test
     fun `match history lists newest first, orients the result and exposes at-the-time bands for rated matches`() {
         val ana = newUser(uid = "a", names = display(name = "Ana"))
         val ben = newUser(uid = "b", names = display(name = "Ben"))

@@ -75,6 +75,12 @@ data class ProfileRequest(
     val city: String? = null,
 )
 
+/** Body for `POST /api/v1/users/{canonicalId}/duplicates` — mark these users as duplicates (#124). */
+@Serializable
+data class MarkDuplicatesRequest(
+    val duplicateIds: List<String>,
+)
+
 @Serializable
 data class UserResponse(
     val id: String,
@@ -87,6 +93,8 @@ data class UserResponse(
     val country: String,
     val kycVerified: Boolean,
     val isActive: Boolean,
+    // When set, this user is a disabled duplicate of the referenced canonical account (#124).
+    val canonicalUserId: String? = null,
     val names: List<NameDto>,
     val contacts: List<ContactDto>,
     val identities: List<IdentityDto>,
@@ -105,6 +113,7 @@ fun User.toResponse(): UserResponse =
         country = country,
         kycVerified = kycVerified,
         isActive = isActive,
+        canonicalUserId = canonicalUserId?.toString(),
         names =
             names.map {
                 NameDto(

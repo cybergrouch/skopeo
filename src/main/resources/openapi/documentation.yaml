@@ -432,6 +432,92 @@ paths:
         '404':
           description: No such user
 
+  /api/v1/users/{id}/duplicates:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: The canonical ("true") account the duplicates are attributed to.
+        schema:
+          type: string
+          format: uuid
+    post:
+      summary: Mark users as duplicates of this canonical account (#124)
+      description: ADMINISTRATOR only. Disables each listed user and points it at the canonical account; reversible and audit-logged. Ratings are not consolidated.
+      tags:
+        - Users
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MarkDuplicatesRequest'
+      responses:
+        '200':
+          description: The canonical account's duplicates after marking
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserSummaryResponse'
+        '400':
+          description: Empty/duplicate ids, self-reference, or a malformed id
+        '403':
+          description: Caller is not an ADMINISTRATOR
+        '404':
+          description: No such canonical or duplicate user
+        '409':
+          description: The canonical is itself a duplicate, or a target is itself a canonical
+    get:
+      summary: List the duplicates of this canonical account (#124)
+      description: ADMINISTRATOR only — backs the un-mark (restore) view.
+      tags:
+        - Users
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The disabled duplicates pointing at this account
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserSummaryResponse'
+        '403':
+          description: Caller is not an ADMINISTRATOR
+        '404':
+          description: No such user
+
+  /api/v1/users/{id}/duplicate:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: A user currently marked as a duplicate.
+        schema:
+          type: string
+          format: uuid
+    delete:
+      summary: Restore a user from duplicate status (#124)
+      description: ADMINISTRATOR only. Reactivates the user and clears its canonical pointer; audit-logged.
+      tags:
+        - Users
+      security:
+        - firebaseAuth: []
+      responses:
+        '204':
+          description: User restored
+        '403':
+          description: Caller is not an ADMINISTRATOR
+        '404':
+          description: No such user
+        '409':
+          description: The user is not marked as a duplicate
+
   /api/v1/users/{userId}/contacts:
     parameters:
       - name: userId
@@ -1647,6 +1733,18 @@ components:
         isPrimary:
           type: boolean
 
+    MarkDuplicatesRequest:
+      type: object
+      description: The users to mark as duplicates of the canonical account in the path (#124).
+      required:
+        - duplicateIds
+      properties:
+        duplicateIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+
     CreateUserRequest:
       type: object
       description: |
@@ -1729,6 +1827,24 @@ components:
             value:
               type: string
             level:
+              type: string
+              nullable: true
+        isDisabled:
+          type: boolean
+          description: True when this profile was marked a duplicate and disabled (#124); the card is a "merged" notice.
+        canonical:
+          nullable: true
+          description: When disabled, the canonical ("true") account to link to.
+          type: object
+          required:
+            - publicCode
+          properties:
+            publicCode:
+              type: string
+            displayName:
+              type: string
+              nullable: true
+            photoUrl:
               type: string
               nullable: true
 
@@ -1874,6 +1990,11 @@ components:
           type: boolean
         isActive:
           type: boolean
+        canonicalUserId:
+          type: string
+          format: uuid
+          nullable: true
+          description: When set, this user is a disabled duplicate of the referenced canonical account (#124).
         names:
           type: array
           items:

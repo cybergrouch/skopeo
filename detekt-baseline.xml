@@ -162,6 +162,7 @@
     <ID>TopLevelPropertyNaming:UserService.kt$private val logger = KotlinLogging.logger {}</ID>
     <ID>TopLevelPropertyNaming:DatabaseConfig.kt$private val logger = KotlinLogging.logger {}</ID>
     <ID>TopLevelPropertyNaming:RankingRoutes.kt$private val logger = KotlinLogging.logger {}</ID>
+    <ID>TooManyFunctions:UserRepository.kt$UserRepository</ID>
     <ID>UnsafeCallOnNullableType:DatabaseConfig.kt$DatabaseConfig$dataSource!!</ID>
     <ID>UnsafeCallOnNullableType:MatchRepository.kt$MatchRepository$loadMatch(id = it[MatchesTable.id].value)!!</ID>
     <ID>UnsafeCallOnNullableType:MatchRepository.kt$MatchRepository$loadMatch(id = matchId)!!</ID>

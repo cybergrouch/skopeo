@@ -191,6 +191,42 @@ class UserRepository {
             UsersTable.update(where = { UsersTable.id eq id }) { it[UsersTable.isActive] = false } > 0
         }
 
+    /**
+     * Mark each user as a disabled duplicate of [canonicalId] (#124): set the canonical pointer and
+     * deactivate, in one transaction. Reversible via [restoreDuplicate].
+     */
+    fun markDuplicates(
+        canonicalId: UUID,
+        duplicateIds: List<UUID>,
+    ): Unit =
+        transaction {
+            duplicateIds.forEach { duplicateId ->
+                UsersTable.update(where = { UsersTable.id eq duplicateId }) {
+                    it[canonicalUserId] = canonicalId
+                    it[isActive] = false
+                }
+            }
+        }
+
+    /** Reverse a duplicate marking: reactivate and clear the canonical pointer (#124). */
+    fun restoreDuplicate(id: UUID): Unit =
+        transaction {
+            UsersTable.update(where = { UsersTable.id eq id }) {
+                it[canonicalUserId] = null
+                it[isActive] = true
+            }
+        }
+
+    /** The disabled duplicates pointing at [canonicalId] (#124) — for the history merge and admin list. */
+    fun findDuplicatesOf(canonicalId: UUID): List<User> =
+        transaction {
+            UsersTable
+                .selectAll()
+                .where { UsersTable.canonicalUserId eq canonicalId }
+                .map { it[UsersTable.id].value }
+                .mapNotNull { loadAggregate(id = it) }
+        }
+
     private fun loadAggregate(id: UUID): User? {
         val row =
             UsersTable
@@ -309,6 +345,7 @@ private fun ResultRow.toUser(
         kycVerified = this[UsersTable.kycVerified],
         isActive = this[UsersTable.isActive],
         proposedRating = this[UsersTable.proposedRating],
+        canonicalUserId = this[UsersTable.canonicalUserId]?.value,
         names = names,
         contacts = contacts,
         identities = identities,

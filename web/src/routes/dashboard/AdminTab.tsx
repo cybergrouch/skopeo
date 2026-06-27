@@ -1,4 +1,5 @@
 import { ActivityLogSection } from './admin/ActivityLogSection'
+import { DuplicatesSection } from './admin/DuplicatesSection'
 import { InvitesSection } from './admin/InvitesSection'
 import { ManagePlayerSection } from './admin/ManagePlayerSection'
 import { PendingAssessmentSection } from './admin/PendingAssessmentSection'
@@ -10,6 +11,7 @@ export function AdminTab() {
       <InvitesSection />
       <PendingAssessmentSection />
       <ManagePlayerSection />
+      <DuplicatesSection />
       <PendingCalculationSection />
       <ActivityLogSection />
     </div>

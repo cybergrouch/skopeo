@@ -117,6 +117,8 @@ data class User(
     // Optional self-reported NTRP rating from sign-up (issue #75) — a proposal for an admin to
     // approve/override, not an authoritative rating; the user stays pending until one is set.
     val proposedRating: BigDecimal? = null,
+    // When set, this user is a disabled duplicate of the referenced canonical ("true") account (#124).
+    val canonicalUserId: UUID? = null,
     val names: List<Name>,
     val contacts: List<Contact>,
     val identities: List<UserIdentity>,

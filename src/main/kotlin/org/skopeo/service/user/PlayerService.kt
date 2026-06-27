@@ -29,6 +29,25 @@ class PlayerService(
     private val matches: MatchRepository = MatchRepository(),
 ) {
     fun publicProfile(code: String): PublicPlayerResponse {
+        val located = locate(code = code)
+        // A disabled duplicate (#124) renders a "merged" card linking to its canonical account; a
+        // plain-deactivated account (no canonical) stays hidden (handled as not-found by resolve).
+        val canonical = located.canonicalUserId?.takeUnless { located.isActive }?.let { users.findById(id = it) }
+        if (canonical != null) {
+            return PublicPlayerResponse(
+                publicCode = located.publicCode,
+                displayName = located.displayName(),
+                photoUrl = located.photoUrl,
+                rating = null,
+                isDisabled = true,
+                canonical =
+                    OpponentSummary(
+                        publicCode = canonical.publicCode,
+                        displayName = canonical.displayName(),
+                        photoUrl = canonical.photoUrl,
+                    ),
+            )
+        }
         val user = resolve(code = code)
         val rating = ratings.findCurrentRating(userId = user.id)
         return PublicPlayerResponse(
@@ -47,19 +66,29 @@ class PlayerService(
      */
     fun matchHistory(code: String): List<PlayerMatchHistoryEntry> {
         val user = resolve(code = code)
-        val played = matches.listByUser(userId = user.id)
+        // A canonical account's history also surfaces its disabled duplicates' matches (#124,
+        // display-only — ratings are never consolidated). Each match is oriented from whichever of
+        // these "self" ids actually played it.
+        val selfIds = (listOf(element = user.id) + users.findDuplicatesOf(canonicalId = user.id).map { it.id }).toSet()
+        val played =
+            selfIds
+                .flatMap { matches.listByUser(userId = it) }
+                .distinctBy { it.id }
+                .sortedByDescending { it.matchDate }
         val ratedMatchIds = played.filter { it.ratedAt != null }.map { it.id }
         val levelByMatchAndUser =
             ratings
                 .historyForMatches(matchIds = ratedMatchIds)
                 .groupBy { it.matchId }
                 .mapValues { (_, rows) -> rows.associate { it.userId to it.previousLevel } }
+        val participantByMatch = played.associate { it.id to participantOf(match = it, selfIds = selfIds) }
         val opponents =
             users
-                .findAllByIds(ids = played.map { opponentId(match = it, playerId = user.id) })
+                .findAllByIds(ids = played.map { opponentId(match = it, playerId = participantByMatch.getValue(key = it.id)) })
                 .associateBy { it.id }
         return played.map { match ->
-            entry(match = match, playerId = user.id, opponents = opponents, levels = levelByMatchAndUser[match.id])
+            val participant = participantByMatch.getValue(key = match.id)
+            entry(match = match, playerId = participant, opponents = opponents, levels = levelByMatchAndUser[match.id])
         }
     }
 
@@ -87,6 +116,19 @@ class PlayerService(
         return users.findByPublicCode(code = normalized)?.takeIf { it.isActive }
             ?: throw ResourceNotFoundException(message = "No player with code $normalized")
     }
+
+    /** Find by code regardless of active status (a disabled duplicate still has a viewable card); 404 if unknown. */
+    private fun locate(code: String): User {
+        val normalized = code.trim().uppercase()
+        return users.findByPublicCode(code = normalized)
+            ?: throw ResourceNotFoundException(message = "No player with code $normalized")
+    }
+
+    /** The "self" id (canonical or one of its duplicates) that actually played [match]. */
+    private fun participantOf(
+        match: Match,
+        selfIds: Set<UUID>,
+    ): UUID = (match.team1.userIds + match.team2.userIds).first { it in selfIds }
 
     private fun entry(
         match: Match,
