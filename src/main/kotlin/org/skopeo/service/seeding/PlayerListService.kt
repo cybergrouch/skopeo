@@ -83,7 +83,7 @@ class PlayerListService(
     ): Either<ServiceError, Unit> =
         either {
             get(token = token, listId = listId).bind() // ownership + existence
-            lists.delete(id = listId).bind()
+            lists.delete(id = listId)
         }
 
     fun addMember(

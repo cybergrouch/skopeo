@@ -14,6 +14,7 @@ const {
   removeMemberMutate,
   generateMutate,
   state,
+  pickerProps,
 } = vi.hoisted(() => ({
   useGetApiV1PlayerLists: vi.fn(),
   useGetApiV1PlayerListsId: vi.fn(),
@@ -24,6 +25,7 @@ const {
   removeMemberMutate: vi.fn(),
   generateMutate: vi.fn(),
   state: { addFail: false },
+  pickerProps: { filters: undefined as Record<string, string> | undefined },
 }))
 
 vi.mock('@/api/generated/player-lists/player-lists', () => ({
@@ -60,13 +62,18 @@ vi.mock('@/api/generated/player-lists/player-lists', () => ({
 vi.mock('@/components/UserSearchSelect', () => ({
   UserSearchSelect: ({
     onSelect,
+    filters,
   }: {
     onSelect: (u: { id: string; publicCode: string; displayName: string }) => void
-  }) => (
-    <button type="button" onClick={() => onSelect({ id: 'u9', publicCode: 'NEW999', displayName: 'New Player' })}>
-      pick-player
-    </button>
-  ),
+    filters?: Record<string, string>
+  }) => {
+    pickerProps.filters = filters
+    return (
+      <button type="button" onClick={() => onSelect({ id: 'u9', publicCode: 'NEW999', displayName: 'New Player' })}>
+        pick-player
+      </button>
+    )
+  },
 }))
 
 function renderTab() {
@@ -177,6 +184,35 @@ describe('SeedingTab', () => {
     await user.click(screen.getByRole('button', { name: 'pick-player' }))
     await waitFor(() =>
       expect(addMemberMutate).toHaveBeenCalledWith({ id: 'l1', data: { userId: 'u9' } }),
+    )
+  })
+
+  it('labels a single-member list in the singular', () => {
+    useGetApiV1PlayerLists.mockReturnValue({ data: [{ id: 'l9', name: 'Solo', createdAt: 'now', memberCount: 1 }] })
+    useGetApiV1PlayerListsId.mockReturnValue({ data: undefined })
+    useGetApiV1PlayerListsIdSeeding.mockReturnValue({ data: undefined })
+    renderTab()
+    expect(screen.getByRole('button', { name: /Solo/ }).textContent).toContain('1 player')
+  })
+
+  it('forwards the sex/age/rating filters to the picker', async () => {
+    useGetApiV1PlayerListsId.mockReturnValue({ data: listDetail })
+    const user = userEvent.setup()
+    renderTab()
+    await user.click(screen.getByRole('button', { name: /Summer Open/ }))
+    // No filters set yet → undefined intervals.
+    expect(pickerProps.filters).toEqual({})
+
+    await user.selectOptions(screen.getByLabelText('Sex'), 'Male')
+    // Type in an order that exercises both open- and closed-ended intervals along the way:
+    // age lower-only → "[20,)", rating upper-only → "(,4.5]", then both sides filled.
+    await user.type(screen.getByLabelText('Age from'), '20')
+    await user.type(screen.getAllByLabelText('to')[1], '4.5') // rating "to"
+    await user.type(screen.getAllByLabelText('to')[0], '30') // age "to"
+    await user.type(screen.getByLabelText('Rating from'), '3.0')
+
+    await waitFor(() =>
+      expect(pickerProps.filters).toEqual({ sex: 'Male', age: '[20,30]', rating: '[3.0,4.5]' }),
     )
   })
 

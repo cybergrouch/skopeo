@@ -57,11 +57,10 @@ class PlayerListRepository {
             }
         }
 
-    fun delete(id: UUID): Either<ServiceError, Unit> =
-        transaction {
-            val deleted = PlayerListsTable.deleteWhere { PlayerListsTable.id eq id }
-            if (deleted == 0) ServiceError.NotFound(message = "Player list $id not found").left() else Unit.right()
-        }
+    /** Delete a list (idempotent). Existence is the service's concern — it checks ownership first. */
+    fun delete(id: UUID) {
+        transaction { PlayerListsTable.deleteWhere { PlayerListsTable.id eq id } }
+    }
 
     /** Add a member; a duplicate (already in the list) surfaces as a [ServiceError.Conflict]. */
     fun addMember(
