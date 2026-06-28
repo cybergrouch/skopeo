@@ -8,27 +8,23 @@ const { useGetApiV1UsersIdDuplicates, markMutate, deleteMutate, state } = vi.hoi
   useGetApiV1UsersIdDuplicates: vi.fn(),
   markMutate: vi.fn(),
   deleteMutate: vi.fn(),
-  state: { markFail: false },
+  state: { markFail: false, pending: false },
 }))
 
 vi.mock('@/api/generated/users/users', () => ({
   useGetApiV1UsersIdDuplicates,
   getGetApiV1UsersIdDuplicatesQueryKey: () => ['dups'],
-  usePostApiV1UsersIdDuplicates: (options?: {
-    mutation?: { onSuccess?: () => void; onError?: () => void }
-  }) => ({
-    isPending: false,
+  usePostApiV1UsersIdDuplicates: () => ({
+    isPending: state.pending,
     mutateAsync: async (vars: unknown) => {
       markMutate(vars)
-      if (state.markFail) options?.mutation?.onError?.()
-      else options?.mutation?.onSuccess?.()
+      if (state.markFail) throw new Error('boom')
     },
   }),
-  useDeleteApiV1UsersIdDuplicate: (options?: { mutation?: { onSuccess?: () => void } }) => ({
-    isPending: false,
+  useDeleteApiV1UsersIdDuplicate: () => ({
+    isPending: state.pending,
     mutateAsync: async (vars: unknown) => {
       deleteMutate(vars)
-      options?.mutation?.onSuccess?.()
     },
   }),
 }))
@@ -59,18 +55,36 @@ function renderSection() {
 const CANONICAL = 'Canonical (true) account'
 const DUPLICATE = 'Add a duplicate to mark'
 
+async function selectCanonicalAndDuplicate(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: `pick:${CANONICAL}` }))
+  await user.click(screen.getByRole('button', { name: `pick:${DUPLICATE}` }))
+}
+
 describe('DuplicatesSection', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     state.markFail = false
+    state.pending = false
     useGetApiV1UsersIdDuplicates.mockReturnValue({ data: [] })
+  })
+
+  it('only offers the canonical picker until one is chosen', async () => {
+    const user = userEvent.setup()
+    renderSection()
+    expect(screen.getByRole('button', { name: `pick:${CANONICAL}` })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Mark as duplicates' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: `pick:${CANONICAL}` }))
+    // Now the form appears; the mark button is present but disabled (no duplicates yet).
+    expect(screen.getByRole('button', { name: 'Mark as duplicates' })).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: `pick:${DUPLICATE}` }))
+    expect(screen.getByRole('button', { name: 'Mark as duplicates' })).toBeEnabled()
   })
 
   it('marks the selected duplicates against the canonical', async () => {
     const user = userEvent.setup()
     renderSection()
-    await user.click(screen.getByRole('button', { name: `pick:${CANONICAL}` }))
-    await user.click(screen.getByRole('button', { name: `pick:${DUPLICATE}` }))
+    await selectCanonicalAndDuplicate(user)
     await user.click(screen.getByRole('button', { name: 'Mark as duplicates' }))
 
     await waitFor(() =>
@@ -86,35 +100,58 @@ describe('DuplicatesSection', () => {
     state.markFail = true
     const user = userEvent.setup()
     renderSection()
-    await user.click(screen.getByRole('button', { name: `pick:${CANONICAL}` }))
-    await user.click(screen.getByRole('button', { name: `pick:${DUPLICATE}` }))
+    await selectCanonicalAndDuplicate(user)
     await user.click(screen.getByRole('button', { name: 'Mark as duplicates' }))
 
-    expect(
-      await screen.findByText(/could not mark the selected profiles/i),
-    ).toBeInTheDocument()
+    expect(await screen.findByText(/could not mark the selected profiles/i)).toBeInTheDocument()
   })
 
-  it('lists the canonical’s current duplicates and restores one', async () => {
+  it('reflects the pending state for marking and restoring', async () => {
+    state.pending = true
     useGetApiV1UsersIdDuplicates.mockReturnValue({
-      data: [{ id: 'd1', publicCode: 'D1CODE', displayName: 'Dupe One' }],
+      data: [{ id: 'd1', publicCode: 'D1CODE', displayName: 'Dupe' }],
+    })
+    const user = userEvent.setup()
+    renderSection()
+    await selectCanonicalAndDuplicate(user)
+
+    expect(screen.getByRole('button', { name: 'Marking…' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Restore' })).toBeDisabled()
+  })
+
+  it('changes the canonical and removes a chosen duplicate', async () => {
+    const user = userEvent.setup()
+    renderSection()
+    await selectCanonicalAndDuplicate(user)
+
+    await user.click(screen.getByRole('button', { name: 'Remove' }))
+    expect(screen.getByRole('button', { name: 'Mark as duplicates' })).toBeDisabled()
+
+    await user.click(screen.getByRole('button', { name: 'Change' }))
+    expect(screen.getByRole('button', { name: `pick:${CANONICAL}` })).toBeInTheDocument()
+  })
+
+  it('lists the canonical’s current duplicates and restores one (no display name)', async () => {
+    useGetApiV1UsersIdDuplicates.mockReturnValue({
+      data: [{ id: 'd1', publicCode: 'D1CODE', displayName: null }],
     })
     const user = userEvent.setup()
     renderSection()
     await user.click(screen.getByRole('button', { name: `pick:${CANONICAL}` }))
 
-    expect(screen.getByText('Dupe One')).toBeInTheDocument()
+    expect(screen.getByText('D1CODE')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Restore' }))
     expect(deleteMutate).toHaveBeenCalledWith({ id: 'd1' })
   })
 
-  it('disables the mark button until a canonical and a duplicate are chosen', async () => {
+  it('shows no duplicates list when the query has no data', async () => {
+    useGetApiV1UsersIdDuplicates.mockReturnValue({ data: undefined })
     const user = userEvent.setup()
     renderSection()
-    expect(screen.getByRole('button', { name: 'Mark as duplicates' })).toBeDisabled()
     await user.click(screen.getByRole('button', { name: `pick:${CANONICAL}` }))
-    expect(screen.getByRole('button', { name: 'Mark as duplicates' })).toBeDisabled()
-    await user.click(screen.getByRole('button', { name: `pick:${DUPLICATE}` }))
-    expect(screen.getByRole('button', { name: 'Mark as duplicates' })).toBeEnabled()
+
+    expect(
+      screen.queryByText('Current duplicates of this account'),
+    ).not.toBeInTheDocument()
   })
 })

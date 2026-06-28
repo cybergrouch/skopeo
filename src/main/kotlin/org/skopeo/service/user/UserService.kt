@@ -127,9 +127,8 @@ class UserService(
     ): Provisioned {
         repository.findByFirebaseUid(firebaseUid = token.uid)?.let { existing ->
             // A disabled duplicate (#124) cannot sign back in; point them at the canonical account.
-            existing.canonicalUserId?.let { canonicalId ->
-                throw AccountMergedException(canonicalPublicCode = repository.findById(id = canonicalId)?.publicCode)
-            }
+            val canonical = existing.canonicalUserId?.let { repository.findById(id = it) }
+            if (canonical != null) throw AccountMergedException(canonicalPublicCode = canonical.publicCode)
             val promoted = promoteIfBootstrapAdmin(token = token, user = existing, adminEmails = adminEmails, capabilities = capabilities)
             return Provisioned(user = promoted, created = false)
         }

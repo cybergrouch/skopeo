@@ -119,9 +119,10 @@ class DuplicateServiceTest {
     }
 
     @Test
-    fun `marking rejects self, unknowns, and empty input`() {
+    fun `marking rejects self, unknowns, empty, non-distinct input, and an unknown canonical`() {
         admin(uid = "root")
         val canonical = provisionUser(uid = "keep")
+        val dup = provisionUser(uid = "dup")
 
         shouldThrow<IllegalArgumentException> {
             service.markDuplicates(token = token(uid = "root"), canonicalId = canonical.id, duplicateIds = emptyList())
@@ -129,6 +130,11 @@ class DuplicateServiceTest {
         shouldThrow<IllegalArgumentException> {
             service.markDuplicates(token = token(uid = "root"), canonicalId = canonical.id, duplicateIds = listOf(element = canonical.id))
         }
+        // Non-distinct ids.
+        shouldThrow<IllegalArgumentException> {
+            service.markDuplicates(token = token(uid = "root"), canonicalId = canonical.id, duplicateIds = listOf(dup.id, dup.id))
+        }
+        // Unknown duplicate.
         shouldThrow<UserNotFoundException> {
             service.markDuplicates(
                 token = token(uid = "root"),
@@ -136,6 +142,36 @@ class DuplicateServiceTest {
                 duplicateIds = listOf(element = UUID.randomUUID()),
             )
         }
+        // Unknown canonical.
+        shouldThrow<UserNotFoundException> {
+            service.markDuplicates(token = token(uid = "root"), canonicalId = UUID.randomUUID(), duplicateIds = listOf(element = dup.id))
+        }
+    }
+
+    @Test
+    fun `an unprovisioned caller is forbidden`() {
+        val canonical = provisionUser(uid = "keep")
+        val dup = provisionUser(uid = "dup")
+
+        shouldThrow<ForbiddenException> {
+            service.markDuplicates(token = token(uid = "ghost"), canonicalId = canonical.id, duplicateIds = listOf(element = dup.id))
+        }
+    }
+
+    @Test
+    fun `restoring an unknown user is not-found`() {
+        admin(uid = "root")
+
+        shouldThrow<UserNotFoundException> { service.restore(token = token(uid = "root"), id = UUID.randomUUID()) }
+    }
+
+    @Test
+    fun `duplicatesOf requires an admin and an existing canonical`() {
+        admin(uid = "root")
+        val canonical = provisionUser(uid = "keep")
+
+        shouldThrow<ForbiddenException> { service.duplicatesOf(token = token(uid = "keep"), canonicalId = canonical.id) }
+        shouldThrow<UserNotFoundException> { service.duplicatesOf(token = token(uid = "root"), canonicalId = UUID.randomUUID()) }
     }
 
     @Test

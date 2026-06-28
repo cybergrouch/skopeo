@@ -30,10 +30,12 @@ class PlayerService(
 ) {
     fun publicProfile(code: String): PublicPlayerResponse {
         val located = locate(code = code)
-        // A disabled duplicate (#124) renders a "merged" card linking to its canonical account; a
-        // plain-deactivated account (no canonical) stays hidden (handled as not-found by resolve).
-        val canonical = located.canonicalUserId?.takeUnless { located.isActive }?.let { users.findById(id = it) }
-        if (canonical != null) {
+        if (!located.isActive) {
+            // A disabled duplicate (#124) renders a "merged" card linking to its canonical account; a
+            // plain-deactivated account (no canonical) stays hidden (treated as not-found).
+            val canonical =
+                located.canonicalUserId?.let { users.findById(id = it) }
+                    ?: throw ResourceNotFoundException(message = "No player with code ${located.publicCode}")
             return PublicPlayerResponse(
                 publicCode = located.publicCode,
                 displayName = located.displayName(),
@@ -48,12 +50,11 @@ class PlayerService(
                     ),
             )
         }
-        val user = resolve(code = code)
-        val rating = ratings.findCurrentRating(userId = user.id)
+        val rating = ratings.findCurrentRating(userId = located.id)
         return PublicPlayerResponse(
-            publicCode = user.publicCode,
-            displayName = user.displayName(),
-            photoUrl = user.photoUrl,
+            publicCode = located.publicCode,
+            displayName = located.displayName(),
+            photoUrl = located.photoUrl,
             rating = rating?.let { PublicRatingDto(value = it.currentRating.toPlainString(), level = it.currentLevel) },
         )
     }

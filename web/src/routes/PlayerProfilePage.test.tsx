@@ -192,6 +192,26 @@ describe('PlayerProfilePage', () => {
     expect(screen.queryByText('No rating yet.')).not.toBeInTheDocument()
   })
 
+  it('links to a canonical without a display name (#124)', () => {
+    useGetApiV1PlayersCode.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: {
+        publicCode: 'DUP123',
+        displayName: 'Dupe',
+        photoUrl: null,
+        rating: undefined,
+        isDisabled: true,
+        canonical: { publicCode: 'REAL99', displayName: null, photoUrl: null },
+      },
+    })
+    renderAt('DUP123')
+    expect(screen.getByRole('link', { name: /view the active profile/i })).toHaveAttribute(
+      'href',
+      '/players/REAL99',
+    )
+  })
+
   it('shows a merged notice without a link when the canonical is unavailable (#124)', () => {
     useGetApiV1PlayersCode.mockReturnValue({
       isLoading: false,
