@@ -51,7 +51,37 @@ export function PlayerProfilePage() {
           </p>
         ) : null}
 
-        {player ? (
+        {player?.isDisabled ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>This profile has been merged</CardTitle>
+              <CardDescription>
+                This account ({player.publicCode}) was marked a duplicate and is
+                no longer active.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {player.canonical ? (
+                <Link
+                  to={`/players/${player.canonical.publicCode}`}
+                  className="text-sm text-primary hover:underline"
+                >
+                  View the active profile
+                  {player.canonical.displayName
+                    ? ` (${player.canonical.displayName})`
+                    : ''}{' '}
+                  →
+                </Link>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  The active profile is unavailable.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {player && !player.isDisabled ? (
           <Card>
             <CardHeader>
               <div className="flex items-center gap-3">
@@ -94,9 +124,11 @@ export function PlayerProfilePage() {
           </Card>
         ) : null}
 
-        {player ? <MatchHistoryCard code={player.publicCode} /> : null}
+        {player && !player.isDisabled ? (
+          <MatchHistoryCard code={player.publicCode} />
+        ) : null}
 
-        {player && isAdmin ? (
+        {player && !player.isDisabled && isAdmin ? (
           <RatingHistoryCard
             entries={ratingHistoryQuery.data ?? []}
             isLoading={ratingHistoryQuery.isLoading}

@@ -24,6 +24,8 @@ enum class AuditAction {
     INVITE_REVOKED,
     MATCH_FIXTURE_CREATED,
     MATCH_RESULT_RECORDED,
+    USER_MARKED_DUPLICATE,
+    USER_UNMARKED_DUPLICATE,
 }
 
 /** The kind of entity an [AuditAction] concerns. */
@@ -48,6 +50,7 @@ enum class AuditCategory {
     MATCH_RESULT,
     CAPABILITY_CHANGE,
     RATING_CHANGE,
+    DUPLICATE_RECTIFICATION,
 }
 
 /** The category an action rolls up into. */
@@ -62,6 +65,7 @@ val AuditAction.category: AuditCategory
             AuditAction.INVITE_CREATED, AuditAction.INVITE_REVOKED -> AuditCategory.INVITE
             AuditAction.MATCH_FIXTURE_CREATED -> AuditCategory.MATCH_FIXTURE
             AuditAction.MATCH_RESULT_RECORDED -> AuditCategory.MATCH_RESULT
+            AuditAction.USER_MARKED_DUPLICATE, AuditAction.USER_UNMARKED_DUPLICATE -> AuditCategory.DUPLICATE_RECTIFICATION
         }
 
 /** The actions that roll up into a category (empty for categories whose events aren't wired yet). */

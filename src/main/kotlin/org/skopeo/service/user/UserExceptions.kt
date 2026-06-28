@@ -15,3 +15,12 @@ class UserNotFoundException(
 class ForbiddenException(
     message: String = "Access is not permitted",
 ) : RuntimeException(message)
+
+/**
+ * The account behind this sign-in was merged into a canonical profile as a duplicate (#124), so it can
+ * no longer be used. Routes map this to 403 and surface [canonicalPublicCode] so the client can link to
+ * the true account.
+ */
+class AccountMergedException(
+    val canonicalPublicCode: String?,
+) : RuntimeException("This account has been merged into another profile")

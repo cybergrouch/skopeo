@@ -15,6 +15,10 @@ data class PublicPlayerResponse(
     val displayName: String?,
     val photoUrl: String?,
     val rating: PublicRatingDto?,
+    // Set when this profile was marked a duplicate and disabled (#124): the page shows a "merged"
+    // notice and [canonical] links to the true account. Active profiles leave these at the defaults.
+    val isDisabled: Boolean = false,
+    val canonical: OpponentSummary? = null,
 )
 
 @Serializable

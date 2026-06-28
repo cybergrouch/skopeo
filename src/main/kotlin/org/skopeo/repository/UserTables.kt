@@ -37,6 +37,10 @@ internal object UsersTable : UUIDTable(name = "users") {
     val isActive = bool(name = "is_active").default(defaultValue = true)
     val publicCode = varchar(name = "public_code", length = PUBLIC_CODE_LEN)
     val proposedRating = decimal(name = "proposed_rating", precision = RATING_PRECISION, scale = RATING_SCALE).nullable()
+
+    // When set, this user is a disabled duplicate of the referenced canonical account (#124).
+    val canonicalUserId =
+        reference(name = "canonical_user_id", foreign = UsersTable, onDelete = ReferenceOption.SET_NULL).nullable()
 }
 
 internal object UserNamesTable : UUIDTable(name = "user_names") {

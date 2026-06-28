@@ -125,8 +125,11 @@ class UserService(
         token: VerifiedFirebaseToken,
         request: CreateUserRequest,
     ): Provisioned {
-        repository.findByFirebaseUid(firebaseUid = token.uid)?.let {
-            val promoted = promoteIfBootstrapAdmin(token = token, user = it, adminEmails = adminEmails, capabilities = capabilities)
+        repository.findByFirebaseUid(firebaseUid = token.uid)?.let { existing ->
+            // A disabled duplicate (#124) cannot sign back in; point them at the canonical account.
+            val canonical = existing.canonicalUserId?.let { repository.findById(id = it) }
+            if (canonical != null) throw AccountMergedException(canonicalPublicCode = canonical.publicCode)
+            val promoted = promoteIfBootstrapAdmin(token = token, user = existing, adminEmails = adminEmails, capabilities = capabilities)
             return Provisioned(user = promoted, created = false)
         }
         // Manual (password/email-link) sign-ups are invite-only; OAuth is exempt. Returns the gated

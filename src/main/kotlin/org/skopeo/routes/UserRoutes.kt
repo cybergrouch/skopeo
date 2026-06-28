@@ -19,10 +19,12 @@ import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.user.CreateUserRequest
+import org.skopeo.dto.user.MarkDuplicatesRequest
 import org.skopeo.dto.user.ProfileRequest
 import org.skopeo.dto.user.toResponse
 import org.skopeo.dto.user.toSummary
 import org.skopeo.model.NumericRange
+import org.skopeo.service.user.DuplicateService
 import org.skopeo.service.user.UserSearchFilters
 import org.skopeo.service.user.UserService
 import org.skopeo.service.user.toProfilePatch
@@ -33,15 +35,50 @@ import java.util.UUID
  * a specific user is restricted to that user or an ADMINISTRATOR (enforced in the
  * service). Routes stay thin — parse, delegate, map errors to status codes.
  */
-fun Application.configureUserRoutes(service: UserService = UserService()) {
+fun Application.configureUserRoutes(
+    service: UserService = UserService(),
+    duplicates: DuplicateService = DuplicateService(),
+) {
     routing {
         authenticate(FIREBASE_AUTH) {
             route(path = "/api/v1/users") {
                 searchUsers(service = service)
                 createUser(service = service)
                 currentUser(service = service)
+                duplicateRoutes(service = duplicates)
                 userById(service = service)
             }
+        }
+    }
+}
+
+/**
+ * Duplicate-profile rectification (#124) — ADMINISTRATOR-only (enforced in [DuplicateService]).
+ * Registered before [userById] so `/{id}/duplicates` and `/{id}/duplicate` resolve ahead of `/{id}`.
+ */
+private fun Route.duplicateRoutes(service: DuplicateService) {
+    post(path = "/{id}/duplicates") {
+        respondMappingErrors {
+            val request = call.receive<MarkDuplicatesRequest>()
+            val duplicates =
+                service.markDuplicates(
+                    token = verifiedToken(),
+                    canonicalId = uuidParam(name = "id"),
+                    duplicateIds = parseIds(raw = request.duplicateIds.joinToString(separator = ",")),
+                )
+            call.respond(status = HttpStatusCode.OK, message = duplicates.map { it.toSummary() })
+        }
+    }
+    get(path = "/{id}/duplicates") {
+        respondMappingErrors {
+            val duplicates = service.duplicatesOf(token = verifiedToken(), canonicalId = uuidParam(name = "id"))
+            call.respond(status = HttpStatusCode.OK, message = duplicates.map { it.toSummary() })
+        }
+    }
+    delete(path = "/{id}/duplicate") {
+        respondMappingErrors {
+            service.restore(token = verifiedToken(), id = uuidParam(name = "id"))
+            call.respond(status = HttpStatusCode.NoContent, message = "")
         }
     }
 }

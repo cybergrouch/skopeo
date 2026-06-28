@@ -81,6 +81,19 @@ class UserServiceTest {
     }
 
     @Test
+    fun `re-provisioning a disabled duplicate is rejected as merged (#124)`() {
+        val canonical = service.provision(token = token(uid = "keep"), request = request).user
+        val dup = service.provision(token = token(uid = "dup"), request = request).user
+        repository.markDuplicates(canonicalId = canonical.id, duplicateIds = listOf(element = dup.id))
+
+        val merged =
+            shouldThrow<AccountMergedException> {
+                service.provision(token = token(uid = "dup"), request = request)
+            }
+        merged.canonicalPublicCode shouldBe canonical.publicCode
+    }
+
+    @Test
     fun `currentRatings returns the current rating per user, omitting the unrated`() {
         val rated = service.provision(token = token(uid = "r"), request = request).user
         val unrated = service.provision(token = token(uid = "u"), request = request).user

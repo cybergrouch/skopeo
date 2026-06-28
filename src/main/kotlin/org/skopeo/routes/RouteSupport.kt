@@ -14,6 +14,7 @@ import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
 import org.skopeo.service.ConflictException
 import org.skopeo.service.ResourceNotFoundException
+import org.skopeo.service.user.AccountMergedException
 import org.skopeo.service.user.ForbiddenException
 import org.skopeo.service.user.VerifiedFirebaseToken
 import java.util.UUID
@@ -77,6 +78,12 @@ internal suspend fun RoutingContext.respondMappingErrors(block: suspend () -> Un
     } catch (e: ResourceNotFoundException) {
         logger.info { e.message }
         call.respond(status = HttpStatusCode.NotFound, message = errorBody(error = "Not found", message = e.message))
+    } catch (e: AccountMergedException) {
+        // A merged duplicate's sign-in (#124): 403 + the canonical code so the client can link to it.
+        logger.warn { "Account merged: ${e.message}" }
+        val base = errorBody(error = "Account merged", message = e.message)
+        val body = e.canonicalPublicCode?.let { base + ("canonicalCode" to it) } ?: base
+        call.respond(status = HttpStatusCode.Forbidden, message = body)
     } catch (e: ForbiddenException) {
         logger.warn { "Access denied: ${e.message}" }
         call.respond(status = HttpStatusCode.Forbidden, message = errorBody(error = "Forbidden", message = e.message))

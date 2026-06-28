@@ -171,6 +171,57 @@ describe('PlayerProfilePage', () => {
     expect(screen.getByText('Loading…')).toBeInTheDocument()
   })
 
+  it('renders a merged notice linking to the canonical for a disabled duplicate (#124)', () => {
+    useGetApiV1PlayersCode.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: {
+        publicCode: 'DUP123',
+        displayName: 'Dupe',
+        photoUrl: null,
+        rating: undefined,
+        isDisabled: true,
+        canonical: { publicCode: 'REAL99', displayName: 'Real', photoUrl: null },
+      },
+    })
+    renderAt('DUP123')
+    expect(screen.getByText('This profile has been merged')).toBeInTheDocument()
+    const link = screen.getByRole('link', { name: /view the active profile \(real\)/i })
+    expect(link).toHaveAttribute('href', '/players/REAL99')
+    // The normal cards/history are suppressed for a disabled duplicate.
+    expect(screen.queryByText('No rating yet.')).not.toBeInTheDocument()
+  })
+
+  it('links to a canonical without a display name (#124)', () => {
+    useGetApiV1PlayersCode.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: {
+        publicCode: 'DUP123',
+        displayName: 'Dupe',
+        photoUrl: null,
+        rating: undefined,
+        isDisabled: true,
+        canonical: { publicCode: 'REAL99', displayName: null, photoUrl: null },
+      },
+    })
+    renderAt('DUP123')
+    expect(screen.getByRole('link', { name: /view the active profile/i })).toHaveAttribute(
+      'href',
+      '/players/REAL99',
+    )
+  })
+
+  it('shows a merged notice without a link when the canonical is unavailable (#124)', () => {
+    useGetApiV1PlayersCode.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: { publicCode: 'DUP123', displayName: 'Dupe', photoUrl: null, rating: undefined, isDisabled: true, canonical: null },
+    })
+    renderAt('DUP123')
+    expect(screen.getByText('The active profile is unavailable.')).toBeInTheDocument()
+  })
+
   it('handles a missing code param without crashing', () => {
     useGetApiV1PlayersCode.mockReturnValue({ isLoading: true, isError: false })
     render(
