@@ -34,6 +34,7 @@ data class MatchSetResult(
  */
 data class Match(
     val id: UUID,
+    val publicCode: String,
     val matchFormat: TeamType,
     val matchType: MatchType,
     val matchDate: LocalDate,
@@ -75,3 +76,10 @@ data class SetScoreInput(
 
 /** Which oversight view of fixtures an administrator is requesting. */
 enum class MatchQuery { PENDING_CALCULATION, AWAITING_RESULTS }
+
+/** A match's shareable identity (#136) — enough to resolve an audit target to a public-page link. */
+data class MatchPublicRef(
+    val matchId: UUID,
+    val publicCode: String,
+    val matchDate: LocalDate,
+)

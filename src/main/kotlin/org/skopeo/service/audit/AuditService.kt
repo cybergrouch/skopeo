@@ -13,6 +13,7 @@ import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditEntry
 import org.skopeo.model.AuditEntryView
 import org.skopeo.model.AuditLogViewPage
+import org.skopeo.model.AuditMatchRef
 import org.skopeo.model.AuditPersonRef
 import org.skopeo.model.AuditWrite
 import org.skopeo.model.Capability
@@ -20,6 +21,7 @@ import org.skopeo.model.ServiceError
 import org.skopeo.model.actions
 import org.skopeo.model.displayName
 import org.skopeo.repository.AuditRepository
+import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.user.VerifiedFirebaseToken
 import java.util.UUID
@@ -40,6 +42,7 @@ private val USER_TARGET_TYPES = setOf(AuditEntityType.USER, AuditEntityType.RATI
 class AuditService(
     private val audit: AuditRepository = AuditRepository(),
     private val users: UserRepository = UserRepository(),
+    private val matches: MatchRepository = MatchRepository(),
 ) {
     /** Append a provenance record. Best-effort companion to a domain write; never the primary action. */
     fun record(write: AuditWrite) {
@@ -62,12 +65,15 @@ class AuditService(
                     offset = offset.coerceAtLeast(minimumValue = 0),
                 )
             val refs = resolveRefs(entries = items)
+            val matchRefs = resolveMatchRefs(entries = items)
             val views =
                 items.map { entry ->
+                    val isMatch = entry.entityType == AuditEntityType.MATCH
                     AuditEntryView(
                         entry = entry,
                         actor = entry.actorUserId?.let { refs[it] },
                         target = if (entry.entityType in USER_TARGET_TYPES) entry.entityId?.let { refs[it] } else null,
+                        matchTarget = if (isMatch) entry.entityId?.let { matchRefs[it] } else null,
                     )
                 }
             AuditLogViewPage(items = views, total = total.toInt())
@@ -98,6 +104,14 @@ class AuditService(
         return users
             .findAllByIds(ids = ids.toList())
             .associate { it.id to AuditPersonRef(userId = it.id, displayName = it.displayName(), publicCode = it.publicCode) }
+    }
+
+    /** Resolve every MATCH-typed target id on the page to its public code + date, in one lookup (#136). */
+    private fun resolveMatchRefs(entries: List<AuditEntry>): Map<UUID, AuditMatchRef> {
+        val ids = entries.mapNotNull { if (it.entityType == AuditEntityType.MATCH) it.entityId else null }
+        return matches
+            .publicRefsByIds(ids = ids)
+            .mapValues { (_, ref) -> AuditMatchRef(matchId = ref.matchId, publicCode = ref.publicCode, matchDate = ref.matchDate) }
     }
 
     private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {

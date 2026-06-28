@@ -14,6 +14,7 @@ import { InviteAcceptPage } from '@/routes/InviteAcceptPage'
 import { CompleteProfilePage } from '@/routes/CompleteProfilePage'
 import { DashboardPage } from '@/routes/DashboardPage'
 import { PlayerProfilePage } from '@/routes/PlayerProfilePage'
+import { MatchPage } from '@/routes/MatchPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -54,6 +55,16 @@ function App() {
                 <RequireAuth>
                   <RequireProfile>
                     <PlayerProfilePage />
+                  </RequireProfile>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/matches/:code"
+              element={
+                <RequireAuth>
+                  <RequireProfile>
+                    <MatchPage />
                   </RequireProfile>
                 </RequireAuth>
               }

@@ -17,6 +17,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.model.CreateFixtureCommand
 import org.skopeo.model.Match
+import org.skopeo.model.MatchPublicRef
 import org.skopeo.model.MatchSetResult
 import org.skopeo.model.MatchSide
 import org.skopeo.model.MatchStatus
@@ -37,6 +38,7 @@ class MatchRepository {
             val team2 = createTeam(name = command.team2Name, type = command.matchFormat, userIds = command.team2UserIds)
             val matchId =
                 MatchesTable.insertAndGetId {
+                    it[publicCode] = generateUniqueMatchCode()
                     it[team1Id] = team1
                     it[team2Id] = team2
                     it[matchFormat] = command.matchFormat.name
@@ -113,6 +115,39 @@ class MatchRepository {
         transaction {
             val match = loadMatch(id = matchId)
             if (match == null) ServiceError.NotFound(message = "Match $matchId not found").left() else match.right()
+        }
+
+    /** Resolve an active match by its shareable public code (#136); null if absent or disabled. */
+    fun findByPublicCode(code: String): Match? =
+        transaction {
+            MatchesTable
+                .selectAll()
+                .where { (MatchesTable.publicCode eq code) and MatchesTable.isActive }
+                .singleOrNull()
+                ?.let { row -> buildMatch(id = row[MatchesTable.id].value, row = row) }
+        }
+
+    /**
+     * Public codes for a set of match ids (#136) — used to resolve match audit targets to a link.
+     * Returns code + date for found, active-or-not matches; missing ids are simply absent.
+     */
+    fun publicRefsByIds(ids: List<UUID>): Map<UUID, MatchPublicRef> =
+        if (ids.isEmpty()) {
+            emptyMap()
+        } else {
+            transaction {
+                MatchesTable
+                    .selectAll()
+                    .where { MatchesTable.id inList ids }
+                    .associate {
+                        it[MatchesTable.id].value to
+                            MatchPublicRef(
+                                matchId = it[MatchesTable.id].value,
+                                publicCode = it[MatchesTable.publicCode],
+                                matchDate = it[MatchesTable.matchDate],
+                            )
+                    }
+            }
         }
 
     /** Stamp a match as rating-calculated (the calculation trigger committing it). */
@@ -218,12 +253,17 @@ class MatchRepository {
 /** Reload a match that is known to exist (e.g. just inserted/updated) — no caller-side null branch. */
 private fun loadMatchOrThrow(id: UUID): Match = buildMatch(id = id, row = MatchesTable.selectAll().where { MatchesTable.id eq id }.single())
 
+/** A unique shareable match code (#136), retrying on the rare collision. Must run in a transaction. */
+private fun generateUniqueMatchCode(): String =
+    PublicCode.generate { code -> MatchesTable.selectAll().where { MatchesTable.publicCode eq code }.any() }
+
 private fun buildMatch(
     id: UUID,
     row: ResultRow,
 ): Match =
     Match(
         id = id,
+        publicCode = row[MatchesTable.publicCode],
         matchFormat = TeamType.valueOf(value = row[MatchesTable.matchFormat]),
         matchType = MatchType.valueOf(value = row[MatchesTable.matchType]),
         matchDate = row[MatchesTable.matchDate],

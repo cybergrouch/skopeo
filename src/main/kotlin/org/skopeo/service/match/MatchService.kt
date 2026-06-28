@@ -7,8 +7,12 @@ import arrow.core.Either
 import arrow.core.left
 import arrow.core.raise.either
 import arrow.core.raise.ensure
+import arrow.core.raise.ensureNotNull
 import arrow.core.right
+import org.skopeo.dto.match.MatchPublicPlayer
+import org.skopeo.dto.match.MatchPublicResponse
 import org.skopeo.dto.match.MatchResultRequest
+import org.skopeo.dto.match.toPublicResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -179,6 +183,23 @@ class MatchService(
             val isParticipant = caller != null && caller.id in (match.team1.userIds + match.team2.userIds)
             ensure(condition = isStaff || isParticipant) { ServiceError.Forbidden() }
             match
+        }
+
+    /**
+     * Read-only public summary of a match by its public code (#136). Visible to any authenticated
+     * user — the same "public" semantics as a player's public profile — with players resolved to
+     * name + code. A [ServiceError.NotFound] if the code resolves to no active match.
+     */
+    fun publicByCode(code: String): Either<ServiceError, MatchPublicResponse> =
+        either {
+            val match = matches.findByPublicCode(code = code)
+            ensureNotNull(value = match) { ServiceError.NotFound(message = "Match $code not found") }
+            val ids = match.team1.userIds + match.team2.userIds
+            val players =
+                users.findAllByIds(ids = ids).associate {
+                    it.id to MatchPublicPlayer(displayName = it.displayName(), publicCode = it.publicCode)
+                }
+            match.toPublicResponse(players = players)
         }
 
     /**

@@ -11,6 +11,7 @@ import org.jetbrains.exposed.sql.javatime.datetime
 private const val NAME_MAX = 255
 private const val TYPE_MAX = 20
 private const val ROUND_MAX = 50
+private const val PUBLIC_CODE_MAX = 6
 
 internal object TeamsTable : UUIDTable(name = "teams") {
     val name = varchar(name = "name", length = NAME_MAX)
@@ -25,6 +26,7 @@ internal object TeamUsersTable : UUIDTable(name = "team_users") {
 }
 
 internal object MatchesTable : UUIDTable(name = "matches") {
+    val publicCode = varchar(name = "public_code", length = PUBLIC_CODE_MAX)
     val team1Id = reference(name = "team1_id", foreign = TeamsTable, onDelete = ReferenceOption.RESTRICT)
     val team2Id = reference(name = "team2_id", foreign = TeamsTable, onDelete = ReferenceOption.RESTRICT)
     val winnerTeamId = reference(name = "winner_team_id", foreign = TeamsTable, onDelete = ReferenceOption.RESTRICT).nullable()

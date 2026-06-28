@@ -6,6 +6,7 @@ package org.skopeo.dto.audit
 import kotlinx.serialization.Serializable
 import org.skopeo.model.AuditEntryView
 import org.skopeo.model.AuditLogViewPage
+import org.skopeo.model.AuditMatchRef
 import org.skopeo.model.AuditPersonRef
 import org.skopeo.model.category
 import java.time.ZoneOffset
@@ -24,6 +25,14 @@ data class AuditPersonResponse(
     val publicCode: String? = null,
 )
 
+/** A match-typed target resolved to its public code + date, so the row links to the public match page (#136). */
+@Serializable
+data class AuditMatchResponse(
+    val matchId: String,
+    val publicCode: String,
+    val matchDate: String,
+)
+
 @Serializable
 data class AuditEntryResponse(
     val id: String,
@@ -38,6 +47,7 @@ data class AuditEntryResponse(
     val comment: String? = null,
     val actor: AuditPersonResponse? = null,
     val target: AuditPersonResponse? = null,
+    val matchTarget: AuditMatchResponse? = null,
 )
 
 @Serializable
@@ -61,7 +71,11 @@ private fun AuditEntryView.toResponse(): AuditEntryResponse =
         comment = entry.comment,
         actor = actor?.toResponse(),
         target = target?.toResponse(),
+        matchTarget = matchTarget?.toResponse(),
     )
 
 private fun AuditPersonRef.toResponse(): AuditPersonResponse =
     AuditPersonResponse(userId = userId.toString(), displayName = displayName, publicCode = publicCode)
+
+private fun AuditMatchRef.toResponse(): AuditMatchResponse =
+    AuditMatchResponse(matchId = matchId.toString(), publicCode = publicCode, matchDate = matchDate.toString())

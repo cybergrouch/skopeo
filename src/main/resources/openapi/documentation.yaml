@@ -1136,6 +1136,32 @@ paths:
         '403':
           description: Caller is not HOST/ADMINISTRATOR
 
+  /api/v1/matches/code/{code}:
+    parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      summary: Get a match's public page by code (#136)
+      description: >-
+        Read-only public summary of a match resolved by its shareable public code. Visible to any
+        authenticated user (the same "public" semantics as a player's public profile).
+      tags:
+        - Matches
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The public match summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchPublicResponse'
+        '404':
+          description: No active match with that code
+
   /api/v1/matches/{id}:
     parameters:
       - name: id
@@ -2792,6 +2818,7 @@ components:
       type: object
       required:
         - id
+        - publicCode
         - matchFormat
         - matchType
         - matchDate
@@ -2804,6 +2831,9 @@ components:
         id:
           type: string
           format: uuid
+        publicCode:
+          type: string
+          description: Stable, shareable public code for the match (#136).
         matchFormat:
           type: string
           enum: [SINGLES, DOUBLES, MIXED_DOUBLES]
@@ -2852,6 +2882,84 @@ components:
         recordedBy:
           type: string
           format: uuid
+          nullable: true
+
+    MatchPublicPlayer:
+      type: object
+      description: One player on the public match page (#136) — name + shareable code only.
+      properties:
+        displayName:
+          type: string
+          nullable: true
+        publicCode:
+          type: string
+          nullable: true
+
+    MatchPublicSet:
+      type: object
+      required:
+        - setNumber
+        - team1Games
+        - team2Games
+      properties:
+        setNumber:
+          type: integer
+        team1Games:
+          type: integer
+        team2Games:
+          type: integer
+        tiebreakTeam1Points:
+          type: integer
+          nullable: true
+        tiebreakTeam2Points:
+          type: integer
+          nullable: true
+
+    MatchPublicResponse:
+      type: object
+      description: Read-only public summary of a match (#136), addressed by its public code.
+      required:
+        - publicCode
+        - matchFormat
+        - matchType
+        - matchDate
+        - status
+        - team1
+        - team2
+        - winner
+        - sets
+      properties:
+        publicCode:
+          type: string
+        matchFormat:
+          type: string
+        matchType:
+          type: string
+        matchDate:
+          type: string
+          format: date
+        status:
+          type: string
+        team1:
+          type: array
+          items:
+            $ref: '#/components/schemas/MatchPublicPlayer'
+        team2:
+          type: array
+          items:
+            $ref: '#/components/schemas/MatchPublicPlayer'
+        winner:
+          type: string
+          enum: [TEAM1, TEAM2, NONE]
+        sets:
+          type: array
+          items:
+            $ref: '#/components/schemas/MatchPublicSet'
+        venue:
+          type: string
+          nullable: true
+        tournamentName:
+          type: string
           nullable: true
 
     CalculationRequest:
@@ -3219,6 +3327,23 @@ components:
           type: string
           nullable: true
 
+    AuditMatchResponse:
+      type: object
+      description: A match-typed target resolved to its public code + date, linking to the public match page (#136).
+      required:
+        - matchId
+        - publicCode
+        - matchDate
+      properties:
+        matchId:
+          type: string
+          format: uuid
+        publicCode:
+          type: string
+        matchDate:
+          type: string
+          format: date
+
     AuditEntryResponse:
       type: object
       required:
@@ -3264,6 +3389,10 @@ components:
           nullable: true
           allOf:
             - $ref: '#/components/schemas/AuditPersonResponse'
+        matchTarget:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/AuditMatchResponse'
 
     AuditLogResponse:
       type: object
