@@ -89,9 +89,30 @@ class DuplicateCandidateServiceTest {
         shouldThrow<IllegalArgumentException> {
             service.flagManual(token = token(uid = "root"), userAId = a.id, userBId = a.id, reason = null)
         }
+        // Either side missing is rejected.
+        shouldThrow<UserNotFoundException> {
+            service.flagManual(token = token(uid = "root"), userAId = UUID.randomUUID(), userBId = a.id, reason = null)
+        }
         shouldThrow<UserNotFoundException> {
             service.flagManual(token = token(uid = "root"), userAId = a.id, userBId = UUID.randomUUID(), reason = null)
         }
+    }
+
+    @Test
+    fun `confirm keeping the second-ordered account marks the first a duplicate`() {
+        admin(uid = "root")
+        val a = provisionUser(uid = "a")
+        val b = provisionUser(uid = "b")
+        val candidate = service.flagManual(token = token(uid = "root"), userAId = a.id, userBId = b.id, reason = null).candidate
+
+        // Keep the userB side → the userA side is the one disabled (the inverse confirm branch).
+        service.confirm(token = token(uid = "root"), id = candidate.id, canonicalId = candidate.userBId)
+
+        users.findById(id = candidate.userAId)!!.let {
+            it.isActive.shouldBeFalse()
+            it.canonicalUserId shouldBe candidate.userBId
+        }
+        candidates.findById(id = candidate.id)!!.status shouldBe DuplicateCandidateStatus.RESOLVED
     }
 
     @Test
@@ -161,6 +182,8 @@ class DuplicateCandidateServiceTest {
         val candidate = service.flagManual(token = token(uid = "root"), userAId = a.id, userBId = b.id, reason = null).candidate
 
         shouldThrow<ForbiddenException> { service.list(token = token(uid = "a"), limit = 50, offset = 0, status = null) }
+        // An unknown caller (no such user) is also refused.
+        shouldThrow<ForbiddenException> { service.list(token = token(uid = "ghost"), limit = 50, offset = 0, status = null) }
         shouldThrow<ForbiddenException> {
             service.flagManual(token = token(uid = "a"), userAId = a.id, userBId = b.id, reason = null)
         }

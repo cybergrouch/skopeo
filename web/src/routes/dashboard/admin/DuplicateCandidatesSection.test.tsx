@@ -87,6 +87,19 @@ describe('DuplicateCandidatesSection', () => {
     await waitFor(() => expect(confirmMutate).toHaveBeenCalledWith({ id: 'c1', data: { canonicalId: 'ua' } }))
   })
 
+  it('confirms keeping the second account, and renders a candidate without a detail', async () => {
+    const noDetail = { ...candidate, detail: null }
+    useGetApiV1DuplicateCandidates.mockReturnValue({ data: { items: [noDetail], total: 1 } })
+    const user = userEvent.setup()
+    renderSection()
+    // Signal shows with no "(detail)" suffix.
+    expect(screen.getByText(/Shared phone/)).toBeInTheDocument()
+    expect(screen.queryByText(/\(\+639170000000\)/)).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Keep BBB222' }))
+    await waitFor(() => expect(confirmMutate).toHaveBeenCalledWith({ id: 'c1', data: { canonicalId: 'ub' } }))
+  })
+
   it('dismisses a candidate', async () => {
     useGetApiV1DuplicateCandidates.mockReturnValue({ data: { items: [candidate], total: 1 } })
     const user = userEvent.setup()
