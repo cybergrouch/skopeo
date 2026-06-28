@@ -120,4 +120,20 @@ describe('UserSearchSelect', () => {
     await user.type(screen.getByLabelText('Player 1'), 'ali')
     expect(useGetApiV1Users).toHaveBeenCalledWith({ q: 'ali' }, expect.anything())
   })
+
+  it('forwards optional sex/age/rating filters into the query params (#111)', async () => {
+    const user = userEvent.setup()
+    render(
+      <UserSearchSelect
+        label="Player 1"
+        filters={{ sex: 'Female', age: '[18,30]', rating: '[3.0,4.0]' }}
+        onSelect={vi.fn()}
+      />,
+    )
+    await user.type(screen.getByLabelText('Player 1'), 'al')
+    expect(useGetApiV1Users).toHaveBeenCalledWith(
+      { q: 'al', sex: 'Female', age: '[18,30]', rating: '[3.0,4.0]' },
+      expect.anything(),
+    )
+  })
 })
