@@ -44,3 +44,16 @@ export function canRate(
     hasCapability(capabilities, Capability.ADMINISTRATOR)
   )
 }
+
+/**
+ * The Research tab is for researchers (#107) — gated so it can later be monetized. Every sign-up
+ * gets RESEARCHER for now, so behaviour is unchanged. ADMINISTRATOR implicitly has RESEARCHER.
+ */
+export function isResearcher(
+  capabilities: readonly Capability[] | undefined,
+): boolean {
+  return (
+    hasCapability(capabilities, Capability.RESEARCHER) ||
+    hasCapability(capabilities, Capability.ADMINISTRATOR)
+  )
+}

@@ -87,7 +87,8 @@ class UserApiIntegrationTest {
             created.status shouldBe HttpStatusCode.Created
             val body = created.body<UserResponse>()
             body.firebaseUid shouldBe "fb-1"
-            body.capabilities shouldBe listOf("PLAYER")
+            // Every sign-up is a PLAYER and a RESEARCHER (#107).
+            body.capabilities.toSet() shouldBe setOf("PLAYER", "RESEARCHER")
 
             val again = client.createUser(token = token)
             again.status shouldBe HttpStatusCode.OK

@@ -234,7 +234,7 @@ describe('ManagePlayerSection', () => {
     await selectAlice()
     // Header shows the id (no display name); every grantable role offers Grant (no active capabilities).
     expect(screen.getByText(/u1/)).toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: /^Grant/ })).toHaveLength(3)
+    expect(screen.getAllByRole('button', { name: /^Grant/ })).toHaveLength(4)
   })
 
   it('grants and revokes roles', async () => {

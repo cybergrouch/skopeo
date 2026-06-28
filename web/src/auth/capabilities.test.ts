@@ -5,6 +5,7 @@ import {
   canRate,
   hasCapability,
   isAdministrator,
+  isResearcher,
 } from './capabilities'
 
 describe('capabilities', () => {
@@ -35,5 +36,13 @@ describe('capabilities', () => {
     expect(canRate([Capability.PLAYER])).toBe(false)
     expect(canRate([Capability.HOST])).toBe(false)
     expect(canRate(undefined)).toBe(false)
+  })
+
+  it('isResearcher is true for researchers and administrators (#107)', () => {
+    expect(isResearcher([Capability.RESEARCHER])).toBe(true)
+    expect(isResearcher([Capability.ADMINISTRATOR])).toBe(true)
+    expect(isResearcher([Capability.PLAYER])).toBe(false)
+    expect(isResearcher([Capability.HOST])).toBe(false)
+    expect(isResearcher(undefined)).toBe(false)
   })
 })

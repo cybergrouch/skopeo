@@ -98,13 +98,13 @@ paths:
 
   /api/v1/users:
     get:
-      summary: Look up users by id, or search by name/sex/age/rating (HOST/ADMINISTRATOR only)
+      summary: Look up users by id (HOST/ADMINISTRATOR), or search by name/sex/age/rating (RESEARCHER or staff)
       description: |
         Two modes:
           - **Id resolution** — `ids` (comma-separated UUIDs) resolves known ids to summaries
-            (match rosters, rating history, calculation previews). Exclusive: it cannot be
-            combined with the search filters below.
-          - **Search** — any combination of `name`, `code`, `q`, `sex`, `age`, `rating`
+            (match rosters, rating history, calculation previews); HOST/ADMINISTRATOR only. Exclusive:
+            it cannot be combined with the search filters below.
+          - **Search** — RESEARCHER or staff (#107). Any combination of `name`, `code`, `q`, `sex`, `age`, `rating`
             (AND-combined; at least one required). `name` is a fuzzy, partial match across all of
             a profile's names; `code` is a player-code prefix; `q` is a unified term matching a
             fuzzy name OR a code prefix. `age` and `rating` are interval strings: `[` / `]`
@@ -910,7 +910,7 @@ paths:
         required: true
         schema:
           type: string
-          enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER]
+          enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER]
     delete:
       summary: Revoke a capability (ADMINISTRATOR only)
       description: |
@@ -2066,7 +2066,7 @@ components:
           type: array
           items:
             type: string
-            enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER]
+            enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER]
 
     UserResponse:
       type: object
@@ -2130,7 +2130,7 @@ components:
           type: array
           items:
             type: string
-            enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER]
+            enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER]
 
     ContactCreateRequest:
       type: object
@@ -2274,7 +2274,7 @@ components:
       properties:
         capability:
           type: string
-          enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER]
+          enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER]
 
     CapabilityResponse:
       type: object
@@ -2284,7 +2284,7 @@ components:
       properties:
         capability:
           type: string
-          enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER]
+          enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER]
         isActive:
           type: boolean
         grantedBy:

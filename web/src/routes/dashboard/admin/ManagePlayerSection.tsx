@@ -31,7 +31,7 @@ import {
 import type { ProfileRequestSex, UserSummaryResponse } from '@/api/generated/model'
 
 // Roles an admin grants here. ADMINISTRATOR is deliberately not toggleable from the UI.
-const GRANTABLE = ['HOST', 'CLUB_OWNER', 'RATER'] as const
+const GRANTABLE = ['HOST', 'CLUB_OWNER', 'RATER', 'RESEARCHER'] as const
 
 /** Edit a player's sex and date of birth (PATCH leaves untouched fields unchanged). */
 function ProfileForm({

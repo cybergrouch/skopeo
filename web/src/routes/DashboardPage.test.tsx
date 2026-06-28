@@ -52,9 +52,10 @@ describe('DashboardPage', () => {
     expect(screen.getByText('Loading your dashboard…')).toBeInTheDocument()
   })
 
-  it('shows Profile and Research (but not Matches/Admin) for a plain player', () => {
+  it('shows Profile and Research (but not Matches/Ratings/Admin) for a default player', () => {
+    // Every sign-up is PLAYER + RESEARCHER (#107), so Research is visible by default.
     useGetApiV1UsersMe.mockReturnValue({
-      data: { id: 'u1', capabilities: ['PLAYER'] },
+      data: { id: 'u1', capabilities: ['PLAYER', 'RESEARCHER'] },
       isLoading: false,
     })
     renderDashboard()
@@ -63,6 +64,16 @@ describe('DashboardPage', () => {
     expect(screen.queryByRole('tab', { name: 'Matches' })).not.toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: 'Ratings' })).not.toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: 'Admin' })).not.toBeInTheDocument()
+  })
+
+  it('hides the Research tab from a player without RESEARCHER (#107)', () => {
+    useGetApiV1UsersMe.mockReturnValue({
+      data: { id: 'u1', capabilities: ['PLAYER'] },
+      isLoading: false,
+    })
+    renderDashboard()
+    expect(screen.getByRole('tab', { name: 'Profile' })).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Research' })).not.toBeInTheDocument()
   })
 
   it('shows the Ratings tab for a rater (no Matches/Admin) (#106)', async () => {
@@ -82,7 +93,7 @@ describe('DashboardPage', () => {
 
   it('shows the Matches tab for a host (plus Profile/Research, no Admin)', () => {
     useGetApiV1UsersMe.mockReturnValue({
-      data: { id: 'u1', capabilities: ['PLAYER', 'HOST'] },
+      data: { id: 'u1', capabilities: ['PLAYER', 'RESEARCHER', 'HOST'] },
       isLoading: false,
     })
     renderDashboard()
@@ -93,7 +104,7 @@ describe('DashboardPage', () => {
 
   it('shows the Matches tab for a club owner (same as a host, no Admin)', () => {
     useGetApiV1UsersMe.mockReturnValue({
-      data: { id: 'u1', capabilities: ['PLAYER', 'CLUB_OWNER'] },
+      data: { id: 'u1', capabilities: ['PLAYER', 'RESEARCHER', 'CLUB_OWNER'] },
       isLoading: false,
     })
     renderDashboard()

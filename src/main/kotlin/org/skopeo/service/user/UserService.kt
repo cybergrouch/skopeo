@@ -68,8 +68,8 @@ class UserService(
     fun currentRatings(ids: List<UUID>): Map<UUID, UserRating> = ratings.findCurrentRatings(userIds = ids)
 
     /**
-     * Staff search (HOST/ADMINISTRATOR) backing the player-picker, role-grants, and player
-     * research. Any combination of facets is allowed and AND-combined; at least one is required.
+     * Player search backing the player-picker, role-grants, and the Research tab — RESEARCHER or staff
+     * (#107). Any combination of facets is allowed and AND-combined; at least one is required.
      * [UserSearchFilters.name] is a fuzzy match; [UserSearchFilters.code] is a shareable player-code
      * prefix (case-insensitive, #86); [UserSearchFilters.q] is the unified picker term matching a
      * fuzzy name OR a code prefix (#86). Sex and the age/rating intervals are validated at the route;
@@ -80,7 +80,7 @@ class UserService(
         filters: UserSearchFilters,
     ): Either<ServiceError, List<User>> =
         either {
-            requireStaff(repository = repository, token = token).bind()
+            requireResearchAccess(repository = repository, token = token).bind()
             val nameTerm = blankToNull(raw = filters.name)
             val codeTerm = blankToNull(raw = filters.code)?.uppercase()
             val qTerm = blankToNull(raw = filters.q)
@@ -278,6 +278,21 @@ private fun requireStaff(
     } else {
         Unit.right()
     }
+}
+
+/**
+ * Allow player research (#107): a RESEARCHER, or staff (HOST/ADMINISTRATOR) who reach the same search
+ * via the player-picker/role-grants. ADMINISTRATOR is staff, so it qualifies even without RESEARCHER.
+ */
+private fun requireResearchAccess(
+    repository: UserRepository,
+    token: VerifiedFirebaseToken,
+): Either<ServiceError, Unit> {
+    val caller = repository.findByFirebaseUid(firebaseUid = token.uid)
+    val allowed =
+        caller != null &&
+            (caller.capabilities.contains(element = Capability.RESEARCHER) || caller.capabilities.any { it in STAFF_ROLES })
+    return if (allowed) Unit.right() else ServiceError.Forbidden().left()
 }
 
 /**
