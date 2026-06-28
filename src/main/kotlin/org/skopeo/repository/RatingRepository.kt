@@ -35,6 +35,9 @@ class RatingRepository {
 
     fun findCurrentRating(userId: UUID): UserRating? = transaction { ratingRow(userId = userId)?.toUserRating() }
 
+    /** Every user's current rating — backs the per-band standings (#113). */
+    fun allCurrentRatings(): List<UserRating> = transaction { UserRatingsTable.selectAll().map { it.toUserRating() } }
+
     /** Current ratings for many users at once, keyed by user id; users without a rating are absent. */
     fun findCurrentRatings(userIds: List<UUID>): Map<UUID, UserRating> =
         transaction {

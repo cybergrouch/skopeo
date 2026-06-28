@@ -35,6 +35,9 @@ vi.mock('./dashboard/RatingsTab', () => ({
 vi.mock('./dashboard/ResearchTab', () => ({
   ResearchTab: () => <div>research content</div>,
 }))
+vi.mock('./dashboard/StandingsTab', () => ({
+  StandingsTab: () => <div>standings content</div>,
+}))
 
 function renderDashboard() {
   return render(
@@ -64,6 +67,7 @@ describe('DashboardPage', () => {
     renderDashboard()
     expect(screen.getByRole('tab', { name: 'Profile' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Research' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Standings' })).toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: 'Matches' })).not.toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: 'Seeding' })).not.toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: 'Ratings' })).not.toBeInTheDocument()
@@ -105,6 +109,7 @@ describe('DashboardPage', () => {
     expect(screen.getByRole('tab', { name: 'Matches' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Seeding' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Research' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Standings' })).toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: 'Admin' })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: 'Seeding' }))
@@ -131,10 +136,14 @@ describe('DashboardPage', () => {
     renderDashboard()
     expect(screen.getByRole('tab', { name: 'Matches' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Ratings' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Standings' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Admin' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: 'Matches' }))
     expect(screen.getByText('matches content')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('tab', { name: 'Standings' }))
+    expect(screen.getByText('standings content')).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: 'Ratings' }))
     expect(screen.getByText('ratings content')).toBeInTheDocument()

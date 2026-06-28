@@ -27,6 +27,8 @@ tags:
     description: Admin onboarding invites for manual (email-link) sign-ups
   - name: Player Lists
     description: Host-curated player lists and generated seedings (HOST/CLUB_OWNER/ADMINISTRATOR)
+  - name: Standings
+    description: Per-band "Ranking Race" standings (interim, ratings-derived); any signed-in player
 
 paths:
   /api/v1/calculate-ranking:
@@ -1762,6 +1764,27 @@ paths:
         '404':
           description: No seeding generated yet
 
+  /api/v1/standings:
+    get:
+      summary: Per-band "Ranking Race" standings (#113)
+      description: >-
+        Interim, ratings-derived standings — within each NTRP band, active rated players ordered by
+        rating (highest first) and ranked. Readable by any signed-in player. The exact rating is never
+        returned (order only); bands are returned strongest-first.
+      tags:
+        - Standings
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The standings, one entry per band
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BandStandingsResponse'
+
 components:
   securitySchemes:
     firebaseAuth:
@@ -3293,3 +3316,39 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SeedingEntryResponse'
+
+    StandingEntryResponse:
+      type: object
+      required:
+        - rank
+        - userId
+        - publicCode
+      properties:
+        rank:
+          type: integer
+        userId:
+          type: string
+        displayName:
+          type: string
+          nullable: true
+        publicCode:
+          type: string
+        sex:
+          type: string
+          nullable: true
+        age:
+          type: integer
+          nullable: true
+
+    BandStandingsResponse:
+      type: object
+      required:
+        - band
+        - entries
+      properties:
+        band:
+          type: string
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/StandingEntryResponse'

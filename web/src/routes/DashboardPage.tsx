@@ -17,6 +17,7 @@ import { MatchesTab } from './dashboard/MatchesTab'
 import { SeedingTab } from './dashboard/SeedingTab'
 import { RatingsTab } from './dashboard/RatingsTab'
 import { ResearchTab } from './dashboard/ResearchTab'
+import { StandingsTab } from './dashboard/StandingsTab'
 
 export function DashboardPage() {
   const navigate = useNavigate()
@@ -60,6 +61,7 @@ export function DashboardPage() {
               {showResearch ? (
                 <TabsTrigger value="research">Research</TabsTrigger>
               ) : null}
+              <TabsTrigger value="standings">Standings</TabsTrigger>
               {showMatches ? (
                 <TabsTrigger value="matches">Matches</TabsTrigger>
               ) : null}
@@ -88,6 +90,9 @@ export function DashboardPage() {
                 <ResearchTab />
               </TabsContent>
             ) : null}
+            <TabsContent value="standings">
+              <StandingsTab />
+            </TabsContent>
             {showMatches ? (
               <TabsContent value="matches">
                 <MatchesTab />
