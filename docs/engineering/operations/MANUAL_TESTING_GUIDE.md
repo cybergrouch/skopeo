@@ -1,12 +1,17 @@
 # Skopeo — Manual End-to-End Testing Guide
 
-A printable runbook for testing the full stack (PostgreSQL + Ktor API + React web UI)
-with all three auth methods — **Google, email/password, and Facebook** — for both
-**sign-up** and **login**. **Part 1** runs everything locally with Docker; **Part 2**
-covers deploying the three components to GCP. **Appendix A** has Firebase project-setup
-steps for reference (you do **not** need them — the project already exists).
+A printable runbook for testing the full stack (PostgreSQL + Ktor API + React web UI).
+**Part 1** runs everything locally with Docker and covers auth (**Google, email/password,
+and Facebook** sign-up + login) and the per-capability dashboard. **Part 1d** is the new
+**feature walkthrough** — the rating pipeline (set ratings → fixtures → results →
+calculation) plus every dashboard tab: Profile (rating speed meter, history with per-set
+breakdown), Research, Standings, Seeding, Ratings, and the Admin tools (manage player /
+roles, duplicate detection, invites, activity log). **Part 2** covers deploying the three
+components to GCP. **Appendix A** has Firebase project-setup steps for reference (you do
+**not** need them — the project already exists).
 
-> Tip: to make a PDF, open this file in your editor/browser and **Print → Save as PDF**.
+> Tip: to make a PDF, open this file in your editor/browser and **Print → Save as PDF**
+> (the committed `MANUAL_TESTING_GUIDE.pdf` is generated this way).
 
 ---
 
@@ -107,7 +112,7 @@ docker compose --profile tools up -d pgadmin
 ```
 
 > *(Only if the API's default project doesn't match yours)* create `docker-compose.override.yml`
-> at the repo root with `services: { skopeo: { environment: { FIREBASE_PROJECT_ID: "<your-project-id>" } } }`.
+> at the repo root with `services: { skopeo: { environment: { FIREBASE_PROJECT_ID: "skopeo-prod" } } }`.
 
 ## Step 3 — Run the web UI (dev server)
 
@@ -156,10 +161,11 @@ npm run dev      # serves http://localhost:5173
 
 # Part 1b — Sign-up tests
 
-For each test, sign up, then observe the dashboard. A brand-new account gets only the `PLAYER`
-capability, so the dashboard shows **only the Profile tab** with a "Pending assessment" rating —
-that is the expected result. (After sign-up you are auto-signed-in; the `/login` page is exercised
-separately in **Part 1c**.)
+For each test, sign up, then observe the dashboard. A brand-new account gets the `PLAYER` and
+`RESEARCHER` capabilities, so the dashboard shows **Profile, Research, and Standings** tabs, with a
+"Pending assessment" rating on the Profile tab — that is the expected result. (Matches, Seeding,
+Ratings, and Admin tabs require additional capabilities — see **Part 1d**.) After sign-up you are
+auto-signed-in; the `/login` page is exercised separately in **Part 1c**.
 
 ## Test 1 — Sign up with Google
 
@@ -167,7 +173,8 @@ separately in **Part 1c**.)
 - [ ] Fill **Sex** and **Date of birth** (both required).
 - [ ] Click **Continue with Google** → choose a Google account in the popup → land on the dashboard.
 
-**Expected:** Profile tab only; name + email; a `PLAYER` badge; "Pending assessment" rating card.
+**Expected:** Profile / Research / Standings tabs; name + email; `PLAYER` and `RESEARCHER` badges;
+"Pending assessment" rating card on the Profile tab.
 
 Result: ☐ Pass ☐ Fail — notes: __________________________________________
 
@@ -211,76 +218,230 @@ Result: ☐ Google ☐ Manual ☐ Facebook — notes: __________________________
 
 ---
 
-## Optional — see the richer dashboards (Matches / Research / Admin)
+## Bootstrap your first administrator
 
-Fresh `PLAYER` accounts can't show these tabs, and granting roles requires an existing admin.
-Bootstrap your first account as an administrator (after signing up at least once):
+Granting roles requires an existing admin, so you need to create the **first** one. Two ways:
+
+**Preferred — the `ADMIN_EMAILS` allowlist (no SQL).** Any sign-in with a *verified* email on the
+allowlist is auto-promoted to `ADMINISTRATOR`. Add your Google email to the API's `ADMIN_EMAILS`
+(comma-separated) and restart the API, then sign in with that Google account:
+
+```bash
+# docker-compose.override.yml at the repo root:
+#   services: { skopeo: { environment: { ADMIN_EMAILS: "you@gmail.com" } } }
+docker compose up -d --build skopeo     # restart the API with the env var
+```
+
+> Auto-promotion requires `email_verified` — it works for **Google** sign-in but **not** an
+> unverified email/password account. For those, use the SQL fallback. See
+> `docs/engineering/architecture/ADMIN_BOOTSTRAP.md`.
+
+**Fallback — direct SQL** (works for any account; target a specific user by email):
 
 ```bash
 docker compose exec postgres psql -U postgres -d SkopeoDb -c \
 "INSERT INTO user_capabilities (user_id, capability)
- SELECT id, 'ADMINISTRATOR' FROM users LIMIT 1;"
+ SELECT user_id, 'ADMINISTRATOR' FROM contact_information WHERE value = 'you@example.com';"
 ```
 
-- [ ] Refresh the dashboard → **Admin** and **Matches/Research** tabs now appear.
-- [ ] As admin you can assign a starting rating, grant `HOST` to other test users, create match
-      fixtures, and run rating calculations.
+- [ ] Hard-refresh the dashboard → **all tabs** (Profile, Research, Standings, Matches, Seeding,
+      Ratings, Admin) now appear.
+- [ ] From here, grant every other role through **Admin → Manage player → Roles** — no more SQL.
 
-> `LIMIT 1` grabs whichever user row exists first. With several test users, target a specific one
-> by joining through `contact_information` on the email.
+The rest of the rating pipeline and each tab are exercised in **Part 1d** below.
 
-## Capability display tests (Player / Host / Club owner / Administrator)
+## Capability display tests (per-capability tabs)
 
-Authorization is capability-based, and the dashboard shows different tabs per capability. Until the
-Administrator UI for granting roles is tested separately, grant/revoke capabilities **directly in the
-database** to simulate each role. Capabilities are additive — a user keeps `PLAYER` and gains others.
+Authorization is capability-based, and the dashboard shows different tabs per capability.
+Capabilities are **additive** — a user keeps `PLAYER`/`RESEARCHER` and gains others. The full set is
+`PLAYER`, `RESEARCHER`, `HOST`, `CLUB_OWNER`, `RATER`, `ADMINISTRATOR`. `ADMINISTRATOR` implicitly
+unlocks every tab (it counts as `RATER` and `RESEARCHER`, and satisfies match-management).
 
-**Grant** a capability to a test account (replace the role and email):
+Once you have an administrator (bootstrapped below), **grant/revoke roles through the UI**:
+**Admin → Manage player → Roles** (covered in Part 1d). The SQL grant below is only needed once, to
+create that **first** administrator.
 
-```bash
-docker compose exec postgres psql -U postgres -d SkopeoDb -c \
-"INSERT INTO user_capabilities (user_id, capability)
- SELECT user_id, 'HOST' FROM contact_information WHERE value = 'you@example.com';"
-```
-
-**Revoke** it again (to reset between scenarios):
-
-```bash
-docker compose exec postgres psql -U postgres -d SkopeoDb -c \
-"DELETE FROM user_capabilities
- WHERE capability = 'HOST'
-   AND user_id IN (SELECT user_id FROM contact_information WHERE value = 'you@example.com');"
-```
-
-After each change, **hard-refresh the browser** (the dashboard refetches `GET /api/v1/users/me`).
+After any role change, **hard-refresh the browser** (the dashboard refetches `GET /api/v1/users/me`).
 
 Expected dashboard per capability:
 
-| Capability      | How it's set         | Tabs shown                        | Notes                                            |
-|-----------------|----------------------|-----------------------------------|--------------------------------------------------|
-| `PLAYER`        | automatic at sign-up | Profile, Research                 | base role; cannot be revoked                     |
-| `HOST`          | grant via SQL        | Profile, Research, Matches        | match management (hosts are players)             |
-| `CLUB_OWNER`    | grant via SQL        | Profile, Research, Matches        | same as host for now; more is added as it evolves |
-| `ADMINISTRATOR` | grant via SQL        | Profile, Research, Matches, Admin | full access                                      |
+| Capability      | How it's set                | Tabs unlocked                            | Notes                                             |
+|-----------------|-----------------------------|------------------------------------------|---------------------------------------------------|
+| `PLAYER`        | automatic at sign-up        | Profile, Standings                       | base role; cannot be revoked                      |
+| `RESEARCHER`    | automatic at sign-up (#107) | Research                                 | gates the Research tab; later monetizable         |
+| `HOST`          | grant via Admin UI          | Matches, Seeding                         | match management + seeding (hosts are players)    |
+| `CLUB_OWNER`    | grant via Admin UI          | Matches, Seeding                         | same as host for now; evolves later               |
+| `RATER`         | grant via Admin UI (#106)   | Ratings                                  | set initial ratings / triage pending assessment   |
+| `ADMINISTRATOR` | bootstrap once, then UI      | all (incl. Admin, Ratings, Research)     | full access                                       |
 
-- [ ] **Player** — a fresh account (Tests 1–3) shows **Profile** and **Research** with a `PLAYER`
-      badge; **no Matches or Admin** tab.
-- [ ] **Host** — grant `HOST`, refresh → **Matches** tab appears alongside Profile/Research; **no
-      Admin** tab.
-- [ ] **Club owner** — grant `CLUB_OWNER`, refresh → **same as a host** (Profile, Research, Matches;
-      no Admin). Revoke when done.
-- [ ] **Administrator** — grant `ADMINISTRATOR`, refresh → **all four tabs** (Profile, Research,
-      Matches, Admin).
-- [ ] **Additive** — with both `HOST` and `ADMINISTRATOR`, all tabs show; revoke `ADMINISTRATOR` and
-      refresh → Admin disappears while Matches/Research/Profile remain (HOST still present).
-
-> Granting capabilities through the database is a temporary testing shortcut. Doing it through the
-> **Administrator → role grants** UI is a separate test, covered once an admin is bootstrapped (see
-> "Optional — see the richer dashboards" above).
+- [ ] **Player + Researcher** — a fresh account (Tests 1–3) shows **Profile, Research, Standings**;
+      **no Matches, Seeding, Ratings, or Admin** tab.
+- [ ] **Host** — grant `HOST`, refresh → **Matches** and **Seeding** tabs appear; still no Ratings/Admin.
+- [ ] **Club owner** — grant `CLUB_OWNER` (revoke HOST first to isolate), refresh → **same as a host**
+      (Matches, Seeding). Revoke when done.
+- [ ] **Rater** — grant `RATER`, refresh → the **Ratings** tab appears.
+- [ ] **Administrator** — grant `ADMINISTRATOR`, refresh → **all tabs** including **Admin** (and
+      Ratings/Research even without those explicit roles).
+- [ ] **Additive** — with `HOST` + `ADMINISTRATOR`, all tabs show; revoke `ADMINISTRATOR` and refresh
+      → Admin/Ratings disappear while Matches/Seeding/Research/Standings/Profile remain (HOST present).
 
 ---
 
-## Player profile deep links & QR codes
+# Part 1d — Feature walkthrough (the rating pipeline + every tab)
+
+This part needs the administrator you bootstrapped above, plus a few test players (sign up 3–4
+accounts). Roles are granted through the Admin UI. The first six tests are the **core rating
+pipeline** in order — rate players → schedule a fixture → record the result → run the calculation →
+read the ratings & history; the rest cover each remaining tab. Capabilities in brackets are what's
+required to *see* the relevant tab.
+
+## Test 4 — Admin: Manage player — profile, rating override, roles `[ADMINISTRATOR]`
+
+- [ ] **Admin → Manage player** → search a member by name/code → select. Header shows
+      "Name · code" with a **Change** button.
+- [ ] **Profile** block — change **Sex** and/or **Date of birth** → **Save profile** → "Saved".
+      (Untouched fields are left unchanged.)
+- [ ] **Rating** block — enter an NTRP value (e.g. `4.0`) → **Override rating** → "Saved". This
+      writes an audited rating-history entry.
+- [ ] **Roles** block — each of `HOST`, `CLUB_OWNER`, `RATER`, `RESEARCHER` shows a **Grant**/
+      **Revoke** toggle (`ADMINISTRATOR` is not toggleable here). Grant **HOST** to one test user
+      (your "host") and **RATER** to another (or just use the admin, who already has both).
+
+Result: ☐ Pass ☐ Fail — notes: __________________________________________
+
+## Test 5 — Rater: set initial ratings (Ratings tab) `[RATER]`
+
+- [ ] As a `RATER` (or admin) open the **Ratings** tab → **Pending assessment** lists players with
+      no rating. A self-reported rating (from onboarding) prefills the input.
+- [ ] Enter an NTRP value → **Set rating** ("Setting…" while saving) → the player drops off the list.
+- [ ] Rate **at least two** players — a fixture needs two rated players.
+
+**Expected:** rated players leave the pending list; the empty state reads "No players are pending
+assessment." Setting the same value again is idempotent.
+
+Result: ☐ Pass ☐ Fail — notes: __________________________________________
+
+## Test 6 — Host: schedule a fixture (Matches tab) `[HOST]`
+
+- [ ] As `HOST` (or admin) open **Matches → Schedule a fixture**. Pick **Player 1** and **Player 2**
+      (the picker excludes the already-chosen player). Both must be **rated** or you'll get
+      "Both players need a rating."
+- [ ] Choose a **Match type** (Open play / League play / Tournament — initial round / League
+      playoffs / Tournament playoffs) and a **Date** → **Schedule fixture** → "Fixture scheduled."
+
+> Recording a result later does **not** move ratings — that's the admin calculation step (Test 8).
+
+Result: ☐ Pass ☐ Fail — notes: __________________________________________
+
+## Test 7 — Host: record a result `[HOST]`
+
+- [ ] **Matches → Awaiting results** → find the fixture (badge: Overdue / Today / Upcoming).
+- [ ] Enter set scores (e.g. Set 1 `6`–`4`, Set 2 `3`–`6`, Set 3 `6`–`2`). **Add set** (up to 5) /
+      **Remove**. Each set needs a clear winner — equal games are rejected.
+- [ ] **Record result** ("Recording…"). The fixture leaves "Awaiting results" and becomes **pending
+      calculation**. The winner is derived server-side.
+
+Result: ☐ Pass ☐ Fail — notes: __________________________________________
+
+## Test 8 — Admin: run the rating calculation — dry-run preview → commit `[ADMINISTRATOR]`
+
+This is the **per-set v2 calculator** (#110): each set is scored sequentially, carrying the rating
+forward, with smoothing applied once at the end.
+
+- [ ] **Admin → Pending calculation** shows "**N** matches pending calculation."
+- [ ] Click **Preview** — a **dry-run**: nothing is saved. Status: "Preview ready — N matches, no
+      changes saved yet."
+- [ ] **Expand a match** → per-player projection like `Alice: 3.50 → 3.66 (+0.16)` and a **per-set
+      breakdown**, one line per set:
+      `Set 1 (6–4): dominance … · scale … · gap …/… · upset|expected · K 0.16 · Δ … → 3.58`.
+- [ ] Verify the **carry-forward**: each set's `→ ratingAfter` feeds the next set's gap; the net
+      change is the sum of the per-set Δ's (then smoothed once if the match used smoothing).
+- [ ] **Commit** → "Committed ratings for N matches." (writes ratings + history + `rated_at`), or
+      **Discard** to drop the preview without writing.
+
+**Expected:** preview writes nothing; after commit the matches disappear from the pending list and
+the players' ratings/history update.
+
+Result: ☐ Pass ☐ Fail — notes: __________________________________________
+
+## Test 9 — Rating history & per-set breakdown (Profile tab) `[any]`
+
+- [ ] On a rated player's **Profile → Rating history**, entries are newest-first; a band change shows
+      a **`Band 3.5 → 4.0`** badge and a highlighted row.
+- [ ] Click a **match-driven** entry → it expands to the match scores + winner and the **same per-set
+      breakdown** as the preview (persisted at commit time — never recomputed, so it stays faithful
+      even if the algorithm constants change later).
+- [ ] An **initial assessment** (no match) is a plain row — not expandable.
+
+Result: ☐ Pass ☐ Fail — notes: __________________________________________
+
+## Test 10 — Rating-band speed meter (Profile tab, #114) `[any]`
+
+- [ ] On your **own** Profile, a rated account shows a semicircular **speed meter** — the needle
+      marks your position **within** your NTRP band (0 = band floor, 1 = band ceiling). It animates
+      on mount and **does not print the exact rating number** (privacy). It respects
+      `prefers-reduced-motion`.
+- [ ] A **pending-assessment** account shows **no meter** — just the "Pending assessment" message.
+- [ ] On a **public** profile (`/players/<code>`, e.g. as an admin viewing another player), the NTRP
+      **band** shows but the **speed meter does not**.
+
+Result: ☐ Pass ☐ Fail — notes: __________________________________________
+
+## Test 11 — Standings tab (#113) `[any]`
+
+- [ ] Open **Standings** (visible to everyone). One card **per NTRP band, strongest first**; each
+      lists players by **rank** (rating-ordered) with name + `sex · age`.
+- [ ] The **rating value is intentionally hidden** — only rank and metadata show.
+- [ ] **Your own row is highlighted** with a "You" label; empty bands read "No players yet."
+
+Result: ☐ Pass ☐ Fail — notes: __________________________________________
+
+## Test 12 — Research tab (#107) `[RESEARCHER]`
+
+- [ ] Open **Research** → filter by any combination of **Name**, **Sex**, **Age from/to**, **Rating
+      from/to** → **Search** (disabled until at least one filter is set).
+- [ ] Results list each match (name + `sex · age` + NTRP band); clicking one opens that player's
+      public profile. Invalid ranges → "Invalid filters. Check the age/rating ranges."
+
+Result: ☐ Pass ☐ Fail — notes: __________________________________________
+
+## Test 13 — Seeding tab (#111) `[HOST]`
+
+- [ ] Open **Seeding** → **New list** → name it → **Create**, then select it.
+- [ ] **Add players**: optionally set sex/age/rating filters, then use **Find a player** (excludes
+      members already added). **Remove** drops a member.
+- [ ] **Generate seeding** → a table (**Seed, Name, Code, NTRP, Rating, Sex, Age**). **Regenerate**
+      refreshes it; **Download CSV** exports it; **Delete list** removes the list (destructive, no
+      confirm).
+
+Result: ☐ Pass ☐ Fail — notes: __________________________________________
+
+## Test 14 — Admin: duplicate detection (#126) & resolution (#124) `[ADMINISTRATOR]`
+
+- [ ] **Auto-detect by phone:** add the **same** phone contact to two different active users → a
+      candidate appears in **Admin → Duplicate candidates** as "UserA & UserB — Shared phone …".
+- [ ] **Manual flag:** Duplicate candidates → **Flag a pair manually** → pick two users + an optional
+      reason → **Flag as candidate**.
+- [ ] **Resolve a candidate:** **Keep UserA** / **Keep UserB** confirms one as canonical and disables
+      the other; **Dismiss** clears a false positive.
+- [ ] **Direct resolution:** **Admin → Duplicate profiles** → choose the canonical account → add one
+      or more duplicates → **Mark as duplicates**. Duplicates are **disabled (not deleted)**, drop out
+      of search/standings, and their public profile links to the canonical. **Ratings are never
+      merged.** **Restore** re-enables a duplicate (reversible).
+
+Result: ☐ Pass ☐ Fail — notes: __________________________________________
+
+## Test 15 — Admin: invites & activity log `[ADMINISTRATOR]`
+
+- [ ] **Invites:** Admin → **Invites** → enter an email → **Send invite** (manual sign-up is
+      invite-only). Filter **Actionable / Accepted / Revoked / All**; **Resend** or **Revoke** a
+      pending invite.
+- [ ] **Activity log:** Admin → **Activity log** → a newest-first table (**When / Who / Action /
+      Target / Note**) with a category filter. Add a free-text **Note** to a row → **Save**.
+
+Result: ☐ Pass ☐ Fail — notes: __________________________________________
+
+## Test 16 — Player profile deep links & QR codes `[any]`
 
 Every player has a short shareable code (shown on their **Profile** tab as **Player ID**). It powers
 an auth-gated deep link to that player's profile and a QR code for scanning from another device.
@@ -365,7 +526,7 @@ Vite dev proxy.
 ```bash
 gcloud run deploy skopeo \
   --source . --allow-unauthenticated \
-  --set-env-vars="DATABASE_URL=jdbc:postgresql://<PRIVATE_IP>:5432/SkopeoDb,DATABASE_USER=skopeo,FIREBASE_PROJECT_ID=<your-project-id>" \
+  --set-env-vars="DATABASE_URL=jdbc:postgresql://<PRIVATE_IP>:5432/SkopeoDb,DATABASE_USER=skopeo,FIREBASE_PROJECT_ID=skopeo-prod" \
   --set-secrets="DATABASE_PASSWORD=skopeo-db-password:latest"
 ```
 
@@ -398,7 +559,10 @@ gcloud run deploy skopeo \
 | Web loads but API calls fail / CORS | Wrong base URL or proxy not used | Keep `VITE_API_BASE_URL` empty for the dev server; confirm API is up at :8080 |
 | `docker compose up` fails on port in use | 5432/8080 taken | Stop the conflicting service or change the published port |
 | API logs: connection refused to Postgres | DB not healthy yet | `docker compose logs postgres`; wait for healthy, then restart `skopeo` |
-| Dashboard shows only Profile tab | Account has only `PLAYER` | Expected; bootstrap an admin (see "Optional") |
+| Only Profile / Research / Standings tabs show | Account is just `PLAYER`+`RESEARCHER` | Expected; grant roles via Admin → Manage player, or bootstrap an admin (see "Bootstrap your first administrator") |
+| Can't schedule a fixture ("need a rating") | One/both players are unrated | Rate them first (Ratings tab / Pending assessment, Test 5) |
+| Recorded a result but ratings didn't change | By design | Ratings move only on the admin calculation step — Preview then **Commit** (Test 8) |
+| New role granted but tab missing | Stale `users/me` | Hard-refresh the browser after any role change |
 
 ---
 
