@@ -26,6 +26,9 @@ enum class AuditAction {
     MATCH_RESULT_RECORDED,
     USER_MARKED_DUPLICATE,
     USER_UNMARKED_DUPLICATE,
+    DUPLICATE_CANDIDATE_FLAGGED,
+    DUPLICATE_CANDIDATE_DISMISSED,
+    DUPLICATE_CANDIDATE_CONFIRMED,
 }
 
 /** The kind of entity an [AuditAction] concerns. */
@@ -65,7 +68,12 @@ val AuditAction.category: AuditCategory
             AuditAction.INVITE_CREATED, AuditAction.INVITE_REVOKED -> AuditCategory.INVITE
             AuditAction.MATCH_FIXTURE_CREATED -> AuditCategory.MATCH_FIXTURE
             AuditAction.MATCH_RESULT_RECORDED -> AuditCategory.MATCH_RESULT
-            AuditAction.USER_MARKED_DUPLICATE, AuditAction.USER_UNMARKED_DUPLICATE -> AuditCategory.DUPLICATE_RECTIFICATION
+            AuditAction.USER_MARKED_DUPLICATE,
+            AuditAction.USER_UNMARKED_DUPLICATE,
+            AuditAction.DUPLICATE_CANDIDATE_FLAGGED,
+            AuditAction.DUPLICATE_CANDIDATE_DISMISSED,
+            AuditAction.DUPLICATE_CANDIDATE_CONFIRMED,
+            -> AuditCategory.DUPLICATE_RECTIFICATION
         }
 
 /** The actions that roll up into a category (empty for categories whose events aren't wired yet). */

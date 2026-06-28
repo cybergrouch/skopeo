@@ -1438,6 +1438,125 @@ paths:
         '404':
           description: No such audit entry
 
+  /api/v1/duplicate-candidates:
+    get:
+      summary: List duplicate candidates for review (#126)
+      description: ADMINISTRATOR only. Suspected same-person account pairs, newest first.
+      tags:
+        - Duplicates
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [OPEN, DISMISSED, RESOLVED]
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: A page of duplicate candidates
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DuplicateCandidatePageResponse'
+        '403':
+          description: Caller is not an ADMINISTRATOR
+    post:
+      summary: Manually flag a duplicate candidate (#126)
+      description: ADMINISTRATOR only. Flags a suspected pair (the "complaint" signal).
+      tags:
+        - Duplicates
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FlagCandidateRequest'
+      responses:
+        '201':
+          description: The flagged candidate
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DuplicateCandidateResponse'
+        '400':
+          description: Same user twice or a malformed id
+        '403':
+          description: Caller is not an ADMINISTRATOR
+        '404':
+          description: No such user
+
+  /api/v1/duplicate-candidates/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    delete:
+      summary: Dismiss a duplicate candidate (#126)
+      description: ADMINISTRATOR only. Marks an open candidate DISMISSED (a false positive).
+      tags:
+        - Duplicates
+      security:
+        - firebaseAuth: []
+      responses:
+        '204':
+          description: Candidate dismissed
+        '403':
+          description: Caller is not an ADMINISTRATOR
+        '404':
+          description: No such candidate
+        '409':
+          description: Candidate is not open
+
+  /api/v1/duplicate-candidates/{id}/confirm:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      summary: Confirm a duplicate candidate (#126)
+      description: ADMINISTRATOR only. Marks the non-canonical account a duplicate (via #124) and resolves the candidate.
+      tags:
+        - Duplicates
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmCandidateRequest'
+      responses:
+        '204':
+          description: Candidate confirmed and resolved
+        '400':
+          description: canonicalId is not one of the candidate's accounts
+        '403':
+          description: Caller is not an ADMINISTRATOR
+        '404':
+          description: No such candidate
+        '409':
+          description: Candidate is not open
+
 components:
   securitySchemes:
     firebaseAuth:
@@ -2705,6 +2824,77 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/InviteResponse'
+        total:
+          type: integer
+
+    FlagCandidateRequest:
+      type: object
+      description: Manually flag a suspected duplicate pair (#126).
+      required:
+        - userAId
+        - userBId
+      properties:
+        userAId:
+          type: string
+          format: uuid
+        userBId:
+          type: string
+          format: uuid
+        reason:
+          type: string
+          nullable: true
+
+    ConfirmCandidateRequest:
+      type: object
+      description: Which account is the canonical ("true") one when confirming a candidate (#126).
+      required:
+        - canonicalId
+      properties:
+        canonicalId:
+          type: string
+          format: uuid
+
+    DuplicateCandidateResponse:
+      type: object
+      description: A suspected duplicate pair for admin review (#126).
+      required:
+        - id
+        - status
+        - signal
+        - flaggedAt
+        - userA
+        - userB
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [OPEN, DISMISSED, RESOLVED]
+        signal:
+          type: string
+          enum: [DUPLICATE_PHONE, MANUAL]
+        detail:
+          type: string
+          nullable: true
+        flaggedAt:
+          type: string
+        userA:
+          $ref: '#/components/schemas/UserSummaryResponse'
+        userB:
+          $ref: '#/components/schemas/UserSummaryResponse'
+
+    DuplicateCandidatePageResponse:
+      type: object
+      description: A page of duplicate candidates plus the total matching the filter.
+      required:
+        - items
+        - total
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DuplicateCandidateResponse'
         total:
           type: integer
 

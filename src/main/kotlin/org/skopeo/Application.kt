@@ -30,6 +30,7 @@ import org.skopeo.config.DatabaseConfig
 import org.skopeo.routes.configureAuditRoutes
 import org.skopeo.routes.configureCapabilityRoutes
 import org.skopeo.routes.configureContactRoutes
+import org.skopeo.routes.configureDuplicateCandidateRoutes
 import org.skopeo.routes.configureInviteRoutes
 import org.skopeo.routes.configureMatchRoutes
 import org.skopeo.routes.configureNameRoutes
@@ -77,6 +78,7 @@ fun Application.module(
     configureRatingRoutes()
     configureMatchRoutes()
     configureInviteRoutes()
+    configureDuplicateCandidateRoutes()
     configureAuditRoutes()
     logger.info { "Skopeo API started successfully on port 8080" }
 }
