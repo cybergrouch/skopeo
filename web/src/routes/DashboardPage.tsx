@@ -14,6 +14,7 @@ import { useGetApiV1UsersMe } from '@/api/generated/users/users'
 import { ProfileTab } from './dashboard/ProfileTab'
 import { AdminTab } from './dashboard/AdminTab'
 import { MatchesTab } from './dashboard/MatchesTab'
+import { SeedingTab } from './dashboard/SeedingTab'
 import { RatingsTab } from './dashboard/RatingsTab'
 import { ResearchTab } from './dashboard/ResearchTab'
 
@@ -25,6 +26,7 @@ export function DashboardPage() {
   const me = meQuery.data
   const capabilities = me?.capabilities ?? []
   const showMatches = canManageMatches(capabilities)
+  const showSeeding = canManageMatches(capabilities)
   const showRatings = canRate(capabilities)
   const showResearch = isResearcher(capabilities)
   const showAdmin = isAdministrator(capabilities)
@@ -61,6 +63,9 @@ export function DashboardPage() {
               {showMatches ? (
                 <TabsTrigger value="matches">Matches</TabsTrigger>
               ) : null}
+              {showSeeding ? (
+                <TabsTrigger value="seeding">Seeding</TabsTrigger>
+              ) : null}
               {showRatings ? (
                 <TabsTrigger value="ratings">Ratings</TabsTrigger>
               ) : null}
@@ -86,6 +91,11 @@ export function DashboardPage() {
             {showMatches ? (
               <TabsContent value="matches">
                 <MatchesTab />
+              </TabsContent>
+            ) : null}
+            {showSeeding ? (
+              <TabsContent value="seeding">
+                <SeedingTab />
               </TabsContent>
             ) : null}
             {showRatings ? (

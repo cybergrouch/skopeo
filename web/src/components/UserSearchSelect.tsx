@@ -3,7 +3,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { useGetApiV1Users } from '@/api/generated/users/users'
-import type { UserSummaryResponse } from '@/api/generated/model'
+import type {
+  GetApiV1UsersParams,
+  UserSummaryResponse,
+} from '@/api/generated/model'
 
 const MIN_QUERY = 2
 
@@ -21,6 +24,8 @@ interface UserSearchSelectProps {
   placeholder?: string
   /** Users already chosen elsewhere, hidden from the results. */
   excludeIds?: string[]
+  /** Optional sex/age/rating constraints merged into the search query (#111). */
+  filters?: Pick<GetApiV1UsersParams, 'sex' | 'age' | 'rating'>
   onSelect: (user: UserSummaryResponse) => void
 }
 
@@ -29,6 +34,7 @@ export function UserSearchSelect({
   label,
   placeholder,
   excludeIds = [],
+  filters = {},
   onSelect,
 }: UserSearchSelectProps) {
   const [term, setTerm] = useState('')
@@ -37,7 +43,8 @@ export function UserSearchSelect({
 
   // Unified search (#86): the backend matches the term against names (fuzzy) OR a player-code
   // prefix, so partial codes and names both surface incrementally without client-side guessing.
-  const query = useGetApiV1Users({ q: debounced }, { query: { enabled } })
+  // Optional filters (#111) narrow the candidate pool to the desired sex/age/rating band.
+  const query = useGetApiV1Users({ q: debounced, ...filters }, { query: { enabled } })
   const results = (query.data ?? []).filter((u) => !excludeIds.includes(u.id))
 
   function pick(user: UserSummaryResponse) {

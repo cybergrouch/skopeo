@@ -25,6 +25,8 @@ tags:
     description: Match fixtures & results (append-only); ratings calculated separately
   - name: Invites
     description: Admin onboarding invites for manual (email-link) sign-ups
+  - name: Player Lists
+    description: Host-curated player lists and generated seedings (HOST/CLUB_OWNER/ADMINISTRATOR)
 
 paths:
   /api/v1/calculate-ranking:
@@ -1557,6 +1559,209 @@ paths:
         '409':
           description: Candidate is not open
 
+  /api/v1/player-lists:
+    get:
+      summary: List the caller's player lists (#111)
+      description: HOST/CLUB_OWNER/ADMINISTRATOR only. The caller's own named lists, newest first.
+      tags:
+        - Player Lists
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The caller's lists
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PlayerListSummaryResponse'
+        '403':
+          description: Caller cannot manage seeding lists
+    post:
+      summary: Create a named player list (#111)
+      tags:
+        - Player Lists
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePlayerListRequest'
+      responses:
+        '201':
+          description: The created list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerListSummaryResponse'
+        '400':
+          description: Missing list name
+        '403':
+          description: Caller cannot manage seeding lists
+
+  /api/v1/player-lists/{id}:
+    get:
+      summary: Get a list with its members (#111)
+      tags:
+        - Player Lists
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The list and its members
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerListResponse'
+        '403':
+          description: Not the caller's list
+        '404':
+          description: No such list
+    delete:
+      summary: Delete a list (#111)
+      tags:
+        - Player Lists
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+        '403':
+          description: Not the caller's list
+        '404':
+          description: No such list
+
+  /api/v1/player-lists/{id}/members:
+    post:
+      summary: Add a player to a list (#111)
+      description: The target must have the PLAYER capability.
+      tags:
+        - Player Lists
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddMemberRequest'
+      responses:
+        '204':
+          description: Member added
+        '400':
+          description: Target is not a player, or a malformed id
+        '403':
+          description: Not the caller's list
+        '404':
+          description: No such list or user
+        '409':
+          description: Already a member
+
+  /api/v1/player-lists/{id}/members/{userId}:
+    delete:
+      summary: Remove a player from a list (#111)
+      tags:
+        - Player Lists
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Member removed
+        '403':
+          description: Not the caller's list
+        '404':
+          description: Not a member
+
+  /api/v1/player-lists/{id}/seeding:
+    post:
+      summary: Generate (or regenerate) a list's seeding (#111)
+      description: >-
+        Rating-sorted (highest first); the top ⌈N/2⌉ rated members get bracket seeds. Regenerating
+        overwrites the previous seeding.
+      tags:
+        - Player Lists
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The generated seeding
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SeedingResponse'
+        '403':
+          description: Not the caller's list
+        '404':
+          description: No such list
+    get:
+      summary: Get the current seeding for a list (#111)
+      tags:
+        - Player Lists
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The current seeding
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SeedingResponse'
+        '403':
+          description: Not the caller's list
+        '404':
+          description: No seeding generated yet
+
 components:
   securitySchemes:
     firebaseAuth:
@@ -2990,3 +3195,101 @@ components:
             $ref: '#/components/schemas/AuditEntryResponse'
         total:
           type: integer
+
+    CreatePlayerListRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+
+    AddMemberRequest:
+      type: object
+      required:
+        - userId
+      properties:
+        userId:
+          type: string
+          format: uuid
+
+    PlayerListSummaryResponse:
+      type: object
+      required:
+        - id
+        - name
+        - createdAt
+        - memberCount
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        createdAt:
+          type: string
+        memberCount:
+          type: integer
+
+    PlayerListResponse:
+      type: object
+      required:
+        - id
+        - name
+        - createdAt
+        - members
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        createdAt:
+          type: string
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserSummaryResponse'
+
+    SeedingEntryResponse:
+      type: object
+      required:
+        - position
+        - publicCode
+        - rating
+      properties:
+        seed:
+          type: integer
+          nullable: true
+        position:
+          type: integer
+        userId:
+          type: string
+          nullable: true
+        displayName:
+          type: string
+          nullable: true
+        publicCode:
+          type: string
+        ntrpBand:
+          type: string
+          nullable: true
+        rating:
+          type: string
+        sex:
+          type: string
+          nullable: true
+        age:
+          type: integer
+          nullable: true
+
+    SeedingResponse:
+      type: object
+      required:
+        - generatedAt
+        - entries
+      properties:
+        generatedAt:
+          type: string
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/SeedingEntryResponse'

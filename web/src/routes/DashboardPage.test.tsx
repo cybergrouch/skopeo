@@ -26,6 +26,9 @@ vi.mock('./dashboard/AdminTab', () => ({
 vi.mock('./dashboard/MatchesTab', () => ({
   MatchesTab: () => <div>matches content</div>,
 }))
+vi.mock('./dashboard/SeedingTab', () => ({
+  SeedingTab: () => <div>seeding content</div>,
+}))
 vi.mock('./dashboard/RatingsTab', () => ({
   RatingsTab: () => <div>ratings content</div>,
 }))
@@ -62,6 +65,7 @@ describe('DashboardPage', () => {
     expect(screen.getByRole('tab', { name: 'Profile' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Research' })).toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: 'Matches' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Seeding' })).not.toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: 'Ratings' })).not.toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: 'Admin' })).not.toBeInTheDocument()
   })
@@ -91,15 +95,20 @@ describe('DashboardPage', () => {
     expect(screen.getByText('ratings content')).toBeInTheDocument()
   })
 
-  it('shows the Matches tab for a host (plus Profile/Research, no Admin)', () => {
+  it('shows the Matches tab for a host (plus Profile/Research, no Admin)', async () => {
     useGetApiV1UsersMe.mockReturnValue({
       data: { id: 'u1', capabilities: ['PLAYER', 'RESEARCHER', 'HOST'] },
       isLoading: false,
     })
+    const user = userEvent.setup()
     renderDashboard()
     expect(screen.getByRole('tab', { name: 'Matches' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Seeding' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Research' })).toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: 'Admin' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('tab', { name: 'Seeding' }))
+    expect(screen.getByText('seeding content')).toBeInTheDocument()
   })
 
   it('shows the Matches tab for a club owner (same as a host, no Admin)', () => {
