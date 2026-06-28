@@ -79,6 +79,19 @@ describe('InvitesSection', () => {
     expect(await screen.findByText(/could not send the invite/i)).toBeInTheDocument()
   })
 
+  it('shows the existing-account message and does not send when the API returns 409 (#132)', async () => {
+    createMutate.mockRejectedValue({ response: { status: 409 } })
+    const user = userEvent.setup()
+    renderSection()
+    await user.type(screen.getByLabelText('Email'), 'taken@x.dev')
+    await user.click(screen.getByRole('button', { name: 'Send invite' }))
+    expect(
+      await screen.findByText(/an account already exists with this email/i),
+    ).toBeInTheDocument()
+    // The invite link is never sent when the address is already taken.
+    expect(sendSignInLink).not.toHaveBeenCalled()
+  })
+
   it('lists invites with their status, and revokes a pending one', async () => {
     useGetApiV1Invites.mockReturnValue(page([pending]))
     const user = userEvent.setup()

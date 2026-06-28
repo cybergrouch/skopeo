@@ -93,6 +93,28 @@ class ContactRepository {
         }
 
     /**
+     * Whether an ACTIVE user holds an active EMAIL contact equal (case-insensitively) to [email] —
+     * the existing-account guard for invites (#132). Disabled users are excluded, so re-inviting a
+     * deactivated account is still allowed. Values are compared normalized (trim + lower-case).
+     */
+    fun activeAccountHasEmail(email: String): Boolean =
+        transaction {
+            val normalized = email.trim().lowercase()
+            ContactInformationTable
+                .join(
+                    otherTable = UsersTable,
+                    joinType = JoinType.INNER,
+                    onColumn = ContactInformationTable.userId,
+                    otherColumn = UsersTable.id,
+                ).selectAll()
+                .where {
+                    (ContactInformationTable.contactType eq ContactType.EMAIL.name) and
+                        ContactInformationTable.isActive and
+                        UsersTable.isActive
+                }.any { it[ContactInformationTable.value].trim().lowercase() == normalized }
+        }
+
+    /**
      * Enable or disable a contact (the append-only alternative to editing). Re-enabling a contact
      * while another of the same type is active violates the one-per-type unique index — surfaced as a
      * [ServiceError.Conflict]; a missing row is a [ServiceError.NotFound].
