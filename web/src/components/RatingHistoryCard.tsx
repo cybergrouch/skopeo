@@ -9,6 +9,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { CalculationBreakdownDetail } from '@/components/CalculationBreakdownDetail'
 
 interface RatingHistoryCardProps {
   entries: RatingHistoryResponse[]
@@ -66,13 +67,7 @@ function MatchCalculationDetail({ matchId }: { matchId: string }) {
               {change.newRating} ({change.change})
             </div>
             {change.breakdown ? (
-              <div className="text-xs text-muted-foreground">
-                dominance {change.breakdown.dominance} · scale{' '}
-                {change.breakdown.scale} · gap {change.breakdown.ratingGap}/
-                {change.breakdown.competitiveThresholdPct} ·{' '}
-                {change.breakdown.isUpset ? 'upset' : 'expected'} · K{' '}
-                {change.breakdown.kFactor}
-              </div>
+              <CalculationBreakdownDetail breakdown={change.breakdown} />
             ) : null}
           </li>
         ))}

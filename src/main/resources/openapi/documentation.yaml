@@ -2619,6 +2619,11 @@ components:
         smoothingFactor:
           type: string
           nullable: true
+        setBreakdown:
+          type: array
+          description: Per-set calculation steps (#110); empty for v1/initial/pre-#110 rows.
+          items:
+            $ref: '#/components/schemas/SetBreakdownResponse'
         calculatedAt:
           type: string
           format: date-time
@@ -2890,8 +2895,50 @@ components:
 
     CalculationBreakdownResponse:
       type: object
-      description: Internal calculator derivatives behind a player's change (issue #89); all values are precise decimal strings.
+      description: >-
+        Internal calculator derivatives behind a player's change (issue #89); all values are precise decimal strings.
+        The net fields are present for the v1 (averaged) calculator and null for v2, which reports per-set steps in `sets` (#110).
+      properties:
+        dominance:
+          type: string
+          nullable: true
+          description: Average per-set game-margin dominance, -1.0..1.0. Null for the v2 per-set calculator.
+        scale:
+          type: string
+          nullable: true
+          description: Upset factor (underdog won) or competitive factor (otherwise). Null for the v2 per-set calculator.
+        ratingGap:
+          type: string
+          nullable: true
+        normalizedGap:
+          type: string
+          nullable: true
+          description: ratingGap / NTRP range.
+        competitiveThresholdPct:
+          type: string
+          nullable: true
+          description: Competitive threshold as a fraction of the NTRP range (0.083 ≈ 0.5 points).
+        isUpset:
+          type: boolean
+          nullable: true
+        upsetMultiplier:
+          type: string
+          nullable: true
+        kFactor:
+          type: string
+          nullable: true
+        sets:
+          type: array
+          description: Per-set steps for the v2 calculator (#110); empty for v1.
+          items:
+            $ref: '#/components/schemas/SetBreakdownResponse'
+
+    SetBreakdownResponse:
+      type: object
+      description: One set's calculator derivatives behind a player's change (v2 per-set calculator, issue #110).
       required:
+        - setIndex
+        - score
         - dominance
         - scale
         - ratingGap
@@ -2900,27 +2947,37 @@ components:
         - isUpset
         - upsetMultiplier
         - kFactor
+        - delta
+        - ratingAfter
       properties:
+        setIndex:
+          type: integer
+          description: 0-based set position within the match.
+        score:
+          type: string
+          description: This player's set score as "self-opponent" games (e.g. "6-2").
         dominance:
           type: string
-          description: Average per-set game-margin dominance, -1.0..1.0.
         scale:
           type: string
-          description: Upset factor (underdog won) or competitive factor (otherwise).
         ratingGap:
           type: string
         normalizedGap:
           type: string
-          description: ratingGap / NTRP range.
         competitiveThresholdPct:
           type: string
-          description: Competitive threshold as a fraction of the NTRP range (0.083 ≈ 0.5 points).
         isUpset:
           type: boolean
         upsetMultiplier:
           type: string
         kFactor:
           type: string
+        delta:
+          type: string
+          description: The rating change contributed by this set.
+        ratingAfter:
+          type: string
+          description: The player's in-match rating after this set.
 
     MatchCalculationResponse:
       type: object

@@ -6,7 +6,7 @@ package org.skopeo.service.match
 import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.collections.shouldContain
-import io.kotest.matchers.nulls.shouldNotBeNull
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -316,9 +316,14 @@ class MatchServiceTest {
 
         val winner = detail.players.first { it.userId == p1.id }
         winner.displayName shouldBe "p1"
-        winner.history.kFactor.shouldNotBeNull().toPlainString() shouldBe "0.160000"
-        winner.history.competitiveThresholdPct.shouldNotBeNull().toPlainString() shouldBe "0.083000"
-        winner.history.isUpset shouldBe false
+        // v2 (default) persists per-set steps; the net breakdown fields stay null (#110).
+        winner.history.kFactor.shouldBeNull()
+        winner.history.setBreakdown.size shouldBe 2
+        winner.history.setBreakdown.first().let { set ->
+            set.kFactor shouldBe "0.160000"
+            set.competitiveThresholdPct shouldBe "0.083000"
+            set.isUpset shouldBe false
+        }
         // The persisted new rating matches the committed history (faithful, not recomputed).
         winner.history.newRating shouldBe ratings.findCurrentRating(userId = p1.id)!!.currentRating
     }

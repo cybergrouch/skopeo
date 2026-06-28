@@ -3,6 +3,9 @@
 
 package org.skopeo.repository
 
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.serializer
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.SqlExpressionBuilder
@@ -13,6 +16,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.model.RatingHistoryEntry
 import org.skopeo.model.RatingHistoryWrite
+import org.skopeo.model.SetCalculationBreakdown
 import org.skopeo.model.UserRating
 import java.math.BigDecimal
 import java.time.LocalDate
@@ -161,6 +165,11 @@ class RatingRepository {
                 it[isUpset] = write.breakdown?.isUpset
                 it[upsetMultiplier] = write.breakdown?.upsetMultiplier
                 it[kFactor] = write.breakdown?.kFactor
+                // Per-set breakdown (#110): JSON-encode when present (v2), else leave null (v1/initial).
+                it[setBreakdown] =
+                    write.breakdown?.sets
+                        ?.takeIf { steps -> steps.isNotEmpty() }
+                        ?.let { steps -> RATING_HISTORY_JSON.encodeToString(serializer = SET_BREAKDOWN_SERIALIZER, value = steps) }
                 it[calculatedAt] = write.calculatedAt
             }
         }
@@ -205,5 +214,13 @@ internal fun ResultRow.toRatingHistory(): RatingHistoryEntry =
         isUpset = this[UserRatingHistoryTable.isUpset],
         upsetMultiplier = this[UserRatingHistoryTable.upsetMultiplier],
         kFactor = this[UserRatingHistoryTable.kFactor],
+        setBreakdown =
+            this[UserRatingHistoryTable.setBreakdown]
+                ?.let { RATING_HISTORY_JSON.decodeFromString(deserializer = SET_BREAKDOWN_SERIALIZER, string = it) }
+                .orEmpty(),
         calculatedAt = this[UserRatingHistoryTable.calculatedAt],
     )
+
+/** JSON codec and serializer for the per-set breakdown column (#110). */
+private val RATING_HISTORY_JSON = Json
+private val SET_BREAKDOWN_SERIALIZER = ListSerializer(elementSerializer = serializer<SetCalculationBreakdown>())
