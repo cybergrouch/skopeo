@@ -9,7 +9,6 @@ import org.skopeo.model.Seeding
 import org.skopeo.model.SeedingEntry
 import org.skopeo.model.ServiceError
 import org.skopeo.model.User
-import org.skopeo.model.UserRating
 import org.skopeo.model.ageInYears
 import org.skopeo.model.displayName
 import org.skopeo.repository.RatingRepository
@@ -41,16 +40,19 @@ class SeedingService(
             val currentRatings = ratings.findCurrentRatings(userIds = list.memberUserIds)
             val today = LocalDate.now()
 
-            // Only rated members can be seeded; order them highest-first with deterministic tie-breaks.
+            // Only rated members can be seeded; order them highest-first with deterministic tie-breaks
+            // (rating → confidence → matches → name), all in one comparator.
             val ordered =
                 members
                     .mapNotNull { user -> currentRatings[user.id]?.let { user to it } }
                     .sortedWith(
-                        comparator =
-                            compareByDescending<Pair<User, UserRating>> { it.second.currentRating }
-                                .thenByDescending { it.second.confidence }
-                                .thenByDescending { it.second.matchesPlayed }
-                                .thenBy { it.first.displayName() ?: it.first.publicCode },
+                        comparator = { (leftUser, leftRating), (rightUser, rightRating) ->
+                            var order = rightRating.currentRating.compareTo(other = leftRating.currentRating)
+                            if (order == 0) order = rightRating.confidence.compareTo(other = leftRating.confidence)
+                            if (order == 0) order = rightRating.matchesPlayed.compareTo(other = leftRating.matchesPlayed)
+                            if (order == 0) order = seedName(user = leftUser).compareTo(other = seedName(user = rightUser))
+                            order
+                        },
                     )
 
             val seededCount = ceil(x = ordered.size / 2.0).toInt()
@@ -80,4 +82,7 @@ class SeedingService(
             lists.get(token = token, listId = listId).bind() // ownership + access
             seedings.findByListId(listId = listId).bind()
         }
+
+    /** The name to sort and snapshot by: the display name, falling back to the shareable code. */
+    private fun seedName(user: User): String = user.displayName() ?: user.publicCode
 }

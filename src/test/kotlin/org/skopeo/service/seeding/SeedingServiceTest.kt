@@ -59,6 +59,18 @@ class SeedingServiceTest {
                 ),
         )
 
+    /** A PLAYER with no display name → seeding falls back to the public code. */
+    private fun provisionUnnamed(uid: String): User =
+        users.provision(
+            command =
+                ProvisionUserCommand(
+                    firebaseUid = uid,
+                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                    names = emptyList(),
+                    capabilities = setOf(element = Capability.PLAYER),
+                ),
+        )
+
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
     private fun rate(
@@ -108,6 +120,22 @@ class SeedingServiceTest {
         val seeding = service.generate(token = token(uid = "host"), listId = listId).shouldBeRight()
         // Same rating → higher confidence first.
         seeding.entries.map { it.userId } shouldBe listOf(high.id, low.id)
+    }
+
+    @Test
+    fun `ties on rating and confidence break by name, falling back to the player code`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        // All equal on rating and confidence, so only the name (or code) tie-break decides the order.
+        val bravo = provision(uid = "Bravo").also { rate(user = it, value = "4.0", confidence = "0.5") }
+        val alpha = provision(uid = "Alpha").also { rate(user = it, value = "4.0", confidence = "0.5") }
+        val unnamed = provisionUnnamed(uid = "nameless").also { rate(user = it, value = "4.0", confidence = "0.5") }
+        val listId = listWith(members = listOf(bravo, alpha, unnamed))
+
+        val ids = service.generate(token = token(uid = "host"), listId = listId).shouldBeRight().entries.map { it.userId }
+        ids shouldHaveSize 3
+        // "Alpha" sorts before "Bravo"; the unnamed player is ordered by its public code (position not asserted).
+        (ids.indexOf(element = alpha.id) < ids.indexOf(element = bravo.id)) shouldBe true
+        (unnamed.id in ids) shouldBe true
     }
 
     @Test
