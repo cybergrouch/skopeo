@@ -165,7 +165,7 @@ class RatingCalculationService(
     /** Pull the per-player calculator derivatives out of the audit trail, keyed by player id. */
     private fun breakdownsByPlayer(audit: List<AuditEntry>): Map<String, CalculationBreakdown> =
         audit
-            .filter { it.context.containsKey(key = "playerId") && it.context.containsKey(key = "dominance") }
+            .filter { it.context.keys.containsAll(elements = listOf("playerId", "dominance")) }
             .associate { entry ->
                 val ctx = entry.context
                 (ctx.getValue(key = "playerId") as String) to

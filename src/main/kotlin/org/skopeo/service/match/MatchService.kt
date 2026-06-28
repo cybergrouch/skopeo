@@ -175,7 +175,7 @@ class MatchService(
         either {
             val match = matches.findById(matchId = matchId).bind()
             val caller = users.findByFirebaseUid(firebaseUid = token.uid)
-            val isStaff = caller?.capabilities?.any { it in STAFF_ROLES } == true
+            val isStaff = caller != null && caller.capabilities.any { it in STAFF_ROLES }
             val isParticipant = caller != null && caller.id in (match.team1.userIds + match.team2.userIds)
             ensure(condition = isStaff || isParticipant) { ServiceError.Forbidden() }
             match

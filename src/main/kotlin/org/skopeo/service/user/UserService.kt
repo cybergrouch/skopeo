@@ -81,9 +81,9 @@ class UserService(
     ): Either<ServiceError, List<User>> =
         either {
             requireStaff(repository = repository, token = token).bind()
-            val nameTerm = filters.name?.let { it.trim().ifEmpty { null } }
-            val codeTerm = filters.code?.let { it.trim().uppercase().ifEmpty { null } }
-            val qTerm = filters.q?.let { it.trim().ifEmpty { null } }
+            val nameTerm = blankToNull(raw = filters.name)
+            val codeTerm = blankToNull(raw = filters.code)?.uppercase()
+            val qTerm = blankToNull(raw = filters.q)
             ensure(
                 condition =
                     nameTerm != null || codeTerm != null || qTerm != null ||
@@ -239,10 +239,13 @@ class UserService(
     ): Either<ServiceError, Unit> {
         val caller = repository.findByFirebaseUid(firebaseUid = token.uid)
         val isSelf = caller?.id == target.id
-        val isAdmin = caller?.capabilities?.contains(element = Capability.ADMINISTRATOR) == true
+        val isAdmin = caller != null && caller.capabilities.contains(element = Capability.ADMINISTRATOR)
         return if (!isSelf && !isAdmin) ServiceError.Forbidden().left() else Unit.right()
     }
 }
+
+/** Trim a free-text search term, collapsing a null/blank value to null. */
+private fun blankToNull(raw: String?): String? = raw?.trim()?.ifEmpty { null }
 
 /**
  * Idempotently grant ADMINISTRATOR to an already-provisioned user whose verified email is on the

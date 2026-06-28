@@ -36,6 +36,7 @@ import org.skopeo.repository.UserRatingsTable
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.calculator.RankingCalculationResult
 import org.skopeo.service.calculator.RankingCalculator
+import org.skopeo.service.calculator.impl.v1.PerformanceBasedRankingCalculatorImpl
 import org.skopeo.service.match.FixtureInput
 import org.skopeo.service.match.MatchService
 import org.skopeo.service.user.VerifiedFirebaseToken
@@ -288,6 +289,28 @@ class RatingCalculationServiceTest {
             RatingCalculationService(matches = matchRepo, ratings = ratings, users = users, calculator = emptyCalculator)
 
         calcWithEmpty.calculate(token = token(uid = "root"), dryRun = true).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `a calculator that omits a player's breakdown is rejected`() {
+        provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        playedMatch(admin = "root", winner = p1.id, loser = p2.id)
+
+        // Real rating changes but an empty audit trail → no per-player breakdown → the defensive guard fires.
+        val noBreakdownCalculator =
+            object : RankingCalculator {
+                override fun calculate(request: RankingCalculationRequest): RankingCalculationResult =
+                    PerformanceBasedRankingCalculatorImpl().calculate(request = request).copy(audit = emptyList())
+            }
+        val calcWithoutBreakdown =
+            RatingCalculationService(matches = matchRepo, ratings = ratings, users = users, calculator = noBreakdownCalculator)
+
+        calcWithoutBreakdown
+            .calculate(token = token(uid = "root"), dryRun = true)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
     }
 
     @Test
