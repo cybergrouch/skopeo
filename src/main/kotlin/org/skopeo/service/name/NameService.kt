@@ -3,30 +3,32 @@
 
 package org.skopeo.service.name
 
-import org.jetbrains.exposed.exceptions.ExposedSQLException
+import arrow.core.Either
+import arrow.core.left
+import arrow.core.raise.either
+import arrow.core.raise.ensure
+import arrow.core.right
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
 import org.skopeo.model.Capability
 import org.skopeo.model.Name
 import org.skopeo.model.NameType
+import org.skopeo.model.ServiceError
 import org.skopeo.repository.NameRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService
-import org.skopeo.service.user.ForbiddenException
-import org.skopeo.service.user.UserNotFoundException
 import org.skopeo.service.user.VerifiedFirebaseToken
-import java.sql.SQLException
 import java.time.LocalDateTime
 import java.util.UUID
-
-private const val PG_UNIQUE_VIOLATION = "23505"
 
 /**
  * Manage a user's names. Names are append-only — added, then disabled rather than edited or
  * deleted — and every operation is self-or-ADMINISTRATOR. A user may hold many active names;
  * the display name is the single active name of type DISPLAY. Posting a new DISPLAY name
  * replaces the current one; the display name cannot be disabled (only replaced).
+ *
+ * Expected failures are returned as an [Either] left ([ServiceError], issue #115) rather than thrown.
  */
 class NameService(
     private val names: NameRepository = NameRepository(),
@@ -36,21 +38,23 @@ class NameService(
     fun list(
         token: VerifiedFirebaseToken,
         userId: UUID,
-    ): List<Name> {
-        requireUserExists(userId = userId)
-        requireUserAccess(token = token, userId = userId)
-        return names.listByUser(userId = userId)
-    }
+    ): Either<ServiceError, List<Name>> =
+        either {
+            requireUserExists(userId = userId).bind()
+            requireUserAccess(token = token, userId = userId).bind()
+            names.listByUser(userId = userId)
+        }
 
     fun get(
         token: VerifiedFirebaseToken,
         userId: UUID,
         nameId: UUID,
-    ): Name {
-        val name = locate(userId = userId, nameId = nameId)
-        requireUserAccess(token = token, userId = userId)
-        return name
-    }
+    ): Either<ServiceError, Name> =
+        either {
+            val name = locate(userId = userId, nameId = nameId).bind()
+            requireUserAccess(token = token, userId = userId).bind()
+            name
+        }
 
     /** Add a name. A DISPLAY name replaces the current display name (the old becomes history). */
     fun create(
@@ -58,23 +62,24 @@ class NameService(
         userId: UUID,
         type: NameType,
         value: String,
-    ): Name {
-        requireUserExists(userId = userId)
-        val actor = requireUserAccess(token = token, userId = userId)
-        val name = names.create(userId = userId, type = type, value = value)
-        audit.record(
-            write =
-                AuditWrite(
-                    actorUserId = actor,
-                    action = AuditAction.NAME_ADDED,
-                    entityType = AuditEntityType.USER,
-                    entityId = userId,
-                    summary = "Added ${type.name} name '$value'",
-                    details = mapOf("nameType" to type.name, "value" to value),
-                ),
-        )
-        return name
-    }
+    ): Either<ServiceError, Name> =
+        either {
+            requireUserExists(userId = userId).bind()
+            val actor = requireUserAccess(token = token, userId = userId).bind()
+            val name = names.create(userId = userId, type = type, value = value)
+            audit.record(
+                write =
+                    AuditWrite(
+                        actorUserId = actor,
+                        action = AuditAction.NAME_ADDED,
+                        entityType = AuditEntityType.USER,
+                        entityId = userId,
+                        summary = "Added ${type.name} name '$value'",
+                        details = mapOf("nameType" to type.name, "value" to value),
+                    ),
+            )
+            name
+        }
 
     /**
      * Enable or disable a name. The display name cannot be disabled (replace it by posting a
@@ -85,66 +90,51 @@ class NameService(
         userId: UUID,
         nameId: UUID,
         active: Boolean,
-    ): Name {
-        val target = locate(userId = userId, nameId = nameId)
-        val actor = requireUserAccess(token = token, userId = userId)
-        require(value = active || target.type != NameType.DISPLAY) {
-            "Cannot disable the display name; add a new display name to replace it"
+    ): Either<ServiceError, Name> =
+        either {
+            val target = locate(userId = userId, nameId = nameId).bind()
+            val actor = requireUserAccess(token = token, userId = userId).bind()
+            ensure(condition = active || target.type != NameType.DISPLAY) {
+                ServiceError.Validation(message = "Cannot disable the display name; add a new display name to replace it")
+            }
+            val disabledAt = if (active) null else LocalDateTime.now()
+            // locate() already proved the name exists; the repository still surfaces the display-name
+            // uniqueness conflict when re-enabling a former display name.
+            names.setActive(id = nameId, active = active, disabledAt = disabledAt).bind()
+            audit.record(
+                write =
+                    AuditWrite(
+                        actorUserId = actor,
+                        action = AuditAction.NAME_UPDATED,
+                        entityType = AuditEntityType.USER,
+                        entityId = userId,
+                        summary = "${if (active) "Enabled" else "Disabled"} ${target.type.name} name '${target.value}'",
+                        details = mapOf("nameId" to nameId.toString(), "active" to active.toString()),
+                    ),
+            )
+            target.copy(isActive = active, disabledAt = disabledAt)
         }
-        val disabledAt = if (active) null else LocalDateTime.now()
-        // locate() already proved the name exists, so the update can't be a no-op; conflictAware
-        // still surfaces the display-name uniqueness conflict when re-enabling a former display name.
-        conflictAware { names.setActive(id = nameId, active = active, disabledAt = disabledAt) }
-        audit.record(
-            write =
-                AuditWrite(
-                    actorUserId = actor,
-                    action = AuditAction.NAME_UPDATED,
-                    entityType = AuditEntityType.USER,
-                    entityId = userId,
-                    summary = "${if (active) "Enabled" else "Disabled"} ${target.type.name} name '${target.value}'",
-                    details = mapOf("nameId" to nameId.toString(), "active" to active.toString()),
-                ),
-        )
-        return target.copy(isActive = active, disabledAt = disabledAt)
-    }
 
     private fun locate(
         userId: UUID,
         nameId: UUID,
-    ): Name {
-        val name = names.findById(id = nameId)
-        if (name == null || name.userId != userId) throw NameNotFoundException(id = nameId)
-        return name
-    }
+    ): Either<ServiceError, Name> =
+        either {
+            val name = names.findById(id = nameId).bind()
+            ensure(condition = name.userId == userId) { ServiceError.NotFound(message = "Name $nameId not found") }
+            name
+        }
 
-    private fun requireUserExists(userId: UUID) {
-        users.findById(id = userId) ?: throw UserNotFoundException(id = userId)
-    }
+    private fun requireUserExists(userId: UUID): Either<ServiceError, Unit> = users.findById(id = userId).map { }
 
     /** Self-or-ADMINISTRATOR access; returns the caller's id (the audit actor). */
     private fun requireUserAccess(
         token: VerifiedFirebaseToken,
         userId: UUID,
-    ): UUID {
+    ): Either<ServiceError, UUID> {
         val caller = users.findByFirebaseUid(firebaseUid = token.uid)
         val isSelf = caller?.id == userId
         val isAdmin = caller?.capabilities?.contains(element = Capability.ADMINISTRATOR) == true
-        if (caller == null || (!isSelf && !isAdmin)) throw ForbiddenException()
-        return caller.id
+        return if (caller == null || (!isSelf && !isAdmin)) ServiceError.Forbidden().left() else caller.id.right()
     }
-
-    private fun <T> conflictAware(block: () -> T): T =
-        try {
-            block()
-        } catch (e: ExposedSQLException) {
-            if (isUniqueViolation(e = e)) {
-                throw NameConflictException(message = "A different active display name already exists")
-            } else {
-                throw e
-            }
-        }
-
-    private fun isUniqueViolation(e: ExposedSQLException): Boolean =
-        generateSequence<Throwable>(seed = e) { it.cause }.any { (it as? SQLException)?.sqlState == PG_UNIQUE_VIOLATION }
 }

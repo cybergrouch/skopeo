@@ -3,9 +3,11 @@
 
 package org.skopeo.service.invite
 
-import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.assertions.arrow.core.shouldBeLeft
+import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -15,14 +17,13 @@ import org.skopeo.model.Capability
 import org.skopeo.model.InviteStatus
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
+import org.skopeo.model.ServiceError
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.InviteRepository
 import org.skopeo.repository.UserRepository
-import org.skopeo.service.ResourceNotFoundException
-import org.skopeo.service.user.ForbiddenException
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.util.UUID
@@ -66,20 +67,20 @@ class InviteServiceTest {
         val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
 
         // The route normalizes the email before the service sees it (#116); here it arrives normalized.
-        val invite = service.create(token = token(uid = "admin"), email = "new@example.com")
+        val invite = service.create(token = token(uid = "admin"), email = "new@example.com").shouldBeRight()
         invite.email shouldBe "new@example.com"
         invite.status shouldBe InviteStatus.PENDING
         invite.invitedBy shouldBe admin.id
 
-        service.create(token = token(uid = "admin"), email = "new@example.com") // resend → rotate
-        service.list(token = token(uid = "admin"), limit = 50, offset = 0).items shouldHaveSize 1
+        service.create(token = token(uid = "admin"), email = "new@example.com").shouldBeRight() // resend → rotate
+        service.list(token = token(uid = "admin"), limit = 50, offset = 0).shouldBeRight().items shouldHaveSize 1
     }
 
     @Test
     fun `creating and revoking an invite write audit-log entries (#100)`() {
         val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
-        val invite = service.create(token = token(uid = "admin"), email = "newbie@example.com")
-        service.revoke(token = token(uid = "admin"), id = invite.id)
+        val invite = service.create(token = token(uid = "admin"), email = "newbie@example.com").shouldBeRight()
+        service.revoke(token = token(uid = "admin"), id = invite.id).shouldBeRight()
 
         val audit = AuditRepository()
         audit.list(actions = listOf(element = AuditAction.INVITE_CREATED), limit = 10, offset = 0).first.single().let {
@@ -95,36 +96,40 @@ class InviteServiceTest {
     fun `a non-admin cannot create, list, or revoke invites`() {
         provision(uid = "player", roles = setOf(element = Capability.PLAYER))
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
-        val invite = service.create(token = token(uid = "admin"), email = "x@example.com")
+        val invite = service.create(token = token(uid = "admin"), email = "x@example.com").shouldBeRight()
 
-        shouldThrow<ForbiddenException> { service.create(token = token(uid = "player"), email = "y@example.com") }
-        shouldThrow<ForbiddenException> { service.list(token = token(uid = "player"), limit = 50, offset = 0) }
-        shouldThrow<ForbiddenException> { service.revoke(token = token(uid = "player"), id = invite.id) }
+        service.create(token = token(uid = "player"), email = "y@example.com").shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service.list(token = token(uid = "player"), limit = 50, offset = 0).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service.revoke(token = token(uid = "player"), id = invite.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
     fun `revoke removes the invite from the open set, and an unknown id is a not-found`() {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
-        val invite = service.create(token = token(uid = "admin"), email = "z@example.com")
+        val invite = service.create(token = token(uid = "admin"), email = "z@example.com").shouldBeRight()
 
-        service.revoke(token = token(uid = "admin"), id = invite.id)
+        service.revoke(token = token(uid = "admin"), id = invite.id).shouldBeRight()
         invites.findOpenByEmail(email = "z@example.com", asOf = java.time.LocalDateTime.now()) shouldBe null
 
-        shouldThrow<ResourceNotFoundException> { service.revoke(token = token(uid = "admin"), id = UUID.randomUUID()) }
+        service
+            .revoke(token = token(uid = "admin"), id = UUID.randomUUID())
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
     @Test
     fun `list scopes to a status filter when given`() {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
-        service.create(token = token(uid = "admin"), email = "pending@example.com")
-        val accepted = service.create(token = token(uid = "admin"), email = "acc@example.com")
+        service.create(token = token(uid = "admin"), email = "pending@example.com").shouldBeRight()
+        val accepted = service.create(token = token(uid = "admin"), email = "acc@example.com").shouldBeRight()
         invites.markAccepted(email = accepted.email, acceptedAt = java.time.LocalDateTime.now())
 
-        val pending = service.list(token = token(uid = "admin"), limit = 50, offset = 0, status = InviteStatus.PENDING)
+        val pending =
+            service.list(token = token(uid = "admin"), limit = 50, offset = 0, status = InviteStatus.PENDING).shouldBeRight()
         pending.items.single().email shouldBe "pending@example.com"
         pending.total shouldBe 1
 
-        val all = service.list(token = token(uid = "admin"), limit = 50, offset = 0)
+        val all = service.list(token = token(uid = "admin"), limit = 50, offset = 0).shouldBeRight()
         all.total shouldBe 2
     }
 }

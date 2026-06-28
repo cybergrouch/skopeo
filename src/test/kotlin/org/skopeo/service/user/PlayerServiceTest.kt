@@ -3,10 +3,12 @@
 
 package org.skopeo.service.user
 
-import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.assertions.arrow.core.shouldBeLeft
+import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -18,6 +20,7 @@ import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.RatingHistoryWrite
+import org.skopeo.model.ServiceError
 import org.skopeo.model.TeamType
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
@@ -25,7 +28,6 @@ import org.skopeo.model.UserName
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
-import org.skopeo.service.ResourceNotFoundException
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.math.BigDecimal
 import java.time.LocalDate
@@ -133,7 +135,7 @@ class PlayerServiceTest {
             )
         ratings.setRating(userId = user.id, rating = BigDecimal("4.0"), level = "4.0", confidence = BigDecimal("0.50"))
 
-        val profile = service.publicProfile(code = user.publicCode.lowercase())
+        val profile = service.publicProfile(code = user.publicCode.lowercase()).shouldBeRight()
 
         profile.publicCode shouldBe user.publicCode
         profile.displayName shouldBe "Ana"
@@ -144,12 +146,12 @@ class PlayerServiceTest {
     fun `omits the rating when the player has none`() {
         val user = newUser(uid = "p2", names = listOf(element = UserName(type = NameType.DISPLAY, value = "Bea")))
 
-        service.publicProfile(code = user.publicCode).rating.shouldBeNull()
+        service.publicProfile(code = user.publicCode).shouldBeRight().rating.shouldBeNull()
     }
 
     @Test
     fun `an unknown code is a not-found`() {
-        shouldThrow<ResourceNotFoundException> { service.publicProfile(code = "ZZZZZZ") }
+        service.publicProfile(code = "ZZZZZZ").shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
     @Test
@@ -157,7 +159,7 @@ class PlayerServiceTest {
         val user = newUser(uid = "p3", names = listOf(element = UserName(type = NameType.DISPLAY, value = "Cy")))
         users.deactivate(id = user.id)
 
-        shouldThrow<ResourceNotFoundException> { service.publicProfile(code = user.publicCode) }
+        service.publicProfile(code = user.publicCode).shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
     @Test
@@ -166,7 +168,7 @@ class PlayerServiceTest {
         val dup = newUser(uid = "dup", names = display(name = "Dupe"))
         users.markDuplicates(canonicalId = canonical.id, duplicateIds = listOf(element = dup.id))
 
-        val profile = service.publicProfile(code = dup.publicCode.lowercase())
+        val profile = service.publicProfile(code = dup.publicCode.lowercase()).shouldBeRight()
 
         profile.isDisabled shouldBe true
         profile.canonical?.publicCode shouldBe canonical.publicCode
@@ -183,7 +185,7 @@ class PlayerServiceTest {
         val match = fixture(u1 = dup.id, u2 = opp.id, date = LocalDate.of(2026, 1, 1))
         users.markDuplicates(canonicalId = canonical.id, duplicateIds = listOf(element = dup.id))
 
-        val history = service.matchHistory(code = canonical.publicCode)
+        val history = service.matchHistory(code = canonical.publicCode).shouldBeRight()
 
         history shouldHaveSize 1
         history.single().let {
@@ -217,7 +219,7 @@ class PlayerServiceTest {
         // A later, still-scheduled fixture — no result, no bands.
         fixture(u1 = ben.id, u2 = ana.id, date = LocalDate.of(2026, 3, 1))
 
-        val historyForAna = service.matchHistory(code = ana.publicCode.lowercase())
+        val historyForAna = service.matchHistory(code = ana.publicCode.lowercase()).shouldBeRight()
 
         historyForAna shouldHaveSize 2
         val upcoming = historyForAna[0]
@@ -251,7 +253,7 @@ class PlayerServiceTest {
         )
 
         // Ben is on team2, so from his perspective the set reads 4-6 and the result is a loss.
-        val historyForBen = service.matchHistory(code = ben.publicCode)
+        val historyForBen = service.matchHistory(code = ben.publicCode).shouldBeRight()
 
         historyForBen shouldHaveSize 1
         historyForBen[0].result shouldBe "LOSS"
@@ -263,12 +265,12 @@ class PlayerServiceTest {
     fun `match history is empty for a player with no matches`() {
         val user = newUser(uid = "lonely", names = display(name = "Solo"))
 
-        service.matchHistory(code = user.publicCode) shouldHaveSize 0
+        service.matchHistory(code = user.publicCode).shouldBeRight() shouldHaveSize 0
     }
 
     @Test
     fun `match history for an unknown code is a not-found`() {
-        shouldThrow<ResourceNotFoundException> { service.matchHistory(code = "ZZZZZZ") }
+        service.matchHistory(code = "ZZZZZZ").shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
     @Test
@@ -279,19 +281,22 @@ class PlayerServiceTest {
         val match = fixture(u1 = player.id, u2 = other.id, date = LocalDate.of(2026, 1, 1))
         history(userId = player.id, matchId = match.id, previousLevel = "3.5")
 
-        service.ratingHistory(token = token(uid = "admin"), code = player.publicCode.lowercase()) shouldHaveSize 1
+        service.ratingHistory(token = token(uid = "admin"), code = player.publicCode.lowercase()).shouldBeRight() shouldHaveSize 1
 
         // A plain player cannot read anyone's rating history by code.
         newUser(uid = "plain", names = display(name = "Plain"))
-        shouldThrow<ForbiddenException> { service.ratingHistory(token = token(uid = "plain"), code = player.publicCode) }
+        service
+            .ratingHistory(token = token(uid = "plain"), code = player.publicCode)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
     fun `rating history by code rejects an unknown caller and an unknown code`() {
         newAdmin(uid = "admin")
         // No provisioned user for this token → not an admin → forbidden.
-        shouldThrow<ForbiddenException> { service.ratingHistory(token = token(uid = "ghost"), code = "ABC234") }
+        service.ratingHistory(token = token(uid = "ghost"), code = "ABC234").shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
         // Admin, but the code resolves to nobody.
-        shouldThrow<ResourceNotFoundException> { service.ratingHistory(token = token(uid = "admin"), code = "ZZZZZZ") }
+        service.ratingHistory(token = token(uid = "admin"), code = "ZZZZZZ").shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
     }
 }

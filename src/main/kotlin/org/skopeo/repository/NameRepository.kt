@@ -3,6 +3,10 @@
 
 package org.skopeo.repository
 
+import arrow.core.Either
+import arrow.core.flatMap
+import arrow.core.left
+import arrow.core.right
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.insertAndGetId
@@ -11,6 +15,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.model.Name
 import org.skopeo.model.NameType
+import org.skopeo.model.ServiceError
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -29,13 +34,15 @@ class NameRepository {
                 .map { it.toName() }
         }
 
-    fun findById(id: UUID): Name? =
+    fun findById(id: UUID): Either<ServiceError, Name> =
         transaction {
             UserNamesTable
                 .selectAll()
                 .where { UserNamesTable.id eq id }
                 .singleOrNull()
                 ?.toName()
+                ?.right()
+                ?: ServiceError.NotFound(message = "Name $id not found").left()
         }
 
     /** Add a name. Adding a DISPLAY name disables the current active display name first. */
@@ -55,19 +62,25 @@ class NameRepository {
             loadById(id = id.value)
         }
 
+    /**
+     * Enable/disable a name. Re-enabling a former DISPLAY name violates the single-active-display unique
+     * index — surfaced as a [ServiceError.Conflict]; a missing row is a [ServiceError.NotFound].
+     */
     fun setActive(
         id: UUID,
         active: Boolean,
         disabledAt: LocalDateTime?,
-    ): Name? =
-        transaction {
-            val updated =
-                UserNamesTable.update(where = { UserNamesTable.id eq id }) {
-                    it[isActive] = active
-                    it[UserNamesTable.disabledAt] = disabledAt
-                }
-            if (updated == 0) null else loadById(id = id)
-        }
+    ): Either<ServiceError, Name> =
+        conflictAware(message = "A different active display name already exists") {
+            transaction {
+                val updated =
+                    UserNamesTable.update(where = { UserNamesTable.id eq id }) {
+                        it[isActive] = active
+                        it[UserNamesTable.disabledAt] = disabledAt
+                    }
+                if (updated == 0) null else loadById(id = id)
+            }
+        }.flatMap { row -> row?.right() ?: ServiceError.NotFound(message = "Name $id not found").left() }
 
     private fun disableActiveDisplay(userId: UUID) {
         UserNamesTable.update(

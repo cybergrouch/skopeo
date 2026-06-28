@@ -60,25 +60,28 @@ private fun Route.duplicateRoutes(service: DuplicateService) {
     post(path = "/{id}/duplicates") {
         respondMappingErrors {
             val request = call.receive<MarkDuplicatesRequest>()
-            val duplicates =
-                service.markDuplicates(
-                    token = verifiedToken(),
-                    canonicalId = uuidParam(name = "id"),
-                    duplicateIds = parseIds(raw = request.duplicateIds.joinToString(separator = ",")),
-                )
-            call.respond(status = HttpStatusCode.OK, message = duplicates.map { it.toSummary() })
+            respondEither(
+                result =
+                    service.markDuplicates(
+                        token = verifiedToken(),
+                        canonicalId = uuidParam(name = "id"),
+                        duplicateIds = parseIds(raw = request.duplicateIds.joinToString(separator = ",")),
+                    ),
+            ) { duplicates -> call.respond(status = HttpStatusCode.OK, message = duplicates.map { it.toSummary() }) }
         }
     }
     get(path = "/{id}/duplicates") {
         respondMappingErrors {
-            val duplicates = service.duplicatesOf(token = verifiedToken(), canonicalId = uuidParam(name = "id"))
-            call.respond(status = HttpStatusCode.OK, message = duplicates.map { it.toSummary() })
+            respondEither(result = service.duplicatesOf(token = verifiedToken(), canonicalId = uuidParam(name = "id"))) { duplicates ->
+                call.respond(status = HttpStatusCode.OK, message = duplicates.map { it.toSummary() })
+            }
         }
     }
     delete(path = "/{id}/duplicate") {
         respondMappingErrors {
-            service.restore(token = verifiedToken(), id = uuidParam(name = "id"))
-            call.respond(status = HttpStatusCode.NoContent, message = "")
+            respondEither(result = service.restore(token = verifiedToken(), id = uuidParam(name = "id"))) {
+                call.respond(status = HttpStatusCode.NoContent, message = "")
+            }
         }
     }
 }
@@ -111,8 +114,10 @@ private fun Route.searchUsers(service: UserService) {
                             ),
                     )
                 }
-            val ratings = service.currentRatings(ids = results.map { it.id })
-            call.respond(status = HttpStatusCode.OK, message = results.map { it.toSummary(rating = ratings[it.id]) })
+            respondEither(result = results) { users ->
+                val ratings = service.currentRatings(ids = users.map { it.id })
+                call.respond(status = HttpStatusCode.OK, message = users.map { it.toSummary(rating = ratings[it.id]) })
+            }
         }
     }
 }
@@ -144,9 +149,10 @@ private fun Route.createUser(service: UserService) {
     post {
         respondMappingErrors {
             val request = call.receive<CreateUserRequest>()
-            val result = service.provision(token = verifiedToken(), request = request)
-            val status = if (result.created) HttpStatusCode.Created else HttpStatusCode.OK
-            call.respond(status = status, message = result.user.toResponse())
+            respondEither(result = service.provision(token = verifiedToken(), request = request)) { result ->
+                val status = if (result.created) HttpStatusCode.Created else HttpStatusCode.OK
+                call.respond(status = status, message = result.user.toResponse())
+            }
         }
     }
 }
@@ -170,28 +176,32 @@ private fun Route.currentUser(service: UserService) {
 private fun Route.userById(service: UserService) {
     get(path = "/{id}") {
         respondMappingErrors {
-            val user = service.getById(token = verifiedToken(), id = uuidParam(name = "id"))
-            call.respond(status = HttpStatusCode.OK, message = user.toResponse())
+            respondEither(result = service.getById(token = verifiedToken(), id = uuidParam(name = "id"))) { user ->
+                call.respond(status = HttpStatusCode.OK, message = user.toResponse())
+            }
         }
     }
     patch(path = "/{id}") {
         respondMappingErrors {
             val patch = call.receive<ProfileRequest>().toProfilePatch()
-            val user = service.patchProfile(token = verifiedToken(), id = uuidParam(name = "id"), patch = patch)
-            call.respond(status = HttpStatusCode.OK, message = user.toResponse())
+            respondEither(result = service.patchProfile(token = verifiedToken(), id = uuidParam(name = "id"), patch = patch)) { user ->
+                call.respond(status = HttpStatusCode.OK, message = user.toResponse())
+            }
         }
     }
     put(path = "/{id}") {
         respondMappingErrors {
             val patch = call.receive<ProfileRequest>().toProfilePatch()
-            val user = service.replaceProfile(token = verifiedToken(), id = uuidParam(name = "id"), patch = patch)
-            call.respond(status = HttpStatusCode.OK, message = user.toResponse())
+            respondEither(result = service.replaceProfile(token = verifiedToken(), id = uuidParam(name = "id"), patch = patch)) { user ->
+                call.respond(status = HttpStatusCode.OK, message = user.toResponse())
+            }
         }
     }
     delete(path = "/{id}") {
         respondMappingErrors {
-            service.deactivate(token = verifiedToken(), id = uuidParam(name = "id"))
-            call.respond(status = HttpStatusCode.NoContent, message = "")
+            respondEither(result = service.deactivate(token = verifiedToken(), id = uuidParam(name = "id"))) {
+                call.respond(status = HttpStatusCode.NoContent, message = "")
+            }
         }
     }
 }

@@ -27,21 +27,26 @@ fun Application.configurePlayerRoutes(service: PlayerService = PlayerService()) 
                 get(path = "/{code}") {
                     respondMappingErrors {
                         val code = call.parameters["code"].orEmpty()
-                        call.respond(status = HttpStatusCode.OK, message = service.publicProfile(code = code))
+                        respondEither(result = service.publicProfile(code = code)) { profile ->
+                            call.respond(status = HttpStatusCode.OK, message = profile)
+                        }
                     }
                 }
                 get(path = "/{code}/match-history") {
                     respondMappingErrors {
                         val code = call.parameters["code"].orEmpty()
-                        call.respond(status = HttpStatusCode.OK, message = service.matchHistory(code = code))
+                        respondEither(result = service.matchHistory(code = code)) { history ->
+                            call.respond(status = HttpStatusCode.OK, message = history)
+                        }
                     }
                 }
                 // ADMINISTRATOR only — the precise rating-history audit view for any player by code.
                 get(path = "/{code}/rating-history") {
                     respondMappingErrors {
                         val code = call.parameters["code"].orEmpty()
-                        val history = service.ratingHistory(token = verifiedToken(), code = code)
-                        call.respond(status = HttpStatusCode.OK, message = history.map { it.toResponse() })
+                        respondEither(result = service.ratingHistory(token = verifiedToken(), code = code)) { history ->
+                            call.respond(status = HttpStatusCode.OK, message = history.map { it.toResponse() })
+                        }
                     }
                 }
             }

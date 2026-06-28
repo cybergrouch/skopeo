@@ -3,9 +3,11 @@
 
 package org.skopeo.service.rating
 
-import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.assertions.arrow.core.shouldBeLeft
+import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -14,13 +16,13 @@ import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
+import org.skopeo.model.ServiceError
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
-import org.skopeo.service.user.ForbiddenException
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.math.BigDecimal
@@ -67,7 +69,8 @@ class RatingServiceTest {
         admin(uid = "root")
         val player = provisionUser(uid = "player")
 
-        val rating = service.setRating(token = token(uid = "root"), userId = player.id, value = BigDecimal("4.3"), confidence = null)
+        val rating =
+            service.setRating(token = token(uid = "root"), userId = player.id, value = BigDecimal("4.3"), confidence = null).shouldBeRight()
 
         rating.currentRating.toPlainString() shouldBe "4.300000" // stored as NUMERIC(10,6)
         rating.currentLevel shouldBe "4.0" // NTRP rounds down to the 0.5 level
@@ -75,12 +78,13 @@ class RatingServiceTest {
 
         // An explicit confidence is honored.
         val adjusted =
-            service.setRating(
-                token = token(uid = "root"),
-                userId = player.id,
-                value = BigDecimal("4.5"),
-                confidence = BigDecimal("0.70"),
-            )
+            service
+                .setRating(
+                    token = token(uid = "root"),
+                    userId = player.id,
+                    value = BigDecimal("4.5"),
+                    confidence = BigDecimal("0.70"),
+                ).shouldBeRight()
         adjusted.confidence.toPlainString() shouldBe "0.70"
     }
 
@@ -90,12 +94,12 @@ class RatingServiceTest {
         val player = provisionUser(uid = "player")
 
         // Initial assessment — the baseline, no history row.
-        service.setRating(token = token(uid = "root"), userId = player.id, value = BigDecimal("4.0"), confidence = null)
-        service.getHistory(token = token(uid = "root"), userId = player.id) shouldBe emptyList()
+        service.setRating(token = token(uid = "root"), userId = player.id, value = BigDecimal("4.0"), confidence = null).shouldBeRight()
+        service.getHistory(token = token(uid = "root"), userId = player.id).shouldBeRight() shouldBe emptyList()
 
         // Override — recorded as a manual (matchId = null) history entry.
-        service.setRating(token = token(uid = "root"), userId = player.id, value = BigDecimal("4.6"), confidence = null)
-        val history = service.getHistory(token = token(uid = "root"), userId = player.id)
+        service.setRating(token = token(uid = "root"), userId = player.id, value = BigDecimal("4.6"), confidence = null).shouldBeRight()
+        val history = service.getHistory(token = token(uid = "root"), userId = player.id).shouldBeRight()
         history shouldHaveSize 1
         history.single().let {
             it.matchId shouldBe null
@@ -111,8 +115,8 @@ class RatingServiceTest {
     fun `setting then overriding a rating write audit-log entries (#100)`() {
         val root = admin(uid = "root")
         val player = provisionUser(uid = "player")
-        service.setRating(token = token(uid = "root"), userId = player.id, value = BigDecimal("4.0"), confidence = null) // initial
-        service.setRating(token = token(uid = "root"), userId = player.id, value = BigDecimal("4.5"), confidence = null) // override
+        service.setRating(token = token(uid = "root"), userId = player.id, value = BigDecimal("4.0"), confidence = null).shouldBeRight()
+        service.setRating(token = token(uid = "root"), userId = player.id, value = BigDecimal("4.5"), confidence = null).shouldBeRight()
 
         val audit = AuditRepository()
         audit.list(actions = listOf(element = AuditAction.RATING_SET), limit = 10, offset = 0).first.single().let {
@@ -131,11 +135,11 @@ class RatingServiceTest {
     fun `an override within the same NTRP band records levelChanged false`() {
         admin(uid = "root")
         val player = provisionUser(uid = "player")
-        service.setRating(token = token(uid = "root"), userId = player.id, value = BigDecimal("4.0"), confidence = null) // initial
+        service.setRating(token = token(uid = "root"), userId = player.id, value = BigDecimal("4.0"), confidence = null).shouldBeRight()
         // 4.0 and 4.2 both publish as the "4.0" band, so the override doesn't cross a level.
-        service.setRating(token = token(uid = "root"), userId = player.id, value = BigDecimal("4.2"), confidence = null)
+        service.setRating(token = token(uid = "root"), userId = player.id, value = BigDecimal("4.2"), confidence = null).shouldBeRight()
 
-        service.getHistory(token = token(uid = "root"), userId = player.id).single().let {
+        service.getHistory(token = token(uid = "root"), userId = player.id).shouldBeRight().single().let {
             it.previousLevel shouldBe "4.0"
             it.newLevel shouldBe "4.0"
             it.levelChanged shouldBe false
@@ -147,22 +151,14 @@ class RatingServiceTest {
         admin(uid = "root")
         val player = provisionUser(uid = "player")
 
-        shouldThrow<ForbiddenException> {
-            service.setRating(
-                token = token(uid = "player"),
-                userId = player.id,
-                value = BigDecimal("4.0"),
-                confidence = null,
-            )
-        }
-        shouldThrow<ForbiddenException> {
-            service.setRating(
-                token = token(uid = "ghost"),
-                userId = player.id,
-                value = BigDecimal("4.0"),
-                confidence = null,
-            )
-        }
+        service
+            .setRating(token = token(uid = "player"), userId = player.id, value = BigDecimal("4.0"), confidence = null)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .setRating(token = token(uid = "ghost"), userId = player.id, value = BigDecimal("4.0"), confidence = null)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
@@ -170,15 +166,25 @@ class RatingServiceTest {
         admin(uid = "root")
         val player = provisionUser(uid = "player")
         provisionUser(uid = "other")
-        service.setRating(token = token(uid = "root"), userId = player.id, value = BigDecimal("4.0"), confidence = null)
+        service.setRating(token = token(uid = "root"), userId = player.id, value = BigDecimal("4.0"), confidence = null).shouldBeRight()
 
-        service.getRatings(token = token(uid = "player"), userId = player.id).single().currentRating.toPlainString() shouldBe "4.000000"
-        service.getRatings(token = token(uid = "root"), userId = player.id).single().currentRating.toPlainString() shouldBe "4.000000"
-        service.getHistory(token = token(uid = "player"), userId = player.id) shouldBe emptyList()
-        shouldThrow<ForbiddenException> { service.getRatings(token = token(uid = "other"), userId = player.id) }
-        shouldThrow<ForbiddenException> { service.getHistory(token = token(uid = "other"), userId = player.id) }
+        service
+            .getRatings(token = token(uid = "player"), userId = player.id)
+            .shouldBeRight()
+            .single()
+            .currentRating
+            .toPlainString() shouldBe "4.000000"
+        service
+            .getRatings(token = token(uid = "root"), userId = player.id)
+            .shouldBeRight()
+            .single()
+            .currentRating
+            .toPlainString() shouldBe "4.000000"
+        service.getHistory(token = token(uid = "player"), userId = player.id).shouldBeRight() shouldBe emptyList()
+        service.getRatings(token = token(uid = "other"), userId = player.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service.getHistory(token = token(uid = "other"), userId = player.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
         // A caller with no provisioned account is forbidden too.
-        shouldThrow<ForbiddenException> { service.getRatings(token = token(uid = "ghost"), userId = player.id) }
+        service.getRatings(token = token(uid = "ghost"), userId = player.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
@@ -186,13 +192,17 @@ class RatingServiceTest {
         admin(uid = "root")
         val unrated = provisionUser(uid = "unrated")
         val rated = provisionUser(uid = "rated")
-        service.setRating(token = token(uid = "root"), userId = rated.id, value = BigDecimal("3.0"), confidence = null)
+        service.setRating(token = token(uid = "root"), userId = rated.id, value = BigDecimal("3.0"), confidence = null).shouldBeRight()
 
-        val pending = service.pendingAssessment(token = token(uid = "root"), limit = 50, offset = 0).items.map { it.userId }
+        val pending =
+            service.pendingAssessment(token = token(uid = "root"), limit = 50, offset = 0).shouldBeRight().items.map { it.userId }
         (unrated.id in pending) shouldBe true
         (rated.id in pending) shouldBe false
 
-        shouldThrow<ForbiddenException> { service.pendingAssessment(token = token(uid = "unrated"), limit = 50, offset = 0) }
+        service
+            .pendingAssessment(token = token(uid = "unrated"), limit = 50, offset = 0)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
@@ -212,7 +222,7 @@ class RatingServiceTest {
                     ),
             )
 
-        val page = service.pendingAssessment(token = token(uid = "root"), limit = 50, offset = 0)
+        val page = service.pendingAssessment(token = token(uid = "root"), limit = 50, offset = 0).shouldBeRight()
         val entry = page.items.single { it.userId == player.id }
         entry.publicCode shouldBe player.publicCode
         entry.displayName shouldBe "Rich"
@@ -238,7 +248,7 @@ class RatingServiceTest {
             )
         val plain = provisionUser(uid = "plain")
 
-        val items = service.pendingAssessment(token = token(uid = "root"), limit = 50, offset = 0).items
+        val items = service.pendingAssessment(token = token(uid = "root"), limit = 50, offset = 0).shouldBeRight().items
         items.single { it.userId == selfRated.id }.proposedRating shouldBe "3.5"
         items.single { it.userId == plain.id }.proposedRating shouldBe null
     }
@@ -248,21 +258,22 @@ class RatingServiceTest {
         admin(uid = "root") // 1 pending (the admin has no rating)
         (1..3).forEach { provisionUser(uid = "p$it") } // 3 more pending → 4 total
 
-        val firstTwo = service.pendingAssessment(token = token(uid = "root"), limit = 2, offset = 0)
+        val firstTwo = service.pendingAssessment(token = token(uid = "root"), limit = 2, offset = 0).shouldBeRight()
         firstTwo.items shouldHaveSize 2
         firstTwo.total shouldBe 4
 
         // Limit is clamped to the max page size, so an oversized request still returns everyone.
-        val clamped = service.pendingAssessment(token = token(uid = "root"), limit = 9999, offset = 0)
+        val clamped = service.pendingAssessment(token = token(uid = "root"), limit = 9999, offset = 0).shouldBeRight()
         clamped.items shouldHaveSize 4
     }
 
     @Test
     fun `setting a rating for an unknown user is rejected`() {
         admin(uid = "root")
-        shouldThrow<org.skopeo.service.user.UserNotFoundException> {
-            service.setRating(token = token(uid = "root"), userId = UUID.randomUUID(), value = BigDecimal("4.0"), confidence = null)
-        }
+        service
+            .setRating(token = token(uid = "root"), userId = UUID.randomUUID(), value = BigDecimal("4.0"), confidence = null)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
     @Test
@@ -281,16 +292,26 @@ class RatingServiceTest {
                     ),
             )
 
-        val entry = service.pendingAssessment(token = token(uid = "root"), limit = 50, offset = 0).items.single { it.userId == nameless.id }
+        val entry =
+            service
+                .pendingAssessment(token = token(uid = "root"), limit = 50, offset = 0)
+                .shouldBeRight()
+                .items
+                .single { it.userId == nameless.id }
         entry.displayName shouldBe null
     }
 
     @Test
     fun `an admin may read their own ratings and history`() {
         val root = admin(uid = "root")
-        service.setRating(token = token(uid = "root"), userId = root.id, value = BigDecimal("5.0"), confidence = null)
+        service.setRating(token = token(uid = "root"), userId = root.id, value = BigDecimal("5.0"), confidence = null).shouldBeRight()
 
-        service.getRatings(token = token(uid = "root"), userId = root.id).single().currentRating.toPlainString() shouldBe "5.000000"
-        service.getHistory(token = token(uid = "root"), userId = root.id) shouldBe emptyList()
+        service
+            .getRatings(token = token(uid = "root"), userId = root.id)
+            .shouldBeRight()
+            .single()
+            .currentRating
+            .toPlainString() shouldBe "5.000000"
+        service.getHistory(token = token(uid = "root"), userId = root.id).shouldBeRight() shouldBe emptyList()
     }
 }

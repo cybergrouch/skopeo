@@ -3,12 +3,14 @@
 
 package org.skopeo.service.rating
 
-import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.assertions.arrow.core.shouldBeLeft
+import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeInstanceOf
 import org.jetbrains.exposed.sql.deleteAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.jupiter.api.BeforeAll
@@ -23,6 +25,7 @@ import org.skopeo.model.Capability
 import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
+import org.skopeo.model.ServiceError
 import org.skopeo.model.TeamType
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
@@ -35,7 +38,6 @@ import org.skopeo.service.calculator.RankingCalculationResult
 import org.skopeo.service.calculator.RankingCalculator
 import org.skopeo.service.match.FixtureInput
 import org.skopeo.service.match.MatchService
-import org.skopeo.service.user.ForbiddenException
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.math.BigDecimal
@@ -107,7 +109,7 @@ class RatingCalculationServiceTest {
                         team1 = listOf(element = winner),
                         team2 = listOf(element = loser),
                     ),
-            )
+            ).shouldBeRight()
         matchService.uploadResult(
             token = token(uid = admin),
             matchId = match.id,
@@ -119,7 +121,7 @@ class RatingCalculationServiceTest {
                             SetScoreRequest(team1Games = 6, team2Games = 2),
                         ),
                 ),
-        )
+        ).shouldBeRight()
         return match.id
     }
 
@@ -130,7 +132,7 @@ class RatingCalculationServiceTest {
         val p2 = provisionUser(uid = "p2", rated = true)
         val matchId = playedMatch(admin = "root", winner = p1.id, loser = p2.id)
 
-        val dry = calc.calculate(token = token(uid = "root"), dryRun = true)
+        val dry = calc.calculate(token = token(uid = "root"), dryRun = true).shouldBeRight()
 
         dry.dryRun.shouldBeTrue()
         dry.matches.single().changes.size shouldBe 2
@@ -146,7 +148,7 @@ class RatingCalculationServiceTest {
         }
         // nothing persisted
         ratings.findCurrentRating(userId = p1.id)!!.currentRating shouldBe BigDecimal("4.000000")
-        matchRepo.findById(matchId = matchId)!!.ratedAt.shouldBeNull()
+        matchRepo.findById(matchId = matchId).shouldBeRight().ratedAt.shouldBeNull()
         matchRepo.listPendingCalculation().size shouldBe 1
     }
 
@@ -161,7 +163,7 @@ class RatingCalculationServiceTest {
         playedMatch(admin = "root", winner = a1.id, loser = a2.id, matchType = MatchType.OPEN_PLAY)
         playedMatch(admin = "root", winner = b1.id, loser = b2.id, matchType = MatchType.TOURNAMENT_PLAYOFFS)
 
-        val changes = calc.calculate(token = token(uid = "root"), dryRun = true).matches.flatMap { it.changes }
+        val changes = calc.calculate(token = token(uid = "root"), dryRun = true).shouldBeRight().matches.flatMap { it.changes }
         val openGain = changes.first { it.userId == a1.id }.let { it.newRating - it.previousRating }
         val playoffGain = changes.first { it.userId == b1.id }.let { it.newRating - it.previousRating }
 
@@ -177,7 +179,7 @@ class RatingCalculationServiceTest {
         val p2 = provisionUser(uid = "p2", rated = true)
         val matchId = playedMatch(admin = "root", winner = p1.id, loser = p2.id)
 
-        val committed = calc.calculate(token = token(uid = "root"), dryRun = false)
+        val committed = calc.calculate(token = token(uid = "root"), dryRun = false).shouldBeRight()
         committed.dryRun.shouldBeFalse()
 
         ratings.findCurrentRating(userId = p1.id)!!.let {
@@ -191,11 +193,11 @@ class RatingCalculationServiceTest {
             it.competitiveThresholdPct.shouldNotBeNull().toPlainString() shouldBe "0.083000"
             it.isUpset shouldBe false
         }
-        matchRepo.findById(matchId = matchId)!!.ratedAt.shouldNotBeNull()
+        matchRepo.findById(matchId = matchId).shouldBeRight().ratedAt.shouldNotBeNull()
         matchRepo.listPendingCalculation().shouldBe(expected = emptyList())
 
         // idempotent — nothing left to process
-        calc.calculate(token = token(uid = "root"), dryRun = false).matches.shouldBe(expected = emptyList())
+        calc.calculate(token = token(uid = "root"), dryRun = false).shouldBeRight().matches.shouldBe(expected = emptyList())
     }
 
     @Test
@@ -206,7 +208,7 @@ class RatingCalculationServiceTest {
         playedMatch(admin = "root", winner = p1.id, loser = p2.id) // earlier
         playedMatch(admin = "root", winner = p2.id, loser = p1.id) // later
 
-        val outcome = calc.calculate(token = token(uid = "root"), dryRun = true)
+        val outcome = calc.calculate(token = token(uid = "root"), dryRun = true).shouldBeRight()
 
         outcome.matches.size shouldBe 2
         val firstP1 = outcome.matches[0].changes.first { it.userId == p1.id }
@@ -220,8 +222,8 @@ class RatingCalculationServiceTest {
         provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
 
-        shouldThrow<ForbiddenException> { calc.calculate(token = token(uid = "host"), dryRun = true) }
-        shouldThrow<ForbiddenException> { calc.calculate(token = token(uid = "ghost"), dryRun = false) }
+        calc.calculate(token = token(uid = "host"), dryRun = true).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        calc.calculate(token = token(uid = "ghost"), dryRun = false).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
@@ -243,7 +245,7 @@ class RatingCalculationServiceTest {
                         team1 = listOf(a1.id, a2.id),
                         team2 = listOf(b1.id, b2.id),
                     ),
-            )
+            ).shouldBeRight()
         matchService.uploadResult(
             token = token(uid = "root"),
             matchId = match.id,
@@ -255,9 +257,9 @@ class RatingCalculationServiceTest {
                             SetScoreRequest(team1Games = 6, team2Games = 2),
                         ),
                 ),
-        )
+        ).shouldBeRight()
 
-        shouldThrow<IllegalArgumentException> { calc.calculate(token = token(uid = "root"), dryRun = true) }
+        calc.calculate(token = token(uid = "root"), dryRun = true).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
     }
 
     @Test
@@ -285,7 +287,7 @@ class RatingCalculationServiceTest {
         val calcWithEmpty =
             RatingCalculationService(matches = matchRepo, ratings = ratings, users = users, calculator = emptyCalculator)
 
-        shouldThrow<IllegalArgumentException> { calcWithEmpty.calculate(token = token(uid = "root"), dryRun = true) }
+        calcWithEmpty.calculate(token = token(uid = "root"), dryRun = true).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
     }
 
     @Test
@@ -299,6 +301,6 @@ class RatingCalculationServiceTest {
         // but the calculation guards against): currentRating then has nothing to resolve.
         transaction { UserRatingsTable.deleteAll() }
 
-        shouldThrow<IllegalArgumentException> { calc.calculate(token = token(uid = "root"), dryRun = true) }
+        calc.calculate(token = token(uid = "root"), dryRun = true).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
     }
 }

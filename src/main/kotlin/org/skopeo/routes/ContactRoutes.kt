@@ -46,22 +46,24 @@ fun Application.configureContactRoutes(service: ContactService = ContactService(
 private fun Route.listAndCreate(service: ContactService) {
     get {
         respondMappingErrors {
-            val list = service.list(token = verifiedToken(), userId = uuidParam(name = "userId"))
-            call.respond(status = HttpStatusCode.OK, message = list.map { it.toResponse() })
+            respondEither(result = service.list(token = verifiedToken(), userId = uuidParam(name = "userId"))) { list ->
+                call.respond(status = HttpStatusCode.OK, message = list.map { it.toResponse() })
+            }
         }
     }
     post {
         respondMappingErrors {
             val request = call.receive<ContactCreateRequest>()
-            val contact =
-                service.create(
-                    token = verifiedToken(),
-                    userId = uuidParam(name = "userId"),
-                    type = parseEnumParam<ContactType>(value = request.type, field = "type"),
-                    value = request.value,
-                    isPrimary = request.isPrimary,
-                )
-            call.respond(status = HttpStatusCode.Created, message = contact.toResponse())
+            respondEither(
+                result =
+                    service.create(
+                        token = verifiedToken(),
+                        userId = uuidParam(name = "userId"),
+                        type = parseEnumParam<ContactType>(value = request.type, field = "type"),
+                        value = request.value,
+                        isPrimary = request.isPrimary,
+                    ),
+            ) { contact -> call.respond(status = HttpStatusCode.Created, message = contact.toResponse()) }
         }
     }
 }
@@ -69,9 +71,10 @@ private fun Route.listAndCreate(service: ContactService) {
 private fun Route.byId(service: ContactService) {
     get(path = "/{id}") {
         respondMappingErrors {
-            val contact =
-                service.get(token = verifiedToken(), userId = uuidParam(name = "userId"), contactId = uuidParam(name = "id"))
-            call.respond(status = HttpStatusCode.OK, message = contact.toResponse())
+            respondEither(
+                result =
+                    service.get(token = verifiedToken(), userId = uuidParam(name = "userId"), contactId = uuidParam(name = "id")),
+            ) { contact -> call.respond(status = HttpStatusCode.OK, message = contact.toResponse()) }
         }
     }
 }
@@ -80,14 +83,15 @@ private fun Route.state(service: ContactService) {
     put(path = "/{id}/state") {
         respondMappingErrors {
             val request = call.receive<ContactStateRequest>()
-            val contact =
-                service.setActive(
-                    token = verifiedToken(),
-                    userId = uuidParam(name = "userId"),
-                    contactId = uuidParam(name = "id"),
-                    active = request.isActive,
-                )
-            call.respond(status = HttpStatusCode.OK, message = contact.toResponse())
+            respondEither(
+                result =
+                    service.setActive(
+                        token = verifiedToken(),
+                        userId = uuidParam(name = "userId"),
+                        contactId = uuidParam(name = "id"),
+                        active = request.isActive,
+                    ),
+            ) { contact -> call.respond(status = HttpStatusCode.OK, message = contact.toResponse()) }
         }
     }
 }
@@ -96,15 +100,16 @@ private fun Route.verification(service: ContactService) {
     put(path = "/{id}/verification") {
         respondMappingErrors {
             val request = call.receive<VerificationRequest>()
-            val contact =
-                service.setVerification(
-                    token = verifiedToken(),
-                    userId = uuidParam(name = "userId"),
-                    contactId = uuidParam(name = "id"),
-                    status = parseEnumParam<VerificationStatus>(value = request.status, field = "status"),
-                    method = request.method?.let { parseEnumParam<VerificationMethod>(value = it, field = "method") },
-                )
-            call.respond(status = HttpStatusCode.OK, message = contact.toResponse())
+            respondEither(
+                result =
+                    service.setVerification(
+                        token = verifiedToken(),
+                        userId = uuidParam(name = "userId"),
+                        contactId = uuidParam(name = "id"),
+                        status = parseEnumParam<VerificationStatus>(value = request.status, field = "status"),
+                        method = request.method?.let { parseEnumParam<VerificationMethod>(value = it, field = "method") },
+                    ),
+            ) { contact -> call.respond(status = HttpStatusCode.OK, message = contact.toResponse()) }
         }
     }
 }

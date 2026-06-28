@@ -32,21 +32,23 @@ fun Application.configureAuditRoutes(service: AuditService = AuditService()) {
                 get {
                     respondMappingErrors {
                         val params = call.request.queryParameters
-                        val page =
-                            service.list(
-                                token = verifiedToken(),
-                                category = params["category"]?.let { parseCategory(raw = it) },
-                                limit = params["limit"]?.toIntOrNull() ?: DEFAULT_AUDIT_PAGE_SIZE,
-                                offset = params["offset"]?.toIntOrNull() ?: 0,
-                            )
-                        call.respond(status = HttpStatusCode.OK, message = page.toResponse())
+                        respondEither(
+                            result =
+                                service.list(
+                                    token = verifiedToken(),
+                                    category = params["category"]?.let { parseCategory(raw = it) },
+                                    limit = params["limit"]?.toIntOrNull() ?: DEFAULT_AUDIT_PAGE_SIZE,
+                                    offset = params["offset"]?.toIntOrNull() ?: 0,
+                                ),
+                        ) { page -> call.respond(status = HttpStatusCode.OK, message = page.toResponse()) }
                     }
                 }
                 patch(path = "/{id}/comment") {
                     respondMappingErrors {
                         val request = call.receive<AuditCommentRequest>()
-                        service.setComment(token = verifiedToken(), id = uuidParam(name = "id"), comment = request.comment)
-                        call.respond(status = HttpStatusCode.NoContent, message = "")
+                        respondEither(
+                            result = service.setComment(token = verifiedToken(), id = uuidParam(name = "id"), comment = request.comment),
+                        ) { call.respond(status = HttpStatusCode.NoContent, message = "") }
                     }
                 }
             }

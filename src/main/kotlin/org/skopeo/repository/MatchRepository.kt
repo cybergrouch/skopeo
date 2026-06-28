@@ -3,6 +3,9 @@
 
 package org.skopeo.repository
 
+import arrow.core.Either
+import arrow.core.left
+import arrow.core.right
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.insert
@@ -17,6 +20,7 @@ import org.skopeo.model.MatchSetResult
 import org.skopeo.model.MatchSide
 import org.skopeo.model.MatchStatus
 import org.skopeo.model.MatchType
+import org.skopeo.model.ServiceError
 import org.skopeo.model.TeamType
 import java.time.LocalDateTime
 import java.util.UUID
@@ -52,9 +56,11 @@ class MatchRepository {
         winnerTeamId: UUID,
         recordedBy: UUID,
         completedAt: LocalDateTime,
-    ): Match? =
+    ): Either<ServiceError, Match> =
         transaction {
-            if (loadMatch(id = matchId) == null) return@transaction null
+            if (loadMatch(id = matchId) == null) {
+                return@transaction ServiceError.NotFound(message = "Match $matchId not found").left()
+            }
             sets.forEach { set ->
                 val hasTb = set.tiebreakTeam1Points != null && set.tiebreakTeam2Points != null
                 val setId =
@@ -81,24 +87,27 @@ class MatchRepository {
                 it[MatchesTable.completedAt] = completedAt
                 it[MatchesTable.recordedBy] = recordedBy
             }
-            loadMatch(id = matchId)
+            loadMatch(id = matchId)!!.right()
         }
 
     fun setActive(
         matchId: UUID,
         active: Boolean,
         disabledAt: LocalDateTime?,
-    ): Match? =
+    ): Either<ServiceError, Match> =
         transaction {
             val updated =
                 MatchesTable.update(where = { MatchesTable.id eq matchId }) {
                     it[isActive] = active
                     it[MatchesTable.disabledAt] = disabledAt
                 }
-            if (updated == 0) null else loadMatch(id = matchId)
+            if (updated == 0) ServiceError.NotFound(message = "Match $matchId not found").left() else loadMatch(id = matchId)!!.right()
         }
 
-    fun findById(matchId: UUID): Match? = transaction { loadMatch(id = matchId) }
+    fun findById(matchId: UUID): Either<ServiceError, Match> =
+        transaction {
+            loadMatch(id = matchId)?.right() ?: ServiceError.NotFound(message = "Match $matchId not found").left()
+        }
 
     /** Stamp a match as rating-calculated (the calculation trigger committing it). */
     fun markRated(

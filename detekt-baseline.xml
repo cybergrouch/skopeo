@@ -2,6 +2,7 @@
 <SmellBaseline>
   <ManuallySuppressedIssues/>
   <CurrentIssues>
+    <ID>CognitiveComplexMethod:ContactRepository.kt$ContactRepository$fun setVerification( id: UUID, status: VerificationStatus, method: VerificationMethod?, verifiedBy: UUID?, verifiedAt: LocalDateTime?, ): Either&lt;ServiceError, Contact&gt;</ID>
     <ID>CognitiveComplexMethod:RatingChangeReport.kt$RatingChangeReport$@Test fun generateRatingChangeReport()</ID>
     <ID>ComplexCondition:PerformanceBasedRankingCalculatorImpl.kt$PerformanceBasedRankingCalculatorImpl$(isWinner &amp;&amp; ratingAdvantage &lt; ZERO) || (!isWinner &amp;&amp; ratingAdvantage &gt; ZERO)</ID>
     <ID>CyclomaticComplexMethod:Rating.kt$RatingSerializer$override fun deserialize(decoder: Decoder): Rating</ID>
@@ -164,6 +165,7 @@
     <ID>TopLevelPropertyNaming:DatabaseConfig.kt$private val logger = KotlinLogging.logger {}</ID>
     <ID>TopLevelPropertyNaming:RankingRoutes.kt$private val logger = KotlinLogging.logger {}</ID>
     <ID>TooManyFunctions:UserRepository.kt$UserRepository</ID>
+    <ID>TooManyFunctions:UserService.kt$UserService</ID>
     <ID>UnsafeCallOnNullableType:DatabaseConfig.kt$DatabaseConfig$dataSource!!</ID>
     <ID>UnsafeCallOnNullableType:MatchRepository.kt$MatchRepository$loadMatch(id = it[MatchesTable.id].value)!!</ID>
     <ID>UnsafeCallOnNullableType:MatchRepository.kt$MatchRepository$loadMatch(id = matchId)!!</ID>

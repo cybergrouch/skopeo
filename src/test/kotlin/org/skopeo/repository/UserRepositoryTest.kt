@@ -3,11 +3,14 @@
 
 package org.skopeo.repository
 
+import io.kotest.assertions.arrow.core.shouldBeLeft
+import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -20,6 +23,7 @@ import org.skopeo.model.ContactType
 import org.skopeo.model.NameType
 import org.skopeo.model.ProfilePatch
 import org.skopeo.model.ProvisionUserCommand
+import org.skopeo.model.ServiceError
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.model.VerificationMethod
@@ -113,8 +117,8 @@ class UserRepositoryTest {
     }
 
     @Test
-    fun `findById returns null for an unknown id`() {
-        repository.findById(id = UUID.randomUUID()).shouldBe(expected = null)
+    fun `findById reports NotFound for an unknown id`() {
+        repository.findById(id = UUID.randomUUID()).shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
     @Test
@@ -141,9 +145,11 @@ class UserRepositoryTest {
     fun `updateProfile patches only the provided fields`() {
         val created = repository.provision(command = googleSignup())
 
-        val updated = repository.updateProfile(id = created.id, patch = ProfilePatch(city = "Cebu", dateOfBirth = LocalDate.of(1990, 1, 2)))
+        val updated =
+            repository
+                .updateProfile(id = created.id, patch = ProfilePatch(city = "Cebu", dateOfBirth = LocalDate.of(1990, 1, 2)))
+                .shouldBeRight()
 
-        updated.shouldNotBeNull()
         updated.city shouldBe "Cebu"
         updated.dateOfBirth shouldBe LocalDate.of(1990, 1, 2)
         updated.sex shouldBe "Male" // untouched
@@ -153,9 +159,9 @@ class UserRepositoryTest {
     fun `updateProfile patches the photoUrl when provided`() {
         val created = repository.provision(command = googleSignup())
 
-        val updated = repository.updateProfile(id = created.id, patch = ProfilePatch(photoUrl = "https://example.com/new.jpg"))
+        val updated =
+            repository.updateProfile(id = created.id, patch = ProfilePatch(photoUrl = "https://example.com/new.jpg")).shouldBeRight()
 
-        updated.shouldNotBeNull()
         updated.photoUrl shouldBe "https://example.com/new.jpg"
         updated.city shouldBe "Manila" // untouched
     }
@@ -164,41 +170,45 @@ class UserRepositoryTest {
     fun `updateProfile changes sex when provided`() {
         val created = repository.provision(command = googleSignup()) // sex = Male
 
-        val updated = repository.updateProfile(id = created.id, patch = ProfilePatch(sex = "Female"))
+        val updated = repository.updateProfile(id = created.id, patch = ProfilePatch(sex = "Female")).shouldBeRight()
 
-        updated.shouldNotBeNull()
         updated.sex shouldBe "Female"
     }
 
     @Test
-    fun `updateProfile returns null for an unknown id`() {
-        repository.updateProfile(id = UUID.randomUUID(), patch = ProfilePatch(city = "Davao")).shouldBe(expected = null)
+    fun `updateProfile reports NotFound for an unknown id`() {
+        repository
+            .updateProfile(id = UUID.randomUUID(), patch = ProfilePatch(city = "Davao"))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
     @Test
     fun `replaceProfile overwrites all mutable fields, clearing omitted ones`() {
         val created = repository.provision(command = googleSignup()) // sex = Male, city = Manila
 
-        val replaced = repository.replaceProfile(id = created.id, patch = ProfilePatch(city = "Iloilo"))
+        val replaced = repository.replaceProfile(id = created.id, patch = ProfilePatch(city = "Iloilo")).shouldBeRight()
 
-        replaced.shouldNotBeNull()
         replaced.city shouldBe "Iloilo"
         replaced.sex.shouldBe(expected = null) // omitted from the replacement → cleared
     }
 
     @Test
-    fun `replaceProfile returns null for an unknown id`() {
-        repository.replaceProfile(id = UUID.randomUUID(), patch = ProfilePatch(city = "Davao")).shouldBe(expected = null)
+    fun `replaceProfile reports NotFound for an unknown id`() {
+        repository
+            .replaceProfile(id = UUID.randomUUID(), patch = ProfilePatch(city = "Davao"))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
     @Test
     fun `deactivate soft-deletes the user`() {
         val created = repository.provision(command = googleSignup())
 
-        repository.deactivate(id = created.id).shouldBeTrue()
+        repository.deactivate(id = created.id).shouldBeRight()
 
-        repository.findById(id = created.id)?.isActive?.shouldBeFalse()
-        repository.deactivate(id = UUID.randomUUID()).shouldBeFalse()
+        repository.findById(id = created.id).shouldBeRight().isActive.shouldBeFalse()
+        repository.deactivate(id = UUID.randomUUID()).shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
     @Test

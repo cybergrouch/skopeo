@@ -3,17 +3,20 @@
 
 package org.skopeo.service.capability
 
+import arrow.core.Either
+import arrow.core.left
+import arrow.core.raise.either
+import arrow.core.raise.ensure
+import arrow.core.right
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
 import org.skopeo.model.Capability
 import org.skopeo.model.CapabilityGrant
+import org.skopeo.model.ServiceError
 import org.skopeo.repository.CapabilityRepository
 import org.skopeo.repository.UserRepository
-import org.skopeo.service.ConflictException
 import org.skopeo.service.audit.AuditService
-import org.skopeo.service.user.ForbiddenException
-import org.skopeo.service.user.UserNotFoundException
 import org.skopeo.service.user.VerifiedFirebaseToken
 import java.time.LocalDateTime
 import java.util.UUID
@@ -22,6 +25,8 @@ import java.util.UUID
  * Manage users' capabilities (roles). The entire API is ADMINISTRATOR-only — a user never
  * elevates themselves. Grants are append-only (re-granting after a revoke is a fresh row),
  * and several guardrails protect against lockout and accidental self-demotion.
+ *
+ * Expected failures are returned as an [Either] left ([ServiceError], issue #115) rather than thrown.
  */
 class CapabilityService(
     private val capabilities: CapabilityRepository = CapabilityRepository(),
@@ -37,82 +42,90 @@ class CapabilityService(
     fun list(
         token: VerifiedFirebaseToken,
         userId: UUID,
-    ): List<CapabilityGrant> {
-        requireAdmin(token = token)
-        requireUserExists(userId = userId)
-        return capabilities.listByUser(userId = userId)
-    }
+    ): Either<ServiceError, List<CapabilityGrant>> =
+        either {
+            requireAdmin(token = token).bind()
+            requireUserExists(userId = userId).bind()
+            capabilities.listByUser(userId = userId)
+        }
 
     fun grant(
         token: VerifiedFirebaseToken,
         userId: UUID,
         capability: Capability,
-    ): Granted {
-        val adminId = requireAdmin(token = token)
-        requireUserExists(userId = userId)
-        capabilities.findActive(userId = userId, capability = capability)?.let { return Granted(grant = it, created = false) }
-        val grant = capabilities.grant(userId = userId, capability = capability, grantedBy = adminId)
-        audit.record(
-            write =
-                AuditWrite(
-                    actorUserId = adminId,
-                    action = AuditAction.CAPABILITY_GRANTED,
-                    entityType = AuditEntityType.CAPABILITY,
-                    entityId = userId,
-                    summary = "Granted ${capability.name} role",
-                    details = mapOf("userId" to userId.toString(), "capability" to capability.name),
-                ),
-        )
-        return Granted(grant = grant, created = true)
-    }
+    ): Either<ServiceError, Granted> =
+        either {
+            val adminId = requireAdmin(token = token).bind()
+            requireUserExists(userId = userId).bind()
+            val existing = capabilities.findActive(userId = userId, capability = capability)
+            if (existing != null) {
+                Granted(grant = existing, created = false)
+            } else {
+                val grant = capabilities.grant(userId = userId, capability = capability, grantedBy = adminId)
+                audit.record(
+                    write =
+                        AuditWrite(
+                            actorUserId = adminId,
+                            action = AuditAction.CAPABILITY_GRANTED,
+                            entityType = AuditEntityType.CAPABILITY,
+                            entityId = userId,
+                            summary = "Granted ${capability.name} role",
+                            details = mapOf("userId" to userId.toString(), "capability" to capability.name),
+                        ),
+                )
+                Granted(grant = grant, created = true)
+            }
+        }
 
-    @Suppress("ThrowsCount") // each throw is a distinct guardrail with its own status code
     fun revoke(
         token: VerifiedFirebaseToken,
         userId: UUID,
         capability: Capability,
-    ) {
-        val adminId = requireAdmin(token = token)
-        requireUserExists(userId = userId)
+    ): Either<ServiceError, Unit> =
+        either {
+            val adminId = requireAdmin(token = token).bind()
+            requireUserExists(userId = userId).bind()
 
-        if (capability == Capability.PLAYER) {
-            throw ConflictException(message = "The PLAYER role cannot be revoked")
-        }
-        capabilities.findActive(userId = userId, capability = capability)
-            ?: throw CapabilityNotFoundException(userId = userId, capability = capability)
-        if (capability == Capability.ADMINISTRATOR) {
-            // Last-admin check precedes the self-check: dropping to zero admins is only possible
-            // by revoking the sole (necessarily one's own) admin grant.
-            if (capabilities.countActiveAdministrators() <= 1) {
-                throw ConflictException(message = "Cannot revoke the last ADMINISTRATOR")
+            ensure(condition = capability != Capability.PLAYER) {
+                ServiceError.Conflict(message = "The PLAYER role cannot be revoked")
             }
-            if (userId == adminId) {
-                throw ForbiddenException(message = "You cannot revoke your own ADMINISTRATOR role")
+            ensure(condition = capabilities.findActive(userId = userId, capability = capability) != null) {
+                ServiceError.NotFound(message = "User $userId does not hold an active $capability capability")
             }
+            if (capability == Capability.ADMINISTRATOR) {
+                // Last-admin check precedes the self-check: dropping to zero admins is only possible
+                // by revoking the sole (necessarily one's own) admin grant.
+                ensure(condition = capabilities.countActiveAdministrators() > 1) {
+                    ServiceError.Conflict(message = "Cannot revoke the last ADMINISTRATOR")
+                }
+                ensure(condition = userId != adminId) {
+                    ServiceError.Forbidden(message = "You cannot revoke your own ADMINISTRATOR role")
+                }
+            }
+
+            capabilities.revoke(userId = userId, capability = capability, revokedBy = adminId, revokedAt = LocalDateTime.now())
+            audit.record(
+                write =
+                    AuditWrite(
+                        actorUserId = adminId,
+                        action = AuditAction.CAPABILITY_REVOKED,
+                        entityType = AuditEntityType.CAPABILITY,
+                        entityId = userId,
+                        summary = "Revoked ${capability.name} role",
+                        details = mapOf("userId" to userId.toString(), "capability" to capability.name),
+                    ),
+            )
         }
 
-        capabilities.revoke(userId = userId, capability = capability, revokedBy = adminId, revokedAt = LocalDateTime.now())
-        audit.record(
-            write =
-                AuditWrite(
-                    actorUserId = adminId,
-                    action = AuditAction.CAPABILITY_REVOKED,
-                    entityType = AuditEntityType.CAPABILITY,
-                    entityId = userId,
-                    summary = "Revoked ${capability.name} role",
-                    details = mapOf("userId" to userId.toString(), "capability" to capability.name),
-                ),
-        )
-    }
-
-    private fun requireUserExists(userId: UUID) {
-        users.findById(id = userId) ?: throw UserNotFoundException(id = userId)
-    }
+    private fun requireUserExists(userId: UUID): Either<ServiceError, Unit> = users.findById(id = userId).map { }
 
     /** Every capability operation requires the caller to be an ADMINISTRATOR; returns their id. */
-    private fun requireAdmin(token: VerifiedFirebaseToken): UUID {
+    private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
         val caller = users.findByFirebaseUid(firebaseUid = token.uid)
-        if (caller == null || !caller.capabilities.contains(element = Capability.ADMINISTRATOR)) throw ForbiddenException()
-        return caller.id
+        return if (caller == null || !caller.capabilities.contains(element = Capability.ADMINISTRATOR)) {
+            ServiceError.Forbidden().left()
+        } else {
+            caller.id.right()
+        }
     }
 }

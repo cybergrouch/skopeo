@@ -23,6 +23,7 @@ val exposedVersion = "0.54.0"
 val postgresVersion = "42.7.4"
 val flywayVersion = "10.17.0"
 val hikariVersion = "5.1.0"
+val arrowVersion = "1.2.4"
 
 java {
     toolchain {
@@ -66,6 +67,9 @@ dependencies {
     // Database - Connection pooling
     implementation("com.zaxxer:HikariCP:$hikariVersion")
 
+    // Functional error handling — repositories and services return Either<ServiceError, T> (issue #115)
+    implementation("io.arrow-kt:arrow-core:$arrowVersion")
+
     // Logging
     implementation("ch.qos.logback:logback-classic:1.5.16")
     implementation("io.github.microutils:kotlin-logging-jvm:3.0.5")
@@ -80,6 +84,7 @@ dependencies {
     testImplementation("io.ktor:ktor-client-content-negotiation:$ktorVersion")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
     testImplementation("io.kotest:kotest-assertions-core:5.8.0")
+    testImplementation("io.kotest.extensions:kotest-assertions-arrow:1.4.0")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
     // Integration tests against a real PostgreSQL (applies the Flyway migration)

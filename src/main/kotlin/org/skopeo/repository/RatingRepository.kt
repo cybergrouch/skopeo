@@ -70,7 +70,8 @@ class RatingRepository {
                     it[confidenceScore] = confidence
                 }
             }
-            ratingRow(userId = userId)!!.toUserRating()
+            val row = ratingRow(userId = userId) ?: error(message = "Rating for user $userId could not be read back")
+            row.toUserRating()
         }
 
     fun historyByUser(userId: UUID): List<RatingHistoryEntry> =

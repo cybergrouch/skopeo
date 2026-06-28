@@ -41,21 +41,25 @@ fun Application.configureCapabilityRoutes(service: CapabilityService = Capabilit
 private fun Route.listAndGrant(service: CapabilityService) {
     get {
         respondMappingErrors {
-            val grants = service.list(token = verifiedToken(), userId = uuidParam(name = "userId"))
-            call.respond(status = HttpStatusCode.OK, message = grants.map { it.toResponse() })
+            respondEither(result = service.list(token = verifiedToken(), userId = uuidParam(name = "userId"))) { grants ->
+                call.respond(status = HttpStatusCode.OK, message = grants.map { it.toResponse() })
+            }
         }
     }
     post {
         respondMappingErrors {
             val request = call.receive<CapabilityGrantRequest>()
-            val result =
-                service.grant(
-                    token = verifiedToken(),
-                    userId = uuidParam(name = "userId"),
-                    capability = parseEnumParam<Capability>(value = request.capability, field = "capability"),
-                )
-            val status = if (result.created) HttpStatusCode.Created else HttpStatusCode.OK
-            call.respond(status = status, message = result.grant.toResponse())
+            respondEither(
+                result =
+                    service.grant(
+                        token = verifiedToken(),
+                        userId = uuidParam(name = "userId"),
+                        capability = parseEnumParam<Capability>(value = request.capability, field = "capability"),
+                    ),
+            ) { result ->
+                val status = if (result.created) HttpStatusCode.Created else HttpStatusCode.OK
+                call.respond(status = status, message = result.grant.toResponse())
+            }
         }
     }
 }
@@ -64,12 +68,14 @@ private fun Route.revoke(service: CapabilityService) {
     delete(path = "/{capability}") {
         respondMappingErrors {
             val raw = call.parameters["capability"] ?: throw BadRequestException(message = "Missing capability")
-            service.revoke(
-                token = verifiedToken(),
-                userId = uuidParam(name = "userId"),
-                capability = parseEnumParam<Capability>(value = raw, field = "capability"),
-            )
-            call.respond(status = HttpStatusCode.NoContent, message = "")
+            respondEither(
+                result =
+                    service.revoke(
+                        token = verifiedToken(),
+                        userId = uuidParam(name = "userId"),
+                        capability = parseEnumParam<Capability>(value = raw, field = "capability"),
+                    ),
+            ) { call.respond(status = HttpStatusCode.NoContent, message = "") }
         }
     }
 }

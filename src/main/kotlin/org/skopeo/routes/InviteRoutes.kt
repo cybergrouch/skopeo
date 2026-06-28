@@ -51,27 +51,30 @@ fun Application.configureInviteRoutes(service: InviteService = InviteService()) 
                 post {
                     respondMappingErrors {
                         val request = call.receive<CreateInviteRequest>()
-                        val invite = service.create(token = verifiedToken(), email = validatedEmail(raw = request.email))
-                        call.respond(status = HttpStatusCode.Created, message = invite.toResponse())
+                        respondEither(
+                            result = service.create(token = verifiedToken(), email = validatedEmail(raw = request.email)),
+                        ) { invite -> call.respond(status = HttpStatusCode.Created, message = invite.toResponse()) }
                     }
                 }
                 get {
                     respondMappingErrors {
                         val params = call.request.queryParameters
-                        val page =
-                            service.list(
-                                token = verifiedToken(),
-                                limit = params["limit"]?.toIntOrNull() ?: DEFAULT_INVITE_PAGE_SIZE,
-                                offset = params["offset"]?.toIntOrNull() ?: 0,
-                                status = params["status"]?.let { parseInviteStatus(raw = it) },
-                            )
-                        call.respond(status = HttpStatusCode.OK, message = page.toResponse())
+                        respondEither(
+                            result =
+                                service.list(
+                                    token = verifiedToken(),
+                                    limit = params["limit"]?.toIntOrNull() ?: DEFAULT_INVITE_PAGE_SIZE,
+                                    offset = params["offset"]?.toIntOrNull() ?: 0,
+                                    status = params["status"]?.let { parseInviteStatus(raw = it) },
+                                ),
+                        ) { page -> call.respond(status = HttpStatusCode.OK, message = page.toResponse()) }
                     }
                 }
                 delete(path = "/{id}") {
                     respondMappingErrors {
-                        service.revoke(token = verifiedToken(), id = uuidParam(name = "id"))
-                        call.respond(status = HttpStatusCode.NoContent, message = "")
+                        respondEither(result = service.revoke(token = verifiedToken(), id = uuidParam(name = "id"))) {
+                            call.respond(status = HttpStatusCode.NoContent, message = "")
+                        }
                     }
                 }
             }

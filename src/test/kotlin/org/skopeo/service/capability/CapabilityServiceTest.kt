@@ -3,10 +3,12 @@
 
 package org.skopeo.service.capability
 
-import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.assertions.arrow.core.shouldBeLeft
+import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -15,15 +17,13 @@ import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
+import org.skopeo.model.ServiceError
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.CapabilityRepository
 import org.skopeo.repository.UserRepository
-import org.skopeo.service.ConflictException
-import org.skopeo.service.user.ForbiddenException
-import org.skopeo.service.user.UserNotFoundException
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.util.UUID
@@ -68,9 +68,15 @@ class CapabilityServiceTest {
         admin(uid = "root")
         val player = provisionUser(uid = "player")
 
-        shouldThrow<ForbiddenException> { service.list(token = token(uid = "player"), userId = player.id) }
-        shouldThrow<ForbiddenException> { service.grant(token = token(uid = "player"), userId = player.id, capability = Capability.HOST) }
-        shouldThrow<ForbiddenException> { service.grant(token = token(uid = "ghost"), userId = player.id, capability = Capability.HOST) }
+        service.list(token = token(uid = "player"), userId = player.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .grant(token = token(uid = "player"), userId = player.id, capability = Capability.HOST)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .grant(token = token(uid = "ghost"), userId = player.id, capability = Capability.HOST)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
@@ -78,12 +84,12 @@ class CapabilityServiceTest {
         val root = admin(uid = "root")
         val player = provisionUser(uid = "player")
 
-        val first = service.grant(token = token(uid = "root"), userId = player.id, capability = Capability.HOST)
+        val first = service.grant(token = token(uid = "root"), userId = player.id, capability = Capability.HOST).shouldBeRight()
         first.created.shouldBeTrue()
         first.grant.capability shouldBe Capability.HOST
         first.grant.grantedBy shouldBe root.id
 
-        val again = service.grant(token = token(uid = "root"), userId = player.id, capability = Capability.HOST)
+        val again = service.grant(token = token(uid = "root"), userId = player.id, capability = Capability.HOST).shouldBeRight()
         again.created.shouldBeFalse()
     }
 
@@ -91,8 +97,8 @@ class CapabilityServiceTest {
     fun `granting and revoking write audit-log entries (#100)`() {
         val root = admin(uid = "root")
         val player = provisionUser(uid = "player")
-        service.grant(token = token(uid = "root"), userId = player.id, capability = Capability.HOST)
-        service.revoke(token = token(uid = "root"), userId = player.id, capability = Capability.HOST)
+        service.grant(token = token(uid = "root"), userId = player.id, capability = Capability.HOST).shouldBeRight()
+        service.revoke(token = token(uid = "root"), userId = player.id, capability = Capability.HOST).shouldBeRight()
 
         val audit = AuditRepository()
         audit.list(actions = listOf(element = AuditAction.CAPABILITY_GRANTED), limit = 10, offset = 0).let { (items, total) ->
@@ -111,11 +117,13 @@ class CapabilityServiceTest {
     fun `an administrator can revoke a non-baseline role`() {
         admin(uid = "root")
         val player = provisionUser(uid = "player")
-        service.grant(token = token(uid = "root"), userId = player.id, capability = Capability.HOST)
+        service.grant(token = token(uid = "root"), userId = player.id, capability = Capability.HOST).shouldBeRight()
 
-        service.revoke(token = token(uid = "root"), userId = player.id, capability = Capability.HOST)
+        service.revoke(token = token(uid = "root"), userId = player.id, capability = Capability.HOST).shouldBeRight()
 
-        service.list(token = token(uid = "root"), userId = player.id)
+        service
+            .list(token = token(uid = "root"), userId = player.id)
+            .shouldBeRight()
             .none { it.capability == Capability.HOST && it.isActive }
             .shouldBeTrue()
     }
@@ -125,24 +133,26 @@ class CapabilityServiceTest {
         admin(uid = "root")
         val player = provisionUser(uid = "player")
 
-        shouldThrow<ConflictException> {
-            service.revoke(token = token(uid = "root"), userId = player.id, capability = Capability.PLAYER)
-        }
+        service
+            .revoke(token = token(uid = "root"), userId = player.id, capability = Capability.PLAYER)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Conflict>()
     }
 
     @Test
     fun `the last administrator cannot be revoked, but one of several can`() {
         val root = admin(uid = "root")
         val second = provisionUser(uid = "second")
-        service.grant(token = token(uid = "root"), userId = second.id, capability = Capability.ADMINISTRATOR)
+        service.grant(token = token(uid = "root"), userId = second.id, capability = Capability.ADMINISTRATOR).shouldBeRight()
 
         // Two admins now: root may revoke second's admin.
-        service.revoke(token = token(uid = "root"), userId = second.id, capability = Capability.ADMINISTRATOR)
+        service.revoke(token = token(uid = "root"), userId = second.id, capability = Capability.ADMINISTRATOR).shouldBeRight()
 
         // root is the last admin: revoking it (their own) is blocked as the last-admin case.
-        shouldThrow<ConflictException> {
-            service.revoke(token = token(uid = "root"), userId = root.id, capability = Capability.ADMINISTRATOR)
-        }
+        service
+            .revoke(token = token(uid = "root"), userId = root.id, capability = Capability.ADMINISTRATOR)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Conflict>()
     }
 
     @Test
@@ -150,9 +160,10 @@ class CapabilityServiceTest {
         val root = admin(uid = "root")
         provisionUser(uid = "second", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
 
-        shouldThrow<ForbiddenException> {
-            service.revoke(token = token(uid = "root"), userId = root.id, capability = Capability.ADMINISTRATOR)
-        }
+        service
+            .revoke(token = token(uid = "root"), userId = root.id, capability = Capability.ADMINISTRATOR)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
@@ -160,17 +171,19 @@ class CapabilityServiceTest {
         admin(uid = "root")
         val player = provisionUser(uid = "player")
 
-        shouldThrow<CapabilityNotFoundException> {
-            service.revoke(token = token(uid = "root"), userId = player.id, capability = Capability.HOST)
-        }
+        service
+            .revoke(token = token(uid = "root"), userId = player.id, capability = Capability.HOST)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
     @Test
     fun `an unknown user is rejected`() {
         admin(uid = "root")
 
-        shouldThrow<UserNotFoundException> {
-            service.list(token = token(uid = "root"), userId = UUID.randomUUID())
-        }
+        service
+            .list(token = token(uid = "root"), userId = UUID.randomUUID())
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
     }
 }
