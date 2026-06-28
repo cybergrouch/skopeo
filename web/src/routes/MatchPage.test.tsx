@@ -59,6 +59,9 @@ describe('MatchPage', () => {
     expect(screen.getByText('Winner')).toBeInTheDocument() // exactly one side won
     expect(screen.getByText('6-4 6-2')).toBeInTheDocument()
     expect(screen.getByText(/Center Court/)).toBeInTheDocument()
+    // The shareable QR card (#137) appears once the match loads.
+    expect(screen.getByText('Share this match')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Copy link' })).toBeInTheDocument()
   })
 
   it('handles doubles, name/code fallbacks, and a match with no venue', () => {

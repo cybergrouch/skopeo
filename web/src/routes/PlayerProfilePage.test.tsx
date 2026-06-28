@@ -90,6 +90,9 @@ describe('PlayerProfilePage', () => {
       'src',
       'https://example.com/a.jpg',
     )
+    // The shareable QR card (#137) shows for an active profile.
+    expect(screen.getByText('Share this profile')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Copy link' })).toBeInTheDocument()
   })
 
   it('shows a rating without a level', () => {
@@ -188,8 +191,9 @@ describe('PlayerProfilePage', () => {
     expect(screen.getByText('This profile has been merged')).toBeInTheDocument()
     const link = screen.getByRole('link', { name: /view the active profile \(real\)/i })
     expect(link).toHaveAttribute('href', '/players/REAL99')
-    // The normal cards/history are suppressed for a disabled duplicate.
+    // The normal cards/history (and the share card) are suppressed for a disabled duplicate.
     expect(screen.queryByText('No rating yet.')).not.toBeInTheDocument()
+    expect(screen.queryByText('Share this profile')).not.toBeInTheDocument()
   })
 
   it('links to a canonical without a display name (#124)', () => {

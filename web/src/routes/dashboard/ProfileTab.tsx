@@ -1,5 +1,3 @@
-import { useState } from 'react'
-import { QRCodeSVG } from 'qrcode.react'
 import {
   Card,
   CardContent,
@@ -8,11 +6,11 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { useAuth } from '@/auth/useAuth'
 import { MatchHistoryCard } from '@/components/MatchHistoryCard'
 import { RatingHistoryCard } from '@/components/RatingHistoryCard'
 import { RatingBandMeter } from '@/components/RatingBandMeter'
+import { ShareCard } from '@/components/ShareCard'
 import type { Capability } from '@/auth/capabilities'
 import {
   useGetApiV1UsersUserIdRatingHistory,
@@ -53,14 +51,9 @@ export function ProfileTab({
     query: { enabled },
   })
 
-  const [copied, setCopied] = useState(false)
   const shareUrl = publicCode
     ? `${window.location.origin}/players/${publicCode}`
     : ''
-  function copyLink() {
-    void navigator.clipboard.writeText(shareUrl)
-    setCopied(true)
-  }
 
   const ratings = ratingsQuery.data ?? []
   const history = historyQuery.data ?? []
@@ -171,21 +164,11 @@ export function ProfileTab({
       </Card>
 
       {publicCode ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Share your profile</CardTitle>
-            <CardDescription>
-              Anyone signed in can scan this code or open the link to view your
-              profile.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col items-center gap-3">
-            <QRCodeSVG value={shareUrl} size={144} />
-            <Button type="button" variant="outline" size="sm" onClick={copyLink}>
-              {copied ? 'Copied!' : 'Copy link'}
-            </Button>
-          </CardContent>
-        </Card>
+        <ShareCard
+          url={shareUrl}
+          title="Share your profile"
+          description="Anyone signed in can scan this code or open the link to view your profile."
+        />
       ) : null}
 
       <RatingHistoryCard

@@ -13,6 +13,7 @@ import {
 } from '@/api/generated/users/users'
 import { MatchHistoryCard } from '@/components/MatchHistoryCard'
 import { RatingHistoryCard } from '@/components/RatingHistoryCard'
+import { ShareCard } from '@/components/ShareCard'
 import { isAdministrator } from '@/auth/capabilities'
 
 /**
@@ -122,6 +123,14 @@ export function PlayerProfilePage() {
               )}
             </CardContent>
           </Card>
+        ) : null}
+
+        {player && !player.isDisabled ? (
+          <ShareCard
+            url={`${window.location.origin}/players/${player.publicCode}`}
+            title="Share this profile"
+            description="Scan this code or copy the link to open this player's profile."
+          />
         ) : null}
 
         {player && !player.isDisabled ? (

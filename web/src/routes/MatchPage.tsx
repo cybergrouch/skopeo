@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/card'
 import { useGetApiV1MatchesCodeCode } from '@/api/generated/matches/matches'
 import type { MatchPublicPlayer } from '@/api/generated/model'
+import { ShareCard } from '@/components/ShareCard'
 
 /** A player's name as a link to their public profile, falling back to the code or "Unknown". */
 function PlayerLink({ player }: { player: MatchPublicPlayer }) {
@@ -104,6 +105,14 @@ export function MatchPage() {
               </div>
             </CardContent>
           </Card>
+        ) : null}
+
+        {match ? (
+          <ShareCard
+            url={`${window.location.origin}/matches/${match.publicCode}`}
+            title="Share this match"
+            description="Scan this code or copy the link to open this match."
+          />
         ) : null}
       </div>
     </div>
