@@ -33,9 +33,10 @@ class PlayerService(
         if (!located.isActive) {
             // A disabled duplicate (#124) renders a "merged" card linking to its canonical account; a
             // plain-deactivated account (no canonical) stays hidden (treated as not-found).
-            val canonical =
-                located.canonicalUserId?.let { users.findById(id = it) }
-                    ?: throw ResourceNotFoundException(message = "No player with code ${located.publicCode}")
+            val canonical = located.canonicalUserId?.let { users.findById(id = it) }
+            if (canonical == null) {
+                throw ResourceNotFoundException(message = "No player with code ${located.publicCode}")
+            }
             return PublicPlayerResponse(
                 publicCode = located.publicCode,
                 displayName = located.displayName(),
