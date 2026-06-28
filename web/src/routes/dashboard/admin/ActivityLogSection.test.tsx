@@ -74,7 +74,7 @@ describe('ActivityLogSection', () => {
 
   it('renders an entry with resolved actor/target and a localized time, defaulting to all categories', () => {
     renderSection()
-    expect(useGetApiV1Audit).toHaveBeenLastCalledWith({ category: undefined, limit: 5, offset: 0 })
+    expect(useGetApiV1Audit).toHaveBeenLastCalledWith({ category: undefined, limit: 25, offset: 0 })
     expect(screen.getByText('Admin (ADM123)')).toBeInTheDocument()
     expect(screen.getByText('Bob (BOB456)')).toBeInTheDocument()
     expect(screen.getByText('Set rating to 4.0')).toBeInTheDocument()
@@ -106,30 +106,30 @@ describe('ActivityLogSection', () => {
     await user.selectOptions(screen.getByLabelText('Category'), 'CAPABILITY_CHANGE')
     expect(useGetApiV1Audit).toHaveBeenLastCalledWith({
       category: 'CAPABILITY_CHANGE',
-      limit: 5,
+      limit: 25,
       offset: 0,
     })
   })
 
-  it('paginates, enabling/disabling Previous and Next at the ends', async () => {
-    useGetApiV1Audit.mockReturnValue(page([entry()], 12))
+  it('paginates 25 rows per page, enabling/disabling Previous and Next at the ends', async () => {
+    useGetApiV1Audit.mockReturnValue(page([entry()], 60)) // 60 / 25 = 3 pages
     const user = userEvent.setup()
     renderSection()
 
-    expect(screen.getByText('Page 1 of 3 · 12 total')).toBeInTheDocument()
+    expect(screen.getByText('Page 1 of 3 · 60 total')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled()
 
     await user.click(screen.getByRole('button', { name: 'Next' }))
-    expect(useGetApiV1Audit).toHaveBeenLastCalledWith({ category: undefined, limit: 5, offset: 5 })
-    expect(screen.getByText('Page 2 of 3 · 12 total')).toBeInTheDocument()
+    expect(useGetApiV1Audit).toHaveBeenLastCalledWith({ category: undefined, limit: 25, offset: 25 })
+    expect(screen.getByText('Page 2 of 3 · 60 total')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Next' }))
-    expect(screen.getByText('Page 3 of 3 · 12 total')).toBeInTheDocument()
+    expect(screen.getByText('Page 3 of 3 · 60 total')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Previous' })).not.toBeDisabled()
 
     await user.click(screen.getByRole('button', { name: 'Previous' }))
-    expect(screen.getByText('Page 2 of 3 · 12 total')).toBeInTheDocument()
+    expect(screen.getByText('Page 2 of 3 · 60 total')).toBeInTheDocument()
   })
 
   it('prefills an existing note and saves an edit', async () => {

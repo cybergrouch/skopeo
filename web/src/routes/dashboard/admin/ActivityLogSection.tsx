@@ -16,7 +16,9 @@ import {
 } from '@/api/generated/audit/audit'
 import type { AuditPersonResponse, GetApiV1AuditCategory } from '@/api/generated/model'
 
-const PAGE_SIZE = 5
+// Activity (invites, ratings, matches, duplicate-rectification, …) grows quickly, so 25 rows/page
+// (#134) rather than the original 5.
+const PAGE_SIZE = 25
 
 // The trace categories the viewer can scope to (#102). "All" clears the filter.
 const CATEGORIES = [
