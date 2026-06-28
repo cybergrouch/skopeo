@@ -3,7 +3,9 @@
 
 package org.skopeo.repository
 
+import org.jetbrains.exposed.sql.JoinType
 import org.jetbrains.exposed.sql.ResultRow
+import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -58,6 +60,29 @@ class ContactRepository {
                     it[verificationStatus] = VerificationStatus.PENDING.name
                 }
             loadById(id = id.value)
+        }
+
+    /**
+     * Active PHONE contacts belonging to OTHER active users — the cross-user duplicate-phone signal
+     * (#126). Excludes [excludeUserId] and any contact of a disabled user. Values are returned as
+     * stored; the caller normalizes for comparison.
+     */
+    fun activePhonesOfOtherActiveUsers(excludeUserId: UUID): List<Contact> =
+        transaction {
+            // contact_information has two FKs to users (user_id, verified_by), so the join column is explicit.
+            ContactInformationTable
+                .join(
+                    otherTable = UsersTable,
+                    joinType = JoinType.INNER,
+                    onColumn = ContactInformationTable.userId,
+                    otherColumn = UsersTable.id,
+                ).selectAll()
+                .where {
+                    (ContactInformationTable.contactType eq ContactType.PHONE.name) and
+                        ContactInformationTable.isActive and
+                        UsersTable.isActive and
+                        (ContactInformationTable.userId neq excludeUserId)
+                }.map { it.toContact() }
         }
 
     /** Enable or disable a contact (the append-only alternative to editing). */

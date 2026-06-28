@@ -74,6 +74,7 @@
     <ID>NamedArguments:ContactService.kt$IllegalArgumentException("Invalid value '$value'", e)</ID>
     <ID>NamedArguments:ContactServiceTest.kt$ContactServiceTest$listOf(UserName(type = NameType.FIRST, value = "N"))</ID>
     <ID>NamedArguments:ContactServiceTest.kt$ContactServiceTest$setOf(Capability.PLAYER)</ID>
+    <ID>NamedArguments:DuplicateCandidateRoutes.kt$IllegalArgumentException("Invalid user id '$raw'", e)</ID>
     <ID>NamedArguments:MatchApiIntegrationTest.kt$MatchApiIntegrationTest$install(ContentNegotiation) { json() }</ID>
     <ID>NamedArguments:MatchApiIntegrationTest.kt$MatchApiIntegrationTest$listOf(matchA.id)</ID>
     <ID>NamedArguments:MatchApiIntegrationTest.kt$MatchApiIntegrationTest$listOf(matchB.id)</ID>

@@ -6,6 +6,7 @@ package org.skopeo.service.contact
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
@@ -14,6 +15,7 @@ import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.ContactType
+import org.skopeo.model.DuplicateCandidateStatus
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.User
@@ -23,6 +25,7 @@ import org.skopeo.model.VerificationMethod
 import org.skopeo.model.VerificationStatus
 import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.ContactRepository
+import org.skopeo.repository.DuplicateCandidateRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.user.ForbiddenException
 import org.skopeo.service.user.UserNotFoundException
@@ -41,6 +44,7 @@ class ContactServiceTest {
 
     private val users = UserRepository()
     private val contacts = ContactRepository()
+    private val candidates = DuplicateCandidateRepository()
     private val service = ContactService(contacts = contacts, users = users)
 
     @BeforeEach
@@ -434,5 +438,35 @@ class ContactServiceTest {
         shouldThrow<ForbiddenException> {
             verify(adminUid = "owner", userId = owner.id, contactId = contact.id)
         }
+    }
+
+    @Test
+    fun `adding a phone matching another active user flags a duplicate candidate, normalized (#126)`() {
+        val a = provisionUser(uid = "a")
+        val b = provisionUser(uid = "b")
+        service.create(token = token(uid = "a"), userId = a.id, type = ContactType.PHONE, value = "+639170000000", isPrimary = true)
+
+        // A formatting variant of the same number still flags — and the contact add itself succeeds.
+        val added =
+            service.create(token = token(uid = "b"), userId = b.id, type = ContactType.PHONE, value = "+63 917 000 0000", isPrimary = true)
+        added.value shouldBe "+63 917 000 0000"
+
+        val open = candidates.list(limit = 50, offset = 0, status = DuplicateCandidateStatus.OPEN).first
+        open shouldHaveSize 1
+        setOf(open.single().userAId, open.single().userBId) shouldBe setOf(a.id, b.id)
+    }
+
+    @Test
+    fun `a non-phone contact, or a match on a disabled user, raises no candidate (#126)`() {
+        val a = provisionUser(uid = "a")
+        val b = provisionUser(uid = "b")
+        // EMAIL never triggers detection.
+        service.create(token = token(uid = "a"), userId = a.id, type = ContactType.EMAIL, value = "a@x.dev", isPrimary = true)
+        // A's phone, then A is disabled — B reusing it should not flag (only active users count).
+        service.create(token = token(uid = "a"), userId = a.id, type = ContactType.PHONE, value = "+639170000000", isPrimary = false)
+        users.deactivate(id = a.id)
+        service.create(token = token(uid = "b"), userId = b.id, type = ContactType.PHONE, value = "+639170000000", isPrimary = true)
+
+        candidates.list(limit = 50, offset = 0, status = DuplicateCandidateStatus.OPEN).second shouldBe 0L
     }
 }

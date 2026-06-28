@@ -10,9 +10,11 @@ import org.skopeo.model.AuditWrite
 import org.skopeo.model.Capability
 import org.skopeo.model.Contact
 import org.skopeo.model.ContactType
+import org.skopeo.model.DuplicateSignal
 import org.skopeo.model.VerificationMethod
 import org.skopeo.model.VerificationStatus
 import org.skopeo.repository.ContactRepository
+import org.skopeo.repository.DuplicateCandidateRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService
 import org.skopeo.service.user.ForbiddenException
@@ -33,6 +35,7 @@ class ContactService(
     private val contacts: ContactRepository = ContactRepository(),
     private val users: UserRepository = UserRepository(),
     private val audit: AuditService = AuditService(),
+    private val candidates: DuplicateCandidateRepository = DuplicateCandidateRepository(),
 ) {
     fun list(
         token: VerifiedFirebaseToken,
@@ -77,7 +80,34 @@ class ContactService(
                     details = mapOf("contactType" to type.name, "value" to value),
                 ),
         )
+        if (type == ContactType.PHONE) flagPhoneDuplicates(newUserId = userId, value = value)
         return contact
+    }
+
+    /**
+     * Duplicate-account detection (#126): if this new phone matches another active user's (after
+     * normalization), raise a candidate for admin review. Flag-and-allow — the contact add is never
+     * blocked, and a shared number just surfaces a candidate (admins can dismiss legitimate ones).
+     */
+    private fun flagPhoneDuplicates(
+        newUserId: UUID,
+        value: String,
+    ) {
+        val normalized = normalizePhone(raw = value)
+        contacts
+            .activePhonesOfOtherActiveUsers(excludeUserId = newUserId)
+            .filter { normalizePhone(raw = it.value) == normalized }
+            .map { it.userId }
+            .distinct()
+            .forEach { otherUserId ->
+                candidates.flag(
+                    userAId = newUserId,
+                    userBId = otherUserId,
+                    signal = DuplicateSignal.DUPLICATE_PHONE,
+                    detail = value,
+                    flaggedBy = null,
+                )
+            }
     }
 
     /**
@@ -180,3 +210,13 @@ private fun <T> conflictAware(
 
 private fun isUniqueViolation(e: ExposedSQLException): Boolean =
     generateSequence<Throwable>(seed = e) { it.cause }.any { (it as? SQLException)?.sqlState == PG_UNIQUE_VIOLATION }
+
+/**
+ * Normalize a phone number for duplicate detection (#126): keep only digits, preserving a single leading
+ * '+', so "+63 917-000" and "+63917000" compare equal. Comparison-only — the stored value is unchanged.
+ */
+internal fun normalizePhone(raw: String): String {
+    val trimmed = raw.trim()
+    val prefix = if (trimmed.startsWith(prefix = "+")) "+" else ""
+    return prefix + trimmed.filter { it.isDigit() }
+}

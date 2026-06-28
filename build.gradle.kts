@@ -259,6 +259,7 @@ tasks.jacocoTestReport {
                         "**/routes/MatchRoutes*.*",
                         "**/routes/InviteRoutes*.*",
                         "**/routes/AuditRoutes*.*",
+                        "**/routes/DuplicateCandidateRoutes*.*",
                         "**/routes/RouteSupport*.*",
                     )
                 }
@@ -314,6 +315,7 @@ tasks.jacocoTestCoverageVerification {
                         "**/routes/MatchRoutes*.*",
                         "**/routes/InviteRoutes*.*",
                         "**/routes/AuditRoutes*.*",
+                        "**/routes/DuplicateCandidateRoutes*.*",
                         "**/routes/RouteSupport*.*",
                     )
                 }
