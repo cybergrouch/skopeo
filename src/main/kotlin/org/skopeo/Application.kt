@@ -38,6 +38,7 @@ import org.skopeo.routes.configurePlayerListRoutes
 import org.skopeo.routes.configurePlayerRoutes
 import org.skopeo.routes.configureRankingRoutes
 import org.skopeo.routes.configureRatingRoutes
+import org.skopeo.routes.configureStandingsRoutes
 import org.skopeo.routes.configureUserRoutes
 import org.skopeo.service.user.UserService
 import org.slf4j.event.Level
@@ -81,6 +82,7 @@ fun Application.module(
     configureInviteRoutes()
     configureDuplicateCandidateRoutes()
     configurePlayerListRoutes()
+    configureStandingsRoutes()
     configureAuditRoutes()
     logger.info { "Skopeo API started successfully on port 8080" }
 }

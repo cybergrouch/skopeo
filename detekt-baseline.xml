@@ -164,6 +164,7 @@
     <ID>TopLevelPropertyNaming:UserService.kt$private val logger = KotlinLogging.logger {}</ID>
     <ID>TopLevelPropertyNaming:DatabaseConfig.kt$private val logger = KotlinLogging.logger {}</ID>
     <ID>TopLevelPropertyNaming:RankingRoutes.kt$private val logger = KotlinLogging.logger {}</ID>
+    <ID>TooManyFunctions:RatingRepository.kt$RatingRepository</ID>
     <ID>TooManyFunctions:UserRepository.kt$UserRepository</ID>
     <ID>TooManyFunctions:UserService.kt$UserService</ID>
     <ID>UnsafeCallOnNullableType:DatabaseConfig.kt$DatabaseConfig$dataSource!!</ID>
