@@ -5,9 +5,6 @@ import { AdminTab } from './AdminTab'
 vi.mock('./admin/InvitesSection', () => ({
   InvitesSection: () => <div>invites section</div>,
 }))
-vi.mock('./admin/PendingAssessmentSection', () => ({
-  PendingAssessmentSection: () => <div>pending assessment section</div>,
-}))
 vi.mock('./admin/PendingCalculationSection', () => ({
   PendingCalculationSection: () => <div>pending calculation section</div>,
 }))
@@ -28,7 +25,6 @@ describe('AdminTab', () => {
   it('renders the admin sections', () => {
     render(<AdminTab />)
     expect(screen.getByText('invites section')).toBeInTheDocument()
-    expect(screen.getByText('pending assessment section')).toBeInTheDocument()
     expect(screen.getByText('manage player section')).toBeInTheDocument()
     expect(screen.getByText('duplicates section')).toBeInTheDocument()
     expect(screen.getByText('duplicate candidates section')).toBeInTheDocument()

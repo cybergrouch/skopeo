@@ -4,11 +4,12 @@ import { Button } from '@/components/ui/button'
 import { BrandLogo } from '@/components/BrandLogo'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuth } from '@/auth/useAuth'
-import { canManageMatches, isAdministrator } from '@/auth/capabilities'
+import { canManageMatches, canRate, isAdministrator } from '@/auth/capabilities'
 import { useGetApiV1UsersMe } from '@/api/generated/users/users'
 import { ProfileTab } from './dashboard/ProfileTab'
 import { AdminTab } from './dashboard/AdminTab'
 import { MatchesTab } from './dashboard/MatchesTab'
+import { RatingsTab } from './dashboard/RatingsTab'
 import { ResearchTab } from './dashboard/ResearchTab'
 
 export function DashboardPage() {
@@ -19,6 +20,7 @@ export function DashboardPage() {
   const me = meQuery.data
   const capabilities = me?.capabilities ?? []
   const showMatches = canManageMatches(capabilities)
+  const showRatings = canRate(capabilities)
   const showAdmin = isAdministrator(capabilities)
 
   async function onSignOut() {
@@ -51,6 +53,9 @@ export function DashboardPage() {
               {showMatches ? (
                 <TabsTrigger value="matches">Matches</TabsTrigger>
               ) : null}
+              {showRatings ? (
+                <TabsTrigger value="ratings">Ratings</TabsTrigger>
+              ) : null}
               {showAdmin ? (
                 <TabsTrigger value="admin">Admin</TabsTrigger>
               ) : null}
@@ -71,6 +76,11 @@ export function DashboardPage() {
             {showMatches ? (
               <TabsContent value="matches">
                 <MatchesTab />
+              </TabsContent>
+            ) : null}
+            {showRatings ? (
+              <TabsContent value="ratings">
+                <RatingsTab />
               </TabsContent>
             ) : null}
             {showAdmin ? (
