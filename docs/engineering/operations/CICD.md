@@ -158,7 +158,9 @@ Store the **provider resource name** and the **deploy SA email** as GitHub repo 
 
 ### 2b. Deploy workflow
 
-Create `.github/workflows/deploy-api.yml`:
+`.github/workflows/deploy-api.yml` now exists (a fuller version of the sketch below: it adds a
+`production` approval gate, a `workflow_dispatch` trigger, an `if: vars.WIF_PROVIDER != ''` guard so
+it stays inert until configured, and passes runtime env/secrets explicitly). The skeleton:
 
 ```yaml
 name: Deploy API to Cloud Run
@@ -195,7 +197,9 @@ Notes:
 - It **retains the service's existing env vars and secrets** (the `DATABASE_*` config and `skopeo-db-password` set during the manual deploy) unless you override them — so the workflow stays minimal.
 - Migrations still run on app startup (Flyway in `DatabaseConfig.init`), so no separate migration step.
 
-Until this is in place, deploy manually per [DEPLOYMENT_GCP.md](DEPLOYMENT_GCP.md) — that's the intended Phase-1-era workflow.
+Until the WIF resources + repo variables exist the job skips, so deploy manually per
+[DEPLOYMENT_GCP.md](DEPLOYMENT_GCP.md). The go-live config (variables, secrets, custom domain,
+approval gate, status) is tracked in [DEPLOYMENT_RUNBOOK.md](DEPLOYMENT_RUNBOOK.md).
 
 ---
 
@@ -228,7 +232,8 @@ The monorepo holds both the API and the SPA. This phase is now **implemented**:
 2. Push, confirm CI goes green on a test PR.
 3. Enable branch protection on `main` (1b).
 4. Route the pending commits through the first PR (1c).
-5. *(Later)* WIF + `deploy-api.yml` (Phase 2).
+5. ✅ Phase 2 — `deploy-api.yml` is in place (WIF, `production` approval gate, deploy-from-source);
+   **inert until** `WIF_PROVIDER` + the GCP resources exist (see [DEPLOYMENT_RUNBOOK.md](DEPLOYMENT_RUNBOOK.md)).
 6. ✅ Web CI/CD (Phase 3) — `web` job in `ci.yml` + `deploy-web.yml` (now in place).
 
 ---
