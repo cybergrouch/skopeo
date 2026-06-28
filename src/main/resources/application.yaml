@@ -13,6 +13,12 @@ firebase:
   # FIREBASE_PROJECT_ID. (A project id is public, not a secret.)
   projectId: "$FIREBASE_PROJECT_ID:skopeo-prod"
 
+cors:
+  # Comma-separated allowed web origins (scheme://host[:port]) for the browser SPA, e.g.
+  # "https://skopeo.com,https://skopeo-prod.web.app". The localhost:5173 dev origin is always
+  # allowed. Set per-environment via WEB_ORIGINS; empty/unset = localhost only.
+  origins: "$WEB_ORIGINS:"
+
 admin:
   # Comma-separated allowlist of emails auto-granted ADMINISTRATOR on sign-up/login, but ONLY when
   # the email is provider-verified (the verified-email gate). Bootstrap / break-glass only — everyday

@@ -131,14 +131,17 @@ fun Application.configurePlugins() {
  * cross-origin and require explicit CORS allowances. Token-based auth (Authorization
  * header) means credentials/cookies are not needed, so allowCredentials stays off.
  *
- * Add the deployed web UI origin (e.g. the Firebase Hosting domain) when it is known.
+ * Production web origins are supplied via config (`cors.origins`, env `WEB_ORIGINS`) as a
+ * comma-separated list of `scheme://host[:port]`, so a new deploy origin needs no code change.
  */
 fun Application.configureCORS() {
+    // Read config on the Application receiver — `environment` isn't reachable inside the install lambda.
+    val webOrigins = parseWebOrigins(raw = environment.config.propertyOrNull(path = "cors.origins")?.getString())
     install(plugin = CORS) {
-        // Local development: Vite dev server default origin
+        // Local development: Vite dev server default origin (always allowed).
         allowHost(host = "localhost:5173", schemes = listOf("http", "https"))
-        // TODO: add the deployed web UI origin, e.g.:
-        // allowHost(host = "skopeo-web.web.app", schemes = listOf("https"))
+        // Production web origins from config, e.g. "https://skopeo.com,https://skopeo-prod.web.app".
+        webOrigins.forEach { (host, scheme) -> allowHost(host = host, schemes = listOf(element = scheme)) }
 
         allowMethod(method = HttpMethod.Get)
         allowMethod(method = HttpMethod.Post)
@@ -191,6 +194,21 @@ fun Application.configureRouting() {
     }
     logger.info { "Routing configured with endpoints: /, /health, /metrics, /api/v1/calculate-ranking" }
 }
+
+/**
+ * Parse a comma-separated `WEB_ORIGINS` value into `(host[:port], scheme)` pairs for CORS
+ * `allowHost`. Blank and malformed entries (missing scheme or host) are dropped.
+ */
+internal fun parseWebOrigins(raw: String?): List<Pair<String, String>> =
+    raw?.split(",")
+        ?.map { it.trim() }
+        ?.filter { it.isNotEmpty() }
+        ?.mapNotNull { origin ->
+            val scheme = origin.substringBefore(delimiter = "://", missingDelimiterValue = "")
+            val host = origin.substringAfter(delimiter = "://", missingDelimiterValue = "")
+            if (scheme.isNotBlank() && host.isNotBlank()) host to scheme else null
+        }
+        .orEmpty()
 
 /**
  * The ADMIN_EMAILS allowlist (config `admin.emails`), normalized to a lowercase/trimmed set.
