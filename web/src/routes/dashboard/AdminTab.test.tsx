@@ -2,9 +2,6 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { AdminTab } from './AdminTab'
 
-vi.mock('./admin/InvitesSection', () => ({
-  InvitesSection: () => <div>invites section</div>,
-}))
 vi.mock('./admin/PendingCalculationSection', () => ({
   PendingCalculationSection: () => <div>pending calculation section</div>,
 }))
@@ -22,13 +19,13 @@ vi.mock('./admin/ActivityLogSection', () => ({
 }))
 
 describe('AdminTab', () => {
-  it('renders the admin sections', () => {
+  it('renders the admin sections (invites now live in their own tab, #135)', () => {
     render(<AdminTab />)
-    expect(screen.getByText('invites section')).toBeInTheDocument()
     expect(screen.getByText('manage player section')).toBeInTheDocument()
     expect(screen.getByText('duplicates section')).toBeInTheDocument()
     expect(screen.getByText('duplicate candidates section')).toBeInTheDocument()
     expect(screen.getByText('pending calculation section')).toBeInTheDocument()
     expect(screen.getByText('activity log section')).toBeInTheDocument()
+    expect(screen.queryByText('invites section')).not.toBeInTheDocument()
   })
 })
