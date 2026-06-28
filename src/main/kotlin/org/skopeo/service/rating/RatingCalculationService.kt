@@ -174,7 +174,10 @@ class RatingCalculationService(
      * fields left null; net entries keep the existing net breakdown with no sets.
      */
     private fun breakdownsByPlayer(audit: List<AuditEntry>): Map<String, CalculationBreakdown> {
-        val relevant = audit.filter { it.context.containsKey(key = "playerId") && it.context.containsKey(key = "dominance") }
+        // Every breakdown entry (v1 net or v2 per-set) carries a "dominance" key alongside "playerId";
+        // match-level audit entries carry neither. Filtering on the one key avoids a permanently dead
+        // "playerId without dominance" branch (the two keys are always emitted together).
+        val relevant = audit.filter { it.context.containsKey(key = "dominance") }
         val (perSet, net) = relevant.partition { it.context.containsKey(key = "setIndex") }
 
         val perSetByPlayer =

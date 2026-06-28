@@ -166,10 +166,13 @@ class RatingRepository {
                 it[upsetMultiplier] = write.breakdown?.upsetMultiplier
                 it[kFactor] = write.breakdown?.kFactor
                 // Per-set breakdown (#110): JSON-encode when present (v2), else leave null (v1/initial).
+                val steps = write.breakdown?.sets
                 it[setBreakdown] =
-                    write.breakdown?.sets
-                        ?.takeIf { steps -> steps.isNotEmpty() }
-                        ?.let { steps -> RATING_HISTORY_JSON.encodeToString(serializer = SET_BREAKDOWN_SERIALIZER, value = steps) }
+                    if (steps.isNullOrEmpty()) {
+                        null
+                    } else {
+                        RATING_HISTORY_JSON.encodeToString(serializer = SET_BREAKDOWN_SERIALIZER, value = steps)
+                    }
                 it[calculatedAt] = write.calculatedAt
             }
         }

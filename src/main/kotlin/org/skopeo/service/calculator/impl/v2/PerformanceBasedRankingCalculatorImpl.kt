@@ -155,12 +155,8 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
     ): RatingChange {
         val previous = player.rating.value.bd
         val updated = newRating.value.bd
-        val percentChange =
-            if (previous == ZERO) {
-                "0.000000"
-            } else {
-                ((updated - previous).divideBy(divisor = previous) * "100.0".bd).toStringPrecise()
-            }
+        // A valid NTRP rating is always in [1.0, 7.0] (Rating enforces it), so previous is never zero.
+        val percentChange = ((updated - previous).divideBy(divisor = previous) * "100.0".bd).toStringPrecise()
         return RatingChange(
             change = (updated - previous).toStringPrecise(),
             previousRating = player.rating,
@@ -178,7 +174,7 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
         step: SetStep,
         ratingAfter: BigDecimal,
     ): AuditEntry {
-        val self = set.games[teamId] ?: 0
+        val self = set.games.getValue(key = teamId)
         val opponent = set.games.filterKeys { it != teamId }.values.sum()
         return AuditEntry(
             message =
