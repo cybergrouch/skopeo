@@ -147,10 +147,20 @@ class RatingServiceTest {
     }
 
     @Test
-    fun `only an admin may set a rating`() {
+    fun `a RATER or admin may set a rating, but a plain player or unknown caller may not (#106)`() {
         admin(uid = "root")
+        val rater = provisionUser(uid = "rater", roles = setOf(Capability.PLAYER, Capability.RATER))
         val player = provisionUser(uid = "player")
 
+        // A RATER (and, implicitly, an ADMINISTRATOR) may set a rating.
+        service
+            .setRating(token = token(uid = "rater"), userId = player.id, value = BigDecimal("4.0"), confidence = null)
+            .shouldBeRight()
+        service
+            .setRating(token = token(uid = "root"), userId = rater.id, value = BigDecimal("3.5"), confidence = null)
+            .shouldBeRight()
+
+        // A plain PLAYER and an unprovisioned caller may not.
         service
             .setRating(token = token(uid = "player"), userId = player.id, value = BigDecimal("4.0"), confidence = null)
             .shouldBeLeft()
@@ -188,14 +198,16 @@ class RatingServiceTest {
     }
 
     @Test
-    fun `pending assessment lists unrated users for admins only`() {
+    fun `pending assessment lists unrated users for a RATER or admin only (#106)`() {
         admin(uid = "root")
+        provisionUser(uid = "rater", roles = setOf(Capability.PLAYER, Capability.RATER))
         val unrated = provisionUser(uid = "unrated")
         val rated = provisionUser(uid = "rated")
         service.setRating(token = token(uid = "root"), userId = rated.id, value = BigDecimal("3.0"), confidence = null).shouldBeRight()
 
+        // A RATER sees the same pending queue as an admin.
         val pending =
-            service.pendingAssessment(token = token(uid = "root"), limit = 50, offset = 0).shouldBeRight().items.map { it.userId }
+            service.pendingAssessment(token = token(uid = "rater"), limit = 50, offset = 0).shouldBeRight().items.map { it.userId }
         (unrated.id in pending) shouldBe true
         (rated.id in pending) shouldBe false
 

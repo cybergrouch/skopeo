@@ -37,8 +37,8 @@ private const val MAX_PAGE_SIZE = 100
 /**
  * Reading ratings/history is self-or-ADMINISTRATOR; setting a rating (the initial
  * assessment, or a later adjustment) and listing users pending assessment are
- * ADMINISTRATOR-only. A user with no rating is "pending assessment" and is ineligible to
- * be entered into a match (enforced by the match flow).
+ * RATER-or-ADMINISTRATOR (ADMINISTRATOR implicitly rates, #106). A user with no rating is
+ * "pending assessment" and is ineligible to be entered into a match (enforced by the match flow).
  *
  * Expected failures are returned as an [Either] left ([ServiceError], issue #115) rather than thrown.
  */
@@ -68,7 +68,7 @@ class RatingService(
         }
 
     /**
-     * Set (or adjust) a user's rating — ADMINISTRATOR only. Computes the published level. The route
+     * Set (or adjust) a user's rating — RATER or ADMINISTRATOR (#106). Computes the published level. The route
      * has already validated the NTRP range and confidence bounds (#116); this trusts them.
      */
     fun setRating(
@@ -78,7 +78,7 @@ class RatingService(
         confidence: BigDecimal?,
     ): Either<ServiceError, UserRating> =
         either {
-            val adminId = requireAdmin(token = token).bind()
+            val adminId = requireRater(token = token).bind()
             requireUserExists(userId = userId).bind()
             val level = Rating.fromValue(value = value.toPlainString()).publishedLevel.value
             val confidenceValue = confidence ?: DEFAULT_CONFIDENCE
@@ -149,7 +149,7 @@ class RatingService(
         offset: Int,
     ): Either<ServiceError, PendingAssessmentPage> =
         either {
-            requireAdmin(token = token).bind()
+            requireRater(token = token).bind()
             val (ids, total) =
                 ratings.userIdsPendingAssessment(
                     limit = limit.coerceIn(minimumValue = 1, maximumValue = MAX_PAGE_SIZE),
@@ -187,13 +187,12 @@ class RatingService(
         return if (caller == null || (!isSelf && !isAdmin)) ServiceError.Forbidden().left() else Unit.right()
     }
 
-    /** ADMINISTRATOR-only access; returns the caller's id (the audit actor). */
-    private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
-        return if (caller == null || !caller.capabilities.contains(element = Capability.ADMINISTRATOR)) {
-            ServiceError.Forbidden().left()
-        } else {
-            caller.id.right()
-        }
+    /** RATER-or-ADMINISTRATOR access (ADMINISTRATOR implicitly rates); returns the caller's id (the audit actor). */
+    private fun requireRater(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid) ?: return ServiceError.Forbidden().left()
+        val canRate =
+            caller.capabilities.contains(element = Capability.RATER) ||
+                caller.capabilities.contains(element = Capability.ADMINISTRATOR)
+        return if (canRate) caller.id.right() else ServiceError.Forbidden().left()
     }
 }

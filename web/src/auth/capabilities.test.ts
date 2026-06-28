@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   Capability,
   canManageMatches,
+  canRate,
   hasCapability,
   isAdministrator,
 } from './capabilities'
@@ -26,5 +27,13 @@ describe('capabilities', () => {
     expect(isAdministrator([Capability.ADMINISTRATOR])).toBe(true)
     expect(isAdministrator([Capability.HOST])).toBe(false)
     expect(isAdministrator(undefined)).toBe(false)
+  })
+
+  it('canRate is true for raters and administrators (#106)', () => {
+    expect(canRate([Capability.RATER])).toBe(true)
+    expect(canRate([Capability.ADMINISTRATOR])).toBe(true)
+    expect(canRate([Capability.PLAYER])).toBe(false)
+    expect(canRate([Capability.HOST])).toBe(false)
+    expect(canRate(undefined)).toBe(false)
   })
 })

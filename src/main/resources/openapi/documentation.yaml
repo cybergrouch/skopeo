@@ -910,7 +910,7 @@ paths:
         required: true
         schema:
           type: string
-          enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR]
+          enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER]
     delete:
       summary: Revoke a capability (ADMINISTRATOR only)
       description: |
@@ -960,7 +960,7 @@ paths:
 
   /api/v1/users/pending-assessment:
     get:
-      summary: List users pending an initial rating, paged (ADMINISTRATOR only)
+      summary: List users pending an initial rating, paged (RATER or ADMINISTRATOR)
       tags:
         - Ratings
       security:
@@ -1019,7 +1019,7 @@ paths:
         '404':
           description: No such user
     put:
-      summary: Set or adjust a user's rating (ADMINISTRATOR only)
+      summary: Set or adjust a user's rating (RATER or ADMINISTRATOR)
       description: |
         The initial assessment, or a later adjustment. Validates the NTRP range
         (1.0–7.0) and derives the published level.
@@ -2066,7 +2066,7 @@ components:
           type: array
           items:
             type: string
-            enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR]
+            enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER]
 
     UserResponse:
       type: object
@@ -2130,7 +2130,7 @@ components:
           type: array
           items:
             type: string
-            enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR]
+            enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER]
 
     ContactCreateRequest:
       type: object
@@ -2274,7 +2274,7 @@ components:
       properties:
         capability:
           type: string
-          enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR]
+          enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER]
 
     CapabilityResponse:
       type: object
@@ -2284,7 +2284,7 @@ components:
       properties:
         capability:
           type: string
-          enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR]
+          enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER]
         isActive:
           type: boolean
         grantedBy:

@@ -31,3 +31,16 @@ export function isAdministrator(
 ): boolean {
   return hasCapability(capabilities, Capability.ADMINISTRATOR)
 }
+
+/**
+ * The Ratings tab is for raters: users who can set initial ratings and triage rating
+ * work (#106). ADMINISTRATOR implicitly has RATER.
+ */
+export function canRate(
+  capabilities: readonly Capability[] | undefined,
+): boolean {
+  return (
+    hasCapability(capabilities, Capability.RATER) ||
+    hasCapability(capabilities, Capability.ADMINISTRATOR)
+  )
+}

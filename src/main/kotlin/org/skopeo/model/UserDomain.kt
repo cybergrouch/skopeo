@@ -9,8 +9,11 @@ import java.time.LocalDateTime
 import java.time.Period
 import java.util.UUID
 
-/** Authorization roles granted to a user (broad for now; devolvable to fine-grained capabilities later). */
-enum class Capability { PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR }
+/**
+ * Authorization roles granted to a user (broad for now; devolvable to fine-grained capabilities later).
+ * RATER may set initial ratings and triage rating work (#106); ADMINISTRATOR implicitly has RATER.
+ */
+enum class Capability { PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER }
 
 /**
  * An append-only grant of a [Capability] to a user. A grant is active until revoked; the

@@ -232,18 +232,22 @@ describe('ManagePlayerSection', () => {
     picked.current = { id: 'u1', publicCode: 'ABC234', displayName: null, capabilities: [] }
     useGetApiV1UsersUserIdCapabilities.mockReturnValue({ data: undefined, isLoading: false })
     await selectAlice()
-    // Header shows the id (no display name); both roles offer Grant (no active capabilities).
+    // Header shows the id (no display name); every grantable role offers Grant (no active capabilities).
     expect(screen.getByText(/u1/)).toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: 'Grant' })).toHaveLength(2)
+    expect(screen.getAllByRole('button', { name: /^Grant/ })).toHaveLength(3)
   })
 
   it('grants and revokes roles', async () => {
     const user = await selectAlice()
     // HOST is active → Revoke; CLUB_OWNER inactive → Grant.
-    await user.click(screen.getByRole('button', { name: 'Revoke' }))
+    await user.click(screen.getByRole('button', { name: 'Revoke HOST' }))
     expect(revokeMutate).toHaveBeenCalledWith({ userId: 'u1', capability: 'HOST' })
 
-    await user.click(screen.getByRole('button', { name: 'Grant' }))
+    await user.click(screen.getByRole('button', { name: 'Grant CLUB_OWNER' }))
     expect(grantMutate).toHaveBeenCalledWith({ userId: 'u1', data: { capability: 'CLUB_OWNER' } })
+
+    // RATER is grantable too (#106).
+    await user.click(screen.getByRole('button', { name: 'Grant RATER' }))
+    expect(grantMutate).toHaveBeenCalledWith({ userId: 'u1', data: { capability: 'RATER' } })
   })
 })
