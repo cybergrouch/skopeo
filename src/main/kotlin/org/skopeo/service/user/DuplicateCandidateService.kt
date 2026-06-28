@@ -38,7 +38,7 @@ class DuplicateCandidateService(
         token: VerifiedFirebaseToken,
         limit: Int,
         offset: Int,
-        status: DuplicateCandidateStatus? = null,
+        status: DuplicateCandidateStatus?,
     ): DuplicateCandidateViewPage {
         requireAdmin(token = token)
         val (items, total) =

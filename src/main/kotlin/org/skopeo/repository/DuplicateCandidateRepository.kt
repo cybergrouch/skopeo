@@ -34,25 +34,36 @@ class DuplicateCandidateRepository {
     ): DuplicateCandidate =
         transaction {
             val (a, b) = orderedPair(first = userAId, second = userBId)
-            val existing = openRow(a = a, b = b)
+            openRow(a = a, b = b)?.let { return@transaction it.toCandidate() }
+            val flaggedAt = LocalDateTime.now()
             val id =
-                existing?.let { it[DuplicateCandidatesTable.id].value }
-                    ?: DuplicateCandidatesTable.insertAndGetId {
-                        it[DuplicateCandidatesTable.userAId] = a
-                        it[DuplicateCandidatesTable.userBId] = b
-                        it[DuplicateCandidatesTable.signal] = signal.name
-                        it[DuplicateCandidatesTable.detail] = detail
-                        it[DuplicateCandidatesTable.flaggedBy] = flaggedBy
-                        it[flaggedAt] = LocalDateTime.now()
-                    }.value
-            loadById(id = id) ?: error(message = "Duplicate candidate $id could not be read back")
+                DuplicateCandidatesTable.insertAndGetId {
+                    it[DuplicateCandidatesTable.userAId] = a
+                    it[DuplicateCandidatesTable.userBId] = b
+                    it[DuplicateCandidatesTable.signal] = signal.name
+                    it[DuplicateCandidatesTable.detail] = detail
+                    it[DuplicateCandidatesTable.flaggedBy] = flaggedBy
+                    it[DuplicateCandidatesTable.flaggedAt] = flaggedAt
+                }.value
+            DuplicateCandidate(
+                id = id,
+                userAId = a,
+                userBId = b,
+                signal = signal,
+                detail = detail,
+                status = DuplicateCandidateStatus.OPEN,
+                flaggedBy = flaggedBy,
+                flaggedAt = flaggedAt,
+                resolvedBy = null,
+                resolvedAt = null,
+            )
         }
 
     /** One page of candidates (newest first) plus the total; optionally scoped to a [status]. */
     fun list(
         limit: Int,
         offset: Int,
-        status: DuplicateCandidateStatus? = null,
+        status: DuplicateCandidateStatus?,
     ): Pair<List<DuplicateCandidate>, Long> =
         transaction {
             fun query() =
