@@ -70,7 +70,7 @@ class RatingRepository {
                     it[confidenceScore] = confidence
                 }
             }
-            val row = ratingRow(userId = userId) ?: error(message = "Rating for user $userId could not be read back")
+            val row = UserRatingsTable.selectAll().where { UserRatingsTable.userId eq userId }.single()
             row.toUserRating()
         }
 

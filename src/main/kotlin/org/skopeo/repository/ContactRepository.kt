@@ -4,7 +4,7 @@
 package org.skopeo.repository
 
 import arrow.core.Either
-import arrow.core.flatMap
+import arrow.core.flatten
 import arrow.core.left
 import arrow.core.right
 import org.jetbrains.exposed.sql.JoinType
@@ -40,13 +40,8 @@ class ContactRepository {
 
     fun findById(id: UUID): Either<ServiceError, Contact> =
         transaction {
-            ContactInformationTable
-                .selectAll()
-                .where { ContactInformationTable.id eq id }
-                .singleOrNull()
-                ?.toContact()
-                ?.right()
-                ?: ServiceError.NotFound(message = "Contact $id not found").left()
+            val row = ContactInformationTable.selectAll().where { ContactInformationTable.id eq id }.singleOrNull()
+            if (row == null) ServiceError.NotFound(message = "Contact $id not found").left() else row.toContact().right()
         }
 
     /**
@@ -114,9 +109,9 @@ class ContactRepository {
                         it[isActive] = active
                         it[ContactInformationTable.disabledAt] = disabledAt
                     }
-                if (updated == 0) null else loadById(id = id)
+                if (updated == 0) ServiceError.NotFound(message = "Contact $id not found").left() else loadById(id = id).right()
             }
-        }.flatMap { row -> row?.right() ?: ServiceError.NotFound(message = "Contact $id not found").left() }
+        }.flatten()
 
     /**
      * Set verification state (the ADMINISTRATOR action). VERIFIED stamps the method,
@@ -143,9 +138,9 @@ class ContactRepository {
                         it[ContactInformationTable.verifiedAt] = whenVerified
                         it[ContactInformationTable.verifiedBy] = whoVerified
                     }
-                if (updated == 0) null else loadById(id = id)
+                if (updated == 0) ServiceError.NotFound(message = "Contact $id not found").left() else loadById(id = id).right()
             }
-        }.flatMap { row -> row?.right() ?: ServiceError.NotFound(message = "Contact $id not found").left() }
+        }.flatten()
 
     private fun loadById(id: UUID): Contact =
         ContactInformationTable

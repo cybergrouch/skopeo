@@ -105,7 +105,7 @@ class InviteService(
     /** ADMINISTRATOR-only access; returns the caller's id (the audit actor). */
     private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
         val caller = users.findByFirebaseUid(firebaseUid = token.uid)
-        val isAdmin = caller?.capabilities?.contains(element = Capability.ADMINISTRATOR) == true
+        val isAdmin = caller != null && caller.capabilities.contains(element = Capability.ADMINISTRATOR)
         return if (caller == null || !isAdmin) ServiceError.Forbidden().left() else caller.id.right()
     }
 }

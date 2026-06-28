@@ -73,6 +73,14 @@ class InviteRepositoryTest {
     }
 
     @Test
+    fun `markAccepted is a no-op when no pending invite exists for the email`() {
+        invites.markAccepted(email = "nobody@x.dev", acceptedAt = LocalDateTime.now())
+
+        invites.findOpenByEmail(email = "nobody@x.dev", asOf = LocalDateTime.now()).shouldBeNull()
+        invites.list(limit = 50, offset = 0).second shouldBe 0L
+    }
+
+    @Test
     fun `revoke closes a pending invite and reports NotFound for an unknown id`() {
         val invite = invites.createOrRotate(email = "rev@x.dev", invitedBy = null, expiresAt = future)
 

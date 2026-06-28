@@ -274,6 +274,14 @@ class PlayerServiceTest {
     }
 
     @Test
+    fun `match history for a deactivated player's code is a not-found`() {
+        val user = newUser(uid = "gone", names = display(name = "Gone"))
+        users.deactivate(id = user.id)
+
+        service.matchHistory(code = user.publicCode).shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
     fun `an admin reads a player's rating history by code, and a non-admin is forbidden`() {
         newAdmin(uid = "admin")
         val player = newUser(uid = "p", names = display(name = "Ana"))

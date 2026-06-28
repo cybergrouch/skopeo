@@ -47,7 +47,7 @@ class InviteRepository {
                     }
                     existingId
                 }
-            loadById(id = id) ?: error(message = "Invite $id could not be read back")
+            loadByIdOrThrow(id = id)
         }
 
     /** The open (PENDING and unexpired) invite for [email], if any — the provisioning gate. */
@@ -90,7 +90,7 @@ class InviteRepository {
             if (updated == 0) {
                 ServiceError.NotFound(message = "No invite $id").left()
             } else {
-                loadById(id = id)?.right() ?: ServiceError.NotFound(message = "No invite $id").left()
+                loadByIdOrThrow(id = id).right()
             }
         }
 
@@ -126,7 +126,7 @@ class InviteRepository {
             .where { (InvitesTable.email eq email) and (InvitesTable.status eq InviteStatus.PENDING.name) }
             .firstOrNull()
 
-    private fun loadById(id: UUID): Invite? = InvitesTable.selectAll().where { InvitesTable.id eq id }.map { it.toInvite() }.firstOrNull()
+    private fun loadByIdOrThrow(id: UUID): Invite = InvitesTable.selectAll().where { InvitesTable.id eq id }.single().toInvite()
 }
 
 internal fun ResultRow.toInvite(): Invite =

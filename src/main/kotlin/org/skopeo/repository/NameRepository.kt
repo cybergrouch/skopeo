@@ -4,7 +4,7 @@
 package org.skopeo.repository
 
 import arrow.core.Either
-import arrow.core.flatMap
+import arrow.core.flatten
 import arrow.core.left
 import arrow.core.right
 import org.jetbrains.exposed.sql.ResultRow
@@ -36,13 +36,8 @@ class NameRepository {
 
     fun findById(id: UUID): Either<ServiceError, Name> =
         transaction {
-            UserNamesTable
-                .selectAll()
-                .where { UserNamesTable.id eq id }
-                .singleOrNull()
-                ?.toName()
-                ?.right()
-                ?: ServiceError.NotFound(message = "Name $id not found").left()
+            val row = UserNamesTable.selectAll().where { UserNamesTable.id eq id }.singleOrNull()
+            if (row == null) ServiceError.NotFound(message = "Name $id not found").left() else row.toName().right()
         }
 
     /** Add a name. Adding a DISPLAY name disables the current active display name first. */
@@ -78,9 +73,9 @@ class NameRepository {
                         it[isActive] = active
                         it[UserNamesTable.disabledAt] = disabledAt
                     }
-                if (updated == 0) null else loadById(id = id)
+                if (updated == 0) ServiceError.NotFound(message = "Name $id not found").left() else loadById(id = id).right()
             }
-        }.flatMap { row -> row?.right() ?: ServiceError.NotFound(message = "Name $id not found").left() }
+        }.flatten()
 
     private fun disableActiveDisplay(userId: UUID) {
         UserNamesTable.update(

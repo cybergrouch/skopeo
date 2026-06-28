@@ -100,7 +100,7 @@ class UserRepository {
                 }
             }
 
-            loadAggregate(id = userId.value) ?: error(message = "Provisioned user ${userId.value} could not be read back")
+            loadAggregateOrThrow(id = userId.value)
         }
 
     fun findById(id: UUID): Either<ServiceError, User> = transaction { aggregateOrNotFound(id = id) }
@@ -233,23 +233,28 @@ class UserRepository {
         }
 
     /** Load the aggregate as an [Either], turning absence into a [ServiceError.NotFound]. Must run in a transaction. */
-    private fun aggregateOrNotFound(id: UUID): Either<ServiceError, User> =
-        loadAggregate(id = id)?.right() ?: ServiceError.NotFound(message = "User $id not found").left()
-
-    private fun loadAggregate(id: UUID): User? {
-        val row =
-            UsersTable
-                .selectAll()
-                .where { UsersTable.id eq id }
-                .singleOrNull() ?: return null
-        return row.toUser(
-            names = namesOf(id = id),
-            contacts = contactsOf(id = id),
-            identities = identitiesOf(id = id),
-            capabilities = capabilitiesOf(id = id),
-        )
+    private fun aggregateOrNotFound(id: UUID): Either<ServiceError, User> {
+        val user = loadAggregate(id = id)
+        return if (user == null) ServiceError.NotFound(message = "User $id not found").left() else user.right()
     }
+
+    private fun loadAggregate(id: UUID): User? =
+        UsersTable.selectAll().where { UsersTable.id eq id }.singleOrNull()?.let { row -> buildAggregate(id = id, row = row) }
+
+    private fun loadAggregateOrThrow(id: UUID): User =
+        buildAggregate(id = id, row = UsersTable.selectAll().where { UsersTable.id eq id }.single())
 }
+
+private fun buildAggregate(
+    id: UUID,
+    row: ResultRow,
+): User =
+    row.toUser(
+        names = namesOf(id = id),
+        contacts = contactsOf(id = id),
+        identities = identitiesOf(id = id),
+        capabilities = capabilitiesOf(id = id),
+    )
 
 /**
  * The unified picker term (#86): a fuzzy name match OR a player-code prefix, OR-combined so typing

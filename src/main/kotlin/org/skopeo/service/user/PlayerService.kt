@@ -55,9 +55,11 @@ class PlayerService(
      * plain-deactivated account (no canonical) stays hidden (treated as not-found).
      */
     private fun mergedCard(located: User): Either<ServiceError, PublicPlayerResponse> {
-        val canonical =
-            located.canonicalUserId?.let { users.findById(id = it).getOrNull() }
-                ?: return ServiceError.NotFound(message = "No player with code ${located.publicCode}").left()
+        val canonicalId = located.canonicalUserId
+        val canonical = if (canonicalId == null) null else users.findById(id = canonicalId).getOrNull()
+        if (canonical == null) {
+            return ServiceError.NotFound(message = "No player with code ${located.publicCode}").left()
+        }
         return PublicPlayerResponse(
             publicCode = located.publicCode,
             displayName = located.displayName(),
@@ -134,15 +136,19 @@ class PlayerService(
 
     private fun resolve(code: String): Either<ServiceError, User> {
         val normalized = code.trim().uppercase()
-        return users.findByPublicCode(code = normalized)?.takeIf { it.isActive }?.right()
-            ?: ServiceError.NotFound(message = "No player with code $normalized").left()
+        val user = users.findByPublicCode(code = normalized)
+        return if (user == null || !user.isActive) {
+            ServiceError.NotFound(message = "No player with code $normalized").left()
+        } else {
+            user.right()
+        }
     }
 
     /** Find by code regardless of active status (a disabled duplicate still has a viewable card); 404 if unknown. */
     private fun locate(code: String): Either<ServiceError, User> {
         val normalized = code.trim().uppercase()
-        return users.findByPublicCode(code = normalized)?.right()
-            ?: ServiceError.NotFound(message = "No player with code $normalized").left()
+        val user = users.findByPublicCode(code = normalized)
+        return if (user == null) ServiceError.NotFound(message = "No player with code $normalized").left() else user.right()
     }
 
     /** The "self" id (canonical or one of its duplicates) that actually played [match]. */

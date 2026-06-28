@@ -199,15 +199,16 @@ class ContactService(
         userId: UUID,
     ): Either<ServiceError, UUID> {
         val caller = users.findByFirebaseUid(firebaseUid = token.uid)
-        val isSelf = caller?.id == userId
-        val isAdmin = caller?.capabilities?.contains(element = Capability.ADMINISTRATOR) == true
-        return if (caller == null || (!isSelf && !isAdmin)) ServiceError.Forbidden().left() else caller.id.right()
+        if (caller == null) return ServiceError.Forbidden().left()
+        val isSelf = caller.id == userId
+        val isAdmin = caller.capabilities.contains(element = Capability.ADMINISTRATOR)
+        return if (!isSelf && !isAdmin) ServiceError.Forbidden().left() else caller.id.right()
     }
 
     /** ADMINISTRATOR-only access; returns the caller's id (the audit actor). */
     private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
         val caller = users.findByFirebaseUid(firebaseUid = token.uid)
-        val isAdmin = caller?.capabilities?.contains(element = Capability.ADMINISTRATOR) == true
+        val isAdmin = caller != null && caller.capabilities.contains(element = Capability.ADMINISTRATOR)
         return if (caller == null || !isAdmin) ServiceError.Forbidden().left() else caller.id.right()
     }
 }

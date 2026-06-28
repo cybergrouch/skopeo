@@ -87,7 +87,8 @@ class DuplicateCandidateRepository {
 
     fun findById(id: UUID): Either<ServiceError, DuplicateCandidate> =
         transaction {
-            loadById(id = id)?.right() ?: ServiceError.NotFound(message = "No duplicate candidate $id").left()
+            val candidate = loadById(id = id)
+            if (candidate == null) ServiceError.NotFound(message = "No duplicate candidate $id").left() else candidate.right()
         }
 
     /**
@@ -110,7 +111,7 @@ class DuplicateCandidateRepository {
             if (updated == 0) {
                 ServiceError.NotFound(message = "No duplicate candidate $id").left()
             } else {
-                loadById(id = id)?.right() ?: ServiceError.NotFound(message = "No duplicate candidate $id").left()
+                loadByIdOrThrow(id = id).right()
             }
         }
 
@@ -133,6 +134,9 @@ class DuplicateCandidateRepository {
 
     private fun loadById(id: UUID): DuplicateCandidate? =
         DuplicateCandidatesTable.selectAll().where { DuplicateCandidatesTable.id eq id }.map { it.toCandidate() }.firstOrNull()
+
+    private fun loadByIdOrThrow(id: UUID): DuplicateCandidate =
+        DuplicateCandidatesTable.selectAll().where { DuplicateCandidatesTable.id eq id }.single().toCandidate()
 }
 
 internal fun ResultRow.toCandidate(): DuplicateCandidate =
