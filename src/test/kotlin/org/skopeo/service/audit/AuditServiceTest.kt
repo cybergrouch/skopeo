@@ -191,6 +191,24 @@ class AuditServiceTest {
     }
 
     @Test
+    fun `a MATCH entry with no entityId resolves to no match target (#136)`() {
+        val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        service.record(
+            write =
+                AuditWrite(
+                    actorUserId = admin.id,
+                    action = AuditAction.MATCH_RESULT_RECORDED,
+                    entityType = AuditEntityType.MATCH,
+                    entityId = null,
+                    summary = "Recorded a match result",
+                ),
+        )
+
+        service.list(token = token(uid = "admin"), category = AuditCategory.MATCH_RESULT, limit = 10, offset = 0)
+            .shouldBeRight().items.single().matchTarget.shouldBeNull()
+    }
+
+    @Test
     fun `an admin sets a comment, blank clears it, and a missing entry is not found`() {
         val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         provision(uid = "player", roles = setOf(element = Capability.PLAYER))

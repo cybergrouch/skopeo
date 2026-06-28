@@ -61,6 +61,31 @@ describe('MatchPage', () => {
     expect(screen.getByText(/Center Court/)).toBeInTheDocument()
   })
 
+  it('handles doubles, name/code fallbacks, and a match with no venue', () => {
+    useGetApiV1MatchesCodeCode.mockReturnValue({
+      data: {
+        ...match,
+        venue: null,
+        team1: [
+          { displayName: 'Ana', publicCode: 'AAA111' },
+          { displayName: null, publicCode: 'CCC333' }, // name falls back to the code
+        ],
+        team2: [{ displayName: null, publicCode: null }], // both null → "Unknown", not a link
+      },
+      isLoading: false,
+    })
+    renderAt()
+
+    // Multi-player side renders both, the second linking by its code.
+    expect(screen.getByRole('link', { name: 'Ana' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'CCC333' })).toHaveAttribute('href', '/players/CCC333')
+    // A player with neither name nor code is plain text.
+    expect(screen.getByText('Unknown')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Unknown' })).not.toBeInTheDocument()
+    // No venue → the date line omits it.
+    expect(screen.queryByText(/Center Court/)).not.toBeInTheDocument()
+  })
+
   it('shows "Not yet played" and no winner badge before a result, and a player without a code is not a link', () => {
     useGetApiV1MatchesCodeCode.mockReturnValue({
       data: {
