@@ -18,6 +18,7 @@ import { SeedingTab } from './dashboard/SeedingTab'
 import { RatingsTab } from './dashboard/RatingsTab'
 import { ResearchTab } from './dashboard/ResearchTab'
 import { StandingsTab } from './dashboard/StandingsTab'
+import { InvitesTab } from './dashboard/InvitesTab'
 
 export function DashboardPage() {
   const navigate = useNavigate()
@@ -30,6 +31,7 @@ export function DashboardPage() {
   const showSeeding = canManageMatches(capabilities)
   const showRatings = canRate(capabilities)
   const showResearch = isResearcher(capabilities)
+  const showInvites = isAdministrator(capabilities)
   const showAdmin = isAdministrator(capabilities)
 
   async function onSignOut() {
@@ -71,6 +73,9 @@ export function DashboardPage() {
               {showRatings ? (
                 <TabsTrigger value="ratings">Ratings</TabsTrigger>
               ) : null}
+              {showInvites ? (
+                <TabsTrigger value="invites">Invites</TabsTrigger>
+              ) : null}
               {showAdmin ? (
                 <TabsTrigger value="admin">Admin</TabsTrigger>
               ) : null}
@@ -106,6 +111,11 @@ export function DashboardPage() {
             {showRatings ? (
               <TabsContent value="ratings">
                 <RatingsTab />
+              </TabsContent>
+            ) : null}
+            {showInvites ? (
+              <TabsContent value="invites">
+                <InvitesTab />
               </TabsContent>
             ) : null}
             {showAdmin ? (
