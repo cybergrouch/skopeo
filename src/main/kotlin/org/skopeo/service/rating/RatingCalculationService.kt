@@ -20,6 +20,7 @@ import org.skopeo.model.Rating
 import org.skopeo.model.RatingCalculationOptions
 import org.skopeo.model.RatingHistoryWrite
 import org.skopeo.model.ServiceError
+import org.skopeo.model.SetCalculationBreakdown
 import org.skopeo.model.SetScore
 import org.skopeo.model.Team
 import org.skopeo.model.TeamType
@@ -29,7 +30,7 @@ import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.calculator.AuditEntry
 import org.skopeo.service.calculator.RankingCalculator
-import org.skopeo.service.calculator.impl.v1.PerformanceBasedRankingCalculatorImpl
+import org.skopeo.service.calculator.impl.v2.PerformanceBasedRankingCalculatorImpl
 import org.skopeo.service.user.VerifiedFirebaseToken
 import java.math.BigDecimal
 import java.time.LocalDate
@@ -51,16 +52,20 @@ class RatingCalculationService(
     private val users: UserRepository = UserRepository(),
     private val calculator: RankingCalculator = PerformanceBasedRankingCalculatorImpl(),
 ) {
-    /** The internal calculator derivatives behind one player's change (issue #89), as precise strings. */
+    /**
+     * The internal calculator derivatives behind one player's change (issue #89), as precise strings.
+     * v1 fills the net fields and leaves [sets] empty; v2 leaves the net fields null and fills [sets] (#110).
+     */
     data class CalculationBreakdown(
-        val dominance: String,
-        val scale: String,
-        val ratingGap: String,
-        val normalizedGap: String,
-        val competitiveThresholdPct: String,
-        val isUpset: Boolean,
-        val upsetMultiplier: String,
-        val kFactor: String,
+        val dominance: String?,
+        val scale: String?,
+        val ratingGap: String?,
+        val normalizedGap: String?,
+        val competitiveThresholdPct: String?,
+        val isUpset: Boolean?,
+        val upsetMultiplier: String?,
+        val kFactor: String?,
+        val sets: List<SetCalculationBreakdown> = emptyList(),
     )
 
     /** One player's computed change within a processed match. */
@@ -162,11 +167,42 @@ class RatingCalculationService(
             MatchCalculation(matchId = match.id, matchDate = match.matchDate, changes = changes)
         }
 
-    /** Pull the per-player calculator derivatives out of the audit trail, keyed by player id. */
-    private fun breakdownsByPlayer(audit: List<AuditEntry>): Map<String, CalculationBreakdown> =
-        audit
-            .filter { it.context.keys.containsAll(elements = listOf("playerId", "dominance")) }
-            .associate { entry ->
+    /**
+     * Pull the per-player calculator derivatives out of the audit trail, keyed by player id. v1 emits
+     * one net entry per player (no `setIndex`); v2 emits one entry per set per player (with `setIndex`,
+     * #110). Per-set entries are grouped into an ordered [SetCalculationBreakdown] list with the net
+     * fields left null; net entries keep the existing net breakdown with no sets.
+     */
+    private fun breakdownsByPlayer(audit: List<AuditEntry>): Map<String, CalculationBreakdown> {
+        // Every breakdown entry (v1 net or v2 per-set) carries a "dominance" key alongside "playerId";
+        // match-level audit entries carry neither. Filtering on the one key avoids a permanently dead
+        // "playerId without dominance" branch (the two keys are always emitted together).
+        val relevant = audit.filter { it.context.containsKey(key = "dominance") }
+        val (perSet, net) = relevant.partition { it.context.containsKey(key = "setIndex") }
+
+        val perSetByPlayer =
+            perSet
+                .groupBy { it.context.getValue(key = "playerId") as String }
+                .mapValues { (_, entries) ->
+                    val steps =
+                        entries
+                            .sortedBy { it.context.factor(key = "setIndex").toInt() }
+                            .map { it.context.toSetBreakdown() }
+                    CalculationBreakdown(
+                        dominance = null,
+                        scale = null,
+                        ratingGap = null,
+                        normalizedGap = null,
+                        competitiveThresholdPct = null,
+                        isUpset = null,
+                        upsetMultiplier = null,
+                        kFactor = null,
+                        sets = steps,
+                    )
+                }
+
+        val netByPlayer =
+            net.associate { entry ->
                 val ctx = entry.context
                 (ctx.getValue(key = "playerId") as String) to
                     CalculationBreakdown(
@@ -180,6 +216,9 @@ class RatingCalculationService(
                         kFactor = ctx.factor(key = "kFactor"),
                     )
             }
+
+        return netByPlayer + perSetByPlayer
+    }
 
     private fun currentRating(
         userId: UUID,
@@ -235,17 +274,35 @@ class RatingCalculationService(
 /** Read an audit-context value (always a precise string for the adjustment-factor entries). */
 private fun Map<String, Any>.factor(key: String): String = this.getValue(key = key) as String
 
-/** Persist-ready form of the in-memory breakdown (#97): precise strings become [BigDecimal] columns. */
+/** Map a v2 per-set audit-context map (#110) into a [SetCalculationBreakdown]. */
+private fun Map<String, Any>.toSetBreakdown(): SetCalculationBreakdown =
+    SetCalculationBreakdown(
+        setIndex = factor(key = "setIndex").toInt(),
+        score = factor(key = "setScore"),
+        dominance = factor(key = "dominance"),
+        scale = factor(key = "scale"),
+        ratingGap = factor(key = "ratingGap"),
+        normalizedGap = factor(key = "normalizedGap"),
+        competitiveThresholdPct = factor(key = "competitiveThresholdPct"),
+        isUpset = factor(key = "isUpset").toBoolean(),
+        upsetMultiplier = factor(key = "upsetMultiplier"),
+        kFactor = factor(key = "kFactor"),
+        delta = factor(key = "delta"),
+        ratingAfter = factor(key = "ratingAfter"),
+    )
+
+/** Persist-ready form of the in-memory breakdown (#97/#110): net strings become [BigDecimal] columns, sets carry through. */
 private fun RatingCalculationService.CalculationBreakdown.toSnapshot(): CalculationBreakdownSnapshot =
     CalculationBreakdownSnapshot(
-        dominance = BigDecimal(dominance),
-        scale = BigDecimal(scale),
-        ratingGap = BigDecimal(ratingGap),
-        normalizedGap = BigDecimal(normalizedGap),
-        competitiveThresholdPct = BigDecimal(competitiveThresholdPct),
+        dominance = dominance?.let { BigDecimal(it) },
+        scale = scale?.let { BigDecimal(it) },
+        ratingGap = ratingGap?.let { BigDecimal(it) },
+        normalizedGap = normalizedGap?.let { BigDecimal(it) },
+        competitiveThresholdPct = competitiveThresholdPct?.let { BigDecimal(it) },
         isUpset = isUpset,
-        upsetMultiplier = BigDecimal(upsetMultiplier),
-        kFactor = BigDecimal(kFactor),
+        upsetMultiplier = upsetMultiplier?.let { BigDecimal(it) },
+        kFactor = kFactor?.let { BigDecimal(it) },
+        sets = sets,
     )
 
 private fun buildRequest(

@@ -3,6 +3,7 @@
 
 package org.skopeo.routes
 
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -296,7 +297,10 @@ class MatchApiIntegrationTest {
                 body.changes.map { it.userId }.toSet() shouldBe setOf(p1.id, p2.id)
                 val winner = body.changes.first { it.userId == p1.id }
                 winner.displayName shouldBe "Player"
-                winner.breakdown?.kFactor shouldBe "0.160000"
+                // v2 (default) surfaces per-set steps; the net kFactor is null, each set carries its own (#110).
+                winner.breakdown?.kFactor.shouldBeNull()
+                winner.breakdown?.sets?.size shouldBe 2
+                winner.breakdown?.sets?.first()?.kFactor shouldBe "0.160000"
             }
         }
 

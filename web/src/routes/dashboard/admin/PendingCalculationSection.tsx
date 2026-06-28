@@ -17,6 +17,7 @@ import { useGetApiV1Users } from '@/api/generated/users/users'
 import { GetApiV1MatchesFilter } from '@/api/generated/model'
 import type { CalculationResponse, MatchResponse } from '@/api/generated/model'
 import { plural } from '@/lib/plural'
+import { CalculationBreakdownDetail } from '@/components/CalculationBreakdownDetail'
 
 const PENDING_FILTER = { filter: GetApiV1MatchesFilter['pending-calculation'] }
 
@@ -139,13 +140,7 @@ export function PendingCalculationSection() {
                                 {nameOf(change.userId)}: {change.previousRating} →{' '}
                                 {change.newRating} ({change.change})
                               </div>
-                              <div className="text-xs text-muted-foreground">
-                                dominance {change.breakdown.dominance} · scale{' '}
-                                {change.breakdown.scale} · gap {change.breakdown.ratingGap}/
-                                {change.breakdown.competitiveThresholdPct} ·{' '}
-                                {change.breakdown.isUpset ? 'upset' : 'expected'} · K{' '}
-                                {change.breakdown.kFactor}
-                              </div>
+                              <CalculationBreakdownDetail breakdown={change.breakdown} />
                             </li>
                           ))}
                         </ul>

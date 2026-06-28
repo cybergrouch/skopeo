@@ -140,12 +140,20 @@ class RatingCalculationServiceTest {
         dry.matches.single().changes.first { it.userId == p1.id }.let {
             it.previousRating shouldBe BigDecimal("4.000000")
             (it.newRating > BigDecimal("4.000000")).shouldBeTrue() // winner gains
-            // The calculator derivatives are surfaced for the detail view (#89).
-            it.breakdown.kFactor shouldBe "0.160000"
-            it.breakdown.competitiveThresholdPct shouldBe "0.083000"
-            it.breakdown.isUpset.shouldBeFalse() // equal ratings, favourite-ish win is not an upset
-            it.breakdown.dominance.isNotBlank().shouldBeTrue()
-            it.breakdown.scale.isNotBlank().shouldBeTrue()
+            // The v2 calculator (default) reports per-set steps; the net fields are null (#110).
+            it.breakdown.kFactor.shouldBeNull()
+            it.breakdown.dominance.shouldBeNull()
+            // One per-set step per set (the fixture has two sets), ordered by set index.
+            it.breakdown.sets.size shouldBe 2
+            it.breakdown.sets.map { set -> set.setIndex } shouldBe listOf(0, 1)
+            it.breakdown.sets.first().let { set ->
+                set.score shouldBe "6-4"
+                set.kFactor shouldBe "0.160000"
+                set.competitiveThresholdPct shouldBe "0.083000"
+                set.isUpset.shouldBeFalse() // equal ratings, favourite-ish win is not an upset
+                set.dominance.isNotBlank().shouldBeTrue()
+                set.scale.isNotBlank().shouldBeTrue()
+            }
         }
         // nothing persisted
         ratings.findCurrentRating(userId = p1.id)!!.currentRating shouldBe BigDecimal("4.000000")
@@ -189,16 +197,49 @@ class RatingCalculationServiceTest {
         }
         ratings.historyByUser(userId = p1.id).single().let {
             it.matchId shouldBe matchId
-            // The calculation breakdown is persisted at commit, not recomputed later (#97).
-            it.kFactor.shouldNotBeNull().toPlainString() shouldBe "0.160000"
-            it.competitiveThresholdPct.shouldNotBeNull().toPlainString() shouldBe "0.083000"
-            it.isUpset shouldBe false
+            // The v2 per-set breakdown is persisted at commit and round-trips through the JSON column (#110);
+            // the net fields stay null for v2.
+            it.kFactor.shouldBeNull()
+            it.setBreakdown.size shouldBe 2
+            it.setBreakdown.map { set -> set.setIndex } shouldBe listOf(0, 1)
+            it.setBreakdown.first().let { set ->
+                set.score shouldBe "6-4"
+                set.kFactor shouldBe "0.160000"
+                set.competitiveThresholdPct shouldBe "0.083000"
+                set.isUpset shouldBe false
+            }
         }
         matchRepo.findById(matchId = matchId).shouldBeRight().ratedAt.shouldNotBeNull()
         matchRepo.listPendingCalculation().shouldBe(expected = emptyList())
 
         // idempotent — nothing left to process
         calc.calculate(token = token(uid = "root"), dryRun = false).shouldBeRight().matches.shouldBe(expected = emptyList())
+    }
+
+    @Test
+    fun `per-set breakdown round-trips - dry-run preview equals the persisted history (#110)`() {
+        provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        playedMatch(admin = "root", winner = p1.id, loser = p2.id)
+
+        // The dry-run preview carries the v2 per-set steps with net fields null.
+        val previewSets =
+            calc
+                .calculate(token = token(uid = "root"), dryRun = true)
+                .shouldBeRight()
+                .matches
+                .single()
+                .changes
+                .first { it.userId == p1.id }
+                .breakdown
+                .sets
+        previewSets.size shouldBe 2
+
+        // Committing persists them; reading the history back returns the same per-set breakdown.
+        calc.calculate(token = token(uid = "root"), dryRun = false).shouldBeRight()
+        val persistedSets = ratings.historyByUser(userId = p1.id).single().setBreakdown
+        persistedSets shouldBe previewSets
     }
 
     @Test

@@ -12,12 +12,16 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.model.AuthProvider
+import org.skopeo.model.CalculationBreakdownSnapshot
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
+import org.skopeo.model.RatingHistoryWrite
+import org.skopeo.model.SetCalculationBreakdown
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.math.BigDecimal
+import java.time.LocalDateTime
 import java.util.UUID
 
 class RatingRepositoryTest {
@@ -113,5 +117,67 @@ class RatingRepositoryTest {
         page3 shouldHaveSize 1
         // Pages are disjoint and together cover every pending user (stable order, no gaps/dupes).
         (page1 + page2 + page3).toSet() shouldBe all
+    }
+
+    private fun historyWrite(
+        userId: UUID,
+        newRating: String,
+        breakdown: CalculationBreakdownSnapshot?,
+    ) = RatingHistoryWrite(
+        userId = userId,
+        matchId = null,
+        previousRating = BigDecimal("4.0"),
+        newRating = BigDecimal(newRating),
+        ratingChange = BigDecimal(newRating).subtract(BigDecimal("4.0")),
+        percentChange = null,
+        previousLevel = "4.0",
+        newLevel = "4.0",
+        levelChanged = false,
+        breakdown = breakdown,
+        calculatedAt = LocalDateTime.now(),
+    )
+
+    @Test
+    fun `appendHistory round-trips the per-set breakdown only when present (#110)`() {
+        val userId = newUser(uid = "history")
+        val step =
+            SetCalculationBreakdown(
+                setIndex = 0,
+                score = "6-2",
+                dominance = "0.500000",
+                scale = "0.400000",
+                ratingGap = "0.500000",
+                normalizedGap = "0.083333",
+                competitiveThresholdPct = "0.083000",
+                isUpset = false,
+                upsetMultiplier = "2.000000",
+                kFactor = "0.160000",
+                delta = "0.032000",
+                ratingAfter = "4.032000",
+            )
+        val netBreakdown =
+            CalculationBreakdownSnapshot(
+                dominance = BigDecimal("0.200000"),
+                scale = BigDecimal("1.000000"),
+                ratingGap = BigDecimal("0.500000"),
+                normalizedGap = BigDecimal("0.083333"),
+                competitiveThresholdPct = BigDecimal("0.083000"),
+                isUpset = false,
+                upsetMultiplier = BigDecimal("2.000000"),
+                kFactor = BigDecimal("0.160000"),
+                sets = emptyList(),
+            )
+
+        // A null breakdown (admin re-rate), a v1 net breakdown (empty sets), and a v2 per-set breakdown.
+        ratings.appendHistory(write = historyWrite(userId = userId, newRating = "4.1", breakdown = null))
+        ratings.appendHistory(write = historyWrite(userId = userId, newRating = "4.2", breakdown = netBreakdown))
+        ratings.appendHistory(
+            write = historyWrite(userId = userId, newRating = "4.3", breakdown = netBreakdown.copy(sets = listOf(element = step))),
+        )
+
+        val byRating = ratings.historyByUser(userId = userId).associateBy { it.newRating }
+        byRating.getValue(key = BigDecimal("4.100000")).setBreakdown shouldBe emptyList()
+        byRating.getValue(key = BigDecimal("4.200000")).setBreakdown shouldBe emptyList()
+        byRating.getValue(key = BigDecimal("4.300000")).setBreakdown shouldBe listOf(element = step)
     }
 }

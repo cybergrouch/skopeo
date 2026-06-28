@@ -55,5 +55,8 @@ internal object UserRatingHistoryTable : UUIDTable(name = "user_rating_history")
     val isUpset = bool(name = "is_upset").nullable()
     val upsetMultiplier = decimal(name = "upset_multiplier", precision = RATING_PRECISION, scale = RATING_SCALE).nullable()
     val kFactor = decimal(name = "k_factor", precision = RATING_PRECISION, scale = RATING_SCALE).nullable()
+
+    // Per-set breakdown (#110): JSON-encoded list of the v2 calculator's per-set steps; null for v1.
+    val setBreakdown = text(name = "set_breakdown").nullable()
     val calculatedAt = datetime(name = "calculated_at")
 }

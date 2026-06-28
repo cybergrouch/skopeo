@@ -9,6 +9,7 @@ import org.skopeo.dto.match.toResponse
 import org.skopeo.model.MatchCalculationDetail
 import org.skopeo.model.MatchPlayerCalculation
 import org.skopeo.model.RatingHistoryEntry
+import org.skopeo.model.SetCalculationBreakdown
 import org.skopeo.service.rating.RatingCalculationService
 
 /**
@@ -33,9 +34,28 @@ data class PlayerChangeResponse(
     val breakdown: CalculationBreakdownResponse,
 )
 
-/** The internal calculator derivatives behind a player's change (issue #89). */
+/**
+ * The internal calculator derivatives behind a player's change (issue #89). The net fields are present
+ * for the v1 (averaged) calculator and null for v2, which reports the per-set steps in [sets] (#110).
+ */
 @Serializable
 data class CalculationBreakdownResponse(
+    val dominance: String? = null,
+    val scale: String? = null,
+    val ratingGap: String? = null,
+    val normalizedGap: String? = null,
+    val competitiveThresholdPct: String? = null,
+    val isUpset: Boolean? = null,
+    val upsetMultiplier: String? = null,
+    val kFactor: String? = null,
+    val sets: List<SetBreakdownResponse> = emptyList(),
+)
+
+/** One set's calculator derivatives behind a player's change (v2 per-set calculator, issue #110). */
+@Serializable
+data class SetBreakdownResponse(
+    val setIndex: Int,
+    val score: String,
     val dominance: String,
     val scale: String,
     val ratingGap: String,
@@ -44,6 +64,8 @@ data class CalculationBreakdownResponse(
     val isUpset: Boolean,
     val upsetMultiplier: String,
     val kFactor: String,
+    val delta: String,
+    val ratingAfter: String,
 )
 
 @Serializable
@@ -113,6 +135,7 @@ fun RatingCalculationService.CalculationOutcome.toResponse(): CalculationRespons
                                         isUpset = it.breakdown.isUpset,
                                         upsetMultiplier = it.breakdown.upsetMultiplier,
                                         kFactor = it.breakdown.kFactor,
+                                        sets = it.breakdown.sets.map { set -> set.toResponse() },
                                     ),
                             )
                         },
@@ -141,20 +164,41 @@ private fun MatchPlayerCalculation.toResponse(): MatchPlayerCalculationResponse 
     )
 
 /**
- * Assemble the persisted breakdown (#97) into its response, or null when absent (initial
- * assessments and pre-#97 rows). The columns are written atomically at commit, so [kFactor]
- * present implies the rest are too; the elvis fallbacks are unreachable guards.
+ * Assemble the persisted breakdown (#97/#110) into its response, or null when absent (initial
+ * assessments and pre-#97 rows). v1 rows carry the net fields (keyed by [kFactor] presence); v2 rows
+ * carry the per-set steps in [setBreakdown] with the net fields null (#110).
  */
 private fun RatingHistoryEntry.toBreakdownResponse(): CalculationBreakdownResponse? =
-    kFactor?.let { k ->
-        CalculationBreakdownResponse(
-            dominance = dominanceFactor?.toPlainString().orEmpty(),
-            scale = scale?.toPlainString().orEmpty(),
-            ratingGap = ratingGap?.toPlainString().orEmpty(),
-            normalizedGap = normalizedGap?.toPlainString().orEmpty(),
-            competitiveThresholdPct = competitiveThresholdPct?.toPlainString().orEmpty(),
-            isUpset = isUpset ?: false,
-            upsetMultiplier = upsetMultiplier?.toPlainString().orEmpty(),
-            kFactor = k.toPlainString(),
-        )
+    when {
+        kFactor != null ->
+            CalculationBreakdownResponse(
+                dominance = dominanceFactor?.toPlainString(),
+                scale = scale?.toPlainString(),
+                ratingGap = ratingGap?.toPlainString(),
+                normalizedGap = normalizedGap?.toPlainString(),
+                competitiveThresholdPct = competitiveThresholdPct?.toPlainString(),
+                isUpset = isUpset,
+                upsetMultiplier = upsetMultiplier?.toPlainString(),
+                kFactor = kFactor.toPlainString(),
+                sets = setBreakdown.map { it.toResponse() },
+            )
+        setBreakdown.isNotEmpty() -> CalculationBreakdownResponse(sets = setBreakdown.map { it.toResponse() })
+        else -> null
     }
+
+/** Map a persisted per-set breakdown (#110) to its response. */
+internal fun SetCalculationBreakdown.toResponse(): SetBreakdownResponse =
+    SetBreakdownResponse(
+        setIndex = setIndex,
+        score = score,
+        dominance = dominance,
+        scale = scale,
+        ratingGap = ratingGap,
+        normalizedGap = normalizedGap,
+        competitiveThresholdPct = competitiveThresholdPct,
+        isUpset = isUpset,
+        upsetMultiplier = upsetMultiplier,
+        kFactor = kFactor,
+        delta = delta,
+        ratingAfter = ratingAfter,
+    )

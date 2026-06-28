@@ -3,10 +3,31 @@
 
 package org.skopeo.model
 
+import kotlinx.serialization.Serializable
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
+
+/**
+ * One set's calculator derivatives behind a player's rating change (issue #110, v2 per-set calculator).
+ * All factors are precise decimal strings; [setIndex] is 0-based and [score] is "self-opponent" games.
+ */
+@Serializable
+data class SetCalculationBreakdown(
+    val setIndex: Int,
+    val score: String,
+    val dominance: String,
+    val scale: String,
+    val ratingGap: String,
+    val normalizedGap: String,
+    val competitiveThresholdPct: String,
+    val isUpset: Boolean,
+    val upsetMultiplier: String,
+    val kFactor: String,
+    val delta: String,
+    val ratingAfter: String,
+)
 
 /**
  * A user's current NTRP rating, as stored. The continuous
@@ -49,6 +70,8 @@ data class RatingHistoryEntry(
     val isUpset: Boolean? = null,
     val upsetMultiplier: BigDecimal? = null,
     val kFactor: BigDecimal? = null,
+    // Per-set breakdown (#110); empty for v1/initial/pre-#110 rows.
+    val setBreakdown: List<SetCalculationBreakdown> = emptyList(),
     val calculatedAt: LocalDateTime,
 )
 
@@ -58,14 +81,16 @@ data class RatingHistoryEntry(
  * pre-existing `dominance_factor` column.
  */
 data class CalculationBreakdownSnapshot(
-    val dominance: BigDecimal,
-    val scale: BigDecimal,
-    val ratingGap: BigDecimal,
-    val normalizedGap: BigDecimal,
-    val competitiveThresholdPct: BigDecimal,
-    val isUpset: Boolean,
-    val upsetMultiplier: BigDecimal,
-    val kFactor: BigDecimal,
+    // v1 fills the net fields and leaves [sets] empty; v2 leaves the net fields null and fills [sets] (#110).
+    val dominance: BigDecimal?,
+    val scale: BigDecimal?,
+    val ratingGap: BigDecimal?,
+    val normalizedGap: BigDecimal?,
+    val competitiveThresholdPct: BigDecimal?,
+    val isUpset: Boolean?,
+    val upsetMultiplier: BigDecimal?,
+    val kFactor: BigDecimal?,
+    val sets: List<SetCalculationBreakdown> = emptyList(),
 )
 
 /** The match result plus the stored per-player calculation behind a rated match (#97). */

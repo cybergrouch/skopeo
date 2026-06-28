@@ -45,6 +45,8 @@ data class RatingHistoryResponse(
     val dominanceFactor: String? = null,
     val smoothingApplied: Boolean,
     val smoothingFactor: String? = null,
+    // Per-set calculation steps (#110); empty for v1/initial/pre-#110 rows.
+    val setBreakdown: List<SetBreakdownResponse> = emptyList(),
     val calculatedAt: String,
 )
 
@@ -95,6 +97,7 @@ fun RatingHistoryEntry.toResponse(): RatingHistoryResponse =
         dominanceFactor = dominanceFactor?.toPlainString(),
         smoothingApplied = smoothingApplied,
         smoothingFactor = smoothingFactor?.toPlainString(),
+        setBreakdown = setBreakdown.map { it.toResponse() },
         calculatedAt = calculatedAt.toString(),
     )
 
