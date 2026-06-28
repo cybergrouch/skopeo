@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 /**
  * A privacy-preserving "speed meter" (issue #114) for a player's own Profile tab. It visualizes
@@ -60,7 +60,6 @@ export function RatingBandMeter({ position }: { position: number }) {
   // Once the settle finishes (or immediately under reduced motion) we add a CSS transition so any
   // later position change eases smoothly rather than snapping.
   const [settled, setSettled] = useState(reducedMotion)
-  const frameRef = useRef<number | null>(null)
 
   const angle = sweepAngle ?? targetAngle
 
@@ -86,23 +85,24 @@ export function RatingBandMeter({ position }: { position: number }) {
     ]
     const duration = 1400
     const startTime = performance.now()
+    let frameId = 0
 
     const tick = (now: number) => {
       const t = Math.min(1, (now - startTime) / duration)
-      // Find the current keyframe segment and linearly interpolate within it.
+      // Find the current keyframe segment and linearly interpolate within it. The keyframe `at`s are
+      // strictly increasing and t is clamped to 1, so the chosen segment always has a positive span.
       let i = 0
       while (i < keyframes.length - 1 && t > keyframes[i + 1].at) {
         i += 1
       }
       const from = keyframes[i]
-      const to = keyframes[Math.min(i + 1, keyframes.length - 1)]
-      const span = to.at - from.at
-      const localT = span > 0 ? (t - from.at) / span : 1
+      const to = keyframes[i + 1]
+      const localT = (t - from.at) / (to.at - from.at)
       const value = from.value + (to.value - from.value) * localT
       setSweepAngle(positionToAngle(value))
 
       if (t < 1) {
-        frameRef.current = requestAnimationFrame(tick)
+        frameId = requestAnimationFrame(tick)
       } else {
         // Drop back to rendering the target directly and enable the smooth-transition path.
         setSweepAngle(null)
@@ -110,12 +110,8 @@ export function RatingBandMeter({ position }: { position: number }) {
       }
     }
 
-    frameRef.current = requestAnimationFrame(tick)
-    return () => {
-      if (frameRef.current !== null) {
-        cancelAnimationFrame(frameRef.current)
-      }
-    }
+    frameId = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(frameId)
   }, [clamped, reducedMotion])
 
   return (
