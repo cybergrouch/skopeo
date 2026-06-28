@@ -103,12 +103,51 @@ export function ProfileTab({
             </div>
           </div>
         </CardHeader>
-        <CardContent className="flex flex-wrap gap-2">
-          {capabilities.map((capability) => (
-            <Badge key={capability} variant="secondary">
-              {capability}
-            </Badge>
-          ))}
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            {capabilities.map((capability) => (
+              <Badge key={capability} variant="secondary">
+                {capability}
+              </Badge>
+            ))}
+          </div>
+
+          {/* Rating (band + own-profile speedometer) lives inside the identity card (#111). */}
+          <div className="space-y-2 border-t pt-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Rating
+            </p>
+            {ratingsQuery.isLoading ? (
+              <p className="text-sm text-muted-foreground">Loading…</p>
+            ) : hasRating ? (
+              <ul className="space-y-2">
+                {ratings.map((rating, index) => (
+                  <li
+                    key={rating.level ?? index}
+                    className="rounded-lg border p-3 text-sm"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium">NTRP</span>
+                      <span>{rating.level ?? rating.value}</span>
+                    </div>
+                    {rating.bandPosition != null ? (
+                      <div className="mt-2 flex justify-center">
+                        <RatingBandMeter position={rating.bandPosition} />
+                      </div>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                <p className="font-medium text-foreground">Pending assessment</p>
+                <p className="mt-1">
+                  An administrator will assign your starting rating. Once that's
+                  done you'll be eligible to be scheduled in matches.
+                </p>
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 
@@ -148,49 +187,6 @@ export function ProfileTab({
           </CardContent>
         </Card>
       ) : null}
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Rating</CardTitle>
-          <CardDescription>
-            {hasRating
-              ? 'Your current rating across systems.'
-              : 'Awaiting an initial rating.'}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {ratingsQuery.isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
-          ) : hasRating ? (
-            <ul className="space-y-2">
-              {ratings.map((rating, index) => (
-                <li
-                  key={rating.level ?? index}
-                  className="rounded-lg border p-3 text-sm"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium">NTRP</span>
-                    <span>{rating.level ?? rating.value}</span>
-                  </div>
-                  {rating.bandPosition != null ? (
-                    <div className="mt-2 flex justify-center">
-                      <RatingBandMeter position={rating.bandPosition} />
-                    </div>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-              <p className="font-medium text-foreground">Pending assessment</p>
-              <p className="mt-1">
-                An administrator will assign your starting rating. Once that's
-                done you'll be eligible to be scheduled in matches.
-              </p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
       <RatingHistoryCard
         entries={history}
