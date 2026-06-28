@@ -103,12 +103,17 @@ class RatingApiIntegrationTest {
                 it.level shouldBe "4.0"
             }
 
+            // The owning player reads the band and gauge position, but NOT the exact rating (#64/#114).
             val ratings =
                 client.get(urlString = "/api/v1/users/${user.id}/ratings") {
                     header(key = HttpHeaders.Authorization, value = "Bearer $userToken")
                 }
             ratings.status shouldBe HttpStatusCode.OK
-            ratings.body<List<UserRatingResponse>>().single().value shouldBe "4.000000"
+            ratings.body<List<UserRatingResponse>>().single().let {
+                it.value shouldBe null // raw rating withheld from the player
+                it.level shouldBe "4.0" // band is visible
+                it.bandPosition shouldBe 0.0 // position within the 4.0–4.5 band (at the floor)
+            }
         }
 
     @Test

@@ -24,6 +24,21 @@ data class Level(
     val maxRating: String?,
 ) {
     companion object {
+        /** NTRP bands are 0.5 wide. */
+        private const val BAND_WIDTH = 0.5
+
+        /**
+         * Normalized 0..1 position of [rating] within its NTRP band (#114): band floor = 0.0,
+         * band ceiling = 1.0, clamped. Drives the privacy-preserving "speed meter" — it reveals
+         * roughly where in the band a player sits without exposing the exact rating. The open-ended
+         * 7.0 band treats a 0.5-wide window above 7.0 as full scale.
+         */
+        fun positionInBand(rating: BigDecimal): Double {
+            val floor = fromValue(value = rating.toPlainString()).minRating.toBigDecimal()
+            val position = (rating - floor).toDouble() / BAND_WIDTH
+            return position.coerceIn(minimumValue = 0.0, maximumValue = 1.0)
+        }
+
         /**
          * Calculate the level from a rating value: round down to the nearest 0.5
          * (3.00–3.49 → 3.0, 3.50–3.99 → 3.5), clamped to the NTRP range [1.0, 7.0].

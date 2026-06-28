@@ -28,6 +28,11 @@ vi.mock('@/api/generated/matches/matches', () => ({
   useGetApiV1MatchesIdCalculation: vi.fn(() => ({ data: undefined, isLoading: false })),
 }))
 vi.mock('@/auth/useAuth', () => ({ useAuth: useAuthMock }))
+// The band meter animates via requestAnimationFrame/matchMedia; stub it so these tests stay focused
+// on the Rating card wiring (the meter itself is covered in RatingBandMeter.test.tsx).
+vi.mock('@/components/RatingBandMeter', () => ({
+  RatingBandMeter: () => <div>band meter</div>,
+}))
 
 function renderProfile(
   capabilities: Capability[] = [Capability.PLAYER],
@@ -172,6 +177,26 @@ describe('ProfileTab', () => {
     // Falls back to the value when there's no published level.
     expect(screen.getByText('8.500000')).toBeInTheDocument()
     expect(screen.queryByText('Pending assessment')).not.toBeInTheDocument()
+  })
+
+  it('renders the band meter when a rating exposes a band position', () => {
+    useGetApiV1UsersUserIdRatings.mockReturnValue({
+      data: [{ system: 'NTRP', value: null, level: '4.0', bandPosition: 0.7 }],
+      isLoading: false,
+    })
+    renderProfile()
+    expect(screen.getByText('4.0')).toBeInTheDocument()
+    expect(screen.getByText('band meter')).toBeInTheDocument()
+  })
+
+  it('omits the band meter when there is no band position', () => {
+    useGetApiV1UsersUserIdRatings.mockReturnValue({
+      data: [{ system: 'NTRP', value: null, level: '4.0' }],
+      isLoading: false,
+    })
+    renderProfile()
+    expect(screen.getByText('4.0')).toBeInTheDocument()
+    expect(screen.queryByText('band meter')).not.toBeInTheDocument()
   })
 
   it('renders history entries, with and without a level change', () => {

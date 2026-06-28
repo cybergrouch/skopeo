@@ -47,14 +47,25 @@ class RatingService(
     private val users: UserRepository = UserRepository(),
     private val audit: AuditService = AuditService(),
 ) {
+    /**
+     * A user's ratings plus whether the caller may see the exact value (#114). Players get the band +
+     * a normalized band position only; rating managers (ADMINISTRATOR) also get the raw rating.
+     */
+    data class RatingsView(
+        val ratings: List<UserRating>,
+        val revealRawValue: Boolean,
+    )
+
     fun getRatings(
         token: VerifiedFirebaseToken,
         userId: UUID,
-    ): Either<ServiceError, List<UserRating>> =
+    ): Either<ServiceError, RatingsView> =
         either {
             requireUserExists(userId = userId).bind()
             requireSelfOrAdmin(token = token, userId = userId).bind()
-            ratings.findByUser(userId = userId)
+            val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+            val revealRawValue = caller != null && caller.capabilities.contains(element = Capability.ADMINISTRATOR)
+            RatingsView(ratings = ratings.findByUser(userId = userId), revealRawValue = revealRawValue)
         }
 
     fun getHistory(

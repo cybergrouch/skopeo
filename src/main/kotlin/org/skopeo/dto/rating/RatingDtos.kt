@@ -4,6 +4,7 @@
 package org.skopeo.dto.rating
 
 import kotlinx.serialization.Serializable
+import org.skopeo.model.Level
 import org.skopeo.model.PendingAssessment
 import org.skopeo.model.PendingAssessmentPage
 import org.skopeo.model.RatingHistoryEntry
@@ -18,8 +19,13 @@ data class SetRatingRequest(
 
 @Serializable
 data class UserRatingResponse(
-    val value: String,
+    // The exact rating is privacy-withheld from players (#64/#114): null unless the caller manages
+    // ratings (ADMINISTRATOR). Players get the band ([level]) and a normalized [bandPosition] instead.
+    val value: String? = null,
     val level: String? = null,
+    // Normalized 0..1 position within the current NTRP band (floor 0 → ceiling 1) for the own-profile
+    // "speed meter" (#114); never reveals the exact rating.
+    val bandPosition: Double? = null,
     val confidence: String,
     val matchesPlayed: Int,
     val lastMatchDate: String? = null,
@@ -61,10 +67,15 @@ data class PendingAssessmentPageResponse(
     val total: Int,
 )
 
-fun UserRating.toResponse(): UserRatingResponse =
+/**
+ * Map a rating for the API. [revealRawValue] gates the exact rating (#114): only rating managers
+ * (ADMINISTRATOR) see it; players get the band + [UserRatingResponse.bandPosition].
+ */
+fun UserRating.toResponse(revealRawValue: Boolean): UserRatingResponse =
     UserRatingResponse(
-        value = currentRating.toPlainString(),
+        value = if (revealRawValue) currentRating.toPlainString() else null,
         level = currentLevel,
+        bandPosition = Level.positionInBand(rating = currentRating),
         confidence = confidence.toPlainString(),
         matchesPlayed = matchesPlayed,
         lastMatchDate = lastMatchDate?.toString(),
