@@ -14,18 +14,15 @@ vi.mock('./admin/DuplicatesSection', () => ({
 vi.mock('./admin/DuplicateCandidatesSection', () => ({
   DuplicateCandidatesSection: () => <div>duplicate candidates section</div>,
 }))
-vi.mock('./admin/ActivityLogSection', () => ({
-  ActivityLogSection: () => <div>activity log section</div>,
-}))
 
 describe('AdminTab', () => {
-  it('renders the admin sections (invites now live in their own tab, #135)', () => {
+  it('renders the admin sections (invites #135 and activity log #134 now live in their own tabs)', () => {
     render(<AdminTab />)
     expect(screen.getByText('manage player section')).toBeInTheDocument()
     expect(screen.getByText('duplicates section')).toBeInTheDocument()
     expect(screen.getByText('duplicate candidates section')).toBeInTheDocument()
     expect(screen.getByText('pending calculation section')).toBeInTheDocument()
-    expect(screen.getByText('activity log section')).toBeInTheDocument()
     expect(screen.queryByText('invites section')).not.toBeInTheDocument()
+    expect(screen.queryByText('activity log section')).not.toBeInTheDocument()
   })
 })

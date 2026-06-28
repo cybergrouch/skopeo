@@ -19,6 +19,7 @@ import { RatingsTab } from './dashboard/RatingsTab'
 import { ResearchTab } from './dashboard/ResearchTab'
 import { StandingsTab } from './dashboard/StandingsTab'
 import { InvitesTab } from './dashboard/InvitesTab'
+import { ActivityTab } from './dashboard/ActivityTab'
 
 export function DashboardPage() {
   const navigate = useNavigate()
@@ -32,6 +33,7 @@ export function DashboardPage() {
   const showRatings = canRate(capabilities)
   const showResearch = isResearcher(capabilities)
   const showInvites = isAdministrator(capabilities)
+  const showActivity = isAdministrator(capabilities)
   const showAdmin = isAdministrator(capabilities)
 
   async function onSignOut() {
@@ -76,6 +78,9 @@ export function DashboardPage() {
               {showInvites ? (
                 <TabsTrigger value="invites">Invites</TabsTrigger>
               ) : null}
+              {showActivity ? (
+                <TabsTrigger value="activity">Activity Log</TabsTrigger>
+              ) : null}
               {showAdmin ? (
                 <TabsTrigger value="admin">Admin</TabsTrigger>
               ) : null}
@@ -116,6 +121,11 @@ export function DashboardPage() {
             {showInvites ? (
               <TabsContent value="invites">
                 <InvitesTab />
+              </TabsContent>
+            ) : null}
+            {showActivity ? (
+              <TabsContent value="activity">
+                <ActivityTab />
               </TabsContent>
             ) : null}
             {showAdmin ? (
