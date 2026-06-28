@@ -62,9 +62,8 @@ class RatingService(
     ): Either<ServiceError, RatingsView> =
         either {
             requireUserExists(userId = userId).bind()
-            requireSelfOrAdmin(token = token, userId = userId).bind()
-            val caller = users.findByFirebaseUid(firebaseUid = token.uid)
-            val revealRawValue = caller != null && caller.capabilities.contains(element = Capability.ADMINISTRATOR)
+            val caller = requireSelfOrAdmin(token = token, userId = userId).bind()
+            val revealRawValue = caller.capabilities.contains(element = Capability.ADMINISTRATOR)
             RatingsView(ratings = ratings.findByUser(userId = userId), revealRawValue = revealRawValue)
         }
 
@@ -187,15 +186,15 @@ class RatingService(
 
     private fun requireUserExists(userId: UUID): Either<ServiceError, Unit> = users.findById(id = userId).map { }
 
-    /** Self-or-ADMINISTRATOR access; the caller need not be the audit actor here. */
+    /** Self-or-ADMINISTRATOR access; returns the (non-null) caller so callers needn't re-fetch it. */
     private fun requireSelfOrAdmin(
         token: VerifiedFirebaseToken,
         userId: UUID,
-    ): Either<ServiceError, Unit> {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
-        val isSelf = caller?.id == userId
-        val isAdmin = caller?.capabilities?.contains(element = Capability.ADMINISTRATOR) == true
-        return if (caller == null || (!isSelf && !isAdmin)) ServiceError.Forbidden().left() else Unit.right()
+    ): Either<ServiceError, User> {
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid) ?: return ServiceError.Forbidden().left()
+        val isSelf = caller.id == userId
+        val isAdmin = caller.capabilities.contains(element = Capability.ADMINISTRATOR)
+        return if (!isSelf && !isAdmin) ServiceError.Forbidden().left() else caller.right()
     }
 
     /** RATER-or-ADMINISTRATOR access (ADMINISTRATOR implicitly rates); returns the caller's id (the audit actor). */
