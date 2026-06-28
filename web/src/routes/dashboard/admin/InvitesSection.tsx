@@ -33,6 +33,13 @@ const FILTERS = [
 
 type InviteFilter = (typeof FILTERS)[number]['value']
 
+// The API rejects an email already attached to an active account with 409 (#132). Surface that
+// specific case so the admin knows why the invite was blocked, rather than the generic failure.
+function existingAccountMessage(err: unknown): string | null {
+  const status = (err as { response?: { status?: number } })?.response?.status
+  return status === 409 ? 'An account already exists with this email.' : null
+}
+
 const BADGE_VARIANT: Record<string, 'default' | 'secondary' | 'outline'> = {
   PENDING: 'default',
   ACCEPTED: 'secondary',
@@ -133,8 +140,8 @@ export function InvitesSection() {
     try {
       await invite(email.trim())
       setEmail('')
-    } catch {
-      setError('Could not send the invite. Check the email and try again.')
+    } catch (err) {
+      setError(existingAccountMessage(err) ?? 'Could not send the invite. Check the email and try again.')
     } finally {
       setSending(false)
     }
@@ -145,8 +152,8 @@ export function InvitesSection() {
     setSending(true)
     try {
       await invite(address)
-    } catch {
-      setError('Could not resend the invite. Try again.')
+    } catch (err) {
+      setError(existingAccountMessage(err) ?? 'Could not resend the invite. Try again.')
     } finally {
       setSending(false)
     }

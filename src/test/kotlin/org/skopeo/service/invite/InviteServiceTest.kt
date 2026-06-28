@@ -14,6 +14,9 @@ import org.junit.jupiter.api.Test
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
+import org.skopeo.model.ContactInfo
+import org.skopeo.model.ContactSource
+import org.skopeo.model.ContactType
 import org.skopeo.model.InviteStatus
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
@@ -21,6 +24,8 @@ import org.skopeo.model.ServiceError
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
+import org.skopeo.model.VerificationMethod
+import org.skopeo.model.VerificationStatus
 import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.InviteRepository
 import org.skopeo.repository.UserRepository
@@ -60,6 +65,29 @@ class InviteServiceTest {
                 ),
         )
 
+    /** Provision an account that owns a verified EMAIL contact — the existing-account guard input (#132). */
+    private fun provisionWithEmail(
+        uid: String,
+        email: String,
+    ): User =
+        users.provision(
+            command =
+                ProvisionUserCommand(
+                    firebaseUid = uid,
+                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                    email =
+                        ContactInfo(
+                            type = ContactType.EMAIL,
+                            value = email,
+                            source = ContactSource.GOOGLE,
+                            status = VerificationStatus.VERIFIED,
+                            method = VerificationMethod.OAUTH_PROVIDER,
+                            isPrimary = true,
+                        ),
+                ),
+        )
+
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
     @Test
@@ -74,6 +102,41 @@ class InviteServiceTest {
 
         service.create(token = token(uid = "admin"), email = "new@example.com").shouldBeRight() // resend → rotate
         service.list(token = token(uid = "admin"), limit = 50, offset = 0).shouldBeRight().items shouldHaveSize 1
+    }
+
+    @Test
+    fun `inviting an email that already belongs to an active account is rejected (#132)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        provisionWithEmail(uid = "member", email = "taken@example.com")
+
+        service
+            .create(token = token(uid = "admin"), email = "taken@example.com")
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Conflict>()
+
+        // Nothing was recorded for the blocked address.
+        service.list(token = token(uid = "admin"), limit = 50, offset = 0).shouldBeRight().items shouldHaveSize 0
+    }
+
+    @Test
+    fun `the existing-account guard matches case- and whitespace-insensitively (#132)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        provisionWithEmail(uid = "member", email = "Mixed.Case@Example.com")
+
+        // The route normalizes to lower-case/trimmed before the service; the stored value keeps its casing.
+        service
+            .create(token = token(uid = "admin"), email = "mixed.case@example.com")
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Conflict>()
+    }
+
+    @Test
+    fun `a disabled account does not block re-inviting its email (#132)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val member = provisionWithEmail(uid = "member", email = "gone@example.com")
+        users.deactivate(id = member.id)
+
+        service.create(token = token(uid = "admin"), email = "gone@example.com").shouldBeRight()
     }
 
     @Test

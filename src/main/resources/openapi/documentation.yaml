@@ -1298,6 +1298,8 @@ paths:
           description: Invalid email
         '403':
           description: Caller is not an ADMINISTRATOR
+        '409':
+          description: An account already exists with this email (active account)
     get:
       summary: List invites, paged (ADMINISTRATOR only)
       tags:

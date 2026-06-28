@@ -6,6 +6,7 @@ package org.skopeo.service.invite
 import arrow.core.Either
 import arrow.core.left
 import arrow.core.raise.either
+import arrow.core.raise.ensure
 import arrow.core.right
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
@@ -15,6 +16,7 @@ import org.skopeo.model.Invite
 import org.skopeo.model.InvitePage
 import org.skopeo.model.InviteStatus
 import org.skopeo.model.ServiceError
+import org.skopeo.repository.ContactRepository
 import org.skopeo.repository.InviteRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService
@@ -36,6 +38,7 @@ private const val INVITE_TTL_DAYS = 7L
 class InviteService(
     private val invites: InviteRepository = InviteRepository(),
     private val users: UserRepository = UserRepository(),
+    private val contacts: ContactRepository = ContactRepository(),
     private val audit: AuditService = AuditService(),
 ) {
     /** [email] is validated and normalized (trimmed, lower-cased) at the route boundary (#116). */
@@ -45,6 +48,11 @@ class InviteService(
     ): Either<ServiceError, Invite> =
         either {
             val adminId = requireAdmin(token = token).bind()
+            // Don't invite an address that already belongs to an active account (#132); disabled
+            // accounts are excluded by the lookup, so a re-invite to a deactivated account is allowed.
+            ensure(condition = !contacts.activeAccountHasEmail(email = email)) {
+                ServiceError.Conflict(message = "An account already exists with this email")
+            }
             val invite =
                 invites.createOrRotate(
                     email = email,
