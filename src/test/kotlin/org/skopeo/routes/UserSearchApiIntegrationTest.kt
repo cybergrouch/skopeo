@@ -205,13 +205,16 @@ class UserSearchApiIntegrationTest {
         }
 
     @Test
-    fun `a plain player cannot look up users`() =
+    fun `a default player can search but cannot resolve ids (#107)`() =
         withApp { client ->
             seedStaff(uid = "admin", roles = setOf(Capability.ADMINISTRATOR))
             val player = TestFirebaseAuth.mintToken(uid = "p1")
-            client.provisionNamed(uid = "p1", displayName = "Player One")
+            val p1 = client.provisionNamed(uid = "p1", displayName = "Player One")
 
-            client.lookup(token = player, params = "name=player").status shouldBe HttpStatusCode.Forbidden
+            // A default sign-up is a RESEARCHER, so player research (search) is allowed (#107)...
+            client.lookup(token = player, params = "name=player").status shouldBe HttpStatusCode.OK
+            // ...but id-resolution stays HOST/ADMINISTRATOR only.
+            client.lookup(token = player, params = "ids=${p1.id}").status shouldBe HttpStatusCode.Forbidden
         }
 
     @Test
