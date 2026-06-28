@@ -130,6 +130,11 @@ class MatchRepositoryTest {
     }
 
     @Test
+    fun `findById on an unknown match is not found`() {
+        matches.findById(matchId = UUID.randomUUID()).shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
     fun `addResult on an unknown match is not found`() {
         matches
             .addResult(

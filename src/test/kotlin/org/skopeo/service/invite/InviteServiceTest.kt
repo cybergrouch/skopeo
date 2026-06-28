@@ -104,6 +104,17 @@ class InviteServiceTest {
     }
 
     @Test
+    fun `a caller without a provisioned account cannot create, list, or revoke invites`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val invite = service.create(token = token(uid = "admin"), email = "x@example.com").shouldBeRight()
+
+        // The token's uid maps to no user (caller == null) -> the admin gate denies before any work.
+        service.create(token = token(uid = "ghost"), email = "y@example.com").shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service.list(token = token(uid = "ghost"), limit = 50, offset = 0).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service.revoke(token = token(uid = "ghost"), id = invite.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
+    @Test
     fun `revoke removes the invite from the open set, and an unknown id is a not-found`() {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val invite = service.create(token = token(uid = "admin"), email = "z@example.com").shouldBeRight()
