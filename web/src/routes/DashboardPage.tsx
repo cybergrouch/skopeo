@@ -4,7 +4,12 @@ import { Button } from '@/components/ui/button'
 import { BrandLogo } from '@/components/BrandLogo'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuth } from '@/auth/useAuth'
-import { canManageMatches, canRate, isAdministrator } from '@/auth/capabilities'
+import {
+  canManageMatches,
+  canRate,
+  isAdministrator,
+  isResearcher,
+} from '@/auth/capabilities'
 import { useGetApiV1UsersMe } from '@/api/generated/users/users'
 import { ProfileTab } from './dashboard/ProfileTab'
 import { AdminTab } from './dashboard/AdminTab'
@@ -21,6 +26,7 @@ export function DashboardPage() {
   const capabilities = me?.capabilities ?? []
   const showMatches = canManageMatches(capabilities)
   const showRatings = canRate(capabilities)
+  const showResearch = isResearcher(capabilities)
   const showAdmin = isAdministrator(capabilities)
 
   async function onSignOut() {
@@ -49,7 +55,9 @@ export function DashboardPage() {
           <Tabs defaultValue="profile">
             <TabsList>
               <TabsTrigger value="profile">Profile</TabsTrigger>
-              <TabsTrigger value="research">Research</TabsTrigger>
+              {showResearch ? (
+                <TabsTrigger value="research">Research</TabsTrigger>
+              ) : null}
               {showMatches ? (
                 <TabsTrigger value="matches">Matches</TabsTrigger>
               ) : null}
@@ -70,9 +78,11 @@ export function DashboardPage() {
                 sex={me?.sex}
               />
             </TabsContent>
-            <TabsContent value="research">
-              <ResearchTab />
-            </TabsContent>
+            {showResearch ? (
+              <TabsContent value="research">
+                <ResearchTab />
+              </TabsContent>
+            ) : null}
             {showMatches ? (
               <TabsContent value="matches">
                 <MatchesTab />

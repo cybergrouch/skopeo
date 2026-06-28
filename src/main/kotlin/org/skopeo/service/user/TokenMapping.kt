@@ -123,11 +123,13 @@ internal fun buildProvisionCommand(
         city = request.city,
         country = request.country,
         proposedRating = parseProposedRating(value = request.proposedRating),
+        // Every sign-up is a PLAYER and a RESEARCHER (#107) — RESEARCHER gates the Research tab and is
+        // granted to all by default for now, so a future paywall is a matter of withholding the grant.
         capabilities =
             if (isBootstrapAdmin(token = token, adminEmails = adminEmails)) {
-                setOf(Capability.PLAYER, Capability.ADMINISTRATOR)
+                setOf(Capability.PLAYER, Capability.RESEARCHER, Capability.ADMINISTRATOR)
             } else {
-                setOf(element = Capability.PLAYER)
+                setOf(Capability.PLAYER, Capability.RESEARCHER)
             },
     )
 }

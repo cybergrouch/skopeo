@@ -143,7 +143,7 @@ class UserServiceTest {
                 token = token(uid = "g", email = "g@example.com", emailVerified = true, signInProvider = "google.com"),
                 request = request,
             ).shouldBeRight().user
-        user.capabilities shouldBe setOf(element = Capability.PLAYER)
+        user.capabilities shouldBe setOf(Capability.PLAYER, Capability.RESEARCHER)
     }
 
     @Test
@@ -155,7 +155,7 @@ class UserServiceTest {
             ).shouldBeRight()
 
         first.created.shouldBeTrue()
-        first.user.capabilities shouldBe setOf(Capability.PLAYER)
+        first.user.capabilities shouldBe setOf(Capability.PLAYER, Capability.RESEARCHER)
         first.user.names.single().value shouldBe "U One" // token display name fallback
         first.user.contacts.single().status shouldBe VerificationStatus.VERIFIED
 
@@ -284,7 +284,7 @@ class UserServiceTest {
                 request = CreateUserRequest(dateOfBirth = "2000-01-01", sex = "Male"),
             ).shouldBeRight()
 
-        result.user.capabilities shouldBe setOf(Capability.PLAYER, Capability.ADMINISTRATOR)
+        result.user.capabilities shouldBe setOf(Capability.PLAYER, Capability.RESEARCHER, Capability.ADMINISTRATOR)
     }
 
     @Test
@@ -296,17 +296,17 @@ class UserServiceTest {
                 token = token(uid = "later", email = "admin@example.com", emailVerified = false, name = "Later"),
                 request = CreateUserRequest(dateOfBirth = "2000-01-01", sex = "Male"),
             ).shouldBeRight()
-        created.user.capabilities shouldBe setOf(Capability.PLAYER)
+        created.user.capabilities shouldBe setOf(Capability.PLAYER, Capability.RESEARCHER)
 
         // Logs in with a verified email -> promoted.
         bootstrapService.currentUser(token = token(uid = "later", email = "admin@example.com", emailVerified = true))!!
-            .capabilities shouldBe setOf(Capability.PLAYER, Capability.ADMINISTRATOR)
+            .capabilities shouldBe setOf(Capability.PLAYER, Capability.RESEARCHER, Capability.ADMINISTRATOR)
 
         // A second login does not double-grant.
         bootstrapService.currentUser(token = token(uid = "later", email = "admin@example.com", emailVerified = true))!!
-            .capabilities shouldBe setOf(Capability.PLAYER, Capability.ADMINISTRATOR)
+            .capabilities shouldBe setOf(Capability.PLAYER, Capability.RESEARCHER, Capability.ADMINISTRATOR)
         repository.findByFirebaseUid(firebaseUid = "later")!!
-            .capabilities shouldBe setOf(Capability.PLAYER, Capability.ADMINISTRATOR)
+            .capabilities shouldBe setOf(Capability.PLAYER, Capability.RESEARCHER, Capability.ADMINISTRATOR)
     }
 
     @Test
@@ -318,7 +318,7 @@ class UserServiceTest {
         ).shouldBeRight()
 
         bootstrapService.currentUser(token = token(uid = "unv", email = "admin@example.com", emailVerified = false))!!
-            .capabilities shouldBe setOf(Capability.PLAYER)
+            .capabilities shouldBe setOf(Capability.PLAYER, Capability.RESEARCHER)
     }
 
     @Test
@@ -407,5 +407,34 @@ class UserServiceTest {
             .search(token = token(uid = "staff2"), filters = UserSearchFilters(code = "   "))
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `search is allowed for a RESEARCHER but forbidden without RESEARCHER or staff (#107)`() {
+        // A plain RESEARCHER (the default for every sign-up) may run player research.
+        service.provision(token = token(uid = "res"), request = request).shouldBeRight()
+        service
+            .search(token = token(uid = "res"), filters = UserSearchFilters(name = "Juan"))
+            .shouldBeRight()
+
+        // A user with neither RESEARCHER nor a staff role, and an unprovisioned caller, are forbidden.
+        repository.provision(
+            command =
+                ProvisionUserCommand(
+                    firebaseUid = "plain",
+                    identity =
+                        UserIdentity(provider = org.skopeo.model.AuthProvider.GOOGLE, providerUid = "plain", isPrimary = true),
+                    names = listOf(element = UserName(type = org.skopeo.model.NameType.DISPLAY, value = "Plain")),
+                    capabilities = setOf(element = Capability.PLAYER),
+                ),
+        )
+        service
+            .search(token = token(uid = "plain"), filters = UserSearchFilters(name = "Juan"))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .search(token = token(uid = "ghost"), filters = UserSearchFilters(name = "Juan"))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 }
