@@ -3,19 +3,20 @@
 
 package org.skopeo.repository
 
-import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.assertions.arrow.core.shouldBeLeft
+import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
-import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
-import org.jetbrains.exposed.exceptions.ExposedSQLException
+import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
+import org.skopeo.model.ServiceError
 import org.skopeo.model.UserIdentity
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.time.LocalDateTime
@@ -57,12 +58,12 @@ class NameRepositoryTest {
         name.type shouldBe NameType.NICKNAME
         name.isActive.shouldBeTrue()
         names.listByUser(userId = userId).single().id shouldBe name.id
-        names.findById(id = name.id).shouldNotBeNull()
+        names.findById(id = name.id).shouldBeRight()
     }
 
     @Test
-    fun `findById returns null when absent`() {
-        names.findById(id = UUID.randomUUID()).shouldBeNull()
+    fun `findById returns NotFound when absent`() {
+        names.findById(id = UUID.randomUUID()).shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
     @Test
@@ -72,7 +73,7 @@ class NameRepositoryTest {
 
         val second = names.create(userId = userId, type = NameType.DISPLAY, value = "Johnny")
 
-        names.findById(id = first.id)!!.isActive.shouldBeFalse()
+        names.findById(id = first.id).shouldBeRight().isActive.shouldBeFalse()
         second.isActive.shouldBeTrue()
         names.listByUser(userId = userId).count { it.type == NameType.DISPLAY && it.isActive } shouldBe 1
     }
@@ -91,17 +92,18 @@ class NameRepositoryTest {
         val userId = newUser(uid = "u4")
         val name = names.create(userId = userId, type = NameType.NICKNAME, value = "JB")
 
-        val disabled = names.setActive(id = name.id, active = false, disabledAt = LocalDateTime.now())
-        disabled.shouldNotBeNull()
+        val disabled = names.setActive(id = name.id, active = false, disabledAt = LocalDateTime.now()).shouldBeRight()
         disabled.isActive.shouldBeFalse()
         disabled.disabledAt.shouldNotBeNull()
 
-        names.setActive(id = name.id, active = true, disabledAt = null)!!.isActive.shouldBeTrue()
+        names.setActive(id = name.id, active = true, disabledAt = null).shouldBeRight().isActive.shouldBeTrue()
     }
 
     @Test
     fun `setActive reports absence`() {
-        names.setActive(id = UUID.randomUUID(), active = false, disabledAt = LocalDateTime.now()).shouldBeNull()
+        names.setActive(id = UUID.randomUUID(), active = false, disabledAt = LocalDateTime.now())
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
     @Test
@@ -110,8 +112,6 @@ class NameRepositoryTest {
         val first = names.create(userId = userId, type = NameType.DISPLAY, value = "Juan")
         names.create(userId = userId, type = NameType.DISPLAY, value = "Johnny") // disables `first`
 
-        shouldThrow<ExposedSQLException> {
-            names.setActive(id = first.id, active = true, disabledAt = null)
-        }
+        names.setActive(id = first.id, active = true, disabledAt = null).shouldBeLeft().shouldBeInstanceOf<ServiceError.Conflict>()
     }
 }

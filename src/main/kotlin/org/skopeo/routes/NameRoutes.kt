@@ -42,21 +42,23 @@ fun Application.configureNameRoutes(service: NameService = NameService()) {
 private fun Route.listAndCreate(service: NameService) {
     get {
         respondMappingErrors {
-            val list = service.list(token = verifiedToken(), userId = uuidParam(name = "userId"))
-            call.respond(status = HttpStatusCode.OK, message = list.map { it.toResponse() })
+            respondEither(result = service.list(token = verifiedToken(), userId = uuidParam(name = "userId"))) { list ->
+                call.respond(status = HttpStatusCode.OK, message = list.map { it.toResponse() })
+            }
         }
     }
     post {
         respondMappingErrors {
             val request = call.receive<NameCreateRequest>()
-            val name =
-                service.create(
-                    token = verifiedToken(),
-                    userId = uuidParam(name = "userId"),
-                    type = parseEnumParam<NameType>(value = request.type, field = "type"),
-                    value = request.value,
-                )
-            call.respond(status = HttpStatusCode.Created, message = name.toResponse())
+            respondEither(
+                result =
+                    service.create(
+                        token = verifiedToken(),
+                        userId = uuidParam(name = "userId"),
+                        type = parseEnumParam<NameType>(value = request.type, field = "type"),
+                        value = request.value,
+                    ),
+            ) { name -> call.respond(status = HttpStatusCode.Created, message = name.toResponse()) }
         }
     }
 }
@@ -64,8 +66,9 @@ private fun Route.listAndCreate(service: NameService) {
 private fun Route.byId(service: NameService) {
     get(path = "/{id}") {
         respondMappingErrors {
-            val name = service.get(token = verifiedToken(), userId = uuidParam(name = "userId"), nameId = uuidParam(name = "id"))
-            call.respond(status = HttpStatusCode.OK, message = name.toResponse())
+            respondEither(
+                result = service.get(token = verifiedToken(), userId = uuidParam(name = "userId"), nameId = uuidParam(name = "id")),
+            ) { name -> call.respond(status = HttpStatusCode.OK, message = name.toResponse()) }
         }
     }
 }
@@ -74,14 +77,15 @@ private fun Route.state(service: NameService) {
     put(path = "/{id}/state") {
         respondMappingErrors {
             val request = call.receive<NameStateRequest>()
-            val name =
-                service.setActive(
-                    token = verifiedToken(),
-                    userId = uuidParam(name = "userId"),
-                    nameId = uuidParam(name = "id"),
-                    active = request.isActive,
-                )
-            call.respond(status = HttpStatusCode.OK, message = name.toResponse())
+            respondEither(
+                result =
+                    service.setActive(
+                        token = verifiedToken(),
+                        userId = uuidParam(name = "userId"),
+                        nameId = uuidParam(name = "id"),
+                        active = request.isActive,
+                    ),
+            ) { name -> call.respond(status = HttpStatusCode.OK, message = name.toResponse()) }
         }
     }
 }

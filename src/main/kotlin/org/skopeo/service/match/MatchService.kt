@@ -3,6 +3,11 @@
 
 package org.skopeo.service.match
 
+import arrow.core.Either
+import arrow.core.left
+import arrow.core.raise.either
+import arrow.core.raise.ensure
+import arrow.core.right
 import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
@@ -17,15 +22,14 @@ import org.skopeo.model.MatchSetResult
 import org.skopeo.model.MatchStatus
 import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
+import org.skopeo.model.ServiceError
 import org.skopeo.model.TeamType
 import org.skopeo.model.User
 import org.skopeo.model.displayName
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
-import org.skopeo.service.ResourceNotFoundException
 import org.skopeo.service.audit.AuditService
-import org.skopeo.service.user.ForbiddenException
 import org.skopeo.service.user.VerifiedFirebaseToken
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -56,6 +60,8 @@ data class FixtureInput(
  * does NOT compute ratings — that's the separate calculation trigger (PR2b). Matches are
  * append-only: disabling (allowed only before a match is rated) plus a new record is how
  * corrections are made.
+ *
+ * Expected failures are returned as an [Either] left ([ServiceError], issue #115) rather than thrown.
  */
 class MatchService(
     private val matches: MatchRepository = MatchRepository(),
@@ -67,136 +73,140 @@ class MatchService(
     fun createFixture(
         token: VerifiedFirebaseToken,
         request: FixtureInput,
-    ): Match {
-        val createdBy = requireStaff(token = token)
-        val team1Users = resolveRatedParticipants(ids = request.team1)
-        val team2Users = resolveRatedParticipants(ids = request.team2)
+    ): Either<ServiceError, Match> =
+        either {
+            val createdBy = requireStaff(token = token).bind()
+            val team1Users = resolveRatedParticipants(ids = request.team1).bind()
+            val team2Users = resolveRatedParticipants(ids = request.team2).bind()
 
-        val match =
-            matches.createFixture(
-                command =
-                    CreateFixtureCommand(
-                        matchFormat = request.matchFormat,
-                        matchType = request.matchType,
-                        matchDate = request.matchDate,
-                        team1UserIds = request.team1,
-                        team2UserIds = request.team2,
-                        team1Name = teamName(users = team1Users),
-                        team2Name = teamName(users = team2Users),
-                        createdBy = createdBy,
-                        venue = request.venue,
-                        tournamentName = request.tournamentName,
+            val match =
+                matches.createFixture(
+                    command =
+                        CreateFixtureCommand(
+                            matchFormat = request.matchFormat,
+                            matchType = request.matchType,
+                            matchDate = request.matchDate,
+                            team1UserIds = request.team1,
+                            team2UserIds = request.team2,
+                            team1Name = teamName(users = team1Users),
+                            team2Name = teamName(users = team2Users),
+                            createdBy = createdBy,
+                            venue = request.venue,
+                            tournamentName = request.tournamentName,
+                        ),
+                )
+            audit.record(
+                write =
+                    AuditWrite(
+                        actorUserId = createdBy,
+                        action = AuditAction.MATCH_FIXTURE_CREATED,
+                        entityType = AuditEntityType.MATCH,
+                        entityId = match.id,
+                        summary = "Created a ${request.matchFormat.name} fixture on ${match.matchDate}",
+                        details =
+                            mapOf(
+                                "matchFormat" to request.matchFormat.name,
+                                "matchType" to request.matchType.name,
+                                "matchDate" to match.matchDate.toString(),
+                            ),
                     ),
             )
-        audit.record(
-            write =
-                AuditWrite(
-                    actorUserId = createdBy,
-                    action = AuditAction.MATCH_FIXTURE_CREATED,
-                    entityType = AuditEntityType.MATCH,
-                    entityId = match.id,
-                    summary = "Created a ${request.matchFormat.name} fixture on ${match.matchDate}",
-                    details =
-                        mapOf(
-                            "matchFormat" to request.matchFormat.name,
-                            "matchType" to request.matchType.name,
-                            "matchDate" to match.matchDate.toString(),
-                        ),
-                ),
-        )
-        return match
-    }
+            match
+        }
 
-    @Suppress("ThrowsCount") // distinct guardrails: not-found, disabled, already-completed
     fun uploadResult(
         token: VerifiedFirebaseToken,
         matchId: UUID,
         request: MatchResultRequest,
-    ): Match {
-        val recordedBy = requireStaff(token = token)
-        val match = matches.findById(matchId = matchId) ?: throw MatchNotFoundException(id = matchId)
-        if (!match.isActive) throw MatchConflictException(message = "Match is disabled")
-        if (match.status != MatchStatus.SCHEDULED) throw MatchConflictException(message = "Match already has results")
-        val (resolvedSets, winner) =
-            deriveOutcome(
-                team1Id = match.team1.teamId,
-                team2Id = match.team2.teamId,
-                request = request,
+    ): Either<ServiceError, Match> =
+        either {
+            val recordedBy = requireStaff(token = token).bind()
+            val match = matches.findById(matchId = matchId).bind()
+            ensure(condition = match.isActive) { ServiceError.Conflict(message = "Match is disabled") }
+            ensure(condition = match.status == MatchStatus.SCHEDULED) { ServiceError.Conflict(message = "Match already has results") }
+            val (resolvedSets, winner) =
+                deriveOutcome(
+                    team1Id = match.team1.teamId,
+                    team2Id = match.team2.teamId,
+                    request = request,
+                ).bind()
+            // All reachable validations have passed; record before persisting (the located, SCHEDULED
+            // match means addResult below won't be a no-op).
+            audit.record(
+                write =
+                    AuditWrite(
+                        actorUserId = recordedBy,
+                        action = AuditAction.MATCH_RESULT_RECORDED,
+                        entityType = AuditEntityType.MATCH,
+                        entityId = matchId,
+                        summary = "Recorded a match result",
+                        details = mapOf("matchId" to matchId.toString(), "winnerTeamId" to winner.toString()),
+                    ),
             )
-        // All reachable validations have passed; record before persisting (the located, SCHEDULED
-        // match means addResult below won't be a no-op).
-        audit.record(
-            write =
-                AuditWrite(
-                    actorUserId = recordedBy,
-                    action = AuditAction.MATCH_RESULT_RECORDED,
-                    entityType = AuditEntityType.MATCH,
-                    entityId = matchId,
-                    summary = "Recorded a match result",
-                    details = mapOf("matchId" to matchId.toString(), "winnerTeamId" to winner.toString()),
-                ),
-        )
-        return matches.addResult(
-            matchId = matchId,
-            sets = resolvedSets,
-            winnerTeamId = winner,
-            recordedBy = recordedBy,
-            completedAt = LocalDateTime.now(),
-        ) ?: throw MatchNotFoundException(id = matchId)
-    }
+            matches
+                .addResult(
+                    matchId = matchId,
+                    sets = resolvedSets,
+                    winnerTeamId = winner,
+                    recordedBy = recordedBy,
+                    completedAt = LocalDateTime.now(),
+                ).bind()
+        }
 
-    @Suppress("ThrowsCount") // distinct guardrails: not-found, rated-lock, not-found-on-update
     fun setActive(
         token: VerifiedFirebaseToken,
         matchId: UUID,
         active: Boolean,
-    ): Match {
-        requireStaff(token = token)
-        val match = matches.findById(matchId = matchId) ?: throw MatchNotFoundException(id = matchId)
-        if (!active && match.ratedAt != null) {
-            throw MatchConflictException(message = "Cannot disable a match that has already been rated")
+    ): Either<ServiceError, Match> =
+        either {
+            requireStaff(token = token).bind()
+            val match = matches.findById(matchId = matchId).bind()
+            ensure(condition = active || match.ratedAt == null) {
+                ServiceError.Conflict(message = "Cannot disable a match that has already been rated")
+            }
+            val disabledAt = if (active) null else LocalDateTime.now()
+            matches.setActive(matchId = matchId, active = active, disabledAt = disabledAt).bind()
         }
-        val disabledAt = if (active) null else LocalDateTime.now()
-        return matches.setActive(matchId = matchId, active = active, disabledAt = disabledAt)
-            ?: throw MatchNotFoundException(id = matchId)
-    }
 
     fun getById(
         token: VerifiedFirebaseToken,
         matchId: UUID,
-    ): Match {
-        val match = matches.findById(matchId = matchId) ?: throw MatchNotFoundException(id = matchId)
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
-        val isStaff = caller?.capabilities?.any { it in STAFF_ROLES } == true
-        val isParticipant = caller != null && caller.id in (match.team1.userIds + match.team2.userIds)
-        if (!isStaff && !isParticipant) throw ForbiddenException()
-        return match
-    }
+    ): Either<ServiceError, Match> =
+        either {
+            val match = matches.findById(matchId = matchId).bind()
+            val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+            val isStaff = caller != null && caller.capabilities.any { it in STAFF_ROLES }
+            val isParticipant = caller != null && caller.id in (match.team1.userIds + match.team2.userIds)
+            ensure(condition = isStaff || isParticipant) { ServiceError.Forbidden() }
+            match
+        }
 
     /**
      * The match result plus the stored per-player calculation behind it (#97), for the detail view
      * a rating-history entry links to. Same participant-or-staff access as [getById]. Reads the
      * breakdown persisted at commit time — never recomputed — so it stays faithful even if the
-     * algorithm constants change. Throws when the match has no committed calculation yet.
+     * algorithm constants change. A [ServiceError.NotFound] when the match has no committed
+     * calculation yet.
      */
     fun calculationDetail(
         token: VerifiedFirebaseToken,
         matchId: UUID,
-    ): MatchCalculationDetail {
-        val match = getById(token = token, matchId = matchId)
-        val byUser = ratings.historyForMatches(matchIds = listOf(element = matchId)).associateBy { it.userId }
-        if (byUser.isEmpty()) {
-            throw ResourceNotFoundException(message = "No rating calculation has been recorded for match $matchId")
+    ): Either<ServiceError, MatchCalculationDetail> =
+        either {
+            val match = getById(token = token, matchId = matchId).bind()
+            val byUser = ratings.historyForMatches(matchIds = listOf(element = matchId)).associateBy { it.userId }
+            ensure(condition = byUser.isNotEmpty()) {
+                ServiceError.NotFound(message = "No rating calculation has been recorded for match $matchId")
+            }
+            val names = displayNames(userIds = byUser.keys.toList())
+            // Present players in team1-then-team2 order for a stable, intuitive layout.
+            val order = match.team1.userIds + match.team2.userIds
+            val players =
+                byUser.values
+                    .sortedBy { order.indexOf(element = it.userId) }
+                    .map { entry -> MatchPlayerCalculation(userId = entry.userId, displayName = names[entry.userId], history = entry) }
+            MatchCalculationDetail(match = match, players = players)
         }
-        val names = displayNames(userIds = byUser.keys.toList())
-        // Present players in team1-then-team2 order for a stable, intuitive layout.
-        val order = match.team1.userIds + match.team2.userIds
-        val players =
-            byUser.values
-                .sortedBy { order.indexOf(element = it.userId) }
-                .map { entry -> MatchPlayerCalculation(userId = entry.userId, displayName = names[entry.userId], history = entry) }
-        return MatchCalculationDetail(match = match, players = players)
-    }
 
     private fun displayNames(userIds: List<UUID>): Map<UUID, String?> =
         users.findAllByIds(ids = userIds).associate { it.id to it.displayName() }
@@ -208,31 +218,33 @@ class MatchService(
     fun query(
         token: VerifiedFirebaseToken,
         view: MatchQuery,
-    ): List<Match> {
-        val caller = staffCaller(token = token)
-        val scopedTo = if (caller.capabilities.contains(element = Capability.ADMINISTRATOR)) null else caller.id
-        return when (view) {
-            MatchQuery.PENDING_CALCULATION -> matches.listPendingCalculation(createdBy = scopedTo)
-            MatchQuery.AWAITING_RESULTS -> matches.listAwaitingResults(createdBy = scopedTo)
-        }
-    }
-
-    private fun requireStaff(token: VerifiedFirebaseToken): UUID = staffCaller(token = token).id
-
-    private fun staffCaller(token: VerifiedFirebaseToken): User {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
-        if (caller == null || caller.capabilities.none { it in STAFF_ROLES }) throw ForbiddenException()
-        return caller
-    }
-
-    private fun resolveRatedParticipants(ids: List<UUID>): List<User> =
-        ids.map { id ->
-            val user = users.findById(id = id) ?: throw IllegalArgumentException("Unknown user $id")
-            require(value = user.isActive) { "User $id is not active" }
-            requireNotNull(value = ratings.findCurrentRating(userId = id)) {
-                "User $id has no rating yet (pending assessment)"
+    ): Either<ServiceError, List<Match>> =
+        either {
+            val caller = staffCaller(token = token).bind()
+            val scopedTo = if (caller.capabilities.contains(element = Capability.ADMINISTRATOR)) null else caller.id
+            when (view) {
+                MatchQuery.PENDING_CALCULATION -> matches.listPendingCalculation(createdBy = scopedTo)
+                MatchQuery.AWAITING_RESULTS -> matches.listAwaitingResults(createdBy = scopedTo)
             }
-            user
+        }
+
+    private fun requireStaff(token: VerifiedFirebaseToken): Either<ServiceError, UUID> = staffCaller(token = token).map { it.id }
+
+    private fun staffCaller(token: VerifiedFirebaseToken): Either<ServiceError, User> {
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+        return if (caller == null || caller.capabilities.none { it in STAFF_ROLES }) ServiceError.Forbidden().left() else caller.right()
+    }
+
+    private fun resolveRatedParticipants(ids: List<UUID>): Either<ServiceError, List<User>> =
+        either {
+            ids.map { id ->
+                val user = users.findById(id = id).mapLeft { ServiceError.Validation(message = "Unknown user $id") }.bind()
+                ensure(condition = user.isActive) { ServiceError.Validation(message = "User $id is not active") }
+                ensure(condition = ratings.findCurrentRating(userId = id) != null) {
+                    ServiceError.Validation(message = "User $id has no rating yet (pending assessment)")
+                }
+                user
+            }
         }
 }
 
@@ -246,39 +258,40 @@ private fun deriveOutcome(
     team1Id: UUID,
     team2Id: UUID,
     request: MatchResultRequest,
-): Pair<List<MatchSetResult>, UUID> {
-    var team1Sets = 0
-    var team2Sets = 0
-    val resolved =
-        request.sets.mapIndexed { index, set ->
-            val winner = setWinner(team1Id = team1Id, team2Id = team2Id, set = set, setNumber = index + 1)
-            if (winner == team1Id) team1Sets++ else team2Sets++
-            MatchSetResult(
-                setNumber = index + 1,
-                team1Games = set.team1Games,
-                team2Games = set.team2Games,
-                winnerTeamId = winner,
-                tiebreakTeam1Points = set.tiebreakTeam1Points,
-                tiebreakTeam2Points = set.tiebreakTeam2Points,
-            )
-        }
-    require(value = team1Sets != team2Sets) { "the match has no clear winner (sets are tied)" }
-    return resolved to if (team1Sets > team2Sets) team1Id else team2Id
-}
+): Either<ServiceError, Pair<List<MatchSetResult>, UUID>> =
+    either {
+        var team1Sets = 0
+        var team2Sets = 0
+        val resolved =
+            request.sets.mapIndexed { index, set ->
+                val winner = setWinner(team1Id = team1Id, team2Id = team2Id, set = set, setNumber = index + 1).bind()
+                if (winner == team1Id) team1Sets++ else team2Sets++
+                MatchSetResult(
+                    setNumber = index + 1,
+                    team1Games = set.team1Games,
+                    team2Games = set.team2Games,
+                    winnerTeamId = winner,
+                    tiebreakTeam1Points = set.tiebreakTeam1Points,
+                    tiebreakTeam2Points = set.tiebreakTeam2Points,
+                )
+            }
+        ensure(condition = team1Sets != team2Sets) { ServiceError.Validation(message = "the match has no clear winner (sets are tied)") }
+        resolved to if (team1Sets > team2Sets) team1Id else team2Id
+    }
 
 private fun setWinner(
     team1Id: UUID,
     team2Id: UUID,
     set: org.skopeo.dto.match.SetScoreRequest,
     setNumber: Int,
-): UUID =
+): Either<ServiceError, UUID> =
     when {
-        set.team1Games > set.team2Games -> team1Id
-        set.team2Games > set.team1Games -> team2Id
+        set.team1Games > set.team2Games -> team1Id.right()
+        set.team2Games > set.team1Games -> team2Id.right()
         set.tiebreakTeam1Points != null && set.tiebreakTeam2Points != null &&
             set.tiebreakTeam1Points != set.tiebreakTeam2Points ->
-            if (set.tiebreakTeam1Points > set.tiebreakTeam2Points) team1Id else team2Id
-        else -> throw IllegalArgumentException("set $setNumber has no clear winner")
+            (if (set.tiebreakTeam1Points > set.tiebreakTeam2Points) team1Id else team2Id).right()
+        else -> ServiceError.Validation(message = "set $setNumber has no clear winner").left()
     }
 
 private fun teamName(users: List<User>): String =

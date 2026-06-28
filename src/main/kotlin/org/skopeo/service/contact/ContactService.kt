@@ -3,7 +3,11 @@
 
 package org.skopeo.service.contact
 
-import org.jetbrains.exposed.exceptions.ExposedSQLException
+import arrow.core.Either
+import arrow.core.left
+import arrow.core.raise.either
+import arrow.core.raise.ensure
+import arrow.core.right
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -11,25 +15,23 @@ import org.skopeo.model.Capability
 import org.skopeo.model.Contact
 import org.skopeo.model.ContactType
 import org.skopeo.model.DuplicateSignal
+import org.skopeo.model.ServiceError
 import org.skopeo.model.VerificationMethod
 import org.skopeo.model.VerificationStatus
 import org.skopeo.repository.ContactRepository
 import org.skopeo.repository.DuplicateCandidateRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService
-import org.skopeo.service.user.ForbiddenException
-import org.skopeo.service.user.UserNotFoundException
 import org.skopeo.service.user.VerifiedFirebaseToken
-import java.sql.SQLException
 import java.time.LocalDateTime
 import java.util.UUID
-
-private const val PG_UNIQUE_VIOLATION = "23505"
 
 /**
  * Manage a user's contacts. Editing the address is self-or-ADMINISTRATOR (and resets
  * any verification); changing the verification state is ADMINISTRATOR-only — the
  * manual stand-in for automated OTP. The DB's uniqueness rules surface as 409s.
+ *
+ * Expected failures are returned as an [Either] left ([ServiceError], issue #115) rather than thrown.
  */
 class ContactService(
     private val contacts: ContactRepository = ContactRepository(),
@@ -40,21 +42,23 @@ class ContactService(
     fun list(
         token: VerifiedFirebaseToken,
         userId: UUID,
-    ): List<Contact> {
-        requireUserExists(userId = userId)
-        requireUserAccess(token = token, userId = userId)
-        return contacts.listByUser(userId = userId)
-    }
+    ): Either<ServiceError, List<Contact>> =
+        either {
+            requireUserExists(userId = userId).bind()
+            requireUserAccess(token = token, userId = userId).bind()
+            contacts.listByUser(userId = userId)
+        }
 
     fun get(
         token: VerifiedFirebaseToken,
         userId: UUID,
         contactId: UUID,
-    ): Contact {
-        val contact = locate(userId = userId, contactId = contactId)
-        requireUserAccess(token = token, userId = userId)
-        return contact
-    }
+    ): Either<ServiceError, Contact> =
+        either {
+            val contact = locate(userId = userId, contactId = contactId).bind()
+            requireUserAccess(token = token, userId = userId).bind()
+            contact
+        }
 
     fun create(
         token: VerifiedFirebaseToken,
@@ -62,27 +66,32 @@ class ContactService(
         type: ContactType,
         value: String,
         isPrimary: Boolean,
-    ): Contact {
-        requireUserExists(userId = userId)
-        val actor = requireUserAccess(token = token, userId = userId)
-        val contact =
-            conflictAware(message = "A ${type.name} contact already exists for this user") {
-                contacts.create(userId = userId, type = type, value = value, isPrimary = isPrimary)
-            }
-        audit.record(
-            write =
-                AuditWrite(
-                    actorUserId = actor,
-                    action = AuditAction.CONTACT_ADDED,
-                    entityType = AuditEntityType.USER,
-                    entityId = userId,
-                    summary = "Added ${type.name} $value",
-                    details = mapOf("contactType" to type.name, "value" to value),
-                ),
-        )
-        if (type == ContactType.PHONE) flagPhoneDuplicates(newUserId = userId, value = value)
-        return contact
-    }
+    ): Either<ServiceError, Contact> =
+        either {
+            requireUserExists(userId = userId).bind()
+            val actor = requireUserAccess(token = token, userId = userId).bind()
+            val contact =
+                contacts
+                    .create(
+                        userId = userId,
+                        type = type,
+                        value = value,
+                        isPrimary = isPrimary,
+                    ).bind()
+            audit.record(
+                write =
+                    AuditWrite(
+                        actorUserId = actor,
+                        action = AuditAction.CONTACT_ADDED,
+                        entityType = AuditEntityType.USER,
+                        entityId = userId,
+                        summary = "Added ${type.name} $value",
+                        details = mapOf("contactType" to type.name, "value" to value),
+                    ),
+            )
+            if (type == ContactType.PHONE) flagPhoneDuplicates(newUserId = userId, value = value)
+            contact
+        }
 
     /**
      * Duplicate-account detection (#126): if this new phone matches another active user's (after
@@ -119,28 +128,32 @@ class ContactService(
         userId: UUID,
         contactId: UUID,
         active: Boolean,
-    ): Contact {
-        val contact = locate(userId = userId, contactId = contactId)
-        val actor = requireUserAccess(token = token, userId = userId)
-        val disabledAt = if (active) null else LocalDateTime.now()
-        // locate() already proved the contact exists, so the update can't be a no-op; conflictAware
-        // still surfaces the "another active contact of that type" conflict when re-enabling.
-        conflictAware(message = "Another active contact of that type already exists") {
-            contacts.setActive(id = contactId, active = active, disabledAt = disabledAt)
+    ): Either<ServiceError, Contact> =
+        either {
+            val contact = locate(userId = userId, contactId = contactId).bind()
+            val actor = requireUserAccess(token = token, userId = userId).bind()
+            val disabledAt = if (active) null else LocalDateTime.now()
+            // locate() already proved the contact exists, so the update can't be a no-op; the repository
+            // still surfaces the "another active contact of that type" conflict when re-enabling.
+            contacts
+                .setActive(
+                    id = contactId,
+                    active = active,
+                    disabledAt = disabledAt,
+                ).bind()
+            audit.record(
+                write =
+                    AuditWrite(
+                        actorUserId = actor,
+                        action = AuditAction.CONTACT_UPDATED,
+                        entityType = AuditEntityType.USER,
+                        entityId = userId,
+                        summary = "${if (active) "Enabled" else "Disabled"} ${contact.type.name} ${contact.value}",
+                        details = mapOf("contactId" to contactId.toString(), "active" to active.toString()),
+                    ),
+            )
+            contact.copy(isActive = active, disabledAt = disabledAt)
         }
-        audit.record(
-            write =
-                AuditWrite(
-                    actorUserId = actor,
-                    action = AuditAction.CONTACT_UPDATED,
-                    entityType = AuditEntityType.USER,
-                    entityId = userId,
-                    summary = "${if (active) "Enabled" else "Disabled"} ${contact.type.name} ${contact.value}",
-                    details = mapOf("contactId" to contactId.toString(), "active" to active.toString()),
-                ),
-        )
-        return contact.copy(isActive = active, disabledAt = disabledAt)
-    }
 
     /** The ADMINISTRATOR-only verification action; records who verified and when. */
     fun setVerification(
@@ -149,67 +162,56 @@ class ContactService(
         contactId: UUID,
         status: VerificationStatus,
         method: VerificationMethod?,
-    ): Contact {
-        val contact = locate(userId = userId, contactId = contactId)
-        val adminId = requireAdmin(token = token)
-        require(value = contact.isActive) { "Cannot change verification of a disabled contact" }
-        // Business rule: a VERIFIED status defaults to ADMIN_OVERRIDE; a non-verified status has no method.
-        val resolvedMethod = if (status == VerificationStatus.VERIFIED) method ?: VerificationMethod.ADMIN_OVERRIDE else null
-        return conflictAware(message = "This value is already verified for another account") {
-            contacts.setVerification(
-                id = contactId,
-                status = status,
-                method = resolvedMethod,
-                verifiedBy = adminId,
-                verifiedAt = LocalDateTime.now(),
-            )
-        } ?: throw ContactNotFoundException(id = contactId)
-    }
+    ): Either<ServiceError, Contact> =
+        either {
+            val contact = locate(userId = userId, contactId = contactId).bind()
+            val adminId = requireAdmin(token = token).bind()
+            ensure(condition = contact.isActive) {
+                ServiceError.Validation(message = "Cannot change verification of a disabled contact")
+            }
+            // Business rule: a VERIFIED status defaults to ADMIN_OVERRIDE; a non-verified status has no method.
+            val resolvedMethod = if (status == VerificationStatus.VERIFIED) method ?: VerificationMethod.ADMIN_OVERRIDE else null
+            contacts
+                .setVerification(
+                    id = contactId,
+                    status = status,
+                    method = resolvedMethod,
+                    verifiedBy = adminId,
+                    verifiedAt = LocalDateTime.now(),
+                ).bind()
+        }
 
     private fun locate(
         userId: UUID,
         contactId: UUID,
-    ): Contact {
-        val contact = contacts.findById(id = contactId)
-        if (contact == null || contact.userId != userId) throw ContactNotFoundException(id = contactId)
-        return contact
-    }
+    ): Either<ServiceError, Contact> =
+        either {
+            val contact = contacts.findById(id = contactId).bind()
+            ensure(condition = contact.userId == userId) { ServiceError.NotFound(message = "Contact $contactId not found") }
+            contact
+        }
 
-    private fun requireUserExists(userId: UUID) {
-        users.findById(id = userId) ?: throw UserNotFoundException(id = userId)
-    }
+    private fun requireUserExists(userId: UUID): Either<ServiceError, Unit> = users.findById(id = userId).map { }
 
     /** Self-or-ADMINISTRATOR access; returns the caller's id (the audit actor). */
     private fun requireUserAccess(
         token: VerifiedFirebaseToken,
         userId: UUID,
-    ): UUID {
+    ): Either<ServiceError, UUID> {
         val caller = users.findByFirebaseUid(firebaseUid = token.uid)
-        val isSelf = caller?.id == userId
-        val isAdmin = caller?.capabilities?.contains(element = Capability.ADMINISTRATOR) == true
-        if (caller == null || (!isSelf && !isAdmin)) throw ForbiddenException()
-        return caller.id
+        if (caller == null) return ServiceError.Forbidden().left()
+        val isSelf = caller.id == userId
+        val isAdmin = caller.capabilities.contains(element = Capability.ADMINISTRATOR)
+        return if (!isSelf && !isAdmin) ServiceError.Forbidden().left() else caller.id.right()
     }
 
-    private fun requireAdmin(token: VerifiedFirebaseToken): UUID {
+    /** ADMINISTRATOR-only access; returns the caller's id (the audit actor). */
+    private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
         val caller = users.findByFirebaseUid(firebaseUid = token.uid)
-        if (caller == null || !caller.capabilities.contains(element = Capability.ADMINISTRATOR)) throw ForbiddenException()
-        return caller.id
+        val isAdmin = caller != null && caller.capabilities.contains(element = Capability.ADMINISTRATOR)
+        return if (caller == null || !isAdmin) ServiceError.Forbidden().left() else caller.id.right()
     }
 }
-
-private fun <T> conflictAware(
-    message: String,
-    block: () -> T,
-): T =
-    try {
-        block()
-    } catch (e: ExposedSQLException) {
-        if (isUniqueViolation(e = e)) throw ContactConflictException(message = message) else throw e
-    }
-
-private fun isUniqueViolation(e: ExposedSQLException): Boolean =
-    generateSequence<Throwable>(seed = e) { it.cause }.any { (it as? SQLException)?.sqlState == PG_UNIQUE_VIOLATION }
 
 /**
  * Normalize a phone number for duplicate detection (#126): keep only digits, preserving a single leading

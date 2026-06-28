@@ -3,21 +3,26 @@
 
 package org.skopeo.service.contact
 
-import io.kotest.assertions.throwables.shouldThrow
+import arrow.core.Either
+import io.kotest.assertions.arrow.core.shouldBeLeft
+import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
+import org.skopeo.model.Contact
 import org.skopeo.model.ContactType
 import org.skopeo.model.DuplicateCandidateStatus
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
+import org.skopeo.model.ServiceError
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
@@ -27,8 +32,6 @@ import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.ContactRepository
 import org.skopeo.repository.DuplicateCandidateRepository
 import org.skopeo.repository.UserRepository
-import org.skopeo.service.user.ForbiddenException
-import org.skopeo.service.user.UserNotFoundException
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.util.UUID
@@ -73,27 +76,29 @@ class ContactServiceTest {
         userId: UUID,
         contactId: UUID,
         status: VerificationStatus = VerificationStatus.VERIFIED,
-    ) = service.setVerification(
-        token = token(uid = adminUid),
-        userId = userId,
-        contactId = contactId,
-        status = status,
-        method = null,
-    )
+    ): Either<ServiceError, Contact> =
+        service.setVerification(
+            token = token(uid = adminUid),
+            userId = userId,
+            contactId = contactId,
+            status = status,
+            method = null,
+        )
 
     @Test
     fun `adding and disabling a contact write audit-log entries (#100)`() {
         val owner = provisionUser(uid = "owner")
         val created =
-            service.create(
-                token = token(uid = "owner"),
-                userId = owner.id,
-                type = ContactType.EMAIL,
-                value = "a@b.dev",
-                isPrimary = true,
-            )
-        service.setActive(token = token(uid = "owner"), userId = owner.id, contactId = created.id, active = false)
-        service.setActive(token = token(uid = "owner"), userId = owner.id, contactId = created.id, active = true)
+            service
+                .create(
+                    token = token(uid = "owner"),
+                    userId = owner.id,
+                    type = ContactType.EMAIL,
+                    value = "a@b.dev",
+                    isPrimary = true,
+                ).shouldBeRight()
+        service.setActive(token = token(uid = "owner"), userId = owner.id, contactId = created.id, active = false).shouldBeRight()
+        service.setActive(token = token(uid = "owner"), userId = owner.id, contactId = created.id, active = true).shouldBeRight()
 
         val audit = AuditRepository()
         audit.list(actions = listOf(element = AuditAction.CONTACT_ADDED), limit = 10, offset = 0).first.single().let {
@@ -112,17 +117,19 @@ class ContactServiceTest {
         val owner = provisionUser(uid = "owner")
 
         val created =
-            service.create(
-                token = token(uid = "owner"),
-                userId = owner.id,
-                type = ContactType.EMAIL,
-                value = "a@example.com",
-                isPrimary = true,
-            )
-        service.list(token = token(uid = "owner"), userId = owner.id).single().id shouldBe created.id
-        service.get(token = token(uid = "owner"), userId = owner.id, contactId = created.id).id shouldBe created.id
+            service
+                .create(
+                    token = token(uid = "owner"),
+                    userId = owner.id,
+                    type = ContactType.EMAIL,
+                    value = "a@example.com",
+                    isPrimary = true,
+                ).shouldBeRight()
+        service.list(token = token(uid = "owner"), userId = owner.id).shouldBeRight().single().id shouldBe created.id
+        service.get(token = token(uid = "owner"), userId = owner.id, contactId = created.id).shouldBeRight().id shouldBe created.id
 
-        val disabled = service.setActive(token = token(uid = "owner"), userId = owner.id, contactId = created.id, active = false)
+        val disabled =
+            service.setActive(token = token(uid = "owner"), userId = owner.id, contactId = created.id, active = false).shouldBeRight()
         disabled.isActive.shouldBeFalse()
     }
 
@@ -130,28 +137,31 @@ class ContactServiceTest {
     fun `disabling lets a new contact of the same type be added, re-enabling then conflicts`() {
         val owner = provisionUser(uid = "owner")
         val first =
-            service.create(
-                token = token(uid = "owner"),
-                userId = owner.id,
-                type = ContactType.EMAIL,
-                value = "first@example.com",
-                isPrimary = true,
-            )
+            service
+                .create(
+                    token = token(uid = "owner"),
+                    userId = owner.id,
+                    type = ContactType.EMAIL,
+                    value = "first@example.com",
+                    isPrimary = true,
+                ).shouldBeRight()
 
-        service.setActive(token = token(uid = "owner"), userId = owner.id, contactId = first.id, active = false)
+        service.setActive(token = token(uid = "owner"), userId = owner.id, contactId = first.id, active = false).shouldBeRight()
         val second =
-            service.create(
-                token = token(uid = "owner"),
-                userId = owner.id,
-                type = ContactType.EMAIL,
-                value = "second@example.com",
-                isPrimary = true,
-            )
+            service
+                .create(
+                    token = token(uid = "owner"),
+                    userId = owner.id,
+                    type = ContactType.EMAIL,
+                    value = "second@example.com",
+                    isPrimary = true,
+                ).shouldBeRight()
 
         // Re-enabling the first now collides with the active second.
-        shouldThrow<ContactConflictException> {
-            service.setActive(token = token(uid = "owner"), userId = owner.id, contactId = first.id, active = true)
-        }
+        service
+            .setActive(token = token(uid = "owner"), userId = owner.id, contactId = first.id, active = true)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Conflict>()
         second.isActive.shouldBeTrue()
     }
 
@@ -160,27 +170,30 @@ class ContactServiceTest {
         val owner = provisionUser(uid = "owner")
         provisionUser(uid = "root", capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val contact =
-            service.create(
-                token = token(uid = "owner"),
-                userId = owner.id,
-                type = ContactType.EMAIL,
-                value = "a@example.com",
-                isPrimary = true,
-            )
-        service.setActive(token = token(uid = "owner"), userId = owner.id, contactId = contact.id, active = false)
+            service
+                .create(
+                    token = token(uid = "owner"),
+                    userId = owner.id,
+                    type = ContactType.EMAIL,
+                    value = "a@example.com",
+                    isPrimary = true,
+                ).shouldBeRight()
+        service.setActive(token = token(uid = "owner"), userId = owner.id, contactId = contact.id, active = false).shouldBeRight()
 
-        shouldThrow<IllegalArgumentException> {
-            verify(adminUid = "root", userId = owner.id, contactId = contact.id)
-        }
+        verify(adminUid = "root", userId = owner.id, contactId = contact.id)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
     }
 
     @Test
     fun `a non-owner non-admin cannot access another user's contacts`() {
         val owner = provisionUser(uid = "owner")
         provisionUser(uid = "intruder")
-        service.create(token = token(uid = "owner"), userId = owner.id, type = ContactType.EMAIL, value = "a@example.com", isPrimary = true)
+        service
+            .create(token = token(uid = "owner"), userId = owner.id, type = ContactType.EMAIL, value = "a@example.com", isPrimary = true)
+            .shouldBeRight()
 
-        shouldThrow<ForbiddenException> { service.list(token = token(uid = "intruder"), userId = owner.id) }
+        service.list(token = token(uid = "intruder"), userId = owner.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
@@ -188,32 +201,34 @@ class ContactServiceTest {
         val owner = provisionUser(uid = "owner")
         val admin = provisionUser(uid = "root", capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val contact =
-            service.create(
-                token = token(uid = "owner"),
-                userId = owner.id,
-                type = ContactType.EMAIL,
-                value = "a@example.com",
-                isPrimary = true,
-            )
+            service
+                .create(
+                    token = token(uid = "owner"),
+                    userId = owner.id,
+                    type = ContactType.EMAIL,
+                    value = "a@example.com",
+                    isPrimary = true,
+                ).shouldBeRight()
 
-        shouldThrow<ForbiddenException> {
-            service.setVerification(
+        service
+            .setVerification(
                 token = token(uid = "owner"),
                 userId = owner.id,
                 contactId = contact.id,
                 status = VerificationStatus.VERIFIED,
                 method = null,
-            )
-        }
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
 
         val verified =
-            service.setVerification(
-                token = token(uid = "root"),
-                userId = owner.id,
-                contactId = contact.id,
-                status = VerificationStatus.VERIFIED,
-                method = null,
-            )
+            service
+                .setVerification(
+                    token = token(uid = "root"),
+                    userId = owner.id,
+                    contactId = contact.id,
+                    status = VerificationStatus.VERIFIED,
+                    method = null,
+                ).shouldBeRight()
         verified.status shouldBe VerificationStatus.VERIFIED
         verified.method shouldBe VerificationMethod.ADMIN_OVERRIDE
         verified.verifiedBy shouldBe admin.id
@@ -224,41 +239,45 @@ class ContactServiceTest {
         val owner = provisionUser(uid = "owner")
         provisionUser(uid = "root", capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val created =
-            service.create(
-                token = token(uid = "owner"),
-                userId = owner.id,
-                type = ContactType.EMAIL,
-                value = "a@example.com",
-                isPrimary = true,
-            )
+            service
+                .create(
+                    token = token(uid = "owner"),
+                    userId = owner.id,
+                    type = ContactType.EMAIL,
+                    value = "a@example.com",
+                    isPrimary = true,
+                ).shouldBeRight()
 
-        service.list(token = token(uid = "root"), userId = owner.id).single().id shouldBe created.id
-        service.get(token = token(uid = "root"), userId = owner.id, contactId = created.id).id shouldBe created.id
+        service.list(token = token(uid = "root"), userId = owner.id).shouldBeRight().single().id shouldBe created.id
+        service.get(token = token(uid = "root"), userId = owner.id, contactId = created.id).shouldBeRight().id shouldBe created.id
     }
 
     @Test
     fun `a caller without a provisioned account is forbidden`() {
         val owner = provisionUser(uid = "owner")
-        service.create(token = token(uid = "owner"), userId = owner.id, type = ContactType.EMAIL, value = "a@example.com", isPrimary = true)
+        service
+            .create(token = token(uid = "owner"), userId = owner.id, type = ContactType.EMAIL, value = "a@example.com", isPrimary = true)
+            .shouldBeRight()
 
-        shouldThrow<ForbiddenException> { service.list(token = token(uid = "ghost"), userId = owner.id) }
+        service.list(token = token(uid = "ghost"), userId = owner.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
     fun `a caller without a provisioned account cannot verify`() {
         val owner = provisionUser(uid = "owner")
         val contact =
-            service.create(
-                token = token(uid = "owner"),
-                userId = owner.id,
-                type = ContactType.EMAIL,
-                value = "a@example.com",
-                isPrimary = true,
-            )
+            service
+                .create(
+                    token = token(uid = "owner"),
+                    userId = owner.id,
+                    type = ContactType.EMAIL,
+                    value = "a@example.com",
+                    isPrimary = true,
+                ).shouldBeRight()
 
-        shouldThrow<ForbiddenException> {
-            verify(adminUid = "ghost", userId = owner.id, contactId = contact.id)
-        }
+        verify(adminUid = "ghost", userId = owner.id, contactId = contact.id)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
@@ -266,16 +285,18 @@ class ContactServiceTest {
         val owner = provisionUser(uid = "owner")
         provisionUser(uid = "root", capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val contact =
-            service.create(
-                token = token(uid = "owner"),
-                userId = owner.id,
-                type = ContactType.EMAIL,
-                value = "a@example.com",
-                isPrimary = true,
-            )
-        verify(adminUid = "root", userId = owner.id, contactId = contact.id)
+            service
+                .create(
+                    token = token(uid = "owner"),
+                    userId = owner.id,
+                    type = ContactType.EMAIL,
+                    value = "a@example.com",
+                    isPrimary = true,
+                ).shouldBeRight()
+        verify(adminUid = "root", userId = owner.id, contactId = contact.id).shouldBeRight()
 
-        val revoked = verify(adminUid = "root", userId = owner.id, contactId = contact.id, status = VerificationStatus.PENDING)
+        val revoked =
+            verify(adminUid = "root", userId = owner.id, contactId = contact.id, status = VerificationStatus.PENDING).shouldBeRight()
 
         revoked.status shouldBe VerificationStatus.PENDING
         revoked.method.shouldBe(expected = null)
@@ -284,23 +305,24 @@ class ContactServiceTest {
     @Test
     fun `duplicate contact type is a conflict`() {
         val owner = provisionUser(uid = "owner")
-        service.create(
-            token = token(uid = "owner"),
-            userId = owner.id,
-            type = ContactType.EMAIL,
-            value = "first@example.com",
-            isPrimary = true,
-        )
+        service
+            .create(
+                token = token(uid = "owner"),
+                userId = owner.id,
+                type = ContactType.EMAIL,
+                value = "first@example.com",
+                isPrimary = true,
+            ).shouldBeRight()
 
-        shouldThrow<ContactConflictException> {
-            service.create(
+        service
+            .create(
                 token = token(uid = "owner"),
                 userId = owner.id,
                 type = ContactType.EMAIL,
                 value = "second@example.com",
                 isPrimary = true,
-            )
-        }
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Conflict>()
     }
 
     @Test
@@ -309,26 +331,28 @@ class ContactServiceTest {
         val userA = provisionUser(uid = "a")
         val userB = provisionUser(uid = "b")
         val cA =
-            service.create(
-                token = token(uid = "a"),
-                userId = userA.id,
-                type = ContactType.EMAIL,
-                value = "dup@example.com",
-                isPrimary = true,
-            )
-        verify(adminUid = "root", userId = userA.id, contactId = cA.id)
+            service
+                .create(
+                    token = token(uid = "a"),
+                    userId = userA.id,
+                    type = ContactType.EMAIL,
+                    value = "dup@example.com",
+                    isPrimary = true,
+                ).shouldBeRight()
+        verify(adminUid = "root", userId = userA.id, contactId = cA.id).shouldBeRight()
         val cB =
-            service.create(
-                token = token(uid = "b"),
-                userId = userB.id,
-                type = ContactType.EMAIL,
-                value = "dup@example.com",
-                isPrimary = true,
-            )
+            service
+                .create(
+                    token = token(uid = "b"),
+                    userId = userB.id,
+                    type = ContactType.EMAIL,
+                    value = "dup@example.com",
+                    isPrimary = true,
+                ).shouldBeRight()
 
-        shouldThrow<ContactConflictException> {
-            verify(adminUid = "root", userId = userB.id, contactId = cB.id)
-        }
+        verify(adminUid = "root", userId = userB.id, contactId = cB.id)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Conflict>()
     }
 
     @Test
@@ -336,37 +360,42 @@ class ContactServiceTest {
         val owner = provisionUser(uid = "owner")
         val other = provisionUser(uid = "other")
         val contact =
-            service.create(
-                token = token(uid = "other"),
-                userId = other.id,
-                type = ContactType.EMAIL,
-                value = "a@example.com",
-                isPrimary = true,
-            )
+            service
+                .create(
+                    token = token(uid = "other"),
+                    userId = other.id,
+                    type = ContactType.EMAIL,
+                    value = "a@example.com",
+                    isPrimary = true,
+                ).shouldBeRight()
 
-        shouldThrow<ContactNotFoundException> {
-            service.get(token = token(uid = "owner"), userId = owner.id, contactId = UUID.randomUUID())
-        }
+        service
+            .get(token = token(uid = "owner"), userId = owner.id, contactId = UUID.randomUUID())
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
         // contact exists but belongs to a different user than the path
-        shouldThrow<ContactNotFoundException> {
-            service.get(token = token(uid = "owner"), userId = owner.id, contactId = contact.id)
-        }
+        service
+            .get(token = token(uid = "owner"), userId = owner.id, contactId = contact.id)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
     @Test
     fun `disabling then re-enabling the only contact succeeds`() {
         val owner = provisionUser(uid = "owner")
         val contact =
-            service.create(
-                token = token(uid = "owner"),
-                userId = owner.id,
-                type = ContactType.EMAIL,
-                value = "a@example.com",
-                isPrimary = true,
-            )
-        service.setActive(token = token(uid = "owner"), userId = owner.id, contactId = contact.id, active = false)
+            service
+                .create(
+                    token = token(uid = "owner"),
+                    userId = owner.id,
+                    type = ContactType.EMAIL,
+                    value = "a@example.com",
+                    isPrimary = true,
+                ).shouldBeRight()
+        service.setActive(token = token(uid = "owner"), userId = owner.id, contactId = contact.id, active = false).shouldBeRight()
 
-        val reenabled = service.setActive(token = token(uid = "owner"), userId = owner.id, contactId = contact.id, active = true)
+        val reenabled =
+            service.setActive(token = token(uid = "owner"), userId = owner.id, contactId = contact.id, active = true).shouldBeRight()
 
         reenabled.isActive.shouldBeTrue()
         reenabled.disabledAt.shouldBe(expected = null)
@@ -377,22 +406,24 @@ class ContactServiceTest {
         val owner = provisionUser(uid = "owner")
         provisionUser(uid = "root", capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val contact =
-            service.create(
-                token = token(uid = "owner"),
-                userId = owner.id,
-                type = ContactType.EMAIL,
-                value = "a@example.com",
-                isPrimary = true,
-            )
+            service
+                .create(
+                    token = token(uid = "owner"),
+                    userId = owner.id,
+                    type = ContactType.EMAIL,
+                    value = "a@example.com",
+                    isPrimary = true,
+                ).shouldBeRight()
 
         val verified =
-            service.setVerification(
-                token = token(uid = "root"),
-                userId = owner.id,
-                contactId = contact.id,
-                status = VerificationStatus.VERIFIED,
-                method = VerificationMethod.EMAIL_LINK,
-            )
+            service
+                .setVerification(
+                    token = token(uid = "root"),
+                    userId = owner.id,
+                    contactId = contact.id,
+                    status = VerificationStatus.VERIFIED,
+                    method = VerificationMethod.EMAIL_LINK,
+                ).shouldBeRight()
 
         verified.status shouldBe VerificationStatus.VERIFIED
         verified.method shouldBe VerificationMethod.EMAIL_LINK
@@ -400,55 +431,61 @@ class ContactServiceTest {
 
     @Test
     fun `creating a contact for a non-existent user is not found`() {
-        val owner = provisionUser(uid = "owner")
+        provisionUser(uid = "owner")
 
-        shouldThrow<UserNotFoundException> {
-            service.create(
+        service
+            .create(
                 token = token(uid = "owner"),
                 userId = UUID.randomUUID(),
                 type = ContactType.EMAIL,
                 value = "a@example.com",
                 isPrimary = true,
-            )
-        }
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
     @Test
     fun `listing contacts for a non-existent user is not found`() {
         provisionUser(uid = "owner")
 
-        shouldThrow<UserNotFoundException> {
-            service.list(token = token(uid = "owner"), userId = UUID.randomUUID())
-        }
+        service
+            .list(token = token(uid = "owner"), userId = UUID.randomUUID())
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
     @Test
     fun `a provisioned non-admin self cannot verify but reaches the capability check`() {
         val owner = provisionUser(uid = "owner")
         val contact =
-            service.create(
-                token = token(uid = "owner"),
-                userId = owner.id,
-                type = ContactType.EMAIL,
-                value = "a@example.com",
-                isPrimary = true,
-            )
+            service
+                .create(
+                    token = token(uid = "owner"),
+                    userId = owner.id,
+                    type = ContactType.EMAIL,
+                    value = "a@example.com",
+                    isPrimary = true,
+                ).shouldBeRight()
 
         // The caller is provisioned (non-null) but lacks ADMINISTRATOR -> capability branch is false.
-        shouldThrow<ForbiddenException> {
-            verify(adminUid = "owner", userId = owner.id, contactId = contact.id)
-        }
+        verify(adminUid = "owner", userId = owner.id, contactId = contact.id)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
     fun `adding a phone matching another active user flags a duplicate candidate, normalized (#126)`() {
         val a = provisionUser(uid = "a")
         val b = provisionUser(uid = "b")
-        service.create(token = token(uid = "a"), userId = a.id, type = ContactType.PHONE, value = "+639170000000", isPrimary = true)
+        service
+            .create(token = token(uid = "a"), userId = a.id, type = ContactType.PHONE, value = "+639170000000", isPrimary = true)
+            .shouldBeRight()
 
         // A formatting variant of the same number still flags — and the contact add itself succeeds.
         val added =
-            service.create(token = token(uid = "b"), userId = b.id, type = ContactType.PHONE, value = "+63 917 000 0000", isPrimary = true)
+            service
+                .create(token = token(uid = "b"), userId = b.id, type = ContactType.PHONE, value = "+63 917 000 0000", isPrimary = true)
+                .shouldBeRight()
         added.value shouldBe "+63 917 000 0000"
 
         val open = candidates.list(limit = 50, offset = 0, status = DuplicateCandidateStatus.OPEN).first
@@ -461,11 +498,17 @@ class ContactServiceTest {
         val a = provisionUser(uid = "a")
         val b = provisionUser(uid = "b")
         // EMAIL never triggers detection.
-        service.create(token = token(uid = "a"), userId = a.id, type = ContactType.EMAIL, value = "a@x.dev", isPrimary = true)
+        service
+            .create(token = token(uid = "a"), userId = a.id, type = ContactType.EMAIL, value = "a@x.dev", isPrimary = true)
+            .shouldBeRight()
         // A's phone, then A is disabled — B reusing it should not flag (only active users count).
-        service.create(token = token(uid = "a"), userId = a.id, type = ContactType.PHONE, value = "+639170000000", isPrimary = false)
+        service
+            .create(token = token(uid = "a"), userId = a.id, type = ContactType.PHONE, value = "+639170000000", isPrimary = false)
+            .shouldBeRight()
         users.deactivate(id = a.id)
-        service.create(token = token(uid = "b"), userId = b.id, type = ContactType.PHONE, value = "+639170000000", isPrimary = true)
+        service
+            .create(token = token(uid = "b"), userId = b.id, type = ContactType.PHONE, value = "+639170000000", isPrimary = true)
+            .shouldBeRight()
 
         candidates.list(limit = 50, offset = 0, status = DuplicateCandidateStatus.OPEN).second shouldBe 0L
     }

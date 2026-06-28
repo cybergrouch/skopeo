@@ -3,6 +3,8 @@
 
 package org.skopeo.repository
 
+import io.kotest.assertions.arrow.core.shouldBeLeft
+import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContain
@@ -10,6 +12,7 @@ import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeInstanceOf
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.junit.jupiter.api.BeforeAll
@@ -22,6 +25,7 @@ import org.skopeo.model.MatchStatus
 import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
+import org.skopeo.model.ServiceError
 import org.skopeo.model.TeamType
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
@@ -87,7 +91,7 @@ class MatchRepositoryTest {
         match.team2.userIds shouldBe listOf(u2)
         match.winnerTeamId.shouldBeNull()
         match.sets.shouldBe(expected = emptyList())
-        matches.findById(matchId = match.id).shouldNotBeNull()
+        matches.findById(matchId = match.id).shouldBeRight()
     }
 
     @Test
@@ -98,26 +102,26 @@ class MatchRepositoryTest {
         val t1 = match.team1.teamId
 
         val completed =
-            matches.addResult(
-                matchId = match.id,
-                sets =
-                    listOf(
-                        MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 4, winnerTeamId = t1),
-                        MatchSetResult(
-                            setNumber = 2,
-                            team1Games = 7,
-                            team2Games = 6,
-                            winnerTeamId = t1,
-                            tiebreakTeam1Points = 7,
-                            tiebreakTeam2Points = 5,
+            matches
+                .addResult(
+                    matchId = match.id,
+                    sets =
+                        listOf(
+                            MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 4, winnerTeamId = t1),
+                            MatchSetResult(
+                                setNumber = 2,
+                                team1Games = 7,
+                                team2Games = 6,
+                                winnerTeamId = t1,
+                                tiebreakTeam1Points = 7,
+                                tiebreakTeam2Points = 5,
+                            ),
                         ),
-                    ),
-                winnerTeamId = t1,
-                recordedBy = u1,
-                completedAt = LocalDateTime.now(),
-            )
+                    winnerTeamId = t1,
+                    recordedBy = u1,
+                    completedAt = LocalDateTime.now(),
+                ).shouldBeRight()
 
-        completed.shouldNotBeNull()
         completed.status shouldBe MatchStatus.COMPLETED
         completed.winnerTeamId shouldBe t1
         completed.completedAt.shouldNotBeNull()
@@ -126,14 +130,21 @@ class MatchRepositoryTest {
     }
 
     @Test
-    fun `addResult on an unknown match returns null`() {
-        matches.addResult(
-            matchId = UUID.randomUUID(),
-            sets = listOf(MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 0, winnerTeamId = UUID.randomUUID())),
-            winnerTeamId = UUID.randomUUID(),
-            recordedBy = UUID.randomUUID(),
-            completedAt = LocalDateTime.now(),
-        ).shouldBeNull()
+    fun `findById on an unknown match is not found`() {
+        matches.findById(matchId = UUID.randomUUID()).shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
+    fun `addResult on an unknown match is not found`() {
+        matches
+            .addResult(
+                matchId = UUID.randomUUID(),
+                sets = listOf(MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 0, winnerTeamId = UUID.randomUUID())),
+                winnerTeamId = UUID.randomUUID(),
+                recordedBy = UUID.randomUUID(),
+                completedAt = LocalDateTime.now(),
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
     @Test
@@ -145,33 +156,36 @@ class MatchRepositoryTest {
 
         // only one tiebreak side supplied -> hasTb is false (short-circuits before persisting a tiebreak)
         val completed =
-            matches.addResult(
-                matchId = match.id,
-                sets =
-                    listOf(
-                        MatchSetResult(
-                            setNumber = 1,
-                            team1Games = 7,
-                            team2Games = 6,
-                            winnerTeamId = t1,
-                            tiebreakTeam1Points = 7,
-                            tiebreakTeam2Points = null,
+            matches
+                .addResult(
+                    matchId = match.id,
+                    sets =
+                        listOf(
+                            MatchSetResult(
+                                setNumber = 1,
+                                team1Games = 7,
+                                team2Games = 6,
+                                winnerTeamId = t1,
+                                tiebreakTeam1Points = 7,
+                                tiebreakTeam2Points = null,
+                            ),
                         ),
-                    ),
-                winnerTeamId = t1,
-                recordedBy = u1,
-                completedAt = LocalDateTime.now(),
-            )
+                    winnerTeamId = t1,
+                    recordedBy = u1,
+                    completedAt = LocalDateTime.now(),
+                ).shouldBeRight()
 
-        completed.shouldNotBeNull()
         completed.sets.size shouldBe 1
         completed.sets[0].tiebreakTeam1Points.shouldBeNull()
         completed.sets[0].tiebreakTeam2Points.shouldBeNull()
     }
 
     @Test
-    fun `setActive on an unknown match returns null`() {
-        matches.setActive(matchId = UUID.randomUUID(), active = false, disabledAt = LocalDateTime.now()).shouldBeNull()
+    fun `setActive on an unknown match is not found`() {
+        matches
+            .setActive(matchId = UUID.randomUUID(), active = false, disabledAt = LocalDateTime.now())
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
     @Test
@@ -181,9 +195,8 @@ class MatchRepositoryTest {
             MatchesTable.update(where = { MatchesTable.id eq match.id }) { it[createdBy] = null }
         }
 
-        val reloaded = matches.findById(matchId = match.id)
+        val reloaded = matches.findById(matchId = match.id).shouldBeRight()
 
-        reloaded.shouldNotBeNull()
         reloaded.createdBy.shouldBeNull()
     }
 
@@ -191,10 +204,10 @@ class MatchRepositoryTest {
     fun `setActive disables and re-enables`() {
         val match = fixture(u1 = newUser(uid = "u1"), u2 = newUser(uid = "u2"))
 
-        matches.setActive(matchId = match.id, active = false, disabledAt = LocalDateTime.now())!!.let {
+        matches.setActive(matchId = match.id, active = false, disabledAt = LocalDateTime.now()).shouldBeRight().let {
             it.isActive.shouldBeFalse()
         }
-        matches.setActive(matchId = match.id, active = true, disabledAt = null)!!.isActive.shouldBeTrue()
+        matches.setActive(matchId = match.id, active = true, disabledAt = null).shouldBeRight().isActive.shouldBeTrue()
     }
 
     @Test

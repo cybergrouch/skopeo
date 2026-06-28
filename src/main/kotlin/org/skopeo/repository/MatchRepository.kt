@@ -3,6 +3,10 @@
 
 package org.skopeo.repository
 
+import arrow.core.Either
+import arrow.core.left
+import arrow.core.right
+import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.insert
@@ -17,6 +21,7 @@ import org.skopeo.model.MatchSetResult
 import org.skopeo.model.MatchSide
 import org.skopeo.model.MatchStatus
 import org.skopeo.model.MatchType
+import org.skopeo.model.ServiceError
 import org.skopeo.model.TeamType
 import java.time.LocalDateTime
 import java.util.UUID
@@ -42,7 +47,7 @@ class MatchRepository {
                     it[tournamentName] = command.tournamentName
                     it[createdBy] = command.createdBy
                 }.value
-            loadMatch(id = matchId)!!
+            loadMatchOrThrow(id = matchId)
         }
 
     /** Record results on a fixture: persist sets/tiebreaks, set the winner, mark COMPLETED. */
@@ -52,9 +57,11 @@ class MatchRepository {
         winnerTeamId: UUID,
         recordedBy: UUID,
         completedAt: LocalDateTime,
-    ): Match? =
+    ): Either<ServiceError, Match> =
         transaction {
-            if (loadMatch(id = matchId) == null) return@transaction null
+            if (loadMatch(id = matchId) == null) {
+                return@transaction ServiceError.NotFound(message = "Match $matchId not found").left()
+            }
             sets.forEach { set ->
                 val hasTb = set.tiebreakTeam1Points != null && set.tiebreakTeam2Points != null
                 val setId =
@@ -81,24 +88,32 @@ class MatchRepository {
                 it[MatchesTable.completedAt] = completedAt
                 it[MatchesTable.recordedBy] = recordedBy
             }
-            loadMatch(id = matchId)
+            loadMatchOrThrow(id = matchId).right()
         }
 
     fun setActive(
         matchId: UUID,
         active: Boolean,
         disabledAt: LocalDateTime?,
-    ): Match? =
+    ): Either<ServiceError, Match> =
         transaction {
             val updated =
                 MatchesTable.update(where = { MatchesTable.id eq matchId }) {
                     it[isActive] = active
                     it[MatchesTable.disabledAt] = disabledAt
                 }
-            if (updated == 0) null else loadMatch(id = matchId)
+            if (updated == 0) {
+                ServiceError.NotFound(message = "Match $matchId not found").left()
+            } else {
+                loadMatchOrThrow(id = matchId).right()
+            }
         }
 
-    fun findById(matchId: UUID): Match? = transaction { loadMatch(id = matchId) }
+    fun findById(matchId: UUID): Either<ServiceError, Match> =
+        transaction {
+            val match = loadMatch(id = matchId)
+            if (match == null) ServiceError.NotFound(message = "Match $matchId not found").left() else match.right()
+        }
 
     /** Stamp a match as rating-calculated (the calculation trigger committing it). */
     fun markRated(
@@ -196,28 +211,35 @@ class MatchRepository {
         return teamId
     }
 
-    private fun loadMatch(id: UUID): Match? {
-        val row = MatchesTable.selectAll().where { MatchesTable.id eq id }.singleOrNull() ?: return null
-        return Match(
-            id = id,
-            matchFormat = TeamType.valueOf(value = row[MatchesTable.matchFormat]),
-            matchType = MatchType.valueOf(value = row[MatchesTable.matchType]),
-            matchDate = row[MatchesTable.matchDate],
-            status = MatchStatus.valueOf(value = row[MatchesTable.status]),
-            team1 = sideOf(teamId = row[MatchesTable.team1Id].value),
-            team2 = sideOf(teamId = row[MatchesTable.team2Id].value),
-            winnerTeamId = row[MatchesTable.winnerTeamId]?.value,
-            sets = setsOf(matchId = id),
-            venue = row[MatchesTable.venue],
-            tournamentName = row[MatchesTable.tournamentName],
-            isActive = row[MatchesTable.isActive],
-            completedAt = row[MatchesTable.completedAt],
-            ratedAt = row[MatchesTable.ratedAt],
-            createdBy = row[MatchesTable.createdBy]?.value,
-            recordedBy = row[MatchesTable.recordedBy]?.value,
-        )
-    }
+    private fun loadMatch(id: UUID): Match? =
+        MatchesTable.selectAll().where { MatchesTable.id eq id }.singleOrNull()?.let { row -> buildMatch(id = id, row = row) }
 }
+
+/** Reload a match that is known to exist (e.g. just inserted/updated) — no caller-side null branch. */
+private fun loadMatchOrThrow(id: UUID): Match = buildMatch(id = id, row = MatchesTable.selectAll().where { MatchesTable.id eq id }.single())
+
+private fun buildMatch(
+    id: UUID,
+    row: ResultRow,
+): Match =
+    Match(
+        id = id,
+        matchFormat = TeamType.valueOf(value = row[MatchesTable.matchFormat]),
+        matchType = MatchType.valueOf(value = row[MatchesTable.matchType]),
+        matchDate = row[MatchesTable.matchDate],
+        status = MatchStatus.valueOf(value = row[MatchesTable.status]),
+        team1 = sideOf(teamId = row[MatchesTable.team1Id].value),
+        team2 = sideOf(teamId = row[MatchesTable.team2Id].value),
+        winnerTeamId = row[MatchesTable.winnerTeamId]?.value,
+        sets = setsOf(matchId = id),
+        venue = row[MatchesTable.venue],
+        tournamentName = row[MatchesTable.tournamentName],
+        isActive = row[MatchesTable.isActive],
+        completedAt = row[MatchesTable.completedAt],
+        ratedAt = row[MatchesTable.ratedAt],
+        createdBy = row[MatchesTable.createdBy]?.value,
+        recordedBy = row[MatchesTable.recordedBy]?.value,
+    )
 
 private fun sideOf(teamId: UUID): MatchSide =
     MatchSide(

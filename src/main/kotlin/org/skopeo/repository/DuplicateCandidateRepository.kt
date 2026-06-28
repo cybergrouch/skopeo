@@ -3,6 +3,9 @@
 
 package org.skopeo.repository
 
+import arrow.core.Either
+import arrow.core.left
+import arrow.core.right
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.and
@@ -13,6 +16,7 @@ import org.jetbrains.exposed.sql.update
 import org.skopeo.model.DuplicateCandidate
 import org.skopeo.model.DuplicateCandidateStatus
 import org.skopeo.model.DuplicateSignal
+import org.skopeo.model.ServiceError
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -81,15 +85,22 @@ class DuplicateCandidateRepository {
             items to total
         }
 
-    fun findById(id: UUID): DuplicateCandidate? = transaction { loadById(id = id) }
+    fun findById(id: UUID): Either<ServiceError, DuplicateCandidate> =
+        transaction {
+            val candidate = loadById(id = id)
+            if (candidate == null) ServiceError.NotFound(message = "No duplicate candidate $id").left() else candidate.right()
+        }
 
-    /** Transition a candidate's status, recording who/when resolved it (null for a dismissal). */
+    /**
+     * Transition a candidate's status, recording who/when resolved it (null for a dismissal). A missing
+     * row is a [ServiceError.NotFound].
+     */
     fun setStatus(
         id: UUID,
         status: DuplicateCandidateStatus,
         resolvedBy: UUID?,
         resolvedAt: LocalDateTime?,
-    ): DuplicateCandidate? =
+    ): Either<ServiceError, DuplicateCandidate> =
         transaction {
             val updated =
                 DuplicateCandidatesTable.update(where = { DuplicateCandidatesTable.id eq id }) {
@@ -97,7 +108,11 @@ class DuplicateCandidateRepository {
                     it[DuplicateCandidatesTable.resolvedBy] = resolvedBy
                     it[DuplicateCandidatesTable.resolvedAt] = resolvedAt
                 }
-            if (updated == 0) null else loadById(id = id)
+            if (updated == 0) {
+                ServiceError.NotFound(message = "No duplicate candidate $id").left()
+            } else {
+                loadByIdOrThrow(id = id).right()
+            }
         }
 
     private fun orderedPair(
@@ -119,6 +134,9 @@ class DuplicateCandidateRepository {
 
     private fun loadById(id: UUID): DuplicateCandidate? =
         DuplicateCandidatesTable.selectAll().where { DuplicateCandidatesTable.id eq id }.map { it.toCandidate() }.firstOrNull()
+
+    private fun loadByIdOrThrow(id: UUID): DuplicateCandidate =
+        DuplicateCandidatesTable.selectAll().where { DuplicateCandidatesTable.id eq id }.single().toCandidate()
 }
 
 internal fun ResultRow.toCandidate(): DuplicateCandidate =

@@ -3,13 +3,18 @@
 
 package org.skopeo.service.user
 
+import arrow.core.Either
+import arrow.core.left
+import arrow.core.raise.either
+import arrow.core.raise.ensure
+import arrow.core.right
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
 import org.skopeo.model.Capability
+import org.skopeo.model.ServiceError
 import org.skopeo.model.User
 import org.skopeo.repository.UserRepository
-import org.skopeo.service.ConflictException
 import org.skopeo.service.audit.AuditService
 import java.util.UUID
 
@@ -19,6 +24,8 @@ import java.util.UUID
  * is disabled and pointed at the canonical (it drops out of search, and its public profile links to the
  * canonical). Records are retained, ratings are NOT consolidated, and every mark/un-mark is audit-logged
  * and reversible.
+ *
+ * Expected failures are returned as an [Either] left ([ServiceError], issue #115) rather than thrown.
  */
 class DuplicateService(
     private val users: UserRepository = UserRepository(),
@@ -29,88 +36,99 @@ class DuplicateService(
         token: VerifiedFirebaseToken,
         canonicalId: UUID,
         duplicateIds: List<UUID>,
-    ): List<User> {
-        val adminId = requireAdmin(token = token)
-        val canonical = users.findById(id = canonicalId) ?: throw UserNotFoundException(id = canonicalId)
-        require(value = duplicateIds.isNotEmpty()) { "At least one duplicate is required" }
-        require(value = duplicateIds.toSet().size == duplicateIds.size) { "Duplicate ids must be distinct" }
-        require(value = canonicalId !in duplicateIds) { "A profile cannot be a duplicate of itself" }
-        if (canonical.canonicalUserId != null) {
-            throw ConflictException(message = "The canonical account is itself a duplicate")
-        }
-        val targets = duplicateIds.map { resolveMarkable(id = it) }
+    ): Either<ServiceError, List<User>> =
+        either {
+            val adminId = requireAdmin(token = token).bind()
+            val canonical = users.findById(id = canonicalId).bind()
+            ensure(condition = duplicateIds.isNotEmpty()) { ServiceError.Validation(message = "At least one duplicate is required") }
+            ensure(
+                condition = duplicateIds.toSet().size == duplicateIds.size,
+            ) { ServiceError.Validation(message = "Duplicate ids must be distinct") }
+            ensure(
+                condition = canonicalId !in duplicateIds,
+            ) { ServiceError.Validation(message = "A profile cannot be a duplicate of itself") }
+            ensure(condition = canonical.canonicalUserId == null) {
+                ServiceError.Conflict(message = "The canonical account is itself a duplicate")
+            }
+            val targets = duplicateIds.map { resolveMarkable(id = it).bind() }
 
-        users.markDuplicates(canonicalId = canonicalId, duplicateIds = duplicateIds)
-        targets.forEach { target ->
-            audit.record(
-                write =
-                    AuditWrite(
-                        actorUserId = adminId,
-                        action = AuditAction.USER_MARKED_DUPLICATE,
-                        entityType = AuditEntityType.USER,
-                        entityId = target.id,
-                        summary = "Marked ${target.publicCode} as a duplicate of ${canonical.publicCode}",
-                        details =
-                            mapOf(
-                                "canonicalUserId" to canonicalId.toString(),
-                                "canonicalPublicCode" to canonical.publicCode,
-                            ),
-                    ),
-            )
+            users.markDuplicates(canonicalId = canonicalId, duplicateIds = duplicateIds)
+            targets.forEach { target ->
+                audit.record(
+                    write =
+                        AuditWrite(
+                            actorUserId = adminId,
+                            action = AuditAction.USER_MARKED_DUPLICATE,
+                            entityType = AuditEntityType.USER,
+                            entityId = target.id,
+                            summary = "Marked ${target.publicCode} as a duplicate of ${canonical.publicCode}",
+                            details =
+                                mapOf(
+                                    "canonicalUserId" to canonicalId.toString(),
+                                    "canonicalPublicCode" to canonical.publicCode,
+                                ),
+                        ),
+                )
+            }
+            users.findDuplicatesOf(canonicalId = canonicalId)
         }
-        return users.findDuplicatesOf(canonicalId = canonicalId)
-    }
 
     /** Reverse a duplicate marking on [id]: reactivate and clear its canonical pointer. */
     fun restore(
         token: VerifiedFirebaseToken,
         id: UUID,
-    ) {
-        val adminId = requireAdmin(token = token)
-        val target = users.findById(id = id) ?: throw UserNotFoundException(id = id)
-        if (target.canonicalUserId == null) {
-            throw ConflictException(message = "User ${target.publicCode} is not marked as a duplicate")
+    ): Either<ServiceError, Unit> =
+        either {
+            val adminId = requireAdmin(token = token).bind()
+            val target = users.findById(id = id).bind()
+            ensure(condition = target.canonicalUserId != null) {
+                ServiceError.Conflict(message = "User ${target.publicCode} is not marked as a duplicate")
+            }
+            users.restoreDuplicate(id = id)
+            audit.record(
+                write =
+                    AuditWrite(
+                        actorUserId = adminId,
+                        action = AuditAction.USER_UNMARKED_DUPLICATE,
+                        entityType = AuditEntityType.USER,
+                        entityId = target.id,
+                        summary = "Restored ${target.publicCode} from duplicate status",
+                        details =
+                            mapOf(
+                                "publicCode" to target.publicCode,
+                                "previousCanonicalUserId" to target.canonicalUserId.toString(),
+                            ),
+                    ),
+            )
         }
-        users.restoreDuplicate(id = id)
-        audit.record(
-            write =
-                AuditWrite(
-                    actorUserId = adminId,
-                    action = AuditAction.USER_UNMARKED_DUPLICATE,
-                    entityType = AuditEntityType.USER,
-                    entityId = target.id,
-                    summary = "Restored ${target.publicCode} from duplicate status",
-                    details =
-                        mapOf(
-                            "publicCode" to target.publicCode,
-                            "previousCanonicalUserId" to target.canonicalUserId.toString(),
-                        ),
-                ),
-        )
-    }
 
     /** The disabled duplicates currently pointing at [canonicalId] — for the admin un-mark view. */
     fun duplicatesOf(
         token: VerifiedFirebaseToken,
         canonicalId: UUID,
-    ): List<User> {
-        requireAdmin(token = token)
-        users.findById(id = canonicalId) ?: throw UserNotFoundException(id = canonicalId)
-        return users.findDuplicatesOf(canonicalId = canonicalId)
-    }
+    ): Either<ServiceError, List<User>> =
+        either {
+            requireAdmin(token = token).bind()
+            users.findById(id = canonicalId).bind()
+            users.findDuplicatesOf(canonicalId = canonicalId)
+        }
 
     /** A target must exist and not itself already be a canonical for other duplicates. */
-    private fun resolveMarkable(id: UUID): User {
-        val target = users.findById(id = id) ?: throw UserNotFoundException(id = id)
-        if (users.findDuplicatesOf(canonicalId = id).isNotEmpty()) {
-            throw ConflictException(message = "User ${target.publicCode} is itself a canonical account for other duplicates")
+    private fun resolveMarkable(id: UUID): Either<ServiceError, User> =
+        either {
+            val target = users.findById(id = id).bind()
+            ensure(condition = users.findDuplicatesOf(canonicalId = id).isEmpty()) {
+                ServiceError.Conflict(message = "User ${target.publicCode} is itself a canonical account for other duplicates")
+            }
+            target
         }
-        return target
-    }
 
-    private fun requireAdmin(token: VerifiedFirebaseToken): UUID {
+    private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
         val caller = users.findByFirebaseUid(firebaseUid = token.uid)
-        if (caller == null || !caller.capabilities.contains(element = Capability.ADMINISTRATOR)) throw ForbiddenException()
-        return caller.id
+        return if (caller == null || !caller.capabilities.contains(element = Capability.ADMINISTRATOR)) {
+            ServiceError.Forbidden().left()
+        } else {
+            caller.id.right()
+        }
     }
 }

@@ -3,10 +3,11 @@
 
 package org.skopeo.repository
 
+import io.kotest.assertions.arrow.core.shouldBeLeft
+import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.collections.shouldHaveSize
-import io.kotest.matchers.nulls.shouldBeNull
-import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -15,6 +16,7 @@ import org.skopeo.model.DuplicateCandidateStatus
 import org.skopeo.model.DuplicateSignal
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
+import org.skopeo.model.ServiceError
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.testsupport.PostgresTestDatabase
@@ -64,18 +66,20 @@ class DuplicateCandidateRepositoryTest {
     }
 
     @Test
-    fun `list with no status filter returns all, and setStatus on an unknown id returns null`() {
+    fun `list with no status filter returns all, and setStatus on an unknown id is not found`() {
         val a = newUser(uid = "a")
         val b = newUser(uid = "b")
         candidates.flag(userAId = a, userBId = b, signal = DuplicateSignal.MANUAL, detail = null, flaggedBy = null)
 
         candidates.list(limit = 50, offset = 0, status = null).second shouldBe 1L
-        candidates.setStatus(
-            id = UUID.randomUUID(),
-            status = DuplicateCandidateStatus.DISMISSED,
-            resolvedBy = null,
-            resolvedAt = LocalDateTime.now(),
-        ).shouldBeNull()
+        candidates
+            .setStatus(
+                id = UUID.randomUUID(),
+                status = DuplicateCandidateStatus.DISMISSED,
+                resolvedBy = null,
+                resolvedAt = LocalDateTime.now(),
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
     @Test
@@ -85,15 +89,15 @@ class DuplicateCandidateRepositoryTest {
         val candidate = candidates.flag(userAId = a, userBId = b, signal = DuplicateSignal.MANUAL, detail = null, flaggedBy = null)
 
         val resolved =
-            candidates.setStatus(
-                id = candidate.id,
-                status = DuplicateCandidateStatus.RESOLVED,
-                resolvedBy = a,
-                resolvedAt = LocalDateTime.now(),
-            )
-        resolved.shouldNotBeNull()
+            candidates
+                .setStatus(
+                    id = candidate.id,
+                    status = DuplicateCandidateStatus.RESOLVED,
+                    resolvedBy = a,
+                    resolvedAt = LocalDateTime.now(),
+                ).shouldBeRight()
         resolved.status shouldBe DuplicateCandidateStatus.RESOLVED
-        candidates.findById(id = candidate.id)!!.status shouldBe DuplicateCandidateStatus.RESOLVED
-        candidates.findById(id = UUID.randomUUID()).shouldBeNull()
+        candidates.findById(id = candidate.id).shouldBeRight().status shouldBe DuplicateCandidateStatus.RESOLVED
+        candidates.findById(id = UUID.randomUUID()).shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
     }
 }

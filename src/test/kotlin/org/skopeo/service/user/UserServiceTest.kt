@@ -3,12 +3,14 @@
 
 package org.skopeo.service.user
 
-import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.assertions.arrow.core.shouldBeLeft
+import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -17,6 +19,7 @@ import org.skopeo.model.AuditAction
 import org.skopeo.model.Capability
 import org.skopeo.model.ProfilePatch
 import org.skopeo.model.ProvisionUserCommand
+import org.skopeo.model.ServiceError
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.model.VerificationStatus
@@ -71,7 +74,7 @@ class UserServiceTest {
 
     @Test
     fun `provisioning a new user writes a USER_CREATED audit entry (#100)`() {
-        val provisioned = service.provision(token = token(uid = "newbie"), request = request)
+        val provisioned = service.provision(token = token(uid = "newbie"), request = request).shouldBeRight()
 
         AuditRepository().list(actions = listOf(element = AuditAction.USER_CREATED), limit = 10, offset = 0).first.single().let {
             it.actorUserId shouldBe provisioned.user.id
@@ -82,21 +85,22 @@ class UserServiceTest {
 
     @Test
     fun `re-provisioning a disabled duplicate is rejected as merged (#124)`() {
-        val canonical = service.provision(token = token(uid = "keep"), request = request).user
-        val dup = service.provision(token = token(uid = "dup"), request = request).user
+        val canonical = service.provision(token = token(uid = "keep"), request = request).shouldBeRight().user
+        val dup = service.provision(token = token(uid = "dup"), request = request).shouldBeRight().user
         repository.markDuplicates(canonicalId = canonical.id, duplicateIds = listOf(element = dup.id))
 
         val merged =
-            shouldThrow<AccountMergedException> {
-                service.provision(token = token(uid = "dup"), request = request)
-            }
+            service
+                .provision(token = token(uid = "dup"), request = request)
+                .shouldBeLeft()
+                .shouldBeInstanceOf<ServiceError.AccountMerged>()
         merged.canonicalPublicCode shouldBe canonical.publicCode
     }
 
     @Test
     fun `currentRatings returns the current rating per user, omitting the unrated`() {
-        val rated = service.provision(token = token(uid = "r"), request = request).user
-        val unrated = service.provision(token = token(uid = "u"), request = request).user
+        val rated = service.provision(token = token(uid = "r"), request = request).shouldBeRight().user
+        val unrated = service.provision(token = token(uid = "u"), request = request).shouldBeRight().user
         RatingRepository().setRating(userId = rated.id, rating = BigDecimal("4.0"), level = "4.0", confidence = BigDecimal("0.50"))
 
         val map = service.currentRatings(ids = listOf(rated.id, unrated.id))
@@ -109,7 +113,7 @@ class UserServiceTest {
     fun `a manual sign-up requires an open invite, which is marked accepted on success`() {
         invite(email = "invitee@example.com")
 
-        service.provision(token = token(uid = "inv", email = "invitee@example.com"), request = request)
+        service.provision(token = token(uid = "inv", email = "invitee@example.com"), request = request).shouldBeRight()
 
         // The invite is consumed (no longer open) once the profile is provisioned.
         invites.findOpenByEmail(email = "invitee@example.com", asOf = LocalDateTime.now()).shouldBeNull()
@@ -117,17 +121,19 @@ class UserServiceTest {
 
     @Test
     fun `a manual sign-up without an invite is forbidden`() {
-        shouldThrow<ForbiddenException> {
-            service.provision(token = token(uid = "x", email = "noinvite@example.com"), request = request)
-        }
+        service
+            .provision(token = token(uid = "x", email = "noinvite@example.com"), request = request)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
     fun `an expired invite does not admit a manual sign-up`() {
         invites.createOrRotate(email = "exp@example.com", invitedBy = null, expiresAt = LocalDateTime.now().minusDays(1))
-        shouldThrow<ForbiddenException> {
-            service.provision(token = token(uid = "e", email = "exp@example.com"), request = request)
-        }
+        service
+            .provision(token = token(uid = "e", email = "exp@example.com"), request = request)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
@@ -136,7 +142,7 @@ class UserServiceTest {
             service.provision(
                 token = token(uid = "g", email = "g@example.com", emailVerified = true, signInProvider = "google.com"),
                 request = request,
-            ).user
+            ).shouldBeRight().user
         user.capabilities shouldBe setOf(element = Capability.PLAYER)
     }
 
@@ -146,14 +152,17 @@ class UserServiceTest {
             service.provision(
                 token = token(uid = "u1", email = "u1@example.com", emailVerified = true, name = "U One", signInProvider = "google.com"),
                 request = CreateUserRequest(dateOfBirth = "2000-01-01", sex = "Male"),
-            )
+            ).shouldBeRight()
 
         first.created.shouldBeTrue()
         first.user.capabilities shouldBe setOf(Capability.PLAYER)
         first.user.names.single().value shouldBe "U One" // token display name fallback
         first.user.contacts.single().status shouldBe VerificationStatus.VERIFIED
 
-        val again = service.provision(token = token(uid = "u1"), request = CreateUserRequest(dateOfBirth = "2000-01-01", sex = "Male"))
+        val again =
+            service
+                .provision(token = token(uid = "u1"), request = CreateUserRequest(dateOfBirth = "2000-01-01", sex = "Male"))
+                .shouldBeRight()
         again.created.shouldBeFalse()
         again.user.id shouldBe first.user.id
     }
@@ -162,19 +171,19 @@ class UserServiceTest {
     fun `currentUser is null before provisioning and present after`() {
         service.currentUser(token = token(uid = "ghost")).shouldBeNull()
 
-        val created = service.provision(token = token(uid = "u2"), request = request).user
+        val created = service.provision(token = token(uid = "u2"), request = request).shouldBeRight().user
 
         service.currentUser(token = token(uid = "u2"))!!.id shouldBe created.id
     }
 
     @Test
     fun `getById allows self, forbids others, 404s on unknown`() {
-        val alice = service.provision(token = token(uid = "alice"), request = request).user
-        service.provision(token = token(uid = "bob"), request = request)
+        val alice = service.provision(token = token(uid = "alice"), request = request).shouldBeRight().user
+        service.provision(token = token(uid = "bob"), request = request).shouldBeRight()
 
-        service.getById(token = token(uid = "alice"), id = alice.id).id shouldBe alice.id
-        shouldThrow<ForbiddenException> { service.getById(token = token(uid = "bob"), id = alice.id) }
-        shouldThrow<UserNotFoundException> { service.getById(token = token(uid = "alice"), id = UUID.randomUUID()) }
+        service.getById(token = token(uid = "alice"), id = alice.id).shouldBeRight().id shouldBe alice.id
+        service.getById(token = token(uid = "bob"), id = alice.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service.getById(token = token(uid = "alice"), id = UUID.randomUUID()).shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
     @Test
@@ -188,9 +197,9 @@ class UserServiceTest {
                     capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
                 ),
         )
-        val target = service.provision(token = token(uid = "member"), request = request).user
+        val target = service.provision(token = token(uid = "member"), request = request).shouldBeRight().user
 
-        service.getById(token = token(uid = "root"), id = target.id).id shouldBe target.id
+        service.getById(token = token(uid = "root"), id = target.id).shouldBeRight().id shouldBe target.id
     }
 
     @Test
@@ -199,66 +208,71 @@ class UserServiceTest {
             service.provision(
                 token = token(uid = "p1"),
                 request = CreateUserRequest(displayName = "Juan", sex = "Male", city = "Manila", dateOfBirth = "2000-01-01"),
-            ).user
+            ).shouldBeRight().user
 
-        val patched = service.patchProfile(token = token(uid = "p1"), id = user.id, patch = ProfilePatch(city = "Cebu"))
+        val patched = service.patchProfile(token = token(uid = "p1"), id = user.id, patch = ProfilePatch(city = "Cebu")).shouldBeRight()
         patched.city shouldBe "Cebu"
         patched.sex shouldBe "Male" // untouched by PATCH
 
-        val replaced = service.replaceProfile(token = token(uid = "p1"), id = user.id, patch = ProfilePatch(city = "Davao"))
+        val replaced =
+            service.replaceProfile(token = token(uid = "p1"), id = user.id, patch = ProfilePatch(city = "Davao")).shouldBeRight()
         replaced.city shouldBe "Davao"
         replaced.sex.shouldBeNull() // cleared by PUT
     }
 
     @Test
     fun `mutations enforce access and existence`() {
-        val user = service.provision(token = token(uid = "owner"), request = request).user
+        val user = service.provision(token = token(uid = "owner"), request = request).shouldBeRight().user
 
-        shouldThrow<ForbiddenException> {
-            service.patchProfile(token = token(uid = "intruder"), id = user.id, patch = ProfilePatch(city = "X"))
-        }
-        shouldThrow<UserNotFoundException> {
-            service.patchProfile(token = token(uid = "owner"), id = UUID.randomUUID(), patch = ProfilePatch(city = "X"))
-        }
+        service
+            .patchProfile(token = token(uid = "intruder"), id = user.id, patch = ProfilePatch(city = "X"))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .patchProfile(token = token(uid = "owner"), id = UUID.randomUUID(), patch = ProfilePatch(city = "X"))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
     @Test
     fun `deactivate soft-deletes the caller's own account`() {
-        val user = service.provision(token = token(uid = "d1"), request = request).user
+        val user = service.provision(token = token(uid = "d1"), request = request).shouldBeRight().user
 
-        service.deactivate(token = token(uid = "d1"), id = user.id)
+        service.deactivate(token = token(uid = "d1"), id = user.id).shouldBeRight()
 
-        service.getById(token = token(uid = "d1"), id = user.id).isActive.shouldBeFalse()
+        service.getById(token = token(uid = "d1"), id = user.id).shouldBeRight().isActive.shouldBeFalse()
     }
 
     @Test
     fun `deactivate forbids others and 404s on unknown`() {
-        val user = service.provision(token = token(uid = "d2"), request = request).user
-        service.provision(token = token(uid = "stranger"), request = request)
+        val user = service.provision(token = token(uid = "d2"), request = request).shouldBeRight().user
+        service.provision(token = token(uid = "stranger"), request = request).shouldBeRight()
 
-        shouldThrow<ForbiddenException> { service.deactivate(token = token(uid = "stranger"), id = user.id) }
-        shouldThrow<UserNotFoundException> { service.deactivate(token = token(uid = "d2"), id = UUID.randomUUID()) }
+        service.deactivate(token = token(uid = "stranger"), id = user.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service.deactivate(token = token(uid = "d2"), id = UUID.randomUUID()).shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
     @Test
     fun `replaceProfile forbids others and 404s on unknown`() {
-        val user = service.provision(token = token(uid = "r1"), request = request).user
-        service.provision(token = token(uid = "outsider"), request = request)
+        val user = service.provision(token = token(uid = "r1"), request = request).shouldBeRight().user
+        service.provision(token = token(uid = "outsider"), request = request).shouldBeRight()
 
-        shouldThrow<ForbiddenException> {
-            service.replaceProfile(token = token(uid = "outsider"), id = user.id, patch = ProfilePatch(city = "X"))
-        }
-        shouldThrow<UserNotFoundException> {
-            service.replaceProfile(token = token(uid = "r1"), id = UUID.randomUUID(), patch = ProfilePatch(city = "X"))
-        }
+        service
+            .replaceProfile(token = token(uid = "outsider"), id = user.id, patch = ProfilePatch(city = "X"))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+        service
+            .replaceProfile(token = token(uid = "r1"), id = UUID.randomUUID(), patch = ProfilePatch(city = "X"))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
     @Test
     fun `an unprovisioned caller is forbidden from accessing a profile`() {
-        val user = service.provision(token = token(uid = "victim"), request = request).user
+        val user = service.provision(token = token(uid = "victim"), request = request).shouldBeRight().user
 
         // The caller's token has no user row, so requireAccess sees caller == null (isAdmin == false).
-        shouldThrow<ForbiddenException> { service.getById(token = token(uid = "no-such-user"), id = user.id) }
+        service.getById(token = token(uid = "no-such-user"), id = user.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
@@ -268,7 +282,7 @@ class UserServiceTest {
                 token =
                     token(uid = "boss", email = "admin@example.com", emailVerified = true, name = "Boss", signInProvider = "google.com"),
                 request = CreateUserRequest(dateOfBirth = "2000-01-01", sex = "Male"),
-            )
+            ).shouldBeRight()
 
         result.user.capabilities shouldBe setOf(Capability.PLAYER, Capability.ADMINISTRATOR)
     }
@@ -281,7 +295,7 @@ class UserServiceTest {
             bootstrapService.provision(
                 token = token(uid = "later", email = "admin@example.com", emailVerified = false, name = "Later"),
                 request = CreateUserRequest(dateOfBirth = "2000-01-01", sex = "Male"),
-            )
+            ).shouldBeRight()
         created.user.capabilities shouldBe setOf(Capability.PLAYER)
 
         // Logs in with a verified email -> promoted.
@@ -301,7 +315,7 @@ class UserServiceTest {
         bootstrapService.provision(
             token = token(uid = "unv", email = "admin@example.com", emailVerified = false, name = "Unv"),
             request = CreateUserRequest(dateOfBirth = "2000-01-01", sex = "Male"),
-        )
+        ).shouldBeRight()
 
         bootstrapService.currentUser(token = token(uid = "unv", email = "admin@example.com", emailVerified = false))!!
             .capabilities shouldBe setOf(Capability.PLAYER)
@@ -320,12 +334,12 @@ class UserServiceTest {
                     capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
                 ),
         )
-        val member = service.provision(token = token(uid = "m1"), request = request).user
+        val member = service.provision(token = token(uid = "m1"), request = request).shouldBeRight().user
 
         member.publicCode.length shouldBe 6
 
         val found =
-            service.search(token = token(uid = "staff"), filters = UserSearchFilters(code = member.publicCode.lowercase()))
+            service.search(token = token(uid = "staff"), filters = UserSearchFilters(code = member.publicCode.lowercase())).shouldBeRight()
         found.single().id shouldBe member.id
     }
 
@@ -341,12 +355,12 @@ class UserServiceTest {
                     capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
                 ),
         )
-        val member = service.provision(token = token(uid = "m2"), request = request).user
+        val member = service.provision(token = token(uid = "m2"), request = request).shouldBeRight().user
 
         // A short prefix (here 3 of 6 chars), lowercased, surfaces the member incrementally —
         // an exact match would return nothing for a partial code.
         val prefix = member.publicCode.take(n = 3).lowercase()
-        val found = service.search(token = token(uid = "staff3"), filters = UserSearchFilters(code = prefix))
+        val found = service.search(token = token(uid = "staff3"), filters = UserSearchFilters(code = prefix)).shouldBeRight()
         found.map { it.id } shouldContain member.id
     }
 
@@ -362,16 +376,16 @@ class UserServiceTest {
                     capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
                 ),
         )
-        val member = service.provision(token = token(uid = "m3"), request = request).user // display name "Juan"
+        val member = service.provision(token = token(uid = "m3"), request = request).shouldBeRight().user // display name "Juan"
 
-        val byName = service.search(token = token(uid = "staff4"), filters = UserSearchFilters(q = "jua"))
+        val byName = service.search(token = token(uid = "staff4"), filters = UserSearchFilters(q = "jua")).shouldBeRight()
         byName.map { it.id } shouldContain member.id
 
         val byCodePrefix =
             service.search(
                 token = token(uid = "staff4"),
                 filters = UserSearchFilters(q = member.publicCode.take(n = 3).lowercase()),
-            )
+            ).shouldBeRight()
         byCodePrefix.map { it.id } shouldContain member.id
     }
 
@@ -389,8 +403,9 @@ class UserServiceTest {
         )
 
         // "   " trims to empty -> treated as no code, so with no other facet the search is rejected.
-        shouldThrow<IllegalArgumentException> {
-            service.search(token = token(uid = "staff2"), filters = UserSearchFilters(code = "   "))
-        }
+        service
+            .search(token = token(uid = "staff2"), filters = UserSearchFilters(code = "   "))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
     }
 }

@@ -3,6 +3,7 @@
 
 package org.skopeo.routes
 
+import arrow.core.Either
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
 import io.ktor.server.auth.jwt.JWTPrincipal
@@ -12,10 +13,7 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.RoutingContext
 import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
-import org.skopeo.service.ConflictException
-import org.skopeo.service.ResourceNotFoundException
-import org.skopeo.service.user.AccountMergedException
-import org.skopeo.service.user.ForbiddenException
+import org.skopeo.model.ServiceError
 import org.skopeo.service.user.VerifiedFirebaseToken
 import java.util.UUID
 
@@ -70,26 +68,60 @@ internal inline fun <reified T : Enum<T>> parseEnumParam(
             message = "Invalid $field '$value'; expected one of ${enumValues<T>().joinToString { it.name }}",
         )
 
-/** Run a handler, mapping domain/parse failures to the right status code. */
+/**
+ * Map a service/repository [ServiceError] (the Arrow `Either` left, issue #115) to its HTTP response.
+ * This is the single place the error taxonomy meets the transport layer.
+ */
+internal suspend fun RoutingContext.respondError(error: ServiceError) {
+    when (error) {
+        is ServiceError.NotFound -> {
+            logger.info { error.message }
+            call.respond(status = HttpStatusCode.NotFound, message = errorBody(error = "Not found", message = error.message))
+        }
+        is ServiceError.Forbidden -> {
+            logger.warn { "Access denied: ${error.message}" }
+            call.respond(status = HttpStatusCode.Forbidden, message = errorBody(error = "Forbidden", message = error.message))
+        }
+        is ServiceError.Conflict -> {
+            logger.warn { "Conflict: ${error.message}" }
+            call.respond(status = HttpStatusCode.Conflict, message = errorBody(error = "Conflict", message = error.message))
+        }
+        is ServiceError.Validation -> {
+            logger.warn { "Validation error: ${error.message}" }
+            call.respond(status = HttpStatusCode.BadRequest, message = errorBody(error = "Validation error", message = error.message))
+        }
+        is ServiceError.AccountMerged -> {
+            // A merged duplicate's sign-in (#124): 403 + the canonical code so the client can link to it.
+            logger.warn { "Account merged: ${error.message}" }
+            val base = errorBody(error = "Account merged", message = error.message)
+            val body = error.canonicalPublicCode?.let { base + ("canonicalCode" to it) } ?: base
+            call.respond(status = HttpStatusCode.Forbidden, message = body)
+        }
+    }
+}
+
+/**
+ * Fold a service [result]: on the right, run [onSuccess] to write the success response; on the left,
+ * map the [ServiceError] to its status via [respondError]. Wrap calls in [respondMappingErrors] so
+ * request-shape failures (bad JSON, DTO-init validation, parse errors) and bugs still map correctly.
+ */
+internal suspend fun <T> RoutingContext.respondEither(
+    result: Either<ServiceError, T>,
+    onSuccess: suspend (T) -> Unit,
+) {
+    result.fold(ifLeft = { respondError(error = it) }, ifRight = { onSuccess(it) })
+}
+
+/**
+ * Run a handler, mapping request-shape failures and bugs to the right status code. Expected domain
+ * failures now flow through [ServiceError]/[respondEither]; this catches what remains: malformed JSON,
+ * DTO/model `init` validation (`IllegalArgumentException`), boundary parse errors (`BadRequestException`
+ * from `uuidParam`/`parseEnumParam`), and anything unexpected (→ 500).
+ */
 @Suppress("TooGenericExceptionCaught") // intentional catch-all that maps to a 500
 internal suspend fun RoutingContext.respondMappingErrors(block: suspend () -> Unit) {
     try {
         block()
-    } catch (e: ResourceNotFoundException) {
-        logger.info { e.message }
-        call.respond(status = HttpStatusCode.NotFound, message = errorBody(error = "Not found", message = e.message))
-    } catch (e: AccountMergedException) {
-        // A merged duplicate's sign-in (#124): 403 + the canonical code so the client can link to it.
-        logger.warn { "Account merged: ${e.message}" }
-        val base = errorBody(error = "Account merged", message = e.message)
-        val body = e.canonicalPublicCode?.let { base + ("canonicalCode" to it) } ?: base
-        call.respond(status = HttpStatusCode.Forbidden, message = body)
-    } catch (e: ForbiddenException) {
-        logger.warn { "Access denied: ${e.message}" }
-        call.respond(status = HttpStatusCode.Forbidden, message = errorBody(error = "Forbidden", message = e.message))
-    } catch (e: ConflictException) {
-        logger.warn { "Conflict: ${e.message}" }
-        call.respond(status = HttpStatusCode.Conflict, message = errorBody(error = "Conflict", message = e.message))
     } catch (e: SerializationException) {
         // Must precede IllegalArgumentException: kotlinx SerializationException is a subtype of it.
         logger.warn(t = e) { "Malformed JSON" }

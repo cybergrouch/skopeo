@@ -3,6 +3,12 @@
 
 package org.skopeo.service.rating
 
+import arrow.core.Either
+import arrow.core.left
+import arrow.core.raise.either
+import arrow.core.raise.ensure
+import arrow.core.raise.ensureNotNull
+import arrow.core.right
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.skopeo.dto.RankingCalculationRequest
 import org.skopeo.model.CalculationBreakdownSnapshot
@@ -13,6 +19,7 @@ import org.skopeo.model.PlayerProfile
 import org.skopeo.model.Rating
 import org.skopeo.model.RatingCalculationOptions
 import org.skopeo.model.RatingHistoryWrite
+import org.skopeo.model.ServiceError
 import org.skopeo.model.SetScore
 import org.skopeo.model.Team
 import org.skopeo.model.TeamType
@@ -23,7 +30,6 @@ import org.skopeo.repository.UserRepository
 import org.skopeo.service.calculator.AuditEntry
 import org.skopeo.service.calculator.RankingCalculator
 import org.skopeo.service.calculator.impl.v1.PerformanceBasedRankingCalculatorImpl
-import org.skopeo.service.user.ForbiddenException
 import org.skopeo.service.user.VerifiedFirebaseToken
 import java.math.BigDecimal
 import java.time.LocalDate
@@ -36,6 +42,8 @@ import java.util.UUID
  * chain is correct, reusing the existing [RankingCalculator]. Dry-run (the default) returns a
  * full preview with no writes; an explicit commit persists ratings, history, and `rated_at` in
  * one transaction.
+ *
+ * Expected failures are returned as an [Either] left ([ServiceError], issue #115) rather than thrown.
  */
 class RatingCalculationService(
     private val matches: MatchRepository = MatchRepository(),
@@ -82,14 +90,15 @@ class RatingCalculationService(
     fun calculate(
         token: VerifiedFirebaseToken,
         dryRun: Boolean,
-    ): CalculationOutcome {
-        val adminId = requireAdmin(token = token)
-        val snapshot = mutableMapOf<UUID, BigDecimal>()
-        val processed = matches.listPendingCalculation().map { processMatch(match = it, snapshot = snapshot) }
+    ): Either<ServiceError, CalculationOutcome> =
+        either {
+            val adminId = requireAdmin(token = token).bind()
+            val snapshot = mutableMapOf<UUID, BigDecimal>()
+            val processed = matches.listPendingCalculation().map { processMatch(match = it, snapshot = snapshot).bind() }
 
-        if (!dryRun) commit(processed = processed, ratedBy = adminId)
-        return CalculationOutcome(dryRun = dryRun, matches = processed)
-    }
+            if (!dryRun) commit(processed = processed, ratedBy = adminId)
+            CalculationOutcome(dryRun = dryRun, matches = processed)
+        }
 
     private fun commit(
         processed: List<MatchCalculation>,
@@ -130,32 +139,33 @@ class RatingCalculationService(
     private fun processMatch(
         match: Match,
         snapshot: MutableMap<UUID, BigDecimal>,
-    ): MatchCalculation {
-        require(value = match.matchFormat == TeamType.SINGLES) {
-            "Only SINGLES matches can be calculated currently (match ${match.id})"
+    ): Either<ServiceError, MatchCalculation> =
+        either {
+            ensure(condition = match.matchFormat == TeamType.SINGLES) {
+                ServiceError.Validation(message = "Only SINGLES matches can be calculated currently (match ${match.id})")
+            }
+            val u1 = match.team1.userIds.single()
+            val u2 = match.team2.userIds.single()
+            val r1 = currentRating(userId = u1, snapshot = snapshot).bind()
+            val r2 = currentRating(userId = u2, snapshot = snapshot).bind()
+
+            val request = buildRequest(match = match, r1 = r1, r2 = r2)
+            val result = calculator.calculate(request = request)
+            val breakdowns = breakdownsByPlayer(audit = result.audit)
+
+            val changes =
+                listOf(
+                    playerChange(userId = u1, response = result.response, breakdowns = breakdowns).bind(),
+                    playerChange(userId = u2, response = result.response, breakdowns = breakdowns).bind(),
+                )
+            changes.forEach { snapshot[it.userId] = it.newRating }
+            MatchCalculation(matchId = match.id, matchDate = match.matchDate, changes = changes)
         }
-        val u1 = match.team1.userIds.single()
-        val u2 = match.team2.userIds.single()
-        val r1 = currentRating(userId = u1, snapshot = snapshot)
-        val r2 = currentRating(userId = u2, snapshot = snapshot)
-
-        val request = buildRequest(match = match, r1 = r1, r2 = r2)
-        val result = calculator.calculate(request = request)
-        val breakdowns = breakdownsByPlayer(audit = result.audit)
-
-        val changes =
-            listOf(
-                playerChange(userId = u1, response = result.response, breakdowns = breakdowns),
-                playerChange(userId = u2, response = result.response, breakdowns = breakdowns),
-            )
-        changes.forEach { snapshot[it.userId] = it.newRating }
-        return MatchCalculation(matchId = match.id, matchDate = match.matchDate, changes = changes)
-    }
 
     /** Pull the per-player calculator derivatives out of the audit trail, keyed by player id. */
     private fun breakdownsByPlayer(audit: List<AuditEntry>): Map<String, CalculationBreakdown> =
         audit
-            .filter { it.context.containsKey(key = "playerId") && it.context.containsKey(key = "dominance") }
+            .filter { it.context.keys.containsAll(elements = listOf("playerId", "dominance")) }
             .associate { entry ->
                 val ctx = entry.context
                 (ctx.getValue(key = "playerId") as String) to
@@ -174,42 +184,51 @@ class RatingCalculationService(
     private fun currentRating(
         userId: UUID,
         snapshot: MutableMap<UUID, BigDecimal>,
-    ): BigDecimal =
-        snapshot.getOrPut(key = userId) {
-            requireNotNull(value = ratings.findCurrentRating(userId = userId)) {
-                "User $userId has no rating (pending assessment)"
-            }.currentRating
+    ): Either<ServiceError, BigDecimal> =
+        either {
+            snapshot.getOrElse(key = userId) {
+                val rating = ratings.findCurrentRating(userId = userId)
+                ensureNotNull(value = rating) {
+                    ServiceError.Validation(message = "User $userId has no rating (pending assessment)")
+                }
+                rating.currentRating.also { snapshot[userId] = it }
+            }
         }
 
     private fun playerChange(
         userId: UUID,
         response: org.skopeo.dto.RankingCalculationResponse,
         breakdowns: Map<String, CalculationBreakdown>,
-    ): PlayerChange {
-        val rc =
-            requireNotNull(value = response.ratingChanges[userId.toString()]) {
-                "calculator returned no change for player $userId"
+    ): Either<ServiceError, PlayerChange> =
+        either {
+            val rc = response.ratingChanges[userId.toString()]
+            ensureNotNull(value = rc) {
+                ServiceError.Validation(message = "calculator returned no change for player $userId")
             }
-        return PlayerChange(
-            userId = userId,
-            previousRating = BigDecimal(rc.previousRating.value),
-            newRating = BigDecimal(rc.newRating.value),
-            change = BigDecimal(rc.change),
-            percentChange = BigDecimal(rc.percentChange.removeSuffix(suffix = "%")),
-            previousLevel = rc.previousRating.publishedLevel.value,
-            newLevel = rc.newRating.publishedLevel.value,
-            levelChanged = rc.levelChanged,
-            breakdown =
-                requireNotNull(value = breakdowns[userId.toString()]) {
-                    "calculator returned no breakdown for player $userId"
-                },
-        )
-    }
+            val breakdown = breakdowns[userId.toString()]
+            ensureNotNull(value = breakdown) {
+                ServiceError.Validation(message = "calculator returned no breakdown for player $userId")
+            }
+            PlayerChange(
+                userId = userId,
+                previousRating = BigDecimal(rc.previousRating.value),
+                newRating = BigDecimal(rc.newRating.value),
+                change = BigDecimal(rc.change),
+                percentChange = BigDecimal(rc.percentChange.removeSuffix(suffix = "%")),
+                previousLevel = rc.previousRating.publishedLevel.value,
+                newLevel = rc.newRating.publishedLevel.value,
+                levelChanged = rc.levelChanged,
+                breakdown = breakdown,
+            )
+        }
 
-    private fun requireAdmin(token: VerifiedFirebaseToken): UUID {
+    private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
         val caller = users.findByFirebaseUid(firebaseUid = token.uid)
-        if (caller == null || !caller.capabilities.contains(element = Capability.ADMINISTRATOR)) throw ForbiddenException()
-        return caller.id
+        return if (caller == null || !caller.capabilities.contains(element = Capability.ADMINISTRATOR)) {
+            ServiceError.Forbidden().left()
+        } else {
+            caller.id.right()
+        }
     }
 }
 

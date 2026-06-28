@@ -41,13 +41,14 @@ fun Application.configureRatingRoutes(
             get(path = "/api/v1/users/pending-assessment") {
                 respondMappingErrors {
                     val params = call.request.queryParameters
-                    val page =
-                        service.pendingAssessment(
-                            token = verifiedToken(),
-                            limit = params["limit"]?.toIntOrNull() ?: DEFAULT_PENDING_PAGE_SIZE,
-                            offset = params["offset"]?.toIntOrNull() ?: 0,
-                        )
-                    call.respond(status = HttpStatusCode.OK, message = page.toResponse())
+                    respondEither(
+                        result =
+                            service.pendingAssessment(
+                                token = verifiedToken(),
+                                limit = params["limit"]?.toIntOrNull() ?: DEFAULT_PENDING_PAGE_SIZE,
+                                offset = params["offset"]?.toIntOrNull() ?: 0,
+                            ),
+                    ) { page -> call.respond(status = HttpStatusCode.OK, message = page.toResponse()) }
                 }
             }
             // Calculation trigger (ADMINISTRATOR). dryRun defaults true; an empty body is a dry run.
@@ -56,8 +57,9 @@ fun Application.configureRatingRoutes(
                     // No/unparseable body → a dry run (the safe default; only an explicit
                     // {"dryRun": false} commits).
                     val request = runCatching { call.receiveNullable<CalculationRequest>() }.getOrNull() ?: CalculationRequest()
-                    val outcome = calculation.calculate(token = verifiedToken(), dryRun = request.dryRun)
-                    call.respond(status = HttpStatusCode.OK, message = outcome.toResponse())
+                    respondEither(result = calculation.calculate(token = verifiedToken(), dryRun = request.dryRun)) { outcome ->
+                        call.respond(status = HttpStatusCode.OK, message = outcome.toResponse())
+                    }
                 }
             }
             route(path = "/api/v1/users/{userId}") {
@@ -70,27 +72,30 @@ fun Application.configureRatingRoutes(
 private fun Route.ratings(service: RatingService) {
     get(path = "/ratings") {
         respondMappingErrors {
-            val list = service.getRatings(token = verifiedToken(), userId = uuidParam(name = "userId"))
-            call.respond(status = HttpStatusCode.OK, message = list.map { it.toResponse() })
+            respondEither(result = service.getRatings(token = verifiedToken(), userId = uuidParam(name = "userId"))) { list ->
+                call.respond(status = HttpStatusCode.OK, message = list.map { it.toResponse() })
+            }
         }
     }
     get(path = "/rating-history") {
         respondMappingErrors {
-            val history = service.getHistory(token = verifiedToken(), userId = uuidParam(name = "userId"))
-            call.respond(status = HttpStatusCode.OK, message = history.map { it.toResponse() })
+            respondEither(result = service.getHistory(token = verifiedToken(), userId = uuidParam(name = "userId"))) { history ->
+                call.respond(status = HttpStatusCode.OK, message = history.map { it.toResponse() })
+            }
         }
     }
     put(path = "/ratings") {
         respondMappingErrors {
             val request = call.receive<SetRatingRequest>()
-            val rating =
-                service.setRating(
-                    token = verifiedToken(),
-                    userId = uuidParam(name = "userId"),
-                    value = validatedRating(raw = request.value),
-                    confidence = validatedConfidence(raw = request.confidence),
-                )
-            call.respond(status = HttpStatusCode.OK, message = rating.toResponse())
+            respondEither(
+                result =
+                    service.setRating(
+                        token = verifiedToken(),
+                        userId = uuidParam(name = "userId"),
+                        value = validatedRating(raw = request.value),
+                        confidence = validatedConfidence(raw = request.confidence),
+                    ),
+            ) { rating -> call.respond(status = HttpStatusCode.OK, message = rating.toResponse()) }
         }
     }
 }

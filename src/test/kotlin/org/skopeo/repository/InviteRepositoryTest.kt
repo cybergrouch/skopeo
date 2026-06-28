@@ -3,14 +3,18 @@
 
 package org.skopeo.repository
 
+import io.kotest.assertions.arrow.core.shouldBeLeft
+import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.model.InviteStatus
+import org.skopeo.model.ServiceError
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.time.LocalDateTime
 import java.util.UUID
@@ -69,14 +73,22 @@ class InviteRepositoryTest {
     }
 
     @Test
-    fun `revoke closes a pending invite and returns null for an unknown id`() {
+    fun `markAccepted is a no-op when no pending invite exists for the email`() {
+        invites.markAccepted(email = "nobody@x.dev", acceptedAt = LocalDateTime.now())
+
+        invites.findOpenByEmail(email = "nobody@x.dev", asOf = LocalDateTime.now()).shouldBeNull()
+        invites.list(limit = 50, offset = 0).second shouldBe 0L
+    }
+
+    @Test
+    fun `revoke closes a pending invite and reports NotFound for an unknown id`() {
         val invite = invites.createOrRotate(email = "rev@x.dev", invitedBy = null, expiresAt = future)
 
-        val revoked = invites.revoke(id = invite.id)
-        revoked?.status shouldBe InviteStatus.REVOKED
+        val revoked = invites.revoke(id = invite.id).shouldBeRight()
+        revoked.status shouldBe InviteStatus.REVOKED
         invites.findOpenByEmail(email = "rev@x.dev", asOf = LocalDateTime.now()).shouldBeNull()
 
-        invites.revoke(id = UUID.randomUUID()).shouldBeNull()
+        invites.revoke(id = UUID.randomUUID()).shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
     @Test

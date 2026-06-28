@@ -3,6 +3,9 @@
 
 package org.skopeo.repository
 
+import arrow.core.Either
+import arrow.core.left
+import arrow.core.right
 import org.jetbrains.exposed.sql.CustomFunction
 import org.jetbrains.exposed.sql.FloatColumnType
 import org.jetbrains.exposed.sql.Op
@@ -25,6 +28,7 @@ import org.skopeo.model.Name
 import org.skopeo.model.NumericRange
 import org.skopeo.model.ProfilePatch
 import org.skopeo.model.ProvisionUserCommand
+import org.skopeo.model.ServiceError
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserSearchQuery
@@ -96,10 +100,10 @@ class UserRepository {
                 }
             }
 
-            loadAggregate(id = userId.value) ?: error(message = "Provisioned user ${userId.value} could not be read back")
+            loadAggregateOrThrow(id = userId.value)
         }
 
-    fun findById(id: UUID): User? = transaction { loadAggregate(id = id) }
+    fun findById(id: UUID): Either<ServiceError, User> = transaction { aggregateOrNotFound(id = id) }
 
     /** Resolve multiple ids to their aggregates in one transaction; unknown ids are dropped. */
     fun findAllByIds(ids: List<UUID>): List<User> = transaction { ids.distinct().mapNotNull { loadAggregate(id = it) } }
@@ -157,7 +161,7 @@ class UserRepository {
     fun updateProfile(
         id: UUID,
         patch: ProfilePatch,
-    ): User? =
+    ): Either<ServiceError, User> =
         transaction {
             val updated =
                 UsersTable.update(where = { UsersTable.id eq id }) {
@@ -166,14 +170,14 @@ class UserRepository {
                     patch.sex?.let { value -> it[UsersTable.sex] = value }
                     patch.city?.let { value -> it[UsersTable.city] = value }
                 }
-            if (updated == 0) null else loadAggregate(id = id)
+            if (updated == 0) ServiceError.NotFound(message = "User $id not found").left() else aggregateOrNotFound(id = id)
         }
 
     /** Full replacement of the mutable profile fields (PUT semantics): null clears the column. */
     fun replaceProfile(
         id: UUID,
         patch: ProfilePatch,
-    ): User? =
+    ): Either<ServiceError, User> =
         transaction {
             val updated =
                 UsersTable.update(where = { UsersTable.id eq id }) {
@@ -182,13 +186,14 @@ class UserRepository {
                     it[sex] = patch.sex
                     it[city] = patch.city
                 }
-            if (updated == 0) null else loadAggregate(id = id)
+            if (updated == 0) ServiceError.NotFound(message = "User $id not found").left() else aggregateOrNotFound(id = id)
         }
 
-    /** Soft-delete: flip is_active to false. Returns false if no such user. */
-    fun deactivate(id: UUID): Boolean =
+    /** Soft-delete: flip is_active to false — a [ServiceError.NotFound] when there is no such user. */
+    fun deactivate(id: UUID): Either<ServiceError, Unit> =
         transaction {
-            UsersTable.update(where = { UsersTable.id eq id }) { it[UsersTable.isActive] = false } > 0
+            val updated = UsersTable.update(where = { UsersTable.id eq id }) { it[UsersTable.isActive] = false }
+            if (updated == 0) ServiceError.NotFound(message = "User $id not found").left() else Unit.right()
         }
 
     /**
@@ -227,20 +232,29 @@ class UserRepository {
                 .mapNotNull { loadAggregate(id = it) }
         }
 
-    private fun loadAggregate(id: UUID): User? {
-        val row =
-            UsersTable
-                .selectAll()
-                .where { UsersTable.id eq id }
-                .singleOrNull() ?: return null
-        return row.toUser(
-            names = namesOf(id = id),
-            contacts = contactsOf(id = id),
-            identities = identitiesOf(id = id),
-            capabilities = capabilitiesOf(id = id),
-        )
+    /** Load the aggregate as an [Either], turning absence into a [ServiceError.NotFound]. Must run in a transaction. */
+    private fun aggregateOrNotFound(id: UUID): Either<ServiceError, User> {
+        val user = loadAggregate(id = id)
+        return if (user == null) ServiceError.NotFound(message = "User $id not found").left() else user.right()
     }
+
+    private fun loadAggregate(id: UUID): User? =
+        UsersTable.selectAll().where { UsersTable.id eq id }.singleOrNull()?.let { row -> buildAggregate(id = id, row = row) }
+
+    private fun loadAggregateOrThrow(id: UUID): User =
+        buildAggregate(id = id, row = UsersTable.selectAll().where { UsersTable.id eq id }.single())
 }
+
+private fun buildAggregate(
+    id: UUID,
+    row: ResultRow,
+): User =
+    row.toUser(
+        names = namesOf(id = id),
+        contacts = contactsOf(id = id),
+        identities = identitiesOf(id = id),
+        capabilities = capabilitiesOf(id = id),
+    )
 
 /**
  * The unified picker term (#86): a fuzzy name match OR a player-code prefix, OR-combined so typing

@@ -70,7 +70,8 @@ class RatingRepository {
                     it[confidenceScore] = confidence
                 }
             }
-            ratingRow(userId = userId)!!.toUserRating()
+            val row = UserRatingsTable.selectAll().where { UserRatingsTable.userId eq userId }.single()
+            row.toUserRating()
         }
 
     fun historyByUser(userId: UUID): List<RatingHistoryEntry> =

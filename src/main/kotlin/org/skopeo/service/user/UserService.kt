@@ -3,6 +3,11 @@
 
 package org.skopeo.service.user
 
+import arrow.core.Either
+import arrow.core.left
+import arrow.core.raise.either
+import arrow.core.raise.ensure
+import arrow.core.right
 import mu.KotlinLogging
 import org.skopeo.dto.user.CreateUserRequest
 import org.skopeo.model.AuditAction
@@ -12,6 +17,7 @@ import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.NumericRange
 import org.skopeo.model.ProfilePatch
+import org.skopeo.model.ServiceError
 import org.skopeo.model.User
 import org.skopeo.model.UserRating
 import org.skopeo.model.UserSearchQuery
@@ -46,6 +52,8 @@ data class UserSearchFilters(
  * Orchestrates user provisioning and CRUD, enforcing the self-or-ADMINISTRATOR
  * access policy. All mutations funnel through here (rather than the routes) so a
  * DB audit trail can be layered in later without touching the transport layer.
+ *
+ * Expected failures are returned as an [Either] left ([ServiceError], issue #115) rather than thrown.
  */
 class UserService(
     private val repository: UserRepository = UserRepository(),
@@ -70,32 +78,33 @@ class UserService(
     fun search(
         token: VerifiedFirebaseToken,
         filters: UserSearchFilters,
-    ): List<User> {
-        requireStaff(repository = repository, token = token)
-        val nameTerm = filters.name?.let { it.trim().ifEmpty { null } }
-        val codeTerm = filters.code?.let { it.trim().uppercase().ifEmpty { null } }
-        val qTerm = filters.q?.let { it.trim().ifEmpty { null } }
-        require(
-            value =
-                nameTerm != null || codeTerm != null || qTerm != null ||
-                    filters.sex != null || filters.age != null || filters.rating != null,
-        ) {
-            "at least one filter (name, code, q, sex, age, rating) is required"
+    ): Either<ServiceError, List<User>> =
+        either {
+            requireStaff(repository = repository, token = token).bind()
+            val nameTerm = blankToNull(raw = filters.name)
+            val codeTerm = blankToNull(raw = filters.code)?.uppercase()
+            val qTerm = blankToNull(raw = filters.q)
+            ensure(
+                condition =
+                    nameTerm != null || codeTerm != null || qTerm != null ||
+                        filters.sex != null || filters.age != null || filters.rating != null,
+            ) {
+                ServiceError.Validation(message = "at least one filter (name, code, q, sex, age, rating) is required")
+            }
+            val dob = filters.age?.let { ageRangeToDob(range = it, today = LocalDate.now()) }
+            repository.search(
+                query =
+                    UserSearchQuery(
+                        name = nameTerm,
+                        code = codeTerm,
+                        q = qTerm,
+                        sex = filters.sex,
+                        dobMin = dob?.min,
+                        dobMax = dob?.max,
+                        rating = filters.rating,
+                    ),
+            )
         }
-        val dob = filters.age?.let { ageRangeToDob(range = it, today = LocalDate.now()) }
-        return repository.search(
-            query =
-                UserSearchQuery(
-                    name = nameTerm,
-                    code = codeTerm,
-                    q = qTerm,
-                    sex = filters.sex,
-                    dobMin = dob?.min,
-                    dobMax = dob?.max,
-                    rating = filters.rating,
-                ),
-        )
-    }
 
     /**
      * Resolve known user ids to their profiles — HOST/ADMINISTRATOR only. Used to turn the bare
@@ -105,11 +114,12 @@ class UserService(
     fun findByIds(
         token: VerifiedFirebaseToken,
         ids: List<UUID>,
-    ): List<User> {
-        requireStaff(repository = repository, token = token)
-        require(value = ids.isNotEmpty()) { "ids must not be empty" }
-        return repository.findAllByIds(ids = ids)
-    }
+    ): Either<ServiceError, List<User>> =
+        either {
+            requireStaff(repository = repository, token = token).bind()
+            ensure(condition = ids.isNotEmpty()) { ServiceError.Validation(message = "ids must not be empty") }
+            repository.findAllByIds(ids = ids)
+        }
 
     /** Outcome of provisioning: [created] distinguishes a fresh user (201) from an idempotent hit (200). */
     data class Provisioned(
@@ -124,33 +134,55 @@ class UserService(
     fun provision(
         token: VerifiedFirebaseToken,
         request: CreateUserRequest,
-    ): Provisioned {
-        repository.findByFirebaseUid(firebaseUid = token.uid)?.let { existing ->
-            // A disabled duplicate (#124) cannot sign back in; point them at the canonical account.
-            val canonical = existing.canonicalUserId?.let { repository.findById(id = it) }
-            if (canonical != null) throw AccountMergedException(canonicalPublicCode = canonical.publicCode)
-            val promoted = promoteIfBootstrapAdmin(token = token, user = existing, adminEmails = adminEmails, capabilities = capabilities)
-            return Provisioned(user = promoted, created = false)
+    ): Either<ServiceError, Provisioned> =
+        either {
+            val existing = repository.findByFirebaseUid(firebaseUid = token.uid)
+            if (existing != null) {
+                provisionExisting(token = token, existing = existing).bind()
+            } else {
+                provisionNew(token = token, request = request).bind()
+            }
         }
-        // Manual (password/email-link) sign-ups are invite-only; OAuth is exempt. Returns the gated
-        // email so we can mark its invite accepted once the profile is created.
-        val invitedEmail = requireInviteForManualSignup(invites = invites, token = token)
-        val command = buildProvisionCommand(token = token, request = request, adminEmails = adminEmails)
-        val user = repository.provision(command = command)
-        if (invitedEmail != null) invites.markAccepted(email = invitedEmail, acceptedAt = LocalDateTime.now())
-        audit.record(
-            // Self sign-up: the new user is the actor.
-            write =
-                AuditWrite(
-                    actorUserId = user.id,
-                    action = AuditAction.USER_CREATED,
-                    entityType = AuditEntityType.USER,
-                    entityId = user.id,
-                    summary = "Signed up",
-                ),
-        )
-        return Provisioned(user = user, created = true)
+
+    /** Idempotent re-provision of an already-known uid: reject a merged duplicate, else promote-and-return. */
+    private fun provisionExisting(
+        token: VerifiedFirebaseToken,
+        existing: User,
+    ): Either<ServiceError, Provisioned> {
+        // A disabled duplicate (#124) cannot sign back in; point them at the canonical account.
+        val canonical = existing.canonicalUserId?.let { repository.findById(id = it).getOrNull() }
+        if (canonical != null) {
+            return ServiceError.AccountMerged(canonicalPublicCode = canonical.publicCode).left()
+        }
+        val promoted = promoteIfBootstrapAdmin(token = token, user = existing, adminEmails = adminEmails, capabilities = capabilities)
+        return Provisioned(user = promoted, created = false).right()
     }
+
+    /** First-time sign-up: enforce the invite gate, write the aggregate, and audit the creation. */
+    private fun provisionNew(
+        token: VerifiedFirebaseToken,
+        request: CreateUserRequest,
+    ): Either<ServiceError, Provisioned> =
+        either {
+            // Manual (password/email-link) sign-ups are invite-only; OAuth is exempt. Returns the gated
+            // email so we can mark its invite accepted once the profile is created.
+            val invitedEmail = requireInviteForManualSignup(invites = invites, token = token).bind()
+            val command = buildProvisionCommand(token = token, request = request, adminEmails = adminEmails)
+            val user = repository.provision(command = command)
+            if (invitedEmail != null) invites.markAccepted(email = invitedEmail, acceptedAt = LocalDateTime.now())
+            audit.record(
+                // Self sign-up: the new user is the actor.
+                write =
+                    AuditWrite(
+                        actorUserId = user.id,
+                        action = AuditAction.USER_CREATED,
+                        entityType = AuditEntityType.USER,
+                        entityId = user.id,
+                        summary = "Signed up",
+                    ),
+            )
+            Provisioned(user = user, created = true)
+        }
 
     /** The caller's own profile, or null if they have not been provisioned yet. */
     fun currentUser(token: VerifiedFirebaseToken): User? =
@@ -161,52 +193,59 @@ class UserService(
     fun getById(
         token: VerifiedFirebaseToken,
         id: UUID,
-    ): User {
-        val target = repository.findById(id = id) ?: throw UserNotFoundException(id = id)
-        requireAccess(token = token, target = target)
-        return target
-    }
+    ): Either<ServiceError, User> =
+        either {
+            val target = repository.findById(id = id).bind()
+            requireAccess(token = token, target = target).bind()
+            target
+        }
 
     fun patchProfile(
         token: VerifiedFirebaseToken,
         id: UUID,
         patch: ProfilePatch,
-    ): User {
-        val target = repository.findById(id = id) ?: throw UserNotFoundException(id = id)
-        requireAccess(token = token, target = target)
-        return repository.updateProfile(id = id, patch = patch) ?: throw UserNotFoundException(id = id)
-    }
+    ): Either<ServiceError, User> =
+        either {
+            val target = repository.findById(id = id).bind()
+            requireAccess(token = token, target = target).bind()
+            repository.updateProfile(id = id, patch = patch).bind()
+        }
 
     fun replaceProfile(
         token: VerifiedFirebaseToken,
         id: UUID,
         patch: ProfilePatch,
-    ): User {
-        val target = repository.findById(id = id) ?: throw UserNotFoundException(id = id)
-        requireAccess(token = token, target = target)
-        return repository.replaceProfile(id = id, patch = patch) ?: throw UserNotFoundException(id = id)
-    }
+    ): Either<ServiceError, User> =
+        either {
+            val target = repository.findById(id = id).bind()
+            requireAccess(token = token, target = target).bind()
+            repository.replaceProfile(id = id, patch = patch).bind()
+        }
 
     fun deactivate(
         token: VerifiedFirebaseToken,
         id: UUID,
-    ) {
-        val target = repository.findById(id = id) ?: throw UserNotFoundException(id = id)
-        requireAccess(token = token, target = target)
-        repository.deactivate(id = id)
-    }
+    ): Either<ServiceError, Unit> =
+        either {
+            val target = repository.findById(id = id).bind()
+            requireAccess(token = token, target = target).bind()
+            repository.deactivate(id = id).bind()
+        }
 
     /** Allow only the target user themselves or an ADMINISTRATOR. */
     private fun requireAccess(
         token: VerifiedFirebaseToken,
         target: User,
-    ) {
+    ): Either<ServiceError, Unit> {
         val caller = repository.findByFirebaseUid(firebaseUid = token.uid)
         val isSelf = caller?.id == target.id
-        val isAdmin = caller?.capabilities?.contains(element = Capability.ADMINISTRATOR) == true
-        if (!isSelf && !isAdmin) throw ForbiddenException()
+        val isAdmin = caller != null && caller.capabilities.contains(element = Capability.ADMINISTRATOR)
+        return if (!isSelf && !isAdmin) ServiceError.Forbidden().left() else Unit.right()
     }
 }
+
+/** Trim a free-text search term, collapsing a null/blank value to null. */
+private fun blankToNull(raw: String?): String? = raw?.trim()?.ifEmpty { null }
 
 /**
  * Idempotently grant ADMINISTRATOR to an already-provisioned user whose verified email is on the
@@ -232,9 +271,13 @@ private fun promoteIfBootstrapAdmin(
 private fun requireStaff(
     repository: UserRepository,
     token: VerifiedFirebaseToken,
-) {
+): Either<ServiceError, Unit> {
     val caller = repository.findByFirebaseUid(firebaseUid = token.uid)
-    if (caller == null || caller.capabilities.none { it in STAFF_ROLES }) throw ForbiddenException()
+    return if (caller == null || caller.capabilities.none { it in STAFF_ROLES }) {
+        ServiceError.Forbidden().left()
+    } else {
+        Unit.right()
+    }
 }
 
 /**
@@ -245,11 +288,13 @@ private fun requireStaff(
 private fun requireInviteForManualSignup(
     invites: InviteRepository,
     token: VerifiedFirebaseToken,
-): String? {
+): Either<ServiceError, String?> {
     val isManual = authProviderOf(signInProvider = token.signInProvider) == AuthProvider.PASSWORD
     val email = token.email?.trim()?.lowercase()
-    if (!isManual || email == null) return null
-    invites.findOpenByEmail(email = email, asOf = LocalDateTime.now())
-        ?: throw ForbiddenException(message = "An invitation is required to register $email")
-    return email
+    if (!isManual || email == null) return null.right()
+    return if (invites.findOpenByEmail(email = email, asOf = LocalDateTime.now()) == null) {
+        ServiceError.Forbidden(message = "An invitation is required to register $email").left()
+    } else {
+        email.right()
+    }
 }

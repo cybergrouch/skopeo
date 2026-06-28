@@ -50,15 +50,17 @@ private fun Route.listAndCreate(service: MatchService) {
     get {
         respondMappingErrors {
             val view = matchQueryOf(value = call.request.queryParameters["filter"])
-            val list = service.query(token = verifiedToken(), view = view)
-            call.respond(status = HttpStatusCode.OK, message = list.map { it.toResponse() })
+            respondEither(result = service.query(token = verifiedToken(), view = view)) { list ->
+                call.respond(status = HttpStatusCode.OK, message = list.map { it.toResponse() })
+            }
         }
     }
     post {
         respondMappingErrors {
             val request = call.receive<CreateFixtureRequest>()
-            val match = service.createFixture(token = verifiedToken(), request = toFixtureInput(request = request))
-            call.respond(status = HttpStatusCode.Created, message = match.toResponse())
+            respondEither(
+                result = service.createFixture(token = verifiedToken(), request = toFixtureInput(request = request)),
+            ) { match -> call.respond(status = HttpStatusCode.Created, message = match.toResponse()) }
         }
     }
 }
@@ -108,28 +110,32 @@ private fun parseMatchDate(value: String): LocalDate =
 private fun Route.byId(service: MatchService) {
     get(path = "/{id}") {
         respondMappingErrors {
-            val match = service.getById(token = verifiedToken(), matchId = uuidParam(name = "id"))
-            call.respond(status = HttpStatusCode.OK, message = match.toResponse())
+            respondEither(
+                result = service.getById(token = verifiedToken(), matchId = uuidParam(name = "id")),
+            ) { match -> call.respond(status = HttpStatusCode.OK, message = match.toResponse()) }
         }
     }
     get(path = "/{id}/calculation") {
         respondMappingErrors {
-            val detail = service.calculationDetail(token = verifiedToken(), matchId = uuidParam(name = "id"))
-            call.respond(status = HttpStatusCode.OK, message = detail.toResponse())
+            respondEither(
+                result = service.calculationDetail(token = verifiedToken(), matchId = uuidParam(name = "id")),
+            ) { detail -> call.respond(status = HttpStatusCode.OK, message = detail.toResponse()) }
         }
     }
     post(path = "/{id}/result") {
         respondMappingErrors {
             val request = call.receive<MatchResultRequest>()
-            val match = service.uploadResult(token = verifiedToken(), matchId = uuidParam(name = "id"), request = request)
-            call.respond(status = HttpStatusCode.OK, message = match.toResponse())
+            respondEither(
+                result = service.uploadResult(token = verifiedToken(), matchId = uuidParam(name = "id"), request = request),
+            ) { match -> call.respond(status = HttpStatusCode.OK, message = match.toResponse()) }
         }
     }
     put(path = "/{id}/state") {
         respondMappingErrors {
             val request = call.receive<MatchStateRequest>()
-            val match = service.setActive(token = verifiedToken(), matchId = uuidParam(name = "id"), active = request.isActive)
-            call.respond(status = HttpStatusCode.OK, message = match.toResponse())
+            respondEither(
+                result = service.setActive(token = verifiedToken(), matchId = uuidParam(name = "id"), active = request.isActive),
+            ) { match -> call.respond(status = HttpStatusCode.OK, message = match.toResponse()) }
         }
     }
 }

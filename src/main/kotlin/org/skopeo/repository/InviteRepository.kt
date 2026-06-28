@@ -3,6 +3,9 @@
 
 package org.skopeo.repository
 
+import arrow.core.Either
+import arrow.core.left
+import arrow.core.right
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.and
@@ -12,6 +15,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.model.Invite
 import org.skopeo.model.InviteStatus
+import org.skopeo.model.ServiceError
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -43,7 +47,7 @@ class InviteRepository {
                     }
                     existingId
                 }
-            loadById(id = id) ?: error(message = "Invite $id could not be read back")
+            loadByIdOrThrow(id = id)
         }
 
     /** The open (PENDING and unexpired) invite for [email], if any — the provisioning gate. */
@@ -76,14 +80,18 @@ class InviteRepository {
         }
     }
 
-    /** Revoke an invite by id; returns the updated invite, or null if no such invite. */
-    fun revoke(id: UUID): Invite? =
+    /** Revoke an invite by id; returns the updated invite, or a [ServiceError.NotFound] if no such invite. */
+    fun revoke(id: UUID): Either<ServiceError, Invite> =
         transaction {
             val updated =
                 InvitesTable.update(where = { InvitesTable.id eq id }) {
                     it[status] = InviteStatus.REVOKED.name
                 }
-            if (updated == 0) null else loadById(id = id)
+            if (updated == 0) {
+                ServiceError.NotFound(message = "No invite $id").left()
+            } else {
+                loadByIdOrThrow(id = id).right()
+            }
         }
 
     /**
@@ -118,7 +126,7 @@ class InviteRepository {
             .where { (InvitesTable.email eq email) and (InvitesTable.status eq InviteStatus.PENDING.name) }
             .firstOrNull()
 
-    private fun loadById(id: UUID): Invite? = InvitesTable.selectAll().where { InvitesTable.id eq id }.map { it.toInvite() }.firstOrNull()
+    private fun loadByIdOrThrow(id: UUID): Invite = InvitesTable.selectAll().where { InvitesTable.id eq id }.single().toInvite()
 }
 
 internal fun ResultRow.toInvite(): Invite =

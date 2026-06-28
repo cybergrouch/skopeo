@@ -48,44 +48,49 @@ fun Application.configureDuplicateCandidateRoutes(service: DuplicateCandidateSer
                 get {
                     respondMappingErrors {
                         val params = call.request.queryParameters
-                        val page =
-                            service.list(
-                                token = verifiedToken(),
-                                limit = params["limit"]?.toIntOrNull() ?: DEFAULT_CANDIDATE_PAGE_SIZE,
-                                offset = params["offset"]?.toIntOrNull() ?: 0,
-                                status = params["status"]?.let { parseCandidateStatus(raw = it) },
-                            )
-                        call.respond(status = HttpStatusCode.OK, message = page.toResponse())
+                        respondEither(
+                            result =
+                                service.list(
+                                    token = verifiedToken(),
+                                    limit = params["limit"]?.toIntOrNull() ?: DEFAULT_CANDIDATE_PAGE_SIZE,
+                                    offset = params["offset"]?.toIntOrNull() ?: 0,
+                                    status = params["status"]?.let { parseCandidateStatus(raw = it) },
+                                ),
+                        ) { page -> call.respond(status = HttpStatusCode.OK, message = page.toResponse()) }
                     }
                 }
                 post {
                     respondMappingErrors {
                         val request = call.receive<FlagCandidateRequest>()
-                        val candidate =
-                            service.flagManual(
-                                token = verifiedToken(),
-                                userAId = parseUserId(raw = request.userAId),
-                                userBId = parseUserId(raw = request.userBId),
-                                reason = request.reason,
-                            )
-                        call.respond(status = HttpStatusCode.Created, message = candidate.toResponse())
+                        respondEither(
+                            result =
+                                service.flagManual(
+                                    token = verifiedToken(),
+                                    userAId = parseUserId(raw = request.userAId),
+                                    userBId = parseUserId(raw = request.userBId),
+                                    reason = request.reason,
+                                ),
+                        ) { candidate -> call.respond(status = HttpStatusCode.Created, message = candidate.toResponse()) }
                     }
                 }
                 post(path = "/{id}/confirm") {
                     respondMappingErrors {
                         val request = call.receive<ConfirmCandidateRequest>()
-                        service.confirm(
-                            token = verifiedToken(),
-                            id = uuidParam(name = "id"),
-                            canonicalId = parseUserId(raw = request.canonicalId),
-                        )
-                        call.respond(status = HttpStatusCode.NoContent, message = "")
+                        respondEither(
+                            result =
+                                service.confirm(
+                                    token = verifiedToken(),
+                                    id = uuidParam(name = "id"),
+                                    canonicalId = parseUserId(raw = request.canonicalId),
+                                ),
+                        ) { call.respond(status = HttpStatusCode.NoContent, message = "") }
                     }
                 }
                 delete(path = "/{id}") {
                     respondMappingErrors {
-                        service.dismiss(token = verifiedToken(), id = uuidParam(name = "id"))
-                        call.respond(status = HttpStatusCode.NoContent, message = "")
+                        respondEither(result = service.dismiss(token = verifiedToken(), id = uuidParam(name = "id"))) {
+                            call.respond(status = HttpStatusCode.NoContent, message = "")
+                        }
                     }
                 }
             }
