@@ -132,27 +132,24 @@ export function SeedingTab() {
     invalidateLists()
   }
 
-  async function onAddMember(user: UserSummaryResponse) {
-    if (!selectedId) return
+  async function onAddMember(listId: string, user: UserSummaryResponse) {
     try {
-      await addMember.mutateAsync({ id: selectedId, data: { userId: user.id } })
+      await addMember.mutateAsync({ id: listId, data: { userId: user.id } })
       setAddError(null)
-      invalidateDetail(selectedId)
+      invalidateDetail(listId)
     } catch {
       setAddError("Couldn't add that player.")
     }
   }
 
-  async function onRemoveMember(userId: string) {
-    if (!selectedId) return
-    await removeMember.mutateAsync({ id: selectedId, userId })
-    invalidateDetail(selectedId)
+  async function onRemoveMember(listId: string, userId: string) {
+    await removeMember.mutateAsync({ id: listId, userId })
+    invalidateDetail(listId)
   }
 
-  async function onGenerate() {
-    if (!selectedId) return
-    await generate.mutateAsync({ id: selectedId })
-    invalidateSeeding(selectedId)
+  async function onGenerate(listId: string) {
+    await generate.mutateAsync({ id: listId })
+    invalidateSeeding(listId)
   }
 
   function buildFilters(): Pick<GetApiV1UsersParams, 'sex' | 'age' | 'rating'> {
@@ -165,16 +162,13 @@ export function SeedingTab() {
     return filters
   }
 
-  function onDownloadCsv() {
-    const list = detail.data
-    const entries = seeding.data?.entries ?? []
-    if (!list || entries.length === 0) return
+  function onDownloadCsv(listName: string, entries: SeedingEntryResponse[], generatedAt: string) {
     const csv = seedingCsv(entries)
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const anchor = document.createElement('a')
     anchor.href = url
-    anchor.download = `${sanitizeFilename(list.name)}-seeding-${seeding.data?.generatedAt ?? ''}.csv`
+    anchor.download = `${sanitizeFilename(listName)}-seeding-${generatedAt}.csv`
     document.body.appendChild(anchor)
     anchor.click()
     document.body.removeChild(anchor)
@@ -184,7 +178,8 @@ export function SeedingTab() {
   const allLists = lists.data ?? []
   const members = detail.data?.members ?? []
   const memberIds = members.map((m) => m.id)
-  const entries = seeding.data?.entries ?? []
+  const seedingData = seeding.data
+  const entries = seedingData?.entries ?? []
   const hasSeeding = entries.length > 0
 
   return (
@@ -275,7 +270,7 @@ export function SeedingTab() {
                             type="button"
                             variant="ghost"
                             size="sm"
-                            onClick={() => onRemoveMember(member.id)}
+                            onClick={() => onRemoveMember(selectedId, member.id)}
                           >
                             Remove
                           </Button>
@@ -352,7 +347,7 @@ export function SeedingTab() {
                   label="Find a player"
                   excludeIds={memberIds}
                   filters={buildFilters()}
-                  onSelect={onAddMember}
+                  onSelect={(user) => onAddMember(selectedId, user)}
                 />
                 {addError ? (
                   <p className="text-sm text-destructive" role="alert">
@@ -363,17 +358,24 @@ export function SeedingTab() {
 
               <section className="space-y-3 border-t pt-4">
                 <div className="flex flex-wrap gap-2">
-                  <Button type="button" onClick={onGenerate}>
+                  <Button type="button" onClick={() => onGenerate(selectedId)}>
                     {hasSeeding ? 'Regenerate' : 'Generate seeding'}
                   </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={onDownloadCsv}
-                    disabled={!hasSeeding}
-                  >
-                    Download CSV
-                  </Button>
+                  {seedingData != null && seedingData.entries.length > 0 ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() =>
+                        onDownloadCsv(
+                          detail.data?.name ?? 'List',
+                          seedingData.entries,
+                          seedingData.generatedAt,
+                        )
+                      }
+                    >
+                      Download CSV
+                    </Button>
+                  ) : null}
                   <Button
                     type="button"
                     variant="ghost"

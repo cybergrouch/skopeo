@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { SeedingTab } from './SeedingTab'
@@ -104,6 +104,16 @@ const listDetail = {
       capabilities: [],
     },
     { id: 'u2', publicCode: 'BBB222', displayName: null, capabilities: [] },
+    {
+      id: 'u3',
+      publicCode: 'CCC333',
+      displayName: 'Bea',
+      sex: 'Female',
+      age: 25,
+      // No NTRP level: the meta falls back to the raw rating value.
+      rating: { value: '3.500000', level: null },
+      capabilities: [],
+    },
   ],
 }
 
@@ -137,6 +147,7 @@ const seeding = {
 
 describe('SeedingTab', () => {
   beforeEach(() => {
+    vi.restoreAllMocks()
     vi.clearAllMocks()
     state.addFail = false
     useGetApiV1PlayerLists.mockReturnValue({ data: lists })
@@ -157,12 +168,26 @@ describe('SeedingTab', () => {
     expect(screen.getByText('No lists yet.')).toBeInTheDocument()
   })
 
+  it('shows the empty state while the lists query is still loading', () => {
+    useGetApiV1PlayerLists.mockReturnValue({ data: undefined })
+    renderTab()
+    expect(screen.getByText('No lists yet.')).toBeInTheDocument()
+  })
+
   it('creates a list and selects it', async () => {
     const user = userEvent.setup()
     renderTab()
     await user.type(screen.getByLabelText('New list'), 'Spring')
     await user.click(screen.getByRole('button', { name: 'Create' }))
     await waitFor(() => expect(createMutate).toHaveBeenCalledWith({ data: { name: 'Spring' } }))
+  })
+
+  it('ignores a create submit when the name is blank', () => {
+    renderTab()
+    // Submitting the form with a whitespace-only name is a no-op (guards against empty creates).
+    fireEvent.change(screen.getByLabelText('New list'), { target: { value: '   ' } })
+    fireEvent.submit(screen.getByLabelText('New list').closest('form')!)
+    expect(createMutate).not.toHaveBeenCalled()
   })
 
   it('selects a list and lists its members (with a code fallback name)', async () => {
@@ -174,6 +199,8 @@ describe('SeedingTab', () => {
     expect(screen.getByText('Female · 30 · NTRP 4.0')).toBeInTheDocument()
     // No-display-name member falls back to the public code.
     expect(screen.getByText('BBB222')).toBeInTheDocument()
+    // A rating without an NTRP level falls back to its raw value.
+    expect(screen.getByText('Female · 25 · NTRP 3.500000')).toBeInTheDocument()
   })
 
   it('adds a member via the picker', async () => {
@@ -322,6 +349,68 @@ describe('SeedingTab', () => {
     vi.unstubAllGlobals()
   })
 
+  it('falls back to a default filename when the list name has no usable characters', async () => {
+    useGetApiV1PlayerListsId.mockReturnValue({ data: { ...listDetail, name: '***' } })
+    useGetApiV1PlayerListsIdSeeding.mockReturnValue({ data: seeding })
+
+    const click = vi.fn()
+    const realCreate = document.createElement.bind(document)
+    let anchor: HTMLAnchorElement | null = null
+    const createElementSpy = vi
+      .spyOn(document, 'createElement')
+      .mockImplementation((tag: string) => {
+        const el = realCreate(tag)
+        if (tag === 'a') {
+          anchor = el as HTMLAnchorElement
+          ;(el as HTMLAnchorElement).click = click
+        }
+        return el
+      })
+    vi.stubGlobal('URL', { ...URL, createObjectURL: () => 'blob:url', revokeObjectURL: vi.fn() })
+
+    const user = userEvent.setup()
+    renderTab()
+    // The list-row label still comes from the lists query; the detail (name "***") drives the filename.
+    await user.click(screen.getByRole('button', { name: /Summer Open/ }))
+    await user.click(screen.getByRole('button', { name: 'Download CSV' }))
+
+    expect(anchor!.download).toBe('list-seeding-2026-06-23T10:00:00.csv')
+
+    createElementSpy.mockRestore()
+    vi.unstubAllGlobals()
+  })
+
+  it('uses a placeholder list name when the detail has not loaded yet', async () => {
+    // Seeding is available but the list detail is still loading.
+    useGetApiV1PlayerListsId.mockReturnValue({ data: undefined })
+    useGetApiV1PlayerListsIdSeeding.mockReturnValue({ data: seeding })
+
+    const click = vi.fn()
+    const realCreate = document.createElement.bind(document)
+    let anchor: HTMLAnchorElement | null = null
+    const createElementSpy = vi
+      .spyOn(document, 'createElement')
+      .mockImplementation((tag: string) => {
+        const el = realCreate(tag)
+        if (tag === 'a') {
+          anchor = el as HTMLAnchorElement
+          ;(el as HTMLAnchorElement).click = click
+        }
+        return el
+      })
+    vi.stubGlobal('URL', { ...URL, createObjectURL: () => 'blob:url', revokeObjectURL: vi.fn() })
+
+    const user = userEvent.setup()
+    renderTab()
+    await user.click(screen.getByRole('button', { name: /Summer Open/ }))
+    await user.click(screen.getByRole('button', { name: 'Download CSV' }))
+
+    expect(anchor!.download).toBe('List-seeding-2026-06-23T10:00:00.csv')
+
+    createElementSpy.mockRestore()
+    vi.unstubAllGlobals()
+  })
+
   it('does not download when there is no seeding', async () => {
     useGetApiV1PlayerListsId.mockReturnValue({ data: listDetail })
     useGetApiV1PlayerListsIdSeeding.mockReturnValue({ data: { generatedAt: 'now', entries: [] } })
@@ -330,8 +419,8 @@ describe('SeedingTab', () => {
     const user = userEvent.setup()
     renderTab()
     await user.click(screen.getByRole('button', { name: /Summer Open/ }))
-    // The button is disabled with no entries, so a forced click is a no-op.
-    expect(screen.getByRole('button', { name: 'Download CSV' })).toBeDisabled()
+    // With no entries the download button is not rendered at all.
+    expect(screen.queryByRole('button', { name: 'Download CSV' })).not.toBeInTheDocument()
     expect(createObjectURL).not.toHaveBeenCalled()
     vi.unstubAllGlobals()
   })
