@@ -122,11 +122,22 @@ data class AuditPersonRef(
     val publicCode: String?,
 )
 
-/** An audit entry with its actor (and, where the entity is a user, its target) resolved to names. */
+/** A match id resolved to its public code + date, so a match-targeted entry can link to its page (#136). */
+data class AuditMatchRef(
+    val matchId: UUID,
+    val publicCode: String,
+    val matchDate: java.time.LocalDate,
+)
+
+/**
+ * An audit entry with its actor resolved to a name, and its target resolved to either a user
+ * ([target]) or a match ([matchTarget]) — whichever the entity type is — for clickable trace rows.
+ */
 data class AuditEntryView(
     val entry: AuditEntry,
     val actor: AuditPersonRef?,
     val target: AuditPersonRef?,
+    val matchTarget: AuditMatchRef? = null,
 )
 
 /** A page of resolved audit views (newest first) plus the total, for the trace viewer. */

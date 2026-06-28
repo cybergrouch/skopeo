@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ActivityLogSection } from './ActivityLogSection'
 
@@ -39,9 +40,11 @@ function page(items: unknown[], total = items.length) {
 
 function renderSection() {
   return render(
-    <QueryClientProvider client={new QueryClient()}>
-      <ActivityLogSection />
-    </QueryClientProvider>,
+    <MemoryRouter>
+      <QueryClientProvider client={new QueryClient()}>
+        <ActivityLogSection />
+      </QueryClientProvider>
+    </MemoryRouter>,
   )
 }
 
@@ -81,6 +84,40 @@ describe('ActivityLogSection', () => {
     expect(
       screen.getByText(new Date('2026-06-27T10:00:00Z').toLocaleString()),
     ).toBeInTheDocument()
+  })
+
+  it('links the actor and user target to their public profiles (#136)', () => {
+    renderSection()
+    expect(screen.getByRole('link', { name: 'Admin (ADM123)' })).toHaveAttribute(
+      'href',
+      '/players/ADM123',
+    )
+    expect(screen.getByRole('link', { name: 'Bob (BOB456)' })).toHaveAttribute(
+      'href',
+      '/players/BOB456',
+    )
+  })
+
+  it('links a match-targeted entry to its public match page (#136)', () => {
+    useGetApiV1Audit.mockReturnValue(
+      page([
+        entry({
+          id: 'm1',
+          category: 'MATCH_FIXTURE',
+          action: 'MATCH_FIXTURE_CREATED',
+          entityType: 'MATCH',
+          entityId: 'match-uuid',
+          summary: 'Created a SINGLES fixture',
+          target: null,
+          matchTarget: { matchId: 'match-uuid', publicCode: 'MTCH01', matchDate: '2026-02-03' },
+        }),
+      ]),
+    )
+    renderSection()
+    expect(screen.getByRole('link', { name: 'Match MTCH01' })).toHaveAttribute(
+      'href',
+      '/matches/MTCH01',
+    )
   })
 
   it('shows System for a null actor, an id fallback without a name, and a dash for no target', () => {

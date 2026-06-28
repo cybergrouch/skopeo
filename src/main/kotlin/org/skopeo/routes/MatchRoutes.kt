@@ -40,6 +40,7 @@ fun Application.configureMatchRoutes(service: MatchService = MatchService()) {
         authenticate(FIREBASE_AUTH) {
             route(path = "/api/v1/matches") {
                 listAndCreate(service = service)
+                publicByCode(service = service)
                 byId(service = service)
             }
         }
@@ -106,6 +107,21 @@ private fun parseMatchDate(value: String): LocalDate =
     } catch (e: DateTimeParseException) {
         throw IllegalArgumentException("Invalid matchDate '$value'; expected ISO-8601 (yyyy-MM-dd)", e)
     }
+
+/**
+ * Public match page lookup by code (#136). The literal `code` segment is matched before `/{id}`, so
+ * it never collides with the UUID route. Visible to any authenticated user (public-profile semantics).
+ */
+private fun Route.publicByCode(service: MatchService) {
+    get(path = "/code/{code}") {
+        respondMappingErrors {
+            val code = call.parameters["code"].orEmpty()
+            respondEither(result = service.publicByCode(code = code)) { match ->
+                call.respond(status = HttpStatusCode.OK, message = match)
+            }
+        }
+    }
+}
 
 private fun Route.byId(service: MatchService) {
     get(path = "/{id}") {

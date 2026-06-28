@@ -6,6 +6,7 @@ package org.skopeo.service.match
 import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.collections.shouldContain
+import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
@@ -462,5 +463,48 @@ class MatchServiceTest {
             .query(token = token(uid = "p1"), view = MatchQuery.PENDING_CALCULATION)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
+    @Test
+    fun `a created fixture gets a 6-char public code (#136)`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+
+        val match =
+            service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
+        match.publicCode.length shouldBe 6
+    }
+
+    @Test
+    fun `publicByCode returns a read-only summary with resolved players, or NotFound (#136)`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val match =
+            service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
+        service.uploadResult(token = token(uid = "host"), matchId = match.id, request = straightSets()).shouldBeRight()
+
+        val public = service.publicByCode(code = match.publicCode).shouldBeRight()
+        public.publicCode shouldBe match.publicCode
+        public.team1.single().displayName shouldBe "p1"
+        public.team1.single().publicCode shouldBe p1.publicCode
+        public.team2.single().displayName shouldBe "p2"
+        public.winner shouldBe "TEAM1" // p1 won both sets
+        public.sets shouldHaveSize 2
+
+        service.publicByCode(code = "ZZZZZZ").shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
+    fun `publicByCode excludes a disabled match (#136)`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val match =
+            service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
+        service.setActive(token = token(uid = "host"), matchId = match.id, active = false).shouldBeRight()
+
+        service.publicByCode(code = match.publicCode).shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
     }
 }

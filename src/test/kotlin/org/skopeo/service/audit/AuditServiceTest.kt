@@ -20,16 +20,21 @@ import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
+import org.skopeo.model.CreateFixtureCommand
+import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.ServiceError
+import org.skopeo.model.TeamType
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.repository.AuditRepository
+import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.testsupport.PostgresTestDatabase
+import java.time.LocalDate
 import java.util.UUID
 
 class AuditServiceTest {
@@ -43,7 +48,8 @@ class AuditServiceTest {
 
     private val users = UserRepository()
     private val repo = AuditRepository()
-    private val service = AuditService(audit = repo, users = users)
+    private val matches = MatchRepository()
+    private val service = AuditService(audit = repo, users = users, matches = matches)
 
     @BeforeEach
     fun reset() {
@@ -143,6 +149,45 @@ class AuditServiceTest {
         // A category with no events wired yet returns nothing.
         service.list(token = token(uid = "admin"), category = AuditCategory.NAME_CHANGE, limit = 10, offset = 0)
             .shouldBeRight().total shouldBe 0
+    }
+
+    @Test
+    fun `a MATCH-typed target resolves to the match public code, not a user (#136)`() {
+        val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val p1 = provision(uid = "p1", roles = setOf(element = Capability.PLAYER))
+        val p2 = provision(uid = "p2", roles = setOf(element = Capability.PLAYER))
+        val match =
+            matches.createFixture(
+                command =
+                    CreateFixtureCommand(
+                        matchFormat = TeamType.SINGLES,
+                        matchType = MatchType.OPEN_PLAY,
+                        matchDate = LocalDate.parse("2026-02-03"),
+                        team1UserIds = listOf(element = p1.id),
+                        team2UserIds = listOf(element = p2.id),
+                        team1Name = "p1",
+                        team2Name = "p2",
+                        createdBy = admin.id,
+                    ),
+            )
+        service.record(
+            write =
+                AuditWrite(
+                    actorUserId = admin.id,
+                    action = AuditAction.MATCH_FIXTURE_CREATED,
+                    entityType = AuditEntityType.MATCH,
+                    entityId = match.id,
+                    summary = "Created a SINGLES fixture on 2026-02-03",
+                ),
+        )
+
+        service.list(token = token(uid = "admin"), category = AuditCategory.MATCH_FIXTURE, limit = 10, offset = 0)
+            .shouldBeRight().items.single().let {
+                it.target.shouldBeNull() // a match is not a user target
+                it.matchTarget.shouldNotBeNull()
+                it.matchTarget.publicCode shouldBe match.publicCode
+                it.matchTarget.matchDate shouldBe LocalDate.parse("2026-02-03")
+            }
     }
 
     @Test

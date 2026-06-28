@@ -25,6 +25,7 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.dto.match.CreateFixtureRequest
+import org.skopeo.dto.match.MatchPublicResponse
 import org.skopeo.dto.match.MatchResponse
 import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.dto.match.SetScoreRequest
@@ -204,6 +205,38 @@ class MatchApiIntegrationTest {
                 }
             pending.status shouldBe HttpStatusCode.OK
             pending.body<List<MatchResponse>>().any { it.id == match.id } shouldBe true
+        }
+
+    @Test
+    fun `the public match page is reachable by code for any signed-in user (#136)`() =
+        withApp { client ->
+            val adminToken = seedStaff(uid = "admin", roles = setOf(Capability.ADMINISTRATOR))
+            val hostToken = seedStaff(uid = "host", roles = setOf(Capability.HOST))
+            val p1 = client.provisionSelf(token = TestFirebaseAuth.mintToken(uid = "p1"))
+            val p2 = client.provisionSelf(token = TestFirebaseAuth.mintToken(uid = "p2"))
+            client.rate(adminToken = adminToken, userId = p1.id)
+            client.rate(adminToken = adminToken, userId = p2.id)
+            val match = client.createFixture(token = hostToken, p1 = p1.id, p2 = p2.id).body<MatchResponse>()
+
+            // A non-participant, non-staff signed-in user can still open the public page.
+            val viewerToken = TestFirebaseAuth.mintToken(uid = "viewer")
+            client.provisionSelf(token = viewerToken)
+            val res =
+                client.get(urlString = "/api/v1/matches/code/${match.publicCode}") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $viewerToken")
+                }
+            res.status shouldBe HttpStatusCode.OK
+            res.body<MatchPublicResponse>().let {
+                it.publicCode shouldBe match.publicCode
+                it.team1.single().publicCode shouldBe p1.publicCode
+                it.team2.single().publicCode shouldBe p2.publicCode
+                it.winner shouldBe "NONE" // no result recorded yet
+            }
+
+            client
+                .get(urlString = "/api/v1/matches/code/ZZZZZZ") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $viewerToken")
+                }.status shouldBe HttpStatusCode.NotFound
         }
 
     @Test

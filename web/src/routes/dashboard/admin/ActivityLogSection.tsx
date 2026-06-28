@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   Card,
@@ -14,7 +15,11 @@ import {
   useGetApiV1Audit,
   usePatchApiV1AuditIdComment,
 } from '@/api/generated/audit/audit'
-import type { AuditPersonResponse, GetApiV1AuditCategory } from '@/api/generated/model'
+import type {
+  AuditEntryResponse,
+  AuditPersonResponse,
+  GetApiV1AuditCategory,
+} from '@/api/generated/model'
 
 // Activity (invites, ratings, matches, duplicate-rectification, …) grows quickly, so 25 rows/page
 // (#134) rather than the original 5.
@@ -39,6 +44,33 @@ type CategoryFilter = (typeof CATEGORIES)[number]['value']
 function person(p: AuditPersonResponse | null | undefined): string {
   if (!p) return 'System'
   return `${p.displayName ?? p.userId.slice(0, 8)} (${p.publicCode ?? '—'})`
+}
+
+/** A user cell — links to the public profile when a public code is known (#136). */
+function PersonCell({ p }: { p: AuditPersonResponse | null | undefined }) {
+  if (!p) return <>System</>
+  if (!p.publicCode) return <>{person(p)}</>
+  return (
+    <Link to={`/players/${p.publicCode}`} className="text-primary hover:underline">
+      {person(p)}
+    </Link>
+  )
+}
+
+/** The target cell: a match link for match entries (#136), a user link for user entries, else "—". */
+function TargetCell({ entry }: { entry: AuditEntryResponse }) {
+  if (entry.matchTarget) {
+    return (
+      <Link
+        to={`/matches/${entry.matchTarget.publicCode}`}
+        className="text-primary hover:underline"
+      >
+        Match {entry.matchTarget.publicCode}
+      </Link>
+    )
+  }
+  if (entry.target) return <PersonCell p={entry.target} />
+  return <>—</>
 }
 
 /** A free-text admin note on an entry; saving it isn't itself audited (#100). */
@@ -139,9 +171,13 @@ export function ActivityLogSection() {
                       <td className="py-2 pr-3 text-muted-foreground">
                         {new Date(entry.occurredAt).toLocaleString()}
                       </td>
-                      <td className="py-2 pr-3">{person(entry.actor)}</td>
+                      <td className="py-2 pr-3">
+                        <PersonCell p={entry.actor} />
+                      </td>
                       <td className="py-2 pr-3">{entry.summary}</td>
-                      <td className="py-2 pr-3">{entry.target ? person(entry.target) : '—'}</td>
+                      <td className="py-2 pr-3">
+                        <TargetCell entry={entry} />
+                      </td>
                       <td className="py-2">
                         <NoteCell entryId={entry.id} comment={entry.comment} />
                       </td>
