@@ -181,12 +181,14 @@ class RatingServiceTest {
         service
             .getRatings(token = token(uid = "player"), userId = player.id)
             .shouldBeRight()
+            .ratings
             .single()
             .currentRating
             .toPlainString() shouldBe "4.000000"
         service
             .getRatings(token = token(uid = "root"), userId = player.id)
             .shouldBeRight()
+            .ratings
             .single()
             .currentRating
             .toPlainString() shouldBe "4.000000"
@@ -321,9 +323,22 @@ class RatingServiceTest {
         service
             .getRatings(token = token(uid = "root"), userId = root.id)
             .shouldBeRight()
+            .ratings
             .single()
             .currentRating
             .toPlainString() shouldBe "5.000000"
         service.getHistory(token = token(uid = "root"), userId = root.id).shouldBeRight() shouldBe emptyList()
+    }
+
+    @Test
+    fun `getRatings reveals the raw value to an admin but not to the owning player (#114)`() {
+        admin(uid = "root")
+        val player = provisionUser(uid = "player")
+        service.setRating(token = token(uid = "root"), userId = player.id, value = BigDecimal("4.3"), confidence = null).shouldBeRight()
+
+        // The owner (a plain player) may read their ratings but the reveal flag stays off.
+        service.getRatings(token = token(uid = "player"), userId = player.id).shouldBeRight().revealRawValue shouldBe false
+        // An ADMINISTRATOR (rating manager) gets the reveal flag.
+        service.getRatings(token = token(uid = "root"), userId = player.id).shouldBeRight().revealRawValue shouldBe true
     }
 }

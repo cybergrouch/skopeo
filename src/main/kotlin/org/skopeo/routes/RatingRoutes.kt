@@ -72,8 +72,8 @@ fun Application.configureRatingRoutes(
 private fun Route.ratings(service: RatingService) {
     get(path = "/ratings") {
         respondMappingErrors {
-            respondEither(result = service.getRatings(token = verifiedToken(), userId = uuidParam(name = "userId"))) { list ->
-                call.respond(status = HttpStatusCode.OK, message = list.map { it.toResponse() })
+            respondEither(result = service.getRatings(token = verifiedToken(), userId = uuidParam(name = "userId"))) { view ->
+                call.respond(status = HttpStatusCode.OK, message = view.ratings.map { it.toResponse(revealRawValue = view.revealRawValue) })
             }
         }
     }
@@ -95,7 +95,8 @@ private fun Route.ratings(service: RatingService) {
                         value = validatedRating(raw = request.value),
                         confidence = validatedConfidence(raw = request.confidence),
                     ),
-            ) { rating -> call.respond(status = HttpStatusCode.OK, message = rating.toResponse()) }
+                // The setter is a RATER/ADMINISTRATOR, so echo back the exact value they just set.
+            ) { rating -> call.respond(status = HttpStatusCode.OK, message = rating.toResponse(revealRawValue = true)) }
         }
     }
 }

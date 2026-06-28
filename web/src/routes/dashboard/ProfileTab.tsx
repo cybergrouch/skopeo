@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { useAuth } from '@/auth/useAuth'
 import { MatchHistoryCard } from '@/components/MatchHistoryCard'
 import { RatingHistoryCard } from '@/components/RatingHistoryCard'
+import { RatingBandMeter } from '@/components/RatingBandMeter'
 import type { Capability } from '@/auth/capabilities'
 import {
   useGetApiV1UsersUserIdRatingHistory,
@@ -162,13 +163,20 @@ export function ProfileTab({
             <p className="text-sm text-muted-foreground">Loading…</p>
           ) : hasRating ? (
             <ul className="space-y-2">
-              {ratings.map((rating) => (
+              {ratings.map((rating, index) => (
                 <li
-                  key={rating.value}
-                  className="flex items-center justify-between rounded-lg border p-3 text-sm"
+                  key={rating.level ?? index}
+                  className="rounded-lg border p-3 text-sm"
                 >
-                  <span className="font-medium">NTRP</span>
-                  <span>{rating.level ?? rating.value}</span>
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">NTRP</span>
+                    <span>{rating.level ?? rating.value}</span>
+                  </div>
+                  {rating.bandPosition != null ? (
+                    <div className="mt-2 flex justify-center">
+                      <RatingBandMeter position={rating.bandPosition} />
+                    </div>
+                  ) : null}
                 </li>
               ))}
             </ul>

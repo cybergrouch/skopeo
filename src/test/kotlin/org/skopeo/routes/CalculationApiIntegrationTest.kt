@@ -3,6 +3,7 @@
 
 package org.skopeo.routes
 
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -106,7 +107,7 @@ class CalculationApiIntegrationTest {
     ): String =
         get(urlString = "/api/v1/users/$userId/ratings") {
             header(key = HttpHeaders.Authorization, value = "Bearer $token")
-        }.body<List<UserRatingResponse>>().single().value
+        }.body<List<UserRatingResponse>>().single().value.shouldNotBeNull() // read with an admin token, so present
 
     @Test
     fun `dry-run previews, commit moves ratings`() =

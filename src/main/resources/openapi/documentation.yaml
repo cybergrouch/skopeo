@@ -2320,15 +2320,25 @@ components:
     UserRatingResponse:
       type: object
       required:
-        - value
         - confidence
         - matchesPlayed
       properties:
         value:
           type: string
+          nullable: true
+          description: >-
+            The exact rating — privacy-withheld from players (#64/#114); present only for a rating
+            manager (ADMINISTRATOR). Players receive the band (level) and bandPosition instead.
         level:
           type: string
           nullable: true
+        bandPosition:
+          type: number
+          format: double
+          nullable: true
+          description: >-
+            Normalized 0..1 position within the current NTRP band (floor 0 → ceiling 1) for the
+            own-profile "speed meter" (#114). Never reveals the exact rating.
         confidence:
           type: string
         matchesPlayed:
