@@ -1,8 +1,18 @@
 # Capabilities (Roles) API
 
-How users' roles are managed over REST. Roles are coarse for now — `PLAYER`, `HOST`,
-`CLUB_OWNER`, `ADMINISTRATOR` — and a user may hold several (they overlap). They can be
-devolved into fine-grained permissions later.
+How users' roles are managed over REST. Roles are coarse for now and a user may hold several (they
+overlap). They can be devolved into fine-grained permissions later.
+
+## Capability set
+
+| Capability | What it unlocks |
+|---|---|
+| `PLAYER` | The baseline role every user keeps; play matches, view own profile/rating. |
+| `HOST` | Create/run events and match fixtures, upload results (see Matches & Events APIs). |
+| `CLUB_OWNER` | Club-level role (reserved; broad ownership over a club's resources). |
+| `RATER` (#106) | Set/adjust initial ratings, work the pending-assessment list, and triage re-rate requests (approve/deny). |
+| `RESEARCHER` (#107) | Gates the player-research feature (player search, lists, standings/seeding tooling). Granted to every new user at sign-up; staff (HOST/ADMINISTRATOR) also reach the same search. |
+| `ADMINISTRATOR` | Full administrative authority; **implicitly satisfies the RATER and RESEARCHER gates**, plus capability management, audit log, duplicate triage, etc. |
 
 ## Admin-only, end to end
 

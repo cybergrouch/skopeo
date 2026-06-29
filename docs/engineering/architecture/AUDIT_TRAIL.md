@@ -1,5 +1,19 @@
 # Audit Trail Documentation
 
+> **Two distinct concepts share the word "audit" in Skopeo:**
+>
+> 1. **The calculator audit trail** (this document's main subject) — an in-memory,
+>    per-calculation list of `AuditEntry` that the *stateless* `RankingCalculator` returns
+>    alongside its result. It is never persisted; the route layer logs it. It explains *how one
+>    calculation was derived*.
+> 2. **The domain audit log** (#100/#102) — a persisted, append-only `audit_log` table recording
+>    *who did what, when, to which entity* across the whole application (sign-ups, name/contact
+>    changes, capability grants, ratings, matches, …), exposed via a read-only activity-log API.
+>
+> They are unrelated implementations. The domain audit log is summarized in
+> [The domain audit log](#the-domain-audit-log-100102); everything else on this page concerns the
+> calculator audit trail.
+
 ## Overview
 
 The `RankingCalculator` follows a **functional programming pattern** where computation is separated from side effects (logging). Instead of directly logging during calculation, the calculator returns both:
@@ -513,6 +527,53 @@ Potential improvements to the audit trail system:
 6. **Audit Analysis**: Add statistics (counts by level, timing analysis)
 
 ---
+
+## The domain audit log (#100/#102)
+
+Separate from the calculator audit trail above, Skopeo keeps a persisted **domain audit log**: an
+append-only record of provenance for traceable domain actions — *who did what, when, to which
+entity*. Domain tables don't reference it; a single log captures everything, and an admin "trace
+viewer" reads it back.
+
+### Data model (`org.skopeo.model.AuditDomain`)
+
+- **`AuditAction`** — the specific action, e.g. `USER_CREATED`, `NAME_ADDED`/`NAME_UPDATED`,
+  `CONTACT_ADDED`/`CONTACT_UPDATED`, `CAPABILITY_GRANTED`/`CAPABILITY_REVOKED`, `RATING_SET`,
+  `RATING_OVERRIDDEN`, `RATING_REREQUESTED`, `RATING_REQUEST_DENIED`, `INVITE_CREATED`/
+  `INVITE_REVOKED`, `MATCH_FIXTURE_CREATED`, `MATCH_RESULT_RECORDED`, and the duplicate-rectification
+  actions (`USER_MARKED_DUPLICATE`, `USER_UNMARKED_DUPLICATE`,
+  `DUPLICATE_CANDIDATE_FLAGGED`/`_DISMISSED`/`_CONFIRMED`).
+- **`AuditEntityType`** — the kind of entity affected: `USER`, `RATING`, `CAPABILITY`, `INVITE`,
+  `MATCH`.
+- **`AuditCategory`** — the coarse grouping the trace viewer shows as one table each:
+  `USER_CREATION`, `NAME_CHANGE`, `CONTACT_CHANGE`, `INVITE`, `MATCH_FIXTURE`, `MATCH_RESULT`,
+  `CAPABILITY_CHANGE`, `RATING_CHANGE`, `DUPLICATE_RECTIFICATION`. Each `AuditAction` rolls up into
+  exactly one category (see `AuditAction.category`). Some categories may have no recorded events yet
+  and read empty.
+- **`AuditWrite`** — what services append: `actorUserId` (null for SYSTEM/self-driven actions),
+  `action`, `entityType`, `entityId`, a system-generated `summary`, and a `details` JSON map
+  (e.g. before/after values).
+- **`AuditEntry`** — a stored record adds `id`, `occurredAt`, and an optional `comment` — the only
+  mutable, un-audited field, a free-text note an administrator may attach later.
+
+The `summary` is always system-generated (never user input). For rendering, the read path resolves
+the actor and the target into either a person (`AuditPersonRef`: name + player code) or, for
+match-typed entries, a match (`AuditMatchRef`: public code + date) so rows can link to the public
+match page.
+
+### Activity-log read API
+
+`ADMINISTRATOR`-only, served by `routes/AuditRoutes.kt` → `service/audit/AuditService.kt`.
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/api/v1/audit?category=&limit=&offset=` | newest-first page of resolved entries + `total`; optional `category` filter (page size defaults to 5, clamped 1..100) |
+| `PATCH` | `/api/v1/audit/{id}/comment` | set/clear the admin note (`{ "comment": "…" }`; blank clears it) → `204` |
+
+`occurredAt` is returned as a UTC ISO-8601 instant; each entry carries its resolved `category`,
+`action`, `entityType`, `summary`, `details`, optional `comment`, and the resolved `actor` /
+`target` / `matchTarget`. Status: `200`/`204` · `400` unknown category · `403` not an
+ADMINISTRATOR · `404` no such entry.
 
 ## Related Documentation
 
