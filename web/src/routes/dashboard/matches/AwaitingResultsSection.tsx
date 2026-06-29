@@ -72,8 +72,9 @@ function MatchResultRow({
 }) {
   const queryClient = useQueryClient()
   // A recorded fixture (has sets) starts collapsed as a score summary that can be expanded to edit;
-  // a scheduled fixture starts as the entry form.
+  // a scheduled fixture starts as the entry form. Once rated (#138) it is frozen: read-only, no edit.
   const recorded = match.sets.length > 0
+  const rated = match.ratedAt != null
   const [editing, setEditing] = useState(false)
   const [rows, setRows] = useState<SetRow[]>(
     recorded ? rowsFromMatch(match) : [{ t1: '', t2: '' }, { t1: '', t2: '' }],
@@ -173,7 +174,9 @@ function MatchResultRow({
           {player1} vs {player2}
         </span>
         <span className="text-muted-foreground">· {match.matchDate}</span>
-        {recorded ? (
+        {rated ? (
+          <Badge>Rated</Badge>
+        ) : recorded ? (
           <Badge variant="secondary">Recorded</Badge>
         ) : (
           <Badge variant={badge.variant}>{badge.label}</Badge>
@@ -250,12 +253,14 @@ function MatchResultRow({
       ) : (
         <div className="flex items-center justify-between gap-2">
           <span className="text-sm font-medium">{summary}</span>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => setEditing(true)}>
-              Edit result
-            </Button>
-            {deleteControls}
-          </div>
+          {rated ? null : (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setEditing(true)}>
+                Edit result
+              </Button>
+              {deleteControls}
+            </div>
+          )}
         </div>
       )}
       {error ? (
@@ -310,12 +315,13 @@ export function AwaitingResultsSection({ eventId }: { eventId?: string } = {}) {
 }
 
 /**
- * An event's recorded-but-unrated fixtures (#138). They stay on view after results are entered and
- * remain editable here until an admin runs the rating calculation, after which the result is frozen.
+ * An event's completed fixtures (#138). They stay on view after results are entered: recorded ones
+ * remain editable until an admin runs the rating calculation, after which the match is frozen — it
+ * stays here as a read-only record badged "Rated".
  */
 export function RecordedResultsSection({ eventId }: { eventId: string }) {
   const matchesQuery = useGetApiV1Matches({
-    filter: GetApiV1MatchesFilter['pending-calculation'],
+    filter: GetApiV1MatchesFilter.results,
     eventId,
   })
   const matches = matchesQuery.data ?? []
@@ -326,7 +332,8 @@ export function RecordedResultsSection({ eventId }: { eventId: string }) {
       <CardHeader>
         <CardTitle>Recorded results</CardTitle>
         <CardDescription>
-          Fixtures with results entered — editable until an admin runs the rating calculation.
+          Fixtures with results entered — editable until an admin runs the rating calculation, then
+          kept here as a read-only “Rated” record.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">

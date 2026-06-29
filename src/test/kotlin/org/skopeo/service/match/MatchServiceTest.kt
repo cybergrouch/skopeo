@@ -613,6 +613,49 @@ class MatchServiceTest {
     }
 
     @Test
+    fun `results lists an event's completed fixtures, rated or not, but pending-calculation drops the rated one (#138)`() {
+        val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val event =
+            EventRepository().create(
+                command =
+                    CreateEventCommand(
+                        name = "E",
+                        startDate = LocalDate.parse("2026-01-01"),
+                        endDate = LocalDate.parse("2026-01-02"),
+                        participantIds = listOf(p1.id, p2.id),
+                        createdBy = host.id,
+                    ),
+            )
+        val recorded =
+            service
+                .createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id))
+                .shouldBeRight()
+        service.uploadResult(token = token(uid = "host"), matchId = recorded.id, request = straightSets()).shouldBeRight()
+        val rated =
+            service
+                .createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id))
+                .shouldBeRight()
+        service.uploadResult(token = token(uid = "host"), matchId = rated.id, request = straightSets()).shouldBeRight()
+        matchRepo.markRated(matchId = rated.id, ratedAt = LocalDateTime.now(), ratedBy = host.id)
+
+        // RESULTS keeps the rated match on view alongside the recorded one...
+        val results = service.query(token = token(uid = "host"), view = MatchQuery.RESULTS, eventId = event.id).shouldBeRight()
+        results.map { it.id }.toSet() shouldBe setOf(recorded.id, rated.id)
+        // ...while pending-calculation only surfaces the still-unrated one.
+        val pending =
+            service.query(token = token(uid = "host"), view = MatchQuery.PENDING_CALCULATION, eventId = event.id).shouldBeRight()
+        pending.map { it.id } shouldBe listOf(element = recorded.id)
+    }
+
+    @Test
+    fun `results without an event id is empty`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        service.query(token = token(uid = "host"), view = MatchQuery.RESULTS).shouldBeRight() shouldBe emptyList()
+    }
+
+    @Test
     fun `publicByCode excludes a disabled match (#136)`() {
         provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val p1 = provisionUser(uid = "p1", rated = true)

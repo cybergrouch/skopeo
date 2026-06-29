@@ -269,6 +269,9 @@ class MatchService(
                     } else {
                         matches.listAwaitingResults(createdBy = scopedTo)
                     }
+                // All of an event's completed fixtures (rated or not), so a rated match stays on view as
+                // a read-only record (#138). Event-scoped only.
+                MatchQuery.RESULTS -> eventId?.let { matches.listResultsByEvent(eventId = it) }.orEmpty()
             }
         }
 

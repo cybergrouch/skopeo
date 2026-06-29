@@ -208,6 +208,22 @@ class MatchRepository {
         }
 
     /**
+     * All of an event's active, completed fixtures — rated or not (#138). Lets the event page keep a
+     * rated match on view as a read-only record alongside the recorded-but-unrated ones.
+     */
+    fun listResultsByEvent(eventId: UUID): List<Match> =
+        transaction {
+            MatchesTable
+                .selectAll()
+                .where {
+                    MatchesTable.isActive and
+                        (MatchesTable.status eq MatchStatus.COMPLETED.name) and
+                        (MatchesTable.eventId eq eventId)
+                }.orderBy(MatchesTable.completedAt to SortOrder.ASC)
+                .map { loadMatch(id = it[MatchesTable.id].value)!! }
+        }
+
+    /**
      * Active fixtures still scheduled and awaiting result entry, regardless of match date.
      * The schedule is only suggestive — a fixture can be played anytime, so it is eligible for
      * results as soon as it exists. When [createdBy] is non-null, scoped to fixtures that user

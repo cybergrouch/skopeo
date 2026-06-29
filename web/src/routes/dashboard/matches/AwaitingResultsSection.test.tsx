@@ -273,12 +273,24 @@ describe('RecordedResultsSection', () => {
     busy.value = false
   })
 
-  it('queries the event-scoped pending-calculation list', () => {
+  it('queries the event-scoped completed-results list', () => {
     renderRecorded('evt-9')
     expect(useGetApiV1Matches).toHaveBeenCalledWith({
-      filter: 'pending-calculation',
+      filter: 'results',
       eventId: 'evt-9',
     })
+  })
+
+  it('shows a rated fixture as a read-only record, with no edit or delete', () => {
+    useGetApiV1Matches.mockReturnValue({
+      data: [{ ...recordedMatch, ratedAt: '2026-02-01T00:00:00Z' }],
+      isLoading: false,
+    })
+    renderRecorded()
+    expect(screen.getByText('Rated')).toBeInTheDocument()
+    expect(screen.getByText('6–4, 6–3')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Edit result' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Delete fixture' })).not.toBeInTheDocument()
   })
 
   it('shows loading and empty states', () => {
