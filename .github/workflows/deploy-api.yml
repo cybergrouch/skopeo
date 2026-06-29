@@ -48,6 +48,11 @@ jobs:
       # Build from source (Cloud Build uses the repo Dockerfile) and deploy.
       # Non-secret runtime config comes from repo *variables*; DB password and the admin
       # allowlist come from Secret Manager via --set-secrets.
+      #
+      # WEB_ORIGINS is a comma-separated CORS allow-list (e.g. the custom apex + the Firebase
+      # default), so we set env vars with gcloud's alternate-delimiter syntax: the leading "^##^"
+      # makes "##" the separator between assignments, leaving commas *inside* WEB_ORIGINS intact.
+      # With the default comma delimiter, a multi-origin WEB_ORIGINS would be mis-parsed.
       - name: Deploy to Cloud Run
         run: |
           gcloud run deploy "${{ vars.CLOUD_RUN_SERVICE || 'skopeo' }}" \
@@ -56,6 +61,6 @@ jobs:
             --region "${{ vars.GCP_REGION || 'asia-southeast1' }}" \
             --allow-unauthenticated \
             --add-cloudsql-instances "${{ vars.CLOUDSQL_INSTANCE }}" \
-            --set-env-vars "FIREBASE_PROJECT_ID=${{ vars.FIREBASE_PROJECT_ID }},DATABASE_URL=${{ vars.DATABASE_URL }},DATABASE_USER=${{ vars.DATABASE_USER }},WEB_ORIGINS=${{ vars.WEB_ORIGINS }}" \
+            --set-env-vars "^##^FIREBASE_PROJECT_ID=${{ vars.FIREBASE_PROJECT_ID }}##DATABASE_URL=${{ vars.DATABASE_URL }}##DATABASE_USER=${{ vars.DATABASE_USER }}##WEB_ORIGINS=${{ vars.WEB_ORIGINS }}" \
             --set-secrets "DATABASE_PASSWORD=skopeo-db-password:latest,ADMIN_EMAILS=skopeo-admin-emails:latest" \
             --quiet
