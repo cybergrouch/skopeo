@@ -33,6 +33,10 @@ vi.mock('@/auth/useAuth', () => ({ useAuth: useAuthMock }))
 vi.mock('@/components/RatingBandMeter', () => ({
   RatingBandMeter: () => <div>band meter</div>,
 }))
+// The re-rate card has its own API wiring + tests (#140); stub it here.
+vi.mock('@/components/ReRateRequestCard', () => ({
+  ReRateRequestCard: () => <div>re-rate card</div>,
+}))
 
 function renderProfile(
   capabilities: Capability[] = [Capability.PLAYER],
