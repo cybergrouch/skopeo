@@ -54,8 +54,8 @@ Settings → Secrets and variables → Actions → **Variables**:
 | `GCP_PROJECT_ID` | `skopeo-prod` | |
 | `GCP_REGION` | `asia-southeast1` | Optional; defaults to `asia-southeast1` |
 | `CLOUD_RUN_SERVICE` | `skopeo` | Optional; defaults to `skopeo` |
-| `CLOUDSQL_INSTANCE` | `skopeo-prod:asia-southeast1:skopeo-db` | Cloud SQL connection name (`--add-cloudsql-instances`) |
-| `DATABASE_URL` | `jdbc:postgresql:///SkopeoDb?cloudSqlInstance=...&socketFactory=...` | JDBC URL (Cloud SQL socket factory or private IP) |
+| `CLOUDSQL_INSTANCE` | `skopeo-prod:asia-southeast1:skopeo-db` | Cloud SQL **connection name** (`project:region:instance`), passed to `--add-cloudsql-instances` |
+| `DATABASE_URL` | `jdbc:postgresql://<PRIVATE_IP>:5432/SkopeoDb` | JDBC URL via the instance's **private IP** over direct VPC egress (DEPLOYMENT_GCP.md §4–5). The build has **no** Cloud SQL socket-factory dependency, so the `jdbc:postgresql:///...&socketFactory=...` form does **not** work here |
 | `DATABASE_USER` | `skopeo` | |
 | `FIREBASE_PROJECT_ID` | `skopeo-prod` | Token issuer/audience anchor |
 | `WEB_ORIGINS` | `https://skopeo.com,https://skopeo-prod.web.app` | CORS allow-list (see "CORS") |
@@ -67,11 +67,17 @@ The workflow wires these with `--set-secrets` (not GitHub secrets — they live 
 | Secret name | Maps to env | Purpose |
 |---|---|---|
 | `skopeo-db-password` | `DATABASE_PASSWORD` | Cloud SQL user password |
-| `skopeo-admin-emails` | `ADMIN_EMAILS` | Verified-email allowlist auto-granted ADMINISTRATOR ([ADMIN_BOOTSTRAP.md](../architecture/ADMIN_BOOTSTRAP.md)) |
+| `skopeo-admin-emails` | `ADMIN_EMAILS` | Verified-email allowlist auto-granted ADMINISTRATOR ([ADMIN_BOOTSTRAP.md](../architecture/ADMIN_BOOTSTRAP.md)) — comes from Secret Manager, **not** a repo variable |
 
-The `DEPLOY_SA` needs `roles/secretmanager.secretAccessor` (or grant per-secret), plus the deploy
-roles from CICD.md (`run.admin`, `iam.serviceAccountUser`, `cloudbuild.builds.editor`,
-`artifactregistry.writer`).
+Both are created in Secret Manager (commands in [DEPLOYMENT_GCP.md §4a](DEPLOYMENT_GCP.md)). The
+`DEPLOY_SA` needs `roles/secretmanager.secretAccessor` (or grant per-secret), plus the deploy
+roles from [CICD.md §2a](CICD.md) (`run.admin`, `iam.serviceAccountUser`, `cloudbuild.builds.editor`,
+`artifactregistry.writer`, `secretmanager.secretAccessor`).
+
+> **Cloud SQL connection:** the workflow passes `--add-cloudsql-instances` (it mounts the instance
+> and is harmless), but this app's actual JDBC connection is via the **private IP over VPC egress**
+> (`--network=default --subnet=default`) — the build has no Cloud SQL socket-factory dependency.
+> See [DEPLOYMENT_GCP.md §5](DEPLOYMENT_GCP.md).
 
 ### Web pipeline — required config
 
@@ -100,19 +106,65 @@ the browser uses — the custom apex **and** the Firebase default while DNS prop
 4. **CORS:** ensure `WEB_ORIGINS` includes `https://skopeo.com`, then redeploy the API.
 5. **Web → API base URL:** set `VITE_API_BASE_URL=https://api.skopeo.com` and redeploy the web.
 
+Exact DNS records, `dig`/`nslookup` verification, and propagation/TLS-issuance expectations are in
+[DEPLOYMENT_GCP.md §9](DEPLOYMENT_GCP.md).
+
 ## Manual-approval gate (API)
 
 GitHub → Settings → **Environments → `production`** → enable **Required reviewers** (add yourself).
 `deploy-api.yml` runs in `environment: production`, so each API deploy pauses for approval before it
-releases. Web deploys are automatic on green `main`.
+releases. Web deploys are automatic on green `main`. Setup steps and the self-approval caveat are in
+[CICD.md §2c](CICD.md).
+
+## Pre-deployment checklist
+
+Before the first deploy (and before each release that changes config), confirm:
+
+- [ ] **CI is green on `main`** — the `build`, `web`, and `secret-scan` jobs all pass.
+- [ ] **The `Dockerfile` builds** — `docker build -t skopeo .` succeeds locally (or the last `--source` Cloud Build did).
+- [ ] **`.gcloudignore` excludes** `web/`, `docs/`, `build/` (and keeps the `Dockerfile`, `src/`, Gradle files) — already committed; don't remove those exclusions.
+- [ ] **OpenAPI spec current** — `OpenAPIIntegrationTest` passes (it's part of `./gradlew check`), so `src/main/resources/openapi/documentation.yaml` matches the API the web client generates against.
+- [ ] **All repo Variables + Secret Manager entries set** — every row in the API/Web tables above, plus `skopeo-db-password` and `skopeo-admin-emails` in Secret Manager.
+- [ ] **`production` environment requires approval** (see below).
+
+## Manual API deploy (`workflow_dispatch`)
+
+`deploy-api.yml` also has a `workflow_dispatch:` trigger: **Actions → Deploy API → Run workflow →
+`main`**. It still runs through the `production` approval gate and the `vars.WIF_PROVIDER` guard.
+Use it to redeploy after changing a repo variable or rotating a secret without a code push.
+
+## First-deploy verification
+
+After the first deploy is approved and green:
+
+```bash
+# Confirm Flyway actually ran the migrations as the revision booted
+gcloud run services logs read skopeo --region asia-southeast1 --limit=50 | grep -i flyway
+
+# Smoke-test the service (cold start: first request after idle pays ~5–10s — JVM + Flyway check)
+SERVICE_URL=$(gcloud run services describe skopeo --region asia-southeast1 --format="value(status.url)")
+curl "$SERVICE_URL/health"
+```
+
+Expect Flyway log lines like `Successfully applied N migrations` (or `Schema ... is up to date`).
+Full verification steps (including the calculator smoke test) are in [DEPLOYMENT_GCP.md §6](DEPLOYMENT_GCP.md).
 
 ## Rollback
 
 - **API:** list revisions and shift 100% traffic back to a known-good one (see DEPLOYMENT_GCP.md §8):
   `gcloud run revisions list --service skopeo --region asia-southeast1` then
   `gcloud run services update-traffic skopeo --to-revisions <REVISION>=100 --region asia-southeast1`.
-  Note: Flyway migrations are forward-only — a rollback restores the image, not the schema.
 - **Web:** Firebase Console → Hosting → **release history** → **Rollback** to a prior release.
+
+### Flyway is forward-only — rolling the API back does not roll the schema back
+
+Migrations apply on startup and are **never auto-reverted**. If you roll the API image back to a
+revision whose code predates a migration that already ran, the older code runs against a **newer
+schema**. That is usually fine (additive migrations), but if the older code can't tolerate the new
+schema it may fail to start or error at runtime. The remediation is **roll forward**: ship a new
+migration (a `V{n+1}__*.sql`, per the incremental-migrations rule) that reconciles the schema with
+the code you want running, rather than trying to undo the applied migration. Plan schema changes to
+be backward-compatible across one release so an image rollback stays safe.
 
 ## Go-live checklist
 

@@ -81,11 +81,44 @@ gcloud sql users create skopeo --instance=skopeo-db --password=<STRONG_PASSWORD>
 > private services access connection on the `default` network — `gcloud`
 > prompts with the exact command (`gcloud services vpc-peerings connect ...`).
 
-Store the password in Secret Manager (never in env vars or source):
+### 4a. Secret Manager entries
+
+The app reads two values from Secret Manager (never from plain env vars or source). Create both —
+`--data-file=-` reads the value from stdin, and `echo -n` avoids a trailing newline in the secret:
 
 ```bash
-echo -n "<STRONG_PASSWORD>" | gcloud secrets create skopeo-db-password --data-file=-
+# DB password → injected as DATABASE_PASSWORD
+echo -n "<STRONG_PASSWORD>" | gcloud secrets create skopeo-db-password \
+  --data-file=- --replication-policy=automatic
+
+# Admin allowlist → injected as ADMIN_EMAILS (comma-separated verified emails auto-granted
+# ADMINISTRATOR — see ADMIN_BOOTSTRAP.md). This is a Secret Manager entry, NOT a repo variable.
+echo -n "admin1@example.com,admin2@example.com" | gcloud secrets create skopeo-admin-emails \
+  --data-file=- --replication-policy=automatic
 ```
+
+To rotate either secret later, add a new version (`--set-secrets` pins `:latest`):
+
+```bash
+echo -n "<NEW_VALUE>" | gcloud secrets versions add skopeo-db-password --data-file=-
+```
+
+The deploy service account must be able to read them. Grant the accessor role (either project-wide,
+or per-secret as shown — least privilege):
+
+```bash
+DEPLOY_SA="github-deployer@skopeo-prod.iam.gserviceaccount.com"
+for SECRET in skopeo-db-password skopeo-admin-emails; do
+  gcloud secrets add-iam-policy-binding "$SECRET" \
+    --member="serviceAccount:${DEPLOY_SA}" \
+    --role="roles/secretmanager.secretAccessor"
+done
+```
+
+> The **Cloud Run runtime service account** (the default compute SA, unless you set one) also needs
+> `roles/secretmanager.secretAccessor` to read the mounted secrets at startup; granting the deploy
+> SA project-wide `secretAccessor` (CICD.md §2a) covers the deploy step, but verify the runtime SA
+> too if the service fails to start with a secret-access error.
 
 Note the instance's **private IP** for the next step:
 
@@ -208,19 +241,88 @@ Scaling path as adoption grows: `min-instances=1` (kill cold starts) → `db-g1-
 
 ---
 
-## 9. Teardown
+## 9. Custom domains, DNS & TLS
+
+Layout: web on the apex (`skopeo.com` → Firebase Hosting), API on a subdomain
+(`api.skopeo.com` → Cloud Run). Both providers issue **managed** TLS certificates once DNS verifies.
+
+### 9a. Web apex → Firebase Hosting
+
+1. Firebase Console → **Hosting → Add custom domain** → enter `skopeo.com`.
+2. Firebase shows a **TXT** record to prove ownership, then one or two **A** records (its hosting
+   IPs). Add them at your DNS registrar. If you also want `www`, add it as a second custom domain
+   (Firebase typically maps it via a CNAME or as a redirect).
+3. Wait for verification — Firebase provisions a managed cert automatically (minutes to ~24 h).
+
+Verify the records resolve before expecting the cert:
+
+```bash
+dig +short TXT skopeo.com        # the ownership TXT Firebase asked for
+dig +short A   skopeo.com        # should return Firebase's hosting IPs
+```
+
+### 9b. API subdomain → Cloud Run domain mapping
+
+```bash
+gcloud run domain-mappings create \
+  --service skopeo \
+  --domain api.skopeo.com \
+  --region asia-southeast1
+
+# Print the DNS records Cloud Run needs you to add (usually a CNAME, or A/AAAA for an apex)
+gcloud run domain-mappings describe \
+  --domain api.skopeo.com --region asia-southeast1 \
+  --format="value(status.resourceRecords[].name, status.resourceRecords[].rrdata)"
+```
+
+Add the shown record(s) at your registrar. Cloud Run provisions a managed TLS cert once DNS
+resolves. Verify:
+
+```bash
+dig +short CNAME api.skopeo.com   # or: nslookup api.skopeo.com
+curl https://api.skopeo.com/health
+```
+
+**Propagation expectations:** DNS changes can take from a few minutes up to ~24–48 h depending on
+the record's prior TTL; managed-cert issuance follows verification and is usually within an hour but
+can lag. The site/API may serve a cert warning until issuance completes — this is normal during
+propagation, not a misconfiguration.
+
+After the domains resolve, point the app config at them:
+- API: `WEB_ORIGINS` must include `https://skopeo.com` (CORS) — redeploy the API.
+- Web: `VITE_API_BASE_URL=https://api.skopeo.com` — redeploy the web.
+
+### 9c. Firebase Auth — authorized domains
+
+Firebase Auth only completes sign-in (Google / Facebook / password reset links) on **authorized
+domains**. The defaults (`localhost`, `<project>.firebaseapp.com`, `<project>.web.app`) cover dev and
+the Firebase URLs, but **your custom domains must be added explicitly**:
+
+1. Firebase Console → **Authentication → Settings → Authorized domains**.
+2. **Add domain** → `skopeo.com` (and `www.skopeo.com` if you serve it).
+3. Save — it takes effect immediately.
+
+> Omitting this is the classic production sign-in bug: Google/Facebook OAuth popups and redirects are
+> rejected with an unauthorized-domain error on the live site even though everything works on
+> `localhost`. The API subdomain (`api.skopeo.com`) does **not** need to be authorized — only the
+> origins the browser loads the web app from.
+
+---
+
+## 10. Teardown
 
 ```bash
 gcloud run services delete skopeo --region=asia-southeast1
 gcloud sql instances delete skopeo-db
 gcloud secrets delete skopeo-db-password
+gcloud secrets delete skopeo-admin-emails
 # or remove everything at once:
 gcloud projects delete skopeo-prod
 ```
 
 ---
 
-## 10. If AWS Is Required Instead
+## 11. If AWS Is Required Instead
 
 The same container deploys to AWS without code changes:
 

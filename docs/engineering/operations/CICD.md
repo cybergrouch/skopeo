@@ -134,29 +134,146 @@ Auto-deploy the API to Cloud Run on merge to `main`, authenticating **keylessly*
 
 ### 2a. One-time GCP setup (keyless auth)
 
-High level (verify exact flags against the [linked WIF guide](https://github.com/google-github-actions/auth)):
+Run these once, in order. Substitute your real `<owner>/<repo>` (e.g. `cybergrouch/skopeo`) and
+project id. Flags verified against [google-github-actions/auth](https://github.com/google-github-actions/auth).
 
 ```bash
-# A dedicated deploy service account
-gcloud iam service-accounts create github-deployer --project=skopeo-prod
-
-# Roles it needs for `gcloud run deploy --source` (Cloud Build + deploy)
-#   roles/run.admin, roles/iam.serviceAccountUser,
-#   roles/cloudbuild.builds.editor, roles/artifactregistry.writer
-# (grant each with: gcloud projects add-iam-policy-binding skopeo-prod ...)
-
-# Workload Identity Pool + GitHub OIDC provider, bound to THIS repo only
-gcloud iam workload-identity-pools create github --location=global
-gcloud iam workload-identity-pools providers create-oidc github \
-  --location=global --workload-identity-pool=github \
-  --issuer-uri="https://token.actions.githubusercontent.com" \
-  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository"
-# Bind the SA so only <owner>/skopeo can impersonate it.
+PROJECT_ID=skopeo-prod
+REPO="<owner>/<repo>"          # e.g. cybergrouch/skopeo
+gcloud config set project "$PROJECT_ID"
+PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format="value(projectNumber)")
 ```
 
-Store the **provider resource name** and the **deploy SA email** as GitHub repo *variables* (not secrets — they're identifiers, not credentials).
+**1. Dedicated deploy service account:**
 
-### 2b. Deploy workflow
+```bash
+gcloud iam service-accounts create github-deployer \
+  --project="$PROJECT_ID" --display-name="GitHub Actions deployer"
+
+DEPLOY_SA="github-deployer@${PROJECT_ID}.iam.gserviceaccount.com"
+```
+
+**2. Project roles the SA needs** for `gcloud run deploy --source .` (Cloud Build builds the image,
+pushes to Artifact Registry, then deploys to Cloud Run; it also reads the mounted secrets):
+
+```bash
+for ROLE in \
+  roles/run.admin \
+  roles/iam.serviceAccountUser \
+  roles/cloudbuild.builds.editor \
+  roles/artifactregistry.writer \
+  roles/secretmanager.secretAccessor; do
+  gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+    --member="serviceAccount:${DEPLOY_SA}" \
+    --role="$ROLE"
+done
+```
+
+(Per-secret `secretAccessor` grants are shown in [DEPLOYMENT_GCP.md §4a](DEPLOYMENT_GCP.md) if you
+prefer least privilege over a project-wide grant.)
+
+**3. Workload Identity pool + GitHub OIDC provider** (the provider is restricted to your repo via
+the attribute condition, so only workflows from that repo can authenticate):
+
+```bash
+gcloud iam workload-identity-pools create github \
+  --project="$PROJECT_ID" --location=global \
+  --display-name="GitHub Actions"
+
+gcloud iam workload-identity-pools providers create-oidc github \
+  --project="$PROJECT_ID" --location=global \
+  --workload-identity-pool=github \
+  --display-name="GitHub OIDC" \
+  --issuer-uri="https://token.actions.githubusercontent.com" \
+  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository,attribute.repository_owner=assertion.repository_owner" \
+  --attribute-condition="assertion.repository=='${REPO}'"
+```
+
+**4. Bind the GitHub repo's identity to the deploy SA** so only that repo can impersonate it:
+
+```bash
+gcloud iam service-accounts add-iam-policy-binding "$DEPLOY_SA" \
+  --project="$PROJECT_ID" \
+  --role="roles/iam.workloadIdentityUser" \
+  --member="principalSet://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github/attribute.repository/${REPO}"
+```
+
+**5. Retrieve the provider resource name** — this exact string goes into `vars.WIF_PROVIDER`:
+
+```bash
+gcloud iam workload-identity-pools providers describe github \
+  --project="$PROJECT_ID" --location=global \
+  --workload-identity-pool=github \
+  --format="value(name)"
+# => projects/<PROJECT_NUMBER>/locations/global/workloadIdentityPools/github/providers/github
+```
+
+**6. Set the two GitHub repo *variables*** (Settings → Secrets and variables → Actions →
+**Variables** — these are identifiers, not credentials, so they are variables not secrets):
+
+```bash
+gh variable set WIF_PROVIDER --body "$(gcloud iam workload-identity-pools providers describe github \
+  --project="$PROJECT_ID" --location=global --workload-identity-pool=github --format='value(name)')"
+gh variable set DEPLOY_SA --body "$DEPLOY_SA"
+```
+
+Setting `WIF_PROVIDER` is what flips `deploy-api.yml` from inert to active (its `if: vars.WIF_PROVIDER
+!= ''` guard). The remaining API variables/secrets are tracked in
+[DEPLOYMENT_RUNBOOK.md](DEPLOYMENT_RUNBOOK.md).
+
+### 2b. Firebase Hosting deploy credential (`FIREBASE_SERVICE_ACCOUNT`)
+
+`deploy-web.yml` uses `FirebaseExtended/action-hosting-deploy`, which authenticates with a **service
+account JSON key** passed as the `FIREBASE_SERVICE_ACCOUNT` GitHub *secret* (the only secret the web
+deploy needs; all `VITE_*` values are public repo variables).
+
+Easiest path — let the Firebase CLI create the SA, grant Hosting roles, and mint the key in one step:
+
+```bash
+cd web
+npx firebase login
+npx firebase init hosting:github   # creates the SA + key and offers to store it as a repo secret
+```
+
+Or do it manually with `gcloud` and store the secret via `gh`:
+
+```bash
+PROJECT_ID=skopeo-prod
+gcloud iam service-accounts create firebase-deployer \
+  --project="$PROJECT_ID" --display-name="Firebase Hosting deployer"
+FB_SA="firebase-deployer@${PROJECT_ID}.iam.gserviceaccount.com"
+
+# Roles needed to deploy Hosting releases
+for ROLE in roles/firebasehosting.admin roles/firebase.viewer; do
+  gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+    --member="serviceAccount:${FB_SA}" --role="$ROLE"
+done
+
+# Generate a JSON key and store its FULL CONTENTS as the GitHub secret, then delete the local file
+gcloud iam service-accounts keys create /tmp/firebase-sa.json --iam-account="$FB_SA"
+gh secret set FIREBASE_SERVICE_ACCOUNT < /tmp/firebase-sa.json
+rm -f /tmp/firebase-sa.json
+```
+
+> `action-hosting-deploy` expects the **raw JSON key contents** (not a base64 blob) in the secret.
+> Setting `VITE_FIREBASE_PROJECT_ID` is what activates `deploy-web.yml` (its
+> `if: vars.VITE_FIREBASE_PROJECT_ID != ''` guard).
+
+### 2c. `production` approval gate (GitHub Environment)
+
+`deploy-api.yml` runs in `environment: production`, so every API deploy pauses for a manual approval
+before it releases. Configure it once:
+
+1. Repo **Settings → Environments → New environment** → name it exactly **`production`**.
+2. Enable **Required reviewers** and add at least one reviewer (yourself for a solo project).
+3. Save.
+
+Caveat: by default GitHub **allows the actor who triggered the run to approve their own deploy** if
+they're listed as a reviewer. For a solo dev that's the only workable setup (self-approval acts as a
+deliberate "yes, ship it" checkpoint); on a team, add reviewers other than the typical pusher. The
+web deploy has no gate — it releases automatically on green `main`.
+
+### 2d. Deploy workflow
 
 `.github/workflows/deploy-api.yml` now exists (a fuller version of the sketch below: it adds a
 `production` approval gate, a `workflow_dispatch` trigger, an `if: vars.WIF_PROVIDER != ''` guard so
@@ -194,8 +311,9 @@ jobs:
 
 Notes:
 - `--source .` builds via Cloud Build and respects the committed `.gcloudignore` (so `web/` and docs aren't uploaded).
-- It **retains the service's existing env vars and secrets** (the `DATABASE_*` config and `skopeo-db-password` set during the manual deploy) unless you override them — so the workflow stays minimal.
-- Migrations still run on app startup (Flyway in `DatabaseConfig.init`), so no separate migration step.
+- The real workflow sets **all** runtime config explicitly on every deploy: non-secret env (`FIREBASE_PROJECT_ID`, `DATABASE_URL`, `DATABASE_USER`, `WEB_ORIGINS`) via `--set-env-vars` from repo *variables*, and `DATABASE_PASSWORD` + `ADMIN_EMAILS` via `--set-secrets` from Secret Manager (`skopeo-db-password`, `skopeo-admin-emails`). Repo variables/secrets are therefore the source of truth — see [DEPLOYMENT_RUNBOOK.md](DEPLOYMENT_RUNBOOK.md).
+- `DATABASE_URL` is the **private-IP** form (`jdbc:postgresql://<PRIVATE_IP>:5432/SkopeoDb`) over direct VPC egress — the build has no Cloud SQL socket factory. `--add-cloudsql-instances` is passed (harmless) but is not how the JDBC connection is made.
+- Migrations still run on app startup (Flyway in `DatabaseConfig.init`), so no separate migration step. Flyway is forward-only — see the rollback note in [DEPLOYMENT_RUNBOOK.md](DEPLOYMENT_RUNBOOK.md).
 
 Until the WIF resources + repo variables exist the job skips, so deploy manually per
 [DEPLOYMENT_GCP.md](DEPLOYMENT_GCP.md). The go-live config (variables, secrets, custom domain,
