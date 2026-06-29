@@ -1735,6 +1735,7 @@ paths:
               - MATCH_RESULT
               - CAPABILITY_CHANGE
               - RATING_CHANGE
+              - DUPLICATE_RECTIFICATION
           description: Scope to a single category; omit for all.
         - name: limit
           in: query
