@@ -10,7 +10,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { UserSearchSelect } from '@/components/UserSearchSelect'
+import { useGetApiV1Users } from '@/api/generated/users/users'
 import {
   getGetApiV1PlayerListsIdQueryKey,
   getGetApiV1PlayerListsIdSeedingQueryKey,
@@ -83,11 +83,15 @@ export function SeedingTab() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [newName, setNewName] = useState('')
   const [addError, setAddError] = useState<string | null>(null)
+  const [searchName, setSearchName] = useState('')
   const [sex, setSex] = useState('')
   const [ageMin, setAgeMin] = useState('')
   const [ageMax, setAgeMax] = useState('')
   const [ratingMin, setRatingMin] = useState('')
   const [ratingMax, setRatingMax] = useState('')
+  // The applied search (null until the user clicks Search) and the checked result ids.
+  const [applied, setApplied] = useState<GetApiV1UsersParams | null>(null)
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set())
 
   const lists = useGetApiV1PlayerLists()
   const createList = usePostApiV1PlayerLists()
@@ -103,6 +107,8 @@ export function SeedingTab() {
   const seeding = useGetApiV1PlayerListsIdSeeding(selectedId ?? '', {
     query: { enabled: hasSelection },
   })
+  // The explicit player search (#148): runs only once Search is clicked (applied !== null).
+  const usersQuery = useGetApiV1Users(applied ?? {}, { query: { enabled: applied !== null } })
 
   function invalidateLists() {
     queryClient.invalidateQueries({ queryKey: getGetApiV1PlayerListsQueryKey() })
@@ -132,16 +138,6 @@ export function SeedingTab() {
     invalidateLists()
   }
 
-  async function onAddMember(listId: string, user: UserSummaryResponse) {
-    try {
-      await addMember.mutateAsync({ id: listId, data: { userId: user.id } })
-      setAddError(null)
-      invalidateDetail(listId)
-    } catch {
-      setAddError("Couldn't add that player.")
-    }
-  }
-
   async function onRemoveMember(listId: string, userId: string) {
     await removeMember.mutateAsync({ id: listId, userId })
     invalidateDetail(listId)
@@ -152,14 +148,43 @@ export function SeedingTab() {
     invalidateSeeding(listId)
   }
 
-  function buildFilters(): Pick<GetApiV1UsersParams, 'sex' | 'age' | 'rating'> {
-    const filters: Pick<GetApiV1UsersParams, 'sex' | 'age' | 'rating'> = {}
-    if (sex) filters.sex = sex as GetApiV1UsersParams['sex']
+  /** The combined search params (name + sex/age/rating), or null when no filter is set. */
+  function buildSearchParams(): GetApiV1UsersParams | null {
+    const params: GetApiV1UsersParams = {}
+    if (searchName.trim()) params.name = searchName.trim()
+    if (sex) params.sex = sex as GetApiV1UsersParams['sex']
     const age = interval(ageMin, ageMax)
-    if (age) filters.age = age
+    if (age) params.age = age
     const rating = interval(ratingMin, ratingMax)
-    if (rating) filters.rating = rating
-    return filters
+    if (rating) params.rating = rating
+    return Object.keys(params).length > 0 ? params : null
+  }
+
+  function onSearch(event: FormEvent) {
+    event.preventDefault()
+    setApplied(buildSearchParams())
+    setCheckedIds(new Set())
+  }
+
+  function toggleChecked(userId: string) {
+    setCheckedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(userId)) next.delete(userId)
+      else next.add(userId)
+      return next
+    })
+  }
+
+  async function onAddChecked(listId: string, candidates: UserSummaryResponse[]) {
+    const chosen = candidates.filter((u) => checkedIds.has(u.id))
+    try {
+      await Promise.all(chosen.map((u) => addMember.mutateAsync({ id: listId, data: { userId: u.id } })))
+      setAddError(null)
+      setCheckedIds(new Set())
+      invalidateDetail(listId)
+    } catch {
+      setAddError("Couldn't add the selected players.")
+    }
   }
 
   function onDownloadCsv(listName: string, entries: SeedingEntryResponse[], generatedAt: string) {
@@ -178,6 +203,8 @@ export function SeedingTab() {
   const allLists = lists.data ?? []
   const members = detail.data?.members ?? []
   const memberIds = members.map((m) => m.id)
+  // Results exclude players already in the list, so "Add to List" only ever adds new members.
+  const searchResults = (usersQuery.data ?? []).filter((u) => !memberIds.includes(u.id))
   const seedingData = seeding.data
   const entries = seedingData?.entries ?? []
   const hasSeeding = entries.length > 0
@@ -282,73 +309,128 @@ export function SeedingTab() {
               </section>
 
               <section className="space-y-3 border-t pt-4">
-                <p className="text-sm font-medium">Add players</p>
-                <div className="space-y-1">
-                  <Label htmlFor="s-sex">Sex</Label>
-                  <select
-                    id="s-sex"
-                    value={sex}
-                    onChange={(e) => setSex(e.target.value)}
-                    className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
-                  >
-                    <option value="">Any</option>
-                    {SEXES.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <fieldset className="flex items-end gap-2">
+                <p className="text-sm font-medium">Search players</p>
+                <p className="text-xs text-muted-foreground">
+                  Combine any filters, then Search. Tick the players you want and Add to List.
+                </p>
+                <form onSubmit={onSearch} className="space-y-3">
                   <div className="space-y-1">
-                    <Label htmlFor="s-age-min">Age from</Label>
+                    <Label htmlFor="s-name">Name</Label>
                     <Input
-                      id="s-age-min"
-                      inputMode="numeric"
-                      className="w-20"
-                      value={ageMin}
-                      onChange={(e) => setAgeMin(e.target.value)}
+                      id="s-name"
+                      value={searchName}
+                      onChange={(e) => setSearchName(e.target.value)}
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label htmlFor="s-age-max">to</Label>
-                    <Input
-                      id="s-age-max"
-                      inputMode="numeric"
-                      className="w-20"
-                      value={ageMax}
-                      onChange={(e) => setAgeMax(e.target.value)}
-                    />
+                    <Label htmlFor="s-sex">Sex</Label>
+                    <select
+                      id="s-sex"
+                      value={sex}
+                      onChange={(e) => setSex(e.target.value)}
+                      className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
+                    >
+                      <option value="">Any</option>
+                      {SEXES.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                </fieldset>
-                <fieldset className="flex items-end gap-2">
-                  <div className="space-y-1">
-                    <Label htmlFor="s-rating-min">Rating from</Label>
-                    <Input
-                      id="s-rating-min"
-                      inputMode="decimal"
-                      className="w-20"
-                      value={ratingMin}
-                      onChange={(e) => setRatingMin(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="s-rating-max">to</Label>
-                    <Input
-                      id="s-rating-max"
-                      inputMode="decimal"
-                      className="w-20"
-                      value={ratingMax}
-                      onChange={(e) => setRatingMax(e.target.value)}
-                    />
-                  </div>
-                </fieldset>
-                <UserSearchSelect
-                  label="Find a player"
-                  excludeIds={memberIds}
-                  filters={buildFilters()}
-                  onSelect={(user) => onAddMember(selectedId, user)}
-                />
+                  <fieldset className="flex items-end gap-2">
+                    <div className="space-y-1">
+                      <Label htmlFor="s-age-min">Age from</Label>
+                      <Input
+                        id="s-age-min"
+                        inputMode="numeric"
+                        className="w-20"
+                        value={ageMin}
+                        onChange={(e) => setAgeMin(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="s-age-max">to</Label>
+                      <Input
+                        id="s-age-max"
+                        inputMode="numeric"
+                        className="w-20"
+                        value={ageMax}
+                        onChange={(e) => setAgeMax(e.target.value)}
+                      />
+                    </div>
+                  </fieldset>
+                  <fieldset className="flex items-end gap-2">
+                    <div className="space-y-1">
+                      <Label htmlFor="s-rating-min">Rating from</Label>
+                      <Input
+                        id="s-rating-min"
+                        inputMode="decimal"
+                        className="w-20"
+                        value={ratingMin}
+                        onChange={(e) => setRatingMin(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="s-rating-max">to</Label>
+                      <Input
+                        id="s-rating-max"
+                        inputMode="decimal"
+                        className="w-20"
+                        value={ratingMax}
+                        onChange={(e) => setRatingMax(e.target.value)}
+                      />
+                    </div>
+                  </fieldset>
+                  <Button type="submit" disabled={buildSearchParams() === null}>
+                    Search
+                  </Button>
+                </form>
+
+                {applied !== null ? (
+                  usersQuery.isLoading ? (
+                    <p className="text-sm text-muted-foreground">Searching…</p>
+                  ) : usersQuery.isError ? (
+                    <p className="text-sm text-destructive" role="alert">
+                      Invalid filters. Check the age/rating ranges.
+                    </p>
+                  ) : searchResults.length > 0 ? (
+                    <div className="space-y-2">
+                      <ul className="space-y-1">
+                        {searchResults.map((user) => {
+                          const meta = memberMeta(user)
+                          return (
+                            <li key={user.id}>
+                              <label className="flex items-center gap-2 rounded-md border p-2 text-sm">
+                                <input
+                                  type="checkbox"
+                                  checked={checkedIds.has(user.id)}
+                                  onChange={() => toggleChecked(user.id)}
+                                />
+                                <span>
+                                  <span className="font-medium">{user.displayName ?? user.publicCode}</span>
+                                  {meta ? (
+                                    <span className="block text-xs text-muted-foreground">{meta}</span>
+                                  ) : null}
+                                </span>
+                              </label>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                      <Button
+                        type="button"
+                        disabled={checkedIds.size === 0 || addMember.isPending}
+                        onClick={() => onAddChecked(selectedId, searchResults)}
+                      >
+                        Add to List
+                      </Button>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No matching players.</p>
+                  )
+                ) : null}
+
                 {addError ? (
                   <p className="text-sm text-destructive" role="alert">
                     {addError}
