@@ -17,6 +17,8 @@ data class CreateFixtureRequest(
     val team2: List<String>,
     val venue: String? = null,
     val tournamentName: String? = null,
+    /** When set, the fixture belongs to this event and both sides must be participants (#138). */
+    val eventId: String? = null,
 )
 
 @Serializable
@@ -84,6 +86,7 @@ data class MatchResponse(
     val ratedAt: String? = null,
     val createdBy: String? = null,
     val recordedBy: String? = null,
+    val eventId: String? = null,
 )
 
 fun Match.toResponse(): MatchResponse =
@@ -115,6 +118,7 @@ fun Match.toResponse(): MatchResponse =
         ratedAt = ratedAt?.toString(),
         createdBy = createdBy?.toString(),
         recordedBy = recordedBy?.toString(),
+        eventId = eventId?.toString(),
     )
 
 /** One player on the public match page (#136): just a display name + shareable code, no ids/contacts. */

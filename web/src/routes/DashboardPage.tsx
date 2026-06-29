@@ -13,7 +13,7 @@ import {
 import { useGetApiV1UsersMe } from '@/api/generated/users/users'
 import { ProfileTab } from './dashboard/ProfileTab'
 import { AdminTab } from './dashboard/AdminTab'
-import { MatchesTab } from './dashboard/MatchesTab'
+import { EventOrganizerTab } from './dashboard/EventOrganizerTab'
 import { SeedingTab } from './dashboard/SeedingTab'
 import { RatingsTab } from './dashboard/RatingsTab'
 import { ResearchTab } from './dashboard/ResearchTab'
@@ -67,7 +67,7 @@ export function DashboardPage() {
               ) : null}
               <TabsTrigger value="standings">Standings</TabsTrigger>
               {showMatches ? (
-                <TabsTrigger value="matches">Matches</TabsTrigger>
+                <TabsTrigger value="matches">Event Organizer</TabsTrigger>
               ) : null}
               {showSeeding ? (
                 <TabsTrigger value="seeding">Seeding</TabsTrigger>
@@ -105,7 +105,7 @@ export function DashboardPage() {
             </TabsContent>
             {showMatches ? (
               <TabsContent value="matches">
-                <MatchesTab />
+                <EventOrganizerTab />
               </TabsContent>
             ) : null}
             {showSeeding ? (

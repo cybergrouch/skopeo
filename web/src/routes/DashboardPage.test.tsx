@@ -23,8 +23,8 @@ vi.mock('./dashboard/ProfileTab', () => ({
 vi.mock('./dashboard/AdminTab', () => ({
   AdminTab: () => <div>admin content</div>,
 }))
-vi.mock('./dashboard/MatchesTab', () => ({
-  MatchesTab: () => <div>matches content</div>,
+vi.mock('./dashboard/EventOrganizerTab', () => ({
+  EventOrganizerTab: () => <div>event organizer content</div>,
 }))
 vi.mock('./dashboard/SeedingTab', () => ({
   SeedingTab: () => <div>seeding content</div>,
@@ -74,7 +74,7 @@ describe('DashboardPage', () => {
     expect(screen.getByRole('tab', { name: 'Profile' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Research' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Standings' })).toBeInTheDocument()
-    expect(screen.queryByRole('tab', { name: 'Matches' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Event Organizer' })).not.toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: 'Seeding' })).not.toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: 'Ratings' })).not.toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: 'Invites' })).not.toBeInTheDocument()
@@ -100,7 +100,7 @@ describe('DashboardPage', () => {
     const user = userEvent.setup()
     renderDashboard()
     expect(screen.getByRole('tab', { name: 'Ratings' })).toBeInTheDocument()
-    expect(screen.queryByRole('tab', { name: 'Matches' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Event Organizer' })).not.toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: 'Invites' })).not.toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: 'Activity Log' })).not.toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: 'Admin' })).not.toBeInTheDocument()
@@ -116,7 +116,7 @@ describe('DashboardPage', () => {
     })
     const user = userEvent.setup()
     renderDashboard()
-    expect(screen.getByRole('tab', { name: 'Matches' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Event Organizer' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Seeding' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Research' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Standings' })).toBeInTheDocument()
@@ -132,7 +132,7 @@ describe('DashboardPage', () => {
       isLoading: false,
     })
     renderDashboard()
-    expect(screen.getByRole('tab', { name: 'Matches' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Event Organizer' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Research' })).toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: 'Admin' })).not.toBeInTheDocument()
   })
@@ -144,15 +144,15 @@ describe('DashboardPage', () => {
     })
     const user = userEvent.setup()
     renderDashboard()
-    expect(screen.getByRole('tab', { name: 'Matches' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Event Organizer' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Ratings' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Standings' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Invites' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Activity Log' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Admin' })).toBeInTheDocument()
 
-    await user.click(screen.getByRole('tab', { name: 'Matches' }))
-    expect(screen.getByText('matches content')).toBeInTheDocument()
+    await user.click(screen.getByRole('tab', { name: 'Event Organizer' }))
+    expect(screen.getByText('event organizer content')).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: 'Standings' }))
     expect(screen.getByText('standings content')).toBeInTheDocument()

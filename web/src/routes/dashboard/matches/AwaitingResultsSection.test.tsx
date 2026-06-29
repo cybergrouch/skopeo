@@ -34,10 +34,10 @@ const match = {
   team2: { teamId: 't2', userIds: ['p2'] },
 }
 
-function renderSection() {
+function renderSection(eventId?: string) {
   return render(
     <QueryClientProvider client={new QueryClient()}>
-      <AwaitingResultsSection />
+      <AwaitingResultsSection eventId={eventId} />
     </QueryClientProvider>,
   )
 }
@@ -61,6 +61,11 @@ describe('AwaitingResultsSection', () => {
     busy.value = true
     renderSection()
     expect(screen.getByRole('button', { name: 'Recording…' })).toBeDisabled()
+  })
+
+  it('scopes the query to an event when given an eventId (#138)', () => {
+    renderSection('evt-1')
+    expect(useGetApiV1Matches).toHaveBeenCalledWith({ filter: 'awaiting-results', eventId: 'evt-1' })
   })
 
   it('shows a loading state', () => {

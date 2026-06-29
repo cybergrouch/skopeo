@@ -48,6 +48,7 @@ class MatchRepository {
                     it[venue] = command.venue
                     it[tournamentName] = command.tournamentName
                     it[createdBy] = command.createdBy
+                    it[eventId] = command.eventId
                 }.value
             loadMatchOrThrow(id = matchId)
         }
@@ -188,7 +189,10 @@ class MatchRepository {
      * results as soon as it exists. When [createdBy] is non-null, scoped to fixtures that user
      * created (HOST oversight). Ordered oldest match date first so overdue fixtures surface on top.
      */
-    fun listAwaitingResults(createdBy: UUID? = null): List<Match> =
+    fun listAwaitingResults(
+        createdBy: UUID? = null,
+        eventId: UUID? = null,
+    ): List<Match> =
         transaction {
             MatchesTable
                 .selectAll()
@@ -196,7 +200,13 @@ class MatchRepository {
                     val base =
                         MatchesTable.isActive and
                             (MatchesTable.status eq MatchStatus.SCHEDULED.name)
-                    if (createdBy != null) base and (MatchesTable.createdBy eq createdBy) else base
+                    // An event scope shows every awaiting fixture in the event (any creator); otherwise
+                    // a HOST is scoped to their own fixtures.
+                    when {
+                        eventId != null -> base and (MatchesTable.eventId eq eventId)
+                        createdBy != null -> base and (MatchesTable.createdBy eq createdBy)
+                        else -> base
+                    }
                 }.orderBy(MatchesTable.matchDate to SortOrder.ASC)
                 .map { loadMatch(id = it[MatchesTable.id].value)!! }
         }
@@ -279,6 +289,7 @@ private fun buildMatch(
         ratedAt = row[MatchesTable.ratedAt],
         createdBy = row[MatchesTable.createdBy]?.value,
         recordedBy = row[MatchesTable.recordedBy]?.value,
+        eventId = row[MatchesTable.eventId]?.value,
     )
 
 private fun sideOf(teamId: UUID): MatchSide =

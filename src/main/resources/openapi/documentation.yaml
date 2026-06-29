@@ -1098,6 +1098,13 @@ paths:
             type: string
             enum: [pending-calculation, awaiting-results]
           description: pending-calculation = completed & unrated; awaiting-results = scheduled, any match date.
+        - name: eventId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: Scope awaiting-results to a single event's fixtures (#138).
       responses:
         '200':
           description: Matching fixtures
@@ -1295,6 +1302,141 @@ paths:
           description: No such match
         '409':
           description: Cannot disable a match that has already been rated
+
+  /api/v1/events:
+    get:
+      summary: List events (HOST/ADMINISTRATOR)
+      description: An ADMINISTRATOR sees all events; a HOST sees their own. (#138)
+      tags:
+        - Events
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The caller's events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EventResponse'
+        '403':
+          description: Caller is not HOST/ADMINISTRATOR
+    post:
+      summary: Create an event (HOST/ADMINISTRATOR)
+      tags:
+        - Events
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEventRequest'
+      responses:
+        '201':
+          description: Event created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventResponse'
+        '400':
+          description: Invalid input (blank name, bad dates, unknown participant)
+        '403':
+          description: Caller is not HOST/ADMINISTRATOR
+
+  /api/v1/events/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      summary: Get an event with its participants (HOST/ADMINISTRATOR)
+      tags:
+        - Events
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The event
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventResponse'
+        '403':
+          description: Caller is not HOST/ADMINISTRATOR
+        '404':
+          description: No such event
+
+  /api/v1/events/{id}/participants:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      summary: Add a participant to an event (HOST/ADMINISTRATOR)
+      tags:
+        - Events
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddParticipantRequest'
+      responses:
+        '200':
+          description: The updated event
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventResponse'
+        '400':
+          description: Unknown participant
+        '403':
+          description: Caller is not HOST/ADMINISTRATOR
+        '404':
+          description: No such event
+
+  /api/v1/events/{id}/participants/{userId}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    delete:
+      summary: Remove a participant from an event (HOST/ADMINISTRATOR)
+      tags:
+        - Events
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The updated event
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventResponse'
+        '403':
+          description: Caller is not HOST/ADMINISTRATOR
+        '404':
+          description: No such event
 
   /api/v1/invites:
     post:
@@ -2739,6 +2881,11 @@ components:
         tournamentName:
           type: string
           nullable: true
+        eventId:
+          type: string
+          format: uuid
+          nullable: true
+          description: When set, the fixture belongs to this event and both sides must be participants (#138).
 
     SetScoreRequest:
       type: object
@@ -2883,6 +3030,87 @@ components:
           type: string
           format: uuid
           nullable: true
+        eventId:
+          type: string
+          format: uuid
+          nullable: true
+          description: The event this fixture belongs to, if any (#138).
+
+    CreateEventRequest:
+      type: object
+      required:
+        - name
+        - startDate
+        - endDate
+      properties:
+        name:
+          type: string
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        participantIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    AddParticipantRequest:
+      type: object
+      required:
+        - userId
+      properties:
+        userId:
+          type: string
+          format: uuid
+
+    EventParticipantResponse:
+      type: object
+      required:
+        - userId
+      properties:
+        userId:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+          nullable: true
+        publicCode:
+          type: string
+          nullable: true
+
+    EventResponse:
+      type: object
+      required:
+        - id
+        - publicCode
+        - name
+        - startDate
+        - endDate
+        - isActive
+        - participants
+      properties:
+        id:
+          type: string
+          format: uuid
+        publicCode:
+          type: string
+        name:
+          type: string
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        isActive:
+          type: boolean
+        participants:
+          type: array
+          items:
+            $ref: '#/components/schemas/EventParticipantResponse'
 
     MatchPublicPlayer:
       type: object
