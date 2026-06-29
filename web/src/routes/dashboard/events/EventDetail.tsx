@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   Card,
@@ -125,6 +126,10 @@ export function EventDetail({
               <CardDescription>
                 {event.startDate} – {event.endDate} · Event ID:{' '}
                 <code className="font-mono font-medium text-foreground">{event.publicCode}</code>
+                {' · '}
+                <Link to={`/events/${event.publicCode}`} className="text-primary hover:underline">
+                  Public page
+                </Link>
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">

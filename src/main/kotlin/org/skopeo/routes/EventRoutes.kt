@@ -33,6 +33,7 @@ fun Application.configureEventRoutes(service: EventService = EventService()) {
         authenticate(FIREBASE_AUTH) {
             route(path = "/api/v1/events") {
                 listAndCreate(service = service)
+                publicByCode(service = service)
                 byIdAndParticipants(service = service)
             }
         }
@@ -52,6 +53,21 @@ private fun Route.listAndCreate(service: EventService) {
             val request = call.receive<CreateEventRequest>()
             respondEither(result = service.create(token = verifiedToken(), input = toCreateEventInput(request = request))) { event ->
                 call.respond(status = HttpStatusCode.Created, message = event.toResponse())
+            }
+        }
+    }
+}
+
+/**
+ * Public event page lookup by code (#138). The literal `code` segment matches before `/{id}`, so it
+ * never collides with the UUID route. Visible to any authenticated user (public-page semantics).
+ */
+private fun Route.publicByCode(service: EventService) {
+    get(path = "/code/{code}") {
+        respondMappingErrors {
+            val code = call.parameters["code"].orEmpty()
+            respondEither(result = service.publicByCode(code = code)) { event ->
+                call.respond(status = HttpStatusCode.OK, message = event)
             }
         }
     }

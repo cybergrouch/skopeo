@@ -49,6 +49,16 @@ class EventRepository {
 
     fun findById(id: UUID): Event? = transaction { loadEvent(id = id) }
 
+    /** Resolve an active event by its shareable public code (#138); null if absent or disabled. */
+    fun findByPublicCode(code: String): Event? =
+        transaction {
+            EventsTable
+                .selectAll()
+                .where { (EventsTable.publicCode eq code) and EventsTable.isActive }
+                .singleOrNull()
+                ?.let { buildEvent(row = it) }
+        }
+
     /** Add a participant (idempotent); returns the updated event, or null if the event is absent. */
     fun addParticipant(
         eventId: UUID,

@@ -15,6 +15,7 @@ import { CompleteProfilePage } from '@/routes/CompleteProfilePage'
 import { DashboardPage } from '@/routes/DashboardPage'
 import { PlayerProfilePage } from '@/routes/PlayerProfilePage'
 import { MatchPage } from '@/routes/MatchPage'
+import { EventPage } from '@/routes/EventPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -65,6 +66,16 @@ function App() {
                 <RequireAuth>
                   <RequireProfile>
                     <MatchPage />
+                  </RequireProfile>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/events/:code"
+              element={
+                <RequireAuth>
+                  <RequireProfile>
+                    <EventPage />
                   </RequireProfile>
                 </RequireAuth>
               }
