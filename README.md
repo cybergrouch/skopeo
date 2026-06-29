@@ -140,12 +140,16 @@ The API is team-based (`teams: Map<String, Team>`, keyed by team ID) so doubles 
 
 Skopeo persists its core data (PostgreSQL + Flyway + Exposed):
 - ✅ Player profiles (database-backed, capability-gated)
-- ✅ Admin-set initial ratings + rating history
-- ✅ Match fixtures and uploaded results
+- ✅ Admin-set initial ratings + rating history, plus player re-rate requests (approve/deny)
+- ✅ Match fixtures and uploaded results (editable until rated)
 - ✅ Admin-triggered rating calculation (dry-run default, explicit commit)
-- ✅ Web UI (sign-up + Profile / Matches / Research / Admin dashboard)
+- ✅ Per-NTRP-band standings / "Ranking Race" leaderboards
+- ✅ Event Organizer (events/meets with participants and matches) + host seeding generation
+- ✅ Governance: domain audit/activity log, duplicate detection + rectification, admin invites
+- ✅ Public pages by shareable code (player / match / event) with QR sharing
+- ✅ Web UI: sign-up + capability-gated dashboard (Profile / Research / Standings / Event Organizer / Seeding / Ratings / Invites / Activity Log / Admin)
 
-The `POST /api/v1/calculate-ranking` endpoint remains a stateless "what-if" calculator that writes nothing. Leaderboards/ranking tables are not yet built (see roadmap below).
+The `POST /api/v1/calculate-ranking` endpoint remains a stateless "what-if" calculator that writes nothing.
 
 ## Product Roadmap
 
@@ -163,13 +167,13 @@ Skopeo's evolution from a **stateless rating calculator** to a **comprehensive p
 | 5 | Player Profile Management | ✅ DONE | Implemented | Database | Capability-gated profiles; sex + date of birth required at sign-up |
 | 6 | Match Tracking System | ✅ DONE | Implemented | #5, Database | Match fixtures + result upload with score validation |
 | 7 | Rating Persistence | ✅ DONE | Implemented | #5, #6, #1 | Admin-set initial ratings, calculation trigger (dry-run/commit), rating history |
-| 8 | Web UI | ✅ DONE | Implemented | #5-#7 | Sign-up + Profile / Matches / Research / Admin dashboard |
+| 8 | Web UI | ✅ DONE | Implemented | #5-#7 | Sign-up + capability-gated dashboard (Profile / Research / Standings / Event Organizer / Seeding / Ratings / Invites / Activity Log / Admin) |
 | **MVP REQUIREMENTS (REMAINING)** |
 | 9 | Player Identity Verification (KYC) 🇵🇭 | 🔴 CRITICAL | Not Started | #5 | Philippine government ID validation (Passport, DL, UMID, SSS, GSIS, National ID) |
 | 9a | Social Media Verification | 🟡 NICE-TO-HAVE | Not Started | #9 | Automated verification via social media accounts (Facebook, Instagram, Twitter) |
-| 10 | Player Ranking System | 🔴 CRITICAL | Not Started | #5, #6, #7 | Dynamic rankings, leaderboards, statistics |
+| 10 | Player Ranking System | ✅ DONE | Implemented | #5, #6, #7 | Per-NTRP-band "Ranking Race" standings / leaderboards (#113) |
 | **NICE-TO-HAVE FEATURES (ENHANCE MVP)** |
-| 11 | Seeding Generation | 🟡 NICE-TO-HAVE | Not Started | #10 | Auto-generate tournament seedings from current rankings |
+| 11 | Seeding Generation | ✅ DONE | Implemented | #10 | Host-curated player lists → rating-sorted seeding with CSV export (#111) |
 | 12 | Dynamic Rating Confidence | 🟡 NICE-TO-HAVE | Not Started | #10 | Time-based confidence score for ratings (accounts for player inactivity) |
 | **POST-MVP FEATURES (FUTURE ENHANCEMENTS)** |
 | 13 | Doubles Support | 🟢 FUTURE | Not Started | #7, #8 | Support for doubles matches (2v2) with team ratings |
@@ -178,7 +182,7 @@ Skopeo's evolution from a **stateless rating calculator** to a **comprehensive p
 | 16 | Mobile Apps | 🟢 FUTURE | Not Started | All APIs | iOS/Android apps for match recording |
 | 17 | Social Features | 🟢 FUTURE | Not Started | #5 | Friend lists, challenge system, activity feed |
 | 18 | Advanced Analytics | 🟢 FUTURE | Not Started | #8 | Predictive modeling, strength of schedule, trend analysis |
-| 19 | Admin Dashboard | 🟢 FUTURE | Not Started | All | Management interface for verification, disputes, cleanup |
+| 19 | Admin Dashboard | ✅ DONE | Implemented | All | Capability-gated Admin tab: manage players, duplicate detection/rectification, pending assessment/calculation, audit/activity log |
 | 20 | Email Notifications | 🟢 FUTURE | Not Started | #7, #14 | Match confirmations, rating changes, tournament invites |
 | 21 | Multi-language Support | 🟢 FUTURE | Not Started | All | Tagalog, English, other Philippine languages |
 | 22 | Payment Integration 🇵🇭 | 🟢 FUTURE | Not Started | #14 | GCash, PayMaya for tournament fees and membership |
