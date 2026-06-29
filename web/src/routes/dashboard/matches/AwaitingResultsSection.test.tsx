@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { AwaitingResultsSection } from './AwaitingResultsSection'
+import { AwaitingResultsSection, RecordedResultsSection } from './AwaitingResultsSection'
 
 const { useGetApiV1Matches, useGetApiV1Users, mutateAsync, deleteMutateAsync, busy, deleteBusy } =
   vi.hoisted(() => ({
@@ -45,12 +45,31 @@ const match = {
   matchDate: '2026-01-01',
   team1: { teamId: 't1', userIds: ['p1'] },
   team2: { teamId: 't2', userIds: ['p2'] },
+  sets: [],
+}
+
+// A recorded (completed, unrated) fixture carries its set scores.
+const recordedMatch = {
+  ...match,
+  id: 'm2',
+  sets: [
+    { setNumber: 1, team1Games: 6, team2Games: 4, winnerTeamId: 't1' },
+    { setNumber: 2, team1Games: 6, team2Games: 3, winnerTeamId: 't1' },
+  ],
 }
 
 function renderSection(eventId?: string) {
   return render(
     <QueryClientProvider client={new QueryClient()}>
       <AwaitingResultsSection eventId={eventId} />
+    </QueryClientProvider>,
+  )
+}
+
+function renderRecorded(eventId = 'evt-1') {
+  return render(
+    <QueryClientProvider client={new QueryClient()}>
+      <RecordedResultsSection eventId={eventId} />
     </QueryClientProvider>,
   )
 }
@@ -190,7 +209,7 @@ describe('AwaitingResultsSection', () => {
 
     await user.click(screen.getByRole('button', { name: 'Record result' }))
 
-    expect(await screen.findByText(/Could not record the result/i)).toBeInTheDocument()
+    expect(await screen.findByText(/Could not save the result/i)).toBeInTheDocument()
   })
 
   it('deletes a fixture after a confirm step', async () => {
@@ -236,5 +255,97 @@ describe('AwaitingResultsSection', () => {
     expect(await screen.findByText(/Could not delete the fixture/i)).toBeInTheDocument()
     // The confirm step resets so the row returns to its default actions.
     expect(screen.getByRole('button', { name: 'Delete fixture' })).toBeInTheDocument()
+  })
+})
+
+describe('RecordedResultsSection', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    useGetApiV1Matches.mockReturnValue({ data: [recordedMatch], isLoading: false })
+    useGetApiV1Users.mockReturnValue({
+      data: [
+        { id: 'p1', displayName: 'Alice', capabilities: [] },
+        { id: 'p2', displayName: 'Bob', capabilities: [] },
+      ],
+      isLoading: false,
+    })
+    mutateAsync.mockResolvedValue({})
+    busy.value = false
+  })
+
+  it('queries the event-scoped pending-calculation list', () => {
+    renderRecorded('evt-9')
+    expect(useGetApiV1Matches).toHaveBeenCalledWith({
+      filter: 'pending-calculation',
+      eventId: 'evt-9',
+    })
+  })
+
+  it('shows loading and empty states', () => {
+    useGetApiV1Matches.mockReturnValue({ data: undefined, isLoading: true })
+    const { rerender } = renderRecorded()
+    expect(screen.getByText('Loading…')).toBeInTheDocument()
+
+    useGetApiV1Matches.mockReturnValue({ data: [], isLoading: false })
+    rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <RecordedResultsSection eventId="evt-1" />
+      </QueryClientProvider>,
+    )
+    expect(screen.getByText('No recorded results yet.')).toBeInTheDocument()
+  })
+
+  it('shows a recorded fixture collapsed as a score summary until expanded', () => {
+    renderRecorded()
+    expect(screen.getByText('Recorded')).toBeInTheDocument()
+    expect(screen.getByText('6–4, 6–3')).toBeInTheDocument()
+    // The entry form is hidden until "Edit result" is clicked.
+    expect(screen.queryByLabelText('set 1 player 1 games')).not.toBeInTheDocument()
+  })
+
+  it('edits a recorded result, prefilling the existing scores and saving the changes', async () => {
+    const user = userEvent.setup()
+    renderRecorded()
+    await user.click(screen.getByRole('button', { name: 'Edit result' }))
+
+    // Existing scores are prefilled.
+    expect(screen.getByLabelText('set 1 player 1 games')).toHaveValue('6')
+    expect(screen.getByLabelText('set 2 player 2 games')).toHaveValue('3')
+
+    // Change set 2 and save.
+    await user.clear(screen.getByLabelText('set 2 player 2 games'))
+    await user.type(screen.getByLabelText('set 2 player 2 games'), '0')
+    await user.click(screen.getByRole('button', { name: 'Save result' }))
+
+    await waitFor(() =>
+      expect(mutateAsync).toHaveBeenCalledWith({
+        id: 'm2',
+        data: {
+          sets: [
+            { team1Games: 6, team2Games: 4 },
+            { team1Games: 6, team2Games: 0 },
+          ],
+        },
+      }),
+    )
+  })
+
+  it('cancels an edit, restoring the collapsed summary without calling the API', async () => {
+    const user = userEvent.setup()
+    renderRecorded()
+    await user.click(screen.getByRole('button', { name: 'Edit result' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(screen.getByRole('button', { name: 'Edit result' })).toBeInTheDocument()
+    expect(screen.queryByLabelText('set 1 player 1 games')).not.toBeInTheDocument()
+    expect(mutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('shows a saving label while an edit is in flight', async () => {
+    busy.value = true
+    const user = userEvent.setup()
+    renderRecorded()
+    await user.click(screen.getByRole('button', { name: 'Edit result' }))
+    expect(screen.getByRole('button', { name: 'Saving…' })).toBeDisabled()
   })
 })

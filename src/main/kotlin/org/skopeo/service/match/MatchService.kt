@@ -23,7 +23,6 @@ import org.skopeo.model.MatchCalculationDetail
 import org.skopeo.model.MatchPlayerCalculation
 import org.skopeo.model.MatchQuery
 import org.skopeo.model.MatchSetResult
-import org.skopeo.model.MatchStatus
 import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
 import org.skopeo.model.ServiceError
@@ -133,15 +132,19 @@ class MatchService(
             val recordedBy = requireStaff(token = token).bind()
             val match = matches.findById(matchId = matchId).bind()
             ensure(condition = match.isActive) { ServiceError.Conflict(message = "Match is disabled") }
-            ensure(condition = match.status == MatchStatus.SCHEDULED) { ServiceError.Conflict(message = "Match already has results") }
+            // Results can be recorded on a scheduled fixture and re-recorded (edited) on a completed one,
+            // but only while the match is still unrated — a rated result is frozen.
+            ensure(condition = match.ratedAt == null) {
+                ServiceError.Conflict(message = "Cannot edit a match that has already been rated")
+            }
             val (resolvedSets, winner) =
                 deriveOutcome(
                     team1Id = match.team1.teamId,
                     team2Id = match.team2.teamId,
                     request = request,
                 ).bind()
-            // All reachable validations have passed; record before persisting (the located, SCHEDULED
-            // match means addResult below won't be a no-op).
+            // All reachable validations have passed; record the audit entry before persisting (the
+            // located, active, unrated match means addResult below won't be a no-op).
             audit.record(
                 write =
                     AuditWrite(
@@ -251,7 +254,14 @@ class MatchService(
             val caller = staffCaller(token = token).bind()
             val scopedTo = if (caller.capabilities.contains(element = Capability.ADMINISTRATOR)) null else caller.id
             when (view) {
-                MatchQuery.PENDING_CALCULATION -> matches.listPendingCalculation(createdBy = scopedTo)
+                // An event scope (#138) shows that event's recorded-but-unrated fixtures (editable until
+                // the rating calculation runs) to any staff member; otherwise the admin oversight list.
+                MatchQuery.PENDING_CALCULATION ->
+                    if (eventId != null) {
+                        matches.listPendingCalculation(eventId = eventId)
+                    } else {
+                        matches.listPendingCalculation(createdBy = scopedTo)
+                    }
                 // An event scope (#138) shows that event's awaiting fixtures to any staff member.
                 MatchQuery.AWAITING_RESULTS ->
                     if (eventId != null) {

@@ -58,6 +58,11 @@ function toSets(rows: SetRow[]): SetScoreRequest[] {
     .map((r) => ({ team1Games: Number(r.t1), team2Games: Number(r.t2) }))
 }
 
+/** The set-score rows prefilled from an already-recorded match (games only; tiebreaks aren't edited). */
+function rowsFromMatch(match: MatchResponse): SetRow[] {
+  return match.sets.map((s) => ({ t1: String(s.team1Games), t2: String(s.team2Games) }))
+}
+
 function MatchResultRow({
   match,
   nameOf,
@@ -66,14 +71,17 @@ function MatchResultRow({
   nameOf: (userId: string) => string
 }) {
   const queryClient = useQueryClient()
-  const [rows, setRows] = useState<SetRow[]>([
-    { t1: '', t2: '' },
-    { t1: '', t2: '' },
-  ])
+  // A recorded fixture (has sets) starts collapsed as a score summary that can be expanded to edit;
+  // a scheduled fixture starts as the entry form.
+  const recorded = match.sets.length > 0
+  const [editing, setEditing] = useState(false)
+  const [rows, setRows] = useState<SetRow[]>(
+    recorded ? rowsFromMatch(match) : [{ t1: '', t2: '' }, { t1: '', t2: '' }],
+  )
   const [error, setError] = useState<string | null>(null)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
 
-  // Refresh every awaiting-results list (global + any event-scoped one) via the base key prefix.
+  // Refresh every matches list (awaiting + recorded, global + event-scoped) via the base key prefix.
   const invalidateMatches = () =>
     queryClient.invalidateQueries({ queryKey: getGetApiV1MatchesQueryKey() })
 
@@ -105,14 +113,58 @@ function MatchResultRow({
     }
     try {
       await upload.mutateAsync({ id: match.id, data: { sets } })
+      setEditing(false)
     } catch {
-      setError('Could not record the result. Each set needs a clear winner.')
+      setError('Could not save the result. Each set needs a clear winner.')
     }
+  }
+
+  function cancelEdit() {
+    setRows(rowsFromMatch(match))
+    setError(null)
+    setEditing(false)
   }
 
   const player1 = match.team1.userIds.map(nameOf).join(', ')
   const player2 = match.team2.userIds.map(nameOf).join(', ')
   const badge = scheduleBadge(match.matchDate, todayIso())
+  const showForm = !recorded || editing
+  const summary = match.sets.map((s) => `${s.team1Games}–${s.team2Games}`).join(', ')
+
+  // Delete control with a confirm step (#138); offered both while entering scores and when collapsed.
+  const deleteControls = confirmingDelete ? (
+    <>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="text-destructive hover:text-destructive"
+        disabled={remove.isPending}
+        onClick={deleteFixture}
+      >
+        {remove.isPending ? 'Deleting…' : 'Confirm delete'}
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        disabled={remove.isPending}
+        onClick={() => setConfirmingDelete(false)}
+      >
+        Cancel
+      </Button>
+    </>
+  ) : (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      className="text-destructive hover:text-destructive"
+      onClick={() => setConfirmingDelete(true)}
+    >
+      Delete fixture
+    </Button>
+  )
 
   return (
     <div className="rounded-lg border p-3">
@@ -121,88 +173,91 @@ function MatchResultRow({
           {player1} vs {player2}
         </span>
         <span className="text-muted-foreground">· {match.matchDate}</span>
-        <Badge variant={badge.variant}>{badge.label}</Badge>
+        {recorded ? (
+          <Badge variant="secondary">Recorded</Badge>
+        ) : (
+          <Badge variant={badge.variant}>{badge.label}</Badge>
+        )}
       </div>
-      <div className="space-y-2">
-        {rows.map((row, index) => (
-          <div key={index} className="flex items-center gap-2">
-            <span className="w-12 text-xs text-muted-foreground">Set {index + 1}</span>
-            <Input
-              aria-label={`set ${index + 1} player 1 games`}
-              className="w-16"
-              inputMode="numeric"
-              value={row.t1}
-              onChange={(e) => setCell(index, 't1', e.target.value)}
-            />
-            <span>–</span>
-            <Input
-              aria-label={`set ${index + 1} player 2 games`}
-              className="w-16"
-              inputMode="numeric"
-              value={row.t2}
-              onChange={(e) => setCell(index, 't2', e.target.value)}
-            />
-            {rows.length > 1 ? (
+      {showForm ? (
+        <>
+          <div className="space-y-2">
+            {rows.map((row, index) => (
+              <div key={index} className="flex items-center gap-2">
+                <span className="w-12 text-xs text-muted-foreground">Set {index + 1}</span>
+                <Input
+                  aria-label={`set ${index + 1} player 1 games`}
+                  className="w-16"
+                  inputMode="numeric"
+                  value={row.t1}
+                  onChange={(e) => setCell(index, 't1', e.target.value)}
+                />
+                <span>–</span>
+                <Input
+                  aria-label={`set ${index + 1} player 2 games`}
+                  className="w-16"
+                  inputMode="numeric"
+                  value={row.t2}
+                  onChange={(e) => setCell(index, 't2', e.target.value)}
+                />
+                {rows.length > 1 ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setRows((prev) => prev.filter((_, i) => i !== index))}
+                  >
+                    Remove
+                  </Button>
+                ) : null}
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {rows.length < MAX_SETS ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setRows((prev) => [...prev, { t1: '', t2: '' }])}
+              >
+                Add set
+              </Button>
+            ) : null}
+            <Button size="sm" disabled={upload.isPending} onClick={submit}>
+              {upload.isPending
+                ? recorded
+                  ? 'Saving…'
+                  : 'Recording…'
+                : recorded
+                  ? 'Save result'
+                  : 'Record result'}
+            </Button>
+            {recorded ? (
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => setRows((prev) => prev.filter((_, i) => i !== index))}
+                disabled={upload.isPending}
+                onClick={cancelEdit}
               >
-                Remove
+                Cancel
               </Button>
             ) : null}
+            {deleteControls}
           </div>
-        ))}
-      </div>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {rows.length < MAX_SETS ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setRows((prev) => [...prev, { t1: '', t2: '' }])}
-          >
-            Add set
-          </Button>
-        ) : null}
-        <Button size="sm" disabled={upload.isPending} onClick={submit}>
-          {upload.isPending ? 'Recording…' : 'Record result'}
-        </Button>
-        {confirmingDelete ? (
-          <>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="text-destructive hover:text-destructive"
-              disabled={remove.isPending}
-              onClick={deleteFixture}
-            >
-              {remove.isPending ? 'Deleting…' : 'Confirm delete'}
+        </>
+      ) : (
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-sm font-medium">{summary}</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => setEditing(true)}>
+              Edit result
             </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={remove.isPending}
-              onClick={() => setConfirmingDelete(false)}
-            >
-              Cancel
-            </Button>
-          </>
-        ) : (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="text-destructive hover:text-destructive"
-            onClick={() => setConfirmingDelete(true)}
-          >
-            Delete fixture
-          </Button>
-        )}
-      </div>
+            {deleteControls}
+          </div>
+        </div>
+      )}
       {error ? (
         <p className="mt-2 text-sm text-destructive" role="alert">
           {error}
@@ -212,18 +267,22 @@ function MatchResultRow({
   )
 }
 
-export function AwaitingResultsSection({ eventId }: { eventId?: string } = {}) {
-  // Scope to a single event's awaiting fixtures when given (#138), else the global oversight list.
-  const matchesQuery = useGetApiV1Matches(eventId ? { ...AWAITING, eventId } : AWAITING)
-  const matches = matchesQuery.data ?? []
-
+/** Resolve the participant ids across [matches] to display names (id → name), with id-slice fallback. */
+function useNameResolver(matches: MatchResponse[]): (userId: string) => string {
   const ids = [...new Set(matches.flatMap((m) => [...m.team1.userIds, ...m.team2.userIds]))]
   const usersQuery = useGetApiV1Users(
     { ids: ids.join(',') },
     { query: { enabled: ids.length > 0 } },
   )
   const nameById = new Map((usersQuery.data ?? []).map((u) => [u.id, u.displayName ?? u.id]))
-  const nameOf = (userId: string) => nameById.get(userId) ?? userId.slice(0, 8)
+  return (userId: string) => nameById.get(userId) ?? userId.slice(0, 8)
+}
+
+export function AwaitingResultsSection({ eventId }: { eventId?: string } = {}) {
+  // Scope to a single event's awaiting fixtures when given (#138), else the global oversight list.
+  const matchesQuery = useGetApiV1Matches(eventId ? { ...AWAITING, eventId } : AWAITING)
+  const matches = matchesQuery.data ?? []
+  const nameOf = useNameResolver(matches)
 
   return (
     <Card>
@@ -244,6 +303,41 @@ export function AwaitingResultsSection({ eventId }: { eventId?: string } = {}) {
           ))
         ) : (
           <p className="text-sm text-muted-foreground">No fixtures awaiting results.</p>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+/**
+ * An event's recorded-but-unrated fixtures (#138). They stay on view after results are entered and
+ * remain editable here until an admin runs the rating calculation, after which the result is frozen.
+ */
+export function RecordedResultsSection({ eventId }: { eventId: string }) {
+  const matchesQuery = useGetApiV1Matches({
+    filter: GetApiV1MatchesFilter['pending-calculation'],
+    eventId,
+  })
+  const matches = matchesQuery.data ?? []
+  const nameOf = useNameResolver(matches)
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Recorded results</CardTitle>
+        <CardDescription>
+          Fixtures with results entered — editable until an admin runs the rating calculation.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {matchesQuery.isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        ) : matches.length > 0 ? (
+          matches.map((match) => (
+            <MatchResultRow key={match.id} match={match} nameOf={nameOf} />
+          ))
+        ) : (
+          <p className="text-sm text-muted-foreground">No recorded results yet.</p>
         )}
       </CardContent>
     </Card>

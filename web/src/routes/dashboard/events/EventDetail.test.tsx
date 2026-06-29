@@ -58,6 +58,7 @@ vi.mock('@/components/UserSearchSelect', () => ({
 }))
 vi.mock('../matches/AwaitingResultsSection', () => ({
   AwaitingResultsSection: ({ eventId }: { eventId?: string }) => <div>awaiting:{eventId}</div>,
+  RecordedResultsSection: ({ eventId }: { eventId?: string }) => <div>recorded:{eventId}</div>,
 }))
 
 const event = {
@@ -122,6 +123,7 @@ describe('EventDetail', () => {
     // The roster shows sex · age · NTRP band to disambiguate same-named players.
     expect(screen.getByText('Female · 34 · NTRP 4.0')).toBeInTheDocument()
     expect(screen.getByText('awaiting:e1')).toBeInTheDocument()
+    expect(screen.getByText('recorded:e1')).toBeInTheDocument()
   })
 
   it('falls back to code, then to a sliced id, for participants without a display name', () => {

@@ -1236,10 +1236,12 @@ paths:
           type: string
           format: uuid
     post:
-      summary: Upload match results (HOST/ADMINISTRATOR)
+      summary: Upload or edit match results (HOST/ADMINISTRATOR)
       description: |
         Records the set scores, derives the winner, and marks the match COMPLETED (pending
-        calculation). Ratings are NOT computed here.
+        calculation). Ratings are NOT computed here. May be called again to EDIT the result while the
+        match is still unrated — the sets are replaced. Once the match has been rated, the result is
+        frozen (409).
       tags:
         - Matches
       security:
@@ -1264,7 +1266,7 @@ paths:
         '404':
           description: No such match
         '409':
-          description: Results already uploaded, or the match is disabled
+          description: The match is disabled, or already rated (the result is frozen)
 
   /api/v1/matches/{id}/state:
     parameters:

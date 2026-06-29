@@ -42,6 +42,7 @@ import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.math.BigDecimal
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.util.UUID
 
 class MatchServiceTest {
@@ -192,7 +193,7 @@ class MatchServiceTest {
     }
 
     @Test
-    fun `uploading results twice or to a disabled match is a conflict`() {
+    fun `re-recording an unrated match edits the result, replacing its sets`() {
         provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val p1 = provisionUser(uid = "p1", rated = true)
         val p2 = provisionUser(uid = "p2", rated = true)
@@ -200,16 +201,33 @@ class MatchServiceTest {
             service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
         service.uploadResult(token = token(uid = "host"), matchId = match.id, request = straightSets()).shouldBeRight()
 
+        // A second upload while unrated is an edit, not a conflict; the sets are overwritten (not appended).
+        val edited =
+            service.uploadResult(token = token(uid = "host"), matchId = match.id, request = straightSets()).shouldBeRight()
+        edited.status shouldBe MatchStatus.COMPLETED
+        edited.sets shouldHaveSize 2
+    }
+
+    @Test
+    fun `uploading to a disabled or already-rated match is a conflict`() {
+        val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+
+        val disabled =
+            service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
+        service.setActive(token = token(uid = "host"), matchId = disabled.id, active = false).shouldBeRight()
         service
-            .uploadResult(token = token(uid = "host"), matchId = match.id, request = straightSets())
+            .uploadResult(token = token(uid = "host"), matchId = disabled.id, request = straightSets())
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Conflict>()
 
-        val other =
+        val rated =
             service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
-        service.setActive(token = token(uid = "host"), matchId = other.id, active = false).shouldBeRight()
+        service.uploadResult(token = token(uid = "host"), matchId = rated.id, request = straightSets()).shouldBeRight()
+        matchRepo.markRated(matchId = rated.id, ratedAt = LocalDateTime.now(), ratedBy = host.id)
         service
-            .uploadResult(token = token(uid = "host"), matchId = other.id, request = straightSets())
+            .uploadResult(token = token(uid = "host"), matchId = rated.id, request = straightSets())
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Conflict>()
     }
@@ -560,6 +578,37 @@ class MatchServiceTest {
         service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
 
         val scoped = service.query(token = token(uid = "host"), view = MatchQuery.AWAITING_RESULTS, eventId = event.id).shouldBeRight()
+        scoped.map { it.id } shouldBe listOf(element = inEvent.id)
+    }
+
+    @Test
+    fun `pending-calculation can be scoped to a single event, listing its recorded fixtures (#138)`() {
+        val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val event =
+            EventRepository().create(
+                command =
+                    CreateEventCommand(
+                        name = "E",
+                        startDate = LocalDate.parse("2026-01-01"),
+                        endDate = LocalDate.parse("2026-01-02"),
+                        participantIds = listOf(p1.id, p2.id),
+                        createdBy = host.id,
+                    ),
+            )
+        val inEvent =
+            service
+                .createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id))
+                .shouldBeRight()
+        service.uploadResult(token = token(uid = "host"), matchId = inEvent.id, request = straightSets()).shouldBeRight()
+        // A recorded fixture outside the event must not leak into the event-scoped view.
+        val outside =
+            service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
+        service.uploadResult(token = token(uid = "host"), matchId = outside.id, request = straightSets()).shouldBeRight()
+
+        val scoped =
+            service.query(token = token(uid = "host"), view = MatchQuery.PENDING_CALCULATION, eventId = event.id).shouldBeRight()
         scoped.map { it.id } shouldBe listOf(element = inEvent.id)
     }
 
