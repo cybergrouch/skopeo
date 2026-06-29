@@ -9,6 +9,10 @@ import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
+import org.skopeo.dto.event.EventParticipantResponse
+import org.skopeo.dto.event.EventPublicResponse
+import org.skopeo.dto.match.MatchPublicPlayer
+import org.skopeo.dto.match.toPublicResponse
 import org.skopeo.model.Capability
 import org.skopeo.model.CreateEventCommand
 import org.skopeo.model.Event
@@ -18,6 +22,7 @@ import org.skopeo.model.ServiceError
 import org.skopeo.model.User
 import org.skopeo.model.displayName
 import org.skopeo.repository.EventRepository
+import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.user.VerifiedFirebaseToken
 import java.time.LocalDate
@@ -41,6 +46,7 @@ data class CreateEventInput(
 class EventService(
     private val events: EventRepository = EventRepository(),
     private val users: UserRepository = UserRepository(),
+    private val matches: MatchRepository = MatchRepository(),
 ) {
     fun create(
         token: VerifiedFirebaseToken,
@@ -111,6 +117,49 @@ class EventService(
                     ServiceError.NotFound(message = "Event $eventId not found")
                 }
             toView(event = updated)
+        }
+
+    /**
+     * Read-only public summary of an event by its public code (#138). Visible to any authenticated
+     * user (the same "public" semantics as a player profile / match page): the event details, the
+     * participant roster, and the event's matches (each resolved for its public page).
+     */
+    fun publicByCode(code: String): Either<ServiceError, EventPublicResponse> =
+        either {
+            val event =
+                ensureNotNull(value = events.findByPublicCode(code = code)) {
+                    ServiceError.NotFound(message = "Event $code not found")
+                }
+            val eventMatches = matches.listByEvent(eventId = event.id)
+            val matchPlayerIds = eventMatches.flatMap { it.team1.userIds + it.team2.userIds }
+            val byId = users.findAllByIds(ids = (event.participantIds + matchPlayerIds).distinct()).associateBy { it.id }
+
+            val participants =
+                event.participantIds.map { id ->
+                    val user = byId.getValue(key = id)
+                    EventParticipantResponse(
+                        userId = id.toString(),
+                        displayName = user.displayName(),
+                        publicCode = user.publicCode,
+                    )
+                }
+            val matchResponses =
+                eventMatches.map { match ->
+                    val players =
+                        (match.team1.userIds + match.team2.userIds).associateWith { id ->
+                            val user = byId.getValue(key = id)
+                            MatchPublicPlayer(displayName = user.displayName(), publicCode = user.publicCode)
+                        }
+                    match.toPublicResponse(players = players)
+                }
+            EventPublicResponse(
+                publicCode = event.publicCode,
+                name = event.name,
+                startDate = event.startDate.toString(),
+                endDate = event.endDate.toString(),
+                participants = participants,
+                matches = matchResponses,
+            )
         }
 
     /** Resolve an event's participant ids to names/codes (preserving roster order). */

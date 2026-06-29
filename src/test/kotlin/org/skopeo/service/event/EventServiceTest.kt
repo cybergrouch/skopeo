@@ -13,13 +13,17 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
+import org.skopeo.model.CreateFixtureCommand
+import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.ServiceError
+import org.skopeo.model.TeamType
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.repository.EventRepository
+import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.testsupport.PostgresTestDatabase
@@ -161,6 +165,36 @@ class EventServiceTest {
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
         service.removeParticipant(token = token(uid = "player"), eventId = event.event.id, userId = event.event.id)
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
+    @Test
+    fun `publicByCode returns the event with participants and its matches, or NotFound (#138)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        val created = service.create(token = token(uid = "host"), input = input(participants = listOf(p1.id, p2.id))).shouldBeRight()
+        MatchRepository().createFixture(
+            command =
+                CreateFixtureCommand(
+                    matchFormat = TeamType.SINGLES,
+                    matchType = MatchType.OPEN_PLAY,
+                    matchDate = LocalDate.parse("2026-03-02"),
+                    team1UserIds = listOf(element = p1.id),
+                    team2UserIds = listOf(element = p2.id),
+                    team1Name = "p1",
+                    team2Name = "p2",
+                    createdBy = host.id,
+                    eventId = created.event.id,
+                ),
+        )
+
+        val public = service.publicByCode(code = created.event.publicCode).shouldBeRight()
+        public.name shouldBe "Spring Open"
+        public.participants.map { it.userId }.toSet() shouldBe setOf(p1.id.toString(), p2.id.toString())
+        public.matches shouldHaveSize 1
+        public.matches.single().team1.single().publicCode shouldBe p1.publicCode
+
+        service.publicByCode(code = "ZZZZZZ").shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
     @Test

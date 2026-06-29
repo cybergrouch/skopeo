@@ -68,4 +68,25 @@ class EventRepositoryTest {
 
         events.findById(id = event.id)!!.createdBy.shouldBeNull()
     }
+
+    @Test
+    fun `findByPublicCode resolves an active event but not a disabled one`() {
+        val creator = newUser(uid = "creator")
+        val event =
+            events.create(
+                command =
+                    CreateEventCommand(
+                        name = "Code Cup",
+                        startDate = LocalDate.parse("2026-05-01"),
+                        endDate = LocalDate.parse("2026-05-02"),
+                        participantIds = emptyList(),
+                        createdBy = creator,
+                    ),
+            )
+        events.findByPublicCode(code = event.publicCode)!!.id shouldBe event.id
+
+        // Disable the event (no API for it yet) — it should drop out of the public lookup.
+        transaction { EventsTable.update(where = { EventsTable.id eq event.id }) { it[isActive] = false } }
+        events.findByPublicCode(code = event.publicCode).shouldBeNull()
+    }
 }

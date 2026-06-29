@@ -4,6 +4,7 @@
 package org.skopeo.dto.event
 
 import kotlinx.serialization.Serializable
+import org.skopeo.dto.match.MatchPublicResponse
 import org.skopeo.model.EventParticipantRef
 import org.skopeo.model.EventView
 
@@ -52,5 +53,19 @@ fun EventView.toResponse(): EventResponse =
         participants = participants.map { it.toResponse() },
     )
 
-private fun EventParticipantRef.toResponse(): EventParticipantResponse =
+internal fun EventParticipantRef.toResponse(): EventParticipantResponse =
     EventParticipantResponse(userId = userId.toString(), displayName = displayName, publicCode = publicCode)
+
+/**
+ * Read-only public summary of an event (#138): its details, participant roster, and the matches it
+ * contains (each a [MatchPublicResponse] so the page can link to their public match pages).
+ */
+@Serializable
+data class EventPublicResponse(
+    val publicCode: String,
+    val name: String,
+    val startDate: String,
+    val endDate: String,
+    val participants: List<EventParticipantResponse>,
+    val matches: List<MatchPublicResponse>,
+)

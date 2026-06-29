@@ -1346,6 +1346,32 @@ paths:
         '403':
           description: Caller is not HOST/ADMINISTRATOR
 
+  /api/v1/events/code/{code}:
+    parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      summary: Get an event's public page by code (#138)
+      description: >-
+        Read-only public summary of an event resolved by its shareable public code (details,
+        participant roster, and the event's matches). Visible to any authenticated user.
+      tags:
+        - Events
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The public event summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventPublicResponse'
+        '404':
+          description: No active event with that code
+
   /api/v1/events/{id}:
     parameters:
       - name: id
@@ -3111,6 +3137,36 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/EventParticipantResponse'
+
+    EventPublicResponse:
+      type: object
+      description: Read-only public summary of an event (#138) — details, roster, and its matches.
+      required:
+        - publicCode
+        - name
+        - startDate
+        - endDate
+        - participants
+        - matches
+      properties:
+        publicCode:
+          type: string
+        name:
+          type: string
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        participants:
+          type: array
+          items:
+            $ref: '#/components/schemas/EventParticipantResponse'
+        matches:
+          type: array
+          items:
+            $ref: '#/components/schemas/MatchPublicResponse'
 
     MatchPublicPlayer:
       type: object

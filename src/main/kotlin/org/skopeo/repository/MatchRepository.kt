@@ -128,6 +128,16 @@ class MatchRepository {
                 ?.let { row -> buildMatch(id = row[MatchesTable.id].value, row = row) }
         }
 
+    /** Every active match in an event (#138), newest match date first — for the public event page. */
+    fun listByEvent(eventId: UUID): List<Match> =
+        transaction {
+            MatchesTable
+                .selectAll()
+                .where { MatchesTable.isActive and (MatchesTable.eventId eq eventId) }
+                .orderBy(MatchesTable.matchDate to SortOrder.DESC)
+                .map { loadMatch(id = it[MatchesTable.id].value)!! }
+        }
+
     /**
      * Public codes for a set of match ids (#136) — used to resolve match audit targets to a link.
      * Returns code + date for found, active-or-not matches; missing ids are simply absent.
