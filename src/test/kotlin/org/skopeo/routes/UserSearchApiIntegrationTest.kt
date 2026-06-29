@@ -141,6 +141,23 @@ class UserSearchApiIntegrationTest {
         }
 
     @Test
+    fun `name search is accent-insensitive, finding accented and plain spellings alike`() =
+        withApp { client ->
+            val host = seedStaff(uid = "host", roles = setOf(Capability.HOST))
+            client.provisionNamed(uid = "u1", displayName = "Maria Garcia")
+            client.provisionNamed(uid = "u2", displayName = "María García")
+            client.provisionNamed(uid = "u3", displayName = "Bob")
+
+            // A plain-ASCII query finds both Marias (the accented one no longer slips through).
+            val plain = client.lookup(token = host, params = "name=maria").body<List<UserSummaryResponse>>()
+            plain.map { it.displayName }.toSet() shouldBe setOf("Maria Garcia", "María García")
+
+            // And an accented query also finds the plain spelling.
+            val accented = client.lookup(token = host, params = "name=garcía").body<List<UserSummaryResponse>>()
+            accented.map { it.displayName }.toSet() shouldBe setOf("Maria Garcia", "María García")
+        }
+
+    @Test
     fun `name search tolerates a misspelling`() =
         withApp { client ->
             val host = seedStaff(uid = "host", roles = setOf(Capability.HOST))

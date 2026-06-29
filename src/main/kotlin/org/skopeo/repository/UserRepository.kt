@@ -11,6 +11,7 @@ import org.jetbrains.exposed.sql.FloatColumnType
 import org.jetbrains.exposed.sql.Op
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
+import org.jetbrains.exposed.sql.TextColumnType
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.exists
 import org.jetbrains.exposed.sql.insert
@@ -32,6 +33,7 @@ import org.skopeo.model.ServiceError
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserSearchQuery
+import java.text.Normalizer
 import java.util.UUID
 
 private const val SEARCH_LIMIT = 20
@@ -258,22 +260,36 @@ private fun buildAggregate(
 private fun nameOrCodeMatches(term: String): Op<Boolean> =
     nameMatches(name = term) or Op.build { UsersTable.publicCode like "${term.uppercase()}%" }
 
-/** Correlated EXISTS: the user has an active name fuzzily matching [name]. */
+/** Unicode combining marks left behind by NFD decomposition (the diacritics to strip when folding). */
+private val COMBINING_MARKS = Regex(pattern = "\\p{Mn}+")
+
+/**
+ * Correlated EXISTS: the user has an active name fuzzily matching [name]. Both sides are accent-folded
+ * (`unaccent(lower(value))` in SQL; NFD-decompose-and-strip for the term) so "maria" finds "María
+ * García" and "jose" finds "José" — common in Philippine names (accent-insensitive search). The folded
+ * substring match is the primary path; pg_trgm SIMILARITY on the folded forms adds typo tolerance.
+ */
 private fun nameMatches(name: String): Op<Boolean> {
-    val normalized = name.lowercase()
-    val nameLower = UserNamesTable.value.lowerCase()
+    val normalized =
+        Normalizer.normalize(name, Normalizer.Form.NFD).replace(regex = COMBINING_MARKS, replacement = "").lowercase()
+    val foldedName =
+        CustomFunction(
+            functionName = "unaccent",
+            columnType = TextColumnType(),
+            UserNamesTable.value.lowerCase(),
+        )
     val proximity =
         CustomFunction(
             functionName = "SIMILARITY",
             columnType = FloatColumnType(),
-            nameLower,
+            foldedName,
             stringParam(value = normalized),
         )
     return exists(
         query =
             UserNamesTable.selectAll().where {
                 (UserNamesTable.userId eq UsersTable.id) and UserNamesTable.isActive and
-                    ((nameLower like "%$normalized%") or (proximity greaterEq SIMILARITY_THRESHOLD))
+                    ((foldedName like "%$normalized%") or (proximity greaterEq SIMILARITY_THRESHOLD))
             },
     )
 }
