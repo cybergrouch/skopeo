@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -196,13 +196,23 @@ describe('EventDetail', () => {
     )
   })
 
-  it('keeps the schedule button disabled when both players are the same', async () => {
+  it('excludes the player chosen in one dropdown from the other', async () => {
     const user = userEvent.setup()
     renderDetail()
-    await user.selectOptions(screen.getByLabelText('Player 1'), 'u1')
-    await user.selectOptions(screen.getByLabelText('Player 2'), 'u1')
-    await user.type(screen.getByLabelText('Date'), '2026-03-02')
-    expect(screen.getByRole('button', { name: 'Schedule fixture' })).toBeDisabled()
+    const player1 = screen.getByLabelText('Player 1')
+    const player2 = screen.getByLabelText('Player 2')
+
+    // Before any choice, both players are offered in each dropdown.
+    expect(within(player2).getByRole('option', { name: 'Ana' })).toBeInTheDocument()
+
+    // Pick Ana as Player 1 → she's no longer selectable as Player 2.
+    await user.selectOptions(player1, 'u1')
+    expect(within(player2).queryByRole('option', { name: 'Ana' })).not.toBeInTheDocument()
+    expect(within(player2).getByRole('option', { name: 'Bob' })).toBeInTheDocument()
+
+    // Symmetrically, picking Bob as Player 2 removes him from Player 1.
+    await user.selectOptions(player2, 'u2')
+    expect(within(player1).queryByRole('option', { name: 'Bob' })).not.toBeInTheDocument()
   })
 
   it('surfaces a fixture error and lets the match type change', async () => {
