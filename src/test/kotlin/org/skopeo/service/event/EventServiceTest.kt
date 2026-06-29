@@ -22,11 +22,14 @@ import org.skopeo.model.TeamType
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
+import org.skopeo.model.ageInYears
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
+import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.testsupport.PostgresTestDatabase
+import java.math.BigDecimal
 import java.time.LocalDate
 import java.util.UUID
 
@@ -88,6 +91,38 @@ class EventServiceTest {
         view.event.publicCode.length shouldBe 6
         view.participants.map { it.userId } shouldBe listOf(p1.id, p2.id)
         view.participants.first().displayName shouldBe "p1"
+    }
+
+    @Test
+    fun `participant roster carries sex, age, and the current rating band`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val dob = LocalDate.parse("1990-09-09")
+        val player =
+            users.provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = "p1",
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "p1", isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = "Maria")),
+                        sex = "Female",
+                        dateOfBirth = dob,
+                    ),
+            )
+        RatingRepository().setRating(
+            userId = player.id,
+            rating = BigDecimal("4.000000"),
+            level = "4.0",
+            confidence = BigDecimal("0.50"),
+        )
+
+        val view =
+            service.create(token = token(uid = "host"), input = input(participants = listOf(element = player.id)))
+                .shouldBeRight()
+        val participant = view.participants.single()
+        participant.sex shouldBe "Female"
+        participant.age shouldBe ageInYears(dateOfBirth = dob, asOf = LocalDate.now())
+        participant.rating?.currentRating?.toPlainString() shouldBe "4.000000"
+        participant.rating?.currentLevel shouldBe "4.0"
     }
 
     @Test

@@ -30,11 +30,18 @@ data class CreateEventCommand(
     val createdBy: UUID,
 )
 
-/** A participant resolved to a display name + shareable code, for rendering the roster (#138). */
+/**
+ * A participant resolved for rendering the roster (#138): display name + shareable code, plus the
+ * disambiguating facets a host needs at a glance — [sex], [age], and the current [rating]. The latter
+ * three mirror the player-summary shape (sex/age and the NTRP band, raw DOB withheld).
+ */
 data class EventParticipantRef(
     val userId: UUID,
     val displayName: String?,
     val publicCode: String?,
+    val sex: String? = null,
+    val age: Int? = null,
+    val rating: UserRating? = null,
 )
 
 /** An event with its participants resolved to names/codes — the shape the API returns. */

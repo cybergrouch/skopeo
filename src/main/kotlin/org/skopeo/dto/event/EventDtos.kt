@@ -5,6 +5,7 @@ package org.skopeo.dto.event
 
 import kotlinx.serialization.Serializable
 import org.skopeo.dto.match.MatchPublicResponse
+import org.skopeo.dto.user.PublicRatingDto
 import org.skopeo.model.EventParticipantRef
 import org.skopeo.model.EventView
 
@@ -23,12 +24,18 @@ data class AddParticipantRequest(
     val userId: String,
 )
 
-/** A participant on an event, resolved to a display name + shareable code. */
+/**
+ * A participant on an event, resolved to a display name + shareable code, plus the disambiguating
+ * facets shown in the roster: [sex], [age], and the current NTRP [rating] band.
+ */
 @Serializable
 data class EventParticipantResponse(
     val userId: String,
     val displayName: String? = null,
     val publicCode: String? = null,
+    val sex: String? = null,
+    val age: Int? = null,
+    val rating: PublicRatingDto? = null,
 )
 
 @Serializable
@@ -54,7 +61,14 @@ fun EventView.toResponse(): EventResponse =
     )
 
 internal fun EventParticipantRef.toResponse(): EventParticipantResponse =
-    EventParticipantResponse(userId = userId.toString(), displayName = displayName, publicCode = publicCode)
+    EventParticipantResponse(
+        userId = userId.toString(),
+        displayName = displayName,
+        publicCode = publicCode,
+        sex = sex,
+        age = age,
+        rating = rating?.let { PublicRatingDto(value = it.currentRating.toPlainString(), level = it.currentLevel) },
+    )
 
 /**
  * Read-only public summary of an event (#138): its details, participant roster, and the matches it
