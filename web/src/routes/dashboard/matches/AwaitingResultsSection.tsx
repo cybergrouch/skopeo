@@ -14,6 +14,7 @@ import {
   getGetApiV1MatchesQueryKey,
   useGetApiV1Matches,
   usePostApiV1MatchesIdResult,
+  usePutApiV1MatchesIdState,
 } from '@/api/generated/matches/matches'
 import { useGetApiV1Users } from '@/api/generated/users/users'
 import { GetApiV1MatchesFilter } from '@/api/generated/model'
@@ -70,14 +71,26 @@ function MatchResultRow({
     { t1: '', t2: '' },
   ])
   const [error, setError] = useState<string | null>(null)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
 
-  const upload = usePostApiV1MatchesIdResult({
-    mutation: {
-      // Refresh every awaiting-results list (global + any event-scoped one) via the base key prefix.
-      onSuccess: () =>
-        queryClient.invalidateQueries({ queryKey: getGetApiV1MatchesQueryKey() }),
-    },
-  })
+  // Refresh every awaiting-results list (global + any event-scoped one) via the base key prefix.
+  const invalidateMatches = () =>
+    queryClient.invalidateQueries({ queryKey: getGetApiV1MatchesQueryKey() })
+
+  const upload = usePostApiV1MatchesIdResult({ mutation: { onSuccess: invalidateMatches } })
+
+  // Delete a fixture = soft-disable it (#138): the server refuses once a match has been rated.
+  const remove = usePutApiV1MatchesIdState({ mutation: { onSuccess: invalidateMatches } })
+
+  async function deleteFixture() {
+    setError(null)
+    try {
+      await remove.mutateAsync({ id: match.id, data: { isActive: false } })
+    } catch {
+      setError('Could not delete the fixture.')
+      setConfirmingDelete(false)
+    }
+  }
 
   function setCell(index: number, key: keyof SetRow, value: string) {
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, [key]: value } : r)))
@@ -156,6 +169,39 @@ function MatchResultRow({
         <Button size="sm" disabled={upload.isPending} onClick={submit}>
           {upload.isPending ? 'Recording…' : 'Record result'}
         </Button>
+        {confirmingDelete ? (
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:text-destructive"
+              disabled={remove.isPending}
+              onClick={deleteFixture}
+            >
+              {remove.isPending ? 'Deleting…' : 'Confirm delete'}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={remove.isPending}
+              onClick={() => setConfirmingDelete(false)}
+            >
+              Cancel
+            </Button>
+          </>
+        ) : (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="text-destructive hover:text-destructive"
+            onClick={() => setConfirmingDelete(true)}
+          >
+            Delete fixture
+          </Button>
+        )}
       </div>
       {error ? (
         <p className="mt-2 text-sm text-destructive" role="alert">

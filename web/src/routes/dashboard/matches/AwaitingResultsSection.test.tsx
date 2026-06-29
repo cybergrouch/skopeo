@@ -4,12 +4,15 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AwaitingResultsSection } from './AwaitingResultsSection'
 
-const { useGetApiV1Matches, useGetApiV1Users, mutateAsync, busy } = vi.hoisted(() => ({
-  useGetApiV1Matches: vi.fn(),
-  useGetApiV1Users: vi.fn(),
-  mutateAsync: vi.fn(),
-  busy: { value: false },
-}))
+const { useGetApiV1Matches, useGetApiV1Users, mutateAsync, deleteMutateAsync, busy, deleteBusy } =
+  vi.hoisted(() => ({
+    useGetApiV1Matches: vi.fn(),
+    useGetApiV1Users: vi.fn(),
+    mutateAsync: vi.fn(),
+    deleteMutateAsync: vi.fn(),
+    busy: { value: false },
+    deleteBusy: { value: false },
+  }))
 
 vi.mock('@/api/generated/matches/matches', () => ({
   useGetApiV1Matches,
@@ -20,6 +23,16 @@ vi.mock('@/api/generated/matches/matches', () => ({
     isPending: busy.value,
     mutateAsync: async (vars: unknown) => {
       const r = await mutateAsync(vars)
+      options?.mutation?.onSuccess?.()
+      return r
+    },
+  }),
+  usePutApiV1MatchesIdState: (options?: {
+    mutation?: { onSuccess?: () => void }
+  }) => ({
+    isPending: deleteBusy.value,
+    mutateAsync: async (vars: unknown) => {
+      const r = await deleteMutateAsync(vars)
       options?.mutation?.onSuccess?.()
       return r
     },
@@ -54,7 +67,9 @@ describe('AwaitingResultsSection', () => {
       isLoading: false,
     })
     mutateAsync.mockResolvedValue({})
+    deleteMutateAsync.mockResolvedValue({})
     busy.value = false
+    deleteBusy.value = false
   })
 
   it('shows a busy label while recording', () => {
@@ -176,5 +191,50 @@ describe('AwaitingResultsSection', () => {
     await user.click(screen.getByRole('button', { name: 'Record result' }))
 
     expect(await screen.findByText(/Could not record the result/i)).toBeInTheDocument()
+  })
+
+  it('deletes a fixture after a confirm step', async () => {
+    const user = userEvent.setup()
+    renderSection()
+
+    // First click only arms the confirmation; nothing is deleted yet.
+    await user.click(screen.getByRole('button', { name: 'Delete fixture' }))
+    expect(deleteMutateAsync).not.toHaveBeenCalled()
+
+    // Confirm soft-disables the fixture (#138).
+    await user.click(screen.getByRole('button', { name: 'Confirm delete' }))
+    await waitFor(() =>
+      expect(deleteMutateAsync).toHaveBeenCalledWith({ id: 'm1', data: { isActive: false } }),
+    )
+  })
+
+  it('cancels a pending delete without calling the API', async () => {
+    const user = userEvent.setup()
+    renderSection()
+    await user.click(screen.getByRole('button', { name: 'Delete fixture' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(screen.getByRole('button', { name: 'Delete fixture' })).toBeInTheDocument()
+    expect(deleteMutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('shows a busy label while deleting', async () => {
+    deleteBusy.value = true
+    const user = userEvent.setup()
+    renderSection()
+    await user.click(screen.getByRole('button', { name: 'Delete fixture' }))
+    expect(screen.getByRole('button', { name: 'Deleting…' })).toBeDisabled()
+  })
+
+  it('shows an error when deleting fails', async () => {
+    deleteMutateAsync.mockRejectedValue(new Error('rated'))
+    const user = userEvent.setup()
+    renderSection()
+    await user.click(screen.getByRole('button', { name: 'Delete fixture' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm delete' }))
+
+    expect(await screen.findByText(/Could not delete the fixture/i)).toBeInTheDocument()
+    // The confirm step resets so the row returns to its default actions.
+    expect(screen.getByRole('button', { name: 'Delete fixture' })).toBeInTheDocument()
   })
 })
