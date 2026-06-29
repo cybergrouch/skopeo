@@ -140,6 +140,20 @@ describe('EventDetail', () => {
     expect(screen.getAllByText(/abcdef12/).length).toBeGreaterThan(0) // both null → sliced id
   })
 
+  it('falls back to the raw rating value when a participant has no published band', () => {
+    useGetApiV1EventsId.mockReturnValue({
+      data: {
+        ...event,
+        participants: [
+          { userId: 'u5', displayName: 'Cleo', publicCode: 'EEE555', rating: { value: '5.250000', level: null } },
+        ],
+      },
+      isLoading: false,
+    })
+    renderDetail()
+    expect(screen.getByText('NTRP 5.250000')).toBeInTheDocument()
+  })
+
   it('shows the empty-roster message when there are no participants', () => {
     useGetApiV1EventsId.mockReturnValue({ data: { ...event, participants: [] }, isLoading: false })
     renderDetail()
