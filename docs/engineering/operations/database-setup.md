@@ -118,9 +118,15 @@ Located in: `src/main/resources/db/migration/`
 
 **Naming Convention:** `V{version}__{description}.sql`
 
-Example:
-- `V1__create_initial_schema.sql` - Initial schema
-- `V2__add_social_media_table.sql` - Add social media verification
+The schema currently lives in a **single consolidated baseline**:
+- `V1__create_initial_schema.sql` — the entire schema (users, names, identities, contacts,
+  capabilities, KYC, ratings + history, teams, matches/sets/tiebreaks, events, seeding,
+  duplicate detection, rating requests, audit log, invites)
+
+The earlier incremental migrations (the former V2–V12) were folded back into V1 while the project
+is **pre-production** — no persistent database has ever been provisioned, so collapsing them is
+safe. Once a production database exists this file is **frozen**: never edit an applied migration;
+the next change is a new `V2__...sql` (see [Creating New Migrations](#creating-new-migrations)).
 
 ### Running Migrations
 
