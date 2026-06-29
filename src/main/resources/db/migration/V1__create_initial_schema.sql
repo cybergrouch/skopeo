@@ -1,11 +1,11 @@
 -- SPDX-FileCopyrightText: 2026 Lange Pantoja
 -- SPDX-License-Identifier: AGPL-3.0-or-later
 
--- Skopeo Schema (single consolidated migration)
--- Pre-production baseline: the entire incremental history (the former V1–V12) has been folded back
--- into this one file. No persistent database has ever been provisioned, so collapsing the migrations
--- is safe. Once a production database exists this file is FROZEN — never edit an applied migration;
--- add a new V2 instead.
+-- Skopeo Schema (single consolidated migration) — the OFFICIAL V1 baseline shipped to production.
+-- Pre-production baseline: the entire incremental history has been folded back into this one file.
+-- No persistent database had been provisioned, so collapsing the migrations was safe. This is the
+-- last consolidation: from the first deployment onward this file is FROZEN — never edit an applied
+-- migration; every schema change ships as a new V2, V3, … added incrementally.
 --
 -- Folded in (original migration → what it added):
 --   V1  initial schema (users, names, identities, contacts, capabilities, KYC, ratings, history,
@@ -21,6 +21,7 @@
 --   V10 matches.public_code (#136)
 --   V11 events, event_participants, matches.event_id (#138)
 --   V12 rating_requests — re-rate requests (#140)
+--   +   unaccent extension — accent-insensitive name search (#150-era search fixes)
 --
 -- "Users" is the single identity for everyone — players, hosts, club owners, raters, researchers,
 -- administrators. What a user may do is governed by user_capabilities, not by which table they live
@@ -32,6 +33,9 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- pg_trgm powers typo-tolerant name search (GET /api/v1/users?name=).
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
+-- unaccent powers accent-insensitive name search ("maria" finds "María García"); user search wraps
+-- unaccent(...) around stored names. Ships with the standard PostgreSQL contrib bundle (like pg_trgm).
+CREATE EXTENSION IF NOT EXISTS unaccent;
 
 -- =============================================================================
 -- CORE USER MANAGEMENT
