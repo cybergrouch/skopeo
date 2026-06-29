@@ -1,236 +1,133 @@
 # Skopeo Implementation Log
 
-This document tracks major implementation milestones and architectural decisions.
+This document tracks major implementation milestones and architectural decisions, reconstructed from git history. Entries are chronological (oldest first). Dates are the dates the work landed on `main`; PR/issue numbers are noted where they exist.
+
+> Note: an earlier revision of this log described the persistence schema with `players` / `player_kyc` / `player_ratings` tables. Those names were never correct — the schema uses a unified `users` aggregate (`users`, `user_kyc`, `user_ratings`, `user_rating_history`, `user_names`, `user_identities`, `user_capabilities`). This log reflects the actual table names.
 
 ---
 
-## 2026-06-09: Database Infrastructure Setup
+## 2026-06-01: Stateless v1 ranking calculator
 
-### What Was Implemented
+- Initialized the project, migrated from Spring Boot to Ktor, and added Docker containerization.
+- Implemented the ranking-calculation API and data model: `POST /api/v1/calculate-ranking` over a map-based, team-oriented request schema (designed so doubles can be added without breaking the contract).
+- Adopted a pure-function core with a monadic audit trail — `RankingCalculator.calculate()` returns a `RankingCalculationResult` (response + `AuditTrail`); the route layer logs the audit entries.
+- Encapsulated rating as a dedicated `BigDecimal`-backed object (serialized as strings) for money-style precision; added ktlint, pre-commit hooks, and code-formatting automation.
 
-Successfully set up the complete database infrastructure for Skopeo MVP with PostgreSQL, Flyway migrations, and Exposed ORM.
+## 2026-06-02 – 2026-06-05: Algorithm tuning and documentation
 
-### Components Added
+- Organized the calculator under a versioned package (`service/calculator/impl/v1/`) behind the `RankingCalculator` interface.
+- Calibrated the Elo-style K-factor for the NTRP/UTR range vs the chess range; added system-specific K-factors (UTR has since been removed — see 2026-06-23).
+- Added USTA NTRP Dynamic-style rating smoothing (`options.smoothingFactor`) with edge-case coverage, migrated tests to Kotest assertions, and enforced named parameters via detekt.
+- Added comprehensive algorithm documentation (later renamed `RATING_CALCULATION_ALGORITHM.md`) and a USTA feature-comparison document.
 
-#### 1. Database Configuration
-- **DatabaseConfig.kt** - Handles database initialization, connection pooling (HikariCP), and Flyway migrations
-- **application.yaml** - Database connection settings with environment variable support
-- **build.gradle.kts** - Added PostgreSQL, Flyway, Exposed, and HikariCP dependencies
+## 2026-06-06 – 2026-06-10: API hardening and audit detail
 
-#### 2. Schema Migration
-- **V1__create_initial_schema.sql** - Complete Phase 1 schema with 9 tables:
-  - `players` - Core player profiles
-  - `player_kyc` - Philippine government ID verification (6 ID types supported)
-  - `player_ratings` - Current rating state with confidence scores
-  - `player_rating_history` - Immutable audit trail for all rating changes
-  - `teams` - Singles/doubles team structure
-  - `team_players` - Junction table for team membership
-  - `matches` - Match records between teams
-  - `match_sets` - Set-by-set scoring
-  - `match_set_tiebreaks` - Tiebreak details
+- Added OpenAPI/Swagger documentation support.
+- Added route integration tests; refined the MVP roadmap and doubles-support design notes in the docs.
+- Renamed the project from "Tennis Levelr" to **Skopeo**; added `CLAUDE.md`.
+- Averaged per-set dominance and logged all rating-change factors in the audit trail.
+- Made winner/loser team IDs explicit on score payloads, with value-derived defaults (`feat!`).
 
-#### 3. Development Tools
-- **docker-compose.yml** - Added PostgreSQL service and optional pgAdmin
-- **database-setup.md** - Comprehensive setup and usage guide
-- **database-schema.md** - ERD, table descriptions, and sample queries
+## 2026-06-09: Initial PostgreSQL persistence infrastructure
 
-#### 4. Application Integration
-- **Application.kt** - Integrated database initialization on startup
-- Added shutdown hook for graceful connection pool closure
+- Stood up the persistence stack: PostgreSQL + Flyway migrations + Exposed ORM + HikariCP connection pooling, wired into application startup via `DatabaseConfig.kt`, with a shutdown hook for graceful pool closure.
+- Added `docker-compose` PostgreSQL (and optional pgAdmin) services and database setup/schema documentation.
+- This established the persistence foundation; the concrete schema was reworked into the unified-user model shortly after (see 2026-06-21+). UTR-specific columns from this era were later dropped (see 2026-06-23).
 
-### Technical Decisions
+## 2026-06-21 – 2026-06-22: User-management foundation (#1–#8)
 
-1. **PostgreSQL 15** - Chosen for:
-   - Native UUID support
-   - JSON/JSONB for flexible metadata
-   - Advanced indexing capabilities
-   - ACID compliance for rating calculations
+- Added the initial infrastructure PR (#1): GitHub Actions CI running `./gradlew check`, plus CORS for the web UI and exclusion of `web/` from the API build context.
+- **User-management schema** (#2): a unified `users` aggregate with `user_names`, `user_identities`, `contact_information`, and `user_capabilities` — replacing any notion of a standalone `players` table. Recorded the Flyway-over-Liquibase rationale.
+- **Firebase auth** (#3): verify Firebase JWTs; added an authenticated `/users/me` probe and auth smoke-test scripts.
+- **User-aggregate persistence** (#4-prep, #5): Exposed-backed persistence with Testcontainers, then user provisioning + CRUD over the persisted store (`UserRoutes`/`UserService`/`UserRepository`).
+- **Contacts** (#6): contact-information API with admin-driven verification; append-only (disable + add, no edits).
+- **Names** (#7): user-names API, append-only, multiple names with an explicit `DISPLAY` name type.
+- **Capabilities** (#8): admin-only, append-only capability (role) management API — the basis for capability-based authorization (PLAYER / HOST / CLUB_OWNER / ADMINISTRATOR, later RATER / RESEARCHER).
+- Added CI coverage/test reporting (JaCoCo summary + JUnit/dorny + Codecov diff coverage) and AGPL-3.0 licensing across PRs #9–#13.
 
-2. **HikariCP** - Fast, reliable connection pooling
-   - Max pool size: 10 connections
-   - Min idle: 2 connections
-   - Auto-tuned timeouts
+## 2026-06-23: Ratings, matches, calculation trigger, and the web client (#4, #2-web)
 
-3. **Flyway** - Version-controlled migrations
-   - Migrations run automatically on startup
-   - Baseline-on-migrate enabled for existing databases
-   - Gradle tasks for manual migration management
+- **Ratings & assessment foundation** (PR1 of #4): admin-set initial ratings (`user_ratings`), the pending-assessment queue (users without a rating), and rating history (`user_rating_history`).
+- **Match fixtures & results** (PR2a of #4): HOST/ADMINISTRATOR create fixtures and upload results (`matches`, `match_sets`, `match_set_tiebreaks`, `teams`, `team_users`); recording a result does not compute ratings.
+- **Rating-calculation trigger** (PR2b of #4): `RatingCalculationService` processes pending matches oldest→newest, carrying ratings forward through an in-memory snapshot and reusing the stateless `RankingCalculator`. **Dry-run is the default**; only an explicit `{"dryRun": false}` persists.
+- **Web client** (#2): React + Vite scaffold with Firebase sign-up, Vitest unit tests, Codecov flags, and Firebase Hosting CI.
+- **Capability-gated dashboard** (web PRs A–D): Profile tab, Admin tab (pending assessment + calculation), Match tab + admin role grants.
+- **User search** (PR C): user search + host-scoped match oversight, id-resolution lookup on `GET /users`, and typo-tolerant name search via `pg_trgm`.
+- Renamed `gender` → `sex` (Male/Female only), added research-screen search filters (sex/age/rating), and made **sex + date of birth required at sign-up** (#25).
 
-4. **Exposed ORM** - JetBrains type-safe SQL DSL
-   - Native Kotlin support
-   - Type safety for database operations
-   - Future-ready for repository pattern
+## 2026-06-23: NTRP-only (UTR removal)
 
-### Database Schema Features
+- Removed UTR from the calculator and core model and dropped the rating-system concept entirely — the system is now NTRP-only by design (#26). Vestigial UTR columns and comments were dropped, and the schema was consolidated back into a single `V1` migration.
 
-#### Philippine KYC Support
-- 6 government ID types: Passport, Driver's License, UMID, SSS, GSIS, National ID
-- Verification workflow: PENDING → VERIFIED/REJECTED
-- Document storage paths (encrypted)
-- Admin verification tracking
+## 2026-06-24 – 2026-06-25: Auth/onboarding polish, public profiles, simulation studies
 
-#### Rating Confidence System
-- Confidence score (0.0-1.0) that decays over time
-- Formula: `confidence = 1.0 - (days_since_last_match / 365)`
-- Used for seeding generation and ranking quality
+- Added authentication & authorization architecture docs and an ORM evaluation (Exposed vs jOOQ vs Jimmer); added Facebook sign-up/login and a refreshed (secret-redacted) manual testing guide.
+- Added NTRP rating simulation studies (matchup matrix + Monte Carlo + K-factor reports) with embedded charts.
+- **Onboarding hardening** (#42, #43): require a display name on manual sign-up; route authenticated-but-unprovisioned users to complete-profile; recover orphaned accounts.
+- **Admin bootstrap** (#45): bootstrap ADMINISTRATOR via a verified-email allowlist, with a decision record.
+- Added gitleaks secret scanning (CI + pre-commit) and Firebase web API-key hardening docs.
+- **Match formats** (#54): single-set match format support.
+- **Profile / shareable identity** (#55, #56, #61): profile avatar; shareable short player code with search-by-code; auth-gated player-profile deep link + QR.
 
-#### Team-Based Architecture
-- Supports singles (1 player) and doubles (2 players)
-- Temporary vs permanent teams
-- Position tracking for doubles partners
-- All players in a team must use same rating system
+## 2026-06-26: Player-facing history, search, invites, calculation breakdown
 
-#### Audit Trail
-- Immutable rating history for all matches
-- Tracks dominance factor and smoothing parameters
-- Enables dispute resolution and algorithm tuning
+- **Player match history** (#65) with at-the-time NTRP bands.
+- **Pending-assessment cards** (#67): richer, paged admin cards; optional self-rating at sign-up for admin approve/override (#75).
+- **Rating history scope** (#73): owner + admin visibility, full value + band, band-change highlighting.
+- **Awaiting-results UX** (#71): badge fixtures as Overdue/Today/Upcoming; research result cards (#64) link to public profiles.
+- **Invites** (#74): invite-only manual onboarding (backend + web); test-user helper scripts seed an invite so manual sign-ups pass the gate.
+- **Calculation breakdown** (#89/#92, #97/#98): surface the breakdown in the pending-calc detail view, and link rating-history entries to their match + persisted calculation. Consolidated migrations V2–V5 back into V1 (#68).
+- **Unified search** (#86/#94): name-or-code-prefix player search; search-suggestion enrichment (#87) and pending-calculation match cards (#84); invite filtering by status (#85/#93).
+- Enforced layered package architecture with ArchUnit (#69).
 
-### Constraints and Data Integrity
+## 2026-06-27: Audit log, admin player management, v2-breakdown persistence
 
-**Foreign Key Cascade Rules:**
-- Player deletion → CASCADE to KYC, ratings, history, team memberships
-- Match deletion → CASCADE to sets, tiebreaks, rating history
-- Team deletion → RESTRICT if referenced by matches (preserve history)
+- **Audit log** (#100/#102): provenance for domain actions (`audit_log` table, V2), an admin trace-viewer read API, and an Activity Log tab; wired remaining audit events for user/name/contact/match.
+- **Admin "Manage player" panel** (#96): edit profile, rating, and roles.
+- Show date of birth and sex (read-only) on the own profile (#95); app logo + favicon set (#109).
+- Consolidated the V2 calculation-breakdown migration into V1.
 
-**Check Constraints:**
-- Email validation (regex)
-- Gender values (M/F/Other)
-- Rating ranges (NTRP: 1.0-7.0, UTR: 1.0-16.0)
-- Confidence score range (0.0-1.0)
-- Match validation (team1 ≠ team2)
-- Set/tiebreak score validation
+## 2026-06-28: Competitive context, duplicates, RATER/RESEARCHER, seeding, standings, v2 calculator, CD
 
-**Indexes:**
-- Primary keys (UUID)
-- Foreign keys for join performance
-- Date fields for temporal queries
-- Composite indexes for player match history
+- **Match occasion / competitive context** (#108): renamed match dimensions — `matchFormat` (SINGLES/DOUBLES) vs `matchType` (occasion) — with a per-occasion rating factor.
+- **Duplicate handling** (#124, #126): duplicate-profile rectification, and duplicate-account detection (phone match + manual flag, `duplicate_candidates` table, V5) feeding rectification.
+- **RATER capability** (#106): dedicated Ratings tab (Phase 1).
+- **RESEARCHER capability** (#107): gates the Research tab (monetization-ready); a default player can search but cannot resolve ids.
+- **Rating band UX** (#114): rating-band "speed meter" on the own profile (relative position, no exact value); moved the rating card into the Profile identity card (#111).
+- **HOST seeding generator** (#111): named player lists → sorted, CSV-exportable seeding (`player_lists`, `player_list_members`, `seedings`, `seeding_entries`, V8).
+- **Ranking Race standings** (#113): per-band standings, Phase 1, ratings-derived.
+- **Per-set v2 calculator** (#110): per-set sequential rating calculation, behind the `RankingCalculator` interface.
+- **API CD** (#130): continuous deployment to Cloud Run + deployment runbook; manual testing guide updated for the new features.
 
-### Migration Strategy
+## 2026-06-29: Public pages, events, re-rate requests, seeding search
 
-**Phase 1 (MVP) - Completed:**
-- Core player management
-- Team and match structure
-- Rating system with history
+- **Match public code + public match page** (#136); QR codes on public Profile and public Match pages (#137).
+- **Event Organizer** (#138): events with participants and event-scoped fixtures (`events`, `event_participants`, V11); public event page + QR (phase 2).
+- **Re-rate requests** (#140): players request a re-rate, RATER approves/denies (`rating_requests` table, V12).
+- **Invites & Activity Log tabs** (#132, #134, #135): block invites to emails already on an active account; promote Invites and Activity Log to their own tabs (25 rows/page).
+- **Seeding tab** (#148): explicit Search + checkbox multi-select + Add to List.
 
-**Phase 2 (Planned):**
-- `player_social_media` table
-- UTR integration fields
-- Enhanced confidence scoring
+---
 
-**Phase 3 (Future):**
-- Tournament management tables
-- Seeding and draw generation
-- Match statistics tracking
+## Current schema (tables)
 
-### Quick Start Commands
+For reference, the live schema (across migrations V1–V12) comprises:
 
-```bash
-# Start PostgreSQL
-docker compose up postgres -d
+- **Users aggregate** (V1): `users`, `user_names`, `user_identities`, `contact_information`, `user_capabilities`, `user_kyc`.
+- **Ratings** (V1): `user_ratings`, `user_rating_history`.
+- **Matches** (V1): `teams`, `team_users`, `matches`, `match_sets`, `match_set_tiebreaks`.
+- **Onboarding** (V1): `invites`.
+- **Audit** (V2): `audit_log`.
+- **Duplicates** (V5): `duplicate_candidates`.
+- **Seeding** (V8): `player_lists`, `player_list_members`, `seedings`, `seeding_entries`.
+- **Events** (V11): `events`, `event_participants`.
+- **Re-rate requests** (V12): `rating_requests`.
 
-# Run application (migrations run automatically)
-./gradlew run
-
-# Access pgAdmin (optional)
-docker compose --profile tools up pgadmin -d
-
-# Connect to database
-docker exec -it SkopeoDb_db psql -U postgres -d SkopeoDb
-
-# Manual migration management
-./gradlew flywayInfo     # Show migration status
-./gradlew flywayMigrate  # Run pending migrations
-./gradlew flywayValidate # Validate applied migrations
-```
-
-### Files Created
-
-**Main Code:**
-- `src/main/kotlin/org/skopeo/config/DatabaseConfig.kt`
-- `src/main/resources/db/migration/V1__create_initial_schema.sql`
-
-**Documentation:**
-- `docs/engineering/architecture/database-schema.md` - Complete schema reference
-- `docs/engineering/operations/database-setup.md` - Setup and usage guide
-- `docs/engineering/IMPLEMENTATION_LOG.md` - This file
-
-**Modified:**
-- `build.gradle.kts` - Database dependencies and Flyway plugin
-- `src/main/resources/application.yaml` - Database configuration
-- `docker-compose.yml` - PostgreSQL and pgAdmin services
-- `.gitignore` - Exclude database backups
-- `src/main/kotlin/org/skopeo/Application.kt` - Database initialization
-
-### Dependencies Added
-
-```kotlin
-// PostgreSQL driver
-implementation("org.postgresql:postgresql:42.7.4")
-
-// Flyway migrations
-implementation("org.flywaydb:flyway-core:10.17.0")
-implementation("org.flywaydb:flyway-database-postgresql:10.17.0")
-
-// Exposed ORM
-implementation("org.jetbrains.exposed:exposed-core:0.54.0")
-implementation("org.jetbrains.exposed:exposed-dao:0.54.0")
-implementation("org.jetbrains.exposed:exposed-jdbc:0.54.0")
-implementation("org.jetbrains.exposed:exposed-java-time:0.54.0")
-
-// Connection pooling
-implementation("com.zaxxer:HikariCP:5.1.0")
-```
-
-### Next Steps
-
-The database infrastructure is now complete and ready for:
-
-1. **Repository Layer Implementation**
-   - Create repository interfaces for each entity
-   - Implement data access using Exposed ORM
-   - Add transaction management
-
-2. **API Endpoints**
-   - Player CRUD operations
-   - Match submission and tracking
-   - Rating queries and history
-
-3. **Integration Tests**
-   - Test database interactions
-   - Verify constraint enforcement
-   - Test migration rollbacks
-
-4. **Data Seeding**
-   - Create test data fixtures
-   - Add sample players and matches
-   - Enable local development and testing
-
-### Success Metrics
-
-✅ PostgreSQL 15 configured with HikariCP connection pooling
-✅ Flyway migrations run automatically on startup
-✅ All 9 Phase 1 tables created with proper constraints
-✅ Database initialization integrated into application lifecycle
-✅ Comprehensive documentation for setup and usage
-✅ Docker Compose setup for local development
-✅ Code compiles successfully with new dependencies
-✅ Changes committed with detailed commit message
-
-### References
+## References
 
 - [Database Schema Documentation](architecture/database-schema.md)
 - [Database Setup Guide](operations/database-setup.md)
-- [PostgreSQL Documentation](https://www.postgresql.org/docs/15/)
-- [Flyway Documentation](https://flywaydb.org/documentation/)
-- [Exposed Framework](https://github.com/JetBrains/Exposed)
-- [HikariCP](https://github.com/brettwooldridge/HikariCP)
-
----
-
-## Previous Milestones
-
-See git history for:
-- 2026-06-09: Team-based architecture refactoring
-- 2026-06-09: Integration test coverage improvements
-- Earlier: Initial API implementation with rating calculator
+- [Rating Calculation Algorithm](../product/RATING_CALCULATION_ALGORITHM.md)
+- [Audit Trail](architecture/AUDIT_TRAIL.md)
+- [Layered Architecture](architecture/LAYERED_ARCHITECTURE.md)
+- [Web UI Architecture](architecture/WEB_UI_ARCHITECTURE.md)

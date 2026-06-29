@@ -2,13 +2,15 @@
 
 A printable runbook for testing the full stack (PostgreSQL + Ktor API + React web UI).
 **Part 1** runs everything locally with Docker and covers auth (**Google, email/password,
-and Facebook** sign-up + login) and the per-capability dashboard. **Part 1d** is the new
-**feature walkthrough** — the rating pipeline (set ratings → fixtures → results →
+and Facebook** sign-up + login) and the per-capability dashboard. **Part 1d** is the
+**feature walkthrough** — the rating pipeline (set ratings → events/fixtures → results →
 calculation) plus every dashboard tab: Profile (rating speed meter, history with per-set
-breakdown), Research, Standings, Seeding, Ratings, and the Admin tools (manage player /
-roles, duplicate detection, invites, activity log). **Part 2** covers deploying the three
-components to GCP. **Appendix A** has Firebase project-setup steps for reference (you do
-**not** need them — the project already exists).
+breakdown, re-rate request), Research, Standings, Event Organizer, Seeding, Ratings
+(pending assessment + re-rate triage), Invites, Activity Log, and the Admin tools (manage
+player / roles, duplicate detection, pending calculation). It also covers the public,
+shareable deep-link pages (player / match / event) and their QR codes. **Part 2** covers
+deploying the three components to GCP. **Appendix A** has Firebase project-setup steps for
+reference (you do **not** need them — the project already exists).
 
 > Tip: to make a PDF, open this file in your editor/browser and **Print → Save as PDF**
 > (the committed `MANUAL_TESTING_GUIDE.pdf` is generated this way).
@@ -163,9 +165,10 @@ npm run dev      # serves http://localhost:5173
 
 For each test, sign up, then observe the dashboard. A brand-new account gets the `PLAYER` and
 `RESEARCHER` capabilities, so the dashboard shows **Profile, Research, and Standings** tabs, with a
-"Pending assessment" rating on the Profile tab — that is the expected result. (Matches, Seeding,
-Ratings, and Admin tabs require additional capabilities — see **Part 1d**.) After sign-up you are
-auto-signed-in; the `/login` page is exercised separately in **Part 1c**.
+"Pending assessment" rating on the Profile tab — that is the expected result. (Event Organizer,
+Seeding, Ratings, Invites, Activity Log, and Admin tabs require additional capabilities — see
+**Part 1d**.) After sign-up you are auto-signed-in; the `/login` page is exercised separately in
+**Part 1c**.
 
 ## Test 1 — Sign up with Google
 
@@ -244,8 +247,8 @@ docker compose exec postgres psql -U postgres -d SkopeoDb -c \
  SELECT user_id, 'ADMINISTRATOR' FROM contact_information WHERE value = 'you@example.com';"
 ```
 
-- [ ] Hard-refresh the dashboard → **all tabs** (Profile, Research, Standings, Matches, Seeding,
-      Ratings, Admin) now appear.
+- [ ] Hard-refresh the dashboard → **all tabs** (Profile, Research, Standings, Event Organizer,
+      Seeding, Ratings, Invites, Activity Log, Admin) now appear.
 - [ ] From here, grant every other role through **Admin → Manage player → Roles** — no more SQL.
 
 The rest of the rating pipeline and each tab are exercised in **Part 1d** below.
@@ -265,35 +268,41 @@ After any role change, **hard-refresh the browser** (the dashboard refetches `GE
 
 Expected dashboard per capability:
 
-| Capability      | How it's set                | Tabs unlocked                            | Notes                                             |
-|-----------------|-----------------------------|------------------------------------------|---------------------------------------------------|
-| `PLAYER`        | automatic at sign-up        | Profile, Standings                       | base role; cannot be revoked                      |
-| `RESEARCHER`    | automatic at sign-up (#107) | Research                                 | gates the Research tab; later monetizable         |
-| `HOST`          | grant via Admin UI          | Matches, Seeding                         | match management + seeding (hosts are players)    |
-| `CLUB_OWNER`    | grant via Admin UI          | Matches, Seeding                         | same as host for now; evolves later               |
-| `RATER`         | grant via Admin UI (#106)   | Ratings                                  | set initial ratings / triage pending assessment   |
-| `ADMINISTRATOR` | bootstrap once, then UI      | all (incl. Admin, Ratings, Research)     | full access                                       |
+| Capability      | How it's set                | Tabs unlocked                                   | Notes                                             |
+|-----------------|-----------------------------|-------------------------------------------------|---------------------------------------------------|
+| `PLAYER`        | automatic at sign-up        | Profile, Standings                              | base role; cannot be revoked                      |
+| `RESEARCHER`    | automatic at sign-up (#107) | Research                                        | gates the Research tab; later monetizable         |
+| `HOST`          | grant via Admin UI          | Event Organizer, Seeding                        | match management + seeding (hosts are players)    |
+| `CLUB_OWNER`    | grant via Admin UI          | Event Organizer, Seeding                        | same as host for now; evolves later               |
+| `RATER`         | grant via Admin UI (#106)   | Ratings                                         | set initial ratings / triage pending + re-rate    |
+| `ADMINISTRATOR` | bootstrap once, then UI      | all (incl. Invites, Activity Log, Admin)        | full access; implies RATER + RESEARCHER + match-mgmt |
+
+> The Admin-only tabs are **Invites**, **Activity Log**, and **Admin** — each requires
+> `ADMINISTRATOR`.
 
 - [ ] **Player + Researcher** — a fresh account (Tests 1–3) shows **Profile, Research, Standings**;
-      **no Matches, Seeding, Ratings, or Admin** tab.
-- [ ] **Host** — grant `HOST`, refresh → **Matches** and **Seeding** tabs appear; still no Ratings/Admin.
+      **no Event Organizer, Seeding, Ratings, Invites, Activity Log, or Admin** tab.
+- [ ] **Host** — grant `HOST`, refresh → **Event Organizer** and **Seeding** tabs appear; still no
+      Ratings/Invites/Activity Log/Admin.
 - [ ] **Club owner** — grant `CLUB_OWNER` (revoke HOST first to isolate), refresh → **same as a host**
-      (Matches, Seeding). Revoke when done.
+      (Event Organizer, Seeding). Revoke when done.
 - [ ] **Rater** — grant `RATER`, refresh → the **Ratings** tab appears.
-- [ ] **Administrator** — grant `ADMINISTRATOR`, refresh → **all tabs** including **Admin** (and
-      Ratings/Research even without those explicit roles).
+- [ ] **Administrator** — grant `ADMINISTRATOR`, refresh → **all tabs** including **Invites, Activity
+      Log, and Admin** (plus Ratings/Research and Event Organizer/Seeding even without those explicit
+      roles).
 - [ ] **Additive** — with `HOST` + `ADMINISTRATOR`, all tabs show; revoke `ADMINISTRATOR` and refresh
-      → Admin/Ratings disappear while Matches/Seeding/Research/Standings/Profile remain (HOST present).
+      → Invites/Activity Log/Admin/Ratings disappear while Event Organizer/Seeding/Research/Standings/
+      Profile remain (HOST present).
 
 ---
 
 # Part 1d — Feature walkthrough (the rating pipeline + every tab)
 
 This part needs the administrator you bootstrapped above, plus a few test players (sign up 3–4
-accounts). Roles are granted through the Admin UI. The first six tests are the **core rating
-pipeline** in order — rate players → schedule a fixture → record the result → run the calculation →
-read the ratings & history; the rest cover each remaining tab. Capabilities in brackets are what's
-required to *see* the relevant tab.
+accounts). Roles are granted through the Admin UI. The first tests are the **core rating
+pipeline** in order — rate players → create an event + schedule a fixture → record the result →
+run the calculation → read the ratings & history; the rest cover each remaining tab and the public
+shareable pages. Capabilities in brackets are what's required to *see* the relevant tab.
 
 ## Test 4 — Admin: Manage player — profile, rating override, roles `[ADMINISTRATOR]`
 
@@ -321,13 +330,24 @@ assessment." Setting the same value again is idempotent.
 
 Result: ☐ Pass ☐ Fail — notes: __________________________________________
 
-## Test 6 — Host: schedule a fixture (Matches tab) `[HOST]`
+## Test 6 — Host: create an event + schedule a fixture (Event Organizer tab) `[HOST]`
 
-- [ ] As `HOST` (or admin) open **Matches → Schedule a fixture**. Pick **Player 1** and **Player 2**
-      (the picker excludes the already-chosen player). Both must be **rated** or you'll get
-      "Both players need a rating."
+Events (meets/leagues/tournaments) are the entry point — an event has a **name**, a **date range**,
+**participants**, and its own shareable public code; the matches it contains are scheduled among its
+participants.
+
+- [ ] As `HOST` (or admin) open the **Event Organizer** tab → **New event**: enter a **Name**, a
+      **Start date** and **End date**, then **Search players to add…** to build the participant roster
+      (click a chip to drop a participant) → **Create event**.
+- [ ] The new event appears under **Events** (name · date range · player count). **Select it** to open
+      its working page.
+- [ ] On the event page, the header shows **name · Event ID · Public page** link. Under
+      **Participants**, add/remove members (the search excludes those already added).
+- [ ] **Schedule a fixture** → pick **Player 1** and **Player 2** (the pickers are **scoped to this
+      event's participants**). Both must be **rated** participants.
 - [ ] Choose a **Match type** (Open play / League play / Tournament — initial round / League
-      playoffs / Tournament playoffs) and a **Date** → **Schedule fixture** → "Fixture scheduled."
+      playoffs / Tournament playoffs) and a **Date** → **Schedule fixture**. (On failure you'll see
+      "Could not schedule the fixture. Both players must be participants and already rated.")
 
 > Recording a result later does **not** move ratings — that's the admin calculation step (Test 8).
 
@@ -335,7 +355,8 @@ Result: ☐ Pass ☐ Fail — notes: __________________________________________
 
 ## Test 7 — Host: record a result `[HOST]`
 
-- [ ] **Matches → Awaiting results** → find the fixture (badge: Overdue / Today / Upcoming).
+- [ ] On the event page, scroll to **Awaiting results** → find the fixture (badge: Overdue / Today /
+      Upcoming).
 - [ ] Enter set scores (e.g. Set 1 `6`–`4`, Set 2 `3`–`6`, Set 3 `6`–`2`). **Add set** (up to 5) /
       **Remove**. Each set needs a clear winner — equal games are rejected.
 - [ ] **Record result** ("Recording…"). The fixture leaves "Awaiting results" and becomes **pending
@@ -407,12 +428,16 @@ Result: ☐ Pass ☐ Fail — notes: __________________________________________
 
 ## Test 13 — Seeding tab (#111) `[HOST]`
 
-- [ ] Open **Seeding** → **New list** → name it → **Create**, then select it.
-- [ ] **Add players**: optionally set sex/age/rating filters, then use **Find a player** (excludes
-      members already added). **Remove** drops a member.
-- [ ] **Generate seeding** → a table (**Seed, Name, Code, NTRP, Rating, Sex, Age**). **Regenerate**
-      refreshes it; **Download CSV** exports it; **Delete list** removes the list (destructive, no
-      confirm).
+- [ ] Open **Seeding** → under **Player lists**, **New list** → name it → **Create** (the new list is
+      auto-selected).
+- [ ] **Members** lists the current members (**Remove** drops one). Under **Search players**, combine
+      any filters — **Name**, **Sex**, **Age from/to**, **Rating from/to** — then **Search** (disabled
+      until at least one filter is set). Results already in the list are excluded.
+- [ ] **Tick** the players you want and click **Add to List**; they move into Members. (Invalid ranges
+      → "Invalid filters. Check the age/rating ranges.")
+- [ ] **Generate seeding** → a table (**Seed, Name, Code, NTRP, Rating, Sex, Age**), server-sorted by
+      rating. **Regenerate** refreshes it; **Download CSV** exports it; **Delete list** removes the
+      list (destructive, no confirm).
 
 Result: ☐ Pass ☐ Fail — notes: __________________________________________
 
@@ -431,17 +456,53 @@ Result: ☐ Pass ☐ Fail — notes: __________________________________________
 
 Result: ☐ Pass ☐ Fail — notes: __________________________________________
 
-## Test 15 — Admin: invites & activity log `[ADMINISTRATOR]`
+## Test 15 — Invites tab (#135) `[ADMINISTRATOR]`
 
-- [ ] **Invites:** Admin → **Invites** → enter an email → **Send invite** (manual sign-up is
-      invite-only). Filter **Actionable / Accepted / Revoked / All**; **Resend** or **Revoke** a
-      pending invite.
-- [ ] **Activity log:** Admin → **Activity log** → a newest-first table (**When / Who / Action /
-      Target / Note**) with a category filter. Add a free-text **Note** to a row → **Save**.
+The Invites tab is now its **own top-level tab** (no longer an Admin sub-section).
+
+- [ ] Open the **Invites** tab → enter an email → **Send invite** (manual sign-up is invite-only; the
+      invitee gets a one-time sign-in link). The invite appears in the list with a status badge.
+- [ ] Filter **Actionable / Accepted / Revoked / All**; **Resend** a pending/expired invite or
+      **Revoke** a pending one.
+- [ ] **Duplicate-email guard (#132):** invite an email that already belongs to an **active account**
+      (e.g. one of your test players) → the API rejects it with 409 and the form shows
+      *"An account already exists with this email."*
 
 Result: ☐ Pass ☐ Fail — notes: __________________________________________
 
-## Test 16 — Player profile deep links & QR codes `[any]`
+## Test 16 — Activity Log tab (#134) `[ADMINISTRATOR]`
+
+The Activity Log is now its **own top-level tab** (no longer an Admin sub-section).
+
+- [ ] Open the **Activity Log** tab → a newest-first table (**When / Who / Action / Target / Note**)
+      with a category filter (All / User creation / Name changes / Contact changes / Invites / Match
+      fixtures / Match results / Capability changes / Rating changes). Times render in your timezone.
+- [ ] **Who / Target** cells link to the relevant public player or match page where a code is known.
+- [ ] Add a free-text **Note** to a row → **Save** (saving a note is not itself audited).
+- [ ] **Pagination (#134):** the log paginates **25 rows per page**. With more than 25 entries,
+      **Previous / Next** appear with a "Page X of Y · N total" readout.
+
+Result: ☐ Pass ☐ Fail — notes: __________________________________________
+
+## Test 17 — Re-rate requests (Profile → Ratings, #140) `[any → RATER]`
+
+A rated player can ask a rater to reconsider their rating; a `RATER` then approves (applying a new
+rating) or denies (with a reason). **At most one PENDING request per player.**
+
+- [ ] **Raise a request (player):** as a rated test player, open **Profile → Rating reconsideration**
+      → type a **justification** → **Request re-rate**. The card switches to "Your request is pending
+      review." and echoes your justification.
+- [ ] **One-at-a-time:** while a request is pending, the form is replaced by that pending notice — you
+      can't raise a second.
+- [ ] **Triage (rater):** as a `RATER` (or admin) open the **Ratings** tab → **Re-rate requests** lists
+      open requests (requester + justification). **Approve** by entering a new NTRP value → **Approve**
+      (applies the rating, writes history), **or** enter a **Reason for denial** → **Deny**.
+- [ ] **Outcome (player):** the requester's **Rating reconsideration** card now shows the result —
+      "approved — new band X" or "denied: <reason>" — and lets them raise a new request.
+
+Result: ☐ Pass ☐ Fail — notes: __________________________________________
+
+## Test 18 — Player profile deep links & QR codes `[any]`
 
 Every player has a short shareable code (shown on their **Profile** tab as **Player ID**). It powers
 an auth-gated deep link to that player's profile and a QR code for scanning from another device.
@@ -470,6 +531,34 @@ an auth-gated deep link to that player's profile and a QR code for scanning from
 > machine's LAN IP and use that origin, or (b) test on the deployed site, where the QR encodes the
 > Firebase Hosting URL. On the same machine, the Copy-link → paste check above verifies the URL is
 > correct regardless.
+
+Result: ☐ Pass ☐ Fail — notes: __________________________________________
+
+## Test 19 — Public match & event pages + QR (#136 / #137 / #138) `[any]`
+
+Matches and events also have shareable public codes and their own auth-gated read-only pages, each
+with the **same QR/Copy-link share card** (`ShareCard`, #137). Use a match scheduled in Test 6.
+
+### Public match page (`/matches/:code`)
+
+- [ ] Find a match's **Match ID** — it's linked from the **Activity Log** (match-fixture/result rows)
+      and from the event's public page (below). Open `http://localhost:5173/matches/<MATCH_CODE>`.
+- [ ] You see a read-only summary: date · match type · both sides (each player links to their public
+      profile) · a **Winner** badge once played · the **Score** (or "Not yet played").
+- [ ] The **Share this match** card shows a QR + **Copy link** for `/matches/<code>`.
+- [ ] **Auth gate:** sign out and open the link → redirected to **login**, then back after sign-in.
+- [ ] **Unknown code** → "We couldn't find or load this match."
+
+### Public event page (`/events/:code`)
+
+- [ ] From **Event Organizer → (select an event)**, click the **Public page** link in the header (or
+      open `http://localhost:5173/events/<EVENT_CODE>` using the **Event ID**).
+- [ ] You see the event **name**, **date range**, **Event ID**, **Participants** (each links to a
+      public profile), and **Matches** (each links to its public match page with a one-line summary).
+- [ ] The **Share this event** card shows a QR + **Copy link** for `/events/<code>`.
+- [ ] **Auth gate** and **Unknown code** ("We couldn't find or load this event.") behave as above.
+
+Result: ☐ Pass ☐ Fail — notes: __________________________________________
 
 ---
 
@@ -560,7 +649,7 @@ gcloud run deploy skopeo \
 | `docker compose up` fails on port in use | 5432/8080 taken | Stop the conflicting service or change the published port |
 | API logs: connection refused to Postgres | DB not healthy yet | `docker compose logs postgres`; wait for healthy, then restart `skopeo` |
 | Only Profile / Research / Standings tabs show | Account is just `PLAYER`+`RESEARCHER` | Expected; grant roles via Admin → Manage player, or bootstrap an admin (see "Bootstrap your first administrator") |
-| Can't schedule a fixture ("need a rating") | One/both players are unrated | Rate them first (Ratings tab / Pending assessment, Test 5) |
+| Can't schedule a fixture (must be participants and already rated) | A player isn't on the event roster, or one/both are unrated | Add both to the event's participants and rate them first (Ratings tab / Pending assessment, Test 5) |
 | Recorded a result but ratings didn't change | By design | Ratings move only on the admin calculation step — Preview then **Commit** (Test 8) |
 | New role granted but tab missing | Stale `users/me` | Hard-refresh the browser after any role change |
 

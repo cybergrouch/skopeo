@@ -13,15 +13,21 @@ Docs are grouped by audience, then by topic.
 
 ### `api/` — HTTP API references
 
-- [API_DOCUMENTATION.md](engineering/api/API_DOCUMENTATION.md) — overall API reference (request/response, examples).
+The **canonical, complete API reference is the OpenAPI spec** (`src/main/resources/openapi/documentation.yaml`, verified by `OpenAPIIntegrationTest`). The pages below are human-readable companions.
+
+- [API_DOCUMENTATION.md](engineering/api/API_DOCUMENTATION.md) — the stateless ranking calculator (`/api/v1/calculate-ranking`) + pointer to the OpenAPI spec.
 - [API_MODEL_PROPOSAL.md](engineering/api/API_MODEL_PROPOSAL.md) — the rating/data model as implemented.
-- [RATINGS_API.md](engineering/api/RATINGS_API.md) · [MATCHES_API.md](engineering/api/MATCHES_API.md) · [CAPABILITIES_API.md](engineering/api/CAPABILITIES_API.md) · [CONTACT_INFORMATION_API.md](engineering/api/CONTACT_INFORMATION_API.md) · [USER_NAMES_API.md](engineering/api/USER_NAMES_API.md) — per-resource endpoint docs.
+- [RATINGS_API.md](engineering/api/RATINGS_API.md) — ratings & assessment, **re-rate requests** (#140), and the rating-calculation trigger.
+- [MATCHES_API.md](engineering/api/MATCHES_API.md) — fixtures & results, the two-dimension `matchFormat`/`matchType` model (#108), public match pages (#136), match calculation detail (#97), and the **events** tie-in (#138).
+- [CAPABILITIES_API.md](engineering/api/CAPABILITIES_API.md) — roles: PLAYER/HOST/CLUB_OWNER/**RATER** (#106)/**RESEARCHER** (#107)/ADMINISTRATOR.
+- [CONTACT_INFORMATION_API.md](engineering/api/CONTACT_INFORMATION_API.md) · [USER_NAMES_API.md](engineering/api/USER_NAMES_API.md) — user sub-resources.
+- Audit / activity log (#100/#102): the domain audit log + read API (`/api/v1/audit`) are documented in [AUDIT_TRAIL.md](engineering/architecture/AUDIT_TRAIL.md) (see *architecture* below).
 
 ### `architecture/` — design & decisions
 
 - [AUTHENTICATION.md](engineering/architecture/AUTHENTICATION.md) — Firebase auth (IDaaS) + in-house capability authorization.
 - [ADMIN_BOOTSTRAP.md](engineering/architecture/ADMIN_BOOTSTRAP.md) — how the first/break-glass administrator is established (verified-email allowlist via env).
-- [AUDIT_TRAIL.md](engineering/architecture/AUDIT_TRAIL.md) — the pure-function-plus-audit-trail calculator pattern.
+- [AUDIT_TRAIL.md](engineering/architecture/AUDIT_TRAIL.md) — two distinct concepts: the pure-function calculator audit trail, **and** the persisted domain audit/activity log with its admin read API (#100/#102).
 - [WEB_UI_ARCHITECTURE.md](engineering/architecture/WEB_UI_ARCHITECTURE.md) — React/Vite web UI decisions and roadmap.
 - [ORM_EVALUATION.md](engineering/architecture/ORM_EVALUATION.md) — Exposed vs jOOQ vs Jimmer decision record.
 - [database-schema.md](engineering/architecture/database-schema.md) — schema, ER diagram, constraints.

@@ -1,449 +1,141 @@
 # Skopeo API Documentation
 
-## Overview
+## Scope of this document
 
-Skopeo provides a REST API for calculating updated tennis player rankings based on match results. The API uses the NTRP (National Tennis Rating Program) system.
+The **canonical, complete API reference is the OpenAPI spec**:
+`src/main/resources/openapi/documentation.yaml` (hand-maintained and verified by
+`OpenAPIIntegrationTest`). Serve/browse it via the running app's docs route, or open the YAML
+directly.
 
-**Base URL:** `http://localhost:8080`
+This page covers only the **stateless ranking calculator** (`POST /api/v1/calculate-ranking`) — a
+pure "what-if" endpoint that persists nothing. For the persistent API surface, see the spec and the
+per-resource companions:
 
-**Version:** 0.0.1-SNAPSHOT
+- [RATINGS_API.md](RATINGS_API.md) — ratings, assessment, re-rate requests, calculation trigger
+- [MATCHES_API.md](MATCHES_API.md) — fixtures, results, public match pages, events tie-in
+- [CAPABILITIES_API.md](CAPABILITIES_API.md) — roles (PLAYER/HOST/CLUB_OWNER/RATER/RESEARCHER/ADMINISTRATOR)
+- [CONTACT_INFORMATION_API.md](CONTACT_INFORMATION_API.md) · [USER_NAMES_API.md](USER_NAMES_API.md) — user sub-resources
+- [AUDIT_TRAIL.md](../architecture/AUDIT_TRAIL.md) — calculator audit trail **and** the domain audit/activity log
 
----
-
-## Endpoints
-
-### Health & Monitoring
-
-#### GET `/health`
-Check API health status.
-
-**Response:**
-```json
-{
-  "status": "UP",
-  "service": "Skopeo API",
-  "version": "0.0.1-SNAPSHOT"
-}
-```
-
-#### GET `/metrics`
-Prometheus metrics endpoint for monitoring.
-
-**Response:** Prometheus text format with JVM, HTTP, and application metrics.
+**Base URL (local):** `http://localhost:8080`
 
 ---
 
-### Ranking Calculation
+## Stateless ranking calculator
 
-#### POST `/api/v1/calculate-ranking`
-Calculate updated player rankings based on match results.
+### POST `/api/v1/calculate-ranking`
 
-**Request Headers:**
-- `Content-Type: application/json`
+A pure, side-effect-free calculation: given two teams and a match score, returns each player's
+updated rating and the rating change. It **stores nothing** — no auth, no persistence. NTRP only,
+SINGLES only.
+
+**Request Headers:** `Content-Type: application/json`
 
 **Request Body:**
 
 ```json
 {
-  "players": {
-    "<playerId>": {
-      "playerId": "string",
-      "name": "string",
-      "rating": {
-        "value": number
-      }
+  "teams": {
+    "T1": {
+      "teamId": "T1",
+      "name": "John Doe",
+      "teamType": "SINGLES",
+      "players": [
+        { "playerId": "P123", "name": "John Doe", "rating": { "value": "4.5" } }
+      ]
+    },
+    "T2": {
+      "teamId": "T2",
+      "name": "Jane Smith",
+      "teamType": "SINGLES",
+      "players": [
+        { "playerId": "P456", "name": "Jane Smith", "rating": { "value": "4.0" } }
+      ]
     }
   },
   "matchScore": {
     "sets": [
       {
-        "games": {
-          "<playerId>": number
-        },
-        "winnerTeamId": "string",
-        "tiebreak": {
-          "points": {
-            "<playerId>": number
-          },
-          "winnerTeamId": "string"
-        }
+        "games": { "T1": 7, "T2": 6 },
+        "winnerTeamId": "T1",
+        "tiebreak": { "points": { "T1": 7, "T2": 5 }, "winnerTeamId": "T1" }
       }
-    ],
-    "matchFormat": "BEST_OF_THREE" | "BEST_OF_FIVE" | "SINGLE_SET" | "ADVANTAGE_SET"
+    ]
   },
-  "matchDate": "string (ISO 8601 format, optional)"
+  "matchDate": "2026-01-15T14:30:00Z",
+  "options": { "smoothingEnabled": true, "smoothingFactor": 0.5, "matchTypeFactor": 1.0 }
 }
 ```
+
+- `teams` must be **exactly two SINGLES teams of one player each**; the map key must equal each
+  team's `teamId`, and each team carries a `name` and a one-element `players` list.
+- **`games`, `winnerTeamId`, and tiebreak `points`/`winnerTeamId` are keyed by *team id*** (not
+  player id). Winner/loser are derived from the scores when omitted.
+- `matchScore` has no `matchFormat` field. `matchDate` and `options` are optional. A `Rating`'s
+  `value` is a **string** (e.g. `"4.5"`).
+- `tiebreak` only decides the set winner when games are level; tiebreak points do **not** feed the
+  dominance calculation.
 
 **Response (200 OK):**
 
 ```json
 {
-  "players": {
-    "<playerId>": {
-      "playerId": "string",
-      "name": "string",
-      "rating": {
-        "value": number
-      }
+  "ratingChanges": {
+    "P123": {
+      "change": "0.080000",
+      "previousRating": { "value": "4.500000" },
+      "newRating": { "value": "4.580000" },
+      "percentChange": "1.78",
+      "levelChanged": false
     }
   },
-  "ratingChanges": {
-    "<playerId>": {
-      "change": number,
-      "percentChange": number,
-      "previousRating": {
-        "value": number
-      },
-      "newRating": {
-        "value": number
-      }
-    }
-  }
+  "players": { "...": "..." },
+  "teams": { "...": "..." }
 }
 ```
 
-**Error Response (400 Bad Request):**
+`ratingChanges` is keyed by **player id**; `players` and `teams` echo the (updated) inputs. Numeric
+fields are strings.
 
-```json
-{
-  "error": "Validation error",
-  "message": "Detailed error message"
-}
-```
+**Errors:** `400` validation error / malformed JSON · `500` unexpected server error. Bodies are
+`{ "error": "...", "message": "..." }`.
 
-**Error Response (500 Internal Server Error):**
+### Example
 
-```json
-{
-  "error": "Internal server error",
-  "message": "An unexpected error occurred"
-}
-```
-
----
-
-## Data Models
-
-### PlayerProfile
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `playerId` | string | Yes | Unique player identifier (max 50 chars, must match map key) |
-| `name` | string | Yes | Player name (max 100 chars) |
-| `rating` | Rating | Yes | Player's current rating |
-
-### Rating
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `value` | number | Yes | Rating value |
-
-**Rating Constraints:**
-- **NTRP**: 1.0 to 7.0 (continuous decimal values)
-
-### MatchScore
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `sets` | SetScore[] | Yes | List of sets (1-5 sets) |
-| `matchFormat` | string | No | Default: "BEST_OF_THREE" |
-
-### SetScore
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `games` | Map<string, number> | Yes | Games won by each player |
-| `winner` | string | Yes | Player ID of set winner |
-| `tiebreak` | TiebreakScore | No | Tiebreak details if applicable |
-
-**Set Score Validation:**
-- Must have exactly 2 players
-- Winner must win by at least 2 games (6-4, 6-3, etc.)
-- Tiebreak sets must be 7-6 or 6-7
-- Regular sets: winner must have at least 6 games
-
-### TiebreakScore
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `points` | Map<string, number> | Yes | Points won by each player |
-| `winner` | string | Yes | Player ID of tiebreak winner |
-
-**Tiebreak Validation:**
-- Winner must have at least 7 points
-- Winner must win by at least 2 points
-
-### RatingChange
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `change` | number | Absolute rating change |
-| `percentChange` | number | Percentage change in rating |
-| `previousRating` | Rating | Rating before match |
-| `newRating` | Rating | Rating after match |
-
----
-
-## Examples
-
-### Example 1: Simple NTRP Match
-
-**Request:**
 ```bash
 curl -X POST http://localhost:8080/api/v1/calculate-ranking \
   -H "Content-Type: application/json" \
   -d '{
-  "players": {
-    "P123": {
-      "playerId": "P123",
-      "name": "John Doe",
-      "rating": {"value": 4.5}
+    "teams": {
+      "T1": { "teamId": "T1", "name": "John Doe",  "teamType": "SINGLES", "players": [ { "playerId": "P123", "name": "John Doe",  "rating": { "value": "4.5" } } ] },
+      "T2": { "teamId": "T2", "name": "Jane Smith", "teamType": "SINGLES", "players": [ { "playerId": "P456", "name": "Jane Smith", "rating": { "value": "4.0" } } ] }
     },
-    "P456": {
-      "playerId": "P456",
-      "name": "Jane Smith",
-      "rating": {"value": 4.0}
+    "matchScore": {
+      "sets": [
+        { "games": { "T1": 6, "T2": 4 }, "winnerTeamId": "T1" },
+        { "games": { "T1": 6, "T2": 3 }, "winnerTeamId": "T1" }
+      ]
     }
-  },
-  "matchScore": {
-    "sets": [
-      {"games": {"P123": 6, "P456": 4}, "winnerTeamId": "P123"},
-      {"games": {"P123": 6, "P456": 3}, "winnerTeamId": "P123"}
-    ]
-  }
-}'
+  }'
 ```
 
-**Response:**
-```json
-{
-  "players": {
-    "P123": {
-      "playerId": "P123",
-      "name": "John Doe",
-      "rating": {"value": 4.5}
-    },
-    "P456": {
-      "playerId": "P456",
-      "name": "Jane Smith",
-      "rating": {"value": 4.0}
-    }
-  },
-  "ratingChanges": {
-    "P123": {
-      "change": 0.0,
-      "percentChange": 0.0,
-      "previousRating": {"value": 4.5},
-      "newRating": {"value": 4.5}
-    },
-    "P456": {
-      "change": 0.0,
-      "percentChange": 0.0,
-      "previousRating": {"value": 4.0},
-      "newRating": {"value": 4.0}
-    }
-  }
-}
-```
-
-*Note: Uses Elo-based ranking algorithm. See [RATING_CALCULATION_ALGORITHM.md](../../product/RATING_CALCULATION_ALGORITHM.md) for details.*
-
-### Example 2: NTRP Match with Tiebreak
-
-**Request:**
-```bash
-curl -X POST http://localhost:8080/api/v1/calculate-ranking \
-  -H "Content-Type: application/json" \
-  -d '{
-  "players": {
-    "P789": {
-      "playerId": "P789",
-      "name": "Mike Wilson",
-      "rating": {"value": 4.5}
-    },
-    "P101": {
-      "playerId": "P101",
-      "name": "Sarah Lee",
-      "rating": {"value": 4.2}
-    }
-  },
-  "matchScore": {
-    "sets": [
-      {
-        "games": {"P789": 7, "P101": 6},
-        "tiebreak": {
-          "points": {"P789": 7, "P101": 5},
-          "winnerTeamId": "P789"
-        },
-        "winnerTeamId": "P789"
-      },
-      {
-        "games": {"P789": 4, "P101": 6},
-        "winnerTeamId": "P101"
-      },
-      {
-        "games": {"P789": 6, "P101": 3},
-        "winnerTeamId": "P789"
-      }
-    ]
-  },
-  "matchDate": "2024-01-15T14:30:00Z"
-}'
-```
-
-**Response:**
-```json
-{
-  "players": {
-    "P789": {
-      "playerId": "P789",
-      "name": "Mike Wilson",
-      "rating": {"value": 4.6}
-    },
-    "P101": {
-      "playerId": "P101",
-      "name": "Sarah Lee",
-      "rating": {"value": 4.1}
-    }
-  },
-  "ratingChanges": {
-    "P789": {
-      "change": 0.1,
-      "percentChange": 2.22,
-      "previousRating": {"value": 4.5},
-      "newRating": {"value": 4.6}
-    },
-    "P101": {
-      "change": -0.1,
-      "percentChange": -2.38,
-      "previousRating": {"value": 4.2},
-      "newRating": {"value": 4.1}
-    }
-  }
-}
-```
+Ratings are NTRP (1.0-7.0), computed to 6 decimal places. The algorithm is documented in
+[RATING_CALCULATION_ALGORITHM.md](../../product/RATING_CALCULATION_ALGORITHM.md); optional smoothing
+in [RATING_SMOOTHING.md](../../product/RATING_SMOOTHING.md).
 
 ---
 
-## Validation Rules
+## Health & monitoring
 
-### Request Validation
-
-1. **Exactly 2 players required** for singles matches
-2. **Map keys must match player IDs** in profiles
-3. **Player IDs in scores must be valid** (exist in players map)
-4. **Winner must be a valid player ID**
-
-### Player Validation
-
-1. **Player ID**: Non-blank, max 50 characters
-2. **Name**: Non-blank, max 100 characters
-3. **Rating value**: Must be a valid NTRP value (1.0 to 7.0)
-
-### Match Score Validation
-
-1. **Sets**: 1-5 sets allowed
-2. **Set games**: Winner must have at least 6 games
-3. **Set margin**: Must win by at least 2 games (unless tiebreak)
-4. **Tiebreak**: Winner must have at least 7 points and win by 2
-5. **Set winner**: Must be one of the two players
-6. **Consistency**: All sets must have the same players
+- `GET /health` — liveness/version JSON.
+- `GET /metrics` — Prometheus metrics (JVM, HTTP, application). See
+  [LOGGING_AND_METRICS.md](../operations/LOGGING_AND_METRICS.md).
 
 ---
 
-## Error Codes
+## Authentication
 
-| Status Code | Description |
-|-------------|-------------|
-| 200 OK | Request successful |
-| 400 Bad Request | Validation error or malformed JSON |
-| 500 Internal Server Error | Unexpected server error |
-
----
-
-## Rate Limiting
-
-Currently no rate limiting is enforced.
-
----
-
-## Testing
-
-### Manual Testing
-
-Use the provided test script:
-```bash
-./scripts/test-ranking-api.sh
-```
-
-### With curl
-
-```bash
-# Test health
-curl http://localhost:8080/health
-
-# Test ranking calculation
-curl -X POST http://localhost:8080/api/v1/calculate-ranking \
-  -H "Content-Type: application/json" \
-  -d @test-data.json
-```
-
-### With HTTPie
-
-```bash
-# Install HTTPie
-brew install httpie
-
-# Test
-http POST :8080/api/v1/calculate-ranking < test-data.json
-```
-
----
-
-## Current Limitations
-
-1. **No Persistence**: Match results and player profiles are not stored
-2. **No Authentication**: API is open without authentication
-3. **No Rate Limiting**: Unlimited requests allowed
-
----
-
-## Roadmap
-
-### Phase 1: Core Functionality ✅
-- ✅ Data model implementation
-- ✅ API endpoint with validation
-- ✅ Comprehensive test suite
-- ✅ API documentation
-
-### Phase 2: Ranking Algorithm ✅
-- ✅ Performance-based Elo algorithm (K=0.16 NTRP)
-- ✅ NTRP-specific calculations
-- ✅ Optional rating smoothing (see [RATING_SMOOTHING.md](../../product/RATING_SMOOTHING.md))
-
-### Phase 3: Persistence (In Progress)
-- ✅ Database infrastructure (PostgreSQL, Flyway, Exposed)
-- Store player profiles
-- Store match results
-- Historical ranking tracking
-
-### Phase 4: Advanced Features
-- Authentication & authorization
-- Rate limiting
-- Match metadata (tournament, surface, location)
-- Statistical analysis
-- API versioning
-
----
-
-## Support
-
-For issues, questions, or contributions:
-- GitHub: [Repository URL]
-- Documentation: `docs/` directory
-
----
-
-**Version:** 0.0.1-SNAPSHOT
-**Last Updated:** 2024-01-15
+The persistent API (everything except `/api/v1/calculate-ranking`, `/health`, `/metrics`) requires
+a **Firebase ID token** (`Authorization: Bearer <token>`) and capability-based authorization. See
+[AUTHENTICATION.md](../architecture/AUTHENTICATION.md) and
+[CAPABILITIES_API.md](CAPABILITIES_API.md).

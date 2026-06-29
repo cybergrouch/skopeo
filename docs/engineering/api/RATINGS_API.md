@@ -1,22 +1,30 @@
-# Ratings & Assessment API (PR1 of #4)
+# Ratings & Assessment API
 
-How a user's ratings are stored, read, and **assigned by administrators**. This is the
-foundation for match-driven rating changes (PR2): a user must have a rating before they can be
-entered into a match.
+How a user's ratings are stored, read, **assigned by raters/administrators**, and how players ask
+for a re-rate. A user must have a rating before they can be entered into a match.
+
+> The canonical, machine-verified contract is the OpenAPI spec
+> (`src/main/resources/openapi/documentation.yaml`, verified by `OpenAPIIntegrationTest`). This
+> page is the human-readable companion.
 
 ## Model
 
 A user has at most one rating in `user_ratings`: a continuous `value` paired with its discrete
 published `level` (e.g. `4.3` → level `4.0`), a `confidence` (0–1, low at first, converges with
 play), `matchesPlayed`, and `lastMatchDate`. Rating changes accrue in `user_rating_history`
-(written by the match flow in PR2; readable here).
+(written by the calculation trigger; readable here).
+
+**Privacy (#114).** The exact `value` is withheld from players: only a rating manager
+(ADMINISTRATOR) sees it. A player reading their own rating gets the published `level` plus a
+normalized `bandPosition` (0..1 within the band) — never the raw number. The `PUT` setter echoes
+the value back to the rater who just set it.
 
 ## Assessment policy
 
 - **No auto-seed.** A new user has *no* rating and is **pending assessment**.
-- **Only an ADMINISTRATOR sets a rating** (the initial assessment, or a later adjustment).
-- A user pending assessment is **ineligible to be added to a match** (enforced by the match
-  flow in PR2). Administrators get a **pending-assessment list** to work through.
+- **A RATER or ADMINISTRATOR sets a rating** (the initial assessment, or a later adjustment).
+- A user pending assessment is **ineligible to be added to a match**. Raters/administrators get a
+  paginated **pending-assessment list** to work through.
 
 ## Endpoints
 
@@ -24,30 +32,76 @@ play), `matchesPlayed`, and `lastMatchDate`. Rating changes accrue in `user_rati
 |---|---|---|
 | `GET` | `/api/v1/users/{userId}/ratings` | self-or-admin — the user's rating (a list, 0 or 1) |
 | `GET` | `/api/v1/users/{userId}/rating-history` | self-or-admin — history |
-| `PUT` | `/api/v1/users/{userId}/ratings` | **admin only** — set/adjust `{ "value": "4.0", "confidence"?: "0.5" }` |
-| `GET` | `/api/v1/users/pending-assessment` | **admin only** — users with no rating yet |
+| `PUT` | `/api/v1/users/{userId}/ratings` | **RATER/ADMIN** — set/adjust `{ "value": "4.0", "confidence"?: "0.5" }` |
+| `GET` | `/api/v1/users/pending-assessment?limit=&offset=` | **RATER/ADMIN** — users with no rating yet (paginated) |
+| `POST` | `/api/v1/ratings/calculations` | **ADMIN** — trigger the rating calculation (dry-run by default) |
 
 Setting a rating validates the NTRP range (1.0–7.0) and derives the published level via the
 calculator's `Level` logic. Values are stored/returned at `NUMERIC(10,6)` precision (e.g.
-`"4.000000"`).
+`"4.000000"`); `confidence`, when supplied, must be in `[0, 1]`.
+
+`pending-assessment` returns a page: `{ "items": [...], "total": N }`, where each item carries the
+user's `publicCode`, `displayName`, `sex`, `dateOfBirth`/`age`, and any `proposedRating`.
 
 ### Status codes
 
 `200` ok · `400` invalid rating value/confidence · `401` missing/invalid token · `403` not
-self/admin (reads) or not admin (set / pending list) · `404` no such user.
+self/admin (reads) or not a rating manager (set / pending list / calculations) · `404` no such user.
+
+## Re-rate requests (#140)
+
+A player can ask for their rating to be reconsidered; a RATER/ADMINISTRATOR triages the queue.
+
+| Method | Path | Access |
+|---|---|---|
+| `POST` | `/api/v1/rating-requests` | player — raise one open request `{ "justification": "…" }` |
+| `GET` | `/api/v1/rating-requests/me` | player — their latest request (`204` if none) |
+| `GET` | `/api/v1/rating-requests?status=&limit=&offset=` | **RATER/ADMIN** — paginated list (filter by `PENDING`/`APPROVED`/`DENIED`) |
+| `POST` | `/api/v1/rating-requests/{id}/approve` | **RATER/ADMIN** — apply a new rating `{ "rating": "4.5" }` |
+| `POST` | `/api/v1/rating-requests/{id}/deny` | **RATER/ADMIN** — `{ "reason": "…" }` |
+
+A player may have at most one **open** request at a time, and must already have a rating to raise
+one. A `RatingRequestResponse` carries `id`, `userId`, `status`, `justification`, the approved
+`newRating` (as a **published band only**, never the raw value — privacy #114), `reason`,
+`resolvedAt`, `createdAt`, and (on the RATER list only) the resolved `requester`. The RATER list
+response is a page: `{ "items": [...], "total": N }`.
+
+### Status codes
+
+`201` created · `200` ok · `204` no own request · `400` blank justification / no rating yet /
+invalid NTRP / missing reason · `401` · `403` not a player / not a RATER · `404` no such request ·
+`409` player already has an open request, or the request is already resolved.
+
+## Rating calculation trigger
+
+Recording match results never moves ratings — an administrator triggers the calculation
+deliberately:
+
+`POST /api/v1/ratings/calculations` (ADMINISTRATOR), body `{ "dryRun": true }`.
+
+- Gathers the matches **pending calculation** (active, `COMPLETED`, unrated) and processes them
+  **oldest→newest by `completedAt`** against an in-memory `(user) → rating` snapshot — seeded from
+  stored ratings and **carried forward** so the chain is correct (match N uses the rating match
+  N-1 produced). Each match reuses the stateless `RankingCalculator`.
+- **`dryRun` defaults to `true`** (an empty/absent/unparseable body is a dry run): returns the full
+  per-match, per-player preview (`previousRating`/`newRating`/`change`/`percentChange`/level plus
+  the calculator `breakdown`) with **zero writes**. Only an explicit `{"dryRun": false}` commits.
+- **Commit** (`dryRun: false`) persists in one transaction: updates `user_ratings` (new
+  rating/level, `matchesPlayed++`, `lastMatchDate`), appends `user_rating_history` (with
+  `matchId` + stored breakdown), and stamps each match `ratedAt`/`ratedBy`. **Idempotent** — a
+  re-run finds nothing pending. SINGLES only for now (the calculator's scope).
+- Response shape: `{ "dryRun": bool, "matchesProcessed": N, "matches": [ { "matchId", "matchDate",
+  "changes": [...] } ] }`.
+
+Layering: `service/rating/RatingCalculationService.kt` orchestrates; `RatingRepository` performs
+the match-driven write + history append, `MatchRepository` the `markRated` stamp.
 
 ## Layering
 
-`routes/RatingRoutes.kt` (thin) → `service/rating/RatingService.kt` (authz, range/level
-derivation) → `repository/RatingRepository.kt` (Exposed over `user_ratings` /
-`user_rating_history`). No schema migration — the tables already exist (V1).
-
-## Next (PR2 — fixtures & results)
-
-A HOST/ADMINISTRATOR creates a **match fixture** (participants, who must already be rated;
-date) then later **uploads results**, which runs the calculator on the stored ratings
-and writes the new ratings + history. Adds the `matches`/`teams`/`match_sets` mappings and a
-small migration (nullable `winner_team_id` for scheduled fixtures + `created_by`/`recorded_by`).
+`routes/RatingRoutes.kt` + `routes/RatingRequestRoutes.kt` (thin) → `service/rating/*` (authz,
+range/level derivation, request triage) → `repository/RatingRepository.kt` +
+`RatingRequestRepository.kt` (Exposed over `user_ratings` / `user_rating_history` /
+`rating_requests`).
 
 ## Future work — onboarding ratings & provisional convergence
 

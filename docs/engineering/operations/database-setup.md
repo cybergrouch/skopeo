@@ -65,6 +65,16 @@ Expected tables:
 - `matches`
 - `match_sets`
 - `match_set_tiebreaks`
+- `invites`
+- `audit_log`
+- `duplicate_candidates`
+- `events`
+- `event_participants`
+- `rating_requests`
+- `player_lists`
+- `player_list_members`
+- `seedings`
+- `seeding_entries`
 
 ---
 
