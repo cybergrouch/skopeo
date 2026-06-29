@@ -53,6 +53,8 @@ describe('ResearchTab', () => {
     await user.click(screen.getByRole('button', { name: 'Search' }))
 
     expect(screen.getByText('Alice')).toBeInTheDocument()
+    // The public code is shown as a differentiator for same-named players.
+    expect(screen.getByText('· AAA111')).toBeInTheDocument()
     expect(screen.getByText('Female · 34')).toBeInTheDocument()
     // Band only, not the 6-decimal value; capability badge no longer shown.
     expect(screen.getByText('NTRP 4.0')).toBeInTheDocument()
@@ -60,6 +62,49 @@ describe('ResearchTab', () => {
     expect(container.querySelector('img')).toHaveAttribute('src', 'https://example.com/a.jpg')
     expect(screen.getByRole('link', { name: /Alice/ })).toHaveAttribute('href', '/players/AAA111')
     expect(useGetApiV1Users).toHaveBeenCalledWith({ name: 'ali' }, { query: { enabled: true } })
+  })
+
+  it('shows both same-named players, each distinguished by its public code', async () => {
+    // Two different people can share a name (common in PH); the search must surface both,
+    // and the public code is what tells them apart in the list.
+    useGetApiV1Users.mockReturnValue({
+      data: [
+        {
+          id: 'm1',
+          publicCode: 'CDBZ7N',
+          displayName: 'Maria Garcia',
+          photoUrl: null,
+          sex: 'Female',
+          age: 35,
+          rating: undefined,
+          capabilities: ['PLAYER'],
+        },
+        {
+          id: 'm2',
+          publicCode: 'ERVNVV',
+          displayName: 'Maria Garcia',
+          photoUrl: null,
+          sex: 'Female',
+          age: 32,
+          rating: undefined,
+          capabilities: ['PLAYER'],
+        },
+      ],
+      isLoading: false,
+      isError: false,
+    })
+    const user = userEvent.setup()
+    renderTab()
+    await user.type(screen.getByLabelText('Name'), 'maria garcia')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+
+    // Both rows render (no dedup on the identical display name)...
+    expect(screen.getAllByText('Maria Garcia')).toHaveLength(2)
+    // ...and each carries its own distinguishing public code + profile link.
+    expect(screen.getByText('· CDBZ7N')).toBeInTheDocument()
+    expect(screen.getByText('· ERVNVV')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /CDBZ7N/ })).toHaveAttribute('href', '/players/CDBZ7N')
+    expect(screen.getByRole('link', { name: /ERVNVV/ })).toHaveAttribute('href', '/players/ERVNVV')
   })
 
   it('falls back to a rating value when there is no published level', async () => {

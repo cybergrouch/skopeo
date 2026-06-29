@@ -183,7 +183,10 @@ export function ResearchTab() {
                         )}
                         <div className="min-w-0 flex-1">
                           <div className="font-medium">
-                            {user.displayName ?? user.id}
+                            {user.displayName ?? user.id}{' '}
+                            <span className="font-normal text-muted-foreground">
+                              · {user.publicCode}
+                            </span>
                           </div>
                           {meta ? (
                             <div className="text-muted-foreground">{meta}</div>
