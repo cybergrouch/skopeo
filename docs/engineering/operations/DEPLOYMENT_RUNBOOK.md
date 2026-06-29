@@ -95,6 +95,27 @@ The API allows `localhost:5173` always and reads production origins from config 
 the browser uses — the custom apex **and** the Firebase default while DNS propagates, e.g.
 `https://skopeo.com,https://skopeo-prod.web.app`. No code change is needed to add an origin.
 
+> **Format is strict** — each entry must be a full `scheme://host[:port]` (include `https://`, no
+> trailing slash, no path). Malformed entries (e.g. a bare `skopeo.com`) are **silently dropped**, so
+> a typo means the browser is blocked with no server-side error.
+
+> **Multi-origin + gcloud:** `WEB_ORIGINS` is the one runtime variable that legitimately contains
+> commas, but `gcloud run deploy --set-env-vars` also uses commas to separate assignments. So a
+> multi-origin value would be mis-parsed by the default delimiter. `deploy-api.yml` therefore sets env
+> vars with gcloud's alternate-delimiter syntax — a leading `^##^` makes `##` the separator so commas
+> inside `WEB_ORIGINS` survive. If you ever set these vars by hand, do the same, e.g.
+> `gcloud run services update skopeo --set-env-vars "^##^WEB_ORIGINS=https://skopeo.com,https://skopeo-prod.web.app"`.
+
+Changing `WEB_ORIGINS` only takes effect on the **next API deploy** (env vars are injected at deploy
+time) — redeploy the API after editing it. Verify with a preflight:
+
+```bash
+curl -i -X OPTIONS https://api.skopeo.com/api/v1/users \
+  -H "Origin: https://skopeo.com" \
+  -H "Access-Control-Request-Method: GET"
+# expect: Access-Control-Allow-Origin: https://skopeo.com
+```
+
 ## Custom domain (apex → Web, `api.` → API)
 
 1. **Web (apex):** Firebase Console → Hosting → **Add custom domain** → `skopeo.com`; add the A/TXT
