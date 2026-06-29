@@ -10,6 +10,8 @@ build/
 .gradle/
 *.jar
 *.class
+# ...but the Gradle wrapper jar MUST ship — the Dockerfile's `./gradlew` needs it (re-include after *.jar).
+!gradle/wrapper/gradle-wrapper.jar
 
 # Frontend — deployed separately to Firebase Hosting, not part of the API image
 web/
