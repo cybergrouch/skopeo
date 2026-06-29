@@ -50,6 +50,7 @@ data class Match(
     val ratedAt: LocalDateTime? = null,
     val createdBy: UUID? = null,
     val recordedBy: UUID? = null,
+    val eventId: UUID? = null,
 )
 
 /** Everything needed to create a fixture (the result is uploaded separately). */
@@ -64,6 +65,7 @@ data class CreateFixtureCommand(
     val createdBy: UUID,
     val venue: String? = null,
     val tournamentName: String? = null,
+    val eventId: UUID? = null,
 )
 
 /** A set's raw score as submitted with results; winners are derived server-side. */

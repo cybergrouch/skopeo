@@ -20,6 +20,7 @@ import org.skopeo.dto.match.SetScoreRequest
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
+import org.skopeo.model.CreateEventCommand
 import org.skopeo.model.MatchQuery
 import org.skopeo.model.MatchStatus
 import org.skopeo.model.MatchType
@@ -31,6 +32,7 @@ import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.repository.AuditRepository
+import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.MatchesTable
 import org.skopeo.repository.RatingRepository
@@ -494,6 +496,71 @@ class MatchServiceTest {
         public.sets shouldHaveSize 2
 
         service.publicByCode(code = "ZZZZZZ").shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
+    fun `a fixture scoped to an event requires both players to be participants (#138)`() {
+        val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val outsider = provisionUser(uid = "p3", rated = true)
+        val event =
+            EventRepository().create(
+                command =
+                    CreateEventCommand(
+                        name = "E",
+                        startDate = LocalDate.parse("2026-01-01"),
+                        endDate = LocalDate.parse("2026-01-02"),
+                        participantIds = listOf(p1.id, p2.id),
+                        createdBy = host.id,
+                    ),
+            )
+
+        // Both players are participants → linked to the event.
+        val ok =
+            service
+                .createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id))
+                .shouldBeRight()
+        ok.eventId shouldBe event.id
+
+        // A non-participant → rejected.
+        service
+            .createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = outsider.id).copy(eventId = event.id))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+
+        // An unknown event → rejected.
+        service
+            .createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = UUID.randomUUID()))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `awaiting-results can be scoped to a single event (#138)`() {
+        val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val event =
+            EventRepository().create(
+                command =
+                    CreateEventCommand(
+                        name = "E",
+                        startDate = LocalDate.parse("2026-01-01"),
+                        endDate = LocalDate.parse("2026-01-02"),
+                        participantIds = listOf(p1.id, p2.id),
+                        createdBy = host.id,
+                    ),
+            )
+        val inEvent =
+            service
+                .createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id))
+                .shouldBeRight()
+        // A fixture not in any event.
+        service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
+
+        val scoped = service.query(token = token(uid = "host"), view = MatchQuery.AWAITING_RESULTS, eventId = event.id).shouldBeRight()
+        scoped.map { it.id } shouldBe listOf(element = inEvent.id)
     }
 
     @Test

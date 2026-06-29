@@ -73,8 +73,9 @@ function MatchResultRow({
 
   const upload = usePostApiV1MatchesIdResult({
     mutation: {
+      // Refresh every awaiting-results list (global + any event-scoped one) via the base key prefix.
       onSuccess: () =>
-        queryClient.invalidateQueries({ queryKey: getGetApiV1MatchesQueryKey(AWAITING) }),
+        queryClient.invalidateQueries({ queryKey: getGetApiV1MatchesQueryKey() }),
     },
   })
 
@@ -165,8 +166,9 @@ function MatchResultRow({
   )
 }
 
-export function AwaitingResultsSection() {
-  const matchesQuery = useGetApiV1Matches(AWAITING)
+export function AwaitingResultsSection({ eventId }: { eventId?: string } = {}) {
+  // Scope to a single event's awaiting fixtures when given (#138), else the global oversight list.
+  const matchesQuery = useGetApiV1Matches(eventId ? { ...AWAITING, eventId } : AWAITING)
   const matches = matchesQuery.data ?? []
 
   const ids = [...new Set(matches.flatMap((m) => [...m.team1.userIds, ...m.team2.userIds]))]

@@ -51,7 +51,8 @@ private fun Route.listAndCreate(service: MatchService) {
     get {
         respondMappingErrors {
             val view = matchQueryOf(value = call.request.queryParameters["filter"])
-            respondEither(result = service.query(token = verifiedToken(), view = view)) { list ->
+            val eventId = call.request.queryParameters["eventId"]?.let { parseUserId(value = it) }
+            respondEither(result = service.query(token = verifiedToken(), view = view, eventId = eventId)) { list ->
                 call.respond(status = HttpStatusCode.OK, message = list.map { it.toResponse() })
             }
         }
@@ -80,6 +81,7 @@ private fun toFixtureInput(request: CreateFixtureRequest): FixtureInput {
         team2 = team2,
         venue = request.venue,
         tournamentName = request.tournamentName,
+        eventId = request.eventId?.let { parseUserId(value = it) },
     )
 }
 

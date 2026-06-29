@@ -31,6 +31,7 @@ import org.skopeo.routes.configureAuditRoutes
 import org.skopeo.routes.configureCapabilityRoutes
 import org.skopeo.routes.configureContactRoutes
 import org.skopeo.routes.configureDuplicateCandidateRoutes
+import org.skopeo.routes.configureEventRoutes
 import org.skopeo.routes.configureInviteRoutes
 import org.skopeo.routes.configureMatchRoutes
 import org.skopeo.routes.configureNameRoutes
@@ -79,6 +80,7 @@ fun Application.module(
     configureCapabilityRoutes()
     configureRatingRoutes()
     configureMatchRoutes()
+    configureEventRoutes()
     configureInviteRoutes()
     configureDuplicateCandidateRoutes()
     configurePlayerListRoutes()

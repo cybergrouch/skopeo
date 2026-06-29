@@ -30,6 +30,7 @@ import org.skopeo.model.ServiceError
 import org.skopeo.model.TeamType
 import org.skopeo.model.User
 import org.skopeo.model.displayName
+import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
@@ -56,6 +57,8 @@ data class FixtureInput(
     val team2: List<UUID>,
     val venue: String? = null,
     val tournamentName: String? = null,
+    /** When set, the fixture belongs to this event and both sides must be event participants (#138). */
+    val eventId: UUID? = null,
 )
 
 /**
@@ -71,6 +74,7 @@ class MatchService(
     private val matches: MatchRepository = MatchRepository(),
     private val ratings: RatingRepository = RatingRepository(),
     private val users: UserRepository = UserRepository(),
+    private val events: EventRepository = EventRepository(),
     private val audit: AuditService = AuditService(),
 ) {
     /** [request] is parsed, range-checked, and composition-validated at the route boundary (#116). */
@@ -80,6 +84,7 @@ class MatchService(
     ): Either<ServiceError, Match> =
         either {
             val createdBy = requireStaff(token = token).bind()
+            ensureEventParticipants(request = request).bind()
             val team1Users = resolveRatedParticipants(ids = request.team1).bind()
             val team2Users = resolveRatedParticipants(ids = request.team2).bind()
 
@@ -97,6 +102,7 @@ class MatchService(
                             createdBy = createdBy,
                             venue = request.venue,
                             tournamentName = request.tournamentName,
+                            eventId = request.eventId,
                         ),
                 )
             audit.record(
@@ -239,15 +245,37 @@ class MatchService(
     fun query(
         token: VerifiedFirebaseToken,
         view: MatchQuery,
+        eventId: UUID? = null,
     ): Either<ServiceError, List<Match>> =
         either {
             val caller = staffCaller(token = token).bind()
             val scopedTo = if (caller.capabilities.contains(element = Capability.ADMINISTRATOR)) null else caller.id
             when (view) {
                 MatchQuery.PENDING_CALCULATION -> matches.listPendingCalculation(createdBy = scopedTo)
-                MatchQuery.AWAITING_RESULTS -> matches.listAwaitingResults(createdBy = scopedTo)
+                // An event scope (#138) shows that event's awaiting fixtures to any staff member.
+                MatchQuery.AWAITING_RESULTS ->
+                    if (eventId != null) {
+                        matches.listAwaitingResults(eventId = eventId)
+                    } else {
+                        matches.listAwaitingResults(createdBy = scopedTo)
+                    }
             }
         }
+
+    /**
+     * When a fixture is scoped to an event (#138), the event must exist and BOTH sides must be event
+     * participants — the hard constraint behind the participant-scoped player search. No-op otherwise.
+     */
+    private fun ensureEventParticipants(request: FixtureInput): Either<ServiceError, Unit> {
+        val eventId = request.eventId ?: return Unit.right()
+        val event = events.findById(id = eventId)
+        val players = request.team1 + request.team2
+        return when {
+            event == null -> ServiceError.Validation(message = "Event $eventId not found").left()
+            players.all { it in event.participantIds.toSet() } -> Unit.right()
+            else -> ServiceError.Validation(message = "All players must be participants of the event").left()
+        }
+    }
 
     private fun requireStaff(token: VerifiedFirebaseToken): Either<ServiceError, UUID> = staffCaller(token = token).map { it.id }
 
