@@ -168,6 +168,15 @@ Skopeo's evolution from a **stateless rating calculator** to a **comprehensive p
 | 6 | Match Tracking System | ✅ DONE | Implemented | #5, Database | Match fixtures + result upload with score validation |
 | 7 | Rating Persistence | ✅ DONE | Implemented | #5, #6, #1 | Admin-set initial ratings, calculation trigger (dry-run/commit), rating history |
 | 8 | Web UI | ✅ DONE | Implemented | #5-#7 | Sign-up + capability-gated dashboard (Profile / Research / Standings / Event Organizer / Seeding / Ratings / Invites / Activity Log / Admin) |
+| **PLATFORM & GOVERNANCE (IMPLEMENTED)** |
+| 24 | Capability-Based Authorization | ✅ DONE | Implemented | #5 | Role gates: PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER (#106), RESEARCHER (#107) |
+| 25 | Event Organizer | ✅ DONE | Implemented | #6, #8 | Host-run events/meets: participants + participant-scoped fixtures; results editable until rated, then read-only (#138) |
+| 26 | Public Pages + QR Sharing | ✅ DONE | Implemented | #5, #6 | Shareable code pages for players / matches / events, with QR (#56 / #136 / #137 / #138) |
+| 27 | Player Search & Research | ✅ DONE | Implemented | #5 | Accent-insensitive name/code search with sex/age/rating filters; Research tab (#86 / #87 / #107) |
+| 28 | Audit / Activity Log | ✅ DONE | Implemented | #5 | Append-only provenance of domain actions + admin activity viewer (#100 / #102) |
+| 29 | Duplicate Detection & Rectification | ✅ DONE | Implemented | #5 | Auto/manual duplicate-candidate flagging + reversible canonical merge (#124 / #126) |
+| 30 | Admin Invitations | ✅ DONE | Implemented | #5 | Invite-gated manual onboarding (email/password & email-link) (#74) |
+| 31 | Re-rate Requests | ✅ DONE | Implemented | #7 | Players request a rating reconsideration; a RATER approves (new rating) or denies (#140) |
 | **MVP REQUIREMENTS (REMAINING)** |
 | 9 | Player Identity Verification (KYC) 🇵🇭 | 🔴 CRITICAL | Not Started | #5 | Philippine government ID validation (Passport, DL, UMID, SSS, GSIS, National ID) |
 | 9a | Social Media Verification | 🟡 NICE-TO-HAVE | Not Started | #9 | Automated verification via social media accounts (Facebook, Instagram, Twitter) |
