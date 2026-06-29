@@ -221,11 +221,13 @@ export function EventDetail({
                       onChange={(e) => setTeam1(e.target.value)}
                     >
                       <option value="">Select…</option>
-                      {participants.map((p) => (
-                        <option key={p.userId} value={p.userId}>
-                          {playerLabel(p.displayName, p.publicCode, p.userId)}
-                        </option>
-                      ))}
+                      {participants
+                        .filter((p) => p.userId !== team2)
+                        .map((p) => (
+                          <option key={p.userId} value={p.userId}>
+                            {playerLabel(p.displayName, p.publicCode, p.userId)}
+                          </option>
+                        ))}
                     </select>
                   </div>
                   <div className="space-y-1">
@@ -239,11 +241,13 @@ export function EventDetail({
                       onChange={(e) => setTeam2(e.target.value)}
                     >
                       <option value="">Select…</option>
-                      {participants.map((p) => (
-                        <option key={p.userId} value={p.userId}>
-                          {playerLabel(p.displayName, p.publicCode, p.userId)}
-                        </option>
-                      ))}
+                      {participants
+                        .filter((p) => p.userId !== team1)
+                        .map((p) => (
+                          <option key={p.userId} value={p.userId}>
+                            {playerLabel(p.displayName, p.publicCode, p.userId)}
+                          </option>
+                        ))}
                     </select>
                   </div>
                 </div>
