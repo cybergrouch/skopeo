@@ -38,6 +38,7 @@ import org.skopeo.routes.configureNameRoutes
 import org.skopeo.routes.configurePlayerListRoutes
 import org.skopeo.routes.configurePlayerRoutes
 import org.skopeo.routes.configureRankingRoutes
+import org.skopeo.routes.configureRatingRequestRoutes
 import org.skopeo.routes.configureRatingRoutes
 import org.skopeo.routes.configureStandingsRoutes
 import org.skopeo.routes.configureUserRoutes
@@ -79,6 +80,7 @@ fun Application.module(
     configureNameRoutes()
     configureCapabilityRoutes()
     configureRatingRoutes()
+    configureRatingRequestRoutes()
     configureMatchRoutes()
     configureEventRoutes()
     configureInviteRoutes()

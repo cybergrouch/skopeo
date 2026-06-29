@@ -11,6 +11,7 @@ import { MatchHistoryCard } from '@/components/MatchHistoryCard'
 import { RatingHistoryCard } from '@/components/RatingHistoryCard'
 import { RatingBandMeter } from '@/components/RatingBandMeter'
 import { ShareCard } from '@/components/ShareCard'
+import { ReRateRequestCard } from '@/components/ReRateRequestCard'
 import type { Capability } from '@/auth/capabilities'
 import {
   useGetApiV1UsersUserIdRatingHistory,
@@ -143,6 +144,8 @@ export function ProfileTab({
           </div>
         </CardContent>
       </Card>
+
+      {hasRating ? <ReRateRequestCard /> : null}
 
       <Card>
         <CardHeader>

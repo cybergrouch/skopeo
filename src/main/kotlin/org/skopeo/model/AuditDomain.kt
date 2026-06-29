@@ -20,6 +20,8 @@ enum class AuditAction {
     CAPABILITY_REVOKED,
     RATING_SET,
     RATING_OVERRIDDEN,
+    RATING_REREQUESTED,
+    RATING_REQUEST_DENIED,
     INVITE_CREATED,
     INVITE_REVOKED,
     MATCH_FIXTURE_CREATED,
@@ -64,7 +66,11 @@ val AuditAction.category: AuditCategory
             AuditAction.NAME_ADDED, AuditAction.NAME_UPDATED -> AuditCategory.NAME_CHANGE
             AuditAction.CONTACT_ADDED, AuditAction.CONTACT_UPDATED -> AuditCategory.CONTACT_CHANGE
             AuditAction.CAPABILITY_GRANTED, AuditAction.CAPABILITY_REVOKED -> AuditCategory.CAPABILITY_CHANGE
-            AuditAction.RATING_SET, AuditAction.RATING_OVERRIDDEN -> AuditCategory.RATING_CHANGE
+            AuditAction.RATING_SET,
+            AuditAction.RATING_OVERRIDDEN,
+            AuditAction.RATING_REREQUESTED,
+            AuditAction.RATING_REQUEST_DENIED,
+            -> AuditCategory.RATING_CHANGE
             AuditAction.INVITE_CREATED, AuditAction.INVITE_REVOKED -> AuditCategory.INVITE
             AuditAction.MATCH_FIXTURE_CREATED -> AuditCategory.MATCH_FIXTURE
             AuditAction.MATCH_RESULT_RECORDED -> AuditCategory.MATCH_RESULT
