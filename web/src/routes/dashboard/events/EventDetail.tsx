@@ -23,7 +23,17 @@ import {
 } from '@/api/generated/matches/matches'
 import { UserSearchSelect } from '@/components/UserSearchSelect'
 import { playerLabel } from '@/lib/playerLabel'
+import type { EventParticipantResponse } from '@/api/generated/model'
 import { AwaitingResultsSection } from '../matches/AwaitingResultsSection'
+
+/** "Female · 34 · NTRP 4.0" — a participant's sex, age, and NTRP band, omitting whatever is missing. */
+function participantMeta(p: EventParticipantResponse): string {
+  const parts: string[] = []
+  if (p.sex) parts.push(p.sex)
+  if (p.age != null) parts.push(String(p.age))
+  if (p.rating) parts.push(`NTRP ${p.rating.level ?? p.rating.value}`)
+  return parts.join(' · ')
+}
 
 const MATCH_TYPES = [
   'OPEN_PLAY',
@@ -136,23 +146,33 @@ export function EventDetail({
               <div className="text-xs font-medium uppercase text-muted-foreground">Participants</div>
               {participants.length > 0 ? (
                 <ul className="space-y-1 text-sm">
-                  {participants.map((p) => (
-                    <li key={p.userId} className="flex items-center justify-between gap-2">
-                      <span>
-                        {playerLabel(p.displayName, p.publicCode, p.userId)}
-                        {p.publicCode ? <span className="text-muted-foreground"> ({p.publicCode})</span> : null}
-                      </span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        disabled={removeParticipant.isPending}
-                        onClick={() => removeParticipant.mutate({ id: eventId, userId: p.userId })}
-                      >
-                        Remove
-                      </Button>
-                    </li>
-                  ))}
+                  {participants.map((p) => {
+                    const meta = participantMeta(p)
+                    return (
+                      <li key={p.userId} className="flex items-center justify-between gap-2">
+                        <span className="min-w-0">
+                          <span className="block">
+                            {playerLabel(p.displayName, p.publicCode, p.userId)}
+                            {p.publicCode ? (
+                              <span className="text-muted-foreground"> ({p.publicCode})</span>
+                            ) : null}
+                          </span>
+                          {meta ? (
+                            <span className="block text-xs text-muted-foreground">{meta}</span>
+                          ) : null}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          disabled={removeParticipant.isPending}
+                          onClick={() => removeParticipant.mutate({ id: eventId, userId: p.userId })}
+                        >
+                          Remove
+                        </Button>
+                      </li>
+                    )
+                  })}
                 </ul>
               ) : (
                 <p className="text-sm text-muted-foreground">No participants yet.</p>

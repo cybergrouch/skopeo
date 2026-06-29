@@ -68,7 +68,14 @@ const event = {
   endDate: '2026-03-03',
   isActive: true,
   participants: [
-    { userId: 'u1', displayName: 'Ana', publicCode: 'AAA111' },
+    {
+      userId: 'u1',
+      displayName: 'Ana',
+      publicCode: 'AAA111',
+      sex: 'Female',
+      age: 34,
+      rating: { value: '4.000000', level: '4.0' },
+    },
     { userId: 'u2', displayName: 'Bob', publicCode: 'BBB222' },
   ],
 }
@@ -112,6 +119,8 @@ describe('EventDetail', () => {
     // Name appears in both the roster and the fixture pickers; the code is unique to the roster line.
     expect(screen.getByText(/\(AAA111\)/)).toBeInTheDocument()
     expect(screen.getByText(/\(BBB222\)/)).toBeInTheDocument()
+    // The roster shows sex · age · NTRP band to disambiguate same-named players.
+    expect(screen.getByText('Female · 34 · NTRP 4.0')).toBeInTheDocument()
     expect(screen.getByText('awaiting:e1')).toBeInTheDocument()
   })
 
@@ -129,6 +138,20 @@ describe('EventDetail', () => {
     renderDetail()
     expect(screen.getAllByText(/DDD444/).length).toBeGreaterThan(0) // name falls back to the code
     expect(screen.getAllByText(/abcdef12/).length).toBeGreaterThan(0) // both null → sliced id
+  })
+
+  it('falls back to the raw rating value when a participant has no published band', () => {
+    useGetApiV1EventsId.mockReturnValue({
+      data: {
+        ...event,
+        participants: [
+          { userId: 'u5', displayName: 'Cleo', publicCode: 'EEE555', rating: { value: '5.250000', level: null } },
+        ],
+      },
+      isLoading: false,
+    })
+    renderDetail()
+    expect(screen.getByText('NTRP 5.250000')).toBeInTheDocument()
   })
 
   it('shows the empty-roster message when there are no participants', () => {

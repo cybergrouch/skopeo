@@ -20,9 +20,11 @@ import org.skopeo.model.EventParticipantRef
 import org.skopeo.model.EventView
 import org.skopeo.model.ServiceError
 import org.skopeo.model.User
+import org.skopeo.model.ageInYears
 import org.skopeo.model.displayName
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
+import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.user.VerifiedFirebaseToken
 import java.time.LocalDate
@@ -47,6 +49,7 @@ class EventService(
     private val events: EventRepository = EventRepository(),
     private val users: UserRepository = UserRepository(),
     private val matches: MatchRepository = MatchRepository(),
+    private val ratings: RatingRepository = RatingRepository(),
 ) {
     fun create(
         token: VerifiedFirebaseToken,
@@ -162,14 +165,22 @@ class EventService(
             )
         }
 
-    /** Resolve an event's participant ids to names/codes (preserving roster order). */
+    /** Resolve an event's participant ids to names/codes + roster facets (sex/age/rating, in order). */
     private fun toView(event: Event): EventView {
         // A participant row always references an existing user (FK), so getValue is safe.
         val byId = users.findAllByIds(ids = event.participantIds).associateBy { it.id }
+        val ratingById = ratings.findCurrentRatings(userIds = event.participantIds)
         val participants =
             event.participantIds.map { id ->
                 val user = byId.getValue(key = id)
-                EventParticipantRef(userId = id, displayName = user.displayName(), publicCode = user.publicCode)
+                EventParticipantRef(
+                    userId = id,
+                    displayName = user.displayName(),
+                    publicCode = user.publicCode,
+                    sex = user.sex,
+                    age = user.dateOfBirth?.let { ageInYears(dateOfBirth = it, asOf = LocalDate.now()) },
+                    rating = ratingById[id],
+                )
             }
         return EventView(event = event, participants = participants)
     }

@@ -3338,6 +3338,25 @@ components:
         publicCode:
           type: string
           nullable: true
+        sex:
+          type: string
+          nullable: true
+          enum: [Male, Female]
+        age:
+          type: integer
+          nullable: true
+          description: Whole years as of today, computed from date of birth.
+        rating:
+          nullable: true
+          type: object
+          required:
+            - value
+          properties:
+            value:
+              type: string
+            level:
+              type: string
+              nullable: true
 
     EventResponse:
       type: object
