@@ -128,6 +128,12 @@ describe('EventDetail', () => {
     expect(screen.getAllByText(/abcdef12/).length).toBeGreaterThan(0) // both null → sliced id
   })
 
+  it('shows the empty-roster message when there are no participants', () => {
+    useGetApiV1EventsId.mockReturnValue({ data: { ...event, participants: [] }, isLoading: false })
+    renderDetail()
+    expect(screen.getByText('No participants yet.')).toBeInTheDocument()
+  })
+
   it('adds and removes a participant', async () => {
     const user = userEvent.setup()
     renderDetail()

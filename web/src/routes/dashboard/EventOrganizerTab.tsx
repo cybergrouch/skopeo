@@ -18,6 +18,7 @@ import {
 import type { UserSummaryResponse } from '@/api/generated/model'
 import { UserSearchSelect } from '@/components/UserSearchSelect'
 import { plural } from '@/lib/plural'
+import { playerLabel } from '@/lib/playerLabel'
 import { EventDetail } from './events/EventDetail'
 
 /** The new-event roster being assembled before the event is created. */
@@ -99,7 +100,7 @@ function NewEventForm() {
                       size="sm"
                       onClick={() => setRoster((r) => r.filter((x) => x.id !== u.id))}
                     >
-                      {u.displayName ?? u.publicCode ?? u.id.slice(0, 8)} ✕
+                      {playerLabel(u.displayName, u.publicCode, u.id)} ✕
                     </Button>
                   </li>
                 ))}

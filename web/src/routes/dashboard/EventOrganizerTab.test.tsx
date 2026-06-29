@@ -139,9 +139,11 @@ describe('EventOrganizerTab', () => {
     expect(screen.getByText(/Could not create the event/)).toBeInTheDocument()
   })
 
-  it('removes a staged participant before creating', async () => {
+  it('de-duplicates and removes a staged participant before creating', async () => {
     const user = userEvent.setup()
     renderTab()
+    // Selecting the same player twice adds them once (de-duplicated).
+    await user.click(screen.getByRole('button', { name: 'Search players to add…' }))
     await user.click(screen.getByRole('button', { name: 'Search players to add…' }))
     expect(screen.getByRole('button', { name: /Ana ✕/ })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /Ana ✕/ }))

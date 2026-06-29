@@ -21,6 +21,7 @@ import {
   usePostApiV1Matches,
 } from '@/api/generated/matches/matches'
 import { UserSearchSelect } from '@/components/UserSearchSelect'
+import { playerLabel } from '@/lib/playerLabel'
 import { AwaitingResultsSection } from '../matches/AwaitingResultsSection'
 
 const MATCH_TYPES = [
@@ -133,7 +134,7 @@ export function EventDetail({
                   {participants.map((p) => (
                     <li key={p.userId} className="flex items-center justify-between gap-2">
                       <span>
-                        {p.displayName ?? p.publicCode ?? p.userId.slice(0, 8)}
+                        {playerLabel(p.displayName, p.publicCode, p.userId)}
                         {p.publicCode ? <span className="text-muted-foreground"> ({p.publicCode})</span> : null}
                       </span>
                       <Button
@@ -197,7 +198,7 @@ export function EventDetail({
                       <option value="">Select…</option>
                       {participants.map((p) => (
                         <option key={p.userId} value={p.userId}>
-                          {p.displayName ?? p.publicCode ?? p.userId.slice(0, 8)}
+                          {playerLabel(p.displayName, p.publicCode, p.userId)}
                         </option>
                       ))}
                     </select>
@@ -215,7 +216,7 @@ export function EventDetail({
                       <option value="">Select…</option>
                       {participants.map((p) => (
                         <option key={p.userId} value={p.userId}>
-                          {p.displayName ?? p.publicCode ?? p.userId.slice(0, 8)}
+                          {playerLabel(p.displayName, p.publicCode, p.userId)}
                         </option>
                       ))}
                     </select>
