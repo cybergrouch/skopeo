@@ -24,7 +24,7 @@ import {
 import { UserSearchSelect } from '@/components/UserSearchSelect'
 import { playerLabel } from '@/lib/playerLabel'
 import type { EventParticipantResponse } from '@/api/generated/model'
-import { AwaitingResultsSection } from '../matches/AwaitingResultsSection'
+import { AwaitingResultsSection, RecordedResultsSection } from '../matches/AwaitingResultsSection'
 
 /** "Female · 34 · NTRP 4.0" — a participant's sex, age, and NTRP band, omitting whatever is missing. */
 function participantMeta(p: EventParticipantResponse): string {
@@ -294,6 +294,7 @@ export function EventDetail({
           </Card>
 
           <AwaitingResultsSection eventId={eventId} />
+          <RecordedResultsSection eventId={eventId} />
         </>
       )}
     </div>

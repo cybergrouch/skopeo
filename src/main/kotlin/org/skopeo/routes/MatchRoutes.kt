@@ -162,5 +162,6 @@ private fun matchQueryOf(value: String?): MatchQuery =
     when (value) {
         "pending-calculation" -> MatchQuery.PENDING_CALCULATION
         "awaiting-results" -> MatchQuery.AWAITING_RESULTS
-        else -> throw IllegalArgumentException("filter must be 'pending-calculation' or 'awaiting-results'")
+        "results" -> MatchQuery.RESULTS
+        else -> throw IllegalArgumentException("filter must be 'pending-calculation', 'awaiting-results', or 'results'")
     }

@@ -8,7 +8,9 @@ import arrow.core.left
 import arrow.core.right
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.or
@@ -65,6 +67,9 @@ class MatchRepository {
             if (loadMatch(id = matchId) == null) {
                 return@transaction ServiceError.NotFound(message = "Match $matchId not found").left()
             }
+            // Replace any existing sets so re-recording (an edit while unrated) overwrites rather than
+            // appends; tiebreak rows cascade-delete with their set.
+            MatchSetsTable.deleteWhere { MatchSetsTable.matchId eq matchId }
             sets.forEach { set ->
                 val hasTb = set.tiebreakTeam1Points != null && set.tiebreakTeam2Points != null
                 val setId =
@@ -179,7 +184,10 @@ class MatchRepository {
      * Active, completed, not-yet-rated matches, oldest completion first (calculation order).
      * When [createdBy] is non-null, scoped to fixtures that user created (HOST oversight).
      */
-    fun listPendingCalculation(createdBy: UUID? = null): List<Match> =
+    fun listPendingCalculation(
+        createdBy: UUID? = null,
+        eventId: UUID? = null,
+    ): List<Match> =
         transaction {
             MatchesTable
                 .selectAll()
@@ -188,7 +196,29 @@ class MatchRepository {
                         MatchesTable.isActive and
                             (MatchesTable.status eq MatchStatus.COMPLETED.name) and
                             MatchesTable.ratedAt.isNull()
-                    if (createdBy != null) base and (MatchesTable.createdBy eq createdBy) else base
+                    // An event scope shows every recorded fixture in the event (any creator); otherwise
+                    // a HOST is scoped to their own.
+                    when {
+                        eventId != null -> base and (MatchesTable.eventId eq eventId)
+                        createdBy != null -> base and (MatchesTable.createdBy eq createdBy)
+                        else -> base
+                    }
+                }.orderBy(MatchesTable.completedAt to SortOrder.ASC)
+                .map { loadMatch(id = it[MatchesTable.id].value)!! }
+        }
+
+    /**
+     * All of an event's active, completed fixtures — rated or not (#138). Lets the event page keep a
+     * rated match on view as a read-only record alongside the recorded-but-unrated ones.
+     */
+    fun listResultsByEvent(eventId: UUID): List<Match> =
+        transaction {
+            MatchesTable
+                .selectAll()
+                .where {
+                    MatchesTable.isActive and
+                        (MatchesTable.status eq MatchStatus.COMPLETED.name) and
+                        (MatchesTable.eventId eq eventId)
                 }.orderBy(MatchesTable.completedAt to SortOrder.ASC)
                 .map { loadMatch(id = it[MatchesTable.id].value)!! }
         }

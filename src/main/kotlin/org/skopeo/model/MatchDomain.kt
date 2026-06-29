@@ -76,8 +76,12 @@ data class SetScoreInput(
     val tiebreakTeam2Points: Int? = null,
 )
 
-/** Which oversight view of fixtures an administrator is requesting. */
-enum class MatchQuery { PENDING_CALCULATION, AWAITING_RESULTS }
+/**
+ * Which view of fixtures is being requested. PENDING_CALCULATION = completed & unrated;
+ * AWAITING_RESULTS = scheduled; RESULTS = an event's completed fixtures (rated or not), so a rated
+ * match still appears under its event as a read-only record (#138).
+ */
+enum class MatchQuery { PENDING_CALCULATION, AWAITING_RESULTS, RESULTS }
 
 /** A match's shareable identity (#136) — enough to resolve an audit target to a public-page link. */
 data class MatchPublicRef(
