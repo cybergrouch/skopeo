@@ -14,7 +14,7 @@ const {
   removeMemberMutate,
   generateMutate,
   state,
-  pickerProps,
+  useGetApiV1Users,
 } = vi.hoisted(() => ({
   useGetApiV1PlayerLists: vi.fn(),
   useGetApiV1PlayerListsId: vi.fn(),
@@ -25,7 +25,7 @@ const {
   removeMemberMutate: vi.fn(),
   generateMutate: vi.fn(),
   state: { addFail: false },
-  pickerProps: { filters: undefined as Record<string, string> | undefined },
+  useGetApiV1Users: vi.fn(),
 }))
 
 vi.mock('@/api/generated/player-lists/player-lists', () => ({
@@ -58,23 +58,16 @@ vi.mock('@/api/generated/player-lists/player-lists', () => ({
   }),
 }))
 
-// Stub the picker to a button that emits a fixed user, surfacing the forwarded props.
-vi.mock('@/components/UserSearchSelect', () => ({
-  UserSearchSelect: ({
-    onSelect,
-    filters,
-  }: {
-    onSelect: (u: { id: string; publicCode: string; displayName: string }) => void
-    filters?: Record<string, string>
-  }) => {
-    pickerProps.filters = filters
-    return (
-      <button type="button" onClick={() => onSelect({ id: 'u9', publicCode: 'NEW999', displayName: 'New Player' })}>
-        pick-player
-      </button>
-    )
-  },
-}))
+vi.mock('@/api/generated/users/users', () => ({ useGetApiV1Users }))
+
+// Two candidates the explicit search returns; the second is already a member of listDetail (u2).
+const searchUsers = [
+  { id: 'u9', publicCode: 'NEW999', displayName: 'New Player', sex: 'Male', age: 28, capabilities: [] },
+  { id: 'u8', publicCode: 'EIGHT8', displayName: 'Eight', capabilities: [] },
+  // No display name → the result falls back to the public code.
+  { id: 'u7', publicCode: 'SEVEN7', displayName: null, capabilities: [] },
+  { id: 'u2', publicCode: 'BBB222', displayName: 'Already In', capabilities: [] },
+]
 
 function renderTab() {
   return render(
@@ -153,6 +146,7 @@ describe('SeedingTab', () => {
     useGetApiV1PlayerLists.mockReturnValue({ data: lists })
     useGetApiV1PlayerListsId.mockReturnValue({ data: undefined })
     useGetApiV1PlayerListsIdSeeding.mockReturnValue({ data: undefined })
+    useGetApiV1Users.mockReturnValue({ data: searchUsers, isLoading: false })
   })
 
   it('renders the caller lists with member counts and an empty selection', () => {
@@ -203,15 +197,75 @@ describe('SeedingTab', () => {
     expect(screen.getByText('Female · 25 · NTRP 3.500000')).toBeInTheDocument()
   })
 
-  it('adds a member via the picker', async () => {
+  it('searches, multi-selects, and adds the checked players to the list', async () => {
     useGetApiV1PlayerListsId.mockReturnValue({ data: listDetail })
     const user = userEvent.setup()
     renderTab()
     await user.click(screen.getByRole('button', { name: /Summer Open/ }))
-    await user.click(screen.getByRole('button', { name: 'pick-player' }))
-    await waitFor(() =>
-      expect(addMemberMutate).toHaveBeenCalledWith({ id: 'l1', data: { userId: 'u9' } }),
-    )
+
+    // No live suggestions; results appear only after Search.
+    expect(screen.queryByText('New Player')).not.toBeInTheDocument()
+    await user.type(screen.getByLabelText('Name'), 'pla')
+    // Fill the remaining range inputs too, so every filter field is exercised.
+    await user.type(screen.getAllByLabelText('to')[0], '40') // age "to"
+    await user.type(screen.getByLabelText('Rating from'), '3.0')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+
+    // u2 ("Already In") is already a member, so it's excluded from the results.
+    expect(screen.getByText('New Player')).toBeInTheDocument()
+    expect(screen.getByText('Eight')).toBeInTheDocument()
+    expect(screen.getByText('SEVEN7')).toBeInTheDocument() // null name → code fallback
+    expect(screen.queryByText('Already In')).not.toBeInTheDocument()
+
+    // Add to List is disabled until at least one is checked; checking then unchecking re-disables it.
+    expect(screen.getByRole('button', { name: 'Add to List' })).toBeDisabled()
+    await user.click(screen.getByRole('checkbox', { name: /New Player/ }))
+    expect(screen.getByRole('button', { name: 'Add to List' })).toBeEnabled()
+    await user.click(screen.getByRole('checkbox', { name: /New Player/ }))
+    expect(screen.getByRole('button', { name: 'Add to List' })).toBeDisabled()
+
+    await user.click(screen.getByRole('checkbox', { name: /New Player/ }))
+    await user.click(screen.getByRole('checkbox', { name: /Eight/ }))
+    await user.click(screen.getByRole('button', { name: 'Add to List' }))
+
+    await waitFor(() => expect(addMemberMutate).toHaveBeenCalledTimes(2))
+    expect(addMemberMutate).toHaveBeenCalledWith({ id: 'l1', data: { userId: 'u9' } })
+    expect(addMemberMutate).toHaveBeenCalledWith({ id: 'l1', data: { userId: 'u8' } })
+  })
+
+  it('shows the empty state, and disables Search until a filter is set', async () => {
+    useGetApiV1PlayerListsId.mockReturnValue({ data: listDetail })
+    useGetApiV1Users.mockReturnValue({ data: [], isLoading: false })
+    const user = userEvent.setup()
+    renderTab()
+    await user.click(screen.getByRole('button', { name: /Summer Open/ }))
+    // Search is disabled until a filter is set.
+    expect(screen.getByRole('button', { name: 'Search' })).toBeDisabled()
+    await user.type(screen.getByLabelText('Name'), 'zzz')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+    expect(screen.getByText('No matching players.')).toBeInTheDocument()
+  })
+
+  it('shows a searching state while results load', async () => {
+    useGetApiV1PlayerListsId.mockReturnValue({ data: listDetail })
+    useGetApiV1Users.mockReturnValue({ data: undefined, isLoading: true })
+    const user = userEvent.setup()
+    renderTab()
+    await user.click(screen.getByRole('button', { name: /Summer Open/ }))
+    await user.type(screen.getByLabelText('Name'), 'an')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+    expect(screen.getByText('Searching…')).toBeInTheDocument()
+  })
+
+  it('shows an error when the filters are invalid', async () => {
+    useGetApiV1PlayerListsId.mockReturnValue({ data: listDetail })
+    useGetApiV1Users.mockReturnValue({ data: undefined, isError: true })
+    const user = userEvent.setup()
+    renderTab()
+    await user.click(screen.getByRole('button', { name: /Summer Open/ }))
+    await user.type(screen.getByLabelText('Name'), 'an')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+    expect(screen.getByText(/Invalid filters/)).toBeInTheDocument()
   })
 
   it('labels a single-member list in the singular', () => {
@@ -222,35 +276,36 @@ describe('SeedingTab', () => {
     expect(screen.getByRole('button', { name: /Solo/ }).textContent).toContain('1 player')
   })
 
-  it('forwards the sex/age/rating filters to the picker', async () => {
+  it('runs the search with the combined name/sex/age/rating filters on Search', async () => {
     useGetApiV1PlayerListsId.mockReturnValue({ data: listDetail })
     const user = userEvent.setup()
     renderTab()
     await user.click(screen.getByRole('button', { name: /Summer Open/ }))
-    // No filters set yet → undefined intervals.
-    expect(pickerProps.filters).toEqual({})
 
+    await user.type(screen.getByLabelText('Name'), 'an')
     await user.selectOptions(screen.getByLabelText('Sex'), 'Male')
-    // Type in an order that exercises both open- and closed-ended intervals along the way:
-    // age lower-only → "[20,)", rating upper-only → "(,4.5]", then both sides filled.
+    // Open-ended on purpose — age lower-only → "[20,)", rating upper-only → "(,4.5]".
     await user.type(screen.getByLabelText('Age from'), '20')
     await user.type(screen.getAllByLabelText('to')[1], '4.5') // rating "to"
-    await user.type(screen.getAllByLabelText('to')[0], '30') // age "to"
-    await user.type(screen.getByLabelText('Rating from'), '3.0')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
 
-    await waitFor(() =>
-      expect(pickerProps.filters).toEqual({ sex: 'Male', age: '[20,30]', rating: '[3.0,4.5]' }),
+    expect(useGetApiV1Users).toHaveBeenLastCalledWith(
+      { name: 'an', sex: 'Male', age: '[20,)', rating: '(,4.5]' },
+      { query: { enabled: true } },
     )
   })
 
-  it('surfaces a conflict when adding a member fails', async () => {
+  it('surfaces an error when adding the selected players fails', async () => {
     state.addFail = true
     useGetApiV1PlayerListsId.mockReturnValue({ data: listDetail })
     const user = userEvent.setup()
     renderTab()
     await user.click(screen.getByRole('button', { name: /Summer Open/ }))
-    await user.click(screen.getByRole('button', { name: 'pick-player' }))
-    expect(await screen.findByText("Couldn't add that player.")).toBeInTheDocument()
+    await user.type(screen.getByLabelText('Name'), 'pla')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+    await user.click(screen.getByRole('checkbox', { name: /New Player/ }))
+    await user.click(screen.getByRole('button', { name: 'Add to List' }))
+    expect(await screen.findByText("Couldn't add the selected players.")).toBeInTheDocument()
   })
 
   it('removes a member', async () => {
