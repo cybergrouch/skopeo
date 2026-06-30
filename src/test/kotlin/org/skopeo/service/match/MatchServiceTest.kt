@@ -660,6 +660,14 @@ class MatchServiceTest {
             change.newRating.shouldBeNull()
         }
 
+        // An anonymous viewer (no token, #193) is treated like any non-privileged viewer: bands, no rates.
+        val asAnon =
+            service.publicByCode(token = null, code = match.publicCode).shouldBeRight().ratingChanges.shouldNotBeNull()
+        asAnon.forEach { change ->
+            change.newLevel.shouldNotBeNull()
+            change.newRating.shouldBeNull()
+        }
+
         // Both a RATER and an ADMINISTRATOR see the precise 6-dp rates.
         for (uid in listOf("rater", "root")) {
             val staffChanges =

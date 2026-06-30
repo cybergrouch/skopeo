@@ -25,6 +25,8 @@ vi.mock('@/api/generated/users/users', () => ({
 vi.mock('@/api/generated/matches/matches', () => ({
   useGetApiV1MatchesIdCalculation: vi.fn(() => ({ data: undefined, isLoading: false })),
 }))
+// The page renders PublicPageNav (#193), which reads auth; default to anonymous here.
+vi.mock('@/auth/useAuth', () => ({ useAuth: () => ({ user: null }) }))
 
 function renderAt(code = 'ABC234') {
   return render(

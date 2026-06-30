@@ -14,12 +14,13 @@ import {
 import { MatchHistoryCard } from '@/components/MatchHistoryCard'
 import { RatingHistoryCard } from '@/components/RatingHistoryCard'
 import { ShareCard } from '@/components/ShareCard'
+import { PublicPageNav } from '@/components/PublicPageNav'
 import { isAdministrator } from '@/auth/capabilities'
 
 /**
- * Auth-gated player profile reached via the shareable deep link `/players/:code` (issue #61).
- * Resolves the player by their public code and shows a privacy-conscious card. Only logged-in
- * users get here (the route is behind RequireAuth/RequireProfile).
+ * Public player profile reached via the shareable deep link `/players/:code` (issue #61). Viewable
+ * without login (#193); anonymous viewers see the privacy-conscious card and a sign-up/login CTA, and
+ * `/me` simply returns no profile so the admin-only rating history stays hidden.
  */
 export function PlayerProfilePage() {
   const { code = '' } = useParams()
@@ -37,9 +38,7 @@ export function PlayerProfilePage() {
   return (
     <div className="flex min-h-svh items-start justify-center bg-muted/40 p-4">
       <div className="w-full max-w-sm space-y-4 pt-10">
-        <Link to="/dashboard" className="text-sm text-primary hover:underline">
-          ← Back to dashboard
-        </Link>
+        <PublicPageNav />
 
         {query.isLoading ? (
           <p className="text-sm text-muted-foreground">Loading player…</p>

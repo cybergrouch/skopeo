@@ -406,6 +406,15 @@ class EventServiceTest {
     }
 
     @Test
+    fun `the public event summary is viewable anonymously, with no viewer status (#193)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight().event
+
+        val public = service.publicByCode(token = null, code = event.publicCode).shouldBeRight()
+        public.viewerStatus shouldBe null
+    }
+
+    @Test
     fun `myEvents lists the caller's events with their standing, empty for an unprovisioned caller (#202)`() {
         provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val player = provision(uid = "player")

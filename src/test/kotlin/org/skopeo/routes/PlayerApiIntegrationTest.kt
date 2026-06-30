@@ -110,9 +110,17 @@ class PlayerApiIntegrationTest {
         }
 
     @Test
-    fun `the endpoint requires authentication`() =
+    fun `the public profile + match history are viewable anonymously; rating-history stays auth-required (#193)`() =
         withApp { client ->
-            client.get(urlString = "/api/v1/players/ABC234").status shouldBe HttpStatusCode.Unauthorized
+            val owner = client.createUser(token = TestFirebaseAuth.mintToken(uid = "owner")).body<UserResponse>()
+
+            // No Authorization header → the public profile and its match history still serve (optional auth).
+            client.get(urlString = "/api/v1/players/${owner.publicCode}").status shouldBe HttpStatusCode.OK
+            client.get(urlString = "/api/v1/players/${owner.publicCode}/match-history").status shouldBe HttpStatusCode.OK
+
+            // The ADMINISTRATOR-only rating-history audit view remains auth-required.
+            client.get(urlString = "/api/v1/players/${owner.publicCode}/rating-history").status shouldBe
+                HttpStatusCode.Unauthorized
         }
 
     @Test

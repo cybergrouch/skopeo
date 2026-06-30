@@ -50,36 +50,11 @@ function App() {
                 </RequireAuth>
               }
             />
-            <Route
-              path="/players/:code"
-              element={
-                <RequireAuth>
-                  <RequireProfile>
-                    <PlayerProfilePage />
-                  </RequireProfile>
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/matches/:code"
-              element={
-                <RequireAuth>
-                  <RequireProfile>
-                    <MatchPage />
-                  </RequireProfile>
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/events/:code"
-              element={
-                <RequireAuth>
-                  <RequireProfile>
-                    <EventPage />
-                  </RequireProfile>
-                </RequireAuth>
-              }
-            />
+            {/* Public-by-code pages are viewable without login (#193); anonymous viewers get a
+                sign-up/login CTA and any account-requiring action prompts them to authenticate. */}
+            <Route path="/players/:code" element={<PlayerProfilePage />} />
+            <Route path="/matches/:code" element={<MatchPage />} />
+            <Route path="/events/:code" element={<EventPage />} />
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
