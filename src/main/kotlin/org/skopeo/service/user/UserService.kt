@@ -290,17 +290,19 @@ private fun requireStaff(
 }
 
 /**
- * Allow player research (#107): a RESEARCHER, or staff (HOST/ADMINISTRATOR) who reach the same search
- * via the player-picker/role-grants. ADMINISTRATOR is staff, so it qualifies even without RESEARCHER.
+ * Allow player search: a RESEARCHER (Research tab, #107), a RATER (Ratings-tab search-and-rate, #205),
+ * or staff (HOST/ADMINISTRATOR) who reach the same search via the player-picker/role-grants.
+ * ADMINISTRATOR is staff, so it qualifies regardless.
  */
 private fun requireResearchAccess(
     repository: UserRepository,
     token: VerifiedFirebaseToken,
 ): Either<ServiceError, Unit> {
     val caller = repository.findByFirebaseUid(firebaseUid = token.uid)
+    val searchRoles = setOf(Capability.RESEARCHER, Capability.RATER)
     val allowed =
         caller != null &&
-            (caller.capabilities.contains(element = Capability.RESEARCHER) || caller.capabilities.any { it in STAFF_ROLES })
+            (caller.capabilities.any { it in searchRoles } || caller.capabilities.any { it in STAFF_ROLES })
     return if (allowed) Unit.right() else ServiceError.Forbidden().left()
 }
 

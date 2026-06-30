@@ -354,6 +354,37 @@ class UserServiceTest {
     }
 
     @Test
+    fun `a RATER can search, a plain player cannot (#205)`() {
+        repository.provision(
+            command =
+                ProvisionUserCommand(
+                    firebaseUid = "rater",
+                    identity =
+                        UserIdentity(provider = org.skopeo.model.AuthProvider.GOOGLE, providerUid = "rater", isPrimary = true),
+                    names = listOf(element = UserName(type = org.skopeo.model.NameType.DISPLAY, value = "Rater")),
+                    capabilities = setOf(Capability.PLAYER, Capability.RATER),
+                ),
+        )
+        repository.provision(
+            command =
+                ProvisionUserCommand(
+                    firebaseUid = "plain",
+                    identity =
+                        UserIdentity(provider = org.skopeo.model.AuthProvider.GOOGLE, providerUid = "plain", isPrimary = true),
+                    names = listOf(element = UserName(type = org.skopeo.model.NameType.DISPLAY, value = "Plain")),
+                    capabilities = setOf(Capability.PLAYER),
+                ),
+        )
+        val member = service.provision(token = token(uid = "m9"), request = request).shouldBeRight().user
+
+        service.search(token = token(uid = "rater"), filters = UserSearchFilters(code = member.publicCode)).shouldBeRight()
+        service
+            .search(token = token(uid = "plain"), filters = UserSearchFilters(code = member.publicCode))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
+    @Test
     fun `search matches a partial code as a case-insensitive prefix`() {
         repository.provision(
             command =

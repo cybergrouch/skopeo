@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import {
@@ -9,12 +9,10 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { SetRatingForm } from '@/components/SetRatingForm'
 import {
   getGetApiV1UsersPendingAssessmentQueryKey,
   useGetApiV1UsersPendingAssessment,
-  usePutApiV1UsersUserIdRatings,
 } from '@/api/generated/ratings/ratings'
 import type { PendingAssessmentResponse } from '@/api/generated/model'
 import { NTRP_SELF_RATING_GUIDE_URL } from '@/lib/ntrp'
@@ -35,29 +33,6 @@ function metaLine(user: PendingAssessmentResponse): string {
 
 function PendingRow({ user }: { user: PendingAssessmentResponse }) {
   const queryClient = useQueryClient()
-  // Prefill with the self-reported rating so the admin can approve it as-is (or override).
-  const [value, setValue] = useState(user.proposedRating ?? '')
-  const [error, setError] = useState<string | null>(null)
-
-  const setRating = usePutApiV1UsersUserIdRatings({
-    mutation: {
-      onSuccess: () =>
-        queryClient.invalidateQueries({
-          queryKey: getGetApiV1UsersPendingAssessmentQueryKey(),
-        }),
-    },
-  })
-
-  async function onSubmit(event: FormEvent) {
-    event.preventDefault()
-    setError(null)
-    try {
-      await setRating.mutateAsync({ userId: user.userId, data: { value } })
-    } catch {
-      setError('Could not set the rating. Check the value and try again.')
-    }
-  }
-
   const meta = metaLine(user)
 
   return (
@@ -98,29 +73,14 @@ function PendingRow({ user }: { user: PendingAssessmentResponse }) {
           ) : null}
         </div>
       </div>
-      <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-2">
-        <div className="space-y-1">
-          <Label htmlFor={`value-${user.userId}`} className="text-xs">
-            Rating
-          </Label>
-          <Input
-            id={`value-${user.userId}`}
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            placeholder="4.0"
-            className="w-24"
-            required
-          />
-        </div>
-        <Button type="submit" size="sm" disabled={setRating.isPending}>
-          {setRating.isPending ? 'Setting…' : 'Set rating'}
-        </Button>
-      </form>
-      {error ? (
-        <p className="mt-2 text-sm text-destructive" role="alert">
-          {error}
-        </p>
-      ) : null}
+      {/* Prefill with the self-reported rating so the admin can approve it as-is (or override). */}
+      <SetRatingForm
+        userId={user.userId}
+        initialValue={user.proposedRating ?? ''}
+        onSaved={() =>
+          queryClient.invalidateQueries({ queryKey: getGetApiV1UsersPendingAssessmentQueryKey() })
+        }
+      />
     </li>
   )
 }
