@@ -189,7 +189,10 @@ class UserServiceTest {
         service.currentUser(token = token(uid = "u3", picture = "https://p/new.jpg"))!!.photoUrl shouldBe "https://p/new.jpg"
         repository.findByFirebaseUid(firebaseUid = "u3")!!.photoUrl shouldBe "https://p/new.jpg" // persisted
 
-        // ...but an absent picture on a later login never wipes the stored value.
+        // ...an unchanged picture on a later login is a no-op (no write needed)...
+        service.currentUser(token = token(uid = "u3", picture = "https://p/new.jpg"))!!.photoUrl shouldBe "https://p/new.jpg"
+
+        // ...and an absent picture on a later login never wipes the stored value.
         service.currentUser(token = token(uid = "u3", picture = null))!!.photoUrl shouldBe "https://p/new.jpg"
     }
 
