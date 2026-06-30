@@ -5,10 +5,11 @@ import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { EventDetail } from './EventDetail'
 
-const { useGetApiV1EventsId, addMutate, removeMutate, createFixtureMutate, state } = vi.hoisted(() => ({
+const { useGetApiV1EventsId, addMutate, removeMutate, decideMutate, createFixtureMutate, state } = vi.hoisted(() => ({
   useGetApiV1EventsId: vi.fn(),
   addMutate: vi.fn(),
   removeMutate: vi.fn(),
+  decideMutate: vi.fn(),
   createFixtureMutate: vi.fn(),
   state: { addFail: false, fixtureFail: false },
 }))
@@ -28,6 +29,13 @@ vi.mock('@/api/generated/events/events', () => ({
     isPending: false,
     mutate: (vars: unknown) => {
       removeMutate(vars)
+      opts?.mutation?.onSuccess?.()
+    },
+  }),
+  usePostApiV1EventsIdParticipantsUserIdDecision: (opts?: { mutation?: { onSuccess?: () => void } }) => ({
+    isPending: false,
+    mutate: (vars: unknown) => {
+      decideMutate(vars)
       opts?.mutation?.onSuccess?.()
     },
   }),
@@ -76,8 +84,9 @@ const event = {
       sex: 'Female',
       age: 34,
       rating: { value: '4.000000', level: '4.0' },
+      status: 'APPROVED',
     },
-    { userId: 'u2', displayName: 'Bob', publicCode: 'BBB222' },
+    { userId: 'u2', displayName: 'Bob', publicCode: 'BBB222', status: 'APPROVED' },
   ],
 }
 
@@ -133,8 +142,8 @@ describe('EventDetail', () => {
       data: {
         ...event,
         participants: [
-          { userId: 'u4', displayName: null, publicCode: 'DDD444' },
-          { userId: 'abcdef120000', displayName: null, publicCode: null },
+          { userId: 'u4', displayName: null, publicCode: 'DDD444', status: 'APPROVED' },
+          { userId: 'abcdef120000', displayName: null, publicCode: null, status: 'APPROVED' },
         ],
       },
       isLoading: false,
@@ -149,7 +158,13 @@ describe('EventDetail', () => {
       data: {
         ...event,
         participants: [
-          { userId: 'u5', displayName: 'Cleo', publicCode: 'EEE555', rating: { value: '5.250000', level: null } },
+          {
+            userId: 'u5',
+            displayName: 'Cleo',
+            publicCode: 'EEE555',
+            rating: { value: '5.250000', level: null },
+            status: 'APPROVED',
+          },
         ],
       },
       isLoading: false,
@@ -238,5 +253,33 @@ describe('EventDetail', () => {
     renderDetail()
     await user.click(screen.getByRole('button', { name: 'Search players…' }))
     expect(screen.getByText('Could not add that participant.')).toBeInTheDocument()
+  })
+
+  it('lists join requests and approves or holds them, keeping requests off the roster (#201)', async () => {
+    useGetApiV1EventsId.mockReturnValue({
+      data: {
+        ...event,
+        participants: [
+          { userId: 'u1', displayName: 'Ana', publicCode: 'AAA111', status: 'APPROVED' },
+          { userId: 'u6', displayName: 'Pat', publicCode: 'PPP666', status: 'PENDING' },
+          { userId: 'u7', displayName: 'Hank', publicCode: 'HHH777', status: 'HOLD' },
+        ],
+      },
+      isLoading: false,
+    })
+    const user = userEvent.setup()
+    renderDetail()
+
+    // The pending player isn't in the fixture pickers (roster = approved only).
+    expect(within(screen.getByLabelText('Player 1')).queryByRole('option', { name: 'Pat' })).not.toBeInTheDocument()
+
+    expect(screen.getByText('Join requests')).toBeInTheDocument()
+    // Approve/Hold controls live only in the requests section; the pending row (first) is Pat.
+    await user.click(screen.getAllByRole('button', { name: 'Approve' })[0])
+    expect(decideMutate).toHaveBeenCalledWith({ id: 'e1', userId: 'u6', data: { status: 'APPROVED' } })
+
+    // Only the pending request offers Hold (the held one shows just Approve).
+    await user.click(screen.getByRole('button', { name: 'Hold' }))
+    expect(decideMutate).toHaveBeenCalledWith({ id: 'e1', userId: 'u6', data: { status: 'HOLD' } })
   })
 })

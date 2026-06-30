@@ -1,12 +1,25 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { EventPage } from './EventPage'
 
-const { useGetApiV1EventsCodeCode } = vi.hoisted(() => ({
+const { useGetApiV1EventsCodeCode, signupMutate } = vi.hoisted(() => ({
   useGetApiV1EventsCodeCode: vi.fn(),
+  signupMutate: vi.fn(),
 }))
-vi.mock('@/api/generated/events/events', () => ({ useGetApiV1EventsCodeCode }))
+vi.mock('@/api/generated/events/events', () => ({
+  useGetApiV1EventsCodeCode,
+  getGetApiV1EventsCodeCodeQueryKey: (code: string) => ['event', code],
+  usePostApiV1EventsCodeCodeSignup: (opts?: { mutation?: { onSuccess?: () => void } }) => ({
+    isPending: false,
+    mutate: (vars: unknown) => {
+      signupMutate(vars)
+      opts?.mutation?.onSuccess?.()
+    },
+  }),
+}))
 
 const event = {
   publicCode: 'EVT001',
@@ -57,11 +70,13 @@ const event = {
 
 function renderAt(code = 'EVT001') {
   return render(
-    <MemoryRouter initialEntries={[`/events/${code}`]}>
-      <Routes>
-        <Route path="/events/:code" element={<EventPage />} />
-      </Routes>
-    </MemoryRouter>,
+    <QueryClientProvider client={new QueryClient()}>
+      <MemoryRouter initialEntries={[`/events/${code}`]}>
+        <Routes>
+          <Route path="/events/:code" element={<EventPage />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
   )
 }
 
@@ -107,5 +122,21 @@ describe('EventPage', () => {
     renderAt()
     expect(screen.getByText('No participants yet.')).toBeInTheDocument()
     expect(screen.getByText('No matches yet.')).toBeInTheDocument()
+  })
+
+  it('offers Request to join and signs up when the viewer has no status (#201)', async () => {
+    useGetApiV1EventsCodeCode.mockReturnValue({ data: { ...event, viewerStatus: null }, isLoading: false })
+    const user = userEvent.setup()
+    renderAt()
+
+    await user.click(screen.getByRole('button', { name: 'Request to join' }))
+    expect(signupMutate).toHaveBeenCalledWith({ code: 'EVT001' })
+  })
+
+  it('shows the pending state instead of a join button once requested (#201)', () => {
+    useGetApiV1EventsCodeCode.mockReturnValue({ data: { ...event, viewerStatus: 'PENDING' }, isLoading: false })
+    renderAt()
+    expect(screen.getByText(/pending the host’s approval/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Request to join' })).not.toBeInTheDocument()
   })
 })

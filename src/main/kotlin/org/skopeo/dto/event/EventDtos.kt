@@ -24,6 +24,12 @@ data class AddParticipantRequest(
     val userId: String,
 )
 
+/** Body for `POST /api/v1/events/{id}/participants/{userId}/decision` — APPROVED or HOLD (#201). */
+@Serializable
+data class DecideParticipantRequest(
+    val status: String,
+)
+
 /**
  * A participant on an event, resolved to a display name + shareable code, plus the disambiguating
  * facets shown in the roster: [sex], [age], and the current NTRP [rating] band.
@@ -36,6 +42,9 @@ data class EventParticipantResponse(
     val sex: String? = null,
     val age: Int? = null,
     val rating: PublicRatingDto? = null,
+    // The participant's standing (#201): "APPROVED" | "PENDING" | "HOLD". Null on the public roster
+    // (which lists approved members only).
+    val status: String? = null,
 )
 
 @Serializable
@@ -68,6 +77,7 @@ internal fun EventParticipantRef.toResponse(): EventParticipantResponse =
         sex = sex,
         age = age,
         rating = rating?.let { PublicRatingDto(value = it.currentRating.toPlainString(), level = it.currentLevel) },
+        status = status.name,
     )
 
 /**
@@ -82,4 +92,7 @@ data class EventPublicResponse(
     val endDate: String,
     val participants: List<EventParticipantResponse>,
     val matches: List<MatchPublicResponse>,
+    // The viewer's own standing on this event (#201): "APPROVED" | "PENDING" | "HOLD", or null if
+    // they haven't signed up (so the page can offer "Request to join").
+    val viewerStatus: String? = null,
 )

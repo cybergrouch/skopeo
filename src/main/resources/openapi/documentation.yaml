@@ -1389,6 +1389,35 @@ paths:
         '404':
           description: No active event with that code
 
+  /api/v1/events/code/{code}/signup:
+    parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      summary: Self-signup to an event by code (#201)
+      description: >-
+        The authenticated player requests to join the event as a PENDING participant a host then
+        approves or holds. Any provisioned player may sign up (not staff-gated); idempotent if
+        already on the event. Returns the public event summary (with the viewer's new status).
+      tags:
+        - Events
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The public event summary after signing up
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventPublicResponse'
+        '403':
+          description: Caller has no Skopeo profile yet
+        '404':
+          description: No active event with that code
+
   /api/v1/events/{id}:
     parameters:
       - name: id
@@ -1444,6 +1473,49 @@ paths:
                 $ref: '#/components/schemas/EventResponse'
         '400':
           description: Unknown participant
+        '403':
+          description: Caller is not HOST/ADMINISTRATOR
+        '404':
+          description: No such event
+
+  /api/v1/events/{id}/participants/{userId}/decision:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      summary: Decide a participant request — approve or hold (#201, HOST/ADMINISTRATOR)
+      description: >-
+        Approve a PENDING/HOLD request (→ APPROVED full roster member) or put it on HOLD (a soft deny
+        that stays on file and can be approved later). Staff-only.
+      tags:
+        - Events
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecideParticipantRequest'
+      responses:
+        '200':
+          description: The updated event
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventResponse'
+        '400':
+          description: Invalid decision (must be APPROVED or HOLD)
         '403':
           description: Caller is not HOST/ADMINISTRATOR
         '404':
@@ -3345,6 +3417,16 @@ components:
           type: string
           format: uuid
 
+    DecideParticipantRequest:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [APPROVED, HOLD]
+          description: The host's decision on a participant request (#201).
+
     EventParticipantResponse:
       type: object
       required:
@@ -3378,6 +3460,11 @@ components:
             level:
               type: string
               nullable: true
+        status:
+          type: string
+          nullable: true
+          enum: [APPROVED, PENDING, HOLD]
+          description: Participant standing (#201); null on the public roster (approved only).
 
     EventResponse:
       type: object
@@ -3439,6 +3526,11 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/MatchPublicResponse'
+        viewerStatus:
+          type: string
+          nullable: true
+          enum: [APPROVED, PENDING, HOLD]
+          description: The viewer's own standing on this event (#201); null if not signed up.
 
     MatchPublicPlayer:
       type: object
