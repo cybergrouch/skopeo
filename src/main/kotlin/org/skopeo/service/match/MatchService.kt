@@ -467,12 +467,9 @@ private fun headToHeadEntry(
     codes: Map<UUID, String>,
 ): MatchPublicHeadToHeadEntry {
     val refIsTeam1 = team1Id in meeting.team1.userIds
-    val winnerId =
-        when (meeting.winnerTeamId) {
-            meeting.team1.teamId -> meeting.team1.userIds.firstOrNull()
-            meeting.team2.teamId -> meeting.team2.userIds.firstOrNull()
-            else -> null
-        }
+    // Meetings are filtered to COMPLETED, so the winner is always team1 or team2.
+    val winnerSide = if (meeting.winnerTeamId == meeting.team1.teamId) meeting.team1 else meeting.team2
+    val winnerId = winnerSide.userIds.firstOrNull()
     return MatchPublicHeadToHeadEntry(
         publicCode = meeting.publicCode,
         matchDate = meeting.matchDate.toString(),

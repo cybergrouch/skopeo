@@ -95,6 +95,30 @@ class MatchRepositoryTest {
     }
 
     @Test
+    fun `listBetweenUsers returns matches between exactly two players, newest first (#188)`() {
+        val a = newUser(uid = "a")
+        val b = newUser(uid = "b")
+        val c = newUser(uid = "c")
+        val older = fixture(u1 = a, u2 = b, date = LocalDate.of(2026, 1, 1))
+        val newer = fixture(u1 = b, u2 = a, date = LocalDate.of(2026, 2, 1)) // reversed sides still count
+        fixture(u1 = a, u2 = c, date = LocalDate.of(2026, 1, 15)) // a vs c — not the pair
+
+        matches.listBetweenUsers(userIdA = a, userIdB = b).map { it.id } shouldBe listOf(newer.id, older.id)
+    }
+
+    @Test
+    fun `listBetweenUsers is empty when a player has no matches (#188)`() {
+        val a = newUser(uid = "a")
+        val b = newUser(uid = "b")
+        fixture(u1 = a, u2 = b)
+        val loner = newUser(uid = "loner")
+
+        // Empty whether the player with no matches is the first or second argument.
+        matches.listBetweenUsers(userIdA = a, userIdB = loner).shouldBe(expected = emptyList())
+        matches.listBetweenUsers(userIdA = loner, userIdB = a).shouldBe(expected = emptyList())
+    }
+
+    @Test
     fun `addResult records sets, winner, and completes the match`() {
         val u1 = newUser(uid = "u1")
         val u2 = newUser(uid = "u2")

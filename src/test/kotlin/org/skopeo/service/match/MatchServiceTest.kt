@@ -556,6 +556,12 @@ class MatchServiceTest {
         completed(team1 = p1.id, team2 = p2.id, date = "2026-01-01", result = straightSets()) // p1 won
         completed(team1 = p1.id, team2 = p2.id, date = "2026-02-01", result = p2Wins) // p2 won
         completed(team1 = p2.id, team2 = p1.id, date = "2025-12-01", result = straightSets()) // reversed sides, p2 won
+        // A scheduled (not yet completed) meeting between them is excluded from the head-to-head.
+        service
+            .createFixture(
+                token = token(uid = "host"),
+                request = fixtureRequest(p1 = p1.id, p2 = p2.id, date = LocalDate.parse("2026-04-01")),
+            ).shouldBeRight()
         val current = completed(team1 = p1.id, team2 = p2.id, date = "2026-03-01", result = straightSets())
 
         val public = service.publicByCode(token = token(uid = "host"), code = current.publicCode).shouldBeRight()
@@ -588,6 +594,37 @@ class MatchServiceTest {
         service.uploadResult(token = token(uid = "host"), matchId = match.id, request = straightSets()).shouldBeRight()
 
         service.publicByCode(token = token(uid = "host"), code = match.publicCode).shouldBeRight().headToHead.shouldBeNull()
+    }
+
+    @Test
+    fun `publicByCode omits the head-to-head for a non-singles match (#188)`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val p3 = provisionUser(uid = "p3", rated = true)
+
+        fun doublesFixture(
+            team1: List<UUID>,
+            team2: List<UUID>,
+        ) = service
+            .createFixture(
+                token = token(uid = "host"),
+                request =
+                    FixtureInput(
+                        matchFormat = TeamType.DOUBLES,
+                        matchType = MatchType.OPEN_PLAY,
+                        matchDate = LocalDate.parse("2026-01-01"),
+                        team1 = team1,
+                        team2 = team2,
+                    ),
+            ).shouldBeRight()
+
+        // Either side having more than one player → head-to-head (singles-only) does not apply.
+        val pluralTeam1 = doublesFixture(team1 = listOf(element = p1.id) + p2.id, team2 = listOf(element = p3.id))
+        val pluralTeam2 = doublesFixture(team1 = listOf(element = p1.id), team2 = listOf(element = p2.id) + p3.id)
+
+        service.publicByCode(token = token(uid = "host"), code = pluralTeam1.publicCode).shouldBeRight().headToHead.shouldBeNull()
+        service.publicByCode(token = token(uid = "host"), code = pluralTeam2.publicCode).shouldBeRight().headToHead.shouldBeNull()
     }
 
     @Test
