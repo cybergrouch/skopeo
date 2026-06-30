@@ -243,6 +243,7 @@ be backward-compatible across one release so an image rollback stays safe.
 - [ ] Firebase project confirmed = the Auth project; web **Variables** + `FIREBASE_SERVICE_ACCOUNT` set → first web deploy green.
 - [ ] Custom domains mapped (apex → Hosting, `api.` → Cloud Run), TLS active, Authorized domains updated.
 - [ ] `WEB_ORIGINS` + `VITE_API_BASE_URL` point at the custom domains; end-to-end sign-in + an API call work.
+- [ ] **Auth email branding** (issue #133): Firebase **public-facing name** = `Skopeo` and the Authentication email template's sender/subject branded — so invite emails say "Skopeo", not the project id. Steps in AUTHENTICATION.md → "Firebase-native gaps".
 - [ ] `production` environment requires approval.
 
 ## Environment status
