@@ -40,6 +40,8 @@ jobs:
       # Vite inlines VITE_* at build time. These are public Firebase client values
       # (safe in the bundle), supplied as repo *variables*; the Firebase secret
       # never leaves Firebase. The deploy service account is the only secret.
+      # VITE_APP_VERSION/COMMIT stamp the deployed build (#229): the ref is the release tag when
+      # dispatched by tag-and-ship (e.g. v0.0.2), or the branch on a manual dispatch (e.g. main).
       - name: Build
         run: npm run build
         env:
@@ -48,6 +50,8 @@ jobs:
           VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
           VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
           VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+          VITE_APP_VERSION: ${{ github.ref_name }}
+          VITE_APP_COMMIT: ${{ github.sha }}
 
       - name: Deploy to Firebase Hosting (live)
         uses: FirebaseExtended/action-hosting-deploy@v0

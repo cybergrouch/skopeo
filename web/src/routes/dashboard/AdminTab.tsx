@@ -1,3 +1,4 @@
+import { BuildInfoSection } from './admin/BuildInfoSection'
 import { DuplicateCandidatesSection } from './admin/DuplicateCandidatesSection'
 import { DuplicatesSection } from './admin/DuplicatesSection'
 import { ManagePlayerSection } from './admin/ManagePlayerSection'
@@ -10,6 +11,7 @@ export function AdminTab() {
       <DuplicatesSection />
       <DuplicateCandidatesSection />
       <PendingCalculationSection />
+      <BuildInfoSection />
     </div>
   )
 }
