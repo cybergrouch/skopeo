@@ -97,6 +97,46 @@ describe('RatingsSearchSection', () => {
       { name: 'p', limit: 26, offset: 25 },
       { query: { enabled: true } },
     )
+
+    // Page back to the first page.
+    await user.click(screen.getByRole('button', { name: 'Previous' }))
+    expect(useGetApiV1Users).toHaveBeenLastCalledWith(
+      { name: 'p', limit: 26, offset: 0 },
+      { query: { enabled: true } },
+    )
+  })
+
+  it('falls back to the id and raw value when a name or band level is missing', async () => {
+    useGetApiV1Users.mockReturnValue({
+      data: [{ id: 'u9', publicCode: 'CODE9', displayName: undefined, rating: { value: '3.500000' } }],
+      isLoading: false,
+      isError: false,
+    })
+    const user = userEvent.setup()
+    renderSection()
+    await user.type(screen.getByLabelText('Name'), 'x')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+
+    expect(screen.getByText('u9')).toBeInTheDocument()
+    expect(screen.getByText('NTRP 3.500000')).toBeInTheDocument()
+  })
+
+  it('shows a loading state while searching', async () => {
+    useGetApiV1Users.mockReturnValue({ data: undefined, isLoading: true, isError: false })
+    const user = userEvent.setup()
+    renderSection()
+    await user.type(screen.getByLabelText('Name'), 'p')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+    expect(screen.getByText('Searching…')).toBeInTheDocument()
+  })
+
+  it('shows an error when the filters are rejected', async () => {
+    useGetApiV1Users.mockReturnValue({ data: undefined, isLoading: false, isError: true })
+    const user = userEvent.setup()
+    renderSection()
+    await user.type(screen.getByLabelText('Name'), 'p')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+    expect(screen.getByText(/Invalid filters/i)).toBeInTheDocument()
   })
 
   it('shows an empty state when nothing matches', async () => {
