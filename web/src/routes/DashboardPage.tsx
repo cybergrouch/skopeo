@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import { LogOut, Menu } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { BrandLogo } from '@/components/BrandLogo'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Sheet,
   SheetContent,
@@ -51,13 +50,13 @@ export function DashboardPage() {
   const showActivity = isAdministrator(capabilities)
   const showAdmin = isAdministrator(capabilities)
 
-  // Active section + mobile drawer open state. The same `active` value drives the desktop tab strip
-  // and the mobile drawer, so the two navs never drift (#187).
+  // The selected section + the menu's open state. One menu drives navigation at every breakpoint —
+  // a hamburger drawer on mobile and desktop alike (#187) — so there's a single nav to reason about.
   const [active, setActive] = useState('profile')
   const [navOpen, setNavOpen] = useState(false)
 
-  // One capability-gated list of sections, the single source of truth for the desktop tabs, the
-  // mobile drawer items, and the rendered content — so gating stays identical across all three.
+  // One capability-gated list of sections: the single source of truth for the menu items and the
+  // rendered content, so gating stays identical across both.
   const sections: Section[] = [
     {
       value: 'profile',
@@ -84,7 +83,7 @@ export function DashboardPage() {
     ...(showAdmin ? [{ value: 'admin', label: 'Admin', element: <AdminTab /> }] : []),
   ]
 
-  const currentLabel = sections.find((s) => s.value === active)?.label ?? 'Profile'
+  const activeSection = sections.find((s) => s.value === active) ?? sections[0]
 
   async function onSignOut() {
     await signOut()
@@ -114,10 +113,10 @@ export function DashboardPage() {
         {meQuery.isLoading ? (
           <p className="text-sm text-muted-foreground">Loading your dashboard…</p>
         ) : (
-          <Tabs value={active} onValueChange={setActive}>
-            {/* Mobile (< md): a hamburger opens the section drawer; the current section's name is the
-                page header in place of the tab strip. */}
-            <div className="mb-4 flex items-center gap-3 md:hidden">
+          <>
+            {/* A single hamburger menu drives navigation everywhere; the current section's name is
+                the page header in place of a tab strip. */}
+            <div className="mb-4 flex items-center gap-3">
               <Sheet open={navOpen} onOpenChange={setNavOpen}>
                 <SheetTrigger asChild>
                   <Button variant="outline" size="icon" aria-label="Open navigation menu">
@@ -146,24 +145,11 @@ export function DashboardPage() {
                   </nav>
                 </SheetContent>
               </Sheet>
-              <h1 className="text-lg font-semibold">{currentLabel}</h1>
+              <h1 className="text-lg font-semibold">{activeSection?.label ?? 'Profile'}</h1>
             </div>
 
-            {/* Desktop (>= md): the tab strip, wrapping so it never overflows the viewport. */}
-            <TabsList className="hidden h-auto flex-wrap justify-start gap-1 md:flex">
-              {sections.map((section) => (
-                <TabsTrigger key={section.value} value={section.value}>
-                  {section.label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-
-            {sections.map((section) => (
-              <TabsContent key={section.value} value={section.value}>
-                {section.element}
-              </TabsContent>
-            ))}
-          </Tabs>
+            {activeSection?.element}
+          </>
         )}
       </main>
     </div>
