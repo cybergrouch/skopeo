@@ -2470,6 +2470,7 @@ components:
       required:
         - dateOfBirth
         - sex
+        - proposedRating
       properties:
         displayName:
           type: string
@@ -2493,8 +2494,7 @@ components:
           description: ISO 3166-1 alpha-2 (defaults to PH)
         proposedRating:
           type: string
-          nullable: true
-          description: Optional self-reported NTRP rating (1.0–7.0) for an admin to approve/override.
+          description: Required self-reported NTRP rating (1.0–7.0) for a rater to approve/override.
 
     ProfileRequest:
       type: object

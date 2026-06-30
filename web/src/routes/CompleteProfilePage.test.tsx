@@ -83,11 +83,12 @@ describe('CompleteProfilePage', () => {
       target: { value: '2000-01-01' },
     })
     await user.selectOptions(screen.getByLabelText('Sex'), 'Male')
+    await user.selectOptions(screen.getByLabelText('NTRP self-rating'), '4.0')
     await user.click(screen.getByRole('button', { name: /save and continue/i }))
 
     await waitFor(() =>
       expect(mutateAsync).toHaveBeenCalledWith({
-        data: { displayName: 'Roger Federer', sex: 'Male', dateOfBirth: '2000-01-01' },
+        data: { displayName: 'Roger Federer', sex: 'Male', dateOfBirth: '2000-01-01', proposedRating: '4.0' },
       }),
     )
     expect(invalidateQueries).toHaveBeenCalled()
@@ -104,11 +105,12 @@ describe('CompleteProfilePage', () => {
       target: { value: '1995-05-05' },
     })
     await user.selectOptions(screen.getByLabelText('Sex'), 'Female')
+    await user.selectOptions(screen.getByLabelText('NTRP self-rating'), '3.0')
     await user.click(screen.getByRole('button', { name: /save and continue/i }))
 
     await waitFor(() =>
       expect(mutateAsync).toHaveBeenCalledWith({
-        data: { displayName: null, sex: 'Female', dateOfBirth: '1995-05-05' },
+        data: { displayName: null, sex: 'Female', dateOfBirth: '1995-05-05', proposedRating: '3.0' },
       }),
     )
   })
@@ -123,9 +125,24 @@ describe('CompleteProfilePage', () => {
       target: { value: '2000-01-01' },
     })
     await user.selectOptions(screen.getByLabelText('Sex'), 'Male')
+    await user.selectOptions(screen.getByLabelText('NTRP self-rating'), '4.0')
     await user.click(screen.getByRole('button', { name: /save and continue/i }))
 
     expect(await screen.findByText('provision boom')).toBeInTheDocument()
     expect(navigateMock).not.toHaveBeenCalled()
+  })
+
+  it('does not provision until a self-rating is chosen (#75)', async () => {
+    useGetApiV1UsersMe.mockReturnValue({ isLoading: false, isSuccess: false })
+    mutateAsync.mockResolvedValue({})
+    const user = userEvent.setup()
+    renderPage()
+
+    fireEvent.change(screen.getByLabelText('Date of birth'), { target: { value: '2000-01-01' } })
+    await user.selectOptions(screen.getByLabelText('Sex'), 'Male')
+    // Self-rating left unset → the required field blocks submission.
+    await user.click(screen.getByRole('button', { name: /save and continue/i }))
+
+    expect(mutateAsync).not.toHaveBeenCalled()
   })
 })

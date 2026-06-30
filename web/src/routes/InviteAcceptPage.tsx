@@ -11,6 +11,7 @@ import {
   usePostApiV1Users,
 } from '@/api/generated/users/users'
 import type { CreateUserRequestSex } from '@/api/generated/model'
+import { NtrpSelfRatingSelect } from '@/components/NtrpSelfRatingSelect'
 import { authErrorMessage } from '@/lib/firebase-errors'
 
 const SEXES = ['Male', 'Female'] as const
@@ -47,6 +48,7 @@ export function InviteAcceptPage() {
   const [name, setName] = useState('')
   const [sex, setSex] = useState('')
   const [dateOfBirth, setDateOfBirth] = useState('')
+  const [proposedRating, setProposedRating] = useState('')
   const [password, setPasswordValue] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -58,7 +60,7 @@ export function InviteAcceptPage() {
     try {
       await setPassword(password)
       await provision.mutateAsync({
-        data: { displayName: name.trim(), sex: sex as CreateUserRequestSex, dateOfBirth },
+        data: { displayName: name.trim(), sex: sex as CreateUserRequestSex, dateOfBirth, proposedRating },
       })
       await queryClient.invalidateQueries({ queryKey: getGetApiV1UsersMeQueryKey() })
       navigate('/dashboard', { replace: true })
@@ -135,6 +137,7 @@ export function InviteAcceptPage() {
             ))}
           </select>
         </div>
+        <NtrpSelfRatingSelect value={proposedRating} onChange={setProposedRating} />
         <div className="space-y-2">
           <Label htmlFor="password">Password</Label>
           <Input

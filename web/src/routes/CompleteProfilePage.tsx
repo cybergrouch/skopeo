@@ -12,6 +12,7 @@ import {
   usePostApiV1Users,
 } from '@/api/generated/users/users'
 import type { CreateUserRequestSex } from '@/api/generated/model'
+import { NtrpSelfRatingSelect } from '@/components/NtrpSelfRatingSelect'
 import { authErrorMessage } from '@/lib/firebase-errors'
 
 const SEXES = ['Male', 'Female'] as const
@@ -33,6 +34,7 @@ export function CompleteProfilePage() {
   const [name, setName] = useState(user?.displayName ?? '')
   const [sex, setSex] = useState('')
   const [dateOfBirth, setDateOfBirth] = useState('')
+  const [proposedRating, setProposedRating] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -46,6 +48,7 @@ export function CompleteProfilePage() {
           displayName: name.trim() || null,
           sex: sex as CreateUserRequestSex,
           dateOfBirth,
+          proposedRating,
         },
       })
       await queryClient.invalidateQueries({ queryKey: getGetApiV1UsersMeQueryKey() })
@@ -113,6 +116,7 @@ export function CompleteProfilePage() {
             ))}
           </select>
         </div>
+        <NtrpSelfRatingSelect value={proposedRating} onChange={setProposedRating} />
         {error ? (
           <p className="text-sm text-destructive" role="alert">
             {error}

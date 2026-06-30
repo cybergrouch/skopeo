@@ -66,10 +66,10 @@ class TokenMappingTest {
     }
 
     @Test
-    fun `parses an optional proposed rating, validating the NTRP range`() {
+    fun `parses the required proposed rating, validating the NTRP range (#75)`() {
         parseProposedRating(value = "4.0") shouldBe BigDecimal("4.0")
-        parseProposedRating(value = null).shouldBeNull()
-        parseProposedRating(value = "  ").shouldBeNull() // blank is treated as absent
+        shouldThrow<IllegalArgumentException> { parseProposedRating(value = null) } // required at sign-up
+        shouldThrow<IllegalArgumentException> { parseProposedRating(value = "  ") } // blank is absent
         shouldThrow<IllegalArgumentException> { parseProposedRating(value = "9.0") } // out of 1.0..7.0
         shouldThrow<IllegalArgumentException> { parseProposedRating(value = "abc") } // non-numeric
     }
@@ -85,11 +85,21 @@ class TokenMappingTest {
     }
 
     @Test
+    fun `a missing self-reported rating is rejected (#75 - required at sign-up)`() {
+        shouldThrow<IllegalArgumentException> {
+            buildProvisionCommand(
+                token = token(name = "Ana"),
+                request = CreateUserRequest(dateOfBirth = "2000-01-01", sex = "Female"),
+            )
+        }
+    }
+
+    @Test
     fun `verified google email becomes a VERIFIED OAUTH contact`() {
         val command =
             buildProvisionCommand(
                 token = token(email = "a@example.com", emailVerified = true, name = "Ana", signInProvider = "google.com"),
-                request = CreateUserRequest(dateOfBirth = "2000-01-01", sex = "Male"),
+                request = CreateUserRequest(proposedRating = "4.0", dateOfBirth = "2000-01-01", sex = "Male"),
             )
 
         command.identity.provider shouldBe AuthProvider.GOOGLE
@@ -111,7 +121,7 @@ class TokenMappingTest {
         val command =
             buildProvisionCommand(
                 token = token(email = "b@example.com", emailVerified = false, name = "Bea"),
-                request = CreateUserRequest(dateOfBirth = "2000-01-01", sex = "Male"),
+                request = CreateUserRequest(proposedRating = "4.0", dateOfBirth = "2000-01-01", sex = "Male"),
             )
 
         command.email!!.status shouldBe VerificationStatus.PENDING
@@ -123,7 +133,14 @@ class TokenMappingTest {
         val command =
             buildProvisionCommand(
                 token = token(name = "from-provider"),
-                request = CreateUserRequest(displayName = "Juan", phone = "+639170000000", dateOfBirth = "2000-01-01", sex = "Male"),
+                request =
+                    CreateUserRequest(
+                        proposedRating = "4.0",
+                        displayName = "Juan",
+                        phone = "+639170000000",
+                        dateOfBirth = "2000-01-01",
+                        sex = "Male",
+                    ),
             )
 
         command.names.single().let {
@@ -142,7 +159,7 @@ class TokenMappingTest {
         val command =
             buildProvisionCommand(
                 token = token(name = "from-provider"),
-                request = CreateUserRequest(displayName = "  Juan  ", dateOfBirth = "2000-01-01", sex = "Male"),
+                request = CreateUserRequest(proposedRating = "4.0", displayName = "  Juan  ", dateOfBirth = "2000-01-01", sex = "Male"),
             )
 
         command.names.single().value shouldBe "Juan"
@@ -153,7 +170,7 @@ class TokenMappingTest {
         val command =
             buildProvisionCommand(
                 token = token(name = "from-provider"),
-                request = CreateUserRequest(displayName = "   ", dateOfBirth = "2000-01-01", sex = "Male"),
+                request = CreateUserRequest(proposedRating = "4.0", displayName = "   ", dateOfBirth = "2000-01-01", sex = "Male"),
             )
 
         command.names.single().value shouldBe "from-provider"
@@ -164,7 +181,7 @@ class TokenMappingTest {
         shouldThrow<IllegalArgumentException> {
             buildProvisionCommand(
                 token = token(name = null),
-                request = CreateUserRequest(displayName = "   ", dateOfBirth = "2000-01-01", sex = "Male"),
+                request = CreateUserRequest(proposedRating = "4.0", displayName = "   ", dateOfBirth = "2000-01-01", sex = "Male"),
             )
         }
     }
@@ -173,15 +190,21 @@ class TokenMappingTest {
     fun `rejects a missing display name, bad sex, and bad date`() {
         // No request display name and no token name.
         shouldThrow<IllegalArgumentException> {
-            buildProvisionCommand(token = token(name = null), request = CreateUserRequest(dateOfBirth = "2000-01-01", sex = "Male"))
-        }
-        shouldThrow<IllegalArgumentException> {
-            buildProvisionCommand(token = token(), request = CreateUserRequest(displayName = "Juan", sex = "X", dateOfBirth = "2000-01-01"))
+            buildProvisionCommand(
+                token = token(name = null),
+                request = CreateUserRequest(proposedRating = "4.0", dateOfBirth = "2000-01-01", sex = "Male"),
+            )
         }
         shouldThrow<IllegalArgumentException> {
             buildProvisionCommand(
                 token = token(),
-                request = CreateUserRequest(displayName = "Juan", dateOfBirth = "31-12-1990", sex = "Male"),
+                request = CreateUserRequest(proposedRating = "4.0", displayName = "Juan", sex = "X", dateOfBirth = "2000-01-01"),
+            )
+        }
+        shouldThrow<IllegalArgumentException> {
+            buildProvisionCommand(
+                token = token(),
+                request = CreateUserRequest(proposedRating = "4.0", displayName = "Juan", dateOfBirth = "31-12-1990", sex = "Male"),
             )
         }
     }
@@ -197,7 +220,10 @@ class TokenMappingTest {
     @Test
     fun `default capabilities are PLAYER and RESEARCHER (#107)`() {
         val command =
-            buildProvisionCommand(token = token(name = "Ana"), request = CreateUserRequest(dateOfBirth = "2000-01-01", sex = "Male"))
+            buildProvisionCommand(
+                token = token(name = "Ana"),
+                request = CreateUserRequest(proposedRating = "4.0", dateOfBirth = "2000-01-01", sex = "Male"),
+            )
         command.capabilities shouldBe setOf(Capability.PLAYER, Capability.RESEARCHER)
     }
 
@@ -206,7 +232,7 @@ class TokenMappingTest {
         val command =
             buildProvisionCommand(
                 token = token(email = "Admin@Example.com", emailVerified = true, name = "Ana"),
-                request = CreateUserRequest(dateOfBirth = "2000-01-01", sex = "Male"),
+                request = CreateUserRequest(proposedRating = "4.0", dateOfBirth = "2000-01-01", sex = "Male"),
                 adminEmails = setOf(element = "admin@example.com"),
             )
         command.capabilities shouldBe setOf(Capability.PLAYER, Capability.RESEARCHER, Capability.ADMINISTRATOR)
@@ -217,7 +243,7 @@ class TokenMappingTest {
         val command =
             buildProvisionCommand(
                 token = token(email = "admin@example.com", emailVerified = false, name = "Ana"),
-                request = CreateUserRequest(dateOfBirth = "2000-01-01", sex = "Male"),
+                request = CreateUserRequest(proposedRating = "4.0", dateOfBirth = "2000-01-01", sex = "Male"),
                 adminEmails = setOf(element = "admin@example.com"),
             )
         command.capabilities shouldBe setOf(Capability.PLAYER, Capability.RESEARCHER)
@@ -228,7 +254,7 @@ class TokenMappingTest {
         val command =
             buildProvisionCommand(
                 token = token(email = "player@example.com", emailVerified = true, name = "Ana"),
-                request = CreateUserRequest(dateOfBirth = "2000-01-01", sex = "Male"),
+                request = CreateUserRequest(proposedRating = "4.0", dateOfBirth = "2000-01-01", sex = "Male"),
                 adminEmails = setOf(element = "admin@example.com"),
             )
         command.capabilities shouldBe setOf(Capability.PLAYER, Capability.RESEARCHER)
