@@ -7,6 +7,12 @@ import kotlinx.serialization.Serializable
 import org.skopeo.model.Match
 import java.util.UUID
 
+/**
+ * The fewest games a side needs to win a set (#213). Standard tennis is 6; Skopeo allows a lower
+ * floor of 4 so Hosts can run shortened, schedule-driven formats. Tiebreak-decided sets are exempt.
+ */
+private const val MIN_GAMES_TO_WIN = 4
+
 /** Body for `POST /api/v1/matches` — create a fixture (no results yet). */
 @Serializable
 data class CreateFixtureRequest(
@@ -31,6 +37,14 @@ data class SetScoreRequest(
     init {
         // Shape validation at the boundary (#116): games can never be negative.
         require(value = team1Games >= 0 && team2Games >= 0) { "games must be non-negative" }
+        // A set decided on games must be won with at least MIN_GAMES_TO_WIN games (#213). Sets with
+        // equal games are decided by the tiebreak (e.g. a match tiebreak) and are exempt from the floor.
+        if (team1Games != team2Games) {
+            val winnerGames = if (team1Games > team2Games) team1Games else team2Games
+            require(value = winnerGames >= MIN_GAMES_TO_WIN) {
+                "a set won on games must be won with at least $MIN_GAMES_TO_WIN games"
+            }
+        }
     }
 }
 
