@@ -1,7 +1,17 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { StandingsTab } from './StandingsTab'
+
+/** The tab links to public profiles, so it must render inside a router. */
+function renderTab() {
+  return render(
+    <MemoryRouter>
+      <StandingsTab />
+    </MemoryRouter>,
+  )
+}
 
 const { useGetApiV1Standings, useGetApiV1UsersMe } = vi.hoisted(() => ({
   useGetApiV1Standings: vi.fn(),
@@ -47,26 +57,26 @@ describe('StandingsTab', () => {
 
   it('shows a loading state while standings resolve', () => {
     useGetApiV1Standings.mockReturnValue({ data: undefined, isLoading: true })
-    render(<StandingsTab />)
+    renderTab()
     expect(screen.getByText('Loading standings…')).toBeInTheDocument()
   })
 
   it('renders an interim, sex-split description', () => {
     useGetApiV1Standings.mockReturnValue({ data: [], isLoading: false })
-    render(<StandingsTab />)
+    renderTab()
     expect(screen.getByText(/Interim standings/i)).toBeInTheDocument()
     expect(screen.getByText(/Men's and Women's standings/i)).toBeInTheDocument()
   })
 
   it('shows a "No standings yet." message when there are no players', () => {
     useGetApiV1Standings.mockReturnValue({ data: [], isLoading: false })
-    render(<StandingsTab />)
+    renderTab()
     expect(screen.getByText('No standings yet.')).toBeInTheDocument()
   })
 
   it('defaults to Men: shows only Male bands, ranks, name/code fallback, and age (#212)', () => {
     useGetApiV1Standings.mockReturnValue({ data: bands, isLoading: false })
-    render(<StandingsTab />)
+    renderTab()
 
     // The toggle offers Men, Women, and Unspecified (since a null-sex player exists).
     expect(screen.getByRole('button', { name: 'Men' })).toHaveAttribute('aria-pressed', 'true')
@@ -85,7 +95,7 @@ describe('StandingsTab', () => {
   it('switches to Women when toggled, showing only Female bands (#212)', async () => {
     useGetApiV1Standings.mockReturnValue({ data: bands, isLoading: false })
     const user = userEvent.setup()
-    render(<StandingsTab />)
+    renderTab()
 
     await user.click(screen.getByRole('button', { name: 'Women' }))
     expect(screen.getByText('Ana Cruz')).toBeInTheDocument()
@@ -96,7 +106,7 @@ describe('StandingsTab', () => {
   it('switches to the Unspecified group when toggled (#212)', async () => {
     useGetApiV1Standings.mockReturnValue({ data: bands, isLoading: false })
     const user = userEvent.setup()
-    render(<StandingsTab />)
+    renderTab()
 
     await user.click(screen.getByRole('button', { name: 'Unspecified' }))
     expect(screen.getByText('No Sex')).toBeInTheDocument()
@@ -105,14 +115,14 @@ describe('StandingsTab', () => {
 
   it('hides the toggle when only one sex group is present', () => {
     useGetApiV1Standings.mockReturnValue({ data: [bands[0]], isLoading: false }) // Men only
-    render(<StandingsTab />)
+    renderTab()
     expect(screen.queryByRole('button', { name: 'Men' })).not.toBeInTheDocument()
     expect(screen.getByText('Bob Cruz')).toBeInTheDocument()
   })
 
   it('highlights only the current user’s own row', () => {
     useGetApiV1Standings.mockReturnValue({ data: bands, isLoading: false })
-    render(<StandingsTab />)
+    renderTab()
 
     // me.id is m1 → its row carries the marker (Men is the default tab).
     const myRow = screen.getByLabelText('Your standing')
@@ -124,15 +134,40 @@ describe('StandingsTab', () => {
   it('highlights no row when the current user is unknown', () => {
     useGetApiV1UsersMe.mockReturnValue({ data: undefined })
     useGetApiV1Standings.mockReturnValue({ data: bands, isLoading: false })
-    render(<StandingsTab />)
+    renderTab()
     expect(screen.queryByLabelText('Your standing')).not.toBeInTheDocument()
   })
 
-  it('never shows a rating value', () => {
+  it('shows no rating value when the payload omits it (non-privileged viewer)', () => {
     useGetApiV1Standings.mockReturnValue({ data: bands, isLoading: false })
-    const { container } = render(<StandingsTab />)
+    const { container } = renderTab()
     container.querySelectorAll('li').forEach((row) => {
       expect(row.textContent ?? '').not.toMatch(/\d\.\d/)
     })
+  })
+
+  it('links each player card to their public profile (#186)', () => {
+    useGetApiV1Standings.mockReturnValue({ data: bands, isLoading: false })
+    renderTab()
+    expect(screen.getByRole('link', { name: 'Bob Cruz' })).toHaveAttribute('href', '/players/BBB222')
+    // The name falls back to the code and still links to the profile.
+    expect(screen.getByRole('link', { name: 'CCC333' })).toHaveAttribute('href', '/players/CCC333')
+  })
+
+  it('shows the precise rating when the payload includes it (raters/admins, #186)', () => {
+    useGetApiV1Standings.mockReturnValue({
+      data: [
+        {
+          band: '4.0–4.5',
+          sex: 'Male',
+          entries: [
+            { rank: 1, userId: 'm1', displayName: 'Bob Cruz', publicCode: 'BBB222', sex: 'Male', age: 40, currentRating: '4.230000' },
+          ],
+        },
+      ],
+      isLoading: false,
+    })
+    renderTab()
+    expect(screen.getByText('4.230000')).toBeInTheDocument()
   })
 })

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   Card,
   CardContent,
@@ -36,8 +37,9 @@ function metaLine(entry: StandingEntryResponse): string {
  * The Standings tab (#113, Phase 1; sex split #212): a read-only, per-NTRP-band "Ranking Race",
  * split into Men's and Women's standings (and an Unspecified group only if any such players exist).
  * A toggle switches the visible sex. Bands and entries arrive pre-ordered (strongest band first,
- * entries already ranked from 1 per group). Ratings are intentionally absent from the payload — this
- * view never shows a rating number; it is an interim, rating-derived ordering only.
+ * entries already ranked from 1 per group). Each card links to the player's public profile. The
+ * precise rating is shown only when the payload includes it — the backend sends it solely to
+ * RATER/ADMINISTRATOR viewers (#186); everyone else sees order only.
  */
 export function StandingsTab() {
   const standingsQuery = useGetApiV1Standings()
@@ -111,7 +113,12 @@ export function StandingsTab() {
                         </span>
                         <div className="min-w-0 flex-1">
                           <div className="font-medium">
-                            {entry.displayName ?? entry.publicCode}
+                            <Link
+                              to={`/players/${entry.publicCode}`}
+                              className="text-primary hover:underline"
+                            >
+                              {entry.displayName ?? entry.publicCode}
+                            </Link>
                             {isMe ? (
                               <span className="ml-2 text-xs font-normal text-muted-foreground">
                                 You
@@ -122,6 +129,12 @@ export function StandingsTab() {
                             <div className="text-muted-foreground">{meta}</div>
                           ) : null}
                         </div>
+                        {/* Precise rating: present only for RATER/ADMINISTRATOR viewers (#186). */}
+                        {entry.currentRating ? (
+                          <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                            {entry.currentRating}
+                          </span>
+                        ) : null}
                       </li>
                     )
                   })}

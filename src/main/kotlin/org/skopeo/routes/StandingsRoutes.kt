@@ -23,7 +23,10 @@ fun Application.configureStandingsRoutes(service: StandingsService = StandingsSe
         authenticate(FIREBASE_AUTH) {
             get(path = "/api/v1/standings") {
                 respondMappingErrors {
-                    call.respond(status = HttpStatusCode.OK, message = service.standings().map { it.toResponse() })
+                    call.respond(
+                        status = HttpStatusCode.OK,
+                        message = service.standings(token = verifiedToken()).map { it.toResponse() },
+                    )
                 }
             }
         }

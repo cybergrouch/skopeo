@@ -111,5 +111,13 @@ class StandingsApiIntegrationTest {
             raw shouldContain "4.0–4.5"
             raw shouldContain player.id
             raw shouldNotContain "4.200000"
+
+            // ...but an ADMINISTRATOR (or RATER) does see the precise rating (#186).
+            val asAdmin =
+                client.get(urlString = "/api/v1/standings") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $admin")
+                }
+            asAdmin.status shouldBe HttpStatusCode.OK
+            asAdmin.bodyAsText() shouldContain "4.200000"
         }
 }
