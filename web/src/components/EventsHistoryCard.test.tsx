@@ -72,9 +72,17 @@ describe('EventsHistoryCard', () => {
   })
 
   it('shows per-section empty messages when one side is empty', () => {
+    // Upcoming-only → the Past section shows its empty message.
     useGetApiV1EventsMine.mockReturnValue({ data: [upcoming], isLoading: false })
-    renderCard()
+    const { unmount } = renderCard()
     expect(screen.getByText('No past events.')).toBeInTheDocument()
     expect(screen.queryByText('No upcoming events.')).not.toBeInTheDocument()
+    unmount()
+
+    // Past-only → the Upcoming section shows its empty message.
+    useGetApiV1EventsMine.mockReturnValue({ data: [past], isLoading: false })
+    renderCard()
+    expect(screen.getByText('No upcoming events.')).toBeInTheDocument()
+    expect(screen.queryByText('No past events.')).not.toBeInTheDocument()
   })
 })
