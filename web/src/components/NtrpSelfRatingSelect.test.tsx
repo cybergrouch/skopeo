@@ -19,4 +19,12 @@ describe('NtrpSelfRatingSelect', () => {
     await userEvent.setup().selectOptions(select, '4.5')
     expect(onChange).toHaveBeenCalledWith('4.5')
   })
+
+  it('links to the NTRP self-rating guide (#203)', () => {
+    render(<NtrpSelfRatingSelect value="" onChange={() => {}} />)
+    const link = screen.getByRole('link', { name: /self-rating guide/i })
+    expect(link).toHaveAttribute('href', 'https://www.teamtopspin.com/tennis-self-rating')
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+  })
 })

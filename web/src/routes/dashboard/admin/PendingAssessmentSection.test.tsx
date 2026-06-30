@@ -70,6 +70,14 @@ describe('PendingAssessmentSection', () => {
     ).toBeInTheDocument()
   })
 
+  it('links raters to the NTRP self-rating guide (#203)', () => {
+    useGetApiV1UsersPendingAssessment.mockReturnValue(page([]))
+    renderSection()
+    const link = screen.getByRole('link', { name: /NTRP self-rating guide/i })
+    expect(link).toHaveAttribute('href', 'https://www.teamtopspin.com/tennis-self-rating')
+    expect(link).toHaveAttribute('target', '_blank')
+  })
+
   it('falls back to the user id when there is no display name', () => {
     useGetApiV1UsersPendingAssessment.mockReturnValue(
       page([{ userId: 'u-no-name', publicCode: 'BBB222', displayName: null }]),

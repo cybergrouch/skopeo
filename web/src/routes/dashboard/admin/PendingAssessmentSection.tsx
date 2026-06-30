@@ -17,6 +17,7 @@ import {
   usePutApiV1UsersUserIdRatings,
 } from '@/api/generated/ratings/ratings'
 import type { PendingAssessmentResponse } from '@/api/generated/model'
+import { NTRP_SELF_RATING_GUIDE_URL } from '@/lib/ntrp'
 
 const PAGE_SIZE = 20
 
@@ -140,7 +141,15 @@ export function PendingAssessmentSection() {
         <CardTitle>Pending assessment</CardTitle>
         <CardDescription>
           Players awaiting an initial rating. Assigning one makes them eligible
-          to be scheduled in matches.
+          to be scheduled in matches.{' '}
+          <a
+            href={NTRP_SELF_RATING_GUIDE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline"
+          >
+            NTRP self-rating guide
+          </a>
         </CardDescription>
       </CardHeader>
       <CardContent>
