@@ -2554,6 +2554,7 @@ components:
       description: One row of a player's match history. Ratings shown only as the published NTRP band, and only when rated.
       required:
         - matchId
+        - publicCode
         - matchDate
         - status
         - rated
@@ -2562,6 +2563,9 @@ components:
         matchId:
           type: string
           format: uuid
+        publicCode:
+          type: string
+          description: The match's shareable public code; link a history row to /matches/{publicCode}.
         matchDate:
           type: string
           format: date

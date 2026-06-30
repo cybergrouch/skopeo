@@ -169,6 +169,7 @@ class PlayerService(
         val opp = opponents.getValue(key = oppId)
         return PlayerMatchHistoryEntry(
             matchId = match.id.toString(),
+            publicCode = match.publicCode,
             matchDate = match.matchDate.toString(),
             status = match.status.name,
             rated = match.ratedAt != null,
