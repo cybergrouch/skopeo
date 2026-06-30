@@ -2592,11 +2592,9 @@ components:
       type: object
       description: |
         Mutable profile fields. PATCH leaves omitted (null) fields unchanged;
-        PUT replaces all of them (omitted fields are cleared).
+        PUT replaces all of them (omitted fields are cleared). The profile photo
+        is not editable here — it is provider-managed and synced on login (#219).
       properties:
-        photoUrl:
-          type: string
-          nullable: true
         dateOfBirth:
           type: string
           format: date

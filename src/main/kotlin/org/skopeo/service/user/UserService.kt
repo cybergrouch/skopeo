@@ -164,7 +164,22 @@ class UserService(
             return ServiceError.AccountMerged(canonicalPublicCode = canonical.publicCode).left()
         }
         val promoted = promoteIfBootstrapAdmin(token = token, user = existing, adminEmails = adminEmails, capabilities = capabilities)
-        return Provisioned(user = promoted, created = false).right()
+        return Provisioned(user = refreshPhoto(token = token, user = promoted), created = false).right()
+    }
+
+    /**
+     * Keep the stored profile photo in sync with the OAuth provider (#219): when the token carries a
+     * picture that differs from what's stored, persist it and return the updated user. A null/absent
+     * picture leaves the stored value intact (we never wipe it). Runs on the authenticated login paths.
+     */
+    private fun refreshPhoto(
+        token: VerifiedFirebaseToken,
+        user: User,
+    ): User {
+        val picture = token.picture
+        if (picture == null || picture == user.photoUrl) return user
+        repository.updatePhotoUrl(userId = user.id, photoUrl = picture)
+        return user.copy(photoUrl = picture)
     }
 
     /** First-time sign-up: enforce the invite gate, write the aggregate, and audit the creation. */
@@ -193,11 +208,12 @@ class UserService(
             Provisioned(user = user, created = true)
         }
 
-    /** The caller's own profile, or null if they have not been provisioned yet. */
-    fun currentUser(token: VerifiedFirebaseToken): User? =
-        repository.findByFirebaseUid(firebaseUid = token.uid)?.let {
-            promoteIfBootstrapAdmin(token = token, user = it, adminEmails = adminEmails, capabilities = capabilities)
-        }
+    /** The caller's own profile, or null if they have not been provisioned yet. Refreshes the photo (#219). */
+    fun currentUser(token: VerifiedFirebaseToken): User? {
+        val user = repository.findByFirebaseUid(firebaseUid = token.uid) ?: return null
+        val promoted = promoteIfBootstrapAdmin(token = token, user = user, adminEmails = adminEmails, capabilities = capabilities)
+        return refreshPhoto(token = token, user = promoted)
+    }
 
     fun getById(
         token: VerifiedFirebaseToken,

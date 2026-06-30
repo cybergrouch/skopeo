@@ -70,7 +70,7 @@ data class CreateUserRequest(
  */
 @Serializable
 data class ProfileRequest(
-    val photoUrl: String? = null,
+    // The profile photo is NOT editable here — it is provider-managed and synced on login (#219).
     val dateOfBirth: String? = null,
     val sex: String? = null,
     val city: String? = null,

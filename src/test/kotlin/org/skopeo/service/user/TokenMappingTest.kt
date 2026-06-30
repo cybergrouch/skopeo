@@ -211,7 +211,7 @@ class TokenMappingTest {
 
     @Test
     fun `toProfilePatch parses and validates`() {
-        val patch = ProfileRequest(photoUrl = "p", dateOfBirth = "2000-01-01", sex = "Female", city = "Cebu").toProfilePatch()
+        val patch = ProfileRequest(dateOfBirth = "2000-01-01", sex = "Female", city = "Cebu").toProfilePatch()
         patch.dateOfBirth shouldBe LocalDate.of(2000, 1, 1)
         patch.sex shouldBe "Female"
         shouldThrow<IllegalArgumentException> { ProfileRequest(sex = "Z").toProfilePatch() }

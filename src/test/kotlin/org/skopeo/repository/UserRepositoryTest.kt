@@ -186,12 +186,12 @@ class UserRepositoryTest {
     }
 
     @Test
-    fun `updateProfile patches the photoUrl when provided`() {
+    fun `updatePhotoUrl refreshes the provider photo without touching other fields (#219)`() {
         val created = repository.provision(command = googleSignup())
 
-        val updated =
-            repository.updateProfile(id = created.id, patch = ProfilePatch(photoUrl = "https://example.com/new.jpg")).shouldBeRight()
+        repository.updatePhotoUrl(userId = created.id, photoUrl = "https://example.com/new.jpg")
 
+        val updated = repository.findById(id = created.id).shouldBeRight()
         updated.photoUrl shouldBe "https://example.com/new.jpg"
         updated.city shouldBe "Manila" // untouched
     }

@@ -59,11 +59,13 @@ class UserServiceTest {
         emailVerified: Boolean = false,
         name: String? = null,
         signInProvider: String = "password",
+        picture: String? = null,
     ) = VerifiedFirebaseToken(
         uid = uid,
         email = email,
         emailVerified = emailVerified,
         name = name,
+        picture = picture,
         signInProvider = signInProvider,
         providerUid = uid,
     )
@@ -177,6 +179,18 @@ class UserServiceTest {
         val created = service.provision(token = token(uid = "u2"), request = request).shouldBeRight().user
 
         service.currentUser(token = token(uid = "u2"))!!.id shouldBe created.id
+    }
+
+    @Test
+    fun `currentUser refreshes the stored photo from the provider when it changed (#219)`() {
+        service.provision(token = token(uid = "u3", picture = "https://p/old.jpg"), request = request).shouldBeRight()
+
+        // A later login carrying a new provider picture updates the stored value...
+        service.currentUser(token = token(uid = "u3", picture = "https://p/new.jpg"))!!.photoUrl shouldBe "https://p/new.jpg"
+        repository.findByFirebaseUid(firebaseUid = "u3")!!.photoUrl shouldBe "https://p/new.jpg" // persisted
+
+        // ...but an absent picture on a later login never wipes the stored value.
+        service.currentUser(token = token(uid = "u3", picture = null))!!.photoUrl shouldBe "https://p/new.jpg"
     }
 
     @Test
