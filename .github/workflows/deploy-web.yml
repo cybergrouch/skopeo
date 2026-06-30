@@ -20,6 +20,10 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     if: ${{ vars.VITE_FIREBASE_PROJECT_ID != '' }}
+    # Same manual-approval gate as the API: nothing ships on a release until you approve in the
+    # `production` GitHub Environment, so the web and API release together (configure required
+    # reviewers on the `production` environment — CICD.md §2c).
+    environment: production
     defaults:
       run:
         working-directory: web

@@ -44,7 +44,7 @@ Deploys are **release-driven, not on-merge**: publishing a GitHub Release deploy
 |---|---|---|---|
 | `.github/workflows/release.yml` | `workflow_dispatch` (the one-click release) | none | none |
 | `.github/workflows/deploy-api.yml` | `release: published`, or `workflow_dispatch` (manual/sandbox) | `vars.WIF_PROVIDER` | `production` environment approval |
-| `.github/workflows/deploy-web.yml` | `release: published`, or `workflow_dispatch` (manual/sandbox) | `vars.VITE_FIREBASE_PROJECT_ID` | none |
+| `.github/workflows/deploy-web.yml` | `release: published`, or `workflow_dispatch` (manual/sandbox) | `vars.VITE_FIREBASE_PROJECT_ID` | `production` environment approval |
 
 **Release flow:** Actions → **Release → Run workflow** → it strips `-SNAPSHOT` to form the official
 version (e.g. `0.0.1`), tags `vX.Y.Z` + publishes a GitHub Release (→ triggers the two deploys), and

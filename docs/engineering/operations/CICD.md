@@ -277,8 +277,11 @@ before it releases. Configure it once:
 
 Caveat: by default GitHub **allows the actor who triggered the run to approve their own deploy** if
 they're listed as a reviewer. For a solo dev that's the only workable setup (self-approval acts as a
-deliberate "yes, ship it" checkpoint); on a team, add reviewers other than the typical pusher. The
-web deploy has no gate — it releases automatically on green `main`.
+deliberate "yes, ship it" checkpoint); on a team, add reviewers other than the typical pusher.
+
+Both `deploy-api.yml` **and** `deploy-web.yml` run in `environment: production`, so a release waits for
+your approval before **either** ships — the API and web release together. (Each is a separate pending
+deployment in the run, so you approve both.)
 
 ### 2d. Deploy workflow
 
