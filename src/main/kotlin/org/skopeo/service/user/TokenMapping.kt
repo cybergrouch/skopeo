@@ -151,7 +151,6 @@ internal fun isBootstrapAdmin(
 
 internal fun ProfileRequest.toProfilePatch(): ProfilePatch =
     ProfilePatch(
-        photoUrl = photoUrl,
         dateOfBirth = parseDateOfBirth(value = dateOfBirth),
         sex = validatedSex(value = sex),
         city = city,

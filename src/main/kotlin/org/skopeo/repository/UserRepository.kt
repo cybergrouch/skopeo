@@ -158,6 +158,18 @@ class UserRepository {
                 ?.let { loadAggregate(id = it[UsersTable.id].value) }
         }
 
+    /** Refresh the provider-sourced profile photo (#219) — a narrow update to keep it in sync on login. */
+    fun updatePhotoUrl(
+        userId: UUID,
+        photoUrl: String,
+    ) {
+        transaction {
+            UsersTable.update(where = { UsersTable.id eq userId }) {
+                it[UsersTable.photoUrl] = photoUrl
+            }
+        }
+    }
+
     fun updateProfile(
         id: UUID,
         patch: ProfilePatch,
@@ -165,7 +177,6 @@ class UserRepository {
         transaction {
             val updated =
                 UsersTable.update(where = { UsersTable.id eq id }) {
-                    patch.photoUrl?.let { value -> it[UsersTable.photoUrl] = value }
                     patch.dateOfBirth?.let { value -> it[UsersTable.dateOfBirth] = value }
                     patch.sex?.let { value -> it[UsersTable.sex] = value }
                     patch.city?.let { value -> it[UsersTable.city] = value }
@@ -173,7 +184,10 @@ class UserRepository {
             if (updated == 0) ServiceError.NotFound(message = "User $id not found").left() else aggregateOrNotFound(id = id)
         }
 
-    /** Full replacement of the mutable profile fields (PUT semantics): null clears the column. */
+    /**
+     * Full replacement of the mutable profile fields (PUT semantics): null clears the column. The
+     * profile photo is excluded — it is provider-managed and synced on login (#219), never set here.
+     */
     fun replaceProfile(
         id: UUID,
         patch: ProfilePatch,
@@ -181,7 +195,6 @@ class UserRepository {
         transaction {
             val updated =
                 UsersTable.update(where = { UsersTable.id eq id }) {
-                    it[photoUrl] = patch.photoUrl
                     it[dateOfBirth] = patch.dateOfBirth
                     it[sex] = patch.sex
                     it[city] = patch.city

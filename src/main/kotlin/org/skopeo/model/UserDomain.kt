@@ -162,7 +162,6 @@ data class ProvisionUserCommand(
 
 /** Partial update of mutable profile fields; null means "leave unchanged". */
 data class ProfilePatch(
-    val photoUrl: String? = null,
     val dateOfBirth: LocalDate? = null,
     val sex: String? = null,
     val city: String? = null,
