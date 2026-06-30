@@ -118,7 +118,7 @@ private fun Route.publicByCode(service: MatchService) {
     get(path = "/code/{code}") {
         respondMappingErrors {
             val code = call.parameters["code"].orEmpty()
-            respondEither(result = service.publicByCode(code = code)) { match ->
+            respondEither(result = service.publicByCode(token = verifiedToken(), code = code)) { match ->
                 call.respond(status = HttpStatusCode.OK, message = match)
             }
         }

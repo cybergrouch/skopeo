@@ -8,6 +8,7 @@ import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -505,15 +506,66 @@ class MatchServiceTest {
             service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
         service.uploadResult(token = token(uid = "host"), matchId = match.id, request = straightSets()).shouldBeRight()
 
-        val public = service.publicByCode(code = match.publicCode).shouldBeRight()
+        val public = service.publicByCode(token = token(uid = "host"), code = match.publicCode).shouldBeRight()
         public.publicCode shouldBe match.publicCode
         public.team1.single().displayName shouldBe "p1"
         public.team1.single().publicCode shouldBe p1.publicCode
         public.team2.single().displayName shouldBe "p2"
         public.winner shouldBe "TEAM1" // p1 won both sets
         public.sets shouldHaveSize 2
+        public.ratingChanges.shouldBeNull() // not yet calculated → no rating changes
 
-        service.publicByCode(code = "ZZZZZZ").shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+        service
+            .publicByCode(token = token(uid = "host"), code = "ZZZZZZ")
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
+    fun `publicByCode reveals rating changes once rated, gated by viewer capability (#136)`() {
+        provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        provisionUser(uid = "viewer") // a plain player — no rate-visibility capability
+        provisionUser(uid = "rater", roles = setOf(Capability.PLAYER, Capability.RATER))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val match =
+            service.createFixture(token = token(uid = "root"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
+        service.uploadResult(token = token(uid = "root"), matchId = match.id, request = straightSets()).shouldBeRight()
+        calc.calculate(token = token(uid = "root"), dryRun = false) // commit ratings + history
+
+        // A non-rater viewer sees the NTRP bands only — the precise rates are withheld.
+        val asPlayer = service.publicByCode(token = token(uid = "viewer"), code = match.publicCode).shouldBeRight()
+        val changes = asPlayer.ratingChanges.shouldNotBeNull()
+        changes shouldHaveSize 2
+        changes.map { it.displayName } shouldBe listOf("p1", "p2") // team1-then-team2 order
+        changes.forEach { change ->
+            change.previousLevel.shouldNotBeNull()
+            change.newLevel.shouldNotBeNull()
+            change.previousRating.shouldBeNull()
+            change.newRating.shouldBeNull()
+            change.ratingChange.shouldBeNull()
+        }
+
+        // A viewer with a valid token but no provisioned Skopeo profile still gets the public bands, no rates.
+        val asGhost =
+            service.publicByCode(token = token(uid = "ghost"), code = match.publicCode).shouldBeRight().ratingChanges.shouldNotBeNull()
+        asGhost.forEach { change ->
+            change.newLevel.shouldNotBeNull()
+            change.newRating.shouldBeNull()
+        }
+
+        // Both a RATER and an ADMINISTRATOR see the precise 6-dp rates.
+        for (uid in listOf("rater", "root")) {
+            val staffChanges =
+                service.publicByCode(token = token(uid = uid), code = match.publicCode).shouldBeRight().ratingChanges.shouldNotBeNull()
+            staffChanges.forEach { change ->
+                change.previousRating.shouldNotBeNull()
+                change.newRating.shouldNotBeNull()
+                change.ratingChange.shouldNotBeNull()
+            }
+            // The fractional part carries 6 digits, matching the NUMERIC(10,6) storage.
+            staffChanges.first().newRating.shouldNotBeNull().substringAfter(delimiter = ".").length shouldBe 6
+        }
     }
 
     @Test
@@ -664,6 +716,9 @@ class MatchServiceTest {
             service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
         service.setActive(token = token(uid = "host"), matchId = match.id, active = false).shouldBeRight()
 
-        service.publicByCode(code = match.publicCode).shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+        service
+            .publicByCode(token = token(uid = "host"), code = match.publicCode)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
     }
 }

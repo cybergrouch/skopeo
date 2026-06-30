@@ -10,6 +10,7 @@ import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
 import org.skopeo.dto.match.MatchPublicPlayer
+import org.skopeo.dto.match.MatchPublicRatingChange
 import org.skopeo.dto.match.MatchPublicResponse
 import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.dto.match.toPublicResponse
@@ -199,17 +200,62 @@ class MatchService(
      * user — the same "public" semantics as a player's public profile — with players resolved to
      * name + code. A [ServiceError.NotFound] if the code resolves to no active match.
      */
-    fun publicByCode(code: String): Either<ServiceError, MatchPublicResponse> =
+    fun publicByCode(
+        token: VerifiedFirebaseToken,
+        code: String,
+    ): Either<ServiceError, MatchPublicResponse> =
         either {
             val match = matches.findByPublicCode(code = code)
             ensureNotNull(value = match) { ServiceError.NotFound(message = "Match $code not found") }
             val ids = match.team1.userIds + match.team2.userIds
+            val usersById = users.findAllByIds(ids = ids).associateBy { it.id }
             val players =
-                users.findAllByIds(ids = ids).associate {
-                    it.id to MatchPublicPlayer(displayName = it.displayName(), publicCode = it.publicCode)
+                usersById.mapValues { (_, user) ->
+                    MatchPublicPlayer(displayName = user.displayName(), publicCode = user.publicCode)
                 }
-            match.toPublicResponse(players = players)
+            // Once rated, surface the per-player rating change (#136): bands for everyone, precise
+            // rates only for RATER/ADMINISTRATOR viewers.
+            val ratingChanges =
+                if (match.ratedAt != null) ratingChangesFor(match = match, usersById = usersById, token = token) else null
+            match.toPublicResponse(players = players, ratingChanges = ratingChanges)
         }
+
+    /**
+     * Per-player rating changes for a rated match. Bands ([previousLevel]/[newLevel]) are public; the
+     * precise rates (6-dp) are included only when the viewer holds RATER or ADMINISTRATOR. Players are
+     * ordered team1-then-team2 (mirroring [calculationDetail]); empty when no history is recorded. Names
+     * and codes are read from value-maps keyed by user id, resolved from the already-loaded [usersById].
+     */
+    private fun ratingChangesFor(
+        match: Match,
+        usersById: Map<UUID, User>,
+        token: VerifiedFirebaseToken,
+    ): List<MatchPublicRatingChange> {
+        val revealRates = callerCanSeeRates(token = token)
+        val names = usersById.mapValues { (_, user) -> user.displayName() }
+        val codes = usersById.mapValues { (_, user) -> user.publicCode }
+        val order = match.team1.userIds + match.team2.userIds
+        return ratings
+            .historyForMatches(matchIds = listOf(element = match.id))
+            .sortedBy { order.indexOf(element = it.userId) }
+            .map { history ->
+                MatchPublicRatingChange(
+                    publicCode = codes[history.userId],
+                    displayName = names[history.userId],
+                    previousLevel = history.previousLevel,
+                    newLevel = history.newLevel,
+                    previousRating = if (revealRates) history.previousRating.toPlainString() else null,
+                    newRating = if (revealRates) history.newRating.toPlainString() else null,
+                    ratingChange = if (revealRates) history.ratingChange.toPlainString() else null,
+                )
+            }
+    }
+
+    /** Whether the viewer may see precise rates (RATER or ADMINISTRATOR); bands are always public. */
+    private fun callerCanSeeRates(token: VerifiedFirebaseToken): Boolean {
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid) ?: return false
+        return caller.capabilities.any { it == Capability.RATER || it == Capability.ADMINISTRATOR }
+    }
 
     /**
      * The match result plus the stored per-player calculation behind it (#97), for the detail view

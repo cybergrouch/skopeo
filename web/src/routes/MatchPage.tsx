@@ -7,7 +7,10 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { useGetApiV1MatchesCodeCode } from '@/api/generated/matches/matches'
-import type { MatchPublicPlayer } from '@/api/generated/model'
+import type {
+  MatchPublicPlayer,
+  MatchPublicRatingChange,
+} from '@/api/generated/model'
 import { ShareCard } from '@/components/ShareCard'
 
 /** A player's name as a link to their public profile, falling back to the code or "Unknown". */
@@ -44,6 +47,51 @@ function Side({
           Winner
         </span>
       ) : null}
+    </div>
+  )
+}
+
+/** A signed delta, e.g. "+0.123456" / "-0.045000" — already-negative strings keep their sign. */
+function signed(value: string): string {
+  return value.startsWith('-') ? value : `+${value}`
+}
+
+/**
+ * One player's rating change for a rated match (#136). Everyone sees the NTRP band move
+ * (previousLevel → newLevel); raters/admins additionally get the precise rates, which the
+ * backend only populates for them — so their presence is what gates the detailed view.
+ */
+function RatingChangeRow({ change }: { change: MatchPublicRatingChange }) {
+  const name = change.displayName ?? change.publicCode ?? 'Unknown'
+  const showRates = change.previousRating != null && change.newRating != null
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span>
+        {change.publicCode ? (
+          <Link
+            to={`/players/${change.publicCode}`}
+            className="text-primary hover:underline"
+          >
+            {name}
+          </Link>
+        ) : (
+          name
+        )}
+      </span>
+      {showRates ? (
+        <span className="font-mono text-xs">
+          {change.previousRating} → {change.newRating}
+          {change.ratingChange ? (
+            <span className="ml-1 text-muted-foreground">
+              ({signed(change.ratingChange)})
+            </span>
+          ) : null}
+        </span>
+      ) : (
+        <span className="font-medium">
+          {change.previousLevel ?? '—'} → {change.newLevel ?? '—'}
+        </span>
+      )}
     </div>
   )
 }
@@ -103,6 +151,14 @@ export function MatchPage() {
                 <span className="font-medium">Score:</span>{' '}
                 {score ? score : 'Not yet played'}
               </div>
+              {match.ratingChanges && match.ratingChanges.length > 0 ? (
+                <div className="space-y-1.5 border-t pt-3">
+                  <div className="font-medium">Rating changes</div>
+                  {match.ratingChanges.map((change, i) => (
+                    <RatingChangeRow key={change.publicCode ?? i} change={change} />
+                  ))}
+                </div>
+              ) : null}
             </CardContent>
           </Card>
         ) : null}

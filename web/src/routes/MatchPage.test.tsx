@@ -89,6 +89,128 @@ describe('MatchPage', () => {
     expect(screen.queryByText(/Center Court/)).not.toBeInTheDocument()
   })
 
+  it('shows NTRP band rating changes for a non-rater viewer (precise rates withheld)', () => {
+    useGetApiV1MatchesCodeCode.mockReturnValue({
+      data: {
+        ...match,
+        ratingChanges: [
+          {
+            displayName: 'Ana',
+            publicCode: 'AAA111',
+            previousLevel: '4.0',
+            newLevel: '4.5',
+            previousRating: null,
+            newRating: null,
+            ratingChange: null,
+          },
+          {
+            displayName: 'Bob',
+            publicCode: 'BBB222',
+            previousLevel: '4.0',
+            newLevel: '3.5',
+            previousRating: null,
+            newRating: null,
+            ratingChange: null,
+          },
+        ],
+      },
+      isLoading: false,
+    })
+    renderAt()
+
+    expect(screen.getByText('Rating changes')).toBeInTheDocument()
+    expect(screen.getByText('4.0 → 4.5')).toBeInTheDocument()
+    expect(screen.getByText('4.0 → 3.5')).toBeInTheDocument()
+    // No precise rates leak to a non-rater.
+    expect(screen.queryByText(/→ 4\.\d{6}/)).not.toBeInTheDocument()
+  })
+
+  it('shows precise 6-dp rates and a signed delta for a rater/admin viewer', () => {
+    useGetApiV1MatchesCodeCode.mockReturnValue({
+      data: {
+        ...match,
+        ratingChanges: [
+          {
+            displayName: 'Ana',
+            publicCode: 'AAA111',
+            previousLevel: '4.0',
+            newLevel: '4.5',
+            previousRating: '4.000000',
+            newRating: '4.123456',
+            ratingChange: '0.123456',
+          },
+          {
+            displayName: 'Bob',
+            publicCode: 'BBB222',
+            previousLevel: '4.0',
+            newLevel: '3.5',
+            previousRating: '4.000000',
+            newRating: '3.876544',
+            ratingChange: '-0.123456',
+          },
+        ],
+      },
+      isLoading: false,
+    })
+    renderAt()
+
+    expect(screen.getByText('4.000000 → 4.123456')).toBeInTheDocument()
+    expect(screen.getByText('(+0.123456)')).toBeInTheDocument() // gain gets a + sign
+    expect(screen.getByText('4.000000 → 3.876544')).toBeInTheDocument()
+    expect(screen.getByText('(-0.123456)')).toBeInTheDocument() // loss keeps its - sign
+    // The NTRP-band-only form is not shown when precise rates are present.
+    expect(screen.queryByText('4.0 → 4.5')).not.toBeInTheDocument()
+  })
+
+  it('falls back to code/"Unknown" names, an em-dash band, and omits an absent delta', () => {
+    useGetApiV1MatchesCodeCode.mockReturnValue({
+      data: {
+        ...match,
+        ratingChanges: [
+          // No display name → label falls back to the public code, still a profile link.
+          {
+            displayName: null,
+            publicCode: 'DDD444',
+            previousLevel: null,
+            newLevel: null,
+            previousRating: null,
+            newRating: null,
+            ratingChange: null,
+          },
+          // Neither name nor code → "Unknown", plain text; precise rates present but no net change.
+          {
+            displayName: null,
+            publicCode: null,
+            previousLevel: '3.5',
+            newLevel: '3.0',
+            previousRating: '3.500000',
+            newRating: '3.000000',
+            ratingChange: null,
+          },
+        ],
+      },
+      isLoading: false,
+    })
+    renderAt()
+
+    expect(screen.getByRole('link', { name: 'DDD444' })).toHaveAttribute('href', '/players/DDD444')
+    expect(screen.getByText('— → —')).toBeInTheDocument() // both band levels missing
+    expect(screen.getByText('Unknown')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Unknown' })).not.toBeInTheDocument()
+    expect(screen.getByText('3.500000 → 3.000000')).toBeInTheDocument()
+    // ratingChange null → no parenthesised delta is rendered.
+    expect(screen.queryByText(/\(/)).not.toBeInTheDocument()
+  })
+
+  it('omits the rating-changes block entirely for an unrated match', () => {
+    useGetApiV1MatchesCodeCode.mockReturnValue({
+      data: { ...match, ratingChanges: null },
+      isLoading: false,
+    })
+    renderAt()
+    expect(screen.queryByText('Rating changes')).not.toBeInTheDocument()
+  })
+
   it('shows "Not yet played" and no winner badge before a result, and a player without a code is not a link', () => {
     useGetApiV1MatchesCodeCode.mockReturnValue({
       data: {

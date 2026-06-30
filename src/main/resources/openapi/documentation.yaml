@@ -3504,6 +3504,46 @@ components:
         tournamentName:
           type: string
           nullable: true
+        ratingChanges:
+          type: array
+          nullable: true
+          description: >-
+            Per-player rating change, present only once the match is rated. The NTRP bands
+            (previousLevel/newLevel) are shown to everyone; the precise rates are populated
+            only for RATER/ADMINISTRATOR viewers.
+          items:
+            $ref: '#/components/schemas/MatchPublicRatingChange'
+
+    MatchPublicRatingChange:
+      type: object
+      description: One player's rating change for a rated match (#136).
+      properties:
+        publicCode:
+          type: string
+          nullable: true
+        displayName:
+          type: string
+          nullable: true
+        previousLevel:
+          type: string
+          nullable: true
+          description: Public NTRP band before the match (shown to everyone).
+        newLevel:
+          type: string
+          nullable: true
+          description: Public NTRP band after the match (shown to everyone).
+        previousRating:
+          type: string
+          nullable: true
+          description: Precise rate before the match (6 fractional digits); null unless viewer is RATER/ADMINISTRATOR.
+        newRating:
+          type: string
+          nullable: true
+          description: Precise rate after the match (6 fractional digits); null unless viewer is RATER/ADMINISTRATOR.
+        ratingChange:
+          type: string
+          nullable: true
+          description: Precise net change (6 fractional digits); null unless viewer is RATER/ADMINISTRATOR.
 
     CalculationRequest:
       type: object
