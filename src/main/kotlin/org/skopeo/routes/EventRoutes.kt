@@ -16,8 +16,11 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
+import org.skopeo.dto.event.AddParticipantRequest
 import org.skopeo.dto.event.CreateEventRequest
+import org.skopeo.dto.event.DecideParticipantRequest
 import org.skopeo.dto.event.toResponse
+import org.skopeo.model.EventParticipantStatus
 import org.skopeo.service.event.CreateEventInput
 import org.skopeo.service.event.EventService
 import java.time.LocalDate
@@ -66,7 +69,16 @@ private fun Route.publicByCode(service: EventService) {
     get(path = "/code/{code}") {
         respondMappingErrors {
             val code = call.parameters["code"].orEmpty()
-            respondEither(result = service.publicByCode(code = code)) { event ->
+            respondEither(result = service.publicByCode(token = verifiedToken(), code = code)) { event ->
+                call.respond(status = HttpStatusCode.OK, message = event)
+            }
+        }
+    }
+    // Self-signup (#201): any authenticated player requests to join the event by its public code.
+    post(path = "/code/{code}/signup") {
+        respondMappingErrors {
+            val code = call.parameters["code"].orEmpty()
+            respondEither(result = service.selfSignup(token = verifiedToken(), code = code)) { event ->
                 call.respond(status = HttpStatusCode.OK, message = event)
             }
         }
@@ -83,13 +95,28 @@ private fun Route.byIdAndParticipants(service: EventService) {
     }
     post(path = "/{id}/participants") {
         respondMappingErrors {
-            val request = call.receive<org.skopeo.dto.event.AddParticipantRequest>()
+            val request = call.receive<AddParticipantRequest>()
             respondEither(
                 result =
                     service.addParticipant(
                         token = verifiedToken(),
                         eventId = uuidParam(name = "id"),
                         userId = parseEventUserId(value = request.userId),
+                    ),
+            ) { event -> call.respond(status = HttpStatusCode.OK, message = event.toResponse()) }
+        }
+    }
+    // Approve or hold a participant request (#201). Staff-only (enforced in the service).
+    post(path = "/{id}/participants/{userId}/decision") {
+        respondMappingErrors {
+            val request = call.receive<DecideParticipantRequest>()
+            respondEither(
+                result =
+                    service.decideParticipant(
+                        token = verifiedToken(),
+                        eventId = uuidParam(name = "id"),
+                        userId = uuidParam(name = "userId"),
+                        status = parseParticipantStatus(value = request.status),
                     ),
             ) { event -> call.respond(status = HttpStatusCode.OK, message = event.toResponse()) }
         }
@@ -107,6 +134,12 @@ private fun Route.byIdAndParticipants(service: EventService) {
         }
     }
 }
+
+/** Parse a participant decision (#201) at the boundary: APPROVED or HOLD, else a 400. */
+private fun parseParticipantStatus(value: String): EventParticipantStatus =
+    requireNotNull(value = EventParticipantStatus.entries.firstOrNull { it.name == value }) {
+        "Invalid decision '$value'; expected APPROVED or HOLD"
+    }
 
 /** Parse + validate the create-event request shape at the boundary (#116): dates and participant ids. */
 private fun toCreateEventInput(request: CreateEventRequest): CreateEventInput =

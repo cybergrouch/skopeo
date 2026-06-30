@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   Card,
   CardContent,
@@ -6,10 +8,57 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { useGetApiV1EventsCodeCode } from '@/api/generated/events/events'
+import { Button } from '@/components/ui/button'
+import {
+  getGetApiV1EventsCodeCodeQueryKey,
+  useGetApiV1EventsCodeCode,
+  usePostApiV1EventsCodeCodeSignup,
+} from '@/api/generated/events/events'
 import type { EventParticipantResponse, MatchPublicResponse } from '@/api/generated/model'
 import { ShareCard } from '@/components/ShareCard'
 import { playerLabel } from '@/lib/playerLabel'
+
+/** The join card on the public event page (#201): request to join, or the viewer's current standing. */
+function JoinCard({ code, viewerStatus }: { code: string; viewerStatus?: string | null }) {
+  const queryClient = useQueryClient()
+  const [error, setError] = useState<string | null>(null)
+  const signup = usePostApiV1EventsCodeCodeSignup({
+    mutation: {
+      onSuccess: () => {
+        setError(null)
+        queryClient.invalidateQueries({ queryKey: getGetApiV1EventsCodeCodeQueryKey(code) })
+      },
+      onError: () => setError('Could not sign up for this event. Please try again.'),
+    },
+  })
+
+  if (viewerStatus === 'APPROVED') {
+    return <p className="text-sm text-muted-foreground">You’re confirmed for this event.</p>
+  }
+  if (viewerStatus === 'PENDING') {
+    return <p className="text-sm text-muted-foreground">Your request to join is pending the host’s approval.</p>
+  }
+  if (viewerStatus === 'HOLD') {
+    return <p className="text-sm text-muted-foreground">Your request is on hold — the host will review it.</p>
+  }
+  return (
+    <div className="space-y-2">
+      <Button
+        type="button"
+        size="sm"
+        disabled={signup.isPending}
+        onClick={() => signup.mutate({ code })}
+      >
+        {signup.isPending ? 'Requesting…' : 'Request to join'}
+      </Button>
+      {error ? (
+        <p className="text-sm text-destructive" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  )
+}
 
 /** A participant as a link to their public profile, falling back to the code / "Unknown". */
 function ParticipantLink({ p }: { p: EventParticipantResponse }) {
@@ -105,6 +154,9 @@ export function EventPage() {
                 ) : (
                   <p className="text-muted-foreground">No matches yet.</p>
                 )}
+              </div>
+              <div className="border-t pt-3">
+                <JoinCard code={event.publicCode} viewerStatus={event.viewerStatus} />
               </div>
             </CardContent>
           </Card>

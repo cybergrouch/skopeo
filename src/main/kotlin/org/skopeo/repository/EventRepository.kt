@@ -12,11 +12,15 @@ import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.update
 import org.skopeo.model.CreateEventCommand
 import org.skopeo.model.Event
+import org.skopeo.model.EventParticipantEntry
+import org.skopeo.model.EventParticipantStatus
+import java.time.LocalDateTime
 import java.util.UUID
 
-/** Persistence for events/meets (issue #138): the event row plus its participant roster. */
+/** Persistence for events/meets (issue #138): the event row plus its participant roster (#201). */
 class EventRepository {
     fun create(command: CreateEventCommand): Event =
         transaction {
@@ -28,7 +32,10 @@ class EventRepository {
                     it[endDate] = command.endDate
                     it[createdBy] = command.createdBy
                 }.value
-            command.participantIds.distinct().forEach { uid -> addParticipantRow(eventId = id, userId = uid) }
+            // Host-listed participants join APPROVED outright, attributed to the creator.
+            command.participantIds.distinct().forEach { uid ->
+                insertParticipant(eventId = id, userId = uid, status = EventParticipantStatus.APPROVED, approvedBy = command.createdBy)
+            }
             loadEventOrThrow(id = id)
         }
 
@@ -59,8 +66,33 @@ class EventRepository {
                 ?.let { buildEvent(row = it) }
         }
 
-    /** Add a participant (idempotent); returns the updated event, or null if the event is absent. */
+    /**
+     * Host-add a participant outright as APPROVED (#201, idempotent). If the user already has a row
+     * (e.g. a PENDING self-signup), it's promoted to APPROVED. Returns the event, or null if absent.
+     */
     fun addParticipant(
+        eventId: UUID,
+        userId: UUID,
+        approvedBy: UUID,
+    ): Event? =
+        transaction {
+            if (loadEvent(id = eventId) == null) {
+                null
+            } else {
+                if (hasParticipant(eventId = eventId, userId = userId)) {
+                    setStatus(eventId = eventId, userId = userId, status = EventParticipantStatus.APPROVED, approvedBy = approvedBy)
+                } else {
+                    insertParticipant(eventId = eventId, userId = userId, status = EventParticipantStatus.APPROVED, approvedBy = approvedBy)
+                }
+                loadEvent(id = eventId)
+            }
+        }
+
+    /**
+     * Self-signup (#201): a player adds themselves as PENDING. Idempotent — if they already have a
+     * row in any status it's left untouched. Returns the event, or null if absent.
+     */
+    fun selfSignup(
         eventId: UUID,
         userId: UUID,
     ): Event? =
@@ -68,17 +100,33 @@ class EventRepository {
             if (loadEvent(id = eventId) == null) {
                 null
             } else {
-                val present =
-                    EventParticipantsTable
-                        .selectAll()
-                        .where { (EventParticipantsTable.eventId eq eventId) and (EventParticipantsTable.userId eq userId) }
-                        .any()
-                if (!present) addParticipantRow(eventId = eventId, userId = userId)
+                if (!hasParticipant(eventId = eventId, userId = userId)) {
+                    insertParticipant(eventId = eventId, userId = userId, status = EventParticipantStatus.PENDING, approvedBy = null)
+                }
                 loadEvent(id = eventId)
             }
         }
 
-    /** Remove a participant (a no-op if absent from the roster); returns the updated event, or null if the event is absent. */
+    /**
+     * Set a participant's status (#201) — APPROVE or HOLD a request. [approvedBy]/approved_at are
+     * stamped when APPROVED, cleared otherwise. Returns the event, or null if the event is absent.
+     */
+    fun setParticipantStatus(
+        eventId: UUID,
+        userId: UUID,
+        status: EventParticipantStatus,
+        approvedBy: UUID?,
+    ): Event? =
+        transaction {
+            if (loadEvent(id = eventId) == null) {
+                null
+            } else {
+                setStatus(eventId = eventId, userId = userId, status = status, approvedBy = approvedBy)
+                loadEvent(id = eventId)
+            }
+        }
+
+    /** Remove a participant (a no-op if absent); returns the updated event, or null if the event is absent. */
     fun removeParticipant(
         eventId: UUID,
         userId: UUID,
@@ -94,13 +142,59 @@ class EventRepository {
             }
         }
 
-    private fun addParticipantRow(
+    /** All participant rows for an event with their status (#201) — the roster + pending/held requests. */
+    fun participantsOf(eventId: UUID): List<EventParticipantEntry> =
+        transaction {
+            EventParticipantsTable
+                .selectAll()
+                .where { EventParticipantsTable.eventId eq eventId }
+                .map {
+                    EventParticipantEntry(
+                        userId = it[EventParticipantsTable.userId].value,
+                        status = EventParticipantStatus.valueOf(value = it[EventParticipantsTable.status]),
+                    )
+                }
+        }
+
+    private fun hasParticipant(
         eventId: UUID,
         userId: UUID,
+    ): Boolean =
+        EventParticipantsTable
+            .selectAll()
+            .where { (EventParticipantsTable.eventId eq eventId) and (EventParticipantsTable.userId eq userId) }
+            .any()
+
+    private fun setStatus(
+        eventId: UUID,
+        userId: UUID,
+        status: EventParticipantStatus,
+        approvedBy: UUID?,
     ) {
+        val approved = status == EventParticipantStatus.APPROVED
+        EventParticipantsTable.update(
+            where = { (EventParticipantsTable.eventId eq eventId) and (EventParticipantsTable.userId eq userId) },
+        ) {
+            it[EventParticipantsTable.status] = status.name
+            it[EventParticipantsTable.approvedBy] = if (approved) approvedBy else null
+            it[EventParticipantsTable.approvedAt] = if (approved) LocalDateTime.now() else null
+        }
+    }
+
+    private fun insertParticipant(
+        eventId: UUID,
+        userId: UUID,
+        status: EventParticipantStatus,
+        approvedBy: UUID?,
+    ) {
+        val approved = status == EventParticipantStatus.APPROVED
         EventParticipantsTable.insert {
             it[EventParticipantsTable.eventId] = eventId
             it[EventParticipantsTable.userId] = userId
+            it[EventParticipantsTable.status] = status.name
+            it[requestedAt] = if (status == EventParticipantStatus.PENDING) LocalDateTime.now() else null
+            it[EventParticipantsTable.approvedBy] = if (approved) approvedBy else null
+            it[approvedAt] = if (approved) LocalDateTime.now() else null
         }
     }
 
@@ -117,17 +211,20 @@ class EventRepository {
             name = row[EventsTable.name],
             startDate = row[EventsTable.startDate],
             endDate = row[EventsTable.endDate],
-            participantIds = participantIdsOf(eventId = id),
+            participantIds = approvedParticipantIdsOf(eventId = id),
             isActive = row[EventsTable.isActive],
             createdBy = row[EventsTable.createdBy]?.value,
         )
     }
 
-    private fun participantIdsOf(eventId: UUID): List<UUID> =
+    /** Only APPROVED participants count as the roster (eligible for fixtures/seeding, #201). */
+    private fun approvedParticipantIdsOf(eventId: UUID): List<UUID> =
         EventParticipantsTable
             .selectAll()
-            .where { EventParticipantsTable.eventId eq eventId }
-            .map { it[EventParticipantsTable.userId].value }
+            .where {
+                (EventParticipantsTable.eventId eq eventId) and
+                    (EventParticipantsTable.status eq EventParticipantStatus.APPROVED.name)
+            }.map { it[EventParticipantsTable.userId].value }
 
     private fun generateUniqueEventCode(): String =
         PublicCode.generate { code -> EventsTable.selectAll().where { EventsTable.publicCode eq code }.any() }

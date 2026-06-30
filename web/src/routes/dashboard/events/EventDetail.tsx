@@ -16,6 +16,7 @@ import {
   useDeleteApiV1EventsIdParticipantsUserId,
   useGetApiV1EventsId,
   usePostApiV1EventsIdParticipants,
+  usePostApiV1EventsIdParticipantsUserIdDecision,
 } from '@/api/generated/events/events'
 import {
   getGetApiV1MatchesQueryKey,
@@ -66,7 +67,10 @@ export function EventDetail({
   const queryClient = useQueryClient()
   const eventQuery = useGetApiV1EventsId(eventId)
   const event = eventQuery.data
-  const participants = event?.participants ?? []
+  const allParticipants = event?.participants ?? []
+  // Only APPROVED members are the roster (eligible for fixtures); PENDING/HOLD are requests (#201).
+  const participants = allParticipants.filter((p) => p.status === 'APPROVED')
+  const requests = allParticipants.filter((p) => p.status === 'PENDING' || p.status === 'HOLD')
 
   const [team1, setTeam1] = useState('')
   const [team2, setTeam2] = useState('')
@@ -83,6 +87,9 @@ export function EventDetail({
     mutation: { onSuccess: refreshEvent },
   })
   const removeParticipant = useDeleteApiV1EventsIdParticipantsUserId({
+    mutation: { onSuccess: refreshEvent },
+  })
+  const decideParticipant = usePostApiV1EventsIdParticipantsUserIdDecision({
     mutation: { onSuccess: refreshEvent },
   })
   const createFixture = usePostApiV1Matches({
@@ -182,7 +189,7 @@ export function EventDetail({
                 <UserSearchSelect
                   label="Add a participant"
                   placeholder="Search players…"
-                  excludeIds={participants.map((p) => p.userId)}
+                  excludeIds={allParticipants.map((p) => p.userId)}
                   onSelect={(user) => {
                     setRosterError(null)
                     addParticipant.mutate(
@@ -199,6 +206,63 @@ export function EventDetail({
               </div>
             </CardContent>
           </Card>
+
+          {requests.length > 0 ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Join requests</CardTitle>
+                <CardDescription>
+                  Players who signed up from the shared link. Approve to add them to the roster, or hold
+                  to set aside (you can approve a held request later).
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-1 text-sm">
+                  {requests.map((p) => {
+                    const meta = participantMeta(p)
+                    return (
+                      <li key={p.userId} className="flex items-center justify-between gap-2">
+                        <span className="min-w-0">
+                          <span className="block">
+                            {playerLabel(p.displayName, p.publicCode, p.userId)}
+                            {p.status === 'HOLD' ? (
+                              <span className="text-muted-foreground"> · on hold</span>
+                            ) : null}
+                          </span>
+                          {meta ? <span className="block text-xs text-muted-foreground">{meta}</span> : null}
+                        </span>
+                        <span className="flex shrink-0 items-center gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={decideParticipant.isPending}
+                            onClick={() =>
+                              decideParticipant.mutate({ id: eventId, userId: p.userId, data: { status: 'APPROVED' } })
+                            }
+                          >
+                            Approve
+                          </Button>
+                          {p.status === 'HOLD' ? null : (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={decideParticipant.isPending}
+                              onClick={() =>
+                                decideParticipant.mutate({ id: eventId, userId: p.userId, data: { status: 'HOLD' } })
+                              }
+                            >
+                              Hold
+                            </Button>
+                          )}
+                        </span>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </CardContent>
+            </Card>
+          ) : null}
 
           <Card>
             <CardHeader>

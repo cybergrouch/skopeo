@@ -5,6 +5,8 @@ package org.skopeo.service.event
 
 import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
+import io.kotest.matchers.booleans.shouldBeFalse
+import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
@@ -14,6 +16,7 @@ import org.junit.jupiter.api.Test
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.CreateFixtureCommand
+import org.skopeo.model.EventParticipantStatus
 import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
@@ -223,13 +226,16 @@ class EventServiceTest {
                 ),
         )
 
-        val public = service.publicByCode(code = created.event.publicCode).shouldBeRight()
+        val public = service.publicByCode(token = token(uid = "host"), code = created.event.publicCode).shouldBeRight()
         public.name shouldBe "Spring Open"
         public.participants.map { it.userId }.toSet() shouldBe setOf(p1.id.toString(), p2.id.toString())
         public.matches shouldHaveSize 1
         public.matches.single().team1.single().publicCode shouldBe p1.publicCode
 
-        service.publicByCode(code = "ZZZZZZ").shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+        service
+            .publicByCode(token = token(uid = "host"), code = "ZZZZZZ")
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
     @Test
@@ -237,5 +243,165 @@ class EventServiceTest {
         // The "ghost" token resolves to no user — the staff gate denies before any work.
         service.create(token = token(uid = "ghost"), input = input()).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
         service.list(token = token(uid = "ghost")).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
+    @Test
+    fun `a player self-signs-up as PENDING and isn't on the approved roster yet (#201)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val player = provision(uid = "player")
+        val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight().event
+
+        val public = service.selfSignup(token = token(uid = "player"), code = event.publicCode).shouldBeRight()
+        public.viewerStatus shouldBe "PENDING"
+        // The public roster lists APPROVED members only — the pending request isn't shown there.
+        public.participants.none { it.userId == player.id.toString() }.shouldBeTrue()
+        // Signing up again is idempotent (still a single PENDING request).
+        service.selfSignup(token = token(uid = "player"), code = event.publicCode).shouldBeRight().viewerStatus shouldBe "PENDING"
+
+        // The organizer sees the request; the approved roster (fixtures/seeding) excludes it.
+        val view = service.get(token = token(uid = "host"), id = event.id).shouldBeRight()
+        view.participants.single { it.userId == player.id }.status shouldBe EventParticipantStatus.PENDING
+        view.event.participantIds.contains(element = player.id).shouldBeFalse()
+    }
+
+    @Test
+    fun `a host approves a request, adding the player to the roster (#201)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val player = provision(uid = "player")
+        val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight().event
+        service.selfSignup(token = token(uid = "player"), code = event.publicCode).shouldBeRight()
+
+        val view =
+            service
+                .decideParticipant(
+                    token = token(uid = "host"),
+                    eventId = event.id,
+                    userId = player.id,
+                    status = EventParticipantStatus.APPROVED,
+                ).shouldBeRight()
+        view.participants.single { it.userId == player.id }.status shouldBe EventParticipantStatus.APPROVED
+        view.event.participantIds.contains(element = player.id).shouldBeTrue()
+
+        val public = service.publicByCode(token = token(uid = "player"), code = event.publicCode).shouldBeRight()
+        public.viewerStatus shouldBe "APPROVED"
+        public.participants.any { it.userId == player.id.toString() }.shouldBeTrue()
+    }
+
+    @Test
+    fun `a host can hold a request and later approve it (#201)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val player = provision(uid = "player")
+        val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight().event
+        service.selfSignup(token = token(uid = "player"), code = event.publicCode).shouldBeRight()
+
+        service
+            .decideParticipant(token = token(uid = "host"), eventId = event.id, userId = player.id, status = EventParticipantStatus.HOLD)
+            .shouldBeRight()
+            .participants
+            .single { it.userId == player.id }
+            .status shouldBe EventParticipantStatus.HOLD
+        // On hold → still off the approved roster.
+        service.get(
+            token = token(uid = "host"),
+            id = event.id,
+        ).shouldBeRight().event.participantIds.contains(element = player.id).shouldBeFalse()
+
+        // A held request can later be approved.
+        service
+            .decideParticipant(
+                token = token(uid = "host"),
+                eventId = event.id,
+                userId = player.id,
+                status = EventParticipantStatus.APPROVED,
+            ).shouldBeRight()
+            .event.participantIds
+            .contains(element = player.id)
+            .shouldBeTrue()
+    }
+
+    @Test
+    fun `a non-staff caller cannot decide a request, and self-signup needs a profile (#201)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val player = provision(uid = "player")
+        provision(uid = "outsider")
+        val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight().event
+        service.selfSignup(token = token(uid = "player"), code = event.publicCode).shouldBeRight()
+
+        service
+            .decideParticipant(
+                token = token(uid = "outsider"),
+                eventId = event.id,
+                userId = player.id,
+                status = EventParticipantStatus.APPROVED,
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+
+        // An unprovisioned token can't self-sign-up.
+        service.selfSignup(
+            token = token(uid = "ghost"),
+            code = event.publicCode,
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
+    @Test
+    fun `a host-added participant is approved outright (#201)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight().event
+
+        val view = service.addParticipant(token = token(uid = "host"), eventId = event.id, userId = p1.id).shouldBeRight()
+        view.participants.single { it.userId == p1.id }.status shouldBe EventParticipantStatus.APPROVED
+        view.event.participantIds.contains(element = p1.id).shouldBeTrue()
+    }
+
+    @Test
+    fun `a host-add promotes an existing pending request to APPROVED (#201)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val player = provision(uid = "player")
+        val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight().event
+        service.selfSignup(token = token(uid = "player"), code = event.publicCode).shouldBeRight()
+
+        val view = service.addParticipant(token = token(uid = "host"), eventId = event.id, userId = player.id).shouldBeRight()
+        view.participants.single { it.userId == player.id }.status shouldBe EventParticipantStatus.APPROVED
+        view.event.participantIds.contains(element = player.id).shouldBeTrue()
+    }
+
+    @Test
+    fun `signup and decide report not-found and reject a non-decision status (#201)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val player = provision(uid = "player")
+        val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight().event
+        service.selfSignup(token = token(uid = "player"), code = event.publicCode).shouldBeRight()
+
+        // Unknown code / event id.
+        service.selfSignup(token = token(uid = "player"), code = "ZZZZZZ").shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+        service
+            .decideParticipant(
+                token = token(uid = "host"),
+                eventId = UUID.randomUUID(),
+                userId = player.id,
+                status = EventParticipantStatus.APPROVED,
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
+        // PENDING is not a valid decision (only APPROVED/HOLD).
+        service
+            .decideParticipant(
+                token = token(uid = "host"),
+                eventId = event.id,
+                userId = player.id,
+                status = EventParticipantStatus.PENDING,
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+        // The repository self-signup is a no-op (null) for an unknown event.
+        events.selfSignup(eventId = UUID.randomUUID(), userId = player.id) shouldBe null
+    }
+
+    @Test
+    fun `the public event summary has no viewer status for an unprovisioned viewer (#201)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight().event
+
+        val public = service.publicByCode(token = token(uid = "ghost"), code = event.publicCode).shouldBeRight()
+        public.viewerStatus shouldBe null
     }
 }

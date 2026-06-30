@@ -10,6 +10,7 @@ import org.jetbrains.exposed.sql.javatime.datetime
 
 private const val EVENT_NAME_MAX = 255
 private const val EVENT_CODE_MAX = 6
+private const val PARTICIPANT_STATUS_MAX = 20
 
 /** Events/meets that contain matches (issue #138): a name, a date range, and a shareable code. */
 internal object EventsTable : UUIDTable(name = "events") {
@@ -25,4 +26,10 @@ internal object EventsTable : UUIDTable(name = "events") {
 internal object EventParticipantsTable : UUIDTable(name = "event_participants") {
     val eventId = reference(name = "event_id", foreign = EventsTable, onDelete = ReferenceOption.CASCADE)
     val userId = reference(name = "user_id", foreign = UsersTable, onDelete = ReferenceOption.CASCADE)
+
+    // Self-signup + host approval (#201): APPROVED roster members vs PENDING/HOLD requests.
+    val status = varchar(name = "status", length = PARTICIPANT_STATUS_MAX).default(defaultValue = "APPROVED")
+    val requestedAt = datetime(name = "requested_at").nullable()
+    val approvedBy = reference(name = "approved_by", foreign = UsersTable, onDelete = ReferenceOption.SET_NULL).nullable()
+    val approvedAt = datetime(name = "approved_at").nullable()
 }
