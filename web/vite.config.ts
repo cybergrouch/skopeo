@@ -1,11 +1,32 @@
 import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vitest/config'
+import type { Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
+// Emit a machine-checkable version.json into the build (#229) — the web's "/health": the deployed
+// version (VITE_APP_VERSION, the release tag), commit, and build time. Verify a deploy with
+// `curl https://<host>/version.json`. Values come from the deploy-web.yml build env (process.env);
+// unset locally → "dev".
+function emitVersionJson(): Plugin {
+  const version = process.env.VITE_APP_VERSION ?? 'dev'
+  const commit = process.env.VITE_APP_COMMIT ?? ''
+  const builtAt = new Date().toISOString()
+  return {
+    name: 'emit-version-json',
+    generateBundle() {
+      this.emitFile({
+        type: 'asset',
+        fileName: 'version.json',
+        source: JSON.stringify({ version, commit, builtAt }, null, 2),
+      })
+    },
+  }
+}
+
 // https://vite.dev/config/ (extended with Vitest's test config)
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), emitVersionJson()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
