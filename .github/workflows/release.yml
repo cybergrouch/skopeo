@@ -1,106 +1,65 @@
 name: Release
 
-# One-click release (manual trigger). It:
-#   1. Derives the release version by stripping -SNAPSHOT from build.gradle.kts (e.g. 0.0.1-SNAPSHOT
-#      → 0.0.1) — or uses the `version` input if you pass one.
-#   2. Creates a release commit that sets that version (so the tagged build's /health reports it),
-#      tags it `vX.Y.Z`, and pushes ONLY the tag (main is left untouched).
-#   3. Publishes a GitHub Release for the tag, then explicitly dispatches deploy-api.yml /
-#      deploy-web.yml for it (the release:published event from GITHUB_TOKEN does NOT trigger other
-#      workflows — GitHub's recursion guard — so they must be dispatched directly).
-#   4. Opens a PR bumping main's dev version to the next -SNAPSHOT (you review + merge it).
+# Step 1 of a two-phase release (manual trigger). It opens a PR that sets the release version
+# (`X.Y.Z`) on main. main is branch-protected (PR + CI required, admins not exempt), so the
+# release-version commit must land via a PR — it can't be pushed straight to main, and we no longer
+# tag an orphan commit off to the side. When you merge that release PR, `tag-and-ship.yml` takes over:
+# it tags the (now on-main) commit, publishes the GitHub Release, dispatches the deploys, and opens
+# the follow-up dev-version bump PR.
 #
-# main always carries the dev `-SNAPSHOT` version; official versions live on tags. To release the
-# current SNAPSHOT as-is (e.g. the initial v0.0.1-SNAPSHOT marker), pass it explicitly via `version`.
+# So main carries an official `X.Y.Z` only briefly — between the release PR merge and the bump PR
+# merge — and otherwise carries `X.Y.Z-SNAPSHOT`. Each release is two merges: the release PR, then
+# the bump PR.
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version (blank = strip -SNAPSHOT from build.gradle.kts, e.g. 0.0.1)"
+        description: "Release version (blank = strip -SNAPSHOT from build.gradle.kts, e.g. 0.0.3)"
         required: false
         type: string
 
 permissions:
-  contents: write       # push the tag + the bump branch
-  pull-requests: write  # open the bump PR
-  actions: write        # dispatch deploy-api.yml / deploy-web.yml (workflow_dispatch)
+  contents: write       # push the release branch
+  pull-requests: write  # open the release PR
 
 concurrency:
   group: release
   cancel-in-progress: false
 
 jobs:
-  release:
+  prepare:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - name: Compute versions
+      - name: Compute release version
         id: v
         run: |
           set -euo pipefail
           CURRENT=$(grep -E '^version = "' build.gradle.kts | head -1 | sed -E 's/^version = "(.*)"/\1/')
           RELEASE="${{ inputs.version }}"
           if [ -z "$RELEASE" ]; then RELEASE="${CURRENT%-SNAPSHOT}"; fi
-          # Next dev version = bump the patch of the release's base, re-add -SNAPSHOT.
-          BASE="${RELEASE%-SNAPSHOT}"
-          IFS=. read -r MAJ MIN PAT <<< "$BASE"
-          NEXT="${MAJ}.${MIN}.$((PAT + 1))-SNAPSHOT"
-          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
-          echo "release=$RELEASE"  >> "$GITHUB_OUTPUT"
-          echo "next=$NEXT"        >> "$GITHUB_OUTPUT"
-          echo "Releasing v$RELEASE (from $CURRENT); next dev = $NEXT"
+          echo "release=$RELEASE" >> "$GITHUB_OUTPUT"
+          echo "Preparing release v$RELEASE (from $CURRENT)"
 
-      - name: Tag the release commit (tag only — main untouched)
+      - name: Open the release PR (version → release)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          REL="${{ steps.v.outputs.release }}"
+          BRANCH="release/v$REL"
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          REL="${{ steps.v.outputs.release }}"
-          # If the tag value differs from the file, write the release version onto a detached commit
-          # so the tagged build reports the official version; otherwise tag HEAD as-is.
-          if [ "$REL" != "${{ steps.v.outputs.current }}" ]; then
-            sed -i -E "s/^version = \".*\"/version = \"$REL\"/" build.gradle.kts
-            git commit -am "release: v$REL"
-          fi
-          git tag -a "v$REL" -m "Skopeo v$REL"
-          git push origin "v$REL"
-
-      - name: Publish GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release create "v${{ steps.v.outputs.release }}" --title "v${{ steps.v.outputs.release }}" --generate-notes
-
-      - name: Deploy the released tag (API + Web)
-        # The release:published event above is created by GITHUB_TOKEN, which (by GitHub's recursion
-        # guard) does NOT trigger deploy-api/deploy-web. So dispatch them explicitly for the new tag.
-        # workflow_dispatch IS the documented exception — GITHUB_TOKEN can trigger it, provided the job
-        # has `actions: write` (see permissions above). Each deploy still pauses at the `production`
-        # environment's gate before shipping. A RELEASE_PAT secret, if set, takes precedence.
-        env:
-          GH_TOKEN: ${{ secrets.RELEASE_PAT || github.token }}
-        run: |
-          set -euo pipefail
-          REL="v${{ steps.v.outputs.release }}"
-          gh workflow run deploy-api.yml --ref "$REL"
-          gh workflow run deploy-web.yml --ref "$REL"
-
-      - name: Open dev version-bump PR
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          NEXT="${{ steps.v.outputs.next }}"
-          BRANCH="chore/bump-$NEXT"
-          # Branch from the pristine origin/main (not the local release commit).
           git checkout -B "$BRANCH" origin/main
-          sed -i -E "s/^version = \".*\"/version = \"$NEXT\"/" build.gradle.kts
-          git commit -am "chore: bump dev version to $NEXT"
-          git push -u origin "$BRANCH"
-          gh pr create --base main --head "$BRANCH" \
-            --title "chore: bump dev version to $NEXT" \
-            --body "Post-release dev version bump after **v${{ steps.v.outputs.release }}**. Merge to continue development on \`$NEXT\`."
+          sed -i -E "s/^version = \".*\"/version = \"$REL\"/" build.gradle.kts
+          git commit -am "release: v$REL"
+          git push -u origin "$BRANCH" --force-with-lease
+          # Reuse an existing release PR for this version if one is already open.
+          if ! gh pr view "$BRANCH" >/dev/null 2>&1; then
+            gh pr create --base main --head "$BRANCH" \
+              --title "release: v$REL" \
+              --body "Cuts **v$REL**. Merging this PR lands the release-version commit on main, then \`tag-and-ship.yml\` tags it, publishes the GitHub Release, dispatches the deploys, and opens the dev-version bump PR. main carries v$REL only until that bump PR merges."
+          fi
