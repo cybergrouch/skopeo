@@ -38,20 +38,30 @@ api.skopeo.com ──► Cloud Run (skopeo)  ──► Cloud SQL (SkopeoDb)
 Both workflows are **inert until configured** — each is guarded by an `if:` on a repo variable, so
 merging them never produces a red run before the cloud resources exist.
 
-Deploys are **release-driven, not on-merge**: publishing a GitHub Release deploys that tag.
+Deploys are **release-driven, not on-merge**: a release tag is deployed (the deploys are dispatched by
+`tag-and-ship.yml` once the release lands on `main`).
 
 | Workflow | Trigger | Guard (skips unless set) | Gate |
 |---|---|---|---|
-| `.github/workflows/release.yml` | `workflow_dispatch` (the one-click release) | none | none |
-| `.github/workflows/deploy-api.yml` | `release: published`, or `workflow_dispatch` (manual/sandbox) | `vars.WIF_PROVIDER` | `production` environment approval |
-| `.github/workflows/deploy-web.yml` | `release: published`, or `workflow_dispatch` (manual/sandbox) | `vars.VITE_FIREBASE_PROJECT_ID` | `production` environment approval |
+| `.github/workflows/release.yml` | `workflow_dispatch` — **step 1**: opens the `release: vX.Y.Z` PR | none | none |
+| `.github/workflows/tag-and-ship.yml` | `push` to `main` — **step 2**: fires when `main` holds an untagged non-SNAPSHOT version | none | none |
+| `.github/workflows/deploy-api.yml` | `workflow_dispatch` (dispatched by tag-and-ship, or manual) | `vars.WIF_PROVIDER` | `production` environment approval |
+| `.github/workflows/deploy-web.yml` | `workflow_dispatch` (dispatched by tag-and-ship, or manual) | `vars.VITE_FIREBASE_PROJECT_ID` | `production` environment approval |
 
-**Release flow:** Actions → **Release → Run workflow** → it strips `-SNAPSHOT` to form the official
-version (e.g. `0.0.1`), tags `vX.Y.Z` + publishes a GitHub Release (→ triggers the two deploys), and
-opens a PR bumping `main`'s dev version to the next `-SNAPSHOT`. The version is single-sourced from
-`build.gradle.kts` → generated `version.properties` → `/health`, so the tag's version is what `/health`
-reports. (To ship the current `-SNAPSHOT` as-is — e.g. the initial `v0.0.1-SNAPSHOT` marker — pass it
-to the Release workflow's `version` input.)
+**Release flow (two phases, two merges):** `main` is branch-protected, so the release-version commit
+lands via a PR rather than a tag-only orphan.
+
+1. Actions → **Release → Run workflow** → `release.yml` opens a **`release: vX.Y.Z` PR** that sets the
+   official version (strips `-SNAPSHOT`, e.g. `0.0.3`) on a branch. Review + merge it.
+2. Merging that PR puts the release version on `main`, which triggers `tag-and-ship.yml`: it tags
+   `vX.Y.Z`, publishes the GitHub Release, **dispatches `deploy-api` + `deploy-web` for the tag** (each
+   waits on the `production` approval gate), and opens a **dev-version bump PR** returning `main` to the
+   next `-SNAPSHOT`. Merge that to finish.
+
+The version is single-sourced from `build.gradle.kts` → generated `version.properties` → `/health`, so
+the tag's version is what `/health` reports. (To ship the current `-SNAPSHOT` as-is — e.g. an initial
+marker — pass the version explicitly to the Release workflow's `version` input.) `tag-and-ship` is
+idempotent: a normal `-SNAPSHOT` push or an already-tagged version is a no-op.
 
 ### API pipeline — required repo **Variables**
 

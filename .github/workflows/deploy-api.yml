@@ -1,17 +1,15 @@
 name: Deploy API
 
-# Deploys the Ktor API to GCP Cloud Run. Release-driven — NOT on every merge:
-#   * release: published  → deploys the released tag (see release.yml). /health reports the tag's
-#     version because the tagged commit carries it in build.gradle.kts → version.properties.
-#   * workflow_dispatch   → manual deploy of the chosen branch (e.g. main = the -SNAPSHOT dev build,
-#     useful for a future sandbox). Run it from the Actions tab.
+# Deploys the Ktor API to GCP Cloud Run. Release-driven — NOT on every merge. Triggered only by
+# workflow_dispatch:
+#   * tag-and-ship.yml dispatches it for the release tag once a `release: vX.Y.Z` PR lands on main,
+#     so /health reports the tag's version (build.gradle.kts → version.properties).
+#   * Run it manually from the Actions tab against any ref (e.g. main = the -SNAPSHOT dev build).
 # Keyless auth via Workload Identity Federation (CICD.md C4) — no service-account JSON is stored.
 # Inert until configured: the job is skipped unless the WIF_PROVIDER repo variable is set.
 # Production deploys wait on the `production` GitHub Environment's manual-approval gate.
 # Flyway migrations run on app startup (DatabaseConfig.init), so the new revision migrates as it boots.
 on:
-  release:
-    types: [published]
   workflow_dispatch: {}
 
 permissions:

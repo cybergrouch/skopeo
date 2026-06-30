@@ -1,12 +1,10 @@
 name: Deploy Web
 
-# Deploys the web client to Firebase Hosting. Release-driven — NOT on every merge:
-#   * release: published  → deploys the released tag's web build (in lockstep with the API).
-#   * workflow_dispatch   → manual deploy of the chosen branch. Run it from the Actions tab.
+# Deploys the web client to Firebase Hosting. Release-driven — NOT on every merge. Triggered only by
+# workflow_dispatch: tag-and-ship.yml dispatches it for the release tag once a `release: vX.Y.Z` PR
+# lands on main (in lockstep with the API), or run it manually from the Actions tab against any ref.
 # Inert until configured: the job is skipped unless the VITE_FIREBASE_PROJECT_ID repo variable is set.
 on:
-  release:
-    types: [published]
   workflow_dispatch: {}
 
 permissions:
