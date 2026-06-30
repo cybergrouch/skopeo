@@ -1,22 +1,17 @@
 name: Deploy API
 
-# Deploys the Ktor API to GCP Cloud Run on every push to main that touches the backend.
+# Deploys the Ktor API to GCP Cloud Run. Release-driven — NOT on every merge:
+#   * release: published  → deploys the released tag (see release.yml). /health reports the tag's
+#     version because the tagged commit carries it in build.gradle.kts → version.properties.
+#   * workflow_dispatch   → manual deploy of the chosen branch (e.g. main = the -SNAPSHOT dev build,
+#     useful for a future sandbox). Run it from the Actions tab.
 # Keyless auth via Workload Identity Federation (CICD.md C4) — no service-account JSON is stored.
-# Inert until configured: the job is skipped unless the WIF_PROVIDER repo variable is set, so
-# merging this workflow never produces a red run before the GCP resources exist.
+# Inert until configured: the job is skipped unless the WIF_PROVIDER repo variable is set.
 # Production deploys wait on the `production` GitHub Environment's manual-approval gate.
 # Flyway migrations run on app startup (DatabaseConfig.init), so the new revision migrates as it boots.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'src/**'
-      - 'build.gradle.kts'
-      - 'settings.gradle.kts'
-      - 'gradle/**'
-      - 'gradlew'
-      - 'Dockerfile'
-      - '.github/workflows/deploy-api.yml'
+  release:
+    types: [published]
   workflow_dispatch: {}
 
 permissions:
@@ -60,6 +55,8 @@ jobs:
             --project "${{ vars.GCP_PROJECT_ID }}" \
             --region "${{ vars.GCP_REGION || 'asia-southeast1' }}" \
             --allow-unauthenticated \
+            --min-instances=1 --max-instances=2 \
+            --network=default --subnet=default \
             --add-cloudsql-instances "${{ vars.CLOUDSQL_INSTANCE }}" \
             --set-env-vars "^##^FIREBASE_PROJECT_ID=${{ vars.FIREBASE_PROJECT_ID }}##DATABASE_URL=${{ vars.DATABASE_URL }}##DATABASE_USER=${{ vars.DATABASE_USER }}##WEB_ORIGINS=${{ vars.WEB_ORIGINS }}" \
             --set-secrets "DATABASE_PASSWORD=skopeo-db-password:latest,ADMIN_EMAILS=skopeo-admin-emails:latest" \

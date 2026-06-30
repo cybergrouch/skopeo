@@ -47,6 +47,17 @@ import org.slf4j.event.Level
 
 private val logger = KotlinLogging.logger {}
 
+/**
+ * The app version reported by /health, read from the build-generated `version.properties` (see
+ * build.gradle.kts `generateVersionProperties`) so the version lives in exactly one place — and a
+ * release tag's version flows through automatically. Falls back to "unknown" if the resource is absent.
+ */
+private val APP_VERSION: String by lazy {
+    object {}.javaClass.getResourceAsStream("/version.properties")?.use { stream ->
+        java.util.Properties().apply { load(stream) }.getProperty("version")
+    } ?: "unknown"
+}
+
 fun main(args: Array<String>) {
     logger.info { "Starting Skopeo API..." }
     EngineMain.main(args = args)
@@ -191,7 +202,7 @@ fun Application.configureRouting() {
                     mapOf(
                         "status" to "UP",
                         "service" to "Skopeo API",
-                        "version" to "0.0.1-SNAPSHOT",
+                        "version" to APP_VERSION,
                     ),
             )
         }
