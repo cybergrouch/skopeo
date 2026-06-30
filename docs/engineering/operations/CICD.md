@@ -165,9 +165,15 @@ for ROLE in \
   roles/secretmanager.secretAccessor; do
   gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member="serviceAccount:${DEPLOY_SA}" \
-    --role="$ROLE"
+    --role="$ROLE" --condition=None
 done
 ```
+
+> **`--condition=None` is required** if your project already has any *conditional* IAM binding (GCP/
+> Firebase auto-adds time-bound ones like `developer-connect-connection-setup`). Without it, gcloud
+> refuses to add an unconditional binding non-interactively and prompts "Please specify a condition."
+> These deploy grants are intentionally unconditional, so `--condition=None` is correct. Add it to
+> every `add-iam-policy-binding` below too.
 
 (Per-secret `secretAccessor` grants are shown in [DEPLOYMENT_GCP.md §4a](DEPLOYMENT_GCP.md) if you
 prefer least privilege over a project-wide grant.)
@@ -195,7 +201,8 @@ gcloud iam workload-identity-pools providers create-oidc github \
 gcloud iam service-accounts add-iam-policy-binding "$DEPLOY_SA" \
   --project="$PROJECT_ID" \
   --role="roles/iam.workloadIdentityUser" \
-  --member="principalSet://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github/attribute.repository/${REPO}"
+  --member="principalSet://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github/attribute.repository/${REPO}" \
+  --condition=None
 ```
 
 **5. Retrieve the provider resource name** — this exact string goes into `vars.WIF_PROVIDER`:
@@ -246,7 +253,7 @@ FB_SA="firebase-deployer@${PROJECT_ID}.iam.gserviceaccount.com"
 # Roles needed to deploy Hosting releases
 for ROLE in roles/firebasehosting.admin roles/firebase.viewer; do
   gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-    --member="serviceAccount:${FB_SA}" --role="$ROLE"
+    --member="serviceAccount:${FB_SA}" --role="$ROLE" --condition=None
 done
 
 # Generate a JSON key and store its FULL CONTENTS as the GitHub secret, then delete the local file
