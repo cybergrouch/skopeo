@@ -7,15 +7,10 @@ import { Label } from '@/components/ui/label'
 import { useAuth } from '@/auth/useAuth'
 import { usePostApiV1Users } from '@/api/generated/users/users'
 import type { CreateUserRequestSex } from '@/api/generated/model'
+import { NtrpSelfRatingSelect } from '@/components/NtrpSelfRatingSelect'
 import { authErrorMessage } from '@/lib/firebase-errors'
 
 const SEXES = ['Male', 'Female'] as const
-
-// NTRP bands 1.0–7.0; an optional self-rating an admin later approves or overrides (#75).
-const NTRP_LEVELS = [
-  '1.0', '1.5', '2.0', '2.5', '3.0', '3.5', '4.0',
-  '4.5', '5.0', '5.5', '6.0', '6.5', '7.0',
-] as const
 
 /**
  * Self-serve sign-up is OAuth-only (Google/Facebook), which arrives email-verified. Manual
@@ -37,8 +32,8 @@ export function SignUpPage() {
   // Sex + date of birth are required up front (the OAuth popup yields neither), then the profile
   // is provisioned from the verified token.
   async function onOAuth(signIn: () => Promise<unknown>, provider: string) {
-    if (!sex || !dateOfBirth) {
-      setError(`Please enter your date of birth and sex before continuing with ${provider}.`)
+    if (!sex || !dateOfBirth || !proposedRating) {
+      setError(`Please enter your date of birth, sex, and NTRP self-rating before continuing with ${provider}.`)
       return
     }
     setError(null)
@@ -50,7 +45,7 @@ export function SignUpPage() {
           displayName: name.trim() || null,
           sex: sex as CreateUserRequestSex,
           dateOfBirth,
-          proposedRating: proposedRating || null,
+          proposedRating,
         },
       })
       navigate('/dashboard', { replace: true })
@@ -113,22 +108,7 @@ export function SignUpPage() {
             ))}
           </select>
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="proposedRating">NTRP self-rating (optional)</Label>
-          <select
-            id="proposedRating"
-            value={proposedRating}
-            onChange={(e) => setProposedRating(e.target.value)}
-            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-          >
-            <option value="">Not sure — an admin will set it</option>
-            {NTRP_LEVELS.map((level) => (
-              <option key={level} value={level}>
-                {level}
-              </option>
-            ))}
-          </select>
-        </div>
+        <NtrpSelfRatingSelect value={proposedRating} onChange={setProposedRating} />
         {error ? (
           <p className="text-sm text-destructive" role="alert">
             {error}

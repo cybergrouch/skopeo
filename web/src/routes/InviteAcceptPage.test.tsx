@@ -50,6 +50,7 @@ async function fillAndFinish(user: ReturnType<typeof userEvent.setup>) {
     target: { value: '1995-05-05' },
   })
   await user.selectOptions(screen.getByLabelText('Sex'), 'Female')
+  await user.selectOptions(screen.getByLabelText('NTRP self-rating'), '3.5')
   await user.type(screen.getByLabelText('Password'), 'secret123')
   await user.click(screen.getByRole('button', { name: /finish sign-up/i }))
 }
@@ -98,9 +99,28 @@ describe('InviteAcceptPage', () => {
 
     await waitFor(() => expect(setPassword).toHaveBeenCalledWith('secret123'))
     expect(mutateAsync).toHaveBeenCalledWith({
-      data: { displayName: 'Newbie', sex: 'Female', dateOfBirth: '1995-05-05' },
+      data: { displayName: 'Newbie', sex: 'Female', dateOfBirth: '1995-05-05', proposedRating: '3.5' },
     })
     expect(navigateMock).toHaveBeenCalledWith('/dashboard', { replace: true })
+  })
+
+  it('does not provision until a self-rating is chosen (#75)', async () => {
+    isSignInLink.mockReturnValue(true)
+    completeSignInLink.mockResolvedValue({})
+    setPassword.mockResolvedValue(undefined)
+    mutateAsync.mockResolvedValue({})
+    const user = userEvent.setup()
+    renderAt()
+    await screen.findByText('Finishing onboarding for invitee@example.com')
+
+    await user.type(screen.getByLabelText('Display name'), 'Newbie')
+    fireEvent.change(screen.getByLabelText('Date of birth'), { target: { value: '1995-05-05' } })
+    await user.selectOptions(screen.getByLabelText('Sex'), 'Female')
+    await user.type(screen.getByLabelText('Password'), 'secret123')
+    // Self-rating left unset → the required field blocks finishing sign-up.
+    await user.click(screen.getByRole('button', { name: /finish sign-up/i }))
+
+    expect(mutateAsync).not.toHaveBeenCalled()
   })
 
   it('completes the single-use email-link exactly once under StrictMode', async () => {

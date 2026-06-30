@@ -54,7 +54,7 @@ class UserApiIntegrationTest {
 
     private fun ApplicationTestBuilder.jsonClient(): HttpClient = createClient { install(ContentNegotiation) { json() } }
 
-    private val defaultBody = CreateUserRequest(displayName = "Juan", dateOfBirth = "2000-01-01", sex = "Male")
+    private val defaultBody = CreateUserRequest(proposedRating = "4.0", displayName = "Juan", dateOfBirth = "2000-01-01", sex = "Male")
 
     private suspend fun HttpClient.createUser(
         token: String,
@@ -171,7 +171,7 @@ class UserApiIntegrationTest {
         withApp { client ->
             val token = TestFirebaseAuth.mintToken(uid = "fb-5")
 
-            val badSex = CreateUserRequest(displayName = "Juan", sex = "X", dateOfBirth = "2000-01-01")
+            val badSex = CreateUserRequest(proposedRating = "4.0", displayName = "Juan", sex = "X", dateOfBirth = "2000-01-01")
             client.createUser(token = token, body = badSex).status shouldBe HttpStatusCode.BadRequest
         }
 

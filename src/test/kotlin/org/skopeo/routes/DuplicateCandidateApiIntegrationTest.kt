@@ -82,7 +82,7 @@ class DuplicateCandidateApiIntegrationTest {
             post(urlString = "/api/v1/users") {
                 header(key = HttpHeaders.Authorization, value = "Bearer $token")
                 contentType(type = ContentType.Application.Json)
-                setBody(body = CreateUserRequest(displayName = uid, dateOfBirth = "2000-01-01", sex = "Male"))
+                setBody(body = CreateUserRequest(proposedRating = "4.0", displayName = uid, dateOfBirth = "2000-01-01", sex = "Male"))
             }.body<UserResponse>()
         return token to user
     }

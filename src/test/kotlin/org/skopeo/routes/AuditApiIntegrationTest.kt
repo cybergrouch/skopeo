@@ -79,7 +79,7 @@ class AuditApiIntegrationTest {
         post(urlString = "/api/v1/users") {
             header(key = HttpHeaders.Authorization, value = "Bearer $token")
             contentType(type = ContentType.Application.Json)
-            setBody(body = CreateUserRequest(displayName = "Player", dateOfBirth = "2000-01-01", sex = "Male"))
+            setBody(body = CreateUserRequest(proposedRating = "4.0", displayName = "Player", dateOfBirth = "2000-01-01", sex = "Male"))
         }.body()
 
     @Test

@@ -86,7 +86,7 @@ class UserSearchApiIntegrationTest {
         post(urlString = "/api/v1/users") {
             header(key = HttpHeaders.Authorization, value = "Bearer ${TestFirebaseAuth.mintToken(uid = uid)}")
             contentType(type = ContentType.Application.Json)
-            setBody(body = CreateUserRequest(displayName = displayName, dateOfBirth = "2000-01-01", sex = "Male"))
+            setBody(body = CreateUserRequest(proposedRating = "4.0", displayName = displayName, dateOfBirth = "2000-01-01", sex = "Male"))
         }.body()
 
     private suspend fun HttpClient.lookup(
@@ -114,7 +114,7 @@ class UserSearchApiIntegrationTest {
         post(urlString = "/api/v1/users") {
             header(key = HttpHeaders.Authorization, value = "Bearer ${TestFirebaseAuth.mintToken(uid = uid)}")
             contentType(type = ContentType.Application.Json)
-            setBody(body = CreateUserRequest(displayName = displayName, sex = sex, dateOfBirth = dateOfBirth))
+            setBody(body = CreateUserRequest(proposedRating = "4.0", displayName = displayName, sex = sex, dateOfBirth = dateOfBirth))
         }.body()
 
     private suspend fun HttpClient.rate(

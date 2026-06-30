@@ -55,9 +55,12 @@ internal fun parseDateOfBirth(value: String?): LocalDate? {
     }
 }
 
-/** Validate an optional self-reported NTRP rating against the 1.0–7.0 range; blank means absent. */
-internal fun parseProposedRating(value: String?): BigDecimal? {
-    if (value.isNullOrBlank()) return null
+/**
+ * Validate the self-reported NTRP rating. Required at sign-up for every provider (#75) — a value in
+ * the 1.0–7.0 range. Throws [IllegalArgumentException] (→ 400) when missing or out of range.
+ */
+internal fun parseProposedRating(value: String?): BigDecimal {
+    require(value = !value.isNullOrBlank()) { "an NTRP self-rating (1.0–7.0) is required" }
     Rating.fromValue(value = value) // throws IllegalArgumentException if non-numeric or out of NTRP range
     return BigDecimal(value)
 }

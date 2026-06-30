@@ -68,7 +68,7 @@ class UserServiceTest {
         providerUid = uid,
     )
 
-    private val request = CreateUserRequest(displayName = "Juan", dateOfBirth = "2000-01-01", sex = "Male")
+    private val request = CreateUserRequest(proposedRating = "4.0", displayName = "Juan", dateOfBirth = "2000-01-01", sex = "Male")
 
     private val bootstrapService = UserService(repository = repository, adminEmails = setOf(element = "admin@example.com"))
 
@@ -151,7 +151,7 @@ class UserServiceTest {
         val first =
             service.provision(
                 token = token(uid = "u1", email = "u1@example.com", emailVerified = true, name = "U One", signInProvider = "google.com"),
-                request = CreateUserRequest(dateOfBirth = "2000-01-01", sex = "Male"),
+                request = CreateUserRequest(proposedRating = "4.0", dateOfBirth = "2000-01-01", sex = "Male"),
             ).shouldBeRight()
 
         first.created.shouldBeTrue()
@@ -161,7 +161,10 @@ class UserServiceTest {
 
         val again =
             service
-                .provision(token = token(uid = "u1"), request = CreateUserRequest(dateOfBirth = "2000-01-01", sex = "Male"))
+                .provision(
+                    token = token(uid = "u1"),
+                    request = CreateUserRequest(proposedRating = "4.0", dateOfBirth = "2000-01-01", sex = "Male"),
+                )
                 .shouldBeRight()
         again.created.shouldBeFalse()
         again.user.id shouldBe first.user.id
@@ -207,7 +210,14 @@ class UserServiceTest {
         val user =
             service.provision(
                 token = token(uid = "p1"),
-                request = CreateUserRequest(displayName = "Juan", sex = "Male", city = "Manila", dateOfBirth = "2000-01-01"),
+                request =
+                    CreateUserRequest(
+                        proposedRating = "4.0",
+                        displayName = "Juan",
+                        sex = "Male",
+                        city = "Manila",
+                        dateOfBirth = "2000-01-01",
+                    ),
             ).shouldBeRight().user
 
         val patched = service.patchProfile(token = token(uid = "p1"), id = user.id, patch = ProfilePatch(city = "Cebu")).shouldBeRight()
@@ -281,7 +291,7 @@ class UserServiceTest {
             bootstrapService.provision(
                 token =
                     token(uid = "boss", email = "admin@example.com", emailVerified = true, name = "Boss", signInProvider = "google.com"),
-                request = CreateUserRequest(dateOfBirth = "2000-01-01", sex = "Male"),
+                request = CreateUserRequest(proposedRating = "4.0", dateOfBirth = "2000-01-01", sex = "Male"),
             ).shouldBeRight()
 
         result.user.capabilities shouldBe setOf(Capability.PLAYER, Capability.RESEARCHER, Capability.ADMINISTRATOR)
@@ -294,7 +304,7 @@ class UserServiceTest {
         val created =
             bootstrapService.provision(
                 token = token(uid = "later", email = "admin@example.com", emailVerified = false, name = "Later"),
-                request = CreateUserRequest(dateOfBirth = "2000-01-01", sex = "Male"),
+                request = CreateUserRequest(proposedRating = "4.0", dateOfBirth = "2000-01-01", sex = "Male"),
             ).shouldBeRight()
         created.user.capabilities shouldBe setOf(Capability.PLAYER, Capability.RESEARCHER)
 
@@ -314,7 +324,7 @@ class UserServiceTest {
         invite(email = "admin@example.com")
         bootstrapService.provision(
             token = token(uid = "unv", email = "admin@example.com", emailVerified = false, name = "Unv"),
-            request = CreateUserRequest(dateOfBirth = "2000-01-01", sex = "Male"),
+            request = CreateUserRequest(proposedRating = "4.0", dateOfBirth = "2000-01-01", sex = "Male"),
         ).shouldBeRight()
 
         bootstrapService.currentUser(token = token(uid = "unv", email = "admin@example.com", emailVerified = false))!!
