@@ -1,4 +1,5 @@
 import { Label } from '@/components/ui/label'
+import { NTRP_SELF_RATING_GUIDE_URL } from '@/lib/ntrp'
 
 /** NTRP bands 1.0–7.0 in 0.5 steps — the self-rating a RATER later approves or overrides (#75). */
 const NTRP_LEVELS = [
@@ -40,7 +41,15 @@ export function NtrpSelfRatingSelect({
         ))}
       </select>
       <p className="text-xs text-muted-foreground">
-        Your best guess (1.0–7.0); a rater reviews and finalizes it.
+        Your best guess (1.0–7.0); a rater reviews and finalizes it.{' '}
+        <a
+          href={NTRP_SELF_RATING_GUIDE_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary hover:underline"
+        >
+          Not sure? See the NTRP self-rating guide.
+        </a>
       </p>
     </div>
   )
