@@ -22,6 +22,7 @@ import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.CreateEventCommand
+import org.skopeo.model.Match
 import org.skopeo.model.MatchQuery
 import org.skopeo.model.MatchStatus
 import org.skopeo.model.MatchType
@@ -519,6 +520,74 @@ class MatchServiceTest {
             .publicByCode(token = token(uid = "host"), code = "ZZZZZZ")
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
+    fun `publicByCode includes the head-to-head record between the two players (#188)`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+
+        fun completed(
+            team1: UUID,
+            team2: UUID,
+            date: String,
+            result: MatchResultRequest,
+        ): Match {
+            val m =
+                service
+                    .createFixture(
+                        token = token(uid = "host"),
+                        request = fixtureRequest(p1 = team1, p2 = team2, date = LocalDate.parse(date)),
+                    ).shouldBeRight()
+            service.uploadResult(token = token(uid = "host"), matchId = m.id, request = result).shouldBeRight()
+            return m
+        }
+        val p2Wins =
+            MatchResultRequest(
+                sets =
+                    listOf(
+                        SetScoreRequest(team1Games = 4, team2Games = 6),
+                        SetScoreRequest(team1Games = 3, team2Games = 6),
+                    ),
+            )
+
+        // Prior meetings, plus the one being viewed — all between p1 and p2.
+        completed(team1 = p1.id, team2 = p2.id, date = "2026-01-01", result = straightSets()) // p1 won
+        completed(team1 = p1.id, team2 = p2.id, date = "2026-02-01", result = p2Wins) // p2 won
+        completed(team1 = p2.id, team2 = p1.id, date = "2025-12-01", result = straightSets()) // reversed sides, p2 won
+        val current = completed(team1 = p1.id, team2 = p2.id, date = "2026-03-01", result = straightSets())
+
+        val public = service.publicByCode(token = token(uid = "host"), code = current.publicCode).shouldBeRight()
+        val h2h = public.headToHead.shouldNotBeNull()
+
+        // Excludes the viewed match; newest first.
+        h2h.meetings.map { it.matchDate } shouldBe listOf("2026-02-01", "2026-01-01", "2025-12-01")
+        h2h.team1Wins shouldBe 1 // p1: the Jan meeting
+        h2h.team2Wins shouldBe 2 // p2: the Feb + reversed-Dec meetings
+
+        // Winner resolved to the player's code; set scores oriented to the viewed match's team1 (p1).
+        val feb = h2h.meetings.first()
+        feb.winnerPublicCode shouldBe p2.publicCode
+        feb.sets.first().team1Games shouldBe 4 // p1's games
+        feb.sets.first().team2Games shouldBe 6
+
+        val dec = h2h.meetings.last() // sides were reversed; oriented back to p1
+        dec.winnerPublicCode shouldBe p2.publicCode
+        dec.sets.first().team1Games shouldBe 4 // p1's games (flipped from the stored team2 side)
+        dec.sets.first().team2Games shouldBe 6
+    }
+
+    @Test
+    fun `publicByCode omits the head-to-head when there are no prior meetings (#188)`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val match =
+            service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
+        service.uploadResult(token = token(uid = "host"), matchId = match.id, request = straightSets()).shouldBeRight()
+
+        service.publicByCode(token = token(uid = "host"), code = match.publicCode).shouldBeRight().headToHead.shouldBeNull()
     }
 
     @Test

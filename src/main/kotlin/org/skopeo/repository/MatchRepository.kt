@@ -257,11 +257,7 @@ class MatchRepository {
      */
     fun listByUser(userId: UUID): List<Match> =
         transaction {
-            val teamIds =
-                TeamUsersTable
-                    .selectAll()
-                    .where { TeamUsersTable.userId eq userId }
-                    .map { it[TeamUsersTable.teamId].value }
+            val teamIds = teamIdsOf(userId = userId)
             if (teamIds.isEmpty()) {
                 emptyList()
             } else {
@@ -274,6 +270,41 @@ class MatchRepository {
                     .map { loadMatch(id = it[MatchesTable.id].value)!! }
             }
         }
+
+    /**
+     * Active matches between exactly these two players (head-to-head, #188), newest match date first.
+     * Singles-oriented: a match counts when one side is [userIdA] and the other is [userIdB] (either
+     * way round). Empty when either player has no matches.
+     */
+    fun listBetweenUsers(
+        userIdA: UUID,
+        userIdB: UUID,
+    ): List<Match> =
+        transaction {
+            val teamsA = teamIdsOf(userId = userIdA)
+            val teamsB = teamIdsOf(userId = userIdB)
+            if (teamsA.isEmpty() || teamsB.isEmpty()) {
+                emptyList()
+            } else {
+                MatchesTable
+                    .selectAll()
+                    .where {
+                        MatchesTable.isActive and
+                            (
+                                ((MatchesTable.team1Id inList teamsA) and (MatchesTable.team2Id inList teamsB)) or
+                                    ((MatchesTable.team1Id inList teamsB) and (MatchesTable.team2Id inList teamsA))
+                            )
+                    }.orderBy(MatchesTable.matchDate to SortOrder.DESC)
+                    .map { loadMatch(id = it[MatchesTable.id].value)!! }
+            }
+        }
+
+    /** The (temporary singles) team ids a user has ever played in — the join basis for match lookups. */
+    private fun teamIdsOf(userId: UUID): List<UUID> =
+        TeamUsersTable
+            .selectAll()
+            .where { TeamUsersTable.userId eq userId }
+            .map { it[TeamUsersTable.teamId].value }
 
     private fun createTeam(
         name: String,

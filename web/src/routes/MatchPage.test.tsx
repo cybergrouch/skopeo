@@ -228,4 +228,90 @@ describe('MatchPage', () => {
     expect(screen.getByText('Guest')).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Guest' })).not.toBeInTheDocument()
   })
+
+  it('renders the head-to-head tally and prior meetings, each linking to its match page (#188)', () => {
+    useGetApiV1MatchesCodeCode.mockReturnValue({
+      data: {
+        ...match,
+        headToHead: {
+          team1Wins: 1,
+          team2Wins: 1,
+          meetings: [
+            {
+              publicCode: 'PREV02',
+              matchDate: '2026-02-01',
+              status: 'COMPLETED',
+              rated: true,
+              sets: [{ setNumber: 1, team1Games: 4, team2Games: 6 }],
+              winnerPublicCode: 'BBB222', // Bob (team2) won
+            },
+            {
+              publicCode: 'PREV01',
+              matchDate: '2026-01-01',
+              status: 'COMPLETED',
+              rated: false,
+              sets: [{ setNumber: 1, team1Games: 6, team2Games: 3 }],
+              winnerPublicCode: 'AAA111', // Ana (team1) won
+            },
+          ],
+        },
+      },
+      isLoading: false,
+    })
+    renderAt()
+
+    expect(screen.getByText('Head-to-head')).toBeInTheDocument()
+    expect(screen.getByText('1 – 1')).toBeInTheDocument()
+    // Each meeting shows date · score · winner and links to its own public page.
+    expect(screen.getByText(/2026-02-01 · 4-6 · Bob won/)).toBeInTheDocument()
+    expect(screen.getByText(/2026-01-01 · 6-3 · Ana won/)).toBeInTheDocument()
+    const links = screen.getAllByRole('link', { name: 'Public page (QR)' })
+    expect(links.map((l) => l.getAttribute('href'))).toEqual([
+      '/matches/PREV02',
+      '/matches/PREV01',
+    ])
+  })
+
+  it('hides the head-to-head section when there are no prior meetings (#188)', () => {
+    useGetApiV1MatchesCodeCode.mockReturnValue({ data: { ...match, headToHead: null }, isLoading: false })
+    renderAt()
+    expect(screen.queryByText('Head-to-head')).not.toBeInTheDocument()
+  })
+
+  it('head-to-head copes with missing names, scores, and undecided/unknown winners (#188)', () => {
+    useGetApiV1MatchesCodeCode.mockReturnValue({
+      data: {
+        ...match,
+        team1: [{ publicCode: 'AAA111' }], // no displayName → falls back to the code
+        team2: [{}], // no name or code → "Unknown"
+        headToHead: {
+          team1Wins: 0,
+          team2Wins: 0,
+          meetings: [
+            // Undecided + no sets: no score, no "won" suffix.
+            { publicCode: 'PREVX', matchDate: '2026-02-01', status: 'COMPLETED', rated: false, sets: [], winnerPublicCode: null },
+            // Winner code matching neither player → no resolvable name.
+            {
+              publicCode: 'PREVY',
+              matchDate: '2026-01-01',
+              status: 'COMPLETED',
+              rated: true,
+              sets: [{ setNumber: 1, team1Games: 6, team2Games: 0 }],
+              winnerPublicCode: 'ZZZ999',
+            },
+          ],
+        },
+      },
+      isLoading: false,
+    })
+    renderAt()
+
+    expect(screen.getByText('Head-to-head')).toBeInTheDocument()
+    expect(screen.getByText(/Prior meetings between AAA111 and Unknown/)).toBeInTheDocument()
+    // Undecided meeting: just the date, no " · ... won".
+    expect(screen.getByText('2026-02-01')).toBeInTheDocument()
+    // Unknown winner code resolves to no name → score shown but no "won" suffix.
+    expect(screen.getByText('2026-01-01 · 6-0')).toBeInTheDocument()
+    expect(screen.queryByText(/won/)).not.toBeInTheDocument()
+  })
 })

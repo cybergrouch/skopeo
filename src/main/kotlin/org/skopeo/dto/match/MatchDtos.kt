@@ -159,6 +159,35 @@ data class MatchPublicResponse(
     // Per-player rating change, present only once the match is rated. The NTRP bands (previous/new
     // level) are shown to everyone; the precise rates are populated only for RATER/ADMINISTRATOR viewers.
     val ratingChanges: List<MatchPublicRatingChange>? = null,
+    // Prior meetings between the same two players (#188); null when there are none or the match is not
+    // singles. Wins and set scores are oriented to team1/team2 of THIS match.
+    val headToHead: MatchPublicHeadToHead? = null,
+)
+
+/**
+ * Head-to-head record between the two players of a singles match (#188): the win tally and the prior
+ * completed meetings, newest first. [team1Wins]/[team2Wins] and each meeting's set scores are oriented
+ * to team1/team2 of the match being viewed, so the orientation is stable across rows.
+ */
+@Serializable
+data class MatchPublicHeadToHead(
+    val team1Wins: Int,
+    val team2Wins: Int,
+    val meetings: List<MatchPublicHeadToHeadEntry>,
+)
+
+/**
+ * One prior meeting in a head-to-head record (#188). [sets] are oriented to team1/team2 of the match
+ * being viewed; [winnerPublicCode] is the winning player's code (one of the two), or null if undecided.
+ */
+@Serializable
+data class MatchPublicHeadToHeadEntry(
+    val publicCode: String,
+    val matchDate: String,
+    val status: String,
+    val rated: Boolean,
+    val sets: List<MatchPublicSet>,
+    val winnerPublicCode: String? = null,
 )
 
 /**
@@ -181,6 +210,7 @@ data class MatchPublicRatingChange(
 fun Match.toPublicResponse(
     players: Map<UUID, MatchPublicPlayer>,
     ratingChanges: List<MatchPublicRatingChange>? = null,
+    headToHead: MatchPublicHeadToHead? = null,
 ): MatchPublicResponse {
     fun side(userIds: List<UUID>) = userIds.map { players[it] ?: MatchPublicPlayer() }
     val winnerSide =
@@ -211,5 +241,6 @@ fun Match.toPublicResponse(
         venue = venue,
         tournamentName = tournamentName,
         ratingChanges = ratingChanges,
+        headToHead = headToHead,
     )
 }
