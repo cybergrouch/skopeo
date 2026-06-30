@@ -162,6 +162,46 @@ describe('MatchPage', () => {
     expect(screen.queryByText('4.0 → 4.5')).not.toBeInTheDocument()
   })
 
+  it('falls back to code/"Unknown" names, an em-dash band, and omits an absent delta', () => {
+    useGetApiV1MatchesCodeCode.mockReturnValue({
+      data: {
+        ...match,
+        ratingChanges: [
+          // No display name → label falls back to the public code, still a profile link.
+          {
+            displayName: null,
+            publicCode: 'DDD444',
+            previousLevel: null,
+            newLevel: null,
+            previousRating: null,
+            newRating: null,
+            ratingChange: null,
+          },
+          // Neither name nor code → "Unknown", plain text; precise rates present but no net change.
+          {
+            displayName: null,
+            publicCode: null,
+            previousLevel: '3.5',
+            newLevel: '3.0',
+            previousRating: '3.500000',
+            newRating: '3.000000',
+            ratingChange: null,
+          },
+        ],
+      },
+      isLoading: false,
+    })
+    renderAt()
+
+    expect(screen.getByRole('link', { name: 'DDD444' })).toHaveAttribute('href', '/players/DDD444')
+    expect(screen.getByText('— → —')).toBeInTheDocument() // both band levels missing
+    expect(screen.getByText('Unknown')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Unknown' })).not.toBeInTheDocument()
+    expect(screen.getByText('3.500000 → 3.000000')).toBeInTheDocument()
+    // ratingChange null → no parenthesised delta is rendered.
+    expect(screen.queryByText(/\(/)).not.toBeInTheDocument()
+  })
+
   it('omits the rating-changes block entirely for an unrated match', () => {
     useGetApiV1MatchesCodeCode.mockReturnValue({
       data: { ...match, ratingChanges: null },

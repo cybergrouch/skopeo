@@ -546,6 +546,14 @@ class MatchServiceTest {
             change.ratingChange.shouldBeNull()
         }
 
+        // A viewer with a valid token but no provisioned Skopeo profile still gets the public bands, no rates.
+        val asGhost =
+            service.publicByCode(token = token(uid = "ghost"), code = match.publicCode).shouldBeRight().ratingChanges.shouldNotBeNull()
+        asGhost.forEach { change ->
+            change.newLevel.shouldNotBeNull()
+            change.newRating.shouldBeNull()
+        }
+
         // Both a RATER and an ADMINISTRATOR see the precise 6-dp rates.
         for (uid in listOf("rater", "root")) {
             val staffChanges =
