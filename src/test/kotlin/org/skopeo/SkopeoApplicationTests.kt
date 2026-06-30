@@ -38,7 +38,10 @@ class SkopeoApplicationTests {
             response.status shouldBe HttpStatusCode.OK
             body shouldContain "\"status\":\"UP\""
             body shouldContain "\"service\":\"Skopeo API\""
-            body shouldContain "\"version\":\"0.0.1-SNAPSHOT\""
+            // Assert the version field is present and non-empty, not a specific value — the version
+            // changes with every release / dev-version bump (release.yml), so pinning it here would
+            // break each bump PR.
+            body shouldContain Regex(pattern = "\"version\":\"[^\"]+\"")
         }
 
     @Test
