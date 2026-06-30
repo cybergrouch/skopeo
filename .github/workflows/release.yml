@@ -5,7 +5,9 @@ name: Release
 #      → 0.0.1) — or uses the `version` input if you pass one.
 #   2. Creates a release commit that sets that version (so the tagged build's /health reports it),
 #      tags it `vX.Y.Z`, and pushes ONLY the tag (main is left untouched).
-#   3. Publishes a GitHub Release for the tag → which triggers deploy-api.yml / deploy-web.yml.
+#   3. Publishes a GitHub Release for the tag, then explicitly dispatches deploy-api.yml /
+#      deploy-web.yml for it (the release:published event from GITHUB_TOKEN does NOT trigger other
+#      workflows — GitHub's recursion guard — so they must be dispatched directly).
 #   4. Opens a PR bumping main's dev version to the next -SNAPSHOT (you review + merge it).
 #
 # main always carries the dev `-SNAPSHOT` version; official versions live on tags. To release the
@@ -67,10 +69,24 @@ jobs:
           git tag -a "v$REL" -m "Skopeo v$REL"
           git push origin "v$REL"
 
-      - name: Publish GitHub Release (triggers the deploy workflows)
+      - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "v${{ steps.v.outputs.release }}" --title "v${{ steps.v.outputs.release }}" --generate-notes
+
+      - name: Deploy the released tag (API + Web)
+        # The release:published event above is created by GITHUB_TOKEN, which (by GitHub's recursion
+        # guard) does NOT trigger deploy-api/deploy-web. So dispatch them explicitly for the new tag;
+        # each still pauses at the `production` environment's manual-approval gate before shipping.
+        # A RELEASE_PAT secret triggers the runs reliably; without one this falls back to GITHUB_TOKEN
+        # (best-effort — may not start the runs, in which case dispatch them manually from the Actions tab).
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PAT || github.token }}
+        run: |
+          set -euo pipefail
+          REL="v${{ steps.v.outputs.release }}"
+          gh workflow run deploy-api.yml --ref "$REL"
+          gh workflow run deploy-web.yml --ref "$REL"
 
       - name: Open dev version-bump PR
         env:

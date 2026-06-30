@@ -162,12 +162,17 @@ for ROLE in \
   roles/iam.serviceAccountUser \
   roles/cloudbuild.builds.editor \
   roles/artifactregistry.writer \
+  roles/storage.admin \
   roles/secretmanager.secretAccessor; do
   gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member="serviceAccount:${DEPLOY_SA}" \
     --role="$ROLE" --condition=None
 done
 ```
+
+> `roles/storage.admin` is required because `gcloud run deploy --source .` stages the build context
+> in a GCS bucket (`run-sources-<project>-<region>`); without it the deploy fails with
+> `storage.buckets.get` denied on that bucket.
 
 > **`--condition=None` is required** if your project already has any *conditional* IAM binding (GCP/
 > Firebase auto-adds time-bound ones like `developer-connect-connection-setup`). Without it, gcloud
