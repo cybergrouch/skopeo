@@ -13,7 +13,10 @@ import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
 import org.skopeo.model.Capability
 import org.skopeo.model.CapabilityGrant
+import org.skopeo.model.ContactType
 import org.skopeo.model.ServiceError
+import org.skopeo.model.User
+import org.skopeo.model.VerificationStatus
 import org.skopeo.repository.CapabilityRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService
@@ -32,6 +35,10 @@ class CapabilityService(
     private val capabilities: CapabilityRepository = CapabilityRepository(),
     private val users: UserRepository = UserRepository(),
     private val audit: AuditService = AuditService(),
+    // The bootstrap ADMINISTRATOR allowlist (config `admin.emails`), normalized lowercase/trimmed.
+    // A user whose verified email is currently on it is the break-glass admin and cannot be
+    // demoted via the API (#194). Empty ⇒ no protected admins. See ADMIN_BOOTSTRAP.md.
+    private val adminEmails: Set<String> = emptySet(),
 ) {
     /** Outcome of a grant: [created] distinguishes a fresh grant (201) from an idempotent hit (200). */
     data class Granted(
@@ -84,7 +91,7 @@ class CapabilityService(
     ): Either<ServiceError, Unit> =
         either {
             val adminId = requireAdmin(token = token).bind()
-            requireUserExists(userId = userId).bind()
+            val target = users.findById(id = userId).bind()
 
             ensure(condition = capability != Capability.PLAYER) {
                 ServiceError.Conflict(message = "The PLAYER role cannot be revoked")
@@ -93,6 +100,12 @@ class CapabilityService(
                 ServiceError.NotFound(message = "User $userId does not hold an active $capability capability")
             }
             if (capability == Capability.ADMINISTRATOR) {
+                // The bootstrap (break-glass) admin is protected first — they must stay an admin
+                // regardless of who attempts the revoke. Remove their email from the allowlist to
+                // make the role revocable again (ADMIN_BOOTSTRAP.md).
+                ensure(condition = !isBootstrapAdmin(user = target)) {
+                    ServiceError.Conflict(message = "Cannot revoke a bootstrap administrator")
+                }
                 // Last-admin check precedes the self-check: dropping to zero admins is only possible
                 // by revoking the sole (necessarily one's own) admin grant.
                 ensure(condition = capabilities.countActiveAdministrators() > 1) {
@@ -118,6 +131,20 @@ class CapabilityService(
         }
 
     private fun requireUserExists(userId: UUID): Either<ServiceError, Unit> = users.findById(id = userId).map { }
+
+    /**
+     * Whether [user] is a current bootstrap administrator: a verified email on the live allowlist.
+     * Mirrors the verified-email gate used at sign-up/login (TokenMapping.isBootstrapAdmin). Empty
+     * allowlist ⇒ never true.
+     */
+    private fun isBootstrapAdmin(user: User): Boolean =
+        adminEmails.isNotEmpty() &&
+            user.contacts.any { contact ->
+                contact.isActive &&
+                    contact.type == ContactType.EMAIL &&
+                    contact.status == VerificationStatus.VERIFIED &&
+                    contact.value.trim().lowercase() in adminEmails
+            }
 
     /** Every capability operation requires the caller to be an ADMINISTRATOR; returns their id. */
     private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {

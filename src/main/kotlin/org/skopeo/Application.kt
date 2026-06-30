@@ -42,6 +42,7 @@ import org.skopeo.routes.configureRatingRequestRoutes
 import org.skopeo.routes.configureRatingRoutes
 import org.skopeo.routes.configureStandingsRoutes
 import org.skopeo.routes.configureUserRoutes
+import org.skopeo.service.capability.CapabilityService
 import org.skopeo.service.user.UserService
 import org.slf4j.event.Level
 
@@ -89,7 +90,7 @@ fun Application.module(
     configurePlayerRoutes()
     configureContactRoutes()
     configureNameRoutes()
-    configureCapabilityRoutes()
+    configureCapabilityRoutes(service = CapabilityService(adminEmails = adminEmails()))
     configureRatingRoutes()
     configureRatingRequestRoutes()
     configureMatchRoutes()
