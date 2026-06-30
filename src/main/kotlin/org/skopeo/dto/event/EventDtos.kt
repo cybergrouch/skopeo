@@ -8,6 +8,7 @@ import org.skopeo.dto.match.MatchPublicResponse
 import org.skopeo.dto.user.PublicRatingDto
 import org.skopeo.model.EventParticipantRef
 import org.skopeo.model.EventView
+import org.skopeo.model.MyEvent
 
 /** Body for `POST /api/v1/events` — create an event (name, date range, roster). */
 @Serializable
@@ -47,6 +48,19 @@ data class EventParticipantResponse(
     val status: String? = null,
 )
 
+/**
+ * A player's own event (#202) for the Profile "Events history": the event's details plus the
+ * caller's standing ([status]: APPROVED | PENDING | HOLD). The client splits upcoming vs past by date.
+ */
+@Serializable
+data class MyEventResponse(
+    val publicCode: String,
+    val name: String,
+    val startDate: String,
+    val endDate: String,
+    val status: String,
+)
+
 @Serializable
 data class EventResponse(
     val id: String,
@@ -57,6 +71,15 @@ data class EventResponse(
     val isActive: Boolean,
     val participants: List<EventParticipantResponse>,
 )
+
+fun MyEvent.toResponse(): MyEventResponse =
+    MyEventResponse(
+        publicCode = event.publicCode,
+        name = event.name,
+        startDate = event.startDate.toString(),
+        endDate = event.endDate.toString(),
+        status = status.name,
+    )
 
 fun EventView.toResponse(): EventResponse =
     EventResponse(

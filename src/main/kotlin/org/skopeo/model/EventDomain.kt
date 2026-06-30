@@ -66,3 +66,9 @@ data class EventView(
     val event: Event,
     val participants: List<EventParticipantRef>,
 )
+
+/** One of a player's own events plus their standing in it (#202) — backs the Profile "Events history". */
+data class MyEvent(
+    val event: Event,
+    val status: EventParticipantStatus,
+)

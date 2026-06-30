@@ -8,6 +8,7 @@ import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.deleteWhere
+import org.jetbrains.exposed.sql.innerJoin
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.selectAll
@@ -17,6 +18,7 @@ import org.skopeo.model.CreateEventCommand
 import org.skopeo.model.Event
 import org.skopeo.model.EventParticipantEntry
 import org.skopeo.model.EventParticipantStatus
+import org.skopeo.model.MyEvent
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -140,6 +142,21 @@ class EventRepository {
                 }
                 loadEvent(id = eventId)
             }
+        }
+
+    /** A player's own events with their standing in each (#202), active only, newest end date first. */
+    fun findForParticipant(userId: UUID): List<MyEvent> =
+        transaction {
+            (EventParticipantsTable innerJoin EventsTable)
+                .selectAll()
+                .where { (EventParticipantsTable.userId eq userId) and EventsTable.isActive }
+                .orderBy(EventsTable.endDate to SortOrder.DESC)
+                .map {
+                    MyEvent(
+                        event = buildEvent(row = it),
+                        status = EventParticipantStatus.valueOf(value = it[EventParticipantsTable.status]),
+                    )
+                }
         }
 
     /** All participant rows for an event with their status (#201) — the roster + pending/held requests. */
