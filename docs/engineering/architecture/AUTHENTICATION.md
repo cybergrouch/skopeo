@@ -187,19 +187,39 @@ database:
   `signInWithFacebook`, buttons). The remaining step is operational: enable the Facebook provider
   in the Firebase console (requires a Facebook app's App ID + secret). No code change needed.
 - **Invite-email branding** (issue #133) — invites are sent client-side via Firebase's
-  `sendSignInLinkToEmail` (`web/src/auth/AuthProvider.tsx`, triggered from
-  `web/src/routes/dashboard/admin/InvitesSection.tsx`). Our `actionCodeSettings` only set the
-  continue URL + `handleCodeInApp`; the email's **sender, subject, and body are Firebase's email
-  template**, not ours. By default that template interpolates the raw project id
-  (`project-<number>`) instead of "Skopeo", which looks unbranded. Fix it in the console — no code
-  change:
-  1. **Project settings → General → Public-facing name** → set to `Skopeo`. This is the value
-     the templates interpolate (`%APP_NAME%`), so it replaces the project id across the auth
-     emails in one place.
-  2. **Authentication → Templates** → the email sign-in / action template → set the **sender name**
-     to `Skopeo`, customise the **subject** (e.g. "You're invited to Skopeo"), and review the body.
-     Optionally set a custom **from** domain.
-  3. Send a test invite and confirm the subject/sender/body say "Skopeo", not the project id.
+  email-link (passwordless) sign-in, `sendSignInLinkToEmail` (`web/src/auth/AuthProvider.tsx`,
+  triggered from `web/src/routes/dashboard/admin/InvitesSection.tsx`). Our `actionCodeSettings`
+  only set the continue URL + `handleCodeInApp`; the email's **sender, subject, and body are
+  Firebase's email template**, not ours. By default that template interpolates the raw project id
+  (`project-<number>`) instead of "Skopeo", which looks unbranded. **Fix it in the console — no
+  code change**, on the `skopeo-prod` project (the one whose `FIREBASE_PROJECT_ID` the web app
+  uses):
+
+  **Step 1 — Public-facing name (this is the actual fix).** The project id in the email is the
+  `%APP_NAME%` token; set it once and it's replaced across the auth emails.
+  1. Firebase console → select **`skopeo-prod`**.
+  2. **Gear icon → Project settings → General** tab.
+  3. Set **Public-facing name** → `Skopeo`; confirm **Support email** is a real address. **Save**.
+
+  **Step 2 — Brand the email templates (sender + subject).**
+  1. **Build → Authentication → Templates**.
+  2. For each editable template (**Email address verification**, **Password reset**, etc.): click
+     the **pencil**, set **Sender name** → `Skopeo`, customise the **Subject**, review the body
+     (`%APP_NAME%` now resolves to "Skopeo"), **Save**.
+  3. **Caveat for the invite email specifically:** the email-link sign-in email does **not** have a
+     freely-editable body template in the console (unlike verification/reset). What you *can*
+     control for it is the **app name (Step 1)** and the **sender/from** — and that is exactly what
+     removes the project-id text. So **Step 1 is what fixes the invite email**; Step 2's body edits
+     mainly benefit the verification/reset emails.
+
+  **Step 3 (optional) — Custom from-domain.** Emails default to
+  `noreply@skopeo-prod.firebaseapp.com`. To send from your own domain, use **Customize domain** in
+  Templates and add the DNS records (SPF/DKIM/TXT) Firebase provides, then verify. Cosmetic; not
+  required.
+
+  **Step 4 — Verify.** Send a real invite (Admin → Invites) to an address you control and confirm
+  the **subject, sender name, and body** say "Skopeo", not `project-<number>`. Applies to
+  newly-sent emails immediately — no redeploy.
 
   If we later want full control of the invite email (branded HTML, our own copy), the path is to
   generate the sign-in link server-side via the Firebase Admin SDK and send it through our own
