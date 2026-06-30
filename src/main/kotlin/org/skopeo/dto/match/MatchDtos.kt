@@ -156,10 +156,32 @@ data class MatchPublicResponse(
     val sets: List<MatchPublicSet>,
     val venue: String? = null,
     val tournamentName: String? = null,
+    // Per-player rating change, present only once the match is rated. The NTRP bands (previous/new
+    // level) are shown to everyone; the precise rates are populated only for RATER/ADMINISTRATOR viewers.
+    val ratingChanges: List<MatchPublicRatingChange>? = null,
+)
+
+/**
+ * One player's rating change for a rated match (#136). [previousLevel]/[newLevel] are the public NTRP
+ * bands (shown to everyone). [previousRating]/[newRating]/[ratingChange] are the precise values (NUMERIC
+ * 10,6 → 6 fractional digits) and are null unless the viewer is a RATER or ADMINISTRATOR.
+ */
+@Serializable
+data class MatchPublicRatingChange(
+    val publicCode: String? = null,
+    val displayName: String? = null,
+    val previousLevel: String? = null,
+    val newLevel: String? = null,
+    val previousRating: String? = null,
+    val newRating: String? = null,
+    val ratingChange: String? = null,
 )
 
 /** Build the public response, resolving each side's players via [players] (id → name/code). */
-fun Match.toPublicResponse(players: Map<UUID, MatchPublicPlayer>): MatchPublicResponse {
+fun Match.toPublicResponse(
+    players: Map<UUID, MatchPublicPlayer>,
+    ratingChanges: List<MatchPublicRatingChange>? = null,
+): MatchPublicResponse {
     fun side(userIds: List<UUID>) = userIds.map { players[it] ?: MatchPublicPlayer() }
     val winnerSide =
         when (winnerTeamId) {
@@ -188,5 +210,6 @@ fun Match.toPublicResponse(players: Map<UUID, MatchPublicPlayer>): MatchPublicRe
             },
         venue = venue,
         tournamentName = tournamentName,
+        ratingChanges = ratingChanges,
     )
 }

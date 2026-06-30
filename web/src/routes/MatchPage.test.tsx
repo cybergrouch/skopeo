@@ -89,6 +89,88 @@ describe('MatchPage', () => {
     expect(screen.queryByText(/Center Court/)).not.toBeInTheDocument()
   })
 
+  it('shows NTRP band rating changes for a non-rater viewer (precise rates withheld)', () => {
+    useGetApiV1MatchesCodeCode.mockReturnValue({
+      data: {
+        ...match,
+        ratingChanges: [
+          {
+            displayName: 'Ana',
+            publicCode: 'AAA111',
+            previousLevel: '4.0',
+            newLevel: '4.5',
+            previousRating: null,
+            newRating: null,
+            ratingChange: null,
+          },
+          {
+            displayName: 'Bob',
+            publicCode: 'BBB222',
+            previousLevel: '4.0',
+            newLevel: '3.5',
+            previousRating: null,
+            newRating: null,
+            ratingChange: null,
+          },
+        ],
+      },
+      isLoading: false,
+    })
+    renderAt()
+
+    expect(screen.getByText('Rating changes')).toBeInTheDocument()
+    expect(screen.getByText('4.0 → 4.5')).toBeInTheDocument()
+    expect(screen.getByText('4.0 → 3.5')).toBeInTheDocument()
+    // No precise rates leak to a non-rater.
+    expect(screen.queryByText(/→ 4\.\d{6}/)).not.toBeInTheDocument()
+  })
+
+  it('shows precise 6-dp rates and a signed delta for a rater/admin viewer', () => {
+    useGetApiV1MatchesCodeCode.mockReturnValue({
+      data: {
+        ...match,
+        ratingChanges: [
+          {
+            displayName: 'Ana',
+            publicCode: 'AAA111',
+            previousLevel: '4.0',
+            newLevel: '4.5',
+            previousRating: '4.000000',
+            newRating: '4.123456',
+            ratingChange: '0.123456',
+          },
+          {
+            displayName: 'Bob',
+            publicCode: 'BBB222',
+            previousLevel: '4.0',
+            newLevel: '3.5',
+            previousRating: '4.000000',
+            newRating: '3.876544',
+            ratingChange: '-0.123456',
+          },
+        ],
+      },
+      isLoading: false,
+    })
+    renderAt()
+
+    expect(screen.getByText('4.000000 → 4.123456')).toBeInTheDocument()
+    expect(screen.getByText('(+0.123456)')).toBeInTheDocument() // gain gets a + sign
+    expect(screen.getByText('4.000000 → 3.876544')).toBeInTheDocument()
+    expect(screen.getByText('(-0.123456)')).toBeInTheDocument() // loss keeps its - sign
+    // The NTRP-band-only form is not shown when precise rates are present.
+    expect(screen.queryByText('4.0 → 4.5')).not.toBeInTheDocument()
+  })
+
+  it('omits the rating-changes block entirely for an unrated match', () => {
+    useGetApiV1MatchesCodeCode.mockReturnValue({
+      data: { ...match, ratingChanges: null },
+      isLoading: false,
+    })
+    renderAt()
+    expect(screen.queryByText('Rating changes')).not.toBeInTheDocument()
+  })
+
   it('shows "Not yet played" and no winner badge before a result, and a player without a code is not a link', () => {
     useGetApiV1MatchesCodeCode.mockReturnValue({
       data: {

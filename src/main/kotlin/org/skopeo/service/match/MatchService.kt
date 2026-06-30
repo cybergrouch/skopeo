@@ -10,6 +10,7 @@ import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
 import org.skopeo.dto.match.MatchPublicPlayer
+import org.skopeo.dto.match.MatchPublicRatingChange
 import org.skopeo.dto.match.MatchPublicResponse
 import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.dto.match.toPublicResponse
@@ -25,6 +26,7 @@ import org.skopeo.model.MatchQuery
 import org.skopeo.model.MatchSetResult
 import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
+import org.skopeo.model.RatingHistoryEntry
 import org.skopeo.model.ServiceError
 import org.skopeo.model.TeamType
 import org.skopeo.model.User
@@ -199,17 +201,67 @@ class MatchService(
      * user — the same "public" semantics as a player's public profile — with players resolved to
      * name + code. A [ServiceError.NotFound] if the code resolves to no active match.
      */
-    fun publicByCode(code: String): Either<ServiceError, MatchPublicResponse> =
+    fun publicByCode(
+        token: VerifiedFirebaseToken,
+        code: String,
+    ): Either<ServiceError, MatchPublicResponse> =
         either {
             val match = matches.findByPublicCode(code = code)
             ensureNotNull(value = match) { ServiceError.NotFound(message = "Match $code not found") }
             val ids = match.team1.userIds + match.team2.userIds
+            val usersById = users.findAllByIds(ids = ids).associateBy { it.id }
             val players =
-                users.findAllByIds(ids = ids).associate {
-                    it.id to MatchPublicPlayer(displayName = it.displayName(), publicCode = it.publicCode)
+                usersById.mapValues { (_, user) ->
+                    MatchPublicPlayer(displayName = user.displayName(), publicCode = user.publicCode)
                 }
-            match.toPublicResponse(players = players)
+            // Once rated, surface the per-player rating change (#136): bands for everyone, precise
+            // rates only for RATER/ADMINISTRATOR viewers.
+            val ratingChanges =
+                if (match.ratedAt != null) ratingChangesFor(match = match, usersById = usersById, token = token) else null
+            match.toPublicResponse(players = players, ratingChanges = ratingChanges)
         }
+
+    /**
+     * Per-player rating changes for a rated match. Bands ([previousLevel]/[newLevel]) are public; the
+     * precise rates (6-dp) are included only when the viewer holds RATER or ADMINISTRATOR. Players are
+     * ordered team1-then-team2. Returns null when the match has no recorded history.
+     */
+    private fun ratingChangesFor(
+        match: Match,
+        usersById: Map<UUID, User>,
+        token: VerifiedFirebaseToken,
+    ): List<MatchPublicRatingChange>? {
+        val byUser = ratings.historyForMatches(matchIds = listOf(element = match.id)).associateBy { it.userId }
+        if (byUser.isEmpty()) return null
+        val revealRates = callerCanSeeRates(token = token)
+        val order = match.team1.userIds + match.team2.userIds
+        return order.mapNotNull { userId ->
+            byUser[userId]?.let { history ->
+                toRatingChange(history = history, user = usersById[userId], revealRates = revealRates)
+            }
+        }
+    }
+
+    /** Whether the viewer may see precise rates (RATER or ADMINISTRATOR); bands are always public. */
+    private fun callerCanSeeRates(token: VerifiedFirebaseToken): Boolean {
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid) ?: return false
+        return caller.capabilities.any { it == Capability.RATER || it == Capability.ADMINISTRATOR }
+    }
+
+    private fun toRatingChange(
+        history: RatingHistoryEntry,
+        user: User?,
+        revealRates: Boolean,
+    ): MatchPublicRatingChange =
+        MatchPublicRatingChange(
+            publicCode = user?.publicCode,
+            displayName = user?.displayName(),
+            previousLevel = history.previousLevel,
+            newLevel = history.newLevel,
+            previousRating = if (revealRates) history.previousRating.toPlainString() else null,
+            newRating = if (revealRates) history.newRating.toPlainString() else null,
+            ratingChange = if (revealRates) history.ratingChange.toPlainString() else null,
+        )
 
     /**
      * The match result plus the stored per-player calculation behind it (#97), for the detail view
