@@ -52,8 +52,13 @@ data class StandingEntry(
     val age: Int?,
 )
 
-/** A single band's leaderboard. */
+/**
+ * A single (band, sex) leaderboard (#212): players are ranked separately per sex within a band.
+ * [sex] is the group's sex ("Male"/"Female"), or null for the "Unspecified" group (rare — sex is
+ * required at sign-up). Ranks restart at 1 within each group.
+ */
 data class BandStandings(
     val band: StandingsBand,
+    val sex: String?,
     val entries: List<StandingEntry>,
 )

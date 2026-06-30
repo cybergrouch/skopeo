@@ -4326,12 +4326,19 @@ components:
 
     BandStandingsResponse:
       type: object
+      description: >-
+        A single (band, sex) leaderboard (#212). One row per (band, sex) that has players; ranks
+        restart at 1 within each.
       required:
         - band
         - entries
       properties:
         band:
           type: string
+        sex:
+          type: string
+          nullable: true
+          description: The group's sex ("Male"/"Female"), or null for the Unspecified group.
         entries:
           type: array
           items:

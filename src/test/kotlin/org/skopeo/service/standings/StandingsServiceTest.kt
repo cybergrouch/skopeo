@@ -39,7 +39,10 @@ class StandingsServiceTest {
         PostgresTestDatabase.truncate()
     }
 
-    private fun provision(uid: String): User =
+    private fun provision(
+        uid: String,
+        sex: String? = null,
+    ): User =
         users.provision(
             command =
                 ProvisionUserCommand(
@@ -47,6 +50,7 @@ class StandingsServiceTest {
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                     dateOfBirth = LocalDate.of(2000, 1, 1),
+                    sex = sex,
                 ),
         )
 
@@ -87,8 +91,28 @@ class StandingsServiceTest {
     }
 
     @Test
-    fun `standings return all bands strongest-first`() {
-        service.standings().map { it.band } shouldBe StandingsBand.entries.reversed()
+    fun `standings list non-empty bands strongest-first, empty bands omitted`() {
+        provision(uid = "lo").also { rate(user = it, value = "4.0") } // FROM_4_0
+        provision(uid = "hi").also { rate(user = it, value = "6.5") } // SIX_PLUS
+        service.standings().map { it.band } shouldBe listOf(StandingsBand.SIX_PLUS, StandingsBand.FROM_4_0)
+    }
+
+    @Test
+    fun `standings split a band by sex, ranking each group from 1 (#212)`() {
+        val m1 = provision(uid = "m1", sex = "Male").also { rate(user = it, value = "4.3") }
+        val m2 = provision(uid = "m2", sex = "Male").also { rate(user = it, value = "4.1") }
+        val f1 = provision(uid = "f1", sex = "Female").also { rate(user = it, value = "4.4") }
+        val u1 = provision(uid = "u1", sex = null).also { rate(user = it, value = "4.2") }
+
+        val rows = service.standings().filter { it.band == StandingsBand.FROM_4_0 }
+        // One row per sex present, in Men → Women → Unspecified order.
+        rows.map { it.sex } shouldBe listOf("Male", "Female", null)
+
+        val men = rows.single { it.sex == "Male" }
+        men.entries.map { it.userId } shouldBe listOf(m1.id, m2.id) // 4.3 ahead of 4.1
+        men.entries.map { it.rank } shouldBe listOf(1, 2) // rank restarts within the group
+        rows.single { it.sex == "Female" }.entries.single().userId shouldBe f1.id
+        rows.single { it.sex == null }.entries.single().userId shouldBe u1.id
     }
 
     @Test

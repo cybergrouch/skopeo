@@ -18,14 +18,19 @@ data class StandingEntryResponse(
     val age: Int? = null,
 )
 
-/** A single band's leaderboard: the band label plus its ranked players. */
+/**
+ * A single (band, sex) leaderboard (#212): the band label, the group's [sex] ("Male"/"Female", or null
+ * for the Unspecified group), and its ranked players. One row per (band, sex) that has players.
+ */
 @Serializable
 data class BandStandingsResponse(
     val band: String,
+    val sex: String? = null,
     val entries: List<StandingEntryResponse>,
 )
 
-fun BandStandings.toResponse(): BandStandingsResponse = BandStandingsResponse(band = band.label, entries = entries.map { it.toResponse() })
+fun BandStandings.toResponse(): BandStandingsResponse =
+    BandStandingsResponse(band = band.label, sex = sex, entries = entries.map { it.toResponse() })
 
 fun StandingEntry.toResponse(): StandingEntryResponse =
     StandingEntryResponse(
