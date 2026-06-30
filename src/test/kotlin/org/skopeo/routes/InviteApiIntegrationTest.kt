@@ -178,6 +178,6 @@ class InviteApiIntegrationTest {
     ) = client.post(urlString = "/api/v1/users") {
         header(key = HttpHeaders.Authorization, value = "Bearer $token")
         contentType(type = ContentType.Application.Json)
-        setBody(body = CreateUserRequest(displayName = "New Member", dateOfBirth = "2000-01-01", sex = "Male"))
+        setBody(body = CreateUserRequest(proposedRating = "4.0", displayName = "New Member", dateOfBirth = "2000-01-01", sex = "Male"))
     }
 }

@@ -84,7 +84,15 @@ class StandingsApiIntegrationTest {
                 client.post(urlString = "/api/v1/users") {
                     header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
                     contentType(type = ContentType.Application.Json)
-                    setBody(body = CreateUserRequest(displayName = "Player One", dateOfBirth = "2000-01-01", sex = "Male"))
+                    setBody(
+                        body =
+                            CreateUserRequest(
+                                proposedRating = "4.0",
+                                displayName = "Player One",
+                                dateOfBirth = "2000-01-01",
+                                sex = "Male",
+                            ),
+                    )
                 }.body()
             client.put(urlString = "/api/v1/users/${player.id}/ratings") {
                 header(key = HttpHeaders.Authorization, value = "Bearer $admin")

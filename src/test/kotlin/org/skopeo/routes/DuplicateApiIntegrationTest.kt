@@ -84,7 +84,7 @@ class DuplicateApiIntegrationTest {
         post(urlString = "/api/v1/users") {
             header(key = HttpHeaders.Authorization, value = "Bearer ${TestFirebaseAuth.mintToken(uid = uid)}")
             contentType(type = ContentType.Application.Json)
-            setBody(body = CreateUserRequest(displayName = displayName, dateOfBirth = "2000-01-01", sex = "Male"))
+            setBody(body = CreateUserRequest(proposedRating = "4.0", displayName = displayName, dateOfBirth = "2000-01-01", sex = "Male"))
         }.body()
 
     private suspend fun HttpClient.searchByName(
@@ -129,7 +129,15 @@ class DuplicateApiIntegrationTest {
                 client.post(urlString = "/api/v1/users") {
                     header(key = HttpHeaders.Authorization, value = "Bearer ${TestFirebaseAuth.mintToken(uid = "dup")}")
                     contentType(type = ContentType.Application.Json)
-                    setBody(body = CreateUserRequest(displayName = "Dupliton", dateOfBirth = "2000-01-01", sex = "Male"))
+                    setBody(
+                        body =
+                            CreateUserRequest(
+                                proposedRating = "4.0",
+                                displayName = "Dupliton",
+                                dateOfBirth = "2000-01-01",
+                                sex = "Male",
+                            ),
+                    )
                 }
             relogin.status shouldBe HttpStatusCode.Forbidden
             relogin.body<Map<String, String>>()["canonicalCode"] shouldBe canonical.publicCode
