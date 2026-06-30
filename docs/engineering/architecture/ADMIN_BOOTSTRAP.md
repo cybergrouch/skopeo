@@ -58,6 +58,12 @@ redesign.
   existing administrator. Auto-revoke would make a fat-fingered deploy a lock-out risk and fights
   the "cannot revoke the last administrator" guardrail. Revocation is done deliberately through the
   UI/API.
+- **Protected from API revocation while listed (#194).** `CapabilityService.revoke` refuses to remove
+  ADMINISTRATOR from a user whose *verified* email is currently on the `ADMIN_EMAILS` allowlist
+  (`Conflict: "Cannot revoke a bootstrap administrator"`), so the break-glass account can't be demoted
+  by another admin. This is the deliberate counterpart to grant-only: to make a bootstrap admin
+  revocable, **remove their email from the allowlist first**, then revoke through the UI/API. (The
+  existing last-admin and no-self-revoke guards still apply to every administrator.)
 - **Evaluated on provision *and* on authenticated login.** Sign-up happens once; checking again on
   login/token resolution means adding an email to the allowlist later promotes an *existing* user on
   their next session. The grant is idempotent (only written when missing).

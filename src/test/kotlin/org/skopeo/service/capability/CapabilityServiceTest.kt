@@ -15,12 +15,16 @@ import org.junit.jupiter.api.Test
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
+import org.skopeo.model.ContactInfo
+import org.skopeo.model.ContactSource
+import org.skopeo.model.ContactType
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.ServiceError
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
+import org.skopeo.model.VerificationStatus
 import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.CapabilityRepository
 import org.skopeo.repository.UserRepository
@@ -164,6 +168,60 @@ class CapabilityServiceTest {
             .revoke(token = token(uid = "root"), userId = root.id, capability = Capability.ADMINISTRATOR)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
+    /** Provision an ADMINISTRATOR carrying an email contact with the given verification status. */
+    private fun adminWithEmail(
+        uid: String,
+        email: String,
+        status: VerificationStatus,
+    ): User =
+        users.provision(
+            command =
+                ProvisionUserCommand(
+                    firebaseUid = uid,
+                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                    email =
+                        ContactInfo(
+                            type = ContactType.EMAIL,
+                            value = email,
+                            source = ContactSource.GOOGLE,
+                            status = status,
+                            isPrimary = true,
+                        ),
+                    capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
+                ),
+        )
+
+    @Test
+    fun `a bootstrap administrator (verified email on the allowlist) cannot be revoked (#194)`() {
+        val gated = CapabilityService(capabilities = capabilities, users = users, adminEmails = setOf(element = "boss@skopeo.co"))
+        admin(uid = "root") // a separate admin who attempts the revoke (so it isn't the last-admin/self case)
+        // Mixed case proves the match is case-insensitive, mirroring the sign-up gate.
+        val boss = adminWithEmail(uid = "boss", email = "Boss@Skopeo.co", status = VerificationStatus.VERIFIED)
+
+        gated
+            .revoke(token = token(uid = "root"), userId = boss.id, capability = Capability.ADMINISTRATOR)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Conflict>()
+
+        // The bootstrap admin keeps ADMINISTRATOR.
+        gated
+            .list(token = token(uid = "root"), userId = boss.id)
+            .shouldBeRight()
+            .any { it.capability == Capability.ADMINISTRATOR && it.isActive }
+            .shouldBeTrue()
+    }
+
+    @Test
+    fun `an allowlisted but unverified email is not protected (#194)`() {
+        val gated = CapabilityService(capabilities = capabilities, users = users, adminEmails = setOf(element = "boss@skopeo.co"))
+        admin(uid = "root")
+        // Email is on the allowlist but not verified — the verified-email gate means no protection.
+        val pending = adminWithEmail(uid = "pending", email = "boss@skopeo.co", status = VerificationStatus.PENDING)
+
+        gated.revoke(token = token(uid = "root"), userId = pending.id, capability = Capability.ADMINISTRATOR).shouldBeRight()
     }
 
     @Test

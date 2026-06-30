@@ -66,7 +66,7 @@ vi.mock('@/components/UserSearchSelect', () => ({
   ),
 }))
 
-type SuccessOpts = { mutation: { onSuccess: () => void } }
+type SuccessOpts = { mutation: { onSuccess: () => void; onError?: (e: unknown) => void } }
 
 function renderSection() {
   return render(
@@ -234,7 +234,7 @@ describe('ManagePlayerSection', () => {
     await selectAlice()
     // Header shows the id (no display name); every grantable role offers Grant (no active capabilities).
     expect(screen.getByText(/u1/)).toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: /^Grant/ })).toHaveLength(4)
+    expect(screen.getAllByRole('button', { name: /^Grant/ })).toHaveLength(5) // incl. ADMINISTRATOR (#194)
   })
 
   it('grants and revokes roles', async () => {
@@ -249,5 +249,42 @@ describe('ManagePlayerSection', () => {
     // RATER is grantable too (#106).
     await user.click(screen.getByRole('button', { name: 'Grant RATER' }))
     expect(grantMutate).toHaveBeenCalledWith({ userId: 'u1', data: { capability: 'RATER' } })
+  })
+
+  it('gates an ADMINISTRATOR grant behind a confirm step (#194)', async () => {
+    const user = await selectAlice()
+    // First click only asks to confirm — it must not grant yet.
+    await user.click(screen.getByRole('button', { name: 'Grant ADMINISTRATOR' }))
+    expect(grantMutate).not.toHaveBeenCalled()
+    expect(screen.getByText('Grant administrator access?')).toBeInTheDocument()
+
+    // Cancel backs out without granting.
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(grantMutate).not.toHaveBeenCalled()
+
+    // Confirming performs the grant.
+    await user.click(screen.getByRole('button', { name: 'Grant ADMINISTRATOR' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm grant ADMINISTRATOR' }))
+    expect(grantMutate).toHaveBeenCalledWith({ userId: 'u1', data: { capability: 'ADMINISTRATOR' } })
+  })
+
+  it('surfaces the backend reason when revoking ADMINISTRATOR is refused (#194)', async () => {
+    // ADMINISTRATOR is active → Revoke; the server refuses (e.g. bootstrap admin).
+    useGetApiV1UsersUserIdCapabilities.mockReturnValue({
+      data: [{ capability: 'ADMINISTRATOR', isActive: true }],
+      isLoading: false,
+    })
+    useDeleteApiV1UsersUserIdCapabilitiesCapability.mockImplementation((options: SuccessOpts) => ({
+      isPending: false,
+      mutate: () =>
+        options.mutation.onError?.({
+          response: { data: { message: 'Cannot revoke a bootstrap administrator' } },
+        }),
+    }))
+    const user = await selectAlice()
+
+    await user.click(screen.getByRole('button', { name: 'Revoke ADMINISTRATOR' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm revoke ADMINISTRATOR' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('Cannot revoke a bootstrap administrator')
   })
 })
