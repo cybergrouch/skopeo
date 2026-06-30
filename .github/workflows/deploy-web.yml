@@ -1,17 +1,13 @@
 name: Deploy Web
 
-# Deploys the web client to Firebase Hosting on every push to main that touches
-# the frontend (or the OpenAPI spec it generates against). Inert until configured:
-# the job is skipped unless the VITE_FIREBASE_PROJECT_ID repo variable is set, so
-# merging this workflow never produces a red run before secrets/vars exist.
+# Deploys the web client to Firebase Hosting. Release-driven — NOT on every merge:
+#   * release: published  → deploys the released tag's web build (in lockstep with the API).
+#   * workflow_dispatch   → manual deploy of the chosen branch. Run it from the Actions tab.
+# Inert until configured: the job is skipped unless the VITE_FIREBASE_PROJECT_ID repo variable is set.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'web/**'
-      - 'src/main/resources/openapi/documentation.yaml'
-      - 'firebase.json'
-      - '.github/workflows/deploy-web.yml'
+  release:
+    types: [published]
+  workflow_dispatch: {}
 
 permissions:
   contents: read

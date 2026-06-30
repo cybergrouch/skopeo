@@ -38,10 +38,20 @@ api.skopeo.com ──► Cloud Run (skopeo)  ──► Cloud SQL (SkopeoDb)
 Both workflows are **inert until configured** — each is guarded by an `if:` on a repo variable, so
 merging them never produces a red run before the cloud resources exist.
 
+Deploys are **release-driven, not on-merge**: publishing a GitHub Release deploys that tag.
+
 | Workflow | Trigger | Guard (skips unless set) | Gate |
 |---|---|---|---|
-| `.github/workflows/deploy-api.yml` | push to `main` touching backend paths, or `workflow_dispatch` | `vars.WIF_PROVIDER` | `production` environment approval |
-| `.github/workflows/deploy-web.yml` | push to `main` touching `web/**`, OpenAPI spec, `firebase.json` | `vars.VITE_FIREBASE_PROJECT_ID` | none |
+| `.github/workflows/release.yml` | `workflow_dispatch` (the one-click release) | none | none |
+| `.github/workflows/deploy-api.yml` | `release: published`, or `workflow_dispatch` (manual/sandbox) | `vars.WIF_PROVIDER` | `production` environment approval |
+| `.github/workflows/deploy-web.yml` | `release: published`, or `workflow_dispatch` (manual/sandbox) | `vars.VITE_FIREBASE_PROJECT_ID` | none |
+
+**Release flow:** Actions → **Release → Run workflow** → it strips `-SNAPSHOT` to form the official
+version (e.g. `0.0.1`), tags `vX.Y.Z` + publishes a GitHub Release (→ triggers the two deploys), and
+opens a PR bumping `main`'s dev version to the next `-SNAPSHOT`. The version is single-sourced from
+`build.gradle.kts` → generated `version.properties` → `/health`, so the tag's version is what `/health`
+reports. (To ship the current `-SNAPSHOT` as-is — e.g. the initial `v0.0.1-SNAPSHOT` marker — pass it
+to the Release workflow's `version` input.)
 
 ### API pipeline — required repo **Variables**
 
@@ -169,6 +179,43 @@ curl "$SERVICE_URL/health"
 
 Expect Flyway log lines like `Successfully applied N migrations` (or `Schema ... is up to date`).
 Full verification steps (including the calculator smoke test) are in [DEPLOYMENT_GCP.md §6](DEPLOYMENT_GCP.md).
+
+## Manual deployment by hand (CD fallback)
+
+If GitHub Actions is unavailable, deploy directly with the gcloud / Firebase CLIs from a local
+checkout. First authenticate: `gcloud auth login` && `gcloud config set project <GCP_PROJECT_ID>`, and
+`firebase login`. Deploy the **release tag** to match what CD ships (`git checkout vX.Y.Z`), or `main`
+for a dev/sandbox build. Real values for the `<…>` placeholders live in the git-ignored
+`presentations/GCP_DEPLOYMENT_WALKTHROUGH.md` — never commit them here.
+
+**API → Cloud Run** (mirrors `deploy-api.yml`; `^##^` keeps the comma inside `WEB_ORIGINS`; the flags
+wire direct VPC egress for the private-IP DB + one warm instance):
+```bash
+git checkout vX.Y.Z      # the release to ship (or `main` for the -SNAPSHOT dev build)
+gcloud run deploy skopeo \
+  --source . \
+  --region asia-southeast1 \
+  --allow-unauthenticated \
+  --min-instances=1 --max-instances=2 \
+  --network=default --subnet=default \
+  --add-cloudsql-instances "<CLOUDSQL_INSTANCE>" \
+  --set-env-vars "^##^FIREBASE_PROJECT_ID=<FIREBASE_PROJECT_ID>##DATABASE_URL=<DATABASE_URL>##DATABASE_USER=<DATABASE_USER>##WEB_ORIGINS=<comma,separated,origins>" \
+  --set-secrets "DATABASE_PASSWORD=skopeo-db-password:latest,ADMIN_EMAILS=skopeo-admin-emails:latest"
+```
+> To change ONLY one env var on the running service later, use `--update-env-vars` (NOT `--set-env-vars`,
+> which replaces them all). Keep the `^##^` prefix when the value contains commas.
+
+**Web → Firebase Hosting** (mirrors `deploy-web.yml`):
+```bash
+cd web
+printf 'VITE_API_BASE_URL=<API_URL>\n' > .env.production.local   # Firebase VITE_* come from .env.local
+npm ci && npm run build
+cd ..
+firebase deploy --only hosting --project <FIREBASE_PROJECT_ID>
+```
+
+Then run the **First-deploy verification** block above (Flyway log + `/health`). To roll back, redeploy
+the previous tag, or `gcloud run services update-traffic skopeo --region asia-southeast1 --to-revisions <PREV>=100`.
 
 ## Rollback
 

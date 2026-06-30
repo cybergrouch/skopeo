@@ -18,6 +18,27 @@ application {
     mainClass.set("org.skopeo.ApplicationKt")
 }
 
+// Single source of truth for the app version: generate version.properties from `project.version`
+// onto the runtime classpath so /health reports it (no hardcoded literal). Release tags carry the
+// official version by setting `version` on the tagged commit (see .github/workflows/release.yml).
+val generateVersionProperties by tasks.registering {
+    val versionFile = layout.buildDirectory.file("generated/version/version.properties")
+    inputs.property("version", project.version.toString())
+    outputs.file(versionFile)
+    doLast {
+        versionFile.get().asFile.apply {
+            parentFile.mkdirs()
+            writeText("version=${project.version}\n")
+        }
+    }
+}
+sourceSets.named("main") {
+    resources.srcDir(layout.buildDirectory.dir("generated/version"))
+}
+tasks.named("processResources") {
+    dependsOn(generateVersionProperties)
+}
+
 val ktorVersion = "3.0.3"
 val exposedVersion = "0.54.0"
 val postgresVersion = "42.7.4"
