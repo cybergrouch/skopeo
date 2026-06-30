@@ -3670,6 +3670,62 @@ components:
             only for RATER/ADMINISTRATOR viewers.
           items:
             $ref: '#/components/schemas/MatchPublicRatingChange'
+        headToHead:
+          allOf:
+            - $ref: '#/components/schemas/MatchPublicHeadToHead'
+          nullable: true
+          description: >-
+            Prior meetings between the same two players (#188); null when there are none or the
+            match is not singles. Wins and set scores are oriented to team1/team2 of this match.
+
+    MatchPublicHeadToHead:
+      type: object
+      description: Head-to-head record between a singles match's two players (#188).
+      required:
+        - team1Wins
+        - team2Wins
+        - meetings
+      properties:
+        team1Wins:
+          type: integer
+          description: Prior wins for team1's player (oriented to this match).
+        team2Wins:
+          type: integer
+          description: Prior wins for team2's player (oriented to this match).
+        meetings:
+          type: array
+          description: Prior completed meetings, newest first, excluding the match being viewed.
+          items:
+            $ref: '#/components/schemas/MatchPublicHeadToHeadEntry'
+
+    MatchPublicHeadToHeadEntry:
+      type: object
+      description: One prior meeting in a head-to-head record (#188).
+      required:
+        - publicCode
+        - matchDate
+        - status
+        - rated
+        - sets
+      properties:
+        publicCode:
+          type: string
+        matchDate:
+          type: string
+          format: date
+        status:
+          type: string
+        rated:
+          type: boolean
+        sets:
+          type: array
+          description: Set scores oriented to team1/team2 of the match being viewed.
+          items:
+            $ref: '#/components/schemas/MatchPublicSet'
+        winnerPublicCode:
+          type: string
+          nullable: true
+          description: The winning player's public code (one of the two), or null if undecided.
 
     MatchPublicRatingChange:
       type: object

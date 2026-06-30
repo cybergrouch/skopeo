@@ -10,6 +10,7 @@ import { useGetApiV1MatchesCodeCode } from '@/api/generated/matches/matches'
 import type {
   MatchPublicPlayer,
   MatchPublicRatingChange,
+  MatchPublicResponse,
 } from '@/api/generated/model'
 import { ShareCard } from '@/components/ShareCard'
 
@@ -96,6 +97,73 @@ function RatingChangeRow({ change }: { change: MatchPublicRatingChange }) {
   )
 }
 
+/** A player's display name, falling back to their code or "Unknown". */
+function playerName(player?: MatchPublicPlayer): string {
+  return player?.displayName ?? player?.publicCode ?? 'Unknown'
+}
+
+/**
+ * Head-to-head record between the two players (#188): the running win tally and prior meetings,
+ * newest first, each linking to its own public match page. Hidden when there are no prior meetings
+ * (the backend returns no head-to-head for those, or for non-singles matches).
+ */
+function HeadToHeadCard({ match }: { match: MatchPublicResponse }) {
+  const h2h = match.headToHead
+  if (!h2h) return null
+  const team1 = match.team1[0]
+  const team2 = match.team2[0]
+
+  function winnerName(code?: string | null): string | null {
+    if (!code) return null
+    if (code === team1?.publicCode) return playerName(team1)
+    if (code === team2?.publicCode) return playerName(team2)
+    return null
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Head-to-head</CardTitle>
+        <CardDescription>
+          Prior meetings between {playerName(team1)} and {playerName(team2)}.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        <div className="flex items-center justify-center gap-3 font-medium">
+          <span>{playerName(team1)}</span>
+          <span className="tabular-nums">
+            {h2h.team1Wins} – {h2h.team2Wins}
+          </span>
+          <span>{playerName(team2)}</span>
+        </div>
+        <ul className="space-y-2">
+          {h2h.meetings.map((meeting) => {
+            const score = meeting.sets
+              .map((s) => `${s.team1Games}-${s.team2Games}`)
+              .join(' ')
+            const won = winnerName(meeting.winnerPublicCode)
+            return (
+              <li key={meeting.publicCode} className="rounded-lg border p-3">
+                <div className="text-muted-foreground">
+                  {meeting.matchDate}
+                  {score ? ` · ${score}` : ''}
+                  {won ? ` · ${won} won` : ''}
+                </div>
+                <Link
+                  to={`/matches/${meeting.publicCode}`}
+                  className="mt-1 inline-block text-xs text-primary hover:underline"
+                >
+                  Public page (QR)
+                </Link>
+              </li>
+            )
+          })}
+        </ul>
+      </CardContent>
+    </Card>
+  )
+}
+
 /**
  * Public, read-only match page reached via `/matches/:code` (issue #136). Resolves the match by its
  * shareable public code and shows a privacy-conscious summary (players, score, date). Auth-gated,
@@ -162,6 +230,8 @@ export function MatchPage() {
             </CardContent>
           </Card>
         ) : null}
+
+        {match ? <HeadToHeadCard match={match} /> : null}
 
         {match ? (
           <ShareCard

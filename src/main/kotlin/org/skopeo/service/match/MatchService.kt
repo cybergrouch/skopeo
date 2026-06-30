@@ -9,9 +9,12 @@ import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
+import org.skopeo.dto.match.MatchPublicHeadToHead
+import org.skopeo.dto.match.MatchPublicHeadToHeadEntry
 import org.skopeo.dto.match.MatchPublicPlayer
 import org.skopeo.dto.match.MatchPublicRatingChange
 import org.skopeo.dto.match.MatchPublicResponse
+import org.skopeo.dto.match.MatchPublicSet
 import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.dto.match.toPublicResponse
 import org.skopeo.model.AuditAction
@@ -24,6 +27,7 @@ import org.skopeo.model.MatchCalculationDetail
 import org.skopeo.model.MatchPlayerCalculation
 import org.skopeo.model.MatchQuery
 import org.skopeo.model.MatchSetResult
+import org.skopeo.model.MatchStatus
 import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
 import org.skopeo.model.ServiceError
@@ -217,8 +221,40 @@ class MatchService(
             // rates only for RATER/ADMINISTRATOR viewers.
             val ratingChanges =
                 if (match.ratedAt != null) ratingChangesFor(match = match, usersById = usersById, token = token) else null
-            match.toPublicResponse(players = players, ratingChanges = ratingChanges)
+            // Prior meetings between the same two players (#188), if any.
+            val headToHead = headToHeadFor(match = match, usersById = usersById)
+            match.toPublicResponse(players = players, ratingChanges = ratingChanges, headToHead = headToHead)
         }
+
+    /**
+     * Head-to-head record between a singles match's two players (#188): the win tally and prior
+     * completed meetings, newest first, excluding [match] itself. Null when the match is not singles
+     * (one player per side) or there are no other completed meetings. Both players are already in
+     * [usersById], so no extra lookups are needed; wins and set scores are oriented to team1/team2.
+     */
+    private fun headToHeadFor(
+        match: Match,
+        usersById: Map<UUID, User>,
+    ): MatchPublicHeadToHead? {
+        if (match.team1.userIds.size != 1 || match.team2.userIds.size != 1) return null
+        val team1Id = match.team1.userIds.first()
+        val team2Id = match.team2.userIds.first()
+        val codes = usersById.mapValues { (_, user) -> user.publicCode }
+        val entries =
+            matches
+                .listBetweenUsers(userIdA = team1Id, userIdB = team2Id)
+                .filter { it.id != match.id && it.status == MatchStatus.COMPLETED }
+                .map { headToHeadEntry(meeting = it, team1Id = team1Id, codes = codes) }
+        return entries
+            .takeIf { it.isNotEmpty() }
+            ?.let {
+                MatchPublicHeadToHead(
+                    team1Wins = it.count { entry -> entry.winnerPublicCode == codes[team1Id] },
+                    team2Wins = it.count { entry -> entry.winnerPublicCode == codes[team2Id] },
+                    meetings = it,
+                )
+            }
+    }
 
     /**
      * Per-player rating changes for a rated match. Bands ([previousLevel]/[newLevel]) are public; the
@@ -406,3 +442,40 @@ private fun teamName(users: List<User>): String =
     users.joinToString(separator = "/") { user ->
         user.names.firstOrNull { it.type == NameType.DISPLAY && it.isActive }?.value ?: "Player"
     }
+
+/** Orient one set's games/tiebreaks to a reference player's side: team1 when [refIsTeam1] (#188). */
+private fun orientSet(
+    set: MatchSetResult,
+    refIsTeam1: Boolean,
+): MatchPublicSet =
+    MatchPublicSet(
+        setNumber = set.setNumber,
+        team1Games = if (refIsTeam1) set.team1Games else set.team2Games,
+        team2Games = if (refIsTeam1) set.team2Games else set.team1Games,
+        tiebreakTeam1Points = if (refIsTeam1) set.tiebreakTeam1Points else set.tiebreakTeam2Points,
+        tiebreakTeam2Points = if (refIsTeam1) set.tiebreakTeam2Points else set.tiebreakTeam1Points,
+    )
+
+/**
+ * Build a head-to-head entry for [meeting] (#188), oriented to the reference player [team1Id] (the
+ * viewed match's team1 player): set scores flip when the reference player was on team2, and the winner
+ * is resolved to the winning player's public code via [codes].
+ */
+private fun headToHeadEntry(
+    meeting: Match,
+    team1Id: UUID,
+    codes: Map<UUID, String>,
+): MatchPublicHeadToHeadEntry {
+    val refIsTeam1 = team1Id in meeting.team1.userIds
+    // Meetings are filtered to COMPLETED, so the winner is always team1 or team2.
+    val winnerSide = if (meeting.winnerTeamId == meeting.team1.teamId) meeting.team1 else meeting.team2
+    val winnerId = winnerSide.userIds.firstOrNull()
+    return MatchPublicHeadToHeadEntry(
+        publicCode = meeting.publicCode,
+        matchDate = meeting.matchDate.toString(),
+        status = meeting.status.name,
+        rated = meeting.ratedAt != null,
+        sets = meeting.sets.map { orientSet(set = it, refIsTeam1 = refIsTeam1) },
+        winnerPublicCode = winnerId?.let { codes[it] },
+    )
+}
