@@ -64,6 +64,41 @@ including deliberate near-duplicate names for search/disambiguation testing.
 ./scripts/testing/createTestUsers.sh
 ```
 
+## Alternate: run the API in Docker (instead of `./gradlew run`)
+
+`docker-compose.yml` includes a `skopeo` service that builds the production `Dockerfile` and runs the
+API in a container next to Postgres — closer to what ships to Cloud Run. Use this instead of step 3.
+
+```bash
+# 1. (Reset, if you want a clean slate)
+docker compose down -v
+
+# 2. Build the API image and start it + Postgres (depends_on brings Postgres up first).
+#    The container connects to the `postgres` service over the compose network
+#    (DATABASE_URL=jdbc:postgresql://postgres:5432/SkopeoDb) and Flyway migrates V1 on startup.
+docker compose up -d --build skopeo
+
+# 3. Watch it boot / confirm Flyway ran, then health-check (port 8080 is published to the host):
+docker compose logs -f skopeo      # Ctrl-C once you see "started successfully"
+curl -i http://localhost:8080/health
+```
+
+Then continue with the web (step 5) and test users (steps 2 & 6) exactly as above — the test scripts
+hit `http://localhost:8080` (published by the container) and `deleteTestUsers.sh` uses
+`docker compose exec postgres`, so both work unchanged.
+
+Docker-specific notes:
+- **Order:** with this option the API + DB come up together and migrate, so run `deleteTestUsers.sh`
+  *after* `docker compose up` (the tables exist), then `createTestUsers.sh`.
+- **Rebuild after code changes:** `docker compose up -d --build skopeo` (re-runs the image build).
+- **Admin locally:** the compose `skopeo` service doesn't set `ADMIN_EMAILS`. To act as ADMINISTRATOR,
+  add `- ADMIN_EMAILS=you@example.com` under its `environment:` and rebuild — or just use `./gradlew run`
+  with the env var for admin sessions.
+- **Stop:** `docker compose down` (keep data) or `docker compose down -v` (wipe the DB volume).
+- **vs `./gradlew run`:** Docker builds the full image (slower first build) and the DB host is
+  `postgres` (compose network), not `localhost`; `./gradlew run` is faster to iterate and connects to
+  `localhost:5432`. Both serve the API on `localhost:8080`.
+
 ## Notes
 - **Order:** delete (step 2) is safe before the API is up — its DB deletes are a harmless no-op on the
   freshly-wiped DB and its real job there is clearing leftover Firebase accounts. To delete test data
