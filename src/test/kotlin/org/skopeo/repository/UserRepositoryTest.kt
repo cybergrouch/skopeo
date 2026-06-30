@@ -8,6 +8,7 @@ import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
+import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
@@ -26,6 +27,7 @@ import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.ServiceError
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
+import org.skopeo.model.UserSearchQuery
 import org.skopeo.model.VerificationMethod
 import org.skopeo.model.VerificationStatus
 import org.skopeo.testsupport.PostgresTestDatabase
@@ -98,6 +100,34 @@ class UserRepositoryTest {
             it.status shouldBe VerificationStatus.VERIFIED
         }
         created.capabilities shouldBe setOf(Capability.PLAYER)
+    }
+
+    @Test
+    fun `search paginates with limit and offset over a stable id order (#197)`() {
+        val ids =
+            (1..3)
+                .map { n ->
+                    // Distinct identities — the helper hardcodes providerUid, which is uniquely constrained.
+                    repository.provision(
+                        command =
+                            googleSignup().copy(
+                                identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = "sub-$n", isPrimary = true),
+                            ),
+                    ).id
+                }.toSet()
+        val query =
+            UserSearchQuery(name = null, code = null, q = null, sex = "Male", dobMin = null, dobMax = null, rating = null)
+
+        val firstPage = repository.search(query = query, limit = 2, offset = 0)
+        val secondPage = repository.search(query = query, limit = 2, offset = 2)
+
+        firstPage shouldHaveSize 2
+        secondPage shouldHaveSize 1
+        // The pages are disjoint and together cover every match (offset over the id-ASC order).
+        (firstPage.map { it.id } + secondPage.map { it.id }).toSet() shouldBe ids
+
+        // Default limit/offset (the typeahead path) returns every match in one page.
+        repository.search(query = query).map { it.id }.toSet() shouldBe ids
     }
 
     @Test

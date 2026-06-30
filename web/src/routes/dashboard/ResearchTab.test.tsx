@@ -61,7 +61,10 @@ describe('ResearchTab', () => {
     expect(screen.queryByText('PLAYER')).not.toBeInTheDocument()
     expect(container.querySelector('img')).toHaveAttribute('src', 'https://example.com/a.jpg')
     expect(screen.getByRole('link', { name: /Alice/ })).toHaveAttribute('href', '/players/AAA111')
-    expect(useGetApiV1Users).toHaveBeenCalledWith({ name: 'ali' }, { query: { enabled: true } })
+    expect(useGetApiV1Users).toHaveBeenCalledWith(
+      { name: 'ali', limit: 26, offset: 0 },
+      { query: { enabled: true } },
+    )
   })
 
   it('shows both same-named players, each distinguished by its public code', async () => {
@@ -141,7 +144,7 @@ describe('ResearchTab', () => {
     await user.click(screen.getByRole('button', { name: 'Search' }))
 
     expect(useGetApiV1Users).toHaveBeenLastCalledWith(
-      { sex: 'Male', age: '[20,30]', rating: '[3.0,)' },
+      { sex: 'Male', age: '[20,30]', rating: '[3.0,)', limit: 26, offset: 0 },
       { query: { enabled: true } },
     )
   })
@@ -154,7 +157,7 @@ describe('ResearchTab', () => {
     await user.click(screen.getByRole('button', { name: 'Search' }))
 
     expect(useGetApiV1Users).toHaveBeenLastCalledWith(
-      { age: '(,30]', rating: '(,4.5]' },
+      { age: '(,30]', rating: '(,4.5]', limit: 26, offset: 0 },
       { query: { enabled: true } },
     )
   })
@@ -201,6 +204,84 @@ describe('ResearchTab', () => {
     await user.type(screen.getByLabelText('Name'), 'ali')
     await user.click(screen.getByRole('button', { name: 'Search' }))
     expect(screen.getByText('Searching…')).toBeInTheDocument()
+  })
+
+  it('paginates results 25 at a time, advancing the offset on Next (#197)', async () => {
+    // 26 rows: a full page (25) plus the look-ahead row that signals a next page exists.
+    const rows = Array.from({ length: 26 }, (_, i) => ({
+      id: `u${i}`,
+      publicCode: `CODE${i}`,
+      displayName: `P${i}`,
+      photoUrl: null,
+      sex: null,
+      age: null,
+      rating: undefined,
+      capabilities: [],
+    }))
+    useGetApiV1Users.mockReturnValue({ data: rows, isLoading: false, isError: false })
+    const user = userEvent.setup()
+    renderTab()
+    await user.type(screen.getByLabelText('Name'), 'p')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+
+    // Only 25 rows render (the 26th is trimmed); Previous disabled, Next enabled.
+    expect(screen.getAllByRole('link')).toHaveLength(25)
+    expect(screen.getByText('Page 1')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled()
+    expect(useGetApiV1Users).toHaveBeenLastCalledWith(
+      { name: 'p', limit: 26, offset: 0 },
+      { query: { enabled: true } },
+    )
+
+    // Next advances by the page size (offset 25).
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    expect(screen.getByText('Page 2')).toBeInTheDocument()
+    expect(useGetApiV1Users).toHaveBeenLastCalledWith(
+      { name: 'p', limit: 26, offset: 25 },
+      { query: { enabled: true } },
+    )
+
+    // Previous goes back a page (offset 0).
+    await user.click(screen.getByRole('button', { name: 'Previous' }))
+    expect(screen.getByText('Page 1')).toBeInTheDocument()
+    expect(useGetApiV1Users).toHaveBeenLastCalledWith(
+      { name: 'p', limit: 26, offset: 0 },
+      { query: { enabled: true } },
+    )
+
+    // A fresh search restarts at page 1 (offset 0).
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+    expect(screen.getByText('Page 1')).toBeInTheDocument()
+    expect(useGetApiV1Users).toHaveBeenLastCalledWith(
+      { name: 'p', limit: 26, offset: 0 },
+      { query: { enabled: true } },
+    )
+  })
+
+  it('hides pagination controls when the results fit on one page', async () => {
+    useGetApiV1Users.mockReturnValue({
+      data: [
+        {
+          id: 'u1',
+          publicCode: 'AAA111',
+          displayName: 'Alice',
+          photoUrl: null,
+          sex: null,
+          age: null,
+          rating: undefined,
+          capabilities: [],
+        },
+      ],
+      isLoading: false,
+      isError: false,
+    })
+    const user = userEvent.setup()
+    renderTab()
+    await user.type(screen.getByLabelText('Name'), 'ali')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+    expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Page 1')).not.toBeInTheDocument()
   })
 
   it('shows an error when the filters are rejected', async () => {
