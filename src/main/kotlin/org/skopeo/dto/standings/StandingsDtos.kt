@@ -7,7 +7,10 @@ import kotlinx.serialization.Serializable
 import org.skopeo.model.BandStandings
 import org.skopeo.model.StandingEntry
 
-/** One ranked player in a band's standings (#113). No exact rating — order only. */
+/**
+ * One ranked player in a band's standings (#113). Order is what's revealed; [currentRating] (the
+ * precise NUMERIC(10,6) value as a string) is present only for RATER/ADMINISTRATOR viewers (#186).
+ */
 @Serializable
 data class StandingEntryResponse(
     val rank: Int,
@@ -16,6 +19,7 @@ data class StandingEntryResponse(
     val publicCode: String,
     val sex: String? = null,
     val age: Int? = null,
+    val currentRating: String? = null,
 )
 
 /**
@@ -40,4 +44,5 @@ fun StandingEntry.toResponse(): StandingEntryResponse =
         publicCode = publicCode,
         sex = sex,
         age = age,
+        currentRating = currentRating,
     )

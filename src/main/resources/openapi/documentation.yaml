@@ -4321,6 +4321,12 @@ components:
         age:
           type: integer
           nullable: true
+        currentRating:
+          type: string
+          nullable: true
+          description: >-
+            Precise NTRP rating (6 fractional digits); present only for RATER/ADMINISTRATOR viewers
+            (#186), null for everyone else.
 
     BandStandingsResponse:
       type: object

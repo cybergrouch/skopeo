@@ -40,8 +40,9 @@ enum class StandingsBand(
 }
 
 /**
- * One row of a band's standings (#113): the player's [rank] within the band. The exact rating is
- * deliberately NOT included — standings only reveal order within a band, never the number (#64/#114).
+ * One row of a band's standings (#113): the player's [rank] within the band. Order is what the
+ * standings reveal (#64/#114); [currentRating] (the precise NUMERIC(10,6) value) is populated only
+ * for RATER/ADMINISTRATOR viewers (#186) and null for everyone else.
  */
 data class StandingEntry(
     val rank: Int,
@@ -50,6 +51,7 @@ data class StandingEntry(
     val publicCode: String,
     val sex: String?,
     val age: Int?,
+    val currentRating: String? = null,
 )
 
 /**

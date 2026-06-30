@@ -4,11 +4,13 @@
 package org.skopeo.service.standings
 
 import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.model.AuthProvider
+import org.skopeo.model.Capability
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.StandingsBand
@@ -17,6 +19,7 @@ import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
+import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.math.BigDecimal
 import java.time.LocalDate
@@ -39,9 +42,15 @@ class StandingsServiceTest {
         PostgresTestDatabase.truncate()
     }
 
+    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
+
+    /** A non-privileged viewer's token — used where the precise-rating reveal is irrelevant. */
+    private val viewerToken = token(uid = "viewer")
+
     private fun provision(
         uid: String,
         sex: String? = null,
+        capabilities: Set<Capability> = setOf(element = Capability.PLAYER),
     ): User =
         users.provision(
             command =
@@ -51,6 +60,7 @@ class StandingsServiceTest {
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                     dateOfBirth = LocalDate.of(2000, 1, 1),
                     sex = sex,
+                    capabilities = capabilities,
                 ),
         )
 
@@ -76,7 +86,7 @@ class StandingsServiceTest {
         confidence = BigDecimal(confidence),
     )
 
-    private fun band(label: StandingsBand) = service.standings().single { it.band == label }
+    private fun band(label: StandingsBand) = service.standings(token = viewerToken).single { it.band == label }
 
     @Test
     fun `of() buckets ratings into the lumped and 0_5-wide bands`() {
@@ -94,7 +104,7 @@ class StandingsServiceTest {
     fun `standings list non-empty bands strongest-first, empty bands omitted`() {
         provision(uid = "lo").also { rate(user = it, value = "4.0") } // FROM_4_0
         provision(uid = "hi").also { rate(user = it, value = "6.5") } // SIX_PLUS
-        service.standings().map { it.band } shouldBe listOf(StandingsBand.SIX_PLUS, StandingsBand.FROM_4_0)
+        service.standings(token = viewerToken).map { it.band } shouldBe listOf(StandingsBand.SIX_PLUS, StandingsBand.FROM_4_0)
     }
 
     @Test
@@ -104,7 +114,7 @@ class StandingsServiceTest {
         val f1 = provision(uid = "f1", sex = "Female").also { rate(user = it, value = "4.4") }
         val u1 = provision(uid = "u1", sex = null).also { rate(user = it, value = "4.2") }
 
-        val rows = service.standings().filter { it.band == StandingsBand.FROM_4_0 }
+        val rows = service.standings(token = viewerToken).filter { it.band == StandingsBand.FROM_4_0 }
         // One row per sex present, in Men → Women → Unspecified order.
         rows.map { it.sex } shouldBe listOf("Male", "Female", null)
 
@@ -149,6 +159,23 @@ class StandingsServiceTest {
             it.displayName shouldBe null
             it.age shouldBe null
         }
+    }
+
+    @Test
+    fun `precise rating is revealed to a rater and an admin, hidden from a plain player (#186)`() {
+        provision(uid = "rater", capabilities = setOf(Capability.PLAYER, Capability.RATER))
+        provision(uid = "root", capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val player = provision(uid = "p").also { rate(user = it, value = "4.2") }
+
+        // Both a RATER and an ADMINISTRATOR see the precise 6-dp rating.
+        service.standings(token = token(uid = "rater")).flatMap { it.entries }
+            .single { it.userId == player.id }.currentRating shouldBe "4.200000"
+        service.standings(token = token(uid = "root")).flatMap { it.entries }
+            .single { it.userId == player.id }.currentRating shouldBe "4.200000"
+
+        // A plain player never sees an exact rating.
+        service.standings(token = token(uid = "p")).flatMap { it.entries }
+            .single { it.userId == player.id }.currentRating.shouldBeNull()
     }
 
     @Test
