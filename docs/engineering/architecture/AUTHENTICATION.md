@@ -186,6 +186,24 @@ database:
 - **Facebook (runtime enablement)** — the client is wired (`facebookProvider`,
   `signInWithFacebook`, buttons). The remaining step is operational: enable the Facebook provider
   in the Firebase console (requires a Facebook app's App ID + secret). No code change needed.
+- **Invite-email branding** (issue #133) — invites are sent client-side via Firebase's
+  `sendSignInLinkToEmail` (`web/src/auth/AuthProvider.tsx`, triggered from
+  `web/src/routes/dashboard/admin/InvitesSection.tsx`). Our `actionCodeSettings` only set the
+  continue URL + `handleCodeInApp`; the email's **sender, subject, and body are Firebase's email
+  template**, not ours. By default that template interpolates the raw project id
+  (`project-<number>`) instead of "Skopeo", which looks unbranded. Fix it in the console — no code
+  change:
+  1. **Project settings → General → Public-facing name** → set to `Skopeo`. This is the value
+     the templates interpolate (`%APP_NAME%`), so it replaces the project id across the auth
+     emails in one place.
+  2. **Authentication → Templates** → the email sign-in / action template → set the **sender name**
+     to `Skopeo`, customise the **subject** (e.g. "You're invited to Skopeo"), and review the body.
+     Optionally set a custom **from** domain.
+  3. Send a test invite and confirm the subject/sender/body say "Skopeo", not the project id.
+
+  If we later want full control of the invite email (branded HTML, our own copy), the path is to
+  generate the sign-in link server-side via the Firebase Admin SDK and send it through our own
+  mailer — a larger change, not required to resolve the branding.
 
 ## Key files
 
