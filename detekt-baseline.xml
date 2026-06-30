@@ -12,6 +12,7 @@
     <ID>ImplicitDefaultLocale:RatingChangeReport.kt$RatingChangeReport$String.format("%+.6f (%.6f)", result.utrP1Delta, result.utrP1New)</ID>
     <ID>ImplicitDefaultLocale:RatingChangeReport.kt$RatingChangeReport$String.format("%+.6f (%.6f)", result.utrP2Delta, result.utrP2New)</ID>
     <ID>ImplicitDefaultLocale:RatingChangeReport.kt$RatingChangeReport$String.format("%.2f", result.ratio)</ID>
+    <ID>LargeClass:MatchServiceTest.kt$MatchServiceTest</ID>
     <ID>LargeClass:RankingCalculationPayloadTest.kt$RankingCalculationPayloadTest</ID>
     <ID>LargeClass:TestScenarios.kt$TestScenarios</ID>
     <ID>LongMethod:PerformanceBasedRankingCalculatorImpl.kt$PerformanceBasedRankingCalculatorImpl$override fun calculate(request: RankingCalculationRequest): RankingCalculationResult</ID>
