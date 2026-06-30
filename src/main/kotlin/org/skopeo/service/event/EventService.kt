@@ -185,7 +185,9 @@ class EventService(
             // The viewer's own standing (#201), so the page can show Request-to-join vs Pending/On hold.
             val caller = users.findByFirebaseUid(firebaseUid = token.uid)
             val viewerStatus =
-                caller?.let { c -> events.participantsOf(eventId = event.id).firstOrNull { it.userId == c.id }?.status?.name }
+                caller
+                    ?.let { c -> events.participantsOf(eventId = event.id).firstOrNull { it.userId == c.id } }
+                    ?.let { it.status.name }
             val eventMatches = matches.listByEvent(eventId = event.id)
             val matchPlayerIds = eventMatches.flatMap { it.team1.userIds + it.team2.userIds }
             val byId = users.findAllByIds(ids = (event.participantIds + matchPlayerIds).distinct()).associateBy { it.id }

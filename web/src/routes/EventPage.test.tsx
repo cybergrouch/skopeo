@@ -5,18 +5,22 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { EventPage } from './EventPage'
 
-const { useGetApiV1EventsCodeCode, signupMutate } = vi.hoisted(() => ({
+const { useGetApiV1EventsCodeCode, signupMutate, state } = vi.hoisted(() => ({
   useGetApiV1EventsCodeCode: vi.fn(),
   signupMutate: vi.fn(),
+  state: { signupFail: false, signupPending: false },
 }))
 vi.mock('@/api/generated/events/events', () => ({
   useGetApiV1EventsCodeCode,
   getGetApiV1EventsCodeCodeQueryKey: (code: string) => ['event', code],
-  usePostApiV1EventsCodeCodeSignup: (opts?: { mutation?: { onSuccess?: () => void } }) => ({
-    isPending: false,
+  usePostApiV1EventsCodeCodeSignup: (opts?: {
+    mutation?: { onSuccess?: () => void; onError?: () => void }
+  }) => ({
+    isPending: state.signupPending,
     mutate: (vars: unknown) => {
       signupMutate(vars)
-      opts?.mutation?.onSuccess?.()
+      if (state.signupFail) opts?.mutation?.onError?.()
+      else opts?.mutation?.onSuccess?.()
     },
   }),
 }))
@@ -81,7 +85,11 @@ function renderAt(code = 'EVT001') {
 }
 
 describe('EventPage', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    state.signupFail = false
+    state.signupPending = false
+  })
 
   it('shows a loading state', () => {
     useGetApiV1EventsCodeCode.mockReturnValue({ data: undefined, isLoading: true })
@@ -138,5 +146,34 @@ describe('EventPage', () => {
     renderAt()
     expect(screen.getByText(/pending the host’s approval/i)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Request to join' })).not.toBeInTheDocument()
+  })
+
+  it('shows the approved and on-hold states (#201)', () => {
+    useGetApiV1EventsCodeCode.mockReturnValue({ data: { ...event, viewerStatus: 'APPROVED' }, isLoading: false })
+    const { unmount } = renderAt()
+    expect(screen.getByText(/confirmed for this event/i)).toBeInTheDocument()
+    unmount()
+
+    useGetApiV1EventsCodeCode.mockReturnValue({ data: { ...event, viewerStatus: 'HOLD' }, isLoading: false })
+    renderAt()
+    expect(screen.getByText(/on hold/i)).toBeInTheDocument()
+  })
+
+  it('shows an error when signing up fails, and a busy label while in flight (#201)', () => {
+    // In-flight: the button is disabled and reads "Requesting…".
+    state.signupPending = true
+    useGetApiV1EventsCodeCode.mockReturnValue({ data: { ...event, viewerStatus: null }, isLoading: false })
+    const { unmount } = renderAt()
+    expect(screen.getByRole('button', { name: 'Requesting…' })).toBeDisabled()
+    unmount()
+
+    // Failure: clicking surfaces the error message.
+    state.signupPending = false
+    state.signupFail = true
+    renderAt()
+    const user = userEvent.setup()
+    return user.click(screen.getByRole('button', { name: 'Request to join' })).then(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(/Could not sign up/i)
+    })
   })
 })

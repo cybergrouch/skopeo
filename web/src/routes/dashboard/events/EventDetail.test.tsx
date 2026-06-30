@@ -261,7 +261,15 @@ describe('EventDetail', () => {
         ...event,
         participants: [
           { userId: 'u1', displayName: 'Ana', publicCode: 'AAA111', status: 'APPROVED' },
-          { userId: 'u6', displayName: 'Pat', publicCode: 'PPP666', status: 'PENDING' },
+          {
+            userId: 'u6',
+            displayName: 'Pat',
+            publicCode: 'PPP666',
+            sex: 'Male',
+            age: 30,
+            rating: { value: '3.500000', level: '3.5' },
+            status: 'PENDING',
+          },
           { userId: 'u7', displayName: 'Hank', publicCode: 'HHH777', status: 'HOLD' },
         ],
       },
@@ -274,6 +282,7 @@ describe('EventDetail', () => {
     expect(within(screen.getByLabelText('Player 1')).queryByRole('option', { name: 'Pat' })).not.toBeInTheDocument()
 
     expect(screen.getByText('Join requests')).toBeInTheDocument()
+    expect(screen.getByText('Male · 30 · NTRP 3.5')).toBeInTheDocument() // request rows show facets too
     // Approve/Hold controls live only in the requests section; the pending row (first) is Pat.
     await user.click(screen.getAllByRole('button', { name: 'Approve' })[0])
     expect(decideMutate).toHaveBeenCalledWith({ id: 'e1', userId: 'u6', data: { status: 'APPROVED' } })

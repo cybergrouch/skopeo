@@ -353,4 +353,55 @@ class EventServiceTest {
         view.participants.single { it.userId == p1.id }.status shouldBe EventParticipantStatus.APPROVED
         view.event.participantIds.contains(element = p1.id).shouldBeTrue()
     }
+
+    @Test
+    fun `a host-add promotes an existing pending request to APPROVED (#201)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val player = provision(uid = "player")
+        val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight().event
+        service.selfSignup(token = token(uid = "player"), code = event.publicCode).shouldBeRight()
+
+        val view = service.addParticipant(token = token(uid = "host"), eventId = event.id, userId = player.id).shouldBeRight()
+        view.participants.single { it.userId == player.id }.status shouldBe EventParticipantStatus.APPROVED
+        view.event.participantIds.contains(element = player.id).shouldBeTrue()
+    }
+
+    @Test
+    fun `signup and decide report not-found and reject a non-decision status (#201)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val player = provision(uid = "player")
+        val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight().event
+        service.selfSignup(token = token(uid = "player"), code = event.publicCode).shouldBeRight()
+
+        // Unknown code / event id.
+        service.selfSignup(token = token(uid = "player"), code = "ZZZZZZ").shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+        service
+            .decideParticipant(
+                token = token(uid = "host"),
+                eventId = UUID.randomUUID(),
+                userId = player.id,
+                status = EventParticipantStatus.APPROVED,
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
+        // PENDING is not a valid decision (only APPROVED/HOLD).
+        service
+            .decideParticipant(
+                token = token(uid = "host"),
+                eventId = event.id,
+                userId = player.id,
+                status = EventParticipantStatus.PENDING,
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+        // The repository self-signup is a no-op (null) for an unknown event.
+        events.selfSignup(eventId = UUID.randomUUID(), userId = player.id) shouldBe null
+    }
+
+    @Test
+    fun `the public event summary has no viewer status for an unprovisioned viewer (#201)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight().event
+
+        val public = service.publicByCode(token = token(uid = "ghost"), code = event.publicCode).shouldBeRight()
+        public.viewerStatus shouldBe null
+    }
 }
