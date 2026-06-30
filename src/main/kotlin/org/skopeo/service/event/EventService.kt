@@ -19,6 +19,7 @@ import org.skopeo.model.Event
 import org.skopeo.model.EventParticipantRef
 import org.skopeo.model.EventParticipantStatus
 import org.skopeo.model.EventView
+import org.skopeo.model.MyEvent
 import org.skopeo.model.ServiceError
 import org.skopeo.model.User
 import org.skopeo.model.ageInYears
@@ -57,7 +58,7 @@ class EventService(
         input: CreateEventInput,
     ): Either<ServiceError, EventView> =
         either {
-            val createdBy = staffCaller(token = token).bind().id
+            val createdBy = staffCaller(users = users, token = token).bind().id
             ensure(condition = input.name.isNotBlank()) { ServiceError.Validation(message = "Event name is required") }
             ensure(condition = !input.endDate.isBefore(input.startDate)) {
                 ServiceError.Validation(message = "End date cannot be before the start date")
@@ -79,9 +80,19 @@ class EventService(
 
     fun list(token: VerifiedFirebaseToken): Either<ServiceError, List<EventView>> =
         either {
-            val caller = staffCaller(token = token).bind()
+            val caller = staffCaller(users = users, token = token).bind()
             val scopedTo = if (caller.capabilities.contains(element = Capability.ADMINISTRATOR)) null else caller.id
             events.list(createdBy = scopedTo).map { toView(event = it) }
+        }
+
+    /**
+     * A player's own events (#202) — every event they're on, in any status — for the Profile tab's
+     * "Events history". Any authenticated user; an unprovisioned caller simply has none.
+     */
+    fun myEvents(token: VerifiedFirebaseToken): Either<ServiceError, List<MyEvent>> =
+        either {
+            val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+            caller?.let { events.findForParticipant(userId = it.id) }.orEmpty()
         }
 
     fun get(
@@ -89,7 +100,7 @@ class EventService(
         id: UUID,
     ): Either<ServiceError, EventView> =
         either {
-            staffCaller(token = token).bind().id
+            staffCaller(users = users, token = token).bind().id
             val event = ensureNotNull(value = events.findById(id = id)) { ServiceError.NotFound(message = "Event $id not found") }
             toView(event = event)
         }
@@ -100,7 +111,7 @@ class EventService(
         userId: UUID,
     ): Either<ServiceError, EventView> =
         either {
-            val actor = staffCaller(token = token).bind().id
+            val actor = staffCaller(users = users, token = token).bind().id
             ensureKnownUsers(users = users, ids = listOf(element = userId)).bind()
             val updated =
                 ensureNotNull(value = events.addParticipant(eventId = eventId, userId = userId, approvedBy = actor)) {
@@ -115,7 +126,7 @@ class EventService(
         userId: UUID,
     ): Either<ServiceError, EventView> =
         either {
-            staffCaller(token = token).bind().id
+            staffCaller(users = users, token = token).bind().id
             val updated =
                 ensureNotNull(value = events.removeParticipant(eventId = eventId, userId = userId)) {
                     ServiceError.NotFound(message = "Event $eventId not found")
@@ -156,7 +167,7 @@ class EventService(
         status: EventParticipantStatus,
     ): Either<ServiceError, EventView> =
         either {
-            val actor = staffCaller(token = token).bind().id
+            val actor = staffCaller(users = users, token = token).bind().id
             ensure(condition = status == EventParticipantStatus.APPROVED || status == EventParticipantStatus.HOLD) {
                 ServiceError.Validation(message = "A decision must be APPROVED or HOLD")
             }
@@ -246,11 +257,15 @@ class EventService(
             }
         return EventView(event = event, participants = participants)
     }
+}
 
-    private fun staffCaller(token: VerifiedFirebaseToken): Either<ServiceError, User> {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
-        return if (caller == null || caller.capabilities.none { it in STAFF_ROLES }) ServiceError.Forbidden().left() else caller.right()
-    }
+/** Resolve the caller and require HOST/ADMINISTRATOR, else [ServiceError.Forbidden]. */
+private fun staffCaller(
+    users: UserRepository,
+    token: VerifiedFirebaseToken,
+): Either<ServiceError, User> {
+    val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+    return if (caller == null || caller.capabilities.none { it in STAFF_ROLES }) ServiceError.Forbidden().left() else caller.right()
 }
 
 /** Every id must map to an existing user, else a [ServiceError.Validation]. */

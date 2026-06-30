@@ -36,6 +36,7 @@ fun Application.configureEventRoutes(service: EventService = EventService()) {
         authenticate(FIREBASE_AUTH) {
             route(path = "/api/v1/events") {
                 listAndCreate(service = service)
+                myEvents(service = service)
                 publicByCode(service = service)
                 byIdAndParticipants(service = service)
             }
@@ -56,6 +57,20 @@ private fun Route.listAndCreate(service: EventService) {
             val request = call.receive<CreateEventRequest>()
             respondEither(result = service.create(token = verifiedToken(), input = toCreateEventInput(request = request))) { event ->
                 call.respond(status = HttpStatusCode.Created, message = event.toResponse())
+            }
+        }
+    }
+}
+
+/**
+ * The caller's own events (#202) for the Profile "Events history". The literal `/mine` segment is
+ * matched before `/{id}`, so it never collides with the UUID route. Any authenticated user.
+ */
+private fun Route.myEvents(service: EventService) {
+    get(path = "/mine") {
+        respondMappingErrors {
+            respondEither(result = service.myEvents(token = verifiedToken())) { events ->
+                call.respond(status = HttpStatusCode.OK, message = events.map { it.toResponse() })
             }
         }
     }

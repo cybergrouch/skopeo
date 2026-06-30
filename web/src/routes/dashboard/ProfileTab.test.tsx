@@ -42,6 +42,10 @@ vi.mock('@/components/ReRateRequestCard', () => ({
 vi.mock('@/components/ProfileFieldsForm', () => ({
   ProfileFieldsForm: () => <div>profile fields form</div>,
 }))
+// The events-history card has its own tests (#202) + its own API hook; stub it here.
+vi.mock('@/components/EventsHistoryCard', () => ({
+  EventsHistoryCard: () => <div>events history</div>,
+}))
 
 function renderProfile(
   capabilities: Capability[] = [Capability.PLAYER],

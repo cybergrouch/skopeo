@@ -8,6 +8,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { useAuth } from '@/auth/useAuth'
 import { MatchHistoryCard } from '@/components/MatchHistoryCard'
+import { EventsHistoryCard } from '@/components/EventsHistoryCard'
 import { RatingHistoryCard } from '@/components/RatingHistoryCard'
 import { RatingBandMeter } from '@/components/RatingBandMeter'
 import { ShareCard } from '@/components/ShareCard'
@@ -162,6 +163,8 @@ export function ProfileTab({
       />
 
       {publicCode ? <MatchHistoryCard code={publicCode} /> : null}
+
+      <EventsHistoryCard />
     </div>
   )
 }

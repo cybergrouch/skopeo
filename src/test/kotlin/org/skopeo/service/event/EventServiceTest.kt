@@ -404,4 +404,24 @@ class EventServiceTest {
         val public = service.publicByCode(token = token(uid = "ghost"), code = event.publicCode).shouldBeRight()
         public.viewerStatus shouldBe null
     }
+
+    @Test
+    fun `myEvents lists the caller's events with their standing, empty for an unprovisioned caller (#202)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val player = provision(uid = "player")
+        val a = service.create(token = token(uid = "host"), input = input(name = "Alpha")).shouldBeRight().event
+        val b = service.create(token = token(uid = "host"), input = input(name = "Bravo")).shouldBeRight().event
+        service.selfSignup(token = token(uid = "player"), code = a.publicCode).shouldBeRight() // PENDING on A
+        service.addParticipant(token = token(uid = "host"), eventId = b.id, userId = player.id).shouldBeRight() // APPROVED on B
+
+        val mine = service.myEvents(token = token(uid = "player")).shouldBeRight()
+        mine.map { it.event.publicCode to it.status }.toSet() shouldBe
+            setOf(
+                a.publicCode to EventParticipantStatus.PENDING,
+                b.publicCode to EventParticipantStatus.APPROVED,
+            )
+
+        // An unprovisioned caller simply has no events.
+        service.myEvents(token = token(uid = "ghost")).shouldBeRight() shouldBe emptyList()
+    }
 }

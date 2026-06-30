@@ -1363,6 +1363,26 @@ paths:
         '403':
           description: Caller is not HOST/ADMINISTRATOR
 
+  /api/v1/events/mine:
+    get:
+      summary: The caller's own events (#202)
+      description: >-
+        Every event the authenticated player is on (any status — APPROVED/PENDING/HOLD), for the
+        Profile tab's "Events history". Not staff-gated; an unprovisioned caller gets an empty list.
+      tags:
+        - Events
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The caller's events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MyEventResponse'
+
   /api/v1/events/code/{code}:
     parameters:
       - name: code
@@ -3465,6 +3485,30 @@ components:
           nullable: true
           enum: [APPROVED, PENDING, HOLD]
           description: Participant standing (#201); null on the public roster (approved only).
+
+    MyEventResponse:
+      type: object
+      description: One of the caller's own events (#202) with their standing in it.
+      required:
+        - publicCode
+        - name
+        - startDate
+        - endDate
+        - status
+      properties:
+        publicCode:
+          type: string
+        name:
+          type: string
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [APPROVED, PENDING, HOLD]
 
     EventResponse:
       type: object
