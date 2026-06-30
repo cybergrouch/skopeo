@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ProfileFieldsForm } from './ProfileFieldsForm'
@@ -117,5 +117,56 @@ describe('ProfileFieldsForm', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Display name is required.')
     expect(nameMutate).not.toHaveBeenCalled()
     expect(patchMutate).not.toHaveBeenCalled()
+  })
+
+  it('updates last name and clears sex + date of birth to null', async () => {
+    const user = userEvent.setup()
+    renderForm()
+    await user.clear(screen.getByLabelText('Last name'))
+    await user.type(screen.getByLabelText('Last name'), 'Brown')
+    await user.selectOptions(screen.getByLabelText('Sex'), '') // clear sex
+    fireEvent.change(screen.getByLabelText('Date of birth'), { target: { value: '' } }) // clear DOB
+    await user.click(screen.getByRole('button', { name: 'Save profile' }))
+
+    await waitFor(() => expect(nameMutate).toHaveBeenCalledWith({ userId: 'u1', data: { type: 'LAST', value: 'Brown' } }))
+    // Both demographics changed → one PATCH with the cleared values as null.
+    expect(patchMutate).toHaveBeenCalledWith({ id: 'u1', data: { sex: null, dateOfBirth: null } })
+  })
+
+  it('surfaces an error when a save fails', async () => {
+    usePatchApiV1UsersId.mockReturnValue({
+      isPending: false,
+      mutateAsync: async () => {
+        throw new Error('boom')
+      },
+    })
+    const user = userEvent.setup()
+    renderForm()
+    await user.selectOptions(screen.getByLabelText('Sex'), 'Female') // triggers the PATCH that throws
+    await user.click(screen.getByRole('button', { name: 'Save profile' }))
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('Could not save the profile. Check the values and try again.'),
+    )
+  })
+
+  it('prefills empty fields for a user with no names or demographics', () => {
+    useGetApiV1UsersId.mockReturnValue({
+      data: { id: 'u1', sex: null, dateOfBirth: null, names: [] },
+      isLoading: false,
+    })
+    renderForm()
+    expect((screen.getByLabelText('Display name') as HTMLInputElement).value).toBe('')
+    expect((screen.getByLabelText('First name') as HTMLInputElement).value).toBe('')
+    expect((screen.getByLabelText('Last name') as HTMLInputElement).value).toBe('')
+    expect((screen.getByLabelText('Sex') as HTMLSelectElement).value).toBe('')
+    expect((screen.getByLabelText('Date of birth') as HTMLInputElement).value).toBe('')
+  })
+
+  it('disables the button and shows Saving… while a save is in flight', () => {
+    usePatchApiV1UsersId.mockReturnValue({ isPending: true, mutateAsync: async (vars: unknown) => patchMutate(vars) })
+    renderForm()
+    const button = screen.getByRole('button', { name: 'Saving…' })
+    expect(button).toBeDisabled()
   })
 })
