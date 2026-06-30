@@ -6,7 +6,7 @@ describe('BrandLogo', () => {
   it('renders the wordmark and the icon', () => {
     const { container } = render(<BrandLogo />)
     expect(screen.getByText('Skopeo')).toBeInTheDocument()
-    expect(container.querySelector('img')).toHaveAttribute('src', '/favicon.svg')
+    expect(container.querySelector('img')).toHaveAttribute('src', '/logo-mark.svg')
   })
 
   it('applies a custom class', () => {
