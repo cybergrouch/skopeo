@@ -242,6 +242,14 @@ describe('ResearchTab', () => {
       { query: { enabled: true } },
     )
 
+    // Previous goes back a page (offset 0).
+    await user.click(screen.getByRole('button', { name: 'Previous' }))
+    expect(screen.getByText('Page 1')).toBeInTheDocument()
+    expect(useGetApiV1Users).toHaveBeenLastCalledWith(
+      { name: 'p', limit: 26, offset: 0 },
+      { query: { enabled: true } },
+    )
+
     // A fresh search restarts at page 1 (offset 0).
     await user.click(screen.getByRole('button', { name: 'Search' }))
     expect(screen.getByText('Page 1')).toBeInTheDocument()

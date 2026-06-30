@@ -125,6 +125,9 @@ class UserRepositoryTest {
         secondPage shouldHaveSize 1
         // The pages are disjoint and together cover every match (offset over the id-ASC order).
         (firstPage.map { it.id } + secondPage.map { it.id }).toSet() shouldBe ids
+
+        // Default limit/offset (the typeahead path) returns every match in one page.
+        repository.search(query = query).map { it.id }.toSet() shouldBe ids
     }
 
     @Test
