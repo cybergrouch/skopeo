@@ -23,6 +23,7 @@ on:
 permissions:
   contents: write       # push the tag + the bump branch
   pull-requests: write  # open the bump PR
+  actions: write        # dispatch deploy-api.yml / deploy-web.yml (workflow_dispatch)
 
 concurrency:
   group: release
@@ -76,10 +77,10 @@ jobs:
 
       - name: Deploy the released tag (API + Web)
         # The release:published event above is created by GITHUB_TOKEN, which (by GitHub's recursion
-        # guard) does NOT trigger deploy-api/deploy-web. So dispatch them explicitly for the new tag;
-        # each still pauses at the `production` environment's manual-approval gate before shipping.
-        # A RELEASE_PAT secret triggers the runs reliably; without one this falls back to GITHUB_TOKEN
-        # (best-effort — may not start the runs, in which case dispatch them manually from the Actions tab).
+        # guard) does NOT trigger deploy-api/deploy-web. So dispatch them explicitly for the new tag.
+        # workflow_dispatch IS the documented exception — GITHUB_TOKEN can trigger it, provided the job
+        # has `actions: write` (see permissions above). Each deploy still pauses at the `production`
+        # environment's gate before shipping. A RELEASE_PAT secret, if set, takes precedence.
         env:
           GH_TOKEN: ${{ secrets.RELEASE_PAT || github.token }}
         run: |
