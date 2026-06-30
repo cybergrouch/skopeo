@@ -61,19 +61,18 @@ describe('RatingsSearchSection', () => {
     expect(screen.getByText('NTRP 4.0')).toBeInTheDocument()
   })
 
-  it('rates a player from the results, prefilled with their current rating (#205)', async () => {
+  it('rates a player from the results, preselected with their current band (#205)', async () => {
     useGetApiV1Users.mockReturnValue({ data: [row], isLoading: false, isError: false })
     const user = userEvent.setup()
     renderSection()
     await user.type(screen.getByLabelText('Name'), 'ana')
     await user.click(screen.getByRole('button', { name: 'Search' }))
 
-    expect(screen.getByLabelText('Rating')).toHaveValue('4.000000') // prefilled current value
-    await user.clear(screen.getByLabelText('Rating'))
-    await user.type(screen.getByLabelText('Rating'), '4.5')
+    expect(screen.getByLabelText('Rating')).toHaveValue('4.0') // preselected current band
+    await user.selectOptions(screen.getByLabelText('Rating'), '4.5')
     await user.click(screen.getByRole('button', { name: 'Set rating' }))
 
-    await waitFor(() => expect(putMutate).toHaveBeenCalledWith({ userId: 'u1', data: { value: '4.5' } }))
+    await waitFor(() => expect(putMutate).toHaveBeenCalledWith({ userId: 'u1', data: { band: '4.5' } }))
   })
 
   it('paginates results 25 at a time and shows Unrated for players without a rating', async () => {

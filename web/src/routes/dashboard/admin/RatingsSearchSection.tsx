@@ -91,7 +91,7 @@ export function RatingsSearchSection() {
                           <span className="shrink-0 text-xs text-muted-foreground">Unrated</span>
                         )}
                       </div>
-                      <SetRatingForm userId={user.id} initialValue={user.rating?.value ?? ''} onSaved={invalidate} />
+                      <SetRatingForm userId={user.id} initialValue={user.rating?.level ?? ''} onSaved={invalidate} />
                     </li>
                   )
                 })}

@@ -27,6 +27,24 @@ data class Level(
         /** NTRP bands are 0.5 wide. */
         private const val BAND_WIDTH = 0.5
 
+        /** A band's midpoint sits a quarter-point above its floor (half of [BAND_WIDTH]). */
+        private val BAND_MIDPOINT_OFFSET = BigDecimal("0.25")
+
+        /** The NTRP ceiling; the open-ended 7.0 band has no quarter-point above it. */
+        private val NTRP_MAX = BigDecimal("7.0")
+
+        /**
+         * The value to store for an initial/admin rating chosen from band [band] (#206): the band
+         * MIDPOINT (floor + 0.25), so the rating sits centered in its 0.5-wide band rather than at
+         * the edge — a single loss won't immediately drop the player a band. [band] is snapped to its
+         * floor first (a slightly off value still maps correctly); the open-ended 7.0 band clamps to
+         * the 7.0 ceiling.
+         */
+        fun bandMidpoint(band: BigDecimal): BigDecimal {
+            val floor = fromValue(value = band.toPlainString()).minRating.toBigDecimal()
+            return floor.add(BAND_MIDPOINT_OFFSET).coerceAtMost(maximumValue = NTRP_MAX)
+        }
+
         /**
          * Normalized 0..1 position of [rating] within its NTRP band (#114): band floor = 0.0,
          * band ceiling = 1.0, clamped. Drives the privacy-preserving "speed meter" — it reveals

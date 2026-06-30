@@ -10,10 +10,15 @@ import org.skopeo.model.PendingAssessmentPage
 import org.skopeo.model.RatingHistoryEntry
 import org.skopeo.model.UserRating
 
-/** Body for `PUT /api/v1/users/{userId}/ratings` — an administrator sets/adjusts a rating. */
+/**
+ * Body for `PUT /api/v1/users/{userId}/ratings` — a RATER/ADMINISTRATOR sets/adjusts a rating.
+ * Provide [band] (the normal path, #206) to store the band midpoint, or [value] for a precise
+ * override; exactly one is required.
+ */
 @Serializable
 data class SetRatingRequest(
-    val value: String,
+    val band: String? = null,
+    val value: String? = null,
     val confidence: String? = null,
 )
 

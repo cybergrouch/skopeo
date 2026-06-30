@@ -26,16 +26,16 @@ describe('SetRatingForm', () => {
     state.fail = false
   })
 
-  it('prefills the value and submits it, then calls onSaved', async () => {
+  it('preselects the band and submits it, then calls onSaved', async () => {
     const user = userEvent.setup()
     render(<SetRatingForm userId="u1" initialValue="3.5" onSaved={onSaved} />)
 
     expect(screen.getByLabelText('Rating')).toHaveValue('3.5')
-    await user.clear(screen.getByLabelText('Rating'))
-    await user.type(screen.getByLabelText('Rating'), '4.5')
+    await user.selectOptions(screen.getByLabelText('Rating'), '4.5')
     await user.click(screen.getByRole('button', { name: 'Set rating' }))
 
-    await waitFor(() => expect(putMutate).toHaveBeenCalledWith({ userId: 'u1', data: { value: '4.5' } }))
+    // The band is sent; the backend stores its midpoint.
+    await waitFor(() => expect(putMutate).toHaveBeenCalledWith({ userId: 'u1', data: { band: '4.5' } }))
     expect(onSaved).toHaveBeenCalled()
   })
 

@@ -117,6 +117,25 @@ class RatingApiIntegrationTest {
         }
 
     @Test
+    fun `setting a rating from a band stores the band midpoint (#206)`() =
+        withApp { client ->
+            val adminToken = seedAdminToken()
+            val user = client.provisionSelf(token = TestFirebaseAuth.mintToken(uid = "fb-band"))
+
+            val set =
+                client.put(urlString = "/api/v1/users/${user.id}/ratings") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = SetRatingRequest(band = "3.5"))
+                }
+            set.status shouldBe HttpStatusCode.OK
+            set.body<UserRatingResponse>().let {
+                it.value shouldBe "3.750000" // band 3.5 → midpoint 3.75
+                it.level shouldBe "3.5" // still displays as the 3.5 band
+            }
+        }
+
+    @Test
     fun `an out-of-range rating or confidence is rejected at the route with a 400 (#116)`() =
         withApp { client ->
             val adminToken = seedAdminToken()
@@ -134,6 +153,10 @@ class RatingApiIntegrationTest {
             setRating(request = SetRatingRequest(value = "not-a-number")) shouldBe HttpStatusCode.BadRequest
             setRating(request = SetRatingRequest(value = "4.0", confidence = "1.5")) shouldBe HttpStatusCode.BadRequest
             setRating(request = SetRatingRequest(value = "4.0", confidence = "-0.1")) shouldBe HttpStatusCode.BadRequest
+            // A band selection is validated the same way; an out-of-range band is a 400.
+            setRating(request = SetRatingRequest(band = "9.0")) shouldBe HttpStatusCode.BadRequest
+            // Neither band nor value is a 400.
+            setRating(request = SetRatingRequest()) shouldBe HttpStatusCode.BadRequest
         }
 
     @Test

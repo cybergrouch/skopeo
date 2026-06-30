@@ -2997,12 +2997,20 @@ components:
 
     SetRatingRequest:
       type: object
-      required:
-        - value
+      description: >-
+        Set a user's NTRP rating. Provide `band` (the normal path) to store the band midpoint
+        (floor + 0.25), or `value` for a precise override. Exactly one is required.
       properties:
+        band:
+          type: string
+          nullable: true
+          description: >-
+            NTRP band 1.0–7.0 (0.5 steps); stored as the band midpoint (e.g. 3.5 → 3.75) so an
+            initial rating sits centered in its band rather than at the edge.
         value:
           type: string
-          description: Rating value (NTRP 1.0–7.0).
+          nullable: true
+          description: Precise NTRP value (1.0–7.0) for an override; stored as-is.
         confidence:
           type: string
           nullable: true
