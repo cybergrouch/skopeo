@@ -79,6 +79,24 @@ class NameRepositoryTest {
     }
 
     @Test
+    fun `adding a FIRST or LAST name supersedes the previous active one (#196)`() {
+        val userId = newUser(uid = "u2b")
+        val firstA = names.create(userId = userId, type = NameType.FIRST, value = "Juan")
+        val lastA = names.create(userId = userId, type = NameType.LAST, value = "Cruz")
+
+        val firstB = names.create(userId = userId, type = NameType.FIRST, value = "Juancho")
+        val lastB = names.create(userId = userId, type = NameType.LAST, value = "dela Cruz")
+
+        // The prior active first/last are disabled; exactly one of each stays active.
+        names.findById(id = firstA.id).shouldBeRight().isActive.shouldBeFalse()
+        names.findById(id = lastA.id).shouldBeRight().isActive.shouldBeFalse()
+        firstB.isActive.shouldBeTrue()
+        lastB.isActive.shouldBeTrue()
+        names.listByUser(userId = userId).count { it.type == NameType.FIRST && it.isActive } shouldBe 1
+        names.listByUser(userId = userId).count { it.type == NameType.LAST && it.isActive } shouldBe 1
+    }
+
+    @Test
     fun `multiple names of the same non-display type are allowed`() {
         val userId = newUser(uid = "u3")
         names.create(userId = userId, type = NameType.NICKNAME, value = "JB")
