@@ -17,6 +17,7 @@ import type {
 } from '@/api/generated/model'
 
 const SEXES = ['Male', 'Female'] as const
+const PAGE_SIZE = 25
 
 /** "Female · 34" — sex and age, omitting whatever is missing. */
 function metaLine(user: UserSummaryResponse): string {
@@ -42,9 +43,17 @@ export function ResearchTab() {
   const [ratingMin, setRatingMin] = useState('')
   const [ratingMax, setRatingMax] = useState('')
   const [applied, setApplied] = useState<GetApiV1UsersParams | null>(null)
+  const [page, setPage] = useState(0)
 
-  const query = useGetApiV1Users(applied ?? {}, { query: { enabled: applied !== null } })
-  const results = query.data ?? []
+  // Fetch one extra row beyond the page so we can tell whether a next page exists without a
+  // separate total-count call; the extra row is trimmed before rendering.
+  const query = useGetApiV1Users(
+    applied ? { ...applied, limit: PAGE_SIZE + 1, offset: page * PAGE_SIZE } : {},
+    { query: { enabled: applied !== null } },
+  )
+  const fetched = query.data ?? []
+  const results = fetched.slice(0, PAGE_SIZE)
+  const hasMore = fetched.length > PAGE_SIZE
 
   function buildParams(): GetApiV1UsersParams | null {
     const params: GetApiV1UsersParams = {}
@@ -59,6 +68,7 @@ export function ResearchTab() {
 
   function onSearch(event: FormEvent) {
     event.preventDefault()
+    setPage(0) // a new search restarts at the first page
     setApplied(buildParams())
   }
 
@@ -205,6 +215,31 @@ export function ResearchTab() {
             ) : (
               <p className="text-sm text-muted-foreground">No matching players.</p>
             )}
+            {!query.isLoading && !query.isError && (page > 0 || hasMore) ? (
+              <div className="mt-3 flex items-center justify-between">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={page === 0}
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                >
+                  Previous
+                </Button>
+                <span className="text-sm text-muted-foreground" aria-live="polite">
+                  Page {page + 1}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!hasMore}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Next
+                </Button>
+              </div>
+            ) : null}
           </CardContent>
         </Card>
       ) : null}

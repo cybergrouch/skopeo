@@ -35,6 +35,11 @@ private val logger = KotlinLogging.logger {}
 
 private val STAFF_ROLES = setOf(Capability.HOST, Capability.ADMINISTRATOR)
 
+// Player-search pagination. The default page size preserves the historical cap for callers that
+// don't paginate (the typeahead picker); the ceiling guards against oversized client requests.
+private const val DEFAULT_SEARCH_LIMIT = 20
+private const val MAX_SEARCH_LIMIT = 100
+
 /**
  * User-search facets resolved at the route boundary (#116): [sex] is already validated and the
  * [age]/[rating] intervals are already parsed. The service trims the free-text terms and AND-combines.
@@ -78,6 +83,8 @@ class UserService(
     fun search(
         token: VerifiedFirebaseToken,
         filters: UserSearchFilters,
+        limit: Int = DEFAULT_SEARCH_LIMIT,
+        offset: Int = 0,
     ): Either<ServiceError, List<User>> =
         either {
             requireResearchAccess(repository = repository, token = token).bind()
@@ -103,6 +110,8 @@ class UserService(
                         dobMax = dob?.max,
                         rating = filters.rating,
                     ),
+                limit = limit.coerceIn(minimumValue = 1, maximumValue = MAX_SEARCH_LIMIT),
+                offset = offset.coerceAtLeast(minimumValue = 0),
             )
         }
 

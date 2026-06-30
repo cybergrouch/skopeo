@@ -112,7 +112,11 @@ class UserRepository {
      * and an NTRP rating range. Querying the users table keeps results one-per-profile; capped at
      * [SEARCH_LIMIT].
      */
-    fun search(query: UserSearchQuery): List<User> =
+    fun search(
+        query: UserSearchQuery,
+        limit: Int = SEARCH_LIMIT,
+        offset: Int = 0,
+    ): List<User> =
         transaction {
             val conditions =
                 buildList {
@@ -131,7 +135,7 @@ class UserRepository {
                 .selectAll()
                 .where { conditions.reduce { acc, op -> acc and op } }
                 .orderBy(UsersTable.id to SortOrder.ASC)
-                .limit(n = SEARCH_LIMIT)
+                .limit(n = limit, offset = offset.toLong())
                 .map { loadAggregate(id = it[UsersTable.id].value)!! }
         }
 

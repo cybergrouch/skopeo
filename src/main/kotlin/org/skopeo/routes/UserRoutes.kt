@@ -88,6 +88,9 @@ private fun Route.duplicateRoutes(service: DuplicateService) {
 
 private val FILTER_PARAMS = listOf("name", "code", "q", "sex", "age", "rating")
 
+// Page size used when a search request omits `limit` (preserves the pre-pagination behaviour).
+private const val DEFAULT_SEARCH_PAGE_SIZE = 20
+
 private fun Route.searchUsers(service: UserService) {
     get {
         respondMappingErrors {
@@ -112,6 +115,8 @@ private fun Route.searchUsers(service: UserService) {
                                 age = params["age"]?.let { NumericRange.parse(raw = it) },
                                 rating = params["rating"]?.let { NumericRange.parse(raw = it) },
                             ),
+                        limit = params["limit"]?.toIntOrNull() ?: DEFAULT_SEARCH_PAGE_SIZE,
+                        offset = params["offset"]?.toIntOrNull() ?: 0,
                     )
                 }
             respondEither(result = results) { users ->
