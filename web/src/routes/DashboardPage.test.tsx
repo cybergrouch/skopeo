@@ -173,6 +173,58 @@ describe('DashboardPage', () => {
     expect(screen.getByText('admin content')).toBeInTheDocument()
   })
 
+  it('opens the mobile drawer and switches sections from it (#187)', async () => {
+    useGetApiV1UsersMe.mockReturnValue({
+      data: { id: 'u1', capabilities: ['PLAYER', 'RATER'] },
+      isLoading: false,
+    })
+    const user = userEvent.setup()
+    renderDashboard()
+
+    // Drawer is closed initially — its items (role=button) aren't rendered yet.
+    expect(screen.queryByRole('button', { name: 'Ratings' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Open navigation menu' }))
+    // Gated items appear in the drawer: Ratings for a rater, but not Admin.
+    expect(screen.getByRole('button', { name: 'Ratings' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Admin' })).not.toBeInTheDocument()
+
+    // Selecting a section from the drawer switches the content.
+    await user.click(screen.getByRole('button', { name: 'Ratings' }))
+    expect(screen.getByText('ratings content')).toBeInTheDocument()
+  })
+
+  it('the mobile drawer respects capability gating (#187)', async () => {
+    useGetApiV1UsersMe.mockReturnValue({
+      data: { id: 'u1', capabilities: ['PLAYER'] }, // plain player: no RESEARCHER/ADMIN
+      isLoading: false,
+    })
+    const user = userEvent.setup()
+    renderDashboard()
+
+    await user.click(screen.getByRole('button', { name: 'Open navigation menu' }))
+    expect(screen.getByRole('button', { name: 'Profile' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Standings' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Research' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Admin' })).not.toBeInTheDocument()
+  })
+
+  it('shows the current section as a mobile page header (#187)', async () => {
+    useGetApiV1UsersMe.mockReturnValue({
+      data: { id: 'u1', capabilities: ['PLAYER'] },
+      isLoading: false,
+    })
+    const user = userEvent.setup()
+    renderDashboard()
+
+    // The header doubles as the page title in place of the tab strip on mobile.
+    expect(screen.getByRole('heading', { name: 'Profile' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Open navigation menu' }))
+    await user.click(screen.getByRole('button', { name: 'Standings' }))
+    expect(screen.getByRole('heading', { name: 'Standings' })).toBeInTheDocument()
+  })
+
   it('still renders the profile tab when the id is missing', () => {
     useGetApiV1UsersMe.mockReturnValue({
       data: { capabilities: ['PLAYER'] },
