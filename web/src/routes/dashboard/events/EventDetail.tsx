@@ -24,6 +24,7 @@ import {
 import { UserSearchSelect } from '@/components/UserSearchSelect'
 import { playerLabel } from '@/lib/playerLabel'
 import type { EventParticipantResponse } from '@/api/generated/model'
+import { ShareCard } from '@/components/ShareCard'
 import { AwaitingResultsSection, RecordedResultsSection } from '../matches/AwaitingResultsSection'
 
 /** "Female · 34 · NTRP 4.0" — a participant's sex, age, and NTRP band, omitting whatever is missing. */
@@ -295,6 +296,12 @@ export function EventDetail({
 
           <AwaitingResultsSection eventId={eventId} />
           <RecordedResultsSection eventId={eventId} />
+
+          <ShareCard
+            url={`${window.location.origin}/events/${event.publicCode}`}
+            title="Share this event"
+            description="Scan this code or copy the link to open this event's public page."
+          />
         </>
       )}
     </div>

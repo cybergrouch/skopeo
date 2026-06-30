@@ -124,6 +124,8 @@ describe('EventDetail', () => {
     expect(screen.getByText('Female · 34 · NTRP 4.0')).toBeInTheDocument()
     expect(screen.getByText('awaiting:e1')).toBeInTheDocument()
     expect(screen.getByText('recorded:e1')).toBeInTheDocument()
+    // The event's share/QR card is surfaced in the dashboard (#179).
+    expect(screen.getByText('Share this event')).toBeInTheDocument()
   })
 
   it('falls back to code, then to a sliced id, for participants without a display name', () => {

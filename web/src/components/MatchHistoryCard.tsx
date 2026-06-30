@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { useGetApiV1PlayersCodeMatchHistory } from '@/api/generated/users/users'
 import type { PlayerMatchHistoryEntry } from '@/api/generated/model'
 import {
@@ -86,6 +87,12 @@ export function MatchHistoryCard({ code }: MatchHistoryCardProps) {
                         {match.opponentLevelAtMatch ?? '—'} (at the time)
                       </div>
                     ) : null}
+                    <Link
+                      to={`/matches/${match.publicCode}`}
+                      className="mt-1 inline-block text-xs text-primary hover:underline"
+                    >
+                      Public page (QR)
+                    </Link>
                   </div>
                 </div>
               </li>

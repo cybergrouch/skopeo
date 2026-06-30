@@ -37,6 +37,8 @@ data class PublicRatingDto(
 @Serializable
 data class PlayerMatchHistoryEntry(
     val matchId: String,
+    // The match's shareable public code (#136) — lets the UI link a history row to its public match page.
+    val publicCode: String,
     val matchDate: String,
     val status: String,
     val rated: Boolean,
