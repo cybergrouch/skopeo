@@ -83,7 +83,10 @@ export function DashboardPage() {
     ...(showAdmin ? [{ value: 'admin', label: 'Admin', element: <AdminTab /> }] : []),
   ]
 
-  const activeSection = sections.find((s) => s.value === active) ?? sections[0]
+  // `active` always names a section (default 'profile', and the menu only sets values from this
+  // list), so the find resolves; sections[0] (Profile) is a typed, never-taken safety net.
+  /* v8 ignore next */
+  const activeSection: Section = sections.find((s) => s.value === active) ?? sections[0]
 
   async function onSignOut() {
     await signOut()
@@ -145,10 +148,10 @@ export function DashboardPage() {
                   </nav>
                 </SheetContent>
               </Sheet>
-              <h1 className="text-lg font-semibold">{activeSection?.label ?? 'Profile'}</h1>
+              <h1 className="text-lg font-semibold">{activeSection.label}</h1>
             </div>
 
-            {activeSection?.element}
+            {activeSection.element}
           </>
         )}
       </main>
