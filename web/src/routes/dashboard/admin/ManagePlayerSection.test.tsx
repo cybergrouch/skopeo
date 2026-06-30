@@ -268,6 +268,18 @@ describe('ManagePlayerSection', () => {
     expect(grantMutate).toHaveBeenCalledWith({ userId: 'u1', data: { capability: 'ADMINISTRATOR' } })
   })
 
+  it('falls back to a generic message when an ADMINISTRATOR grant fails without a reason (#194)', async () => {
+    usePostApiV1UsersUserIdCapabilities.mockImplementation((options: SuccessOpts) => ({
+      isPending: false,
+      mutate: () => options.mutation.onError?.({}), // error with no response body
+    }))
+    const user = await selectAlice()
+
+    await user.click(screen.getByRole('button', { name: 'Grant ADMINISTRATOR' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm grant ADMINISTRATOR' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not grant the role.')
+  })
+
   it('surfaces the backend reason when revoking ADMINISTRATOR is refused (#194)', async () => {
     // ADMINISTRATOR is active → Revoke; the server refuses (e.g. bootstrap admin).
     useGetApiV1UsersUserIdCapabilities.mockReturnValue({

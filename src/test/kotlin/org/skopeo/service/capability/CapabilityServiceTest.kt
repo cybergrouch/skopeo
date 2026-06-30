@@ -27,9 +27,11 @@ import org.skopeo.model.UserName
 import org.skopeo.model.VerificationStatus
 import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.CapabilityRepository
+import org.skopeo.repository.ContactRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.testsupport.PostgresTestDatabase
+import java.time.LocalDateTime
 import java.util.UUID
 
 class CapabilityServiceTest {
@@ -222,6 +224,57 @@ class CapabilityServiceTest {
         val pending = adminWithEmail(uid = "pending", email = "boss@skopeo.co", status = VerificationStatus.PENDING)
 
         gated.revoke(token = token(uid = "root"), userId = pending.id, capability = Capability.ADMINISTRATOR).shouldBeRight()
+    }
+
+    @Test
+    fun `a verified email not on the allowlist is not protected (#194)`() {
+        val gated = CapabilityService(capabilities = capabilities, users = users, adminEmails = setOf(element = "boss@skopeo.co"))
+        admin(uid = "root")
+        // Verified, but the address isn't on the allowlist → an ordinary admin, freely revocable.
+        val other = adminWithEmail(uid = "other", email = "someone@elsewhere.com", status = VerificationStatus.VERIFIED)
+
+        gated.revoke(token = token(uid = "root"), userId = other.id, capability = Capability.ADMINISTRATOR).shouldBeRight()
+    }
+
+    @Test
+    fun `a non-email contact never confers bootstrap protection (#194)`() {
+        val gated = CapabilityService(capabilities = capabilities, users = users, adminEmails = setOf(element = "boss@skopeo.co"))
+        admin(uid = "root")
+        // A verified PHONE (no email) must not match the email allowlist.
+        val phoneAdmin =
+            users.provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = "phone",
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "phone", isPrimary = true),
+                        names = listOf(element = UserName(type = NameType.DISPLAY, value = "phone")),
+                        phone =
+                            ContactInfo(
+                                type = ContactType.PHONE,
+                                value = "+639170000000",
+                                source = ContactSource.MANUAL,
+                                status = VerificationStatus.VERIFIED,
+                                isPrimary = true,
+                            ),
+                        capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
+                    ),
+            )
+
+        gated.revoke(token = token(uid = "root"), userId = phoneAdmin.id, capability = Capability.ADMINISTRATOR).shouldBeRight()
+    }
+
+    @Test
+    fun `a disabled allowlisted email no longer confers protection (#194)`() {
+        val gated = CapabilityService(capabilities = capabilities, users = users, adminEmails = setOf(element = "boss@skopeo.co"))
+        admin(uid = "root")
+        val boss = adminWithEmail(uid = "boss", email = "boss@skopeo.co", status = VerificationStatus.VERIFIED)
+        // Disable the email contact — an inactive contact must not protect the role.
+        val emailContact = boss.contacts.single { it.type == ContactType.EMAIL }
+        ContactRepository()
+            .setActive(id = emailContact.id, active = false, disabledAt = LocalDateTime.now())
+            .shouldBeRight()
+
+        gated.revoke(token = token(uid = "root"), userId = boss.id, capability = Capability.ADMINISTRATOR).shouldBeRight()
     }
 
     @Test
