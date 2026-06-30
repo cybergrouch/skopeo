@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AwaitingResultsSection, RecordedResultsSection } from './AwaitingResultsSection'
 
@@ -42,6 +43,7 @@ vi.mock('@/api/generated/users/users', () => ({ useGetApiV1Users }))
 
 const match = {
   id: 'm1',
+  publicCode: 'MPUB1',
   matchDate: '2026-01-01',
   team1: { teamId: 't1', userIds: ['p1'] },
   team2: { teamId: 't2', userIds: ['p2'] },
@@ -52,6 +54,7 @@ const match = {
 const recordedMatch = {
   ...match,
   id: 'm2',
+  publicCode: 'MPUB2',
   sets: [
     { setNumber: 1, team1Games: 6, team2Games: 4, winnerTeamId: 't1' },
     { setNumber: 2, team1Games: 6, team2Games: 3, winnerTeamId: 't1' },
@@ -60,17 +63,21 @@ const recordedMatch = {
 
 function renderSection(eventId?: string) {
   return render(
-    <QueryClientProvider client={new QueryClient()}>
-      <AwaitingResultsSection eventId={eventId} />
-    </QueryClientProvider>,
+    <MemoryRouter>
+      <QueryClientProvider client={new QueryClient()}>
+        <AwaitingResultsSection eventId={eventId} />
+      </QueryClientProvider>
+    </MemoryRouter>,
   )
 }
 
 function renderRecorded(eventId = 'evt-1') {
   return render(
-    <QueryClientProvider client={new QueryClient()}>
-      <RecordedResultsSection eventId={eventId} />
-    </QueryClientProvider>,
+    <MemoryRouter>
+      <QueryClientProvider client={new QueryClient()}>
+        <RecordedResultsSection eventId={eventId} />
+      </QueryClientProvider>
+    </MemoryRouter>,
   )
 }
 
@@ -291,6 +298,11 @@ describe('RecordedResultsSection', () => {
     expect(screen.getByText('6–4, 6–3')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Edit result' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Delete fixture' })).not.toBeInTheDocument()
+    // Every fixture row links to the match's public page (where the QR lives).
+    expect(screen.getByRole('link', { name: 'Public page (QR)' })).toHaveAttribute(
+      'href',
+      '/matches/MPUB2',
+    )
   })
 
   it('shows loading and empty states', () => {
@@ -300,9 +312,11 @@ describe('RecordedResultsSection', () => {
 
     useGetApiV1Matches.mockReturnValue({ data: [], isLoading: false })
     rerender(
-      <QueryClientProvider client={new QueryClient()}>
-        <RecordedResultsSection eventId="evt-1" />
-      </QueryClientProvider>,
+      <MemoryRouter>
+        <QueryClientProvider client={new QueryClient()}>
+          <RecordedResultsSection eventId="evt-1" />
+        </QueryClientProvider>
+      </MemoryRouter>,
     )
     expect(screen.getByText('No recorded results yet.')).toBeInTheDocument()
   })

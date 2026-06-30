@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   Card,
@@ -181,6 +182,12 @@ function MatchResultRow({
         ) : (
           <Badge variant={badge.variant}>{badge.label}</Badge>
         )}
+        <Link
+          to={`/matches/${match.publicCode}`}
+          className="ml-auto text-xs text-primary hover:underline"
+        >
+          Public page (QR)
+        </Link>
       </div>
       {showForm ? (
         <>
