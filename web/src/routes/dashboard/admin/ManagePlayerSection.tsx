@@ -11,11 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { UserSearchSelect } from '@/components/UserSearchSelect'
-import {
-  getGetApiV1UsersIdQueryKey,
-  useGetApiV1UsersId,
-  usePatchApiV1UsersId,
-} from '@/api/generated/users/users'
+import { ProfileFieldsForm } from '@/components/ProfileFieldsForm'
 import {
   getGetApiV1UsersUserIdRatingHistoryQueryKey,
   getGetApiV1UsersUserIdRatingsQueryKey,
@@ -28,7 +24,7 @@ import {
   useGetApiV1UsersUserIdCapabilities,
   usePostApiV1UsersUserIdCapabilities,
 } from '@/api/generated/capabilities/capabilities'
-import type { ProfileRequestSex, UserSummaryResponse } from '@/api/generated/model'
+import type { UserSummaryResponse } from '@/api/generated/model'
 
 // Roles an admin can grant/revoke here. ADMINISTRATOR is included (#194) but gated behind a confirm
 // step, since it's a high-impact grant; the backend also refuses to revoke a bootstrap admin.
@@ -40,103 +36,6 @@ const ADMIN_ROLE: GrantableRole = 'ADMINISTRATOR'
 function errorMessage(err: unknown, fallback: string): string {
   const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
   return message ?? fallback
-}
-
-/** Edit a player's sex and date of birth (PATCH leaves untouched fields unchanged). */
-function ProfileForm({
-  userId,
-  initialSex,
-  initialDateOfBirth,
-}: {
-  userId: string
-  initialSex: string
-  initialDateOfBirth: string
-}) {
-  const queryClient = useQueryClient()
-  const [sex, setSex] = useState(initialSex)
-  const [dateOfBirth, setDateOfBirth] = useState(initialDateOfBirth)
-  const [saved, setSaved] = useState(false)
-
-  const patch = usePatchApiV1UsersId({
-    mutation: {
-      onSuccess: () => {
-        setSaved(true)
-        queryClient.invalidateQueries({ queryKey: getGetApiV1UsersIdQueryKey(userId) })
-      },
-    },
-  })
-
-  function onSubmit(event: FormEvent) {
-    event.preventDefault()
-    setSaved(false)
-    const sexValue: ProfileRequestSex = sex === 'Male' || sex === 'Female' ? sex : null
-    patch.mutate({
-      id: userId,
-      data: { sex: sexValue, dateOfBirth: dateOfBirth ? dateOfBirth : null },
-    })
-  }
-
-  return (
-    <form onSubmit={onSubmit} className="space-y-3">
-      <div className="space-y-1">
-        <Label htmlFor="manage-sex" className="text-xs">
-          Sex
-        </Label>
-        <select
-          id="manage-sex"
-          value={sex}
-          onChange={(e) => {
-            setSex(e.target.value)
-            setSaved(false)
-          }}
-          className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-        >
-          <option value="">—</option>
-          <option value="Male">Male</option>
-          <option value="Female">Female</option>
-        </select>
-      </div>
-      <div className="space-y-1">
-        <Label htmlFor="manage-dob" className="text-xs">
-          Date of birth
-        </Label>
-        <Input
-          id="manage-dob"
-          type="date"
-          value={dateOfBirth}
-          onChange={(e) => {
-            setDateOfBirth(e.target.value)
-            setSaved(false)
-          }}
-        />
-      </div>
-      <div className="flex items-center gap-2">
-        <Button type="submit" size="sm" disabled={patch.isPending}>
-          Save profile
-        </Button>
-        {saved ? (
-          <span className="text-xs text-muted-foreground" role="status">
-            Saved
-          </span>
-        ) : null}
-      </div>
-    </form>
-  )
-}
-
-function ProfileEditor({ userId }: { userId: string }) {
-  const userQuery = useGetApiV1UsersId(userId)
-  if (userQuery.isLoading || !userQuery.data) {
-    return <p className="text-sm text-muted-foreground">Loading…</p>
-  }
-  return (
-    <ProfileForm
-      key={userId}
-      userId={userId}
-      initialSex={userQuery.data.sex ?? ''}
-      initialDateOfBirth={userQuery.data.dateOfBirth ?? ''}
-    />
-  )
 }
 
 /** Push a new NTRP rating, overriding the current one (recorded in rating history, #96). */
@@ -357,7 +256,7 @@ export function ManagePlayerSection() {
               </Button>
             </div>
             <ManageBlock title="Profile">
-              <ProfileEditor userId={user.id} />
+              <ProfileFieldsForm userId={user.id} />
             </ManageBlock>
             <ManageBlock title="Rating">
               <RatingEditor userId={user.id} />

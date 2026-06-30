@@ -746,10 +746,11 @@ paths:
     post:
       summary: Add a name
       description: |
-        Append-only. Self-or-ADMINISTRATOR. Multiple names of the same type are allowed.
-        A DISPLAY name replaces the user's current display name (the old one becomes disabled
-        history). Values are immutable; to change other names, disable (via /state) and add a
-        new one.
+        Append-only. Self-or-ADMINISTRATOR. The single-valued types (DISPLAY, FIRST, LAST) keep
+        exactly one active value — adding a new one supersedes the prior active of that type (the
+        old becomes disabled history). Other types may have multiple active names. Values are
+        immutable; to change those, disable (via /state) and add a new one. FIRST/LAST are private
+        — they never appear on the public profile.
       tags:
         - Names
       security:
@@ -2825,7 +2826,7 @@ components:
       properties:
         type:
           type: string
-          description: A DISPLAY name replaces the user's current display name.
+          description: DISPLAY, FIRST, and LAST replace the user's current active name of that type.
           enum: [FIRST, MIDDLE, LAST, SUFFIX, NICKNAME, PREFERRED, FULL, GOVERNMENT, DISPLAY]
         value:
           type: string

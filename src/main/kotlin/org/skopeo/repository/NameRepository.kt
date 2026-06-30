@@ -19,11 +19,14 @@ import org.skopeo.model.ServiceError
 import java.time.LocalDateTime
 import java.util.UUID
 
+/** Name types of which a user holds at most one active value; adding a new one supersedes the old. */
+private val SINGLE_VALUED_NAME_TYPES = setOf(NameType.DISPLAY, NameType.FIRST, NameType.LAST)
+
 /**
  * Row-level persistence for individual [Name]s. Names are append-only: created here, never
  * edited; a name is retired by disabling it ([setActive]). A user may hold many active
- * names; the display name is the single active name of type DISPLAY — adding a new DISPLAY
- * name atomically disables the previous one, so exactly one stays active.
+ * names; the single-valued types (DISPLAY/FIRST/LAST) keep exactly one active — adding a new
+ * one atomically disables the previous one of that type.
  */
 class NameRepository {
     fun listByUser(userId: UUID): List<Name> =
@@ -40,14 +43,18 @@ class NameRepository {
             if (row == null) ServiceError.NotFound(message = "Name $id not found").left() else row.toName().right()
         }
 
-    /** Add a name. Adding a DISPLAY name disables the current active display name first. */
+    /**
+     * Add a name. For the single-valued types ([SINGLE_VALUED_NAME_TYPES] — DISPLAY/FIRST/LAST) the
+     * current active name of that type is disabled first, so exactly one stays active and the new
+     * value supersedes the old (which is retained as history).
+     */
     fun create(
         userId: UUID,
         type: NameType,
         value: String,
     ): Name =
         transaction {
-            if (type == NameType.DISPLAY) disableActiveDisplay(userId = userId)
+            if (type in SINGLE_VALUED_NAME_TYPES) disableActiveOfType(userId = userId, type = type)
             val id =
                 UserNamesTable.insertAndGetId {
                     it[UserNamesTable.userId] = userId
@@ -77,12 +84,15 @@ class NameRepository {
             }
         }.flatten()
 
-    private fun disableActiveDisplay(userId: UUID) {
+    private fun disableActiveOfType(
+        userId: UUID,
+        type: NameType,
+    ) {
         UserNamesTable.update(
             where = {
                 (UserNamesTable.userId eq userId) and
                     UserNamesTable.isActive and
-                    (UserNamesTable.nameType eq NameType.DISPLAY.name)
+                    (UserNamesTable.nameType eq type.name)
             },
         ) {
             it[isActive] = false

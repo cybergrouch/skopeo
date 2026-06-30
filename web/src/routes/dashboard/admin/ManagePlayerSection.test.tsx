@@ -1,31 +1,25 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ManagePlayerSection } from './ManagePlayerSection'
 
 const {
-  useGetApiV1UsersId,
-  usePatchApiV1UsersId,
   useGetApiV1UsersUserIdRatings,
   usePutApiV1UsersUserIdRatings,
   useGetApiV1UsersUserIdCapabilities,
   usePostApiV1UsersUserIdCapabilities,
   useDeleteApiV1UsersUserIdCapabilitiesCapability,
-  patchMutate,
   putMutate,
   grantMutate,
   revokeMutate,
   picked,
 } = vi.hoisted(() => ({
-  useGetApiV1UsersId: vi.fn(),
-  usePatchApiV1UsersId: vi.fn(),
   useGetApiV1UsersUserIdRatings: vi.fn(),
   usePutApiV1UsersUserIdRatings: vi.fn(),
   useGetApiV1UsersUserIdCapabilities: vi.fn(),
   usePostApiV1UsersUserIdCapabilities: vi.fn(),
   useDeleteApiV1UsersUserIdCapabilitiesCapability: vi.fn(),
-  patchMutate: vi.fn(),
   putMutate: vi.fn(),
   grantMutate: vi.fn(),
   revokeMutate: vi.fn(),
@@ -40,10 +34,10 @@ const {
   },
 }))
 
-vi.mock('@/api/generated/users/users', () => ({
-  useGetApiV1UsersId,
-  usePatchApiV1UsersId,
-  getGetApiV1UsersIdQueryKey: (id: string) => ['users', id],
+// The editable name/demographics form has its own tests (#196/#199); stub it here so this test
+// focuses on player selection + rating + roles.
+vi.mock('@/components/ProfileFieldsForm', () => ({
+  ProfileFieldsForm: () => <div>profile fields form</div>,
 }))
 vi.mock('@/api/generated/ratings/ratings', () => ({
   useGetApiV1UsersUserIdRatings,
@@ -87,17 +81,6 @@ describe('ManagePlayerSection', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     picked.current = { id: 'u1', publicCode: 'ABC234', displayName: 'Alice', capabilities: [] }
-    useGetApiV1UsersId.mockReturnValue({
-      data: { id: 'u1', sex: 'Male', dateOfBirth: '2000-01-15' },
-      isLoading: false,
-    })
-    usePatchApiV1UsersId.mockImplementation((options: SuccessOpts) => ({
-      isPending: false,
-      mutate: (vars: unknown) => {
-        patchMutate(vars)
-        options.mutation.onSuccess()
-      },
-    }))
     useGetApiV1UsersUserIdRatings.mockReturnValue({
       data: [{ value: '4.000000', level: '4.0' }],
       isLoading: false,
@@ -147,49 +130,10 @@ describe('ManagePlayerSection', () => {
     expect(screen.getByRole('button', { name: 'pick Alice' })).toBeInTheDocument()
   })
 
-  it('prefills and saves the profile (sex + date of birth)', async () => {
-    const user = await selectAlice()
-    expect((screen.getByLabelText('Sex') as HTMLSelectElement).value).toBe('Male')
-    expect((screen.getByLabelText('Date of birth') as HTMLInputElement).value).toBe('2000-01-15')
-
-    await user.selectOptions(screen.getByLabelText('Sex'), 'Female')
-    fireEvent.change(screen.getByLabelText('Date of birth'), {
-      target: { value: '1999-12-31' },
-    })
-    await user.click(screen.getByRole('button', { name: 'Save profile' }))
-
-    expect(patchMutate).toHaveBeenCalledWith({
-      id: 'u1',
-      data: { sex: 'Female', dateOfBirth: '1999-12-31' },
-    })
-    expect(screen.getByText('Saved')).toBeInTheDocument()
-  })
-
-  it('clears sex and date of birth to null when blanked', async () => {
-    useGetApiV1UsersId.mockReturnValue({
-      data: { id: 'u1', sex: null, dateOfBirth: null },
-      isLoading: false,
-    })
-    const user = await selectAlice()
-    expect((screen.getByLabelText('Sex') as HTMLSelectElement).value).toBe('')
-    await user.click(screen.getByRole('button', { name: 'Save profile' }))
-    expect(patchMutate).toHaveBeenCalledWith({
-      id: 'u1',
-      data: { sex: null, dateOfBirth: null },
-    })
-  })
-
-  it('shows a loading state while the profile loads', async () => {
-    useGetApiV1UsersId.mockReturnValue({ data: undefined, isLoading: true })
+  it('renders the shared profile-fields form for the selected player', async () => {
     await selectAlice()
-    // Both the profile and (data-less) rating editors show a loading line.
-    expect(screen.getAllByText('Loading…').length).toBeGreaterThanOrEqual(1)
-  })
-
-  it('treats a resolved-but-empty profile as still loading', async () => {
-    useGetApiV1UsersId.mockReturnValue({ data: undefined, isLoading: false })
-    await selectAlice()
-    expect(screen.getByText('Profile').parentElement).toHaveTextContent('Loading…')
+    expect(screen.getByText('Profile')).toBeInTheDocument()
+    expect(screen.getByText('profile fields form')).toBeInTheDocument()
   })
 
   it('overrides the rating and reports success', async () => {

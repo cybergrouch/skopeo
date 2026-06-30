@@ -132,6 +132,12 @@ data class User(
 /** The user's single active display name, if any (names include disabled ones). */
 fun User.displayName(): String? = names.firstOrNull { it.type == NameType.DISPLAY && it.isActive }?.value
 
+/** The user's single active first name, if any (private — never shown on the public profile). */
+fun User.firstName(): String? = names.firstOrNull { it.type == NameType.FIRST && it.isActive }?.value
+
+/** The user's single active last name, if any (private — never shown on the public profile). */
+fun User.lastName(): String? = names.firstOrNull { it.type == NameType.LAST && it.isActive }?.value
+
 /** Whole years between [dateOfBirth] and [asOf]. */
 fun ageInYears(
     dateOfBirth: LocalDate,
