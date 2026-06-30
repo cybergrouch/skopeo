@@ -1,0 +1,83 @@
+name: Tag and Ship
+
+# Step 2 of the two-phase release. Fires on every push to main, but only acts when main carries an
+# official (non-SNAPSHOT) version that isn't tagged yet — i.e. right after a `release: vX.Y.Z` PR
+# (from release.yml) merges. It then:
+#   1. tags the release commit (already on main) and publishes the GitHub Release,
+#   2. dispatches deploy-api / deploy-web for the tag (they pause at the `production` gate),
+#   3. opens the dev-version bump PR to return main to the next -SNAPSHOT.
+# Idempotent: a normal -SNAPSHOT push does nothing, and an already-tagged version does nothing — so a
+# feature merge, or the bump PR merge, won't re-ship.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write       # create the tag + push the bump branch
+  pull-requests: write  # open the bump PR
+  actions: write        # dispatch deploy-api.yml / deploy-web.yml (workflow_dispatch)
+
+concurrency:
+  group: tag-and-ship
+  cancel-in-progress: false
+
+jobs:
+  ship:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Decide whether to ship
+        id: decide
+        run: |
+          set -euo pipefail
+          VERSION=$(grep -E '^version = "' build.gradle.kts | head -1 | sed -E 's/^version = "(.*)"/\1/')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          case "$VERSION" in
+            *-SNAPSHOT)
+              echo "ship=false" >> "$GITHUB_OUTPUT"
+              echo "main is on a dev version ($VERSION) — nothing to ship"; exit 0 ;;
+          esac
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1; then
+            echo "ship=false" >> "$GITHUB_OUTPUT"
+            echo "v$VERSION is already tagged — nothing to ship"; exit 0
+          fi
+          BASE="${VERSION%-SNAPSHOT}"
+          IFS=. read -r MAJ MIN PAT <<< "$BASE"
+          echo "next=${MAJ}.${MIN}.$((PAT + 1))-SNAPSHOT" >> "$GITHUB_OUTPUT"
+          echo "ship=true" >> "$GITHUB_OUTPUT"
+          echo "Shipping v$VERSION"
+
+      - name: Tag, release, deploy, and open the bump PR
+        if: steps.decide.outputs.ship == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          REL="${{ steps.decide.outputs.version }}"
+          NEXT="${{ steps.decide.outputs.next }}"
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # 1. Tag the release commit (already on main) and publish the release.
+          git tag -a "v$REL" -m "Skopeo v$REL"
+          git push origin "v$REL"
+          gh release create "v$REL" --title "v$REL" --generate-notes
+
+          # 2. Dispatch the deploys for the tag (each pauses at the production approval gate).
+          gh workflow run deploy-api.yml --ref "v$REL"
+          gh workflow run deploy-web.yml --ref "v$REL"
+
+          # 3. Open the dev-version bump PR to return main to the next -SNAPSHOT.
+          BRANCH="chore/bump-$NEXT"
+          git checkout -B "$BRANCH" origin/main
+          sed -i -E "s/^version = \".*\"/version = \"$NEXT\"/" build.gradle.kts
+          git commit -am "chore: bump dev version to $NEXT"
+          git push -u origin "$BRANCH" --force-with-lease
+          if ! gh pr view "$BRANCH" >/dev/null 2>&1; then
+            gh pr create --base main --head "$BRANCH" \
+              --title "chore: bump dev version to $NEXT" \
+              --body "Post-release dev version bump after **v$REL**. Merge to continue development on \`$NEXT\`."
+          fi
