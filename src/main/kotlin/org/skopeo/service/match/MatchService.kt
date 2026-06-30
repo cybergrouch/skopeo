@@ -26,7 +26,6 @@ import org.skopeo.model.MatchQuery
 import org.skopeo.model.MatchSetResult
 import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
-import org.skopeo.model.RatingHistoryEntry
 import org.skopeo.model.ServiceError
 import org.skopeo.model.TeamType
 import org.skopeo.model.User
@@ -224,22 +223,32 @@ class MatchService(
     /**
      * Per-player rating changes for a rated match. Bands ([previousLevel]/[newLevel]) are public; the
      * precise rates (6-dp) are included only when the viewer holds RATER or ADMINISTRATOR. Players are
-     * ordered team1-then-team2. Returns null when the match has no recorded history.
+     * ordered team1-then-team2 (mirroring [calculationDetail]); empty when no history is recorded. Names
+     * and codes are read from value-maps keyed by user id, resolved from the already-loaded [usersById].
      */
     private fun ratingChangesFor(
         match: Match,
         usersById: Map<UUID, User>,
         token: VerifiedFirebaseToken,
-    ): List<MatchPublicRatingChange>? {
-        val byUser = ratings.historyForMatches(matchIds = listOf(element = match.id)).associateBy { it.userId }
-        if (byUser.isEmpty()) return null
+    ): List<MatchPublicRatingChange> {
         val revealRates = callerCanSeeRates(token = token)
+        val names = usersById.mapValues { (_, user) -> user.displayName() }
+        val codes = usersById.mapValues { (_, user) -> user.publicCode }
         val order = match.team1.userIds + match.team2.userIds
-        return order.mapNotNull { userId ->
-            byUser[userId]?.let { history ->
-                toRatingChange(history = history, user = usersById[userId], revealRates = revealRates)
+        return ratings
+            .historyForMatches(matchIds = listOf(element = match.id))
+            .sortedBy { order.indexOf(element = it.userId) }
+            .map { history ->
+                MatchPublicRatingChange(
+                    publicCode = codes[history.userId],
+                    displayName = names[history.userId],
+                    previousLevel = history.previousLevel,
+                    newLevel = history.newLevel,
+                    previousRating = if (revealRates) history.previousRating.toPlainString() else null,
+                    newRating = if (revealRates) history.newRating.toPlainString() else null,
+                    ratingChange = if (revealRates) history.ratingChange.toPlainString() else null,
+                )
             }
-        }
     }
 
     /** Whether the viewer may see precise rates (RATER or ADMINISTRATOR); bands are always public. */
@@ -247,21 +256,6 @@ class MatchService(
         val caller = users.findByFirebaseUid(firebaseUid = token.uid) ?: return false
         return caller.capabilities.any { it == Capability.RATER || it == Capability.ADMINISTRATOR }
     }
-
-    private fun toRatingChange(
-        history: RatingHistoryEntry,
-        user: User?,
-        revealRates: Boolean,
-    ): MatchPublicRatingChange =
-        MatchPublicRatingChange(
-            publicCode = user?.publicCode,
-            displayName = user?.displayName(),
-            previousLevel = history.previousLevel,
-            newLevel = history.newLevel,
-            previousRating = if (revealRates) history.previousRating.toPlainString() else null,
-            newRating = if (revealRates) history.newRating.toPlainString() else null,
-            ratingChange = if (revealRates) history.ratingChange.toPlainString() else null,
-        )
 
     /**
      * The match result plus the stored per-player calculation behind it (#97), for the detail view
