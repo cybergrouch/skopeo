@@ -163,12 +163,12 @@ describe('PendingAssessmentSection', () => {
     expect(screen.getByText('Self-rated:')).toBeInTheDocument()
     expect(screen.getByLabelText('Rating')).toHaveValue('3.5')
 
-    // Approving as-is submits the prefilled value.
+    // Approving as-is submits the preselected band (the backend stores its midpoint).
     await user.click(screen.getByRole('button', { name: 'Set rating' }))
     await waitFor(() =>
       expect(mutateAsync).toHaveBeenCalledWith({
         userId: 'u6',
-        data: { value: '3.5' },
+        data: { band: '3.5' },
       }),
     )
   })
@@ -197,17 +197,17 @@ describe('PendingAssessmentSection', () => {
     expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument()
   })
 
-  it('assigns a rating with the entered value', async () => {
+  it('assigns a rating from the selected band', async () => {
     const user = userEvent.setup()
     renderSection()
 
-    await user.type(screen.getByLabelText('Rating'), '4.5')
+    await user.selectOptions(screen.getByLabelText('Rating'), '4.5')
     await user.click(screen.getByRole('button', { name: 'Set rating' }))
 
     await waitFor(() =>
       expect(mutateAsync).toHaveBeenCalledWith({
         userId: 'u1',
-        data: { value: '4.5' },
+        data: { band: '4.5' },
       }),
     )
   })
@@ -223,7 +223,7 @@ describe('PendingAssessmentSection', () => {
     const user = userEvent.setup()
     renderSection()
 
-    await user.type(screen.getByLabelText('Rating'), '99')
+    await user.selectOptions(screen.getByLabelText('Rating'), '4.0')
     await user.click(screen.getByRole('button', { name: 'Set rating' }))
 
     expect(

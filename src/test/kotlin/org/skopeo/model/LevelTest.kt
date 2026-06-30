@@ -32,4 +32,21 @@ class LevelTest {
         // Below the 1.0 floor clamps to the 1.0 band floor → 0.0.
         Level.positionInBand(rating = BigDecimal("0.5")) shouldBe 0.0
     }
+
+    @Test
+    fun `bandMidpoint stores a band at its quarter-point above the floor (#206)`() {
+        // Each band maps to floor + 0.25, so the rating sits centered in its band.
+        Level.bandMidpoint(band = BigDecimal("1.0")) shouldBe BigDecimal("1.25")
+        Level.bandMidpoint(band = BigDecimal("3.5")) shouldBe BigDecimal("3.75")
+        Level.bandMidpoint(band = BigDecimal("6.5")) shouldBe BigDecimal("6.75")
+        // A slightly off value snaps to its band floor first.
+        Level.bandMidpoint(band = BigDecimal("3.7")) shouldBe BigDecimal("3.75")
+        // The midpoint round-trips back to the same band label.
+        Level.fromValue(value = Level.bandMidpoint(band = BigDecimal("3.5")).toPlainString()).value shouldBe "3.5"
+    }
+
+    @Test
+    fun `bandMidpoint clamps the open-ended 7_0 band to the ceiling (#206)`() {
+        Level.bandMidpoint(band = BigDecimal("7.0")) shouldBe BigDecimal("7.0")
+    }
 }

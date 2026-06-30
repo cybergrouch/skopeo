@@ -20,6 +20,7 @@ import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.rating.CalculationRequest
 import org.skopeo.dto.rating.SetRatingRequest
 import org.skopeo.dto.rating.toResponse
+import org.skopeo.model.Level
 import org.skopeo.model.Rating
 import org.skopeo.service.rating.RatingCalculationService
 import org.skopeo.service.rating.RatingService
@@ -92,7 +93,7 @@ private fun Route.ratings(service: RatingService) {
                     service.setRating(
                         token = verifiedToken(),
                         userId = uuidParam(name = "userId"),
-                        value = validatedRating(raw = request.value),
+                        value = resolvedRating(request = request),
                         confidence = validatedConfidence(raw = request.confidence),
                     ),
                 // The setter is a RATER/ADMINISTRATOR, so echo back the exact value they just set.
@@ -101,10 +102,21 @@ private fun Route.ratings(service: RatingService) {
     }
 }
 
-/** Validate the NTRP value at the boundary (#116): a valid number in the 1.0–7.0 range, or a 400. */
-private fun validatedRating(raw: String): BigDecimal {
-    Rating.fromValue(value = raw)
-    return BigDecimal(raw)
+/**
+ * Resolve the NTRP value to store (#206/#116). A [SetRatingRequest.band] selection (the normal path)
+ * is mapped to the band MIDPOINT so initial ratings sit centered in their band; a precise
+ * [SetRatingRequest.value] (the override path) is stored as-is. Exactly one must be present and in the
+ * 1.0–7.0 range, otherwise a 400.
+ */
+private fun resolvedRating(request: SetRatingRequest): BigDecimal {
+    val band = request.band
+    if (band != null) {
+        Rating.fromValue(value = band) // reject a non-numeric / out-of-range band with a 400
+        return Level.bandMidpoint(band = BigDecimal(band))
+    }
+    val value = requireNotNull(value = request.value) { "a band or value is required" }
+    Rating.fromValue(value = value)
+    return BigDecimal(value)
 }
 
 /** Validate confidence at the boundary (#116): absent, or a number in [0, 1]; otherwise a 400. */
