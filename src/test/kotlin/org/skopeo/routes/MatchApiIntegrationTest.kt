@@ -405,5 +405,8 @@ class MatchApiIntegrationTest {
                 .status shouldBe HttpStatusCode.BadRequest
             client.postRawResult(token = adminToken, matchId = matchId, json = """{"sets":[]}""").status shouldBe
                 HttpStatusCode.BadRequest
+            // A set won on fewer than 4 games is rejected at the boundary too (#213).
+            client.postRawResult(token = adminToken, matchId = matchId, json = """{"sets":[{"team1Games":3,"team2Games":2}]}""")
+                .status shouldBe HttpStatusCode.BadRequest
         }
 }

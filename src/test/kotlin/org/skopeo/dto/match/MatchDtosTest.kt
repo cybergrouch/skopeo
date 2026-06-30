@@ -1,0 +1,36 @@
+// SPDX-FileCopyrightText: 2026 Lange Pantoja
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+package org.skopeo.dto.match
+
+import io.kotest.assertions.throwables.shouldNotThrowAny
+import io.kotest.assertions.throwables.shouldThrow
+import org.junit.jupiter.api.Test
+
+class MatchDtosTest {
+    @Test
+    fun `a set won on games needs at least 4 games (#213)`() {
+        // Standard and shortened-but-valid winners are accepted.
+        shouldNotThrowAny { SetScoreRequest(team1Games = 6, team2Games = 4) }
+        shouldNotThrowAny { SetScoreRequest(team1Games = 4, team2Games = 3) } // the 4-game floor, exactly
+        shouldNotThrowAny { SetScoreRequest(team1Games = 2, team2Games = 6) } // floor applies to the winner either side
+    }
+
+    @Test
+    fun `a set won with fewer than 4 games is rejected (#213)`() {
+        shouldThrow<IllegalArgumentException> { SetScoreRequest(team1Games = 3, team2Games = 2) }
+        shouldThrow<IllegalArgumentException> { SetScoreRequest(team1Games = 1, team2Games = 0) }
+    }
+
+    @Test
+    fun `a tiebreak-decided set (equal games) is exempt from the games floor (#213)`() {
+        // Equal games are decided by the tiebreak, e.g. a match super-tiebreak recorded as 0-0.
+        shouldNotThrowAny { SetScoreRequest(team1Games = 0, team2Games = 0, tiebreakTeam1Points = 10, tiebreakTeam2Points = 8) }
+        shouldNotThrowAny { SetScoreRequest(team1Games = 6, team2Games = 6, tiebreakTeam1Points = 7, tiebreakTeam2Points = 5) }
+    }
+
+    @Test
+    fun `negative games are still rejected (#116)`() {
+        shouldThrow<IllegalArgumentException> { SetScoreRequest(team1Games = -1, team2Games = 0) }
+    }
+}

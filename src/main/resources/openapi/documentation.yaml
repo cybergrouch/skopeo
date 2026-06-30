@@ -3266,6 +3266,10 @@ components:
 
     SetScoreRequest:
       type: object
+      description: >-
+        One set's score. Games are non-negative; a set decided on games must be won with at least
+        4 games (#213) — standard tennis is 6, but a lower floor of 4 allows shortened formats.
+        Sets with equal games are decided by the tiebreak and are exempt from that floor.
       required:
         - team1Games
         - team2Games
