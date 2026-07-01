@@ -53,11 +53,32 @@ jobs:
           VITE_APP_VERSION: ${{ github.ref_name }}
           VITE_APP_COMMIT: ${{ github.sha }}
 
+      # Deploy to Firebase Hosting. We invoke firebase-tools directly (instead of
+      # FirebaseExtended/action-hosting-deploy) so we can treat the benign "no changes to release"
+      # case as success: if nothing web-facing changed since the last deploy, Firebase returns
+      # HTTP 400 "supplied version ... is the current active version", which would otherwise fail
+      # the whole release even though live already serves the intended build. Any other error still
+      # fails the job. Auth mirrors the action: the service-account JSON becomes ADC for the CLI.
       - name: Deploy to Firebase Hosting (live)
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          projectId: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
-          channelId: live
-          entryPoint: .
+        working-directory: ${{ github.workspace }}
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_PROJECT: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
+        run: |
+          creds="$(mktemp)"
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$creds"
+          export GOOGLE_APPLICATION_CREDENTIALS="$creds"
+          set +e
+          out="$(npx firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --non-interactive 2>&1)"
+          code=$?
+          set -e
+          rm -f "$creds"
+          echo "$out"
+          if [ "$code" -eq 0 ]; then
+            exit 0
+          fi
+          if printf '%s' "$out" | grep -q "is the current active version"; then
+            echo "::notice::No web changes since the last deploy — live already serves this build. Treating as success."
+            exit 0
+          fi
+          exit "$code"
