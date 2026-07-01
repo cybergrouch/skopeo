@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test
 import org.skopeo.dto.rating.SetRatingRequest
 import org.skopeo.dto.user.CreateUserRequest
 import org.skopeo.dto.user.UserResponse
+import org.skopeo.dto.user.UserSummaryPageResponse
 import org.skopeo.dto.user.UserSummaryResponse
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
@@ -350,5 +351,36 @@ class UserSearchApiIntegrationTest {
         withApp { client ->
             val host = seedStaff(uid = "host", roles = setOf(Capability.HOST))
             client.searchWith(token = host, "rating" to "3.0,4.0").status shouldBe HttpStatusCode.BadRequest
+        }
+
+    @Test
+    fun `paged search returns items with the total and honors limit and offset (#232)`() =
+        withApp { client ->
+            val host = seedStaff(uid = "host", roles = setOf(Capability.HOST))
+            (1..3).forEach { n -> client.provisionNamed(uid = "u$n", displayName = "Alice $n") }
+
+            val first =
+                client.get(urlString = "/api/v1/users/search?name=alice&limit=2&offset=0") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                }.body<UserSummaryPageResponse>()
+            first.total shouldBe 3 // all three match...
+            first.items.size shouldBe 2 // ...but only the requested page of 2 is returned
+
+            val second =
+                client.get(urlString = "/api/v1/users/search?name=alice&limit=2&offset=2") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                }.body<UserSummaryPageResponse>()
+            second.total shouldBe 3
+            second.items.size shouldBe 1 // the remainder
+        }
+
+    @Test
+    fun `paged search is refused for an unprovisioned caller (#232)`() =
+        withApp { client ->
+            // Mirrors the list search: no caller record → no research access.
+            client
+                .get(urlString = "/api/v1/users/search?name=alice") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer ${TestFirebaseAuth.mintToken(uid = "ghost")}")
+                }.status shouldBe HttpStatusCode.Forbidden
         }
 }
