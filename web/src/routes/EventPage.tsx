@@ -184,6 +184,7 @@ export function EventPage() {
             url={`${window.location.origin}/events/${event.publicCode}`}
             title="Share this event"
             description="Scan this code or copy the link to open this event."
+            shareText={`${event.name} on Skopeo`}
           />
         ) : null}
       </div>

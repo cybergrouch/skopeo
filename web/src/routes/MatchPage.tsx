@@ -237,6 +237,7 @@ export function MatchPage() {
             url={`${window.location.origin}/matches/${match.publicCode}`}
             title="Share this match"
             description="Scan this code or copy the link to open this match."
+            shareText={`${playerName(match.team1[0])} vs ${playerName(match.team2[0])} on Skopeo`}
           />
         ) : null}
       </div>

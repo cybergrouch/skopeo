@@ -129,6 +129,7 @@ export function PlayerProfilePage() {
             url={`${window.location.origin}/players/${player.publicCode}`}
             title="Share this profile"
             description="Scan this code or copy the link to open this player's profile."
+            shareText={`${player.displayName ?? player.publicCode}'s Skopeo profile`}
           />
         ) : null}
 
