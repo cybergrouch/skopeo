@@ -110,7 +110,7 @@ class PlayerApiIntegrationTest {
         }
 
     @Test
-    fun `the public profile + match history are viewable anonymously; rating-history stays auth-required (#193)`() =
+    fun `the public profile + match history are viewable anonymously, rating-history stays auth-required (#193)`() =
         withApp { client ->
             val owner = client.createUser(token = TestFirebaseAuth.mintToken(uid = "owner")).body<UserResponse>()
 

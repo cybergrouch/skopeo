@@ -240,7 +240,7 @@ class MatchApiIntegrationTest {
         }
 
     @Test
-    fun `the public match page is reachable anonymously; privileged routes still 401 (#193)`() =
+    fun `the public match page is reachable anonymously, privileged routes still 401 (#193)`() =
         withApp { client ->
             val adminToken = seedStaff(uid = "admin", roles = setOf(Capability.ADMINISTRATOR))
             val hostToken = seedStaff(uid = "host", roles = setOf(Capability.HOST))
