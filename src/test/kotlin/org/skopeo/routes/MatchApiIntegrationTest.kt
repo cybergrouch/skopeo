@@ -240,6 +240,26 @@ class MatchApiIntegrationTest {
         }
 
     @Test
+    fun `the public match page is reachable anonymously, privileged routes still 401 (#193)`() =
+        withApp { client ->
+            val adminToken = seedStaff(uid = "admin", roles = setOf(Capability.ADMINISTRATOR))
+            val hostToken = seedStaff(uid = "host", roles = setOf(Capability.HOST))
+            val p1 = client.provisionSelf(token = TestFirebaseAuth.mintToken(uid = "p1"))
+            val p2 = client.provisionSelf(token = TestFirebaseAuth.mintToken(uid = "p2"))
+            client.rate(adminToken = adminToken, userId = p1.id)
+            client.rate(adminToken = adminToken, userId = p2.id)
+            val match = client.createFixture(token = hostToken, p1 = p1.id, p2 = p2.id).body<MatchResponse>()
+
+            // No Authorization header at all → the public page still serves (optional auth).
+            val anon = client.get(urlString = "/api/v1/matches/code/${match.publicCode}")
+            anon.status shouldBe HttpStatusCode.OK
+            anon.body<MatchPublicResponse>().publicCode shouldBe match.publicCode
+
+            // A privileged route remains auth-required without a token.
+            client.get(urlString = "/api/v1/matches").status shouldBe HttpStatusCode.Unauthorized
+        }
+
+    @Test
     fun `oversight views are scoped - a host sees only their own fixtures, an admin sees all`() =
         withApp { client ->
             val adminToken = seedStaff(uid = "admin", roles = setOf(Capability.ADMINISTRATOR))

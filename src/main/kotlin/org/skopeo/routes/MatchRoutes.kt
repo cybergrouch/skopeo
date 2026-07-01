@@ -37,10 +37,14 @@ import java.util.UUID
  */
 fun Application.configureMatchRoutes(service: MatchService = MatchService()) {
     routing {
-        authenticate(FIREBASE_AUTH) {
-            route(path = "/api/v1/matches") {
-                listAndCreate(service = service)
+        route(path = "/api/v1/matches") {
+            // The public-by-code page is viewable anonymously (#193): a token is used if present
+            // (raters/admins see precise rates) but not required.
+            authenticate(FIREBASE_AUTH, optional = true) {
                 publicByCode(service = service)
+            }
+            authenticate(FIREBASE_AUTH) {
+                listAndCreate(service = service)
                 byId(service = service)
             }
         }
@@ -118,7 +122,7 @@ private fun Route.publicByCode(service: MatchService) {
     get(path = "/code/{code}") {
         respondMappingErrors {
             val code = call.parameters["code"].orEmpty()
-            respondEither(result = service.publicByCode(token = verifiedToken(), code = code)) { match ->
+            respondEither(result = service.publicByCode(token = optionalVerifiedToken(), code = code)) { match ->
                 call.respond(status = HttpStatusCode.OK, message = match)
             }
         }

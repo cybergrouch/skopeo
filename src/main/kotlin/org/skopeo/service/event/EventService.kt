@@ -185,7 +185,7 @@ class EventService(
      * participant roster, and the event's matches (each resolved for its public page).
      */
     fun publicByCode(
-        token: VerifiedFirebaseToken,
+        token: VerifiedFirebaseToken?,
         code: String,
     ): Either<ServiceError, EventPublicResponse> =
         either {
@@ -194,7 +194,8 @@ class EventService(
                     ServiceError.NotFound(message = "Event $code not found")
                 }
             // The viewer's own standing (#201), so the page can show Request-to-join vs Pending/On hold.
-            val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+            // Anonymous viewers (#193) have no standing → null.
+            val caller = token?.let { users.findByFirebaseUid(firebaseUid = it.uid) }
             val viewerStatus =
                 caller
                     ?.let { c -> events.participantsOf(eventId = event.id).firstOrNull { it.userId == c.id } }

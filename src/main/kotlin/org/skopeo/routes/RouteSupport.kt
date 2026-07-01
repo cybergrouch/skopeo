@@ -26,8 +26,15 @@ internal fun errorBody(
 ): Map<String, String> = mapOf("error" to error, "message" to (message ?: error))
 
 /** Lift the verified Firebase identity out of the JWT claims (the only place that touches the token shape). */
-internal fun RoutingContext.verifiedToken(): VerifiedFirebaseToken {
-    val payload = call.principal<JWTPrincipal>()!!.payload
+internal fun RoutingContext.verifiedToken(): VerifiedFirebaseToken = call.principal<JWTPrincipal>()!!.toVerifiedToken()
+
+/**
+ * The verified identity when present, or null on an anonymous request (#193). For routes under
+ * `authenticate(FIREBASE_AUTH, optional = true)`, where a token is used if supplied but not required.
+ */
+internal fun RoutingContext.optionalVerifiedToken(): VerifiedFirebaseToken? = call.principal<JWTPrincipal>()?.toVerifiedToken()
+
+private fun JWTPrincipal.toVerifiedToken(): VerifiedFirebaseToken {
     val firebase = payload.getClaim("firebase").asMap()
     val signInProvider = firebase?.get(key = "sign_in_provider") as? String
 

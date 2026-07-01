@@ -261,11 +261,12 @@ paths:
 
   /api/v1/players/{code}:
     get:
-      summary: Resolve a player's shareable public profile by code (auth-gated, not public)
+      summary: Resolve a player's shareable public profile by code (viewable without login, #193)
       tags:
         - Users
       security:
         - firebaseAuth: []
+        - {}
       parameters:
         - name: code
           in: path
@@ -287,7 +288,7 @@ paths:
 
   /api/v1/players/{code}/match-history:
     get:
-      summary: A player's match history by code (auth-gated, privacy-conscious)
+      summary: A player's match history by code (viewable without login, #193; privacy-conscious)
       description: >-
         Every active match the player took part in (scheduled, completed, and rated), newest first.
         Ratings appear only as the published NTRP band at the time of the match, and only for rated
@@ -296,6 +297,7 @@ paths:
         - Users
       security:
         - firebaseAuth: []
+        - {}
       parameters:
         - name: code
           in: path
@@ -1168,12 +1170,13 @@ paths:
     get:
       summary: Get a match's public page by code (#136)
       description: >-
-        Read-only public summary of a match resolved by its shareable public code. Visible to any
-        authenticated user (the same "public" semantics as a player's public profile).
+        Read-only public summary of a match resolved by its shareable public code. Viewable without
+        login (#193); a token, if present, lets RATER/ADMINISTRATOR viewers see precise rates.
       tags:
         - Matches
       security:
         - firebaseAuth: []
+        - {}
       responses:
         '200':
           description: The public match summary
@@ -1394,11 +1397,13 @@ paths:
       summary: Get an event's public page by code (#138)
       description: >-
         Read-only public summary of an event resolved by its shareable public code (details,
-        participant roster, and the event's matches). Visible to any authenticated user.
+        participant roster, and the event's matches). Viewable without login (#193); a token, if
+        present, personalizes the viewer's join status.
       tags:
         - Events
       security:
         - firebaseAuth: []
+        - {}
       responses:
         '200':
           description: The public event summary

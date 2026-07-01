@@ -7,6 +7,8 @@ const { useGetApiV1MatchesCodeCode } = vi.hoisted(() => ({
   useGetApiV1MatchesCodeCode: vi.fn(),
 }))
 vi.mock('@/api/generated/matches/matches', () => ({ useGetApiV1MatchesCodeCode }))
+// The page renders PublicPageNav (#193), which reads auth; default to anonymous here.
+vi.mock('@/auth/useAuth', () => ({ useAuth: () => ({ user: null }) }))
 
 const match = {
   publicCode: 'MTCH01',

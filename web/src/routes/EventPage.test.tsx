@@ -8,8 +8,10 @@ import { EventPage } from './EventPage'
 const { useGetApiV1EventsCodeCode, signupMutate, state } = vi.hoisted(() => ({
   useGetApiV1EventsCodeCode: vi.fn(),
   signupMutate: vi.fn(),
-  state: { signupFail: false, signupPending: false },
+  state: { signupFail: false, signupPending: false, user: { uid: 'u1' } as { uid: string } | null },
 }))
+// JoinCard + PublicPageNav read auth (#193); default to a logged-in user, overridden per test.
+vi.mock('@/auth/useAuth', () => ({ useAuth: () => ({ user: state.user }) }))
 vi.mock('@/api/generated/events/events', () => ({
   useGetApiV1EventsCodeCode,
   getGetApiV1EventsCodeCodeQueryKey: (code: string) => ['event', code],
@@ -89,6 +91,7 @@ describe('EventPage', () => {
     vi.clearAllMocks()
     state.signupFail = false
     state.signupPending = false
+    state.user = { uid: 'u1' } // logged in by default
   })
 
   it('shows a loading state', () => {
@@ -139,6 +142,17 @@ describe('EventPage', () => {
 
     await user.click(screen.getByRole('button', { name: 'Request to join' }))
     expect(signupMutate).toHaveBeenCalledWith({ code: 'EVT001' })
+  })
+
+  it('prompts an anonymous viewer to log in / sign up instead of joining (#193)', () => {
+    state.user = null
+    useGetApiV1EventsCodeCode.mockReturnValue({ data: { ...event, viewerStatus: null }, isLoading: false })
+    renderAt()
+
+    expect(screen.queryByRole('button', { name: 'Request to join' })).not.toBeInTheDocument()
+    // The join prompt (unique to the JoinCard) links to login/signup; the page CTA also shows "Log in".
+    expect(screen.getByText(/to request to join/i)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'sign up' })).toHaveAttribute('href', '/signup')
   })
 
   it('shows the pending state instead of a join button once requested (#201)', () => {

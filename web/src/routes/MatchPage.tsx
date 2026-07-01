@@ -13,6 +13,7 @@ import type {
   MatchPublicResponse,
 } from '@/api/generated/model'
 import { ShareCard } from '@/components/ShareCard'
+import { PublicPageNav } from '@/components/PublicPageNav'
 
 /** A player's name as a link to their public profile, falling back to the code or "Unknown". */
 function PlayerLink({ player }: { player: MatchPublicPlayer }) {
@@ -181,9 +182,7 @@ export function MatchPage() {
   return (
     <div className="flex min-h-svh items-start justify-center bg-muted/40 p-4">
       <div className="w-full max-w-sm space-y-4 pt-10">
-        <Link to="/dashboard" className="text-sm text-primary hover:underline">
-          ← Back to dashboard
-        </Link>
+        <PublicPageNav />
 
         {query.isLoading ? (
           <p className="text-sm text-muted-foreground">Loading match…</p>

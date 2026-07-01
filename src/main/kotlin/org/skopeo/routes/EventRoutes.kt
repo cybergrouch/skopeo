@@ -33,11 +33,15 @@ import java.util.UUID
  */
 fun Application.configureEventRoutes(service: EventService = EventService()) {
     routing {
-        authenticate(FIREBASE_AUTH) {
-            route(path = "/api/v1/events") {
+        route(path = "/api/v1/events") {
+            // The public event page is viewable anonymously (#193); self-signup + the rest stay required.
+            authenticate(FIREBASE_AUTH, optional = true) {
+                publicEventByCode(service = service)
+            }
+            authenticate(FIREBASE_AUTH) {
                 listAndCreate(service = service)
                 myEvents(service = service)
-                publicByCode(service = service)
+                eventSelfSignup(service = service)
                 byIdAndParticipants(service = service)
             }
         }
@@ -77,19 +81,23 @@ private fun Route.myEvents(service: EventService) {
 }
 
 /**
- * Public event page lookup by code (#138). The literal `code` segment matches before `/{id}`, so it
- * never collides with the UUID route. Visible to any authenticated user (public-page semantics).
+ * Public event page lookup by code (#138), viewable anonymously (#193) — a token only personalizes
+ * the viewer status. The literal `code` segment matches before `/{id}`, so it never collides with the
+ * UUID route.
  */
-private fun Route.publicByCode(service: EventService) {
+private fun Route.publicEventByCode(service: EventService) {
     get(path = "/code/{code}") {
         respondMappingErrors {
             val code = call.parameters["code"].orEmpty()
-            respondEither(result = service.publicByCode(token = verifiedToken(), code = code)) { event ->
+            respondEither(result = service.publicByCode(token = optionalVerifiedToken(), code = code)) { event ->
                 call.respond(status = HttpStatusCode.OK, message = event)
             }
         }
     }
-    // Self-signup (#201): any authenticated player requests to join the event by its public code.
+}
+
+/** Self-signup (#201): any authenticated player requests to join the event by its public code. */
+private fun Route.eventSelfSignup(service: EventService) {
     post(path = "/code/{code}/signup") {
         respondMappingErrors {
             val code = call.parameters["code"].orEmpty()

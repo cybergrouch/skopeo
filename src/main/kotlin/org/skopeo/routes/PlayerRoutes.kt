@@ -22,8 +22,10 @@ import org.skopeo.service.user.PlayerService
  */
 fun Application.configurePlayerRoutes(service: PlayerService = PlayerService()) {
     routing {
-        authenticate(FIREBASE_AUTH) {
-            route(path = "/api/v1/players") {
+        route(path = "/api/v1/players") {
+            // The public profile + its match history are viewable anonymously (#193) — neither uses
+            // a token. The rating-history audit view stays ADMINISTRATOR-only (required auth).
+            authenticate(FIREBASE_AUTH, optional = true) {
                 get(path = "/{code}") {
                     respondMappingErrors {
                         val code = call.parameters["code"].orEmpty()
@@ -40,7 +42,9 @@ fun Application.configurePlayerRoutes(service: PlayerService = PlayerService()) 
                         }
                     }
                 }
-                // ADMINISTRATOR only — the precise rating-history audit view for any player by code.
+            }
+            // ADMINISTRATOR only — the precise rating-history audit view for any player by code.
+            authenticate(FIREBASE_AUTH) {
                 get(path = "/{code}/rating-history") {
                     respondMappingErrors {
                         val code = call.parameters["code"].orEmpty()

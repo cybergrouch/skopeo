@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   Card,
@@ -16,11 +16,15 @@ import {
 } from '@/api/generated/events/events'
 import type { EventParticipantResponse, MatchPublicResponse } from '@/api/generated/model'
 import { ShareCard } from '@/components/ShareCard'
+import { PublicPageNav } from '@/components/PublicPageNav'
+import { useAuth } from '@/auth/useAuth'
 import { playerLabel } from '@/lib/playerLabel'
 
 /** The join card on the public event page (#201): request to join, or the viewer's current standing. */
 function JoinCard({ code, viewerStatus }: { code: string; viewerStatus?: string | null }) {
   const queryClient = useQueryClient()
+  const { user } = useAuth()
+  const location = useLocation()
   const [error, setError] = useState<string | null>(null)
   const signup = usePostApiV1EventsCodeCodeSignup({
     mutation: {
@@ -40,6 +44,21 @@ function JoinCard({ code, viewerStatus }: { code: string; viewerStatus?: string 
   }
   if (viewerStatus === 'HOLD') {
     return <p className="text-sm text-muted-foreground">Your request is on hold — the host will review it.</p>
+  }
+  // Joining needs an account (#193): prompt an anonymous viewer to log in / sign up first.
+  if (!user) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        <Link to="/login" state={{ from: location }} className="font-medium text-primary hover:underline">
+          Log in
+        </Link>
+        {' or '}
+        <Link to="/signup" className="font-medium text-primary hover:underline">
+          sign up
+        </Link>
+        {' to request to join.'}
+      </p>
+    )
   }
   return (
     <div className="space-y-2">
@@ -95,7 +114,7 @@ function MatchRow({ match }: { match: MatchPublicResponse }) {
 /**
  * Public, read-only event page reached via `/events/:code` (issue #138). Resolves the event by its
  * shareable code and shows its details, participants (linking to profiles), and matches (linking to
- * their public pages), with a QR for sharing. Auth-gated, mirroring the public player/match pages.
+ * their public pages), with a QR for sharing. Viewable without login (#193); joining prompts sign-in.
  */
 export function EventPage() {
   const { code = '' } = useParams()
@@ -105,9 +124,7 @@ export function EventPage() {
   return (
     <div className="flex min-h-svh items-start justify-center bg-muted/40 p-4">
       <div className="w-full max-w-sm space-y-4 pt-10">
-        <Link to="/dashboard" className="text-sm text-primary hover:underline">
-          ← Back to dashboard
-        </Link>
+        <PublicPageNav />
 
         {query.isLoading ? (
           <p className="text-sm text-muted-foreground">Loading event…</p>

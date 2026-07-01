@@ -205,7 +205,7 @@ class MatchService(
      * name + code. A [ServiceError.NotFound] if the code resolves to no active match.
      */
     fun publicByCode(
-        token: VerifiedFirebaseToken,
+        token: VerifiedFirebaseToken?,
         code: String,
     ): Either<ServiceError, MatchPublicResponse> =
         either {
@@ -265,7 +265,7 @@ class MatchService(
     private fun ratingChangesFor(
         match: Match,
         usersById: Map<UUID, User>,
-        token: VerifiedFirebaseToken,
+        token: VerifiedFirebaseToken?,
     ): List<MatchPublicRatingChange> {
         val revealRates = callerCanSeeRates(token = token)
         val names = usersById.mapValues { (_, user) -> user.displayName() }
@@ -287,9 +287,9 @@ class MatchService(
             }
     }
 
-    /** Whether the viewer may see precise rates (RATER or ADMINISTRATOR); bands are always public. */
-    private fun callerCanSeeRates(token: VerifiedFirebaseToken): Boolean {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid) ?: return false
+    /** Whether the viewer may see precise rates (RATER or ADMINISTRATOR); anonymous (#193) ⇒ false, bands only. */
+    private fun callerCanSeeRates(token: VerifiedFirebaseToken?): Boolean {
+        val caller = token?.let { users.findByFirebaseUid(firebaseUid = it.uid) } ?: return false
         return caller.capabilities.any { it == Capability.RATER || it == Capability.ADMINISTRATOR }
     }
 
