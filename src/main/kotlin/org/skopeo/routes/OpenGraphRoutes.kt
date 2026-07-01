@@ -13,6 +13,15 @@ import io.ktor.server.routing.routing
 import org.skopeo.service.event.EventService
 import org.skopeo.service.match.MatchService
 import org.skopeo.service.user.PlayerService
+import java.net.URI
+import java.net.http.HttpClient
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
+import java.time.Duration
+import java.util.concurrent.atomic.AtomicReference
+
+private const val SHELL_TIMEOUT_SECONDS = 5L
+private const val HTTP_OK = 200
 
 /** Minimal shell used only if the deployed index.html can't be fetched — crawlers still get the tags. */
 private const val FALLBACK_SHELL =
@@ -72,3 +81,23 @@ fun Application.configureOpenGraphRoutes(
         }
     }
 }
+
+/** Fetch the deployed index.html once from [indexUrl] and cache it (the shell changes only on redeploy). */
+internal fun httpShellProvider(indexUrl: String): WebShellProvider {
+    val client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(SHELL_TIMEOUT_SECONDS)).build()
+    val cache = AtomicReference<String?>(null)
+    return WebShellProvider {
+        cache.get() ?: runCatching {
+            val request =
+                HttpRequest.newBuilder(URI.create(indexUrl)).timeout(Duration.ofSeconds(SHELL_TIMEOUT_SECONDS)).GET().build()
+            val response = client.send(request, HttpResponse.BodyHandlers.ofString())
+            if (response.statusCode() == HTTP_OK) response.body().also { cache.set(it) } else null
+        }.getOrNull()
+    }
+}
+
+/** The site origin for canonical URLs + the og:image, from config (`web.origin`) or the prod default. */
+internal fun Application.webOrigin(): String =
+    environment.config.propertyOrNull(path = "web.origin")?.getString()?.trimEnd('/') ?: "https://skopeo.co"
+
+internal fun Application.webIndexUrl(): String = "${webOrigin()}/index.html"

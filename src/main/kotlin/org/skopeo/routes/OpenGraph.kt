@@ -3,27 +3,19 @@
 
 package org.skopeo.routes
 
-import io.ktor.server.application.Application
 import org.skopeo.dto.event.EventPublicResponse
 import org.skopeo.dto.match.MatchPublicPlayer
 import org.skopeo.dto.match.MatchPublicResponse
 import org.skopeo.dto.user.PublicPlayerResponse
-import java.net.URI
-import java.net.http.HttpClient
-import java.net.http.HttpRequest
-import java.net.http.HttpResponse
-import java.time.Duration
-import java.util.concurrent.atomic.AtomicReference
 
 /*
- * Pure Open Graph helpers + the SPA shell provider for per-page rich link previews (#238). The public
- * pages are a client-rendered SPA, so social crawlers (which don't run JS) see no per-page Open Graph
- * tags. The responder (OpenGraphRoutes) resolves the entity and returns the deployed index.html with
- * per-page tags injected into <head>; the SPA still boots for humans while crawlers read the tags.
+ * Pure Open Graph helpers for per-page rich link previews (#238). The public pages are a client-rendered
+ * SPA, so social crawlers (which don't run JS) see no per-page Open Graph tags. The responder
+ * (OpenGraphRoutes) resolves the entity and returns the deployed index.html with these per-page tags
+ * injected into <head>; the SPA still boots for humans while crawlers read the tags. This file holds the
+ * pure, unit-tested logic; the network/config plumbing lives in OpenGraphRoutes.
  */
 
-private const val SHELL_TIMEOUT_SECONDS = 5L
-private const val HTTP_OK = 200
 private val TITLE = Regex(pattern = "<title>.*?</title>", option = RegexOption.DOT_MATCHES_ALL)
 
 /** Per-page Open Graph / Twitter Card metadata. */
@@ -130,23 +122,3 @@ internal fun defaultMeta(
         url = url,
         image = image,
     )
-
-/** Fetch the deployed index.html once from [indexUrl] and cache it (the shell changes only on redeploy). */
-internal fun httpShellProvider(indexUrl: String): WebShellProvider {
-    val client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(SHELL_TIMEOUT_SECONDS)).build()
-    val cache = AtomicReference<String?>(null)
-    return WebShellProvider {
-        cache.get() ?: runCatching {
-            val request =
-                HttpRequest.newBuilder(URI.create(indexUrl)).timeout(Duration.ofSeconds(SHELL_TIMEOUT_SECONDS)).GET().build()
-            val response = client.send(request, HttpResponse.BodyHandlers.ofString())
-            if (response.statusCode() == HTTP_OK) response.body().also { cache.set(it) } else null
-        }.getOrNull()
-    }
-}
-
-/** The site origin for canonical URLs + the og:image, from config (`web.origin`) or the prod default. */
-internal fun Application.webOrigin(): String =
-    environment.config.propertyOrNull(path = "web.origin")?.getString()?.trimEnd('/') ?: "https://skopeo.co"
-
-internal fun Application.webIndexUrl(): String = "${webOrigin()}/index.html"
