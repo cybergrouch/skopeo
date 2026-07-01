@@ -118,26 +118,31 @@ class UserRepository {
         offset: Int = 0,
     ): List<User> =
         transaction {
-            val conditions =
-                buildList {
-                    add(element = Op.build { UsersTable.isActive eq true })
-                    query.sex?.let { sex -> add(element = Op.build { UsersTable.sex eq sex }) }
-                    query.dobMin?.let { min -> add(element = Op.build { UsersTable.dateOfBirth greaterEq min }) }
-                    query.dobMax?.let { max -> add(element = Op.build { UsersTable.dateOfBirth lessEq max }) }
-                    query.name?.let { name -> add(element = nameMatches(name = name)) }
-                    // Prefix match (#86): the service uppercases the term and codes are stored
-                    // uppercase, so a plain LIKE 'PREFIX%' matches partial codes case-insensitively.
-                    query.code?.let { code -> add(element = Op.build { UsersTable.publicCode like "$code%" }) }
-                    query.q?.let { term -> add(element = nameOrCodeMatches(term = term)) }
-                    query.rating?.let { range -> add(element = ratingMatches(range = range)) }
-                }
             UsersTable
                 .selectAll()
-                .where { conditions.reduce { acc, op -> acc and op } }
+                .where { conditionsFor(query = query) }
                 .orderBy(UsersTable.id to SortOrder.ASC)
                 .limit(n = limit, offset = offset.toLong())
                 .map { loadAggregate(id = it[UsersTable.id].value)!! }
         }
+
+    /** Total active users matching [query] (#232) — the same predicate as [search], for paging totals. */
+    fun countSearch(query: UserSearchQuery): Long = transaction { UsersTable.selectAll().where { conditionsFor(query = query) }.count() }
+
+    /** The AND-combined predicate for [search]/[countSearch]: every supplied facet of [query]. */
+    private fun conditionsFor(query: UserSearchQuery): Op<Boolean> =
+        buildList {
+            add(element = Op.build { UsersTable.isActive eq true })
+            query.sex?.let { sex -> add(element = Op.build { UsersTable.sex eq sex }) }
+            query.dobMin?.let { min -> add(element = Op.build { UsersTable.dateOfBirth greaterEq min }) }
+            query.dobMax?.let { max -> add(element = Op.build { UsersTable.dateOfBirth lessEq max }) }
+            query.name?.let { name -> add(element = nameMatches(name = name)) }
+            // Prefix match (#86): the service uppercases the term and codes are stored uppercase, so a
+            // plain LIKE 'PREFIX%' matches partial codes case-insensitively.
+            query.code?.let { code -> add(element = Op.build { UsersTable.publicCode like "$code%" }) }
+            query.q?.let { term -> add(element = nameOrCodeMatches(term = term)) }
+            query.rating?.let { range -> add(element = ratingMatches(range = range)) }
+        }.reduce { acc, op -> acc and op }
 
     fun findByFirebaseUid(firebaseUid: String): User? =
         transaction {

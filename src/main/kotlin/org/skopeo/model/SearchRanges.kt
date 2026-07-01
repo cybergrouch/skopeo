@@ -108,3 +108,9 @@ data class UserSearchQuery(
     val dobMax: LocalDate?,
     val rating: NumericRange?,
 )
+
+/** A page of user-search results plus the total match count, for numbered pagination (#232). */
+data class UserSearchPage(
+    val items: List<User>,
+    val total: Long,
+)

@@ -21,6 +21,7 @@ import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.user.CreateUserRequest
 import org.skopeo.dto.user.MarkDuplicatesRequest
 import org.skopeo.dto.user.ProfileRequest
+import org.skopeo.dto.user.UserSummaryPageResponse
 import org.skopeo.dto.user.toResponse
 import org.skopeo.dto.user.toSummary
 import org.skopeo.model.NumericRange
@@ -43,6 +44,7 @@ fun Application.configureUserRoutes(
         authenticate(FIREBASE_AUTH) {
             route(path = "/api/v1/users") {
                 searchUsers(service = service)
+                searchUsersPaged(service = service)
                 createUser(service = service)
                 currentUser(service = service)
                 duplicateRoutes(service = duplicates)
@@ -122,6 +124,45 @@ private fun Route.searchUsers(service: UserService) {
             respondEither(result = results) { users ->
                 val ratings = service.currentRatings(ids = users.map { it.id })
                 call.respond(status = HttpStatusCode.OK, message = users.map { it.toSummary(rating = ratings[it.id]) })
+            }
+        }
+    }
+}
+
+/**
+ * Paged player search for numbered pagination (#232): same filters as the list search but returns
+ * `{ items, total }` so the UI can show the current page, page links, and the total. Separate from the
+ * bare-list search above, which the typeahead/seeding/id-resolution callers keep using.
+ */
+private fun Route.searchUsersPaged(service: UserService) {
+    get(path = "/search") {
+        respondMappingErrors {
+            val params = call.request.queryParameters
+            val page =
+                service.searchPage(
+                    token = verifiedToken(),
+                    filters =
+                        UserSearchFilters(
+                            name = params["name"],
+                            code = params["code"],
+                            q = params["q"],
+                            sex = validatedSex(value = params["sex"]),
+                            age = params["age"]?.let { NumericRange.parse(raw = it) },
+                            rating = params["rating"]?.let { NumericRange.parse(raw = it) },
+                        ),
+                    limit = params["limit"]?.toIntOrNull() ?: DEFAULT_SEARCH_PAGE_SIZE,
+                    offset = params["offset"]?.toIntOrNull() ?: 0,
+                )
+            respondEither(result = page) { result ->
+                val ratings = service.currentRatings(ids = result.items.map { it.id })
+                call.respond(
+                    status = HttpStatusCode.OK,
+                    message =
+                        UserSummaryPageResponse(
+                            items = result.items.map { it.toSummary(rating = ratings[it.id]) },
+                            total = result.total.toInt(),
+                        ),
+                )
             }
         }
     }

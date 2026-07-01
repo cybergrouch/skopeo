@@ -172,3 +172,10 @@ fun User.toSummary(rating: UserRating? = null): UserSummaryResponse =
         rating = rating?.let { PublicRatingDto(value = it.currentRating.toPlainString(), level = it.currentLevel) },
         capabilities = capabilities.map { it.name }.sorted(),
     )
+
+/** A page of search results plus the total match count, for numbered pagination (#232). */
+@Serializable
+data class UserSummaryPageResponse(
+    val items: List<UserSummaryResponse>,
+    val total: Int,
+)

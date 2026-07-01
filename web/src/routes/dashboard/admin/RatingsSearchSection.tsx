@@ -8,9 +8,9 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { PlayerSearchForm } from '@/components/PlayerSearchForm'
-import { SearchPager } from '@/components/SearchPager'
+import { NumberedPager } from '@/components/NumberedPager'
 import { SetRatingForm } from '@/components/SetRatingForm'
-import { getGetApiV1UsersQueryKey, useGetApiV1Users } from '@/api/generated/users/users'
+import { getGetApiV1UsersSearchQueryKey, useGetApiV1UsersSearch } from '@/api/generated/users/users'
 import type { GetApiV1UsersParams, UserSummaryResponse } from '@/api/generated/model'
 
 const PAGE_SIZE = 25
@@ -33,14 +33,13 @@ export function RatingsSearchSection() {
   const [applied, setApplied] = useState<GetApiV1UsersParams | null>(null)
   const [page, setPage] = useState(0)
 
-  // Fetch one extra row beyond the page to detect a next page without a total-count call.
-  const query = useGetApiV1Users(
-    applied ? { ...applied, limit: PAGE_SIZE + 1, offset: page * PAGE_SIZE } : {},
+  // Paged search (#232): the endpoint returns { items, total } so we can show numbered pages.
+  const query = useGetApiV1UsersSearch(
+    applied ? { ...applied, limit: PAGE_SIZE, offset: page * PAGE_SIZE } : {},
     { query: { enabled: applied !== null } },
   )
-  const fetched = query.data ?? []
-  const results = fetched.slice(0, PAGE_SIZE)
-  const hasMore = fetched.length > PAGE_SIZE
+  const results = query.data?.items ?? []
+  const total = query.data?.total ?? 0
 
   function applySearch(params: GetApiV1UsersParams | null) {
     setPage(0)
@@ -48,7 +47,7 @@ export function RatingsSearchSection() {
   }
 
   // Refresh the search results so an updated rating shows immediately.
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: getGetApiV1UsersQueryKey() })
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: getGetApiV1UsersSearchQueryKey() })
 
   return (
     <Card>
@@ -96,12 +95,7 @@ export function RatingsSearchSection() {
                   )
                 })}
               </ul>
-              <SearchPager
-                page={page}
-                hasMore={hasMore}
-                onPrev={() => setPage((p) => Math.max(0, p - 1))}
-                onNext={() => setPage((p) => p + 1)}
-              />
+              <NumberedPager page={page} total={total} pageSize={PAGE_SIZE} onPage={setPage} />
             </>
           ) : (
             <p className="text-sm text-muted-foreground">No matching players.</p>

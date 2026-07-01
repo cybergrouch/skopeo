@@ -20,6 +20,7 @@ import org.skopeo.model.ProfilePatch
 import org.skopeo.model.ServiceError
 import org.skopeo.model.User
 import org.skopeo.model.UserRating
+import org.skopeo.model.UserSearchPage
 import org.skopeo.model.UserSearchQuery
 import org.skopeo.model.ageRangeToDob
 import org.skopeo.repository.CapabilityRepository
@@ -88,6 +89,38 @@ class UserService(
     ): Either<ServiceError, List<User>> =
         either {
             requireResearchAccess(repository = repository, token = token).bind()
+            val query = validatedQuery(filters = filters).bind()
+            repository.search(
+                query = query,
+                limit = limit.coerceIn(minimumValue = 1, maximumValue = MAX_SEARCH_LIMIT),
+                offset = offset.coerceAtLeast(minimumValue = 0),
+            )
+        }
+
+    /** Like [search] but returns a page with the total match count, for numbered pagination (#232). */
+    fun searchPage(
+        token: VerifiedFirebaseToken,
+        filters: UserSearchFilters,
+        limit: Int = DEFAULT_SEARCH_LIMIT,
+        offset: Int = 0,
+    ): Either<ServiceError, UserSearchPage> =
+        either {
+            requireResearchAccess(repository = repository, token = token).bind()
+            val query = validatedQuery(filters = filters).bind()
+            UserSearchPage(
+                items =
+                    repository.search(
+                        query = query,
+                        limit = limit.coerceIn(minimumValue = 1, maximumValue = MAX_SEARCH_LIMIT),
+                        offset = offset.coerceAtLeast(minimumValue = 0),
+                    ),
+                total = repository.countSearch(query = query),
+            )
+        }
+
+    /** Build the repository query from request filters, requiring at least one filter (#116). */
+    private fun validatedQuery(filters: UserSearchFilters): Either<ServiceError, UserSearchQuery> =
+        either {
             val nameTerm = blankToNull(raw = filters.name)
             val codeTerm = blankToNull(raw = filters.code)?.uppercase()
             val qTerm = blankToNull(raw = filters.q)
@@ -99,19 +132,14 @@ class UserService(
                 ServiceError.Validation(message = "at least one filter (name, code, q, sex, age, rating) is required")
             }
             val dob = filters.age?.let { ageRangeToDob(range = it, today = LocalDate.now()) }
-            repository.search(
-                query =
-                    UserSearchQuery(
-                        name = nameTerm,
-                        code = codeTerm,
-                        q = qTerm,
-                        sex = filters.sex,
-                        dobMin = dob?.min,
-                        dobMax = dob?.max,
-                        rating = filters.rating,
-                    ),
-                limit = limit.coerceIn(minimumValue = 1, maximumValue = MAX_SEARCH_LIMIT),
-                offset = offset.coerceAtLeast(minimumValue = 0),
+            UserSearchQuery(
+                name = nameTerm,
+                code = codeTerm,
+                q = qTerm,
+                sex = filters.sex,
+                dobMin = dob?.min,
+                dobMax = dob?.max,
+                rating = filters.rating,
             )
         }
 
