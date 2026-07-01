@@ -99,7 +99,28 @@ Defined in `src/App.tsx`. Public, code-addressed pages and the authenticated das
 The `/players/:code`, `/matches/:code`, and `/events/:code` pages are shareable by **public code**
 and each render a `ShareCard` (`src/components/ShareCard.tsx`) — a QR code (`qrcode.react`)
 encoding the page URL plus a copy-link button. The same card appears on the owner's Profile tab so
-every shareable page offers one scan-or-copy affordance.
+every shareable page offers one scan-or-copy affordance. `ShareCard` also offers native sharing
+(`navigator.share`, where supported) or Facebook / X / WhatsApp intent links (#192).
+
+### Rich link previews (Open Graph)
+
+When those public links are shared, they should render a rich card (title, description, image) on
+Facebook / X / LinkedIn / WhatsApp / iMessage / Slack. Two layers provide this:
+
+- **Site-wide defaults** — static Open Graph + Twitter Card tags and a brand cover
+  (`web/public/og-cover.png`) live in `web/index.html`. Every link gets a generic card.
+- **Per-page tags (#238)** — the pages are a client-rendered SPA, and social crawlers don't run JS,
+  so per-page tags can't come from the client. Firebase Hosting **rewrites** `/matches/*`,
+  `/players/*`, `/events/*` to the Cloud Run API, where the Ktor **Open Graph responder**
+  (`routes/OpenGraphRoutes.kt` + `routes/OpenGraph.kt`) resolves the entity **anonymously**
+  (bands-only, reusing each service's `publicByCode`/`publicProfile`) and returns the deployed
+  `index.html` with per-page `<title>` + `og:*`/`twitter:*` tags injected into `<head>`. The SPA
+  still boots for humans; crawlers read the injected tags. Unknown codes fall back to the site-wide
+  default card. The responder fetches the deployed `index.html` once and caches it (the shell only
+  changes on web redeploy); the site origin is configured via `WEB_SITE_ORIGIN` (`web.origin`,
+  default `https://skopeo.co`). These routes serve **HTML, not JSON**, so they are intentionally
+  absent from the OpenAPI spec. A per-page `og:image` (rendering the score/players) is a later
+  enhancement; per-page tags currently reuse the static cover.
 
 ## Dashboard structure
 
@@ -154,8 +175,10 @@ unchanged.
   `web/dist`. The API base URL is read from `VITE_API_BASE_URL` (empty in dev so requests go
   through the Vite proxy). Firebase client config comes from public `VITE_FIREBASE_*` env vars
   (`src/lib/firebase.ts`) — these are safe to ship in the bundle.
-- **Hosting:** Firebase Hosting serves `web/dist` (`firebase.json`), with SPA rewrites (all paths →
-  `/index.html`) and long-lived immutable caching for hashed `/assets/**`.
+- **Hosting:** Firebase Hosting serves `web/dist` (`firebase.json`) with a catch-all SPA rewrite
+  (`**` → `/index.html`) and long-lived immutable caching for hashed `/assets/**`. Ahead of the
+  catch-all, `/matches/*`, `/players/*`, `/events/*` are rewritten to the Cloud Run service so the
+  Open Graph responder can inject per-page tags (see *Rich link previews* above).
 - **CI deploy:** `.github/workflows/deploy-web.yml` builds and deploys to Firebase Hosting on
   pushes to `main` that touch `web/**`, the OpenAPI spec, `firebase.json`, or the workflow itself.
   The job is gated on the `VITE_FIREBASE_PROJECT_ID` repo variable being set, so it is inert until

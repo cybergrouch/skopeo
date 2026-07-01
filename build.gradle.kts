@@ -290,6 +290,8 @@ tasks.jacocoTestReport {
                         "**/routes/DuplicateCandidateRoutes*.*",
                         "**/routes/PlayerListRoutes*.*",
                         "**/routes/StandingsRoutes*.*",
+                        // Only the route glue (OpenGraphRoutes); the pure OG logic in OpenGraph.kt stays measured.
+                        "**/routes/OpenGraphRoutes*.*",
                         "**/routes/RouteSupport*.*",
                     )
                 }
@@ -350,6 +352,8 @@ tasks.jacocoTestCoverageVerification {
                         "**/routes/DuplicateCandidateRoutes*.*",
                         "**/routes/PlayerListRoutes*.*",
                         "**/routes/StandingsRoutes*.*",
+                        // Only the route glue (OpenGraphRoutes); the pure OG logic in OpenGraph.kt stays measured.
+                        "**/routes/OpenGraphRoutes*.*",
                         "**/routes/RouteSupport*.*",
                     )
                 }

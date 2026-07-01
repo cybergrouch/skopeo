@@ -19,6 +19,12 @@ cors:
   # allowed. Set per-environment via WEB_ORIGINS; empty/unset = localhost only.
   origins: "$WEB_ORIGINS:"
 
+web:
+  # Public site origin (scheme://host, no trailing slash) used to build canonical og:url + og:image and
+  # to fetch the deployed index.html for per-page Open Graph tags (#238). Set per-environment via
+  # WEB_SITE_ORIGIN; unset falls back to the production default (https://skopeo.co).
+  origin: "$WEB_SITE_ORIGIN:https://skopeo.co"
+
 admin:
   # Comma-separated allowlist of emails auto-granted ADMINISTRATOR on sign-up/login, but ONLY when
   # the email is provider-verified (the verified-email gate). Bootstrap / break-glass only — everyday

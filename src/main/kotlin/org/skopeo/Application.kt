@@ -35,6 +35,7 @@ import org.skopeo.routes.configureEventRoutes
 import org.skopeo.routes.configureInviteRoutes
 import org.skopeo.routes.configureMatchRoutes
 import org.skopeo.routes.configureNameRoutes
+import org.skopeo.routes.configureOpenGraphRoutes
 import org.skopeo.routes.configurePlayerListRoutes
 import org.skopeo.routes.configurePlayerRoutes
 import org.skopeo.routes.configureRankingRoutes
@@ -100,6 +101,7 @@ fun Application.module(
     configurePlayerListRoutes()
     configureStandingsRoutes()
     configureAuditRoutes()
+    configureOpenGraphRoutes()
     logger.info { "Skopeo API started successfully on port 8080" }
 }
 

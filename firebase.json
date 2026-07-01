@@ -4,6 +4,18 @@
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "rewrites": [
       {
+        "source": "/matches/*",
+        "run": { "serviceId": "skopeo", "region": "asia-southeast1" }
+      },
+      {
+        "source": "/players/*",
+        "run": { "serviceId": "skopeo", "region": "asia-southeast1" }
+      },
+      {
+        "source": "/events/*",
+        "run": { "serviceId": "skopeo", "region": "asia-southeast1" }
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
