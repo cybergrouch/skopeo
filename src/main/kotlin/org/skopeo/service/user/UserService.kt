@@ -101,8 +101,8 @@ class UserService(
     fun searchPage(
         token: VerifiedFirebaseToken,
         filters: UserSearchFilters,
-        limit: Int = DEFAULT_SEARCH_LIMIT,
-        offset: Int = 0,
+        limit: Int,
+        offset: Int,
     ): Either<ServiceError, UserSearchPage> =
         either {
             requireResearchAccess(repository = repository, token = token).bind()
