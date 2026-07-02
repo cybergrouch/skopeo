@@ -278,6 +278,11 @@ class EventServiceTest {
     }
 
     @Test
+    fun `setActive reports false when no event row matches`() {
+        events.setActive(id = UUID.randomUUID(), active = false, disabledAt = null).shouldBeFalse()
+    }
+
+    @Test
     fun `a host deletes an event with no matches, and it drops off their list`() {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight().event

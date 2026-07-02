@@ -13,7 +13,13 @@ const { useGetApiV1EventsId, addMutate, removeMutate, decideMutate, createFixtur
     decideMutate: vi.fn(),
     createFixtureMutate: vi.fn(),
     deleteMutate: vi.fn(),
-    state: { addFail: false, fixtureFail: false, deleteFail: false, deleteErrorMessage: null as string | null },
+    state: {
+      addFail: false,
+      fixtureFail: false,
+      deleteFail: false,
+      deletePending: false,
+      deleteErrorMessage: null as string | null,
+    },
   }))
 
 vi.mock('@/api/generated/events/events', () => ({
@@ -21,7 +27,7 @@ vi.mock('@/api/generated/events/events', () => ({
   getGetApiV1EventsIdQueryKey: () => ['event'],
   getGetApiV1EventsQueryKey: () => ['events'],
   useDeleteApiV1EventsId: (opts?: { mutation?: { onSuccess?: () => void } }) => ({
-    isPending: false,
+    isPending: state.deletePending,
     mutateAsync: async (vars: unknown) => {
       deleteMutate(vars)
       if (state.deleteFail) {
@@ -119,6 +125,7 @@ describe('EventDetail', () => {
     state.addFail = false
     state.fixtureFail = false
     state.deleteFail = false
+    state.deletePending = false
     state.deleteErrorMessage = null
     useGetApiV1EventsId.mockReturnValue({ data: event, isLoading: false })
   })
@@ -323,6 +330,15 @@ describe('EventDetail', () => {
 
     expect(deleteMutate).toHaveBeenCalledWith({ id: 'e1' })
     expect(onBack).toHaveBeenCalled()
+  })
+
+  it('shows a busy label while the delete is in flight', async () => {
+    state.deletePending = true
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.click(screen.getByRole('button', { name: 'Delete event' }))
+    expect(screen.getByRole('button', { name: 'Deleting…' })).toBeInTheDocument()
   })
 
   it('cancels a pending delete without calling the API', async () => {
