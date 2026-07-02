@@ -1546,6 +1546,25 @@ paths:
           description: Caller is not HOST/ADMINISTRATOR
         '404':
           description: No such event
+    delete:
+      summary: Delete an event (HOST owns / ADMINISTRATOR any)
+      description: |
+        Soft-deletes an event, gated by its matches. Any rated match blocks deletion outright; any
+        recorded (but unrated) match is refused with advice to delete those matches first. Remaining
+        scheduled fixtures are soft-disabled alongside the event. A HOST may delete only their own event.
+      tags:
+        - Events
+      security:
+        - firebaseAuth: []
+      responses:
+        '204':
+          description: Event deleted
+        '403':
+          description: Caller is not HOST/ADMINISTRATOR, or a HOST deleting another's event
+        '404':
+          description: No such event
+        '409':
+          description: The event has recorded or rated matches and cannot be deleted
 
   /api/v1/events/{id}/participants:
     parameters:

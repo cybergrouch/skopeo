@@ -5,18 +5,37 @@ import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { EventDetail } from './EventDetail'
 
-const { useGetApiV1EventsId, addMutate, removeMutate, decideMutate, createFixtureMutate, state } = vi.hoisted(() => ({
-  useGetApiV1EventsId: vi.fn(),
-  addMutate: vi.fn(),
-  removeMutate: vi.fn(),
-  decideMutate: vi.fn(),
-  createFixtureMutate: vi.fn(),
-  state: { addFail: false, fixtureFail: false },
-}))
+const { useGetApiV1EventsId, addMutate, removeMutate, decideMutate, createFixtureMutate, deleteMutate, state } =
+  vi.hoisted(() => ({
+    useGetApiV1EventsId: vi.fn(),
+    addMutate: vi.fn(),
+    removeMutate: vi.fn(),
+    decideMutate: vi.fn(),
+    createFixtureMutate: vi.fn(),
+    deleteMutate: vi.fn(),
+    state: {
+      addFail: false,
+      fixtureFail: false,
+      deleteFail: false,
+      deletePending: false,
+      deleteErrorMessage: null as string | null,
+    },
+  }))
 
 vi.mock('@/api/generated/events/events', () => ({
   useGetApiV1EventsId,
   getGetApiV1EventsIdQueryKey: () => ['event'],
+  getGetApiV1EventsQueryKey: () => ['events'],
+  useDeleteApiV1EventsId: (opts?: { mutation?: { onSuccess?: () => void } }) => ({
+    isPending: state.deletePending,
+    mutateAsync: async (vars: unknown) => {
+      deleteMutate(vars)
+      if (state.deleteFail) {
+        throw state.deleteErrorMessage ? { response: { data: { message: state.deleteErrorMessage } } } : new Error('boom')
+      }
+      opts?.mutation?.onSuccess?.()
+    },
+  }),
   usePostApiV1EventsIdParticipants: (opts?: { mutation?: { onSuccess?: () => void } }) => ({
     isPending: false,
     mutate: (vars: unknown, handlers?: { onError?: () => void }) => {
@@ -105,6 +124,9 @@ describe('EventDetail', () => {
     vi.clearAllMocks()
     state.addFail = false
     state.fixtureFail = false
+    state.deleteFail = false
+    state.deletePending = false
+    state.deleteErrorMessage = null
     useGetApiV1EventsId.mockReturnValue({ data: event, isLoading: false })
   })
 
@@ -290,5 +312,74 @@ describe('EventDetail', () => {
     // Only the pending request offers Hold (the held one shows just Approve).
     await user.click(screen.getByRole('button', { name: 'Hold' }))
     expect(decideMutate).toHaveBeenCalledWith({ id: 'e1', userId: 'u6', data: { status: 'HOLD' } })
+  })
+
+  it('deletes the event after a confirm step and returns to the list (#243)', async () => {
+    const user = userEvent.setup()
+    const onBack = vi.fn()
+    render(
+      <MemoryRouter>
+        <QueryClientProvider client={new QueryClient()}>
+          <EventDetail eventId="e1" onBack={onBack} />
+        </QueryClientProvider>
+      </MemoryRouter>,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Delete event' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm delete' }))
+
+    expect(deleteMutate).toHaveBeenCalledWith({ id: 'e1' })
+    expect(onBack).toHaveBeenCalled()
+  })
+
+  it('shows a busy label while the delete is in flight', async () => {
+    state.deletePending = true
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.click(screen.getByRole('button', { name: 'Delete event' }))
+    expect(screen.getByRole('button', { name: 'Deleting…' })).toBeInTheDocument()
+  })
+
+  it('cancels a pending delete without calling the API', async () => {
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.click(screen.getByRole('button', { name: 'Delete event' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(deleteMutate).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Delete event' })).toBeInTheDocument()
+  })
+
+  it('shows a generic message when a delete fails without server guidance', async () => {
+    state.deleteFail = true
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.click(screen.getByRole('button', { name: 'Delete event' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm delete' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not delete this event.')
+  })
+
+  it('surfaces the server guidance when a delete is refused (#243)', async () => {
+    state.deleteFail = true
+    state.deleteErrorMessage = "Delete this event's recorded matches first, then delete the event"
+    const user = userEvent.setup()
+    const onBack = vi.fn()
+    render(
+      <MemoryRouter>
+        <QueryClientProvider client={new QueryClient()}>
+          <EventDetail eventId="e1" onBack={onBack} />
+        </QueryClientProvider>
+      </MemoryRouter>,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Delete event' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm delete' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('recorded matches first')
+    expect(onBack).not.toHaveBeenCalled()
   })
 })

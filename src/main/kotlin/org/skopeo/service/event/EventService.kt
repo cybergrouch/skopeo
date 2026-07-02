@@ -19,6 +19,7 @@ import org.skopeo.model.Event
 import org.skopeo.model.EventParticipantRef
 import org.skopeo.model.EventParticipantStatus
 import org.skopeo.model.EventView
+import org.skopeo.model.MatchStatus
 import org.skopeo.model.MyEvent
 import org.skopeo.model.ServiceError
 import org.skopeo.model.User
@@ -30,6 +31,7 @@ import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.user.VerifiedFirebaseToken
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.util.UUID
 
 private val STAFF_ROLES = setOf(Capability.HOST, Capability.ADMINISTRATOR)
@@ -103,6 +105,38 @@ class EventService(
             staffCaller(users = users, token = token).bind().id
             val event = ensureNotNull(value = events.findById(id = id)) { ServiceError.NotFound(message = "Event $id not found") }
             toView(event = event)
+        }
+
+    /**
+     * Delete an event (#243), soft-delete via is_active. The event's matches gate it: any *rated* match
+     * blocks deletion outright (results are permanent); any *recorded* (COMPLETED) but unrated match is
+     * refused with advice to delete those matches first (they're still deletable while unrated, #138).
+     * Remaining scheduled fixtures — the only matches that can survive the guard — are soft-disabled
+     * alongside the event so they don't outlive it. A HOST may only delete their own event; an
+     * ADMINISTRATOR may delete any.
+     */
+    fun delete(
+        token: VerifiedFirebaseToken,
+        id: UUID,
+    ): Either<ServiceError, Unit> =
+        either {
+            val caller = staffCaller(users = users, token = token).bind()
+            val event = ensureNotNull(value = events.findById(id = id)) { ServiceError.NotFound(message = "Event $id not found") }
+            val isAdmin = caller.capabilities.contains(element = Capability.ADMINISTRATOR)
+            ensure(condition = isAdmin || event.createdBy == caller.id) { ServiceError.Forbidden() }
+
+            val eventMatches = matches.listByEvent(eventId = id)
+            ensure(condition = eventMatches.none { it.ratedAt != null }) {
+                ServiceError.Conflict(message = "This event has rated matches and can't be deleted")
+            }
+            ensure(condition = eventMatches.none { it.status == MatchStatus.COMPLETED }) {
+                ServiceError.Conflict(message = "Delete this event's recorded matches first, then delete the event")
+            }
+
+            val now = LocalDateTime.now()
+            // Only scheduled (unrecorded, unrated) fixtures remain; soft-disable them so none outlive the event.
+            eventMatches.forEach { matches.setActive(matchId = it.id, active = false, disabledAt = now).bind() }
+            events.setActive(id = id, active = false, disabledAt = now)
         }
 
     fun addParticipant(
