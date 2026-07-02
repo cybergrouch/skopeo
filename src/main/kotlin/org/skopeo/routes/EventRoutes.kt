@@ -144,6 +144,14 @@ private fun Route.byIdAndParticipants(service: EventService) {
             ) { event -> call.respond(status = HttpStatusCode.OK, message = event.toResponse()) }
         }
     }
+    // Delete an event (#243). Soft-delete, gated by the event's matches (see EventService.delete).
+    delete(path = "/{id}") {
+        respondMappingErrors {
+            respondEither(result = service.delete(token = verifiedToken(), id = uuidParam(name = "id"))) {
+                call.respond(status = HttpStatusCode.NoContent, message = "")
+            }
+        }
+    }
     delete(path = "/{id}/participants/{userId}") {
         respondMappingErrors {
             respondEither(

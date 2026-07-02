@@ -13,6 +13,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
   getGetApiV1EventsIdQueryKey,
+  getGetApiV1EventsQueryKey,
+  useDeleteApiV1EventsId,
   useDeleteApiV1EventsIdParticipantsUserId,
   useGetApiV1EventsId,
   usePostApiV1EventsIdParticipants,
@@ -57,6 +59,12 @@ const MATCH_TYPE_LABELS: Record<(typeof MATCH_TYPES)[number], string> = {
  * pickers are scoped to this event's participants (and the API enforces it). Hosts manage the roster
  * here and record results below.
  */
+/** Prefer the server's message (e.g. the 409 delete-guard advice), falling back to a generic one. */
+function eventErrorMessage(err: unknown, fallback: string): string {
+  const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+  return message && message.trim() !== '' ? message : fallback
+}
+
 export function EventDetail({
   eventId,
   onBack,
@@ -78,6 +86,8 @@ export function EventDetail({
   const [date, setDate] = useState('')
   const [fixtureError, setFixtureError] = useState<string | null>(null)
   const [rosterError, setRosterError] = useState<string | null>(null)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   function refreshEvent() {
     void queryClient.invalidateQueries({ queryKey: getGetApiV1EventsIdQueryKey(eventId) })
@@ -102,6 +112,27 @@ export function EventDetail({
       },
     },
   })
+
+  // Delete the event (#243). The server refuses (409) while it has recorded/rated matches — surface
+  // its guidance verbatim. On success, return to the list, which no longer includes this event.
+  const deleteEvent = useDeleteApiV1EventsId({
+    mutation: {
+      onSuccess: () => {
+        void queryClient.invalidateQueries({ queryKey: getGetApiV1EventsQueryKey() })
+        onBack()
+      },
+    },
+  })
+
+  async function confirmDelete() {
+    setDeleteError(null)
+    try {
+      await deleteEvent.mutateAsync({ id: eventId })
+    } catch (e) {
+      setDeleteError(eventErrorMessage(e, 'Could not delete this event.'))
+      setConfirmingDelete(false)
+    }
+  }
 
   function scheduleFixture(e: FormEvent) {
     e.preventDefault()
@@ -366,6 +397,59 @@ export function EventDetail({
             title="Share this event"
             description="Scan this code or copy the link to open this event's public page."
           />
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Delete event</CardTitle>
+              <CardDescription>
+                An event can be deleted only while it has no recorded matches. Delete recorded matches
+                first; an event with rated matches can’t be deleted.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {confirmingDelete ? (
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive hover:text-destructive"
+                    disabled={deleteEvent.isPending}
+                    onClick={confirmDelete}
+                  >
+                    {deleteEvent.isPending ? 'Deleting…' : 'Confirm delete'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={deleteEvent.isPending}
+                    onClick={() => setConfirmingDelete(false)}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => {
+                    setDeleteError(null)
+                    setConfirmingDelete(true)
+                  }}
+                >
+                  Delete event
+                </Button>
+              )}
+              {deleteError ? (
+                <p className="text-sm text-destructive" role="alert">
+                  {deleteError}
+                </p>
+              ) : null}
+            </CardContent>
+          </Card>
         </>
       )}
     </div>

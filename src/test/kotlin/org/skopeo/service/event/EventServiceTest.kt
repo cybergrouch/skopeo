@@ -9,6 +9,7 @@ import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
@@ -17,6 +18,8 @@ import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.CreateFixtureCommand
 import org.skopeo.model.EventParticipantStatus
+import org.skopeo.model.Match
+import org.skopeo.model.MatchSetResult
 import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
@@ -34,6 +37,7 @@ import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.math.BigDecimal
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.util.UUID
 
 class EventServiceTest {
@@ -236,6 +240,118 @@ class EventServiceTest {
             .publicByCode(token = token(uid = "host"), code = "ZZZZZZ")
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    // --- Event deletion (#243) ---
+
+    private val matchRepo = MatchRepository()
+
+    private fun seedFixture(
+        eventId: UUID,
+        host: User,
+        p1: User,
+        p2: User,
+    ): Match =
+        matchRepo.createFixture(
+            command =
+                CreateFixtureCommand(
+                    matchFormat = TeamType.SINGLES,
+                    matchType = MatchType.OPEN_PLAY,
+                    matchDate = LocalDate.parse("2026-03-02"),
+                    team1UserIds = listOf(element = p1.id),
+                    team2UserIds = listOf(element = p2.id),
+                    team1Name = "p1",
+                    team2Name = "p2",
+                    createdBy = host.id,
+                    eventId = eventId,
+                ),
+        )
+
+    private fun recordResult(match: Match) {
+        matchRepo.addResult(
+            matchId = match.id,
+            sets = listOf(element = MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 4, winnerTeamId = match.team1.teamId)),
+            winnerTeamId = match.team1.teamId,
+            recordedBy = match.createdBy!!,
+            completedAt = LocalDateTime.now(),
+        )
+    }
+
+    @Test
+    fun `a host deletes an event with no matches, and it drops off their list`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight().event
+
+        service.delete(token = token(uid = "host"), id = event.id).shouldBeRight()
+
+        events.findById(id = event.id)!!.isActive.shouldBeFalse()
+        service.list(token = token(uid = "host")).shouldBeRight() shouldHaveSize 0
+    }
+
+    @Test
+    fun `deleting an event soft-disables its remaining scheduled fixtures`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        val event = service.create(token = token(uid = "host"), input = input(participants = listOf(p1.id, p2.id))).shouldBeRight().event
+        seedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2)
+
+        service.delete(token = token(uid = "host"), id = event.id).shouldBeRight()
+
+        matchRepo.listByEvent(eventId = event.id) shouldHaveSize 0
+    }
+
+    @Test
+    fun `an event with a recorded but unrated match is refused, advising match deletion first`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        val event = service.create(token = token(uid = "host"), input = input(participants = listOf(p1.id, p2.id))).shouldBeRight().event
+        recordResult(match = seedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2))
+
+        val error = service.delete(token = token(uid = "host"), id = event.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Conflict>()
+        error.message shouldContain "recorded matches first"
+        events.findById(id = event.id)!!.isActive.shouldBeTrue()
+    }
+
+    @Test
+    fun `an event with a rated match cannot be deleted`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        val event = service.create(token = token(uid = "host"), input = input(participants = listOf(p1.id, p2.id))).shouldBeRight().event
+        val match = seedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2)
+        recordResult(match = match)
+        matchRepo.markRated(matchId = match.id, ratedAt = LocalDateTime.now(), ratedBy = host.id)
+
+        val error = service.delete(token = token(uid = "host"), id = event.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Conflict>()
+        error.message shouldContain "rated matches"
+        events.findById(id = event.id)!!.isActive.shouldBeTrue()
+    }
+
+    @Test
+    fun `a host cannot delete another host's event, but an administrator can`() {
+        val owner = provision(uid = "owner", roles = setOf(Capability.PLAYER, Capability.HOST))
+        provision(uid = "other", roles = setOf(Capability.PLAYER, Capability.HOST))
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val event = service.create(token = token(uid = "owner"), input = input()).shouldBeRight().event
+
+        service.delete(token = token(uid = "other"), id = event.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        events.findById(id = event.id)!!.isActive.shouldBeTrue()
+
+        service.delete(token = token(uid = "admin"), id = event.id).shouldBeRight()
+        events.findById(id = event.id)!!.isActive.shouldBeFalse()
+        owner.id shouldBe event.createdBy
+    }
+
+    @Test
+    fun `deleting a non-existent event is NotFound, and a non-staff caller is forbidden`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        service
+            .delete(token = token(uid = "host"), id = UUID.randomUUID())
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
+        service.delete(token = token(uid = "ghost"), id = UUID.randomUUID()).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test

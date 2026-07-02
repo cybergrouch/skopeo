@@ -58,6 +58,19 @@ class EventRepository {
 
     fun findById(id: UUID): Event? = transaction { loadEvent(id = id) }
 
+    /** Soft-delete/restore an event (#243): flip is_active and stamp/clear disabled_at. Returns false if absent. */
+    fun setActive(
+        id: UUID,
+        active: Boolean,
+        disabledAt: LocalDateTime?,
+    ): Boolean =
+        transaction {
+            EventsTable.update(where = { EventsTable.id eq id }) {
+                it[isActive] = active
+                it[EventsTable.disabledAt] = disabledAt
+            } > 0
+        }
+
     /** Resolve an active event by its shareable public code (#138); null if absent or disabled. */
     fun findByPublicCode(code: String): Event? =
         transaction {
