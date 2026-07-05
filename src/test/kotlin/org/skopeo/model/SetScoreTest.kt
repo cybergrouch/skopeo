@@ -167,4 +167,61 @@ class SetScoreTest {
             exception.message shouldContain "must be one of the teams in the tiebreak"
         }
     }
+
+    @Nested
+    @DisplayName("Flexible scores (format policy lives at recording, #213)")
+    inner class FlexibleScores {
+        @Test
+        @DisplayName("A set won by a single game is accepted (no win-by-2 rule)")
+        fun testWinByOneAccepted() {
+            val set = SetScore(games = mapOf("T1" to 6, "T2" to 5), winnerTeamId = "T1")
+
+            set.winnerTeamId shouldBe "T1"
+            set.loserTeamId shouldBe "T2"
+        }
+
+        @Test
+        @DisplayName("A short set is accepted (no 6-game floor)")
+        fun testShortSetAccepted() {
+            val set = SetScore(games = mapOf("T1" to 4, "T2" to 1), winnerTeamId = "T1")
+
+            set.winnerTeamId shouldBe "T1"
+        }
+
+        @Test
+        @DisplayName("A long set is accepted (no 7-game cap)")
+        fun testLongSetAccepted() {
+            val set = SetScore(games = mapOf("T1" to 8, "T2" to 6), winnerTeamId = "T1")
+
+            set.winnerTeamId shouldBe "T1"
+        }
+
+        @Test
+        @DisplayName("A tiebreak-decided set need not be 7-6")
+        fun testTiebreakSetNeedNotBeSevenSix() {
+            val set =
+                SetScore(
+                    games = mapOf("T1" to 7, "T2" to 5),
+                    winnerTeamId = "T1",
+                    tiebreak = TiebreakScore(points = mapOf("T1" to 10, "T2" to 8), winnerTeamId = "T1"),
+                )
+
+            set.tiebreak?.winnerTeamId shouldBe "T1"
+        }
+
+        @Test
+        @DisplayName("A tiebreak winner other than the set winner is still rejected")
+        fun testTiebreakWinnerConsistencyStillEnforced() {
+            val exception =
+                shouldThrow<IllegalArgumentException> {
+                    SetScore(
+                        games = mapOf("T1" to 6, "T2" to 5),
+                        winnerTeamId = "T1",
+                        tiebreak = TiebreakScore(points = mapOf("T1" to 3, "T2" to 7), winnerTeamId = "T2"),
+                    )
+                }
+
+            exception.message shouldContain "must be the set winner"
+        }
+    }
 }
