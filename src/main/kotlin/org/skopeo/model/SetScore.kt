@@ -41,22 +41,16 @@ data class SetScore(
 
         require(value = winnerGames >= 0 && loserGames >= 0) { "Game scores must be non-negative" }
 
-        // Validate set scores
+        // The tiebreak, when present, decides the set — so its winner must be the set winner.
         if (tiebreak != null) {
-            // The tiebreak decides the set, so its winner must be the set winner
             require(value = tiebreak.winnerTeamId == winnerTeamId) {
                 "Tiebreak winner '${tiebreak.winnerTeamId}' must be the set winner '$winnerTeamId'"
             }
-
-            // Tiebreak set (usually 7-6 or 6-7)
-            require(value = (winnerGames == 7 && loserGames == 6) || (winnerGames == 6 && loserGames == 7)) {
-                "Tiebreak set must be 7-6 or 6-7, got $winnerGames-$loserGames"
-            }
-        } else {
-            // Regular set - must win by 2 games, or 6-4, 6-3, etc.
-            require(value = winnerGames >= 6) { "Winner must have at least 6 games in a regular set" }
-            require(value = winnerGames - loserGames >= 2) { "Set must be won by at least 2 games" }
-            require(value = winnerGames <= 7) { "Games should not exceed 7 without tiebreak" }
         }
+        // No tennis-format rules here (win-by-2, 6/7-game caps, 7-6 tiebreak sets): score-format policy
+        // lives at the recording boundary (SetScoreRequest, #213) and has moved to flexible scores. This
+        // model is also how the rating (re)calculation rebuilds a stored match's request, so re-imposing a
+        // stricter format here broke recalculation of already-recorded flexible scores. The dominance model
+        // needs only the game counts, a valid winner/loser, and non-negative scores.
     }
 }

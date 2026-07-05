@@ -330,9 +330,14 @@ private fun buildRequest(
                 } else {
                     null
                 }
+            val winner = set.winnerTeamId.toString()
+            val games = mapOf(t1 to set.team1Games, t2 to set.team2Games)
             SetScore(
-                games = mapOf(t1 to set.team1Games, t2 to set.team2Games),
-                winnerTeamId = set.winnerTeamId.toString(),
+                games = games,
+                winnerTeamId = winner,
+                // Name the loser explicitly (the other team): for an equal-games set (tiebreak-decided)
+                // the default (fewest games) would otherwise collide with the winner.
+                loserTeamId = (games.keys - winner).single(),
                 tiebreak = tiebreak,
             )
         }

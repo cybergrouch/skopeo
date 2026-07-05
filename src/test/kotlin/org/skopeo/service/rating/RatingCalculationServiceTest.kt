@@ -127,6 +127,37 @@ class RatingCalculationServiceTest {
     }
 
     @Test
+    fun `recalculates a match recorded with a flexible, win-by-one set score`() {
+        // Regression: recording accepts flexible scores (#213), but the calculation rebuilt each set
+        // through SetScore, which enforced a stricter tennis format (win-by-2) and threw during recalc.
+        provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val match =
+            matchService.createFixture(
+                token = token(uid = "root"),
+                request =
+                    FixtureInput(
+                        matchFormat = TeamType.SINGLES,
+                        matchType = MatchType.OPEN_PLAY,
+                        matchDate = LocalDate.parse("2026-01-01"),
+                        team1 = listOf(element = p1.id),
+                        team2 = listOf(element = p2.id),
+                    ),
+            ).shouldBeRight()
+        matchService.uploadResult(
+            token = token(uid = "root"),
+            matchId = match.id,
+            // 6-5 (won by one) — previously rejected by SetScore's win-by-2 rule during the rebuild.
+            request = MatchResultRequest(sets = listOf(element = SetScoreRequest(team1Games = 6, team2Games = 5))),
+        ).shouldBeRight()
+
+        val result = calc.calculate(token = token(uid = "root"), dryRun = true).shouldBeRight()
+
+        result.matches.single().changes.size shouldBe 2
+    }
+
+    @Test
     fun `dry-run previews changes without writing`() {
         provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val p1 = provisionUser(uid = "p1", rated = true)
