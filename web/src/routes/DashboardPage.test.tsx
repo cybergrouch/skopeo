@@ -44,6 +44,9 @@ vi.mock('./dashboard/InvitesTab', () => ({
 vi.mock('./dashboard/ActivityTab', () => ({
   ActivityTab: () => <div>activity content</div>,
 }))
+vi.mock('./dashboard/ReportTab', () => ({
+  ReportTab: () => <div>report content</div>,
+}))
 
 function renderDashboard() {
   return render(
