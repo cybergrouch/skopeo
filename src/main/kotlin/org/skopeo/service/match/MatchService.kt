@@ -16,6 +16,7 @@ import org.skopeo.dto.match.MatchPublicRatingChange
 import org.skopeo.dto.match.MatchPublicResponse
 import org.skopeo.dto.match.MatchPublicSet
 import org.skopeo.dto.match.MatchResultRequest
+import org.skopeo.dto.match.UpcomingMatchResponse
 import org.skopeo.dto.match.toPublicResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
@@ -225,6 +226,42 @@ class MatchService(
             val headToHead = headToHeadFor(match = match, usersById = usersById)
             match.toPublicResponse(players = players, ratingChanges = ratingChanges, headToHead = headToHead)
         }
+
+    /**
+     * The authenticated caller's upcoming matches (#251): their SCHEDULED fixtures dated today or later,
+     * soonest first, for the private profile. Owner-only — an unprovisioned caller simply has none.
+     */
+    fun upcomingForCaller(token: VerifiedFirebaseToken): Either<ServiceError, List<UpcomingMatchResponse>> =
+        either {
+            val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+            if (caller == null) emptyList() else upcomingMatchesOf(userId = caller.id)
+        }
+
+    private fun upcomingMatchesOf(userId: UUID): List<UpcomingMatchResponse> {
+        val today = LocalDate.now()
+        val upcoming =
+            matches
+                .listByUser(userId = userId)
+                .filter { it.status == MatchStatus.SCHEDULED && !it.matchDate.isBefore(today) }
+                .sortedBy { it.matchDate }
+        val playersById =
+            users.findAllByIds(ids = upcoming.flatMap { it.team1.userIds + it.team2.userIds }.distinct()).associateBy { it.id }
+        return upcoming.map { match ->
+            val callerOnTeam1 = userId in match.team1.userIds
+            val opponentIds = if (callerOnTeam1) match.team2.userIds else match.team1.userIds
+            UpcomingMatchResponse(
+                publicCode = match.publicCode,
+                matchDate = match.matchDate.toString(),
+                matchType = match.matchType.name,
+                venue = match.venue,
+                opponents =
+                    opponentIds.map { id ->
+                        val user = playersById.getValue(key = id)
+                        MatchPublicPlayer(displayName = user.displayName(), publicCode = user.publicCode)
+                    },
+            )
+        }
+    }
 
     /**
      * Head-to-head record between a singles match's two players (#188): the win tally and prior

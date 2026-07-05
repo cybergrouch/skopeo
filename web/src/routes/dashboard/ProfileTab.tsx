@@ -8,6 +8,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { useAuth } from '@/auth/useAuth'
 import { MatchHistoryCard } from '@/components/MatchHistoryCard'
+import { UpcomingMatchesCard } from '@/components/UpcomingMatchesCard'
 import { EventsHistoryCard } from '@/components/EventsHistoryCard'
 import { RatingHistoryCard } from '@/components/RatingHistoryCard'
 import { RatingBandMeter } from '@/components/RatingBandMeter'
@@ -161,6 +162,8 @@ export function ProfileTab({
         isLoading={historyQuery.isLoading}
         description="Changes from your rated matches."
       />
+
+      <UpcomingMatchesCard />
 
       {publicCode ? <MatchHistoryCard code={publicCode} /> : null}
 
