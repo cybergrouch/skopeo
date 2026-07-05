@@ -28,6 +28,7 @@ import { ResearchTab } from './dashboard/ResearchTab'
 import { StandingsTab } from './dashboard/StandingsTab'
 import { InvitesTab } from './dashboard/InvitesTab'
 import { ActivityTab } from './dashboard/ActivityTab'
+import { ReportTab } from './dashboard/ReportTab'
 
 interface Section {
   value: string
@@ -48,6 +49,7 @@ export function DashboardPage() {
   const showResearch = isResearcher(capabilities)
   const showInvites = isAdministrator(capabilities)
   const showActivity = isAdministrator(capabilities)
+  const showReport = isAdministrator(capabilities)
   const showAdmin = isAdministrator(capabilities)
 
   // The selected section + the menu's open state. One menu drives navigation at every breakpoint —
@@ -78,6 +80,7 @@ export function DashboardPage() {
     ...(showRatings ? [{ value: 'ratings', label: 'Ratings', element: <RatingsTab /> }] : []),
     ...(showInvites ? [{ value: 'invites', label: 'Invites', element: <InvitesTab /> }] : []),
     ...(showActivity ? [{ value: 'activity', label: 'Activity Log', element: <ActivityTab /> }] : []),
+    ...(showReport ? [{ value: 'reports', label: 'Reports', element: <ReportTab /> }] : []),
     ...(showAdmin ? [{ value: 'admin', label: 'Admin', element: <AdminTab /> }] : []),
   ]
 

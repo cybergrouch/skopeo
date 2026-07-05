@@ -44,6 +44,9 @@ vi.mock('./dashboard/InvitesTab', () => ({
 vi.mock('./dashboard/ActivityTab', () => ({
   ActivityTab: () => <div>activity content</div>,
 }))
+vi.mock('./dashboard/ReportTab', () => ({
+  ReportTab: () => <div>report content</div>,
+}))
 
 function renderDashboard() {
   return render(
@@ -86,6 +89,7 @@ describe('DashboardPage', () => {
     expect(screen.queryByRole('button', { name: 'Ratings' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Invites' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Activity Log' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Reports' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Admin' })).not.toBeInTheDocument()
   })
 
@@ -163,6 +167,7 @@ describe('DashboardPage', () => {
     expect(screen.getByRole('button', { name: 'Standings' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Invites' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Activity Log' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Reports' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Admin' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Event Organizer' }))

@@ -91,6 +91,19 @@ class RatingRepository {
         }
 
     /**
+     * Every rating-history row across all users (#216 band-hop report), oldest first. Pilot-scale: the
+     * report reconstructs each player's band at the window boundaries in memory, so it reads the table
+     * in full; revisit with a windowed SQL query if the history grows large.
+     */
+    fun allHistory(): List<RatingHistoryEntry> =
+        transaction {
+            UserRatingHistoryTable
+                .selectAll()
+                .orderBy(UserRatingHistoryTable.calculatedAt to SortOrder.ASC)
+                .map { it.toRatingHistory() }
+        }
+
+    /**
      * Every rating-history row tied to any of [matchIds] (across all users). Used to reconstruct
      * each side's at-the-time band for match history. Returns empty when [matchIds] is empty.
      */
