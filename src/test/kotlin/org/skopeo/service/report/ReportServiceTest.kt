@@ -111,6 +111,8 @@ class ReportServiceTest {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
 
         report(admin = "player").shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        // A token that maps to no account is likewise forbidden (the caller can't be resolved).
+        report(admin = "ghost").shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
         service
             .bandHops(token = token(uid = "admin"), startDate = LocalDate.parse("2026-03-31"), endDate = LocalDate.parse("2026-03-01"))
             .shouldBeLeft()
@@ -134,6 +136,8 @@ class ReportServiceTest {
         val jumper = ratedPlayer(uid = "jumper", currentLevel = "4.0")
         change(userId = jumper.id, at = "2026-03-10T10:00", from = "3.0", to = "3.5")
         change(userId = jumper.id, at = "2026-03-20T10:00", from = "3.5", to = "4.0")
+        // A change AFTER the window close is excluded from the closing band (still 4.0, not 4.5).
+        change(userId = jumper.id, at = "2026-04-05T10:00", from = "4.0", to = "4.5")
         // Dropped one band within the window (direction-agnostic): entered at 3.5, closed at 3.0.
         val dropper = ratedPlayer(uid = "dropper", currentLevel = "3.0")
         change(userId = dropper.id, at = "2026-02-10T10:00", from = "3.0", to = "3.5")
@@ -169,6 +173,34 @@ class ReportServiceTest {
         result.totalPlayers shouldBe 1
         result.buckets.single { it.hopDistance == 0 }.users.single().publicCode shouldBe
             users.findByFirebaseUid(firebaseUid = "banded")!!.publicCode
+    }
+
+    @Test
+    fun `a history row without a band label falls back to the previous band`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val user = ratedPlayer(uid = "u", currentLevel = "3.0")
+        // A change row can carry a null newLevel (nullable column); it must not null out the resolved band.
+        ratings.appendHistory(
+            write =
+                RatingHistoryWrite(
+                    userId = user.id,
+                    matchId = null,
+                    previousRating = BigDecimal("3.0"),
+                    newRating = BigDecimal("3.2"),
+                    ratingChange = BigDecimal("0.2"),
+                    percentChange = null,
+                    previousLevel = "3.0",
+                    newLevel = null,
+                    levelChanged = false,
+                    breakdown = null,
+                    calculatedAt = LocalDateTime.parse("2026-03-10T10:00"),
+                ),
+        )
+
+        val result = report().shouldBeRight()
+
+        result.totalPlayers shouldBe 1
+        result.buckets.single { it.hopDistance == 0 }.users.single().toBand shouldBe "3.0"
     }
 
     @Test

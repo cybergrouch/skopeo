@@ -60,19 +60,23 @@ class ReportService(
             val windowOpen = startDate.atStartOfDay()
             val windowClose = endDate.atTime(LocalTime.MAX)
 
-            val currentByUser = ratings.allCurrentRatings().associateBy { it.userId }
             val historyByUser = ratings.allHistory().groupBy { it.userId }
 
+            // Population: every player with a current band on record. A player with none can't be placed
+            // on the band scale and is skipped (the only reachable skip). A rated player's band at each
+            // boundary always resolves (their current band is the ultimate fallback), so no null hops.
             val hops =
-                currentByUser.values.mapNotNull { rating ->
-                    val rows = historyByUser[rating.userId].orEmpty()
-                    val fromBand = bandAsOf(rows = rows, instant = windowOpen, inclusive = false, fallback = rating.currentLevel)
-                    val toBand = bandAsOf(rows = rows, instant = windowClose, inclusive = true, fallback = rating.currentLevel)
-                    val distance = hopDistance(from = fromBand, to = toBand)
-                    if (fromBand == null || toBand == null || distance == null) {
-                        null
-                    } else {
-                        Hop(userId = rating.userId, fromBand = fromBand, toBand = toBand, distance = distance)
+                ratings.allCurrentRatings().mapNotNull { rating ->
+                    rating.currentLevel?.let { currentBand ->
+                        val rows = historyByUser[rating.userId].orEmpty()
+                        val fromBand = bandAsOf(rows = rows, instant = windowOpen, inclusive = false, fallback = currentBand)
+                        val toBand = bandAsOf(rows = rows, instant = windowClose, inclusive = true, fallback = currentBand)
+                        Hop(
+                            userId = rating.userId,
+                            fromBand = fromBand,
+                            toBand = toBand,
+                            distance = bandDistance(from = fromBand, to = toBand),
+                        )
                     }
                 }
 
@@ -87,16 +91,16 @@ class ReportService(
                             count = list.size,
                             users =
                                 list
-                                    .mapNotNull { hop ->
-                                        namesById[hop.userId]?.let { user ->
-                                            BandHopUserRow(
-                                                publicCode = user.publicCode,
-                                                displayName = user.displayName(),
-                                                fromBand = hop.fromBand,
-                                                toBand = hop.toBand,
-                                            )
-                                        }
-                                    }.sortedBy { it.displayName ?: it.publicCode },
+                                    .map { hop ->
+                                        // Every hop came from a rating row (FK-backed user), so it resolves.
+                                        val user = namesById.getValue(key = hop.userId)
+                                        BandHopUserRow(
+                                            publicCode = user.publicCode,
+                                            displayName = user.displayName(),
+                                            fromBand = hop.fromBand,
+                                            toBand = hop.toBand,
+                                        )
+                                    }.sortedBy { it.publicCode },
                         )
                     }
 
@@ -121,24 +125,18 @@ class ReportService(
         rows: List<RatingHistoryEntry>,
         instant: LocalDateTime,
         inclusive: Boolean,
-        fallback: String?,
-    ): String? {
+        fallback: String,
+    ): String {
         val prior =
             rows.filter { if (inclusive) !it.calculatedAt.isAfter(instant) else it.calculatedAt.isBefore(instant) }
-        val latestBefore = prior.maxByOrNull { it.calculatedAt }?.newLevel
-        return latestBefore ?: rows.minByOrNull { it.calculatedAt }?.previousLevel ?: fallback
+        return prior.maxByOrNull { it.calculatedAt }?.newLevel ?: rows.minByOrNull { it.calculatedAt }?.previousLevel ?: fallback
     }
 
-    /** Absolute number of 0.5-wide bands between two level labels (e.g. 3.0 → 4.0 = 2); null if unparsable. */
-    private fun hopDistance(
-        from: String?,
-        to: String?,
-    ): Int? {
-        val fromValue = from?.toBigDecimalOrNull()
-        val toValue = to?.toBigDecimalOrNull()
-        if (fromValue == null || toValue == null) return null
-        return ((toValue - fromValue).abs().toDouble() / BAND_WIDTH).roundToInt()
-    }
+    /** Absolute number of 0.5-wide bands between two NTRP level labels, e.g. 3.0 → 4.0 = 2 (labels are numeric). */
+    private fun bandDistance(
+        from: String,
+        to: String,
+    ): Int = ((to.toBigDecimal() - from.toBigDecimal()).abs().toDouble() / BAND_WIDTH).roundToInt()
 
     private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
         val caller = users.findByFirebaseUid(firebaseUid = token.uid)
