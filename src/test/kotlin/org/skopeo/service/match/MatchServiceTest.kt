@@ -117,6 +117,41 @@ class MatchServiceTest {
                 ),
         )
 
+    private fun create(
+        host: String,
+        request: FixtureInput,
+    ) = service.createFixture(token = token(uid = host), request = request).shouldBeRight()
+
+    @Test
+    fun `upcomingForCaller returns only the caller's future scheduled matches, soonest first (#251)`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val p3 = provisionUser(uid = "p3", rated = true)
+        val p4 = provisionUser(uid = "p4", rated = true)
+        val today = LocalDate.now()
+
+        val soon = create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p2.id, date = today.plusDays(3)))
+        val later = create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p3.id, date = today.plusDays(10)))
+        // Caller sits on team2 here — the opponent must be resolved from the other side.
+        val onTeam2 = create(host = "host", request = fixtureRequest(p1 = p4.id, p2 = p1.id, date = today.plusDays(5)))
+        // Excluded: a past scheduled fixture, and a future fixture that's already completed.
+        create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p2.id, date = today.minusDays(2)))
+        val done = create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p3.id, date = today.plusDays(1)))
+        service.uploadResult(token = token(uid = "host"), matchId = done.id, request = straightSets()).shouldBeRight()
+
+        val upcoming = service.upcomingForCaller(token = token(uid = "p1")).shouldBeRight()
+
+        upcoming.map { it.publicCode } shouldBe listOf(soon.publicCode, onTeam2.publicCode, later.publicCode)
+        upcoming.first().opponents.single().publicCode shouldBe p2.publicCode
+        upcoming.single { it.publicCode == onTeam2.publicCode }.opponents.single().publicCode shouldBe p4.publicCode
+    }
+
+    @Test
+    fun `upcomingForCaller is empty for an unprovisioned caller (#251)`() {
+        service.upcomingForCaller(token = token(uid = "ghost")).shouldBeRight() shouldBe emptyList()
+    }
+
     @Test
     fun `a host can create a fixture between rated players`() {
         provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))

@@ -1238,6 +1238,26 @@ paths:
         '403':
           description: Caller is not HOST/ADMINISTRATOR
 
+  /api/v1/matches/upcoming:
+    get:
+      summary: The caller's own upcoming (scheduled) matches (#251)
+      description: >-
+        The authenticated caller's SCHEDULED fixtures dated today or later, soonest first, for the
+        private profile. Owner-only (derived from the token); an unprovisioned caller gets an empty list.
+      tags:
+        - Matches
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The caller's upcoming matches (possibly empty)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UpcomingMatchResponse'
+
   /api/v1/matches/code/{code}:
     parameters:
       - name: code
@@ -3751,6 +3771,30 @@ components:
         publicCode:
           type: string
           nullable: true
+
+    UpcomingMatchResponse:
+      type: object
+      description: A caller's upcoming (scheduled) match for their private profile (#251).
+      required:
+        - publicCode
+        - matchDate
+        - matchType
+        - opponents
+      properties:
+        publicCode:
+          type: string
+        matchDate:
+          type: string
+          format: date
+        matchType:
+          type: string
+        venue:
+          type: string
+          nullable: true
+        opponents:
+          type: array
+          items:
+            $ref: '#/components/schemas/MatchPublicPlayer'
 
     MatchPublicSet:
       type: object

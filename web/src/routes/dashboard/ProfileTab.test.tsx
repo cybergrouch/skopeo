@@ -46,6 +46,10 @@ vi.mock('@/components/ProfileFieldsForm', () => ({
 vi.mock('@/components/EventsHistoryCard', () => ({
   EventsHistoryCard: () => <div>events history</div>,
 }))
+// The upcoming-matches card has its own tests (#251) + its own API hook; stub it here.
+vi.mock('@/components/UpcomingMatchesCard', () => ({
+  UpcomingMatchesCard: () => <div>upcoming matches</div>,
+}))
 
 function renderProfile(
   capabilities: Capability[] = [Capability.PLAYER],

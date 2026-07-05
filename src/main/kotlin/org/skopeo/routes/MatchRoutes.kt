@@ -45,7 +45,20 @@ fun Application.configureMatchRoutes(service: MatchService = MatchService()) {
             }
             authenticate(FIREBASE_AUTH) {
                 listAndCreate(service = service)
+                upcoming(service = service)
                 byId(service = service)
+            }
+        }
+    }
+}
+
+/** The caller's own upcoming (scheduled) matches for their private profile (#251). Literal path, so it
+ * takes priority over `/{id}`; authenticated so only the owner sees their fixtures. */
+private fun Route.upcoming(service: MatchService) {
+    get(path = "/upcoming") {
+        respondMappingErrors {
+            respondEither(result = service.upcomingForCaller(token = verifiedToken())) { list ->
+                call.respond(status = HttpStatusCode.OK, message = list)
             }
         }
     }

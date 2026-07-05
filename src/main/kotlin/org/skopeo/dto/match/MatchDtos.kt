@@ -142,6 +142,19 @@ data class MatchPublicPlayer(
     val publicCode: String? = null,
 )
 
+/**
+ * A caller's upcoming (scheduled, not-yet-played) match for their private profile (#251): the
+ * opponent(s) + date, linking to the public match page by [publicCode]. Owner-only.
+ */
+@Serializable
+data class UpcomingMatchResponse(
+    val publicCode: String,
+    val matchDate: String,
+    val matchType: String,
+    val venue: String? = null,
+    val opponents: List<MatchPublicPlayer>,
+)
+
 /** A set's score on the public match page, expressed per side (no internal team ids). */
 @Serializable
 data class MatchPublicSet(
