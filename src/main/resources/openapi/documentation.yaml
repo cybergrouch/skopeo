@@ -1974,6 +1974,45 @@ paths:
         '403':
           description: Caller is not an ADMINISTRATOR
 
+  /api/v1/reports/band-hops:
+    get:
+      summary: NTRP band-hop report over a date range (ADMINISTRATOR only)
+      description: >-
+        For each rated player (#216), compares the NTRP band they were in entering the window with the
+        band at its close and buckets players by the absolute number of 0.5-wide bands moved (0 = stayed
+        in band). Confirms that most players stay in band and surfaces the exceptions who jumped. Band
+        labels only — never exact ratings.
+      tags:
+        - Reports
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: startDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: Window start (inclusive), ISO-8601 yyyy-MM-dd.
+        - name: endDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: Window end (inclusive), ISO-8601 yyyy-MM-dd.
+      responses:
+        '200':
+          description: The band-hop report for the range
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BandHopReportResponse'
+        '400':
+          description: Missing/invalid date, or endDate before startDate
+        '403':
+          description: Caller is not an ADMINISTRATOR
+
   /api/v1/audit/{id}/comment:
     patch:
       summary: Set or clear an administrator's note on an audit entry (ADMINISTRATOR only)
@@ -4320,6 +4359,71 @@ components:
             $ref: '#/components/schemas/AuditEntryResponse'
         total:
           type: integer
+
+    BandHopUserRow:
+      type: object
+      required:
+        - publicCode
+        - fromBand
+        - toBand
+      properties:
+        publicCode:
+          type: string
+        displayName:
+          type: string
+          nullable: true
+        fromBand:
+          type: string
+          description: NTRP band entering the window (label only), e.g. "3.0".
+        toBand:
+          type: string
+          description: NTRP band at the window close (label only).
+
+    BandHopBucket:
+      type: object
+      required:
+        - hopDistance
+        - count
+        - users
+      properties:
+        hopDistance:
+          type: integer
+          description: Absolute number of 0.5-wide bands moved (0 = stayed in band).
+        count:
+          type: integer
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/BandHopUserRow'
+
+    BandHopReportResponse:
+      type: object
+      required:
+        - startDate
+        - endDate
+        - totalPlayers
+        - stayedCount
+        - jumpedCount
+        - buckets
+      properties:
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        totalPlayers:
+          type: integer
+        stayedCount:
+          type: integer
+          description: Players whose band did not change over the window (hopDistance 0).
+        jumpedCount:
+          type: integer
+          description: Players who moved at least one band (hopDistance >= 1).
+        buckets:
+          type: array
+          items:
+            $ref: '#/components/schemas/BandHopBucket'
 
     CreatePlayerListRequest:
       type: object

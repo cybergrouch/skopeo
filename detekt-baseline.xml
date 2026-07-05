@@ -102,6 +102,7 @@
     <ID>NamedArguments:MatchServiceTest.kt$MatchServiceTest$listOf(p1.id)</ID>
     <ID>NamedArguments:MatchServiceTest.kt$MatchServiceTest$listOf(p1.toString())</ID>
     <ID>NamedArguments:MatchServiceTest.kt$MatchServiceTest$listOf(p2.toString())</ID>
+    <ID>NamedArguments:ReportRoutes.kt$IllegalArgumentException("Invalid $name '$value'; expected ISO-8601 (yyyy-MM-dd)", e)</ID>
     <ID>NamedArguments:MatchServiceTest.kt$MatchServiceTest$setOf(Capability.PLAYER)</ID>
     <ID>NamedArguments:NameApiIntegrationTest.kt$NameApiIntegrationTest$install(ContentNegotiation) { json() }</ID>
     <ID>NamedArguments:NameService.kt$NameService$IllegalArgumentException("Invalid name type '$value'", e)</ID>
