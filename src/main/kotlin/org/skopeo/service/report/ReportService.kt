@@ -146,9 +146,15 @@ class ReportService(
         inclusive: Boolean,
         fallback: BigDecimal,
     ): BigDecimal {
-        val prior =
-            rows.filter { if (inclusive) !it.calculatedAt.isAfter(instant) else it.calculatedAt.isBefore(instant) }
-        return prior.maxByOrNull { it.calculatedAt }?.newRating ?: rows.minByOrNull { it.calculatedAt }?.previousRating ?: fallback
+        val latestPrior =
+            rows
+                .filter { if (inclusive) !it.calculatedAt.isAfter(instant) else it.calculatedAt.isBefore(instant) }
+                .maxByOrNull { it.calculatedAt }
+        // newRating/previousRating are non-null, so an explicit branch (vs a ?. chain) avoids a dead
+        // "present row but null rating" branch that could never be covered.
+        if (latestPrior != null) return latestPrior.newRating
+        val earliest = rows.minByOrNull { it.calculatedAt }
+        return if (earliest != null) earliest.previousRating else fallback
     }
 
     /** A band's index on the NTRP scale: (minRating − 1.0) / 0.5, e.g. 1.0 → 0, 3.0 → 4, 4.0 → 6. */
