@@ -4,6 +4,7 @@
 package org.skopeo.service.calculator.impl.v2
 
 import io.kotest.matchers.doubles.plusOrMinus
+import io.kotest.matchers.doubles.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import org.skopeo.dto.RankingCalculationRequest
@@ -164,6 +165,29 @@ class PerformanceBasedRankingCalculatorV2Test {
 
         changeFor(result = mixed, playerId = "T1a") shouldBe changeFor(result = doubles, playerId = "T1a")
         changeFor(result = mixed, playerId = "T1b") shouldBe changeFor(result = doubles, playerId = "T1b")
+    }
+
+    @Test
+    fun `team-level change depends only on the team mean, not the within-team spread (#265)`() {
+        // #265 decision: upset/gap is decided by the team MEAN, so two 7.0-combined pairs — {3.0,4.0} and
+        // {3.5,3.5}, both mean 3.5 — get the identical team-level change against the same opponents and score.
+        // Only the within-team split differs (proportional to each partner's share of the mean); the team mean
+        // itself moves by the same Δ_team. This locks in that within-team spread must NOT affect the team-level
+        // upset/gap treatment (a spread-aware alternative was considered and rejected — see the algorithm doc §7.4).
+        val opponents = "4.0" to "4.0"
+        val score = listOf(6 to 4, 6 to 4)
+        val lopsided = v2.calculate(request = doublesRequest(t1 = "3.0" to "4.0", t2 = opponents, sets = score))
+        val even = v2.calculate(request = doublesRequest(t1 = "3.5" to "3.5", t2 = opponents, sets = score))
+
+        // Sum of the two partners' deltas = 2·Δ_team, i.e. the team-level change; it must match across both splits.
+        val lopsidedTeamDelta =
+            changeFor(result = lopsided, playerId = "T1a").toDouble() + changeFor(result = lopsided, playerId = "T1b").toDouble()
+        val evenTeamDelta =
+            changeFor(result = even, playerId = "T1a").toDouble() + changeFor(result = even, playerId = "T1b").toDouble()
+
+        lopsidedTeamDelta shouldBe (evenTeamDelta plusOrMinus 1e-9)
+        // Sanity: it is a positive (upset) move — the 3.5-mean pair beat the higher 4.0-mean pair.
+        evenTeamDelta shouldBeGreaterThan 0.0
     }
 
     @Test

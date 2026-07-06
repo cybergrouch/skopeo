@@ -632,6 +632,22 @@ Team 1: 5.0 → 5.20, 3.0 → 3.12     Team 2: 4.0 → 3.84, 4.0 → 3.84
 
 The four changes sum to `+0.20 + 0.12 − 0.16 − 0.16 = 0` (conserved); the stronger partner gains more (0.20 vs 0.12) while the team mean still moved by exactly the 0.16 the formula computed.
 
+### 7.4 Why the team mean is the basis — not the within-team spread (issue #265)
+
+Upset detection and the gap/scale factors are computed **from the two team means only**; the *spread* within a team (how far apart the two partners are) deliberately plays **no role**. Two teams with the same mean are treated identically — a `{3.0, 4.0}` pair and a `{3.5, 3.5}` pair both enter as a mean-3.5 team, get the same upset classification, and receive the same **team-level** change against a given opponent and score (only the per-partner *split* differs, per §7.2). A spread-aware alternative (letting a wide within-team gap change the upset math) was considered and **rejected**.
+
+This is intentional, and it mirrors how the real-world formats that produce these pairings actually work — **combined-rating** doubles (e.g. a "7.0-combined" bracket, where any two partners whose ratings sum to 7.0 may enter: 3.0+4.0, 3.5+3.5, and in principle 2.5+4.5 … up to the rare 1.0+6.0). The design assumption is that **a given combined rating is competitive in whatever permutation it appears**, because the stronger partner compensates for the weaker one. So the algorithm reasons about the *team*, exactly as the format does.
+
+**Why these formats exist (and why the resulting rating moves are expected, not a bug):**
+
+- They **let lower-ranked players share the court with higher-ranked players** — the point of a combined-rating cap.
+- They are **advantageous to a higher-ranked player who can spot a lower-ranked partner able to keep up with high-level play**: that pair enters a 7.0-combined bracket while really performing like a stronger (≈7.5) pair, *until the lower-ranked player's rating is re-assessed*.
+- So there is genuine upside for **both** sides, and a **lower-ranked partner getting bumped up a band is unsurprising — it is precisely what these tournaments are for** (surfacing and correcting under-rating). The team-mean basis produces exactly that outcome.
+
+The extreme permutations (e.g. 1.0+6.0) are seldom seen and are typically weeded out by hosts; the common, effective splits are 3.0+4.0 and 3.5+3.5. We therefore optimize for the common case and do not claim a 1.0+6.0 pair truly plays like a 3.5+3.5 pair — only that the format treats a combined rating as competitive.
+
+This decision also bounds the "partner-strength farming" concern (issue #266): because equal-combined brackets are competitive by assumption and matchmaking enforces them, any inflation premium only appears when a pair faces a *lower*-combined pair (a mismatched bracket). Any future guardrail should therefore key off the **opposing team-mean gap**, not off lopsided pairing per se. See the reproducible exposure numbers in `DoublesRatingSimulationReport`.
+
 ## 8. Edge Cases and Known Limitations
 
 ### Edge cases (handled by design)
