@@ -10,9 +10,10 @@ How Skopeo turns a match result into rating changes — explained top-down, from
 4. [Dominance factor tables](#4-dominance-factor-tables) — pre-computed values for all common tennis scores
 5. [The post-processing pipeline](#5-the-post-processing-pipeline) — smoothing, clamping, precision, zero-sum
 6. [Worked examples](#6-worked-examples) — full calculations, end to end, plus the complete rating-change table for all test scenarios
-7. [Edge cases and known limitations](#7-edge-cases-and-known-limitations)
-8. [Implementation map](#8-implementation-map) — where the code lives
-9. [Glossary](#9-glossary) — every technical term defined in one place
+7. [Doubles](#7-doubles-team-based-rating) — how the same formula extends to four players
+8. [Edge cases and known limitations](#8-edge-cases-and-known-limitations)
+9. [Implementation map](#9-implementation-map) — where the code lives
+10. [Glossary](#10-glossary) — every technical term defined in one place
 
 ---
 
@@ -232,7 +233,7 @@ At this calibration a player needs a sustained run of strong results — not one
 
 ### 3.4 The upset multiplier: 2.0
 
-When an underdog wins, both ratings are demonstrably wrong, and the evidence is strong — beating a better player is much harder than luck usually allows. The [upset multiplier](#upset-multiplier) of **2.0** makes upset results carry double weight, so miscalibrated ratings converge quickly instead of drifting for dozens of matches. It is a fixed constant regardless of gap size (the gap already enters scale linearly); see [§7](#7-edge-cases-and-known-limitations) for the implications.
+When an underdog wins, both ratings are demonstrably wrong, and the evidence is strong — beating a better player is much harder than luck usually allows. The [upset multiplier](#upset-multiplier) of **2.0** makes upset results carry double weight, so miscalibrated ratings converge quickly instead of drifting for dozens of matches. It is a fixed constant regardless of gap size (the gap already enters scale linearly); see [§8](#8-edge-cases-and-known-limitations) for the implications.
 
 ### Constants summary
 
@@ -291,7 +292,7 @@ A lost set contributes its dominance as a negative term, dragging the average do
 | 6-4, 4-6, 6-4 | +0.200, −0.200, +0.200 | 0.067 |
 | 7-6, 6-7, 7-6 | +0.077, −0.077, +0.077 | 0.026 |
 
-Note that every set carries equal weight in the average — a deciding third set counts the same as the first ([known limitation](#7-edge-cases-and-known-limitations)).
+Note that every set carries equal weight in the average — a deciding third set counts the same as the first ([known limitation](#8-edge-cases-and-known-limitations)).
 
 ### Quick reference: change between equal players
 
@@ -574,7 +575,64 @@ What the matrices show at a glance:
 
 ---
 
-## 7. Edge Cases and Known Limitations
+## 7. Doubles (team-based rating)
+
+Everything above describes a match between two **players**. Doubles (and mixed doubles) is a match between two **teams of two**, and the algorithm extends to it without touching the four-factor core: only the *inputs* fed into the master formula and the *output* split back onto players change. Singles is simply the one-player-per-team special case of this same machinery.
+
+Skopeo folds doubles into the single NTRP rating (no separate doubles number) using the **team-mean** method (issue #256, "Scheme 2"). The full comparison of candidate methods, with a Monte-Carlo fairness study, is in [DOUBLES_RATING_STUDY.md](DOUBLES_RATING_STUDY.md); this section documents the shipped behavior.
+
+### 7.1 Team rating = the mean of the partners
+
+A team enters the calculation as **one virtual player rated at the mean of its two partners**:
+
+```
+teamMean = (rₐ + r_b) / 2
+```
+
+That single number drives every factor exactly as in singles, evaluated team-vs-team:
+
+- **dominance** — from the team's per-set games (the score is already team-level), unchanged.
+- **rating gap / normalized gap / scale / upset** — computed from the two *team means*. An upset is decided by the team-mean gap, and the match-type factor applies identically.
+
+So the master formula runs once per team and produces a single **team delta** `Δ_team` — the amount the team's mean rating moves — with all the singles properties intact (zero-sum between the two teams, expected results carry no change, per-set carry-forward).
+
+### 7.2 Splitting the team delta back onto the partners
+
+The team delta is distributed to the two partners **in proportion to each partner's share of the team mean**:
+
+```
+δᵢ = Δ_team × (rᵢ / teamMean)
+```
+
+This split is deliberately **mean-normalized** rather than an even halving:
+
+- The **team mean moves by exactly `Δ_team`** (the amount the formula computed for the team), so the calibration is identical to singles.
+- The partners' changes **sum to `2 × Δ_team`** — each player is a full member of the team, not half of one.
+- Total rating is **conserved across all four players** before boundary clamping (team 1 gains what team 2 loses, doubled).
+- **Equal partners split evenly**: when `rₐ = r_b = teamMean`, each `δ = Δ_team` — the same change the equivalent singles player would get.
+- **Unequal partners split proportionally**: the stronger partner (higher `rᵢ`) absorbs a larger share of the swing — they had more rating "at stake" in the team average. This is the only signal available, since a match result never reveals which partner actually contributed the points ([known limitation](#8-edge-cases-and-known-limitations)).
+
+**MIXED_DOUBLES is rated identically to DOUBLES** — no sex-based adjustment.
+
+### 7.3 Worked example
+
+Team 1 = 5.0 & 3.0 (mean **4.0**) beats Team 2 = 4.0 & 4.0 (mean **4.0**), 6-0 (what-if endpoint, so `matchTypeFactor = 1.0`):
+
+```
+teamMean₁ = (5.0 + 3.0) / 2 = 4.0        teamMean₂ = (4.0 + 4.0) / 2 = 4.0
+normalizedGap = |4.0 − 4.0| / 6.0 = 0.0  → scale (A) = 1.0
+dominance     = (6−0) / (6+0)      = 1.0
+Δ_team        = 0.16 × 1.0 × 1.0 × (+1) = +0.16   (Team 1)   /   −0.16 (Team 2)
+
+Split Team 1:  δ(5.0) = 0.16 × 5.0/4.0 = +0.20     δ(3.0) = 0.16 × 3.0/4.0 = +0.12
+Split Team 2:  δ(4.0) = −0.16 × 4.0/4.0 = −0.16    δ(4.0) = −0.16 (each)
+
+Team 1: 5.0 → 5.20, 3.0 → 3.12     Team 2: 4.0 → 3.84, 4.0 → 3.84
+```
+
+The four changes sum to `+0.20 + 0.12 − 0.16 − 0.16 = 0` (conserved); the stronger partner gains more (0.20 vs 0.12) while the team mean still moved by exactly the 0.16 the formula computed.
+
+## 8. Edge Cases and Known Limitations
 
 ### Edge cases (handled by design)
 
@@ -596,11 +654,12 @@ Possible future refinements (historical weighting, time decay, set-depth weighti
 
 ---
 
-## 8. Implementation Map
+## 9. Implementation Map
 
 | What | Where |
 |---|---|
-| Algorithm (all of §1–§3, §5) | `src/main/kotlin/org/skopeo/service/calculator/impl/v1/PerformanceBasedRankingCalculatorImpl.kt` |
+| Algorithm (all of §1–§3, §5) | `src/main/kotlin/org/skopeo/service/calculator/impl/v2/PerformanceBasedRankingCalculatorImpl.kt` |
+| Singles / doubles specifics (§7) | `SinglesMatchTypeHandler.kt` / `DoublesMatchTypeHandler.kt` (shared flow in `AbstractMatchTypeHandler.kt`), same package |
 | Dominance factor | `calculateDominanceFactor()` in `src/main/kotlin/org/skopeo/model/MatchScore.kt` |
 | BigDecimal precision helpers | `src/main/kotlin/org/skopeo/service/calculator/impl/BigDecimalUtils.kt` |
 | Audit trail (every step logged) | `src/main/kotlin/org/skopeo/service/calculator/AuditTrail.kt` — see [AUDIT_TRAIL.md](../engineering/architecture/AUDIT_TRAIL.md) |
@@ -615,7 +674,7 @@ Test coverage: `PerformanceBasedRankingCalculatorImplTest` (763 NTRP scenarios, 
 
 ---
 
-## 9. Glossary
+## 10. Glossary
 
 #### Elo rating system
 The classical chess rating method ([Wikipedia](https://en.wikipedia.org/wiki/Elo_rating_system)): after each game, points transfer from loser to winner, with the amount based on how expected the result was. Skopeo extends Elo with margin-of-victory awareness (the dominance factor).
@@ -665,6 +724,12 @@ Forcing a new rating back inside the NTRP floor/ceiling (1.0–7.0). The final p
 #### Published level
 The discrete, public-facing rating bucket (NTRP in 0.5 steps) derived from the continuous internal rating. The API reports `levelChanged` when a rating change crosses a bucket boundary.
 
+#### Team mean
+For doubles, a team's rating entering the calculation: the arithmetic mean of its two partners' ratings. Every factor of the master formula is evaluated on the two team means, team-vs-team. See [§7.1](#71-team-rating--the-mean-of-the-partners).
+
+#### Mean-normalized split
+How a doubles team's computed change (`Δ_team`) is distributed to its partners: `δᵢ = Δ_team × rᵢ / teamMean`. The team mean moves by exactly `Δ_team`, the partners' changes sum to `2 × Δ_team`, and total rating is conserved across the four players (before clamping). Equal partners split evenly; the stronger partner absorbs a larger share otherwise. See [§7.2](#72-splitting-the-team-delta-back-onto-the-partners).
+
 ---
 
 ## References
@@ -676,6 +741,6 @@ The discrete, public-facing rating bucket (NTRP in 0.5 steps) derived from the c
 
 ---
 
-**Document Version**: 3.2 (NTRP-only; removed UTR and the rating-system concept; previously 3.1: per-set dominance averaging; 3.0: top-down restructure, renamed from ALGORITHM_BEHAVIOR.md)
-**Last Updated**: 2026-06-10
-**Algorithm Version**: Performance-Based Elo v2.1 (Normalized Gap + Per-Set Dominance Averaging)
+**Document Version**: 3.3 (added §7 Doubles — team-mean rating with mean-normalized split, #256; refreshed the implementation map to v2; previously 3.2: NTRP-only, removed UTR and the rating-system concept; 3.1: per-set dominance averaging; 3.0: top-down restructure, renamed from ALGORITHM_BEHAVIOR.md)
+**Last Updated**: 2026-07-06
+**Algorithm Version**: Performance-Based Elo v2.1 (Normalized Gap + Per-Set Dominance Averaging; team-mean doubles)
