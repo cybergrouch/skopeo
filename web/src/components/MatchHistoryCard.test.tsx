@@ -132,7 +132,7 @@ describe('MatchHistoryCard', () => {
     expect(screen.getByText(/2026-02-01 · LOSS · 4-6/)).toBeInTheDocument()
   })
 
-  it('renders a dash when a rated match is missing a band', () => {
+  it('renders a dash when a rated match is missing a band, and "Player" for a nameless opponent', () => {
     useGetApiV1PlayersCodeMatchHistory.mockReturnValue({
       isLoading: false,
       data: [
@@ -146,7 +146,7 @@ describe('MatchHistoryCard', () => {
           setScores: ['6-0', '6-0'],
           partners: [],
           opponents: [
-            { publicCode: 'BEN123', displayName: 'Ben', photoUrl: null, levelAtMatch: null },
+            { publicCode: 'BEN123', displayName: null, photoUrl: null, levelAtMatch: null },
           ],
           playerLevelAtMatch: null,
         },
@@ -154,6 +154,8 @@ describe('MatchHistoryCard', () => {
     })
     renderCard()
     expect(screen.getByText(/NTRP — vs — \(at the time\)/)).toBeInTheDocument()
+    // A participant with no display name falls back to "Player" in the side list.
+    expect(screen.getByText('vs Player')).toBeInTheDocument()
   })
 
   it('renders a doubles match with the partner and both opponents and their bands', () => {
