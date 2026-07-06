@@ -6,7 +6,6 @@ package org.skopeo.service.rating
 import arrow.core.Either
 import arrow.core.left
 import arrow.core.raise.either
-import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -146,23 +145,16 @@ class RatingCalculationService(
         snapshot: MutableMap<UUID, BigDecimal>,
     ): Either<ServiceError, MatchCalculation> =
         either {
-            ensure(condition = match.matchFormat == TeamType.SINGLES) {
-                ServiceError.Validation(message = "Only SINGLES matches can be calculated currently (match ${match.id})")
-            }
-            val u1 = match.team1.userIds.single()
-            val u2 = match.team2.userIds.single()
-            val r1 = currentRating(userId = u1, snapshot = snapshot).bind()
-            val r2 = currentRating(userId = u2, snapshot = snapshot).bind()
+            // Singles (1 player/team) and doubles (2 players/team) both flow through here; the calculator
+            // picks the format-specific handler, and the audit/response are keyed per player either way.
+            val players = match.team1.userIds + match.team2.userIds
+            val ratingsByUser = players.map { it to currentRating(userId = it, snapshot = snapshot).bind() }.toMap()
 
-            val request = buildRequest(match = match, r1 = r1, r2 = r2)
+            val request = buildRequest(match = match, ratingsByUser = ratingsByUser)
             val result = calculator.calculate(request = request)
             val breakdowns = breakdownsByPlayer(audit = result.audit)
 
-            val changes =
-                listOf(
-                    playerChange(userId = u1, response = result.response, breakdowns = breakdowns).bind(),
-                    playerChange(userId = u2, response = result.response, breakdowns = breakdowns).bind(),
-                )
+            val changes = players.map { playerChange(userId = it, response = result.response, breakdowns = breakdowns).bind() }
             changes.forEach { snapshot[it.userId] = it.newRating }
             MatchCalculation(matchId = match.id, matchDate = match.matchDate, changes = changes)
         }
@@ -307,17 +299,14 @@ private fun RatingCalculationService.CalculationBreakdown.toSnapshot(): Calculat
 
 private fun buildRequest(
     match: Match,
-    r1: BigDecimal,
-    r2: BigDecimal,
+    ratingsByUser: Map<UUID, BigDecimal>,
 ): RankingCalculationRequest {
-    val u1 = match.team1.userIds.single()
-    val u2 = match.team2.userIds.single()
     val t1 = match.team1.teamId.toString()
     val t2 = match.team2.teamId.toString()
     val teams =
         mapOf(
-            t1 to singlesTeam(teamId = t1, userId = u1, rating = r1),
-            t2 to singlesTeam(teamId = t2, userId = u2, rating = r2),
+            t1 to teamOf(teamId = t1, userIds = match.team1.userIds, format = match.matchFormat, ratingsByUser = ratingsByUser),
+            t2 to teamOf(teamId = t2, userIds = match.team2.userIds, format = match.matchFormat, ratingsByUser = ratingsByUser),
         )
     val sets =
         match.sets.map { set ->
@@ -350,22 +339,22 @@ private fun buildRequest(
     )
 }
 
-private fun singlesTeam(
+private fun teamOf(
     teamId: String,
-    userId: UUID,
-    rating: BigDecimal,
+    userIds: List<UUID>,
+    format: TeamType,
+    ratingsByUser: Map<UUID, BigDecimal>,
 ): Team =
     Team(
         teamId = teamId,
         name = teamId,
         players =
-            listOf(
-                element =
-                    PlayerProfile(
-                        playerId = userId.toString(),
-                        name = "Player",
-                        rating = Rating.fromValue(value = rating.toPlainString()),
-                    ),
-            ),
-        teamType = TeamType.SINGLES,
+            userIds.map { userId ->
+                PlayerProfile(
+                    playerId = userId.toString(),
+                    name = "Player",
+                    rating = Rating.fromValue(value = ratingsByUser.getValue(key = userId).toPlainString()),
+                )
+            },
+        teamType = format,
     )

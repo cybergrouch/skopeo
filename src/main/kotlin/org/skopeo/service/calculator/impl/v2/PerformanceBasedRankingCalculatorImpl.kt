@@ -8,6 +8,7 @@ import org.skopeo.dto.RatingChange
 import org.skopeo.model.MatchScore
 import org.skopeo.model.Rating
 import org.skopeo.model.RatingCalculationOptions
+import org.skopeo.model.TeamType
 import org.skopeo.model.asRating
 import org.skopeo.model.bd
 import org.skopeo.model.calculateDominanceFactor
@@ -51,7 +52,7 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
     override fun calculate(request: RankingCalculationRequest): RankingCalculationResult {
         val audit = AuditTrail()
 
-        val matchTypeHandler = SinglesMatchTypeHandler(request = request, auditTrail = audit)
+        val matchTypeHandler = handlerFor(request = request, audit = audit)
 
         val teamIds = request.teams.keys.toList()
         val team1Id = teamIds[0]
@@ -144,6 +145,17 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
             audit = audit.getEntries(),
         )
     }
+
+    /** Pick the format-specific handler from the request's team shape (singles = 1 player, else doubles). */
+    private fun handlerFor(
+        request: RankingCalculationRequest,
+        audit: AuditTrail,
+    ): MatchTypeHandler =
+        if (request.teams.values.all { it.teamType == TeamType.SINGLES }) {
+            SinglesMatchTypeHandler(request = request, auditTrail = audit)
+        } else {
+            DoublesMatchTypeHandler(request = request, auditTrail = audit)
+        }
 
     /** The per-set change for one subject team, evaluated against their current in-match rating. */
     private fun stepFor(

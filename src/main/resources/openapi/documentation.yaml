@@ -54,32 +54,75 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/RankingCalculationRequest'
-            example:
-              teams:
-                T1:
-                  teamId: "T1"
-                  name: "Player 1"
-                  players:
-                    - playerId: "P1"
+            examples:
+              singles:
+                summary: Singles (1 player per team)
+                value:
+                  teams:
+                    T1:
+                      teamId: "T1"
                       name: "Player 1"
-                      rating:
-                        value: "4.5"
-                  teamType: "SINGLES"
-                T2:
-                  teamId: "T2"
-                  name: "Player 2"
-                  players:
-                    - playerId: "P2"
+                      players:
+                        - playerId: "P1"
+                          name: "Player 1"
+                          rating:
+                            value: "4.5"
+                      teamType: "SINGLES"
+                    T2:
+                      teamId: "T2"
                       name: "Player 2"
-                      rating:
-                        value: "4.0"
-                  teamType: "SINGLES"
-              matchScore:
-                sets:
-                  - games:
-                      T1: 6
-                      T2: 2
-                    winnerTeamId: "T1"
+                      players:
+                        - playerId: "P2"
+                          name: "Player 2"
+                          rating:
+                            value: "4.0"
+                      teamType: "SINGLES"
+                  matchScore:
+                    sets:
+                      - games:
+                          T1: 6
+                          T2: 2
+                        winnerTeamId: "T1"
+              doubles:
+                summary: Doubles (2 players per team; both teams must share the same format)
+                description: >-
+                  A team is evaluated at the mean of its two partners' ratings; the team's change is split
+                  back to each partner in proportion to their share of that mean. MIXED_DOUBLES is scored
+                  identically to DOUBLES.
+                value:
+                  teams:
+                    T1:
+                      teamId: "T1"
+                      name: "Team 1"
+                      players:
+                        - playerId: "P1"
+                          name: "Player 1"
+                          rating:
+                            value: "5.0"
+                        - playerId: "P2"
+                          name: "Player 2"
+                          rating:
+                            value: "3.0"
+                      teamType: "DOUBLES"
+                    T2:
+                      teamId: "T2"
+                      name: "Team 2"
+                      players:
+                        - playerId: "P3"
+                          name: "Player 3"
+                          rating:
+                            value: "4.0"
+                        - playerId: "P4"
+                          name: "Player 4"
+                          rating:
+                            value: "4.0"
+                      teamType: "DOUBLES"
+                  matchScore:
+                    sets:
+                      - games:
+                          T1: 6
+                          T2: 4
+                        winnerTeamId: "T1"
       responses:
         '200':
           description: Successfully calculated rating changes
