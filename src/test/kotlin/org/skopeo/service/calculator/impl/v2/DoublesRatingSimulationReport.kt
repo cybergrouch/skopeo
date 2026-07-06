@@ -160,33 +160,47 @@ class DoublesRatingSimulationReport {
     @Test
     fun `doubles scheme fairness — monte carlo`() {
         val seeds = listOf(SEED, 11L, 22L, 33L, 44L)
-        val perSeed = seeds.map { simulate(seed = it) } // each → [Scheme1, Scheme2-mean, Scheme2-sum]
+        println("true skill ~ N(${f(SKILL_MEAN, 2)}, ${f(SKILL_SD, 2)}) clamped [$SKILL_MIN, $SKILL_MAX]; init: all @ population mean")
+
+        // Primary neutral generator (team = mean of partners), then a sensitivity check where the
+        // stronger partner dominates team play — to confirm the ranking isn't an artefact of team = mean.
+        runStudy(label = "team strength = mean(θ)", seeds = seeds) { x, y -> (x + y) / 2.0 }
+        runStudy(label = "team strength = 0.6·stronger + 0.4·weaker (sensitivity)", seeds = seeds) { x, y ->
+            0.6 * maxOf(x, y) + 0.4 * minOf(x, y)
+        }
+        println(upsetIllustration())
+    }
+
+    /** Run the 5-seed study for one outcome model, print the averaged table, and assert robust properties. */
+    private fun runStudy(
+        label: String,
+        seeds: List<Long>,
+        teamStrength: (Double, Double) -> Double,
+    ) {
+        val perSeed = seeds.map { simulate(seed = it, teamStrength = teamStrength) } // each → [S1, S2-mean, S2-sum]
         val s1 = averageOf(runs = perSeed.map { it[0] })
         val s2m = averageOf(runs = perSeed.map { it[1] })
         val s2s = averageOf(runs = perSeed.map { it[2] })
 
         fun row(
-            label: String,
+            name: String,
             s: Stats,
-        ) = "$label | RMSE=${f(s.rmse)} | RMSE(centered)=${f(s.rmseCentered)} | Pearson=${f(s.pearson)} | " +
-            "drift(mean)=${f(s.drift)} | within-band σ=${f(s.withinBandSd)}"
+        ) = "$name | RMSE=${f(s.rmse)} | Pearson=${f(s.pearson)} | drift(mean)=${f(s.drift)} | within-band σ=${f(s.withinBandSd)}"
 
         println(
             buildString {
-                appendLine("=== Doubles rating scheme Monte-Carlo (${seeds.size} seeds, $PLAYERS players x $ROUNDS rounds, averaged) ===")
-                appendLine("true skill ~ N(${f(SKILL_MEAN, 2)}, ${f(SKILL_SD, 2)}) clamped [$SKILL_MIN, $SKILL_MAX]")
-                appendLine("init: all players @ the true population mean")
-                appendLine(row(label = "Scheme 1        ", s = s1))
-                appendLine(row(label = "Scheme 2 (mean) ", s = s2m))
-                appendLine(row(label = "Scheme 2 (sum)  ", s = s2s))
-                append(upsetIllustration())
+                appendLine("=== $label — ${seeds.size} seeds, $PLAYERS players x $ROUNDS rounds (averaged) ===")
+                appendLine(row(name = "Scheme 1        ", s = s1))
+                appendLine(row(name = "Scheme 2 (mean) ", s = s2m))
+                appendLine(row(name = "Scheme 2 (sum)  ", s = s2s))
             },
         )
 
-        // Harness sanity + robust properties (not the final scheme pick):
+        // Robust properties expected under either outcome model:
         s1.pearson shouldBeGreaterThan 0.7 // scheme 1 recovers skill
         s2m.pearson shouldBeGreaterThan 0.7 // scheme 2 (mean) recovers skill
         abs(s2m.drift) shouldBeLessThan 0.02 // scheme 2 (mean) conserves total rating
+        s2m.rmse shouldBeLessThan s1.rmse // ranking: scheme 2 (mean) recovers skill better than scheme 1
     }
 
     private fun averageOf(runs: List<Stats>): Stats =
@@ -198,8 +212,15 @@ class DoublesRatingSimulationReport {
             withinBandSd = runs.map { it.withinBandSd }.average(),
         )
 
-    /** One full simulation for a seed; returns [Scheme 1, Scheme 2 (mean), Scheme 2 (sum)] stats. */
-    private fun simulate(seed: Long): List<Stats> {
+    /**
+     * One full simulation for a seed; returns [Scheme 1, Scheme 2 (mean), Scheme 2 (sum)] stats.
+     * [teamStrength] maps the two partners' true skills to the team's true strength for the outcome model
+     * (e.g. their mean, or a stronger-partner-weighted blend) — the sensitivity dial for the study.
+     */
+    private fun simulate(
+        seed: Long,
+        teamStrength: (Double, Double) -> Double,
+    ): List<Stats> {
         val random = Random(seed = seed)
         val theta = DoubleArray(PLAYERS) { gaussian(random = random, mean = SKILL_MEAN, sd = SKILL_SD).coerceIn(SKILL_MIN, SKILL_MAX) }
         val initMean = theta.average()
@@ -220,7 +241,11 @@ class DoublesRatingSimulationReport {
                 val b2 = order[i + 3]
                 i += 4
                 val (gamesA, gamesB) =
-                    playSet(strengthA = (theta[a1] + theta[a2]) / 2.0, strengthB = (theta[b1] + theta[b2]) / 2.0, random = random)
+                    playSet(
+                        strengthA = teamStrength(theta[a1], theta[a2]),
+                        strengthB = teamStrength(theta[b1], theta[b2]),
+                        random = random,
+                    )
 
                 apply(r = r1, d = scheme1(r = r1, a1 = a1, a2 = a2, b1 = b1, b2 = b2, gamesA = gamesA, gamesB = gamesB), a1, a2, b1, b2)
                 apply(

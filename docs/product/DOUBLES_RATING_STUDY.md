@@ -269,6 +269,22 @@ conserves, but a player's rating is somewhat more partner-dependent (higher with
 credited by rating share. Scheme 1 is more partner-robust and credits over-performance (Elo-intuitive),
 but compresses the rating spread (higher RMSE) and is harsh on strong-carries-weak.
 
+**Sensitivity to the outcome model.** The generator above sets a team's true strength to the *mean* of
+its partners' skills, which arguably flatters scheme 2 (mean). Re-running with a **stronger-partner-
+weighted** generator (`team strength = 0.6·stronger + 0.4·weaker`) leaves the ranking unchanged:
+
+| Metric (weighted generator) | Scheme 1 | Scheme 2 (mean) | Scheme 2 (sum) |
+|---|---|---|---|
+| Skill-recovery RMSE | 0.734 | **0.674** | 0.869 |
+| Rating vs θ (Pearson) | 0.806 | **0.837** | 0.845 |
+| Total-rating drift | −0.006 | **0.000** | −0.357 |
+| Within-band σ | **0.107** | 0.151 | 0.060 |
+
+The figures barely move — Scheme 2 (mean) still wins on accuracy and conservation, Scheme 1 still
+compresses, sum still deflates. So the conclusion is **not** an artefact of the team = mean assumption.
+(Both models are exercised by the report, which asserts the ranking holds for each; a more extreme
+weighting could be explored later, but a 0.6/0.4 blend already confirms robustness.)
+
 ### Recommendation
 
 **Adopt Scheme 2 with the team _mean_ aggregate** as the default doubles calculation: it gives the best
@@ -283,8 +299,8 @@ mean (scheme 1's expectation signal). That could retain conservation + accuracy 
 partner-independence and restoring intuitive upset credit. Worth a follow-up simulation round if the
 plain ratio split proves unpopular.
 
-**Caveats.** Single-set matches and a **team-strength = mean-of-θ** outcome model; the latter is neutral
-but does align with scheme 2 (mean)'s aggregate, so before locking in it is worth a sensitivity check
-with an alternative generator (e.g. the stronger partner weighted higher, `0.6·max + 0.4·min`) to
-confirm the ranking is robust. Reproduce with:
-`./gradlew test --tests "*DoublesRatingSimulationReport"` (deterministic; prints the summary above).
+**Caveats.** The study uses **single-set matches** and **random matchmaking**. The outcome-model
+sensitivity (team = mean vs stronger-partner-weighted) has been checked and the ranking holds (above);
+remaining directions if we want more assurance are rating-based matchmaking, best-of-three chaining, and
+a more extreme partner weighting. Reproduce with:
+`./gradlew test --tests "*DoublesRatingSimulationReport"` (deterministic; prints both models' summaries).
