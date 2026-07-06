@@ -103,6 +103,11 @@ function playerName(player?: MatchPublicPlayer): string {
   return player?.displayName ?? player?.publicCode ?? 'Unknown'
 }
 
+/** A side's players as a comma-separated name list, e.g. "Ana & Bea" reads as "Ana, Bea". */
+function sideNames(players: MatchPublicPlayer[]): string {
+  return players.map((p) => playerName(p)).join(', ')
+}
+
 /**
  * Head-to-head record between the two players (#188): the running win tally and prior meetings,
  * newest first, each linking to its own public match page. Hidden when there are no prior meetings
@@ -237,7 +242,7 @@ export function MatchPage() {
             url={`${window.location.origin}/matches/${match.publicCode}`}
             title="Share this match"
             description="Scan this code or copy the link to open this match."
-            shareText={`${playerName(match.team1[0])} vs ${playerName(match.team2[0])} on Skopeo`}
+            shareText={`${sideNames(match.team1)} vs ${sideNames(match.team2)} on Skopeo`}
           />
         ) : null}
       </div>

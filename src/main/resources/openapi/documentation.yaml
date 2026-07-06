@@ -2866,6 +2866,8 @@ components:
         - status
         - rated
         - setScores
+        - partners
+        - opponents
       properties:
         matchId:
           type: string
@@ -2891,28 +2893,39 @@ components:
           description: Set scores oriented as "playerGames-opponentGames"; empty until a result is recorded.
           items:
             type: string
-        opponent:
-          nullable: true
-          type: object
-          required:
-            - publicCode
-          properties:
-            publicCode:
-              type: string
-            displayName:
-              type: string
-              nullable: true
-            photoUrl:
-              type: string
-              nullable: true
+        partners:
+          type: array
+          description: The player's teammate(s) — empty for singles, one entry for doubles.
+          items:
+            $ref: '#/components/schemas/MatchHistoryParticipant'
+        opponents:
+          type: array
+          description: The opposing side — one player for singles, two for doubles.
+          items:
+            $ref: '#/components/schemas/MatchHistoryParticipant'
         playerLevelAtMatch:
           type: string
           nullable: true
           description: This player's published NTRP band at the time of the match (rated matches only).
-        opponentLevelAtMatch:
+
+    MatchHistoryParticipant:
+      type: object
+      description: A teammate or opponent on a match-history row, with their NTRP band at the time of the match.
+      required:
+        - publicCode
+      properties:
+        publicCode:
+          type: string
+        displayName:
           type: string
           nullable: true
-          description: The opponent's published NTRP band at the time of the match (rated matches only).
+        photoUrl:
+          type: string
+          nullable: true
+        levelAtMatch:
+          type: string
+          nullable: true
+          description: This participant's published NTRP band at the time of the match (rated matches only).
 
     UserSummaryPageResponse:
       type: object
