@@ -13,7 +13,7 @@ import io.ktor.server.routing.routing
 import mu.KotlinLogging
 import org.skopeo.dto.RankingCalculationRequest
 import org.skopeo.service.calculator.RankingCalculator
-import org.skopeo.service.calculator.impl.v1.PerformanceBasedRankingCalculatorImpl
+import org.skopeo.service.calculator.impl.v2.PerformanceBasedRankingCalculatorImpl
 
 private val logger = KotlinLogging.logger {}
 

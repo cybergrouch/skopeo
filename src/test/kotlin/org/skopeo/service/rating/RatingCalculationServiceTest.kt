@@ -36,7 +36,7 @@ import org.skopeo.repository.UserRatingsTable
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.calculator.RankingCalculationResult
 import org.skopeo.service.calculator.RankingCalculator
-import org.skopeo.service.calculator.impl.v1.PerformanceBasedRankingCalculatorImpl
+import org.skopeo.service.calculator.impl.v2.PerformanceBasedRankingCalculatorImpl
 import org.skopeo.service.match.FixtureInput
 import org.skopeo.service.match.MatchService
 import org.skopeo.service.user.VerifiedFirebaseToken

@@ -4,7 +4,6 @@
   <CurrentIssues>
     <ID>CognitiveComplexMethod:ContactRepository.kt$ContactRepository$fun setVerification( id: UUID, status: VerificationStatus, method: VerificationMethod?, verifiedBy: UUID?, verifiedAt: LocalDateTime?, ): Either&lt;ServiceError, Contact&gt;</ID>
     <ID>CognitiveComplexMethod:RatingChangeReport.kt$RatingChangeReport$@Test fun generateRatingChangeReport()</ID>
-    <ID>ComplexCondition:PerformanceBasedRankingCalculatorImpl.kt$PerformanceBasedRankingCalculatorImpl$(isWinner &amp;&amp; ratingAdvantage &lt; ZERO) || (!isWinner &amp;&amp; ratingAdvantage &gt; ZERO)</ID>
     <ID>CyclomaticComplexMethod:Rating.kt$RatingSerializer$override fun deserialize(decoder: Decoder): Rating</ID>
     <ID>CyclomaticComplexMethod:RatingChangeReport.kt$RatingChangeReport$@Test fun generateRatingChangeReport()</ID>
     <ID>ImplicitDefaultLocale:RatingChangeReport.kt$RatingChangeReport$String.format("%+.6f (%.6f)", result.ntrpP1Delta, result.ntrpP1New)</ID>
@@ -14,7 +13,6 @@
     <ID>ImplicitDefaultLocale:RatingChangeReport.kt$RatingChangeReport$String.format("%.2f", result.ratio)</ID>
     <ID>LargeClass:MatchServiceTest.kt$MatchServiceTest</ID>
     <ID>LargeClass:RankingCalculationPayloadTest.kt$RankingCalculationPayloadTest</ID>
-    <ID>LargeClass:TestScenarios.kt$TestScenarios</ID>
     <ID>LongMethod:PerformanceBasedRankingCalculatorImpl.kt$PerformanceBasedRankingCalculatorImpl$override fun calculate(request: RankingCalculationRequest): RankingCalculationResult</ID>
     <ID>LongMethod:RankingCalculationPayloadTest.kt$RankingCalculationPayloadTest$@Test fun testNTRP_BasicMatch_ExactPayload()</ID>
     <ID>LongMethod:RankingCalculationPayloadTest.kt$RankingCalculationPayloadTest$@Test fun testNTRP_DominantWin_ExactPayload()</ID>
@@ -25,10 +23,6 @@
     <ID>LongMethod:RankingCalculationPayloadTest.kt$RankingCalculationPayloadTest$@Test fun testUTR_Tiebreak_ExactPayload()</ID>
     <ID>LongMethod:RatingChangeReport.kt$RatingChangeReport$@Test fun generateRatingChangeReport()</ID>
     <ID>LongParameterList:DatabaseConfig.kt$DatabaseConfig$( url: String, driver: String, user: String, password: String, maximumPoolSize: Int, minimumIdle: Int, connectionTimeout: Long, idleTimeout: Long, maxLifetime: Long, )</ID>
-    <ID>LongParameterList:PerformanceBasedRankingCalculatorImpl.kt$PerformanceBasedRankingCalculatorImpl$( player1: PlayerProfile, player2: PlayerProfile, matchScore: MatchScore, audit: AuditTrail, player1TeamId: String, player2TeamId: String, matchTypeFactor: BigDecimal, )</ID>
-    <ID>LongParameterList:PerformanceBasedRankingCalculatorImpl.kt$PerformanceBasedRankingCalculatorImpl$( player: PlayerProfile, teamId: String, set: SetScore, index: Int, step: SetStep, ratingAfter: BigDecimal, )</ID>
-    <ID>LongParameterList:PerformanceBasedRankingCalculatorImplTest.kt$PerformanceBasedRankingCalculatorImplTest$( scenario: String, p1Rating: String, p2Rating: String, p1Games: Int, p2Games: Int, winner: String, expectedP1Delta: String, expectedP2Delta: String, description: String, )</ID>
-    <ID>LongParameterList:TeamTestHelpers.kt$( p1Rating: String, p2Rating: String, system: RatingSystem, p1Games: Int, p2Games: Int, // "T1" or "T2" winner: String, smoothingEnabled: Boolean = false, smoothingFactor: Double = 0.5, )</ID>
     <ID>MagicNumber:DatabaseConfig.kt$DatabaseConfig$10</ID>
     <ID>MagicNumber:DatabaseConfig.kt$DatabaseConfig$1800000</ID>
     <ID>MagicNumber:DatabaseConfig.kt$DatabaseConfig$30000</ID>
@@ -51,15 +45,6 @@
     <ID>MagicNumber:Team.kt$Team$100</ID>
     <ID>MagicNumber:Team.kt$Team$50</ID>
     <ID>MagicNumber:TiebreakScore.kt$TiebreakScore$7</ID>
-    <ID>MapGetWithNotNullAssertionOperator:PerformanceBasedRankingCalculatorImpl.kt$PerformanceBasedRankingCalculatorImpl$request.teams[team1Id]!!</ID>
-    <ID>MapGetWithNotNullAssertionOperator:PerformanceBasedRankingCalculatorImpl.kt$PerformanceBasedRankingCalculatorImpl$request.teams[team2Id]!!</ID>
-    <ID>MapGetWithNotNullAssertionOperator:PerformanceBasedRankingCalculatorImplTest.kt$PerformanceBasedRankingCalculatorImplTest.RatingSmoothingTests.EdgeCases$result.response.ratingChanges["P1"]!!</ID>
-    <ID>MapGetWithNotNullAssertionOperator:PerformanceBasedRankingCalculatorImplTest.kt$PerformanceBasedRankingCalculatorImplTest.RatingSmoothingTests.EdgeCases$resultFullSmoothing.response.ratingChanges["P1"]!!</ID>
-    <ID>MapGetWithNotNullAssertionOperator:PerformanceBasedRankingCalculatorImplTest.kt$PerformanceBasedRankingCalculatorImplTest.RatingSmoothingTests.EdgeCases$resultNoSmoothing.response.ratingChanges["P1"]!!</ID>
-    <ID>MapGetWithNotNullAssertionOperator:PerformanceBasedRankingCalculatorImplTest.kt$PerformanceBasedRankingCalculatorImplTest.RatingSmoothingTests.NTRPSmoothing$result.response.ratingChanges["P1"]!!</ID>
-    <ID>MapGetWithNotNullAssertionOperator:PerformanceBasedRankingCalculatorImplTest.kt$PerformanceBasedRankingCalculatorImplTest.RatingSmoothingTests.NTRPSmoothing$result.response.ratingChanges["P2"]!!</ID>
-    <ID>MapGetWithNotNullAssertionOperator:PerformanceBasedRankingCalculatorImplTest.kt$PerformanceBasedRankingCalculatorImplTest.RatingSmoothingTests.NTRPSmoothing$resultNoSmoothing.response.ratingChanges["P1"]!!</ID>
-    <ID>MapGetWithNotNullAssertionOperator:PerformanceBasedRankingCalculatorImplTest.kt$PerformanceBasedRankingCalculatorImplTest.RatingSmoothingTests.NTRPSmoothing$resultWithSmoothing.response.ratingChanges["P1"]!!</ID>
     <ID>NamedArguments:Application.kt$IllegalStateException("OpenAPI specification file not found")</ID>
     <ID>NamedArguments:CalculationApiIntegrationTest.kt$CalculationApiIntegrationTest$install(ContentNegotiation) { json() }</ID>
     <ID>NamedArguments:CalculationApiIntegrationTest.kt$CalculationApiIntegrationTest$listOf(UserName(type = NameType.DISPLAY, value = uid))</ID>
@@ -110,15 +95,6 @@
     <ID>NamedArguments:NameServiceTest.kt$NameServiceTest$setOf(Capability.PLAYER)</ID>
     <ID>NamedArguments:OpenAPIIntegrationTest.kt$OpenAPIIntegrationTest$match(ContentType.Text.Html)</ID>
     <ID>NamedArguments:OpenAPIIntegrationTest.kt$OpenAPIIntegrationTest$match(ContentType.Text.Plain)</ID>
-    <ID>NamedArguments:PerformanceBasedRankingCalculatorImpl.kt$PerformanceBasedRankingCalculatorImpl$listOf(updatedPlayer1)</ID>
-    <ID>NamedArguments:PerformanceBasedRankingCalculatorImpl.kt$PerformanceBasedRankingCalculatorImpl$listOf(updatedPlayer2)</ID>
-    <ID>NamedArguments:PerformanceBasedRankingCalculatorImplTest.kt$PerformanceBasedRankingCalculatorImplTest$listOf(player1)</ID>
-    <ID>NamedArguments:PerformanceBasedRankingCalculatorImplTest.kt$PerformanceBasedRankingCalculatorImplTest$listOf(player2)</ID>
-    <ID>NamedArguments:PerformanceBasedRankingCalculatorImplTest.kt$PerformanceBasedRankingCalculatorImplTest.AuditTrailTests$abs(dominance)</ID>
-    <ID>NamedArguments:PerformanceBasedRankingCalculatorImplTest.kt$PerformanceBasedRankingCalculatorImplTest.RatingSmoothingTests.NTRPSmoothing$shouldBeBetween(-0.000001, 0.000001, 0.0)</ID>
-    <ID>NamedArguments:PerformanceBasedRankingCalculatorImplTest.kt$PerformanceBasedRankingCalculatorImplTest.RatingSmoothingTests.NTRPSmoothing$shouldBeBetween(fullChange * 0.25, fullChange * 0.35, 0.0)</ID>
-    <ID>NamedArguments:PerformanceBasedRankingCalculatorImplTest.kt$PerformanceBasedRankingCalculatorImplTest.RatingSmoothingTests.NTRPSmoothing$shouldBeBetween(fullChange * 0.45, fullChange * 0.55, 0.0)</ID>
-    <ID>NamedArguments:PerformanceBasedRankingCalculatorImplTest.kt$PerformanceBasedRankingCalculatorImplTest.RatingSmoothingTests.NTRPSmoothing$shouldBeBetween(fullChange * 0.65, fullChange * 0.75, 0.0)</ID>
     <ID>NamedArguments:PostgresTestDatabase.kt$PostgresTestDatabase$exec("TRUNCATE users CASCADE")</ID>
     <ID>NamedArguments:RankingCalculationPayloadTest.kt$RankingCalculationPayloadTest$encodeToString(JsonElement.serializer(), element)</ID>
     <ID>NamedArguments:RankingCalculationPayloadTest.kt$RankingCalculationPayloadTest$parseToJsonElement(jsonString)</ID>
@@ -136,14 +112,7 @@
     <ID>NamedArguments:RatingServiceTest.kt$RatingServiceTest$provision( ProvisionUserCommand( firebaseUid = uid, identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true), names = listOf(UserName(type = NameType.DISPLAY, value = uid)), capabilities = roles, ), )</ID>
     <ID>NamedArguments:RatingServiceTest.kt$RatingServiceTest$setOf(Capability.PLAYER)</ID>
     <ID>NamedArguments:SearchRanges.kt$NumericRange.Companion$IllegalArgumentException("Invalid number '$value' in range '$raw'")</ID>
-    <ID>NamedArguments:TeamTestHelpers.kt$listOf( SetScore( games = mapOf("T1" to p1Games, "T2" to p2Games), winnerTeamId = winner, tiebreak = tiebreakFor(p1Games = p1Games, p2Games = p2Games, winner = winner), ), )</ID>
-    <ID>NamedArguments:TeamTestHelpers.kt$listOf(player1)</ID>
-    <ID>NamedArguments:TeamTestHelpers.kt$listOf(player2)</ID>
     <ID>NamedArguments:TestFirebaseAuth.kt$TestFirebaseAuth$mapOf(signInProvider to listOf(uid))</ID>
-    <ID>NamedArguments:TestScenarios.kt$TestScenarios$add(generatedScenario(id = "CG$index", group = "Competitive", ntrpP1 = p1, ntrpP2 = p2, score = score))</ID>
-    <ID>NamedArguments:TestScenarios.kt$TestScenarios$add(generatedScenario(id = "EX$index", group = "Extreme", ntrpP1 = p1, ntrpP2 = p2, score = score))</ID>
-    <ID>NamedArguments:TestScenarios.kt$TestScenarios$add(generatedScenario(id = "PL$index", group = "Published", ntrpP1 = p1, ntrpP2 = p2, score = score))</ID>
-    <ID>NamedArguments:TestScenarios.kt$TestScenarios$coerceIn(constants.minRating, constants.maxRating)</ID>
     <ID>NamedArguments:TokenMapping.kt$IllegalArgumentException("A display name is required")</ID>
     <ID>NamedArguments:TokenMapping.kt$IllegalArgumentException("Invalid dateOfBirth '$value'; expected ISO-8601 (yyyy-MM-dd)", e)</ID>
     <ID>NamedArguments:TokenMapping.kt$listOf(UserName(type = NameType.DISPLAY, value = value))</ID>
@@ -181,13 +150,10 @@
     <ID>UnsafeCallOnNullableType:MatchRepository.kt$MatchRepository$loadMatch(id = matchId)!!</ID>
     <ID>UnsafeCallOnNullableType:MatchRepository.kt$MatchRepository$set.tiebreakTeam1Points!!</ID>
     <ID>UnsafeCallOnNullableType:MatchRepository.kt$MatchRepository$set.tiebreakTeam2Points!!</ID>
-    <ID>UnsafeCallOnNullableType:PerformanceBasedRankingCalculatorImpl.kt$PerformanceBasedRankingCalculatorImpl$request.teams[team1Id]!!</ID>
-    <ID>UnsafeCallOnNullableType:PerformanceBasedRankingCalculatorImpl.kt$PerformanceBasedRankingCalculatorImpl$request.teams[team2Id]!!</ID>
     <ID>UnsafeCallOnNullableType:Rating.kt$RatingSerializer$jsonObject["publishedLevel"]!!</ID>
     <ID>UnsafeCallOnNullableType:RatingRepository.kt$RatingRepository$ratingRow(userId = userId)!!</ID>
     <ID>UnsafeCallOnNullableType:RouteSupport.kt$call.principal&lt;JWTPrincipal&gt;()!!</ID>
     <ID>UnsafeCallOnNullableType:UserRepository.kt$UserRepository$loadAggregate(id = it[UsersTable.id].value)!!</ID>
-    <ID>UnusedParameter:PerformanceBasedRankingCalculatorImplTest.kt$PerformanceBasedRankingCalculatorImplTest$description: String</ID>
     <ID>UseCheckOrError:Application.kt$throw IllegalStateException("OpenAPI specification file not found")</ID>
   </CurrentIssues>
 </SmellBaseline>

@@ -14,12 +14,9 @@ import org.skopeo.model.RatingCalculationOptions
 import org.skopeo.model.SetScore
 import org.skopeo.model.Team
 import org.skopeo.model.TeamType
-import org.skopeo.service.calculator.impl.v1.createSinglesRequest
-import org.skopeo.service.calculator.impl.v1.PerformanceBasedRankingCalculatorImpl as V1Calculator
 
 class PerformanceBasedRankingCalculatorV2Test {
     private val v2 = PerformanceBasedRankingCalculatorImpl()
-    private val v1 = V1Calculator()
 
     private fun team(
         id: String,
@@ -60,32 +57,22 @@ class PerformanceBasedRankingCalculatorV2Test {
     ): String = result.response.ratingChanges.getValue(key = playerId).change
 
     @Test
-    fun `a single-set match yields exactly the v1 result (parity), with and without smoothing`() {
-        // Expected win, upset, and shutout — with smoothing on and off — must match v1 set-for-set.
-        listOf(
-            createSinglesRequest(p1Rating = "4.5", p2Rating = "4.0", p1Games = 6, p2Games = 2, winner = "T1"),
-            // An upset: the lower-rated player wins.
-            createSinglesRequest(p1Rating = "4.0", p2Rating = "4.5", p1Games = 6, p2Games = 4, winner = "T1"),
-            createSinglesRequest(p1Rating = "4.5", p2Rating = "4.0", p1Games = 6, p2Games = 0, winner = "T1"),
-            createSinglesRequest(p1Rating = "4.5", p2Rating = "4.0", p1Games = 6, p2Games = 2, winner = "T1", smoothingEnabled = true),
-        ).forEach { request ->
-            val a = v2.calculate(request = request)
-            val b = v1.calculate(request = request)
-            changeFor(result = a, playerId = "P1") shouldBe changeFor(result = b, playerId = "P1")
-            changeFor(result = a, playerId = "P2") shouldBe changeFor(result = b, playerId = "P2")
-        }
+    fun `a single set applies one dominance-scaled step`() {
+        // Equal players, a 6-0 set: dominance 1.0, competitive scale 1.0, K 0.16 → ±0.16.
+        val request = multiSetRequest(p1Rating = "4.0", p2Rating = "4.0", sets = listOf(element = 6 to 0))
+
+        changeFor(result = v2.calculate(request = request), playerId = "P1").toDouble() shouldBe (0.16 plusOrMinus 0.001)
+        changeFor(result = v2.calculate(request = request), playerId = "P2").toDouble() shouldBe (-0.16 plusOrMinus 0.001)
     }
 
     @Test
     fun `a multi-set match chains per-set (carry-forward) instead of averaging dominance`() {
-        // Equal players, a 6-0,6-0,6-0 sweep. v1 averages dominance (1.0) into one 0.16 step.
-        // v2 chains: 0.16 + 0.0572 + 0.0204 = 0.2376 (each set evaluated against the widening gap).
+        // Equal players, a 6-0,6-0,6-0 sweep. Averaging dominance (1.0) would give a single 0.16 step;
+        // v2 chains 0.16 + 0.0572 + 0.0204 = 0.2376 (each set evaluated against the widening gap).
         val request = multiSetRequest(p1Rating = "4.0", p2Rating = "4.0", sets = listOf(6 to 0, 6 to 0, 6 to 0))
 
         val v2Result = v2.calculate(request = request)
-        val v1Result = v1.calculate(request = request)
 
-        changeFor(result = v1Result, playerId = "P1").toDouble() shouldBe (0.16 plusOrMinus 0.001)
         changeFor(result = v2Result, playerId = "P1").toDouble() shouldBe (0.2376 plusOrMinus 0.001)
         changeFor(result = v2Result, playerId = "P2").toDouble() shouldBe (-0.2376 plusOrMinus 0.001)
     }
@@ -106,19 +93,15 @@ class PerformanceBasedRankingCalculatorV2Test {
     }
 
     @Test
-    fun `set order changes the v2 result (momentum) but not the order-independent v1 average`() {
-        // Same three sets, different order. v1 averages dominance → order-independent. v2 carries the
-        // rating forward set-by-set, so the order (and thus each set's expectation) matters.
+    fun `set order changes the v2 result (momentum)`() {
+        // Same three sets, different order. Carry-forward makes each set's expectation depend on the
+        // running rating, so the order matters (an order-independent average would not change).
         val requestA = multiSetRequest(p1Rating = "4.0", p2Rating = "4.0", sets = listOf(2 to 6, 6 to 3, 6 to 4))
         val requestB = multiSetRequest(p1Rating = "4.0", p2Rating = "4.0", sets = listOf(6 to 4, 6 to 3, 2 to 6))
 
-        // Averaging is order-independent.
-        changeFor(result = v1.calculate(request = requestA), playerId = "P1") shouldBe
-            changeFor(result = v1.calculate(request = requestB), playerId = "P1")
-
-        // Carry-forward makes the set order matter.
         val v2A = changeFor(result = v2.calculate(request = requestA), playerId = "P1")
         val v2B = changeFor(result = v2.calculate(request = requestB), playerId = "P1")
+
         (v2A != v2B) shouldBe true
     }
 }
