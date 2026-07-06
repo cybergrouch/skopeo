@@ -54,6 +54,13 @@ const MATCH_TYPE_LABELS: Record<(typeof MATCH_TYPES)[number], string> = {
   TOURNAMENT_PLAYOFFS: 'Tournament playoffs',
 }
 
+const MATCH_FORMATS = ['SINGLES', 'DOUBLES', 'MIXED_DOUBLES'] as const
+const MATCH_FORMAT_LABELS: Record<(typeof MATCH_FORMATS)[number], string> = {
+  SINGLES: 'Singles',
+  DOUBLES: 'Doubles',
+  MIXED_DOUBLES: 'Mixed doubles',
+}
+
 /**
  * One event's working page (#138): the same matches UI as the global tab, but the fixture's player
  * pickers are scoped to this event's participants (and the API enforces it). Hosts manage the roster
@@ -80,8 +87,12 @@ export function EventDetail({
   const participants = allParticipants.filter((p) => p.status === 'APPROVED')
   const requests = allParticipants.filter((p) => p.status === 'PENDING' || p.status === 'HOLD')
 
-  const [team1, setTeam1] = useState('')
-  const [team2, setTeam2] = useState('')
+  // Two slots per side; the "b" slots are only used (and shown) for doubles/mixed doubles.
+  const [team1a, setTeam1a] = useState('')
+  const [team1b, setTeam1b] = useState('')
+  const [team2a, setTeam2a] = useState('')
+  const [team2b, setTeam2b] = useState('')
+  const [format, setFormat] = useState<(typeof MATCH_FORMATS)[number]>('SINGLES')
   const [matchType, setMatchType] = useState<(typeof MATCH_TYPES)[number]>('OPEN_PLAY')
   const [date, setDate] = useState('')
   const [fixtureError, setFixtureError] = useState<string | null>(null)
@@ -105,8 +116,10 @@ export function EventDetail({
   const createFixture = usePostApiV1Matches({
     mutation: {
       onSuccess: () => {
-        setTeam1('')
-        setTeam2('')
+        setTeam1a('')
+        setTeam1b('')
+        setTeam2a('')
+        setTeam2b('')
         setDate('')
         void queryClient.invalidateQueries({ queryKey: getGetApiV1MatchesQueryKey() })
       },
@@ -134,28 +147,60 @@ export function EventDetail({
     }
   }
 
+  const isDoubles = format !== 'SINGLES'
+  // Only the slots this format uses; "b" slots participate for doubles/mixed doubles.
+  const chosen = isDoubles ? [team1a, team1b, team2a, team2b] : [team1a, team2a]
+
   function scheduleFixture(e: FormEvent) {
     e.preventDefault()
     setFixtureError(null)
     createFixture.mutate(
       {
         data: {
-          matchFormat: 'SINGLES',
+          matchFormat: format,
           matchType,
           matchDate: date,
-          team1: [team1],
-          team2: [team2],
+          team1: isDoubles ? [team1a, team1b] : [team1a],
+          team2: isDoubles ? [team2a, team2b] : [team2a],
           eventId,
         },
       },
       {
         onError: () =>
-          setFixtureError('Could not schedule the fixture. Both players must be participants and already rated.'),
+          setFixtureError('Could not schedule the fixture. Every player must be a participant and already rated.'),
       },
     )
   }
 
-  const canSchedule = team1 !== '' && team2 !== '' && team1 !== team2 && date !== ''
+  const filled = chosen.filter((id) => id !== '')
+  const canSchedule = filled.length === chosen.length && new Set(filled).size === chosen.length && date !== ''
+
+  // One player dropdown, scoped to the roster and excluding whoever's already picked in the other slots.
+  function playerSelect(id: string, label: string, value: string, onChange: (v: string) => void) {
+    const takenElsewhere = chosen.filter((s) => s !== value && s !== '')
+    return (
+      <div className="space-y-1">
+        <Label htmlFor={id} className="text-xs">
+          {label}
+        </Label>
+        <select
+          id={id}
+          className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        >
+          <option value="">Select…</option>
+          {participants
+            .filter((p) => p.userId === value || !takenElsewhere.includes(p.userId))
+            .map((p) => (
+              <option key={p.userId} value={p.userId}>
+                {playerLabel(p.displayName, p.publicCode, p.userId)}
+              </option>
+            ))}
+        </select>
+      </div>
+    )
+  }
 
   return (
     <div className="grid gap-4">
@@ -299,53 +344,56 @@ export function EventDetail({
             <CardHeader>
               <CardTitle>Schedule a fixture</CardTitle>
               <CardDescription>
-                Both players must be participants of this event. Recording results later doesn’t move
-                ratings — that’s the admin calculation step.
+                Every player must be a participant of this event. Pick a format — doubles and mixed doubles
+                need two players a side. Recording results later doesn’t move ratings — that’s the admin
+                calculation step.
               </CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={scheduleFixture} className="grid gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="event-format" className="text-xs">
+                    Format
+                  </Label>
+                  <select
+                    id="event-format"
+                    className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                    value={format}
+                    onChange={(e) => {
+                      const next = e.target.value as (typeof MATCH_FORMATS)[number]
+                      setFormat(next)
+                      // Dropping back to singles retires the partner slots so they can't leak into the request.
+                      if (next === 'SINGLES') {
+                        setTeam1b('')
+                        setTeam2b('')
+                      }
+                    }}
+                  >
+                    {MATCH_FORMATS.map((f) => (
+                      <option key={f} value={f}>
+                        {MATCH_FORMAT_LABELS[f]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <Label htmlFor="event-team1" className="text-xs">
-                      Player 1
-                    </Label>
-                    <select
-                      id="event-team1"
-                      className="h-9 w-full rounded-md border bg-background px-2 text-sm"
-                      value={team1}
-                      onChange={(e) => setTeam1(e.target.value)}
-                    >
-                      <option value="">Select…</option>
-                      {participants
-                        .filter((p) => p.userId !== team2)
-                        .map((p) => (
-                          <option key={p.userId} value={p.userId}>
-                            {playerLabel(p.displayName, p.publicCode, p.userId)}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="event-team2" className="text-xs">
-                      Player 2
-                    </Label>
-                    <select
-                      id="event-team2"
-                      className="h-9 w-full rounded-md border bg-background px-2 text-sm"
-                      value={team2}
-                      onChange={(e) => setTeam2(e.target.value)}
-                    >
-                      <option value="">Select…</option>
-                      {participants
-                        .filter((p) => p.userId !== team1)
-                        .map((p) => (
-                          <option key={p.userId} value={p.userId}>
-                            {playerLabel(p.displayName, p.publicCode, p.userId)}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
+                  {isDoubles ? (
+                    <>
+                      <div className="space-y-1">
+                        {playerSelect('event-team1', 'Player 1', team1a, setTeam1a)}
+                        {playerSelect('event-team1b', 'Partner 1', team1b, setTeam1b)}
+                      </div>
+                      <div className="space-y-1">
+                        {playerSelect('event-team2', 'Player 2', team2a, setTeam2a)}
+                        {playerSelect('event-team2b', 'Partner 2', team2b, setTeam2b)}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      {playerSelect('event-team1', 'Player 1', team1a, setTeam1a)}
+                      {playerSelect('event-team2', 'Player 2', team2a, setTeam2a)}
+                    </>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
