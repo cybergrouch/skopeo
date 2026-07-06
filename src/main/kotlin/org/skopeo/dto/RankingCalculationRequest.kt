@@ -7,7 +7,6 @@ import kotlinx.serialization.Serializable
 import org.skopeo.model.MatchScore
 import org.skopeo.model.RatingCalculationOptions
 import org.skopeo.model.Team
-import org.skopeo.model.TeamType
 
 @Serializable
 data class RankingCalculationRequest(
@@ -52,12 +51,10 @@ data class RankingCalculationRequest(
             }
         }
 
-        // For singles (current scope): verify both teams have exactly 1 player
-        teams.values.forEach { team ->
-            require(value = team.teamType == TeamType.SINGLES && team.players.size == 1) {
-                "Only SINGLES matches are currently supported (1 player per team). " +
-                    "Team '${team.teamId}' has ${team.players.size} players with type ${team.teamType}"
-            }
+        // Both teams must be the same format (no singles-vs-doubles). Per-team player counts are already
+        // enforced by Team.init (SINGLES = 1, DOUBLES/MIXED_DOUBLES = 2), so this only rules out a mismatch.
+        require(value = teams.values.map { it.teamType }.toSet().size == 1) {
+            "Both teams must have the same format, got ${teams.values.map { it.teamType }}"
         }
     }
 }

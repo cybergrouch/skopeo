@@ -7,6 +7,7 @@ import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.doubles.plusOrMinus
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -299,28 +300,27 @@ class RatingCalculationServiceTest {
         calc.calculate(token = token(uid = "ghost"), dryRun = false).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
-    @Test
-    fun `a non-SINGLES pending match cannot be calculated`() {
-        provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
-        val a1 = provisionUser(uid = "a1", rated = true)
-        val a2 = provisionUser(uid = "a2", rated = true)
-        val b1 = provisionUser(uid = "b1", rated = true)
-        val b2 = provisionUser(uid = "b2", rated = true)
-
+    /** Create + complete a doubles fixture where [team1] beats [team2]; returns the match id. */
+    private fun playedDoubles(
+        admin: String,
+        team1: List<UUID>,
+        team2: List<UUID>,
+        format: TeamType = TeamType.DOUBLES,
+    ): UUID {
         val match =
             matchService.createFixture(
-                token = token(uid = "root"),
+                token = token(uid = admin),
                 request =
                     FixtureInput(
-                        matchFormat = TeamType.DOUBLES,
+                        matchFormat = format,
                         matchType = MatchType.OPEN_PLAY,
                         matchDate = LocalDate.parse("2026-01-01"),
-                        team1 = listOf(a1.id, a2.id),
-                        team2 = listOf(b1.id, b2.id),
+                        team1 = team1,
+                        team2 = team2,
                     ),
             ).shouldBeRight()
         matchService.uploadResult(
-            token = token(uid = "root"),
+            token = token(uid = admin),
             matchId = match.id,
             request =
                 MatchResultRequest(
@@ -331,8 +331,57 @@ class RatingCalculationServiceTest {
                         ),
                 ),
         ).shouldBeRight()
+        return match.id
+    }
 
-        calc.calculate(token = token(uid = "root"), dryRun = true).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+    @Test
+    fun `a doubles match calculates and commits a change for all four players`() {
+        provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val a1 = provisionUser(uid = "a1", rated = true)
+        val a2 = provisionUser(uid = "a2", rated = true)
+        val b1 = provisionUser(uid = "b1", rated = true)
+        val b2 = provisionUser(uid = "b2", rated = true)
+        val matchId = playedDoubles(admin = "root", team1 = listOf(a1.id, a2.id), team2 = listOf(b1.id, b2.id))
+
+        val dry = calc.calculate(token = token(uid = "root"), dryRun = true).shouldBeRight()
+        val changes = dry.matches.single().changes
+        changes.size shouldBe 4
+        // Equal 4.0 partners: winners gain, losers lose; each carries a per-set breakdown.
+        changes.first { it.userId == a1.id }.let { (it.newRating > it.previousRating).shouldBeTrue() }
+        changes.first { it.userId == b1.id }.let { (it.newRating < it.previousRating).shouldBeTrue() }
+        changes.forEach { it.breakdown.sets.size shouldBe 2 }
+
+        calc.calculate(token = token(uid = "root"), dryRun = false).shouldBeRight()
+        ratings.historyByUser(userId = a1.id).single().matchId shouldBe matchId
+        ratings.historyByUser(userId = b2.id).single().matchId shouldBe matchId
+        matchRepo.listPendingCalculation().shouldBe(expected = emptyList())
+    }
+
+    @Test
+    fun `doubles splits the team change by each partner's rating share of the team mean`() {
+        provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        // Winning team: 5.0 & 3.0 (mean 4.0); losing team: 4.0 & 4.0 (mean 4.0). Equal means keep the
+        // team change identical to the equal-partner case, but the stronger partner absorbs a larger share.
+        val a1 =
+            provisionUser(uid = "a1", rated = true).also {
+                ratings.setRating(userId = it.id, rating = BigDecimal("5.0"), level = "5.0", confidence = BigDecimal("0.50"))
+            }
+        val a2 =
+            provisionUser(uid = "a2", rated = true).also {
+                ratings.setRating(userId = it.id, rating = BigDecimal("3.0"), level = "3.0", confidence = BigDecimal("0.50"))
+            }
+        val b1 = provisionUser(uid = "b1", rated = true)
+        val b2 = provisionUser(uid = "b2", rated = true)
+        playedDoubles(admin = "root", team1 = listOf(a1.id, a2.id), team2 = listOf(b1.id, b2.id))
+
+        val changes = calc.calculate(token = token(uid = "root"), dryRun = true).shouldBeRight().matches.single().changes
+        val stronger = changes.first { it.userId == a1.id }.let { it.newRating - it.previousRating }
+        val weaker = changes.first { it.userId == a2.id }.let { it.newRating - it.previousRating }
+
+        // Ratio split: 5.0-partner gains more than the 3.0-partner (δ ∝ rᵢ / mean).
+        (stronger > weaker).shouldBeTrue()
+        // Conservation across the four players.
+        changes.sumOf { it.newRating - it.previousRating }.toDouble() shouldBe (0.0 plusOrMinus 0.000001)
     }
 
     @Test

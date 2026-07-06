@@ -92,6 +92,80 @@ class PerformanceBasedRankingCalculatorV2Test {
         changeFor(result = v2.calculate(request = request), playerId = "P1").toDouble() shouldBe (0.1188 plusOrMinus 0.001)
     }
 
+    private fun doublesTeam(
+        id: String,
+        ratings: Pair<String, String>,
+        format: TeamType = TeamType.DOUBLES,
+    ): Team {
+        val (rA, rB) = ratings
+        val a = PlayerProfile(playerId = "${id}a", name = "${id}a", rating = Rating.fromValue(value = rA))
+        val b = PlayerProfile(playerId = "${id}b", name = "${id}b", rating = Rating.fromValue(value = rB))
+        return Team(teamId = id, name = id, players = listOf(a, b), teamType = format)
+    }
+
+    private fun doublesRequest(
+        t1: Pair<String, String>,
+        t2: Pair<String, String>,
+        sets: List<Pair<Int, Int>>,
+        format: TeamType = TeamType.DOUBLES,
+    ): RankingCalculationRequest =
+        RankingCalculationRequest(
+            teams =
+                mapOf(
+                    "T1" to doublesTeam(id = "T1", ratings = t1, format = format),
+                    "T2" to doublesTeam(id = "T2", ratings = t2, format = format),
+                ),
+            matchScore = MatchScore(sets = sets.map { (a, b) -> SetScore(games = mapOf("T1" to a, "T2" to b)) }),
+        )
+
+    @Test
+    fun `doubles with equal partners moves each partner like the singles result`() {
+        // Both teams average 4.0, a 6-0 set → team Δ ±0.16. Equal partners (rᵢ = mean) each take the full
+        // team Δ, so the team mean moves by ±0.16 exactly as the equivalent singles player would.
+        val result = v2.calculate(request = doublesRequest(t1 = "4.0" to "4.0", t2 = "4.0" to "4.0", sets = listOf(element = 6 to 0)))
+
+        changeFor(result = result, playerId = "T1a").toDouble() shouldBe (0.16 plusOrMinus 0.001)
+        changeFor(result = result, playerId = "T1b").toDouble() shouldBe (0.16 plusOrMinus 0.001)
+        changeFor(result = result, playerId = "T2a").toDouble() shouldBe (-0.16 plusOrMinus 0.001)
+        changeFor(result = result, playerId = "T2b").toDouble() shouldBe (-0.16 plusOrMinus 0.001)
+    }
+
+    @Test
+    fun `doubles splits the team change by each partner's share of the team mean`() {
+        // T1 = 5.0 & 3.0 (mean 4.0) vs T2 = 4.0 & 4.0 (mean 4.0): equal means → team Δ ±0.16, but T1's
+        // change splits proportionally: 0.16·5/4 = 0.20 to the stronger partner, 0.16·3/4 = 0.12 to the weaker.
+        val result = v2.calculate(request = doublesRequest(t1 = "5.0" to "3.0", t2 = "4.0" to "4.0", sets = listOf(element = 6 to 0)))
+
+        changeFor(result = result, playerId = "T1a").toDouble() shouldBe (0.20 plusOrMinus 0.001)
+        changeFor(result = result, playerId = "T1b").toDouble() shouldBe (0.12 plusOrMinus 0.001)
+    }
+
+    @Test
+    fun `doubles conserves total rating across the four players`() {
+        val result = v2.calculate(request = doublesRequest(t1 = "5.0" to "3.0", t2 = "4.5" to "3.5", sets = listOf(6 to 2, 4 to 6, 6 to 3)))
+
+        val net = result.response.ratingChanges.values.sumOf { it.change.toDouble() }
+        net shouldBe (0.0 plusOrMinus 0.001)
+    }
+
+    @Test
+    fun `mixed doubles is rated identically to doubles`() {
+        val doubles = v2.calculate(request = doublesRequest(t1 = "5.0" to "3.0", t2 = "4.0" to "4.0", sets = listOf(element = 6 to 1)))
+        val mixed =
+            v2.calculate(
+                request =
+                    doublesRequest(
+                        t1 = "5.0" to "3.0",
+                        t2 = "4.0" to "4.0",
+                        sets = listOf(element = 6 to 1),
+                        format = TeamType.MIXED_DOUBLES,
+                    ),
+            )
+
+        changeFor(result = mixed, playerId = "T1a") shouldBe changeFor(result = doubles, playerId = "T1a")
+        changeFor(result = mixed, playerId = "T1b") shouldBe changeFor(result = doubles, playerId = "T1b")
+    }
+
     @Test
     fun `set order changes the v2 result (momentum)`() {
         // Same three sets, different order. Carry-forward makes each set's expectation depend on the

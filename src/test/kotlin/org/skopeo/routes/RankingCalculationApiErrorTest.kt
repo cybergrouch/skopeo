@@ -153,6 +153,98 @@ class RankingCalculationApiErrorTest {
         }
 
     @Test
+    fun testSuccessfulDoublesRequest() =
+        testApplication {
+            application {
+                module(initDatabase = false)
+            }
+
+            val requestJson =
+                """
+                {
+                  "teams": {
+                    "T1": {
+                      "teamId": "T1",
+                      "name": "Team 1",
+                      "players": [
+                        {"playerId": "P1", "name": "Player 1", "rating": {"value": "5.0"}},
+                        {"playerId": "P2", "name": "Player 2", "rating": {"value": "3.0"}}
+                      ],
+                      "teamType": "DOUBLES"
+                    },
+                    "T2": {
+                      "teamId": "T2",
+                      "name": "Team 2",
+                      "players": [
+                        {"playerId": "P3", "name": "Player 3", "rating": {"value": "4.0"}},
+                        {"playerId": "P4", "name": "Player 4", "rating": {"value": "4.0"}}
+                      ],
+                      "teamType": "DOUBLES"
+                    }
+                  },
+                  "matchScore": {
+                    "sets": [{"games": {"T1": 6, "T2": 4}, "winnerTeamId": "T1"}]
+                  }
+                }
+                """
+
+            val response =
+                client.post(urlString = "/api/v1/calculate-ranking") {
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = requestJson.trimIndent())
+                }
+
+            response.status shouldBe HttpStatusCode.OK
+            val body = response.bodyAsText()
+            // All four partners get a change; the stronger partner (5.0) moves more than the weaker (3.0).
+            body shouldContain "P1"
+            body shouldContain "P4"
+        }
+
+    @Test
+    fun testErrorResponse_MismatchedTeamFormats() =
+        testApplication {
+            application {
+                module(initDatabase = false)
+            }
+
+            val requestJson =
+                """
+                {
+                  "teams": {
+                    "T1": {
+                      "teamId": "T1",
+                      "name": "Singles",
+                      "players": [{"playerId": "P1", "name": "Player 1", "rating": {"value": "4.5"}}],
+                      "teamType": "SINGLES"
+                    },
+                    "T2": {
+                      "teamId": "T2",
+                      "name": "Doubles",
+                      "players": [
+                        {"playerId": "P2", "name": "Player 2", "rating": {"value": "4.0"}},
+                        {"playerId": "P3", "name": "Player 3", "rating": {"value": "4.0"}}
+                      ],
+                      "teamType": "DOUBLES"
+                    }
+                  },
+                  "matchScore": {
+                    "sets": [{"games": {"T1": 6, "T2": 4}, "winnerTeamId": "T1"}]
+                  }
+                }
+                """
+
+            val response =
+                client.post(urlString = "/api/v1/calculate-ranking") {
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = requestJson.trimIndent())
+                }
+
+            response.status shouldBe HttpStatusCode.BadRequest
+            response.bodyAsText() shouldContain "same format"
+        }
+
+    @Test
     fun testErrorResponse_LoserSameAsWinner() =
         testApplication {
             application {
