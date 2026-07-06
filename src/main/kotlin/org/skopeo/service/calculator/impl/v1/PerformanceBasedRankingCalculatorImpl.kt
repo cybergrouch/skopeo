@@ -86,7 +86,19 @@ import java.math.BigDecimal
  *
  * All internal calculations use BigDecimal with 6 decimal places precision
  * to ensure accurate and predictable results.
+ *
+ * @deprecated Superseded by the v2 per-set calculator (#110), which is the canonical implementation
+ * used everywhere in production. This v1 is retained only for its parity/regression tests and is
+ * slated for removal; do not use it in new code.
  */
+@Deprecated(
+    message = "Superseded by the v2 per-set calculator (#110); use the v2 implementation. Slated for removal.",
+    replaceWith =
+        ReplaceWith(
+            expression = "PerformanceBasedRankingCalculatorImpl()",
+            "org.skopeo.service.calculator.impl.v2.PerformanceBasedRankingCalculatorImpl",
+        ),
+)
 class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
     companion object {
         private val ZERO = "0.0".bd

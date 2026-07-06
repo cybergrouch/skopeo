@@ -42,6 +42,7 @@ import kotlin.math.abs
  * - Tests calculation start, match result, ranking adjustments, rating changes
  * - Validates zero-sum property and audit entry order
  */
+@Suppress("DEPRECATION") // exercises the deprecated v1 calculator; removed together with v1
 class PerformanceBasedRankingCalculatorImplTest {
     private val calculator = PerformanceBasedRankingCalculatorImpl()
 

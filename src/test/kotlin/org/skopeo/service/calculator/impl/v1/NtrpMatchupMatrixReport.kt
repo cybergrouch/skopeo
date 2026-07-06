@@ -28,6 +28,7 @@ import kotlin.math.min
  * Outputs: a fixed-width text report at /tmp/ntrp_matchup_matrix.txt and a Markdown report at
  * presentations/ntrp_matchup_matrix.md.
  */
+@Suppress("DEPRECATION") // exercises the deprecated v1 calculator; removed together with v1
 class NtrpMatchupMatrixReport {
     private val calculator = PerformanceBasedRankingCalculatorImpl()
 

@@ -17,6 +17,7 @@ import org.skopeo.model.TeamType
 import org.skopeo.service.calculator.impl.v1.createSinglesRequest
 import org.skopeo.service.calculator.impl.v1.PerformanceBasedRankingCalculatorImpl as V1Calculator
 
+@Suppress("DEPRECATION") // exercises the deprecated v1 calculator; removed together with v1
 class PerformanceBasedRankingCalculatorV2Test {
     private val v2 = PerformanceBasedRankingCalculatorImpl()
     private val v1 = V1Calculator()

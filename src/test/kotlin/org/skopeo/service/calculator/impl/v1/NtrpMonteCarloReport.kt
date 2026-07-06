@@ -37,6 +37,7 @@ import kotlin.random.Random
  * Outputs: /tmp/ntrp_montecarlo.txt, presentations/ntrp_montecarlo.md, and two PNG charts in
  * presentations/ (a class-effect heatmap and an Analysis-1 median-vs-start check).
  */
+@Suppress("DEPRECATION") // exercises the deprecated v1 calculator; removed together with v1
 class NtrpMonteCarloReport {
     private val calculator = PerformanceBasedRankingCalculatorImpl()
 
