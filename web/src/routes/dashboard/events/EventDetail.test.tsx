@@ -109,6 +109,17 @@ const event = {
   ],
 }
 
+// A four-strong approved roster, enough to fill both sides of a doubles fixture.
+const doublesRoster = {
+  ...event,
+  participants: [
+    { userId: 'u1', displayName: 'Ana', publicCode: 'AAA111', status: 'APPROVED' },
+    { userId: 'u2', displayName: 'Bob', publicCode: 'BBB222', status: 'APPROVED' },
+    { userId: 'u3', displayName: 'Cara', publicCode: 'CCC333', status: 'APPROVED' },
+    { userId: 'u4', displayName: 'Dan', publicCode: 'DDD444', status: 'APPROVED' },
+  ],
+}
+
 function renderDetail() {
   return render(
     <MemoryRouter>
@@ -254,6 +265,106 @@ describe('EventDetail', () => {
     // Symmetrically, picking Bob as Player 2 removes him from Player 1.
     await user.selectOptions(player2, 'u2')
     expect(within(player1).queryByRole('option', { name: 'Bob' })).not.toBeInTheDocument()
+  })
+
+  it('schedules a doubles fixture with two players a side (disabled until all four picked)', async () => {
+    useGetApiV1EventsId.mockReturnValue({ data: doublesRoster, isLoading: false })
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.selectOptions(screen.getByLabelText('Format'), 'DOUBLES')
+    // Partner pickers appear only for doubles.
+    expect(screen.getByLabelText('Partner 1')).toBeInTheDocument()
+    expect(screen.getByLabelText('Partner 2')).toBeInTheDocument()
+
+    await user.selectOptions(screen.getByLabelText('Player 1'), 'u1')
+    await user.selectOptions(screen.getByLabelText('Partner 1'), 'u2')
+    await user.selectOptions(screen.getByLabelText('Player 2'), 'u3')
+    await user.type(screen.getByLabelText('Date'), '2026-03-02')
+    // Still missing Partner 2 → can't schedule yet.
+    expect(screen.getByRole('button', { name: 'Schedule fixture' })).toBeDisabled()
+
+    await user.selectOptions(screen.getByLabelText('Partner 2'), 'u4')
+    expect(screen.getByRole('button', { name: 'Schedule fixture' })).toBeEnabled()
+
+    await user.click(screen.getByRole('button', { name: 'Schedule fixture' }))
+    expect(createFixtureMutate).toHaveBeenCalledWith(
+      {
+        data: {
+          matchFormat: 'DOUBLES',
+          matchType: 'OPEN_PLAY',
+          matchDate: '2026-03-02',
+          team1: ['u1', 'u2'],
+          team2: ['u3', 'u4'],
+          eventId: 'e1',
+        },
+      },
+      expect.anything(),
+    )
+  })
+
+  it('sends the mixed-doubles format', async () => {
+    useGetApiV1EventsId.mockReturnValue({ data: doublesRoster, isLoading: false })
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.selectOptions(screen.getByLabelText('Format'), 'MIXED_DOUBLES')
+    await user.selectOptions(screen.getByLabelText('Player 1'), 'u1')
+    await user.selectOptions(screen.getByLabelText('Partner 1'), 'u2')
+    await user.selectOptions(screen.getByLabelText('Player 2'), 'u3')
+    await user.selectOptions(screen.getByLabelText('Partner 2'), 'u4')
+    await user.type(screen.getByLabelText('Date'), '2026-03-02')
+    await user.click(screen.getByRole('button', { name: 'Schedule fixture' }))
+
+    expect(createFixtureMutate.mock.calls[0][0].data.matchFormat).toBe('MIXED_DOUBLES')
+  })
+
+  it('excludes a player picked in any doubles slot from the other three', async () => {
+    useGetApiV1EventsId.mockReturnValue({ data: doublesRoster, isLoading: false })
+    const user = userEvent.setup()
+    renderDetail()
+    await user.selectOptions(screen.getByLabelText('Format'), 'DOUBLES')
+
+    await user.selectOptions(screen.getByLabelText('Player 1'), 'u1')
+    // Ana (u1) is now off the other three slots.
+    for (const label of ['Partner 1', 'Player 2', 'Partner 2']) {
+      expect(within(screen.getByLabelText(label)).queryByRole('option', { name: 'Ana' })).not.toBeInTheDocument()
+    }
+    // …but stays selected in her own slot.
+    expect(within(screen.getByLabelText('Player 1')).getByRole('option', { name: 'Ana' })).toBeInTheDocument()
+  })
+
+  it('retires the partner slots when switching back to singles', async () => {
+    useGetApiV1EventsId.mockReturnValue({ data: doublesRoster, isLoading: false })
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.selectOptions(screen.getByLabelText('Format'), 'DOUBLES')
+    await user.selectOptions(screen.getByLabelText('Player 1'), 'u1')
+    await user.selectOptions(screen.getByLabelText('Partner 1'), 'u2')
+    await user.selectOptions(screen.getByLabelText('Player 2'), 'u3')
+    await user.selectOptions(screen.getByLabelText('Partner 2'), 'u4')
+
+    await user.selectOptions(screen.getByLabelText('Format'), 'SINGLES')
+    // Partner pickers are gone, and the retired partner (u2) is selectable again as the opponent.
+    expect(screen.queryByLabelText('Partner 1')).not.toBeInTheDocument()
+    expect(within(screen.getByLabelText('Player 2')).getByRole('option', { name: 'Bob' })).toBeInTheDocument()
+
+    await user.type(screen.getByLabelText('Date'), '2026-03-02')
+    await user.click(screen.getByRole('button', { name: 'Schedule fixture' }))
+    expect(createFixtureMutate).toHaveBeenCalledWith(
+      {
+        data: {
+          matchFormat: 'SINGLES',
+          matchType: 'OPEN_PLAY',
+          matchDate: '2026-03-02',
+          team1: ['u1'],
+          team2: ['u3'],
+          eventId: 'e1',
+        },
+      },
+      expect.anything(),
+    )
   })
 
   it('surfaces a fixture error and lets the match type change', async () => {
