@@ -1,10 +1,11 @@
 # Doubles Rating Calculation — Design Study (#256)
 
-> **Status: in progress.** This document works through two candidate schemes for
-> calculating NTRP rating changes in **doubles** matches (four players instead of
-> two), evaluates their mathematics, and defines a Monte-Carlo fairness study to
-> choose between them. The simulation results and final recommendation are filled
-> in once the study has run (see [Results](#5-monte-carlo-fairness-study)).
+> **Status: analysis + Monte-Carlo complete; recommendation pending sign-off.** This document
+> works through two candidate schemes for calculating NTRP rating changes in **doubles** matches
+> (four players instead of two), evaluates their mathematics, and runs a Monte-Carlo fairness study
+> to choose between them. **Headline: adopt Scheme 2 with the team _mean_ aggregate** (best skill
+> recovery + exact rating conservation); reject the sum aggregate (off-scale). See
+> [Results](#results) and [Recommendation](#recommendation).
 
 Related: [#256](https://github.com/cybergrouch/skopeo/issues/256),
 [RATING_CALCULATION_ALGORITHM.md](./RATING_CALCULATION_ALGORITHM.md),
@@ -192,19 +193,63 @@ Seeded for reproducibility; artefacts written under `presentations/` (git-ignore
 
 ### Results
 
-_TBD — to be filled in once the simulation has been implemented and run._
+Harness: `DoublesRatingSimulationReport` (test source set), reusing the real v2 engine. Setup:
+1000 players, 50 rounds each (≈ 50 matches/player), **single-set** matches, **random** partners and
+opponents each round, every player initialised at the true population mean, outcomes driven only by
+true skill (team strength = mean of partners' θ). Figures below are **averaged over 5 seeds**.
 
-| Metric (seed …, P players × R rounds) | Scheme 1 | Scheme 2 (mean) | Scheme 2 (sum) |
+| Metric | Scheme 1 | Scheme 2 (mean) | Scheme 2 (sum) |
 |---|---|---|---|
-| Skill-recovery RMSE | … | … | … |
-| Rating vs θ correlation | … | … | … |
-| Total-rating drift | … | … | … |
-| Partner-independence (σ) | … | … | … |
+| Skill-recovery RMSE (lower = better) | 0.735 | **0.675** | 0.871 |
+| RMSE, mean-centred | 0.735 | **0.675** | 0.794 |
+| Rating vs θ (Pearson) | 0.802 | **0.837** | 0.837 |
+| Total-rating drift | −0.001 | **0.000** | −0.357 |
+| Within-band σ (partner-independence; lower = better) | **0.108** | 0.150 | 0.060 |
+
+Illustration — **A = {5.0, 3.0} beats even B = {4.0, 4.0}, 6-2** (who gains?):
+
+| | strong partner (5.0) | weak partner (3.0) |
+|---|---|---|
+| Scheme 1 | +0.000 (favourite, met expectation) | **+0.321** (underdog upset) |
+| Scheme 2 (mean) | **+0.100** (larger rating share) | +0.060 |
+
+**Findings**
+
+1. **Scheme 2 (mean) recovers skill best** — lowest RMSE and highest correlation — *and* conserves
+   total rating exactly (drift 0.000). Reusing the singles evaluation on the team mean works cleanly.
+2. **Scheme 1's feared inflation did not appear** — drift is ≈0 (−0.001). Under random matchmaking the
+   non-zero-sum asymmetry washes out. Its real weakness is different: it has the **lowest within-band σ
+   (most partner-independent) yet the highest RMSE**, i.e. it **compresses ratings toward the mean**
+   (regression/bias). That matches the predicted "harsh on a strong player carrying a weak partner":
+   the strong player gets ~0 for expected wins but a full hit for losses, so recurring strong carriers
+   drift toward the pack.
+3. **Scheme 2 (sum) is disqualified** — the `[1,7]` clamp of over-7 team sums causes systematic
+   **deflation (drift −0.357)** and the worst RMSE; correlation/ordering survive but the bias is large.
+   Confirms sum is off-scale.
+4. **The two within-team splits are genuinely opposite** (illustration): scheme 1 rewards the
+   over-performing underdog partner; scheme 2 gives the higher-rated partner the larger move.
+
+**The trade-off is accuracy vs partner-consistency.** Scheme 2 (mean) is more accurate on average and
+conserves, but a player's rating is somewhat more partner-dependent (higher within-band σ) and is
+credited by rating share. Scheme 1 is more partner-robust and credits over-performance (Elo-intuitive),
+but compresses the rating spread (higher RMSE) and is harsh on strong-carries-weak.
 
 ### Recommendation
 
-_TBD — after the study. Preliminary expectation from the maths: scheme 1 is fairer per
-player but must be checked for drift; scheme 2 (with **mean**, not sum) conserves rating
-but must be checked for strong-player inflation from the ratio split. A hybrid — team-mean
-expectation (scheme 2's conservation) with a performance-aware split closer to scheme 1's
-per-player gaps — is a candidate if each pure scheme has a disqualifying flaw._
+**Adopt Scheme 2 with the team _mean_ aggregate** as the default doubles calculation: it gives the best
+skill recovery, conserves total rating exactly, reuses the existing engine without re-calibration, and
+has no off-scale pathology. **Reject the sum aggregate** (off-scale → deflation). Scheme 1 is a
+reasonable alternative if *partner-independence* is valued above aggregate accuracy, but its
+compression/regression is a real downside.
+
+**Candidate refinement (future):** a **hybrid** — keep scheme 2's team-mean expectation and conservation,
+but replace the pure rating-ratio split with one that leans on each partner's gap to the opponents'
+mean (scheme 1's expectation signal). That could retain conservation + accuracy while improving
+partner-independence and restoring intuitive upset credit. Worth a follow-up simulation round if the
+plain ratio split proves unpopular.
+
+**Caveats.** Single-set matches and a **team-strength = mean-of-θ** outcome model; the latter is neutral
+but does align with scheme 2 (mean)'s aggregate, so before locking in it is worth a sensitivity check
+with an alternative generator (e.g. the stronger partner weighted higher, `0.6·max + 0.4·min`) to
+confirm the ranking is robust. Reproduce with:
+`./gradlew test --tests "*DoublesRatingSimulationReport"` (deterministic; prints the summary above).
