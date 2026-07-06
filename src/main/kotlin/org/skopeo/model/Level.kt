@@ -63,8 +63,6 @@ data class Level(
          */
         fun fromValue(value: String): Level = calculateNtrpLevel(rating = value.toBigDecimal())
 
-        fun fromRating(rating: Rating): Level = fromValue(value = rating.value)
-
         private fun calculateNtrpLevel(rating: BigDecimal): Level {
             val clampedRating = rating.coerceIn(minimumValue = BigDecimal("1.0"), maximumValue = BigDecimal("7.0"))
 
@@ -89,32 +87,5 @@ data class Level(
                 maxRating = maxRating?.toPlainString(),
             )
         }
-
-        /** Check if a rating falls within a level's boundaries (min inclusive, max exclusive). */
-        fun isWithinLevel(
-            rating: Rating,
-            level: Level,
-        ): Boolean {
-            val ratingValue = rating.value.toBigDecimal()
-            if (ratingValue < level.minRating.toBigDecimal()) {
-                return false
-            }
-            val maxRating = level.maxRating?.toBigDecimal()
-            return maxRating == null || ratingValue < maxRating
-        }
     }
-
-    /** Human-readable description, e.g., "NTRP 4.0 (Advanced)". */
-    fun getDescription(): String = "NTRP $value (${getNtrpSkillLevel(level = value.toDouble())})"
-
-    private fun getNtrpSkillLevel(level: Double): String =
-        when {
-            level < 2.0 -> "New Player"
-            level < 3.0 -> "Beginner"
-            level < 4.0 -> "Intermediate"
-            level < 5.0 -> "Advanced"
-            level < 6.0 -> "Expert/College"
-            level < 7.0 -> "Professional"
-            else -> "World-Class"
-        }
 }

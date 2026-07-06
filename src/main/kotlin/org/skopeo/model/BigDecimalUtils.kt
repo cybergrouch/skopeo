@@ -35,3 +35,5 @@ internal val String.bd: BigDecimal get() = this.toBigDecimalPrecise()
 internal val Int.bd: BigDecimal get() = this.toBigDecimalPrecise()
 
 internal val Double.bd: BigDecimal get() = this.toBigDecimalPrecise()
+
+internal val BigDecimal.asRating: Rating get() = Rating.fromValue(value = this.toStringPrecise())
