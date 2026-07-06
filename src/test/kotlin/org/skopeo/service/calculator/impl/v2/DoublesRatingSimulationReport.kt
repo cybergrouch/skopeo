@@ -10,6 +10,7 @@ import org.skopeo.dto.RankingCalculationRequest
 import org.skopeo.model.MatchScore
 import org.skopeo.model.PlayerProfile
 import org.skopeo.model.Rating
+import org.skopeo.model.RatingCalculationOptions
 import org.skopeo.model.SetScore
 import org.skopeo.model.Team
 import org.skopeo.model.TeamType
@@ -94,6 +95,62 @@ class DoublesRatingSimulationReport {
 
     private fun clampRating(value: Double): Double = value.coerceIn(minimumValue = 1.0, maximumValue = 7.0)
 
+    /** A two-player DOUBLES team (distinct player ids so the response carries a per-player delta). */
+    private fun doublesTeam(
+        teamId: String,
+        first: Double,
+        second: Double,
+    ): Team =
+        Team(
+            teamId = teamId,
+            name = teamId,
+            players =
+                listOf(
+                    PlayerProfile(playerId = "$teamId-1", name = "$teamId-1", rating = ratingOf(value = first)),
+                    PlayerProfile(playerId = "$teamId-2", name = "$teamId-2", rating = ratingOf(value = second)),
+                ),
+            teamType = TeamType.DOUBLES,
+        )
+
+    /**
+     * The four players' rating deltas from ONE real doubles match, straight through the shipped
+     * [DoublesMatchTypeHandler] (team mean + proportional split + per-set sequential carry) — no maths
+     * re-implemented here. Returns [a1, a2, b1, b2]; [sets] are (gamesA, gamesB) per set and [factor] is
+     * the match-type factor (0.5 open play … 1.2 tournament playoffs).
+     */
+    private fun doublesMatchDeltas(
+        a1: Double,
+        a2: Double,
+        b1: Double,
+        b2: Double,
+        sets: List<Pair<Int, Int>>,
+        factor: Double,
+    ): DoubleArray {
+        val request =
+            RankingCalculationRequest(
+                teams =
+                    mapOf(
+                        "A" to doublesTeam(teamId = "A", first = a1, second = a2),
+                        "B" to doublesTeam(teamId = "B", first = b1, second = b2),
+                    ),
+                matchScore =
+                    MatchScore(
+                        sets =
+                            sets.map { (ga, gb) ->
+                                SetScore(games = mapOf("A" to ga, "B" to gb), winnerTeamId = if (ga > gb) "A" else "B")
+                            },
+                    ),
+                options = RatingCalculationOptions(matchTypeFactor = factor),
+            )
+        val changes = calculator.calculate(request = request).response.ratingChanges
+        return doubleArrayOf(
+            changes.getValue(key = "A-1").change.toDouble(),
+            changes.getValue(key = "A-2").change.toDouble(),
+            changes.getValue(key = "B-1").change.toDouble(),
+            changes.getValue(key = "B-2").change.toDouble(),
+        )
+    }
+
     // --- the two schemes (each returns the four players' deltas for a set: [a1, a2, b1, b2]) ---
 
     /** Scheme 1: each player vs the opponents' mean, using their own rating as the subject. */
@@ -169,6 +226,75 @@ class DoublesRatingSimulationReport {
             0.6 * maxOf(x, y) + 0.4 * minOf(x, y)
         }
         println(upsetIllustration())
+    }
+
+    /**
+     * Farming-exposure probe for the shipped team-mean scheme — reproduces the analysis on issue #266
+     * (doubles partner-strength anti-farming guardrails) directly through the real v2 doubles calculator,
+     * so the write-up on that issue stays checkable against the code. It shows:
+     *
+     *  (a) how far a strong player can inflate by pairing DOWN and beating a HIGHER-combined opposing pair
+     *      — the win reads as a team upset (2× multiplier) because the weak partner suppresses the team
+     *      mean, and the proportional split hands the stronger partner the larger slice; and
+     *  (b) that combined-rating matchmaking — where the opposing pair shares the SAME team mean, e.g. a
+     *      7.0-combined bracket (3.0+4.0 vs 3.5+3.5) — removes most of the exposure: the upset premium
+     *      disappears, per-match gain roughly halves, and balanced win/loss play conserves rating.
+     *
+     * This is why #266's recommended guardrail keys off the OPPOSING team-mean gap (the mismatched-bracket
+     * case), not off lopsided pairing per se. Prints a summary; asserts the robust properties.
+     */
+    @Test
+    fun `doubles farming exposure and matchmaking mitigation`() {
+        val win = listOf(6 to 4, 6 to 4) // a clear 2-set win for team A
+        val loss = listOf(4 to 6, 4 to 6) // the mirror-image loss
+        val strong0 = 4.0
+        val weak = 3.0 // partner, one full band below → team mean 3.5
+        val higherOpp = 4.0 // a HIGHER-combined opposing pair (mean 4.0) → the pair is the underdog
+        val equalOpp = 3.5 // an equal 7.0-combined opposing pair (mean 3.5) → a competitive match
+
+        println("\n=== Farming exposure & matchmaking mitigation (issue #266) — real v2 doubles calculator ===")
+        for ((factor, label) in listOf(0.5 to "open play (0.5)", 1.0 to "tournament (1.0)")) {
+            // (a) First-match gain to the strong 4.0 in each bracket.
+            val gainMismatch = doublesMatchDeltas(a1 = strong0, a2 = weak, b1 = higherOpp, b2 = higherOpp, sets = win, factor = factor)[0]
+            val gainEqual = doublesMatchDeltas(a1 = strong0, a2 = weak, b1 = equalOpp, b2 = equalOpp, sets = win, factor = factor)[0]
+
+            // (b) Balanced win+loss over a single encounter each (fresh 4.0 strong, no carry) — the systematic signal.
+            val netMismatch =
+                doublesMatchDeltas(a1 = strong0, a2 = weak, b1 = higherOpp, b2 = higherOpp, sets = win, factor = factor)[0] +
+                    doublesMatchDeltas(a1 = strong0, a2 = weak, b1 = higherOpp, b2 = higherOpp, sets = loss, factor = factor)[0]
+            val netEqual =
+                doublesMatchDeltas(a1 = strong0, a2 = weak, b1 = equalOpp, b2 = equalOpp, sets = win, factor = factor)[0] +
+                    doublesMatchDeltas(a1 = strong0, a2 = weak, b1 = equalOpp, b2 = equalOpp, sets = loss, factor = factor)[0]
+
+            // (c) Worst-case farming trajectory: always win 6-4 6-4 vs FRESH 4.0 opponents, fixed 3.0 partner,
+            //     carrying only the strong player forward. Drift self-limits at the within-team-gap ceiling.
+            var strong = strong0
+            var matchesToNextBand = -1
+            repeat(times = 120) { m ->
+                val delta = doublesMatchDeltas(a1 = strong, a2 = weak, b1 = higherOpp, b2 = higherOpp, sets = win, factor = factor)[0]
+                strong = clampRating(value = strong + delta)
+                if (matchesToNextBand < 0 && strong >= 4.5) matchesToNextBand = m + 1
+            }
+
+            println("--- $label ---")
+            println("  first-match strong Δ:  mismatched(vs 4.0-mean)=${f(gainMismatch)}   equal(vs 3.5-mean)=${f(gainEqual)}")
+            println("  balanced win+loss net: mismatched=${f(netMismatch)}   equal=${f(netEqual)}  (equal-bracket ≈ conserves)")
+            println(
+                "  always-win trajectory: reaches 4.5 in $matchesToNextBand matches; plateaus at ${f(
+                    strong,
+                    2,
+                )} (ceiling ≈ within-team gap above start)",
+            )
+
+            // The 2× upset premium makes pairing-down against a higher pair materially more rewarding than an equal bracket.
+            gainMismatch shouldBeGreaterThan gainEqual
+            // Combined-rating matchmaking neutralises the systematic signal; the mismatched case does not.
+            netEqual shouldBeLessThan netMismatch
+            abs(netEqual) shouldBeLessThan 0.01
+            // Worst-case drift is bounded near the within-team gap (start 4.0 + gap 1.0 → ~5.0), i.e. it self-limits.
+            strong shouldBeLessThan 5.05
+            strong shouldBeGreaterThan 4.9
+        }
     }
 
     /** Run the 5-seed study for one outcome model, print the averaged table, and assert robust properties. */
