@@ -191,6 +191,41 @@ thousands of players × many matches).
 Both schemes are prototyped behind the `MatchTypeHandler` seam introduced in #258.
 Seeded for reproducibility; artefacts written under `presentations/` (git-ignored).
 
+### How to read the numbers (plain-language glossary)
+
+**The experiment in one paragraph.** We invent a crowd of players, each given a secret **true skill**
+(written `θ`, "theta") somewhere on the NTRP 1–7 scale — this is how good they *really* are. Everyone
+*starts* with the same rating (the crowd average), then plays many rounds of doubles with random
+partners. Each scheme updates its own copy of everyone's rating from the exact same match results. At
+the end we compare each player's computed **rating** to their secret **true skill**. A good, fair scheme
+ends up with ratings that closely match true skill, don't systematically drift, and don't depend on who
+you happened to be partnered with. Each metric below measures one of those qualities.
+
+- **Skill-recovery RMSE** *(lower is better)* — the **typical gap between a player's rating and their
+  true skill**, in rating points. Think "on average, how wrong is the rating?" `0.68` means ratings are
+  off by about 0.68 NTRP points on average. It's the headline accuracy score. (RMSE = "root-mean-square
+  error"; it's just a standard way to average those gaps that weighs big misses more.)
+- **Rating ↔ θ correlation (Pearson)** *(higher is better, max 1.0)* — do **better players get higher
+  ratings?** 1.0 = the ratings rank everyone perfectly by true skill. It only cares about the *ordering*,
+  not the absolute value — so a system where everyone's number is uniformly too low can still score
+  high here (which is exactly how the "sum" variant looks good on this row but bad on RMSE).
+- **Total-rating drift** *(closer to 0 is better)* — did the **whole crowd's average rating creep up or
+  down** over time? Everyone starts at the average, so 0 means "no points invented or lost overall."
+  A big negative number (like the sum variant's −0.36) means the system is quietly **deflating**
+  everyone; that makes ratings from different dates hard to compare.
+- **Within-band σ** *(lower is better)* — line up all the players who are *truly* the same level (say,
+  all the real "4.0s") and see **how spread out their computed ratings are**. Low = two equally-skilled
+  players end up with nearly the same rating, i.e. **your rating reflects you, not luck-of-the-partner**
+  (σ, "sigma", is the standard deviation — a standard measure of spread). ⚠️ Only meaningful *together
+  with* RMSE: a scheme can be tightly clustered but in the *wrong place* (that's the sum variant — low
+  spread, but everyone squeezed too low).
+
+**One more intuition — "bias" vs "noise".** Total error (RMSE) comes from two things: **bias** (a
+*systematic* error, e.g. everyone squeezed toward the middle, or everyone too low) and **noise** (random
+scatter, roughly the within-band σ). A scheme can be low-noise but high-bias (consistent, but
+consistently *off*) — which is what we see with Scheme 1 (tightly clustered yet squeezed toward the
+average) and, more severely, the sum variant (tight but deflated).
+
 ### Results
 
 Harness: `DoublesRatingSimulationReport` (test source set), reusing the real v2 engine. Setup:
