@@ -22,6 +22,16 @@ function statusLabel(match: PlayerMatchHistoryEntry): string {
   return 'Awaiting rating'
 }
 
+/** Comma-separated display names for a side (partners or opponents); "Player" for anyone unnamed. */
+function names(side: PlayerMatchHistoryEntry['opponents']): string {
+  return side.map((p) => p.displayName ?? 'Player').join(', ')
+}
+
+/** Comma-separated NTRP bands at match time for a side, e.g. "3.5, 4.0" (dash for any missing). */
+function bands(side: PlayerMatchHistoryEntry['opponents']): string {
+  return side.map((p) => p.levelAtMatch ?? '—').join(', ')
+}
+
 /**
  * A player's match history (issue #65), shown on the owner's Profile tab and the public profile
  * alike. Ratings appear only as the published NTRP band at the time of the match, never the
@@ -47,12 +57,14 @@ export function MatchHistoryCard({ code }: MatchHistoryCardProps) {
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : matches.length > 0 ? (
           <ul className="space-y-2">
-            {matches.map((match) => (
+            {matches.map((match) => {
+              const lead = match.opponents[0]
+              return (
               <li key={match.matchId} className="rounded-lg border p-3 text-sm">
                 <div className="flex items-center gap-3">
-                  {match.opponent?.photoUrl ? (
+                  {lead?.photoUrl ? (
                     <img
-                      src={match.opponent.photoUrl}
+                      src={lead.photoUrl}
                       alt=""
                       referrerPolicy="no-referrer"
                       className="h-9 w-9 shrink-0 rounded-full object-cover"
@@ -62,15 +74,16 @@ export function MatchHistoryCard({ code }: MatchHistoryCardProps) {
                       aria-hidden="true"
                       className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-muted-foreground"
                     >
-                      {(match.opponent?.displayName ?? 'P')
-                        .charAt(0)
-                        .toUpperCase()}
+                      {(lead?.displayName ?? 'P').charAt(0).toUpperCase()}
                     </div>
                   )}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-medium">
-                        vs {match.opponent?.displayName ?? 'Player'}
+                        {match.partners.length > 0
+                          ? `with ${names(match.partners)} · `
+                          : ''}
+                        vs {names(match.opponents) || 'Player'}
                       </span>
                       <Badge variant="secondary">{statusLabel(match)}</Badge>
                     </div>
@@ -84,7 +97,7 @@ export function MatchHistoryCard({ code }: MatchHistoryCardProps) {
                     {match.rated ? (
                       <div className="mt-1 text-muted-foreground">
                         NTRP {match.playerLevelAtMatch ?? '—'} vs{' '}
-                        {match.opponentLevelAtMatch ?? '—'} (at the time)
+                        {bands(match.opponents)} (at the time)
                       </div>
                     ) : null}
                     <Link
@@ -96,7 +109,8 @@ export function MatchHistoryCard({ code }: MatchHistoryCardProps) {
                   </div>
                 </div>
               </li>
-            ))}
+              )
+            })}
           </ul>
         ) : (
           <p className="text-sm text-muted-foreground">No matches yet.</p>

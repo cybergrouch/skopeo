@@ -30,9 +30,11 @@ data class PublicRatingDto(
 /**
  * One row of a player's match history (issue #65), shown on their own Profile tab and on the
  * shareable public profile alike. Ratings are surfaced only as the published NTRP band
- * ([playerLevelAtMatch]/[opponentLevelAtMatch] — the level at the time the match was rated), never
- * the precise value. [rated] indicates the match has been calculated and contributes to the
- * current rating; scheduled and unrated-completed matches carry null levels.
+ * ([playerLevelAtMatch] and each participant's [MatchHistoryParticipant.levelAtMatch] — the level
+ * at the time the match was rated), never the precise value. [rated] indicates the match has been
+ * calculated and contributes to the current rating; scheduled and unrated-completed matches carry
+ * null levels. [partners] is empty for singles and holds the teammate(s) for doubles; [opponents]
+ * holds the opposing side (one player for singles, two for doubles).
  */
 @Serializable
 data class PlayerMatchHistoryEntry(
@@ -44,12 +46,25 @@ data class PlayerMatchHistoryEntry(
     val rated: Boolean,
     val result: String?,
     val setScores: List<String>,
-    val opponent: OpponentSummary?,
+    val partners: List<MatchHistoryParticipant>,
+    val opponents: List<MatchHistoryParticipant>,
     val playerLevelAtMatch: String?,
-    val opponentLevelAtMatch: String?,
 )
 
-/** The opposing player on a match-history row — identified the same privacy-conscious way as a public profile. */
+/**
+ * A teammate or opponent on a match-history row (#256) — identified the same privacy-conscious way
+ * as a public profile, plus their published NTRP band at the time of the match ([levelAtMatch] is
+ * null for scheduled or unrated matches).
+ */
+@Serializable
+data class MatchHistoryParticipant(
+    val publicCode: String,
+    val displayName: String?,
+    val photoUrl: String?,
+    val levelAtMatch: String?,
+)
+
+/** A related player identified the same privacy-conscious way as a public profile (e.g. a merged card's canonical). */
 @Serializable
 data class OpponentSummary(
     val publicCode: String,

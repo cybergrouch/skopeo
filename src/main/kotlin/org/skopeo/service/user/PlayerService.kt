@@ -7,6 +7,7 @@ import arrow.core.Either
 import arrow.core.left
 import arrow.core.raise.either
 import arrow.core.right
+import org.skopeo.dto.user.MatchHistoryParticipant
 import org.skopeo.dto.user.OpponentSummary
 import org.skopeo.dto.user.PlayerMatchHistoryEntry
 import org.skopeo.dto.user.PublicPlayerResponse
@@ -100,13 +101,16 @@ class PlayerService(
                     .groupBy { it.matchId }
                     .mapValues { (_, rows) -> rows.associate { it.userId to it.previousLevel } }
             val participantByMatch = played.associate { it.id to participantOf(match = it, selfIds = selfIds) }
-            val opponents =
-                users
-                    .findAllByIds(ids = played.map { opponentId(match = it, playerId = participantByMatch.getValue(key = it.id)) })
-                    .associateBy { it.id }
+            // Resolve every other participant (partners + opponents) across all matches in one lookup.
+            val otherIds =
+                played.flatMap { match ->
+                    val self = participantByMatch.getValue(key = match.id)
+                    (match.team1.userIds + match.team2.userIds).filterNot { it == self }
+                }
+            val participantsById = users.findAllByIds(ids = otherIds).associateBy { it.id }
             played.map { match ->
                 val participant = participantByMatch.getValue(key = match.id)
-                entry(match = match, playerId = participant, opponents = opponents, levels = levelByMatchAndUser[match.id])
+                entry(match = match, playerId = participant, players = participantsById, levels = levelByMatchAndUser[match.id])
             }
         }
 
@@ -160,38 +164,39 @@ class PlayerService(
     private fun entry(
         match: Match,
         playerId: UUID,
-        opponents: Map<UUID, User>,
+        players: Map<UUID, User>,
         levels: Map<UUID, String?>?,
     ): PlayerMatchHistoryEntry {
         val onTeam1 = playerId in match.team1.userIds
-        val playerTeamId = if (onTeam1) match.team1.teamId else match.team2.teamId
-        val oppId = opponentId(match = match, playerId = playerId)
-        val opp = opponents.getValue(key = oppId)
+        val playerTeam = if (onTeam1) match.team1 else match.team2
+        val opposingTeam = if (onTeam1) match.team2 else match.team1
+
+        fun participant(userId: UUID): MatchHistoryParticipant {
+            val user = players.getValue(key = userId)
+            return MatchHistoryParticipant(
+                publicCode = user.publicCode,
+                displayName = user.displayName(),
+                photoUrl = user.photoUrl,
+                levelAtMatch = levels?.get(key = userId),
+            )
+        }
+
         return PlayerMatchHistoryEntry(
             matchId = match.id.toString(),
             publicCode = match.publicCode,
             matchDate = match.matchDate.toString(),
             status = match.status.name,
             rated = match.ratedAt != null,
-            result = match.winnerTeamId?.let { if (it == playerTeamId) "WIN" else "LOSS" },
+            result = match.winnerTeamId?.let { if (it == playerTeam.teamId) "WIN" else "LOSS" },
             setScores =
                 match.sets.map { set ->
                     val playerGames = if (onTeam1) set.team1Games else set.team2Games
                     val opponentGames = if (onTeam1) set.team2Games else set.team1Games
                     "$playerGames-$opponentGames"
                 },
-            opponent = OpponentSummary(publicCode = opp.publicCode, displayName = opp.displayName(), photoUrl = opp.photoUrl),
+            partners = playerTeam.userIds.filterNot { it == playerId }.map(transform = ::participant),
+            opponents = opposingTeam.userIds.map(transform = ::participant),
             playerLevelAtMatch = levels?.get(key = playerId),
-            opponentLevelAtMatch = levels?.get(key = oppId),
         )
-    }
-
-    /** The opposing player's id. A singles match always has exactly one opponent (enforced on creation). */
-    private fun opponentId(
-        match: Match,
-        playerId: UUID,
-    ): UUID {
-        val otherSide = if (playerId in match.team1.userIds) match.team2 else match.team1
-        return otherSide.userIds.first()
     }
 }

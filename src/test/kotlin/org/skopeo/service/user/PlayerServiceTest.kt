@@ -5,6 +5,8 @@ package org.skopeo.service.user
 
 import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
+import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
@@ -99,6 +101,24 @@ class PlayerServiceTest {
             ),
     )
 
+    private fun doublesFixture(
+        team1: List<UUID>,
+        team2: List<UUID>,
+        date: LocalDate,
+    ) = matches.createFixture(
+        command =
+            CreateFixtureCommand(
+                matchFormat = TeamType.DOUBLES,
+                matchType = MatchType.OPEN_PLAY,
+                matchDate = date,
+                team1UserIds = team1,
+                team2UserIds = team2,
+                team1Name = "T1",
+                team2Name = "T2",
+                createdBy = team1.first(),
+            ),
+    )
+
     /** Append a single player's rating-history row for a match, carrying their pre-match band. */
     private fun history(
         userId: UUID,
@@ -190,7 +210,8 @@ class PlayerServiceTest {
         history shouldHaveSize 1
         history.single().let {
             it.matchId shouldBe match.id.toString()
-            it.opponent?.displayName shouldBe "Opp"
+            it.opponents.single().displayName shouldBe "Opp"
+            it.partners.shouldBeEmpty()
         }
     }
 
@@ -227,16 +248,17 @@ class PlayerServiceTest {
         upcoming.rated shouldBe false
         upcoming.result.shouldBeNull()
         upcoming.playerLevelAtMatch.shouldBeNull()
-        upcoming.opponent?.displayName shouldBe "Ben"
+        upcoming.opponents.single().displayName shouldBe "Ben"
 
         val win = historyForAna[1]
         win.rated shouldBe true
         win.result shouldBe "WIN"
         win.setScores shouldBe listOf("6-4", "6-3")
-        win.opponent?.displayName shouldBe "Ben"
-        win.opponent?.publicCode shouldBe ben.publicCode
+        win.partners.shouldBeEmpty()
+        win.opponents.single().displayName shouldBe "Ben"
+        win.opponents.single().publicCode shouldBe ben.publicCode
         win.playerLevelAtMatch shouldBe "4.0"
-        win.opponentLevelAtMatch shouldBe "3.5"
+        win.opponents.single().levelAtMatch shouldBe "3.5"
     }
 
     @Test
@@ -259,6 +281,40 @@ class PlayerServiceTest {
         historyForBen[0].result shouldBe "LOSS"
         historyForBen[0].setScores shouldBe listOf(element = "4-6")
         historyForBen[0].rated shouldBe false
+    }
+
+    @Test
+    fun `doubles match history surfaces the partner and both opponents with their at-the-time bands (#256)`() {
+        val ana = newUser(uid = "a", names = display(name = "Ana"))
+        val bea = newUser(uid = "b", names = display(name = "Bea"))
+        val cy = newUser(uid = "c", names = display(name = "Cy"))
+        val deb = newUser(uid = "d", names = display(name = "Deb"))
+
+        // Ana & Bea (team1) beat Cy & Deb (team2), then the match is rated.
+        val match = doublesFixture(team1 = listOf(ana.id, bea.id), team2 = listOf(cy.id, deb.id), date = LocalDate.of(2026, 1, 1))
+        matches.addResult(
+            matchId = match.id,
+            sets = listOf(element = MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 3, winnerTeamId = match.team1.teamId)),
+            winnerTeamId = match.team1.teamId,
+            recordedBy = ana.id,
+            completedAt = LocalDateTime.now(),
+        )
+        matches.markRated(matchId = match.id, ratedAt = LocalDateTime.now(), ratedBy = ana.id)
+        history(userId = ana.id, matchId = match.id, previousLevel = "4.0")
+        history(userId = bea.id, matchId = match.id, previousLevel = "3.5")
+        history(userId = cy.id, matchId = match.id, previousLevel = "3.0")
+        history(userId = deb.id, matchId = match.id, previousLevel = "3.5")
+
+        val entry = service.matchHistory(code = ana.publicCode).shouldBeRight().single()
+
+        entry.result shouldBe "WIN"
+        entry.playerLevelAtMatch shouldBe "4.0"
+        // The partner (Bea) is surfaced, not folded into the opponents.
+        entry.partners.single().displayName shouldBe "Bea"
+        entry.partners.single().levelAtMatch shouldBe "3.5"
+        // Both opponents appear, each with their own band at the time.
+        entry.opponents.map { it.displayName } shouldContainExactlyInAnyOrder listOf("Cy", "Deb")
+        entry.opponents.map { it.levelAtMatch } shouldContainExactlyInAnyOrder listOf("3.0", "3.5")
     }
 
     @Test

@@ -51,13 +51,16 @@ describe('MatchHistoryCard', () => {
           rated: true,
           result: 'WIN',
           setScores: ['6-4', '6-3'],
-          opponent: {
-            publicCode: 'BEN123',
-            displayName: 'Ben',
-            photoUrl: 'https://example.com/ben.jpg',
-          },
+          partners: [],
+          opponents: [
+            {
+              publicCode: 'BEN123',
+              displayName: 'Ben',
+              photoUrl: 'https://example.com/ben.jpg',
+              levelAtMatch: '3.5',
+            },
+          ],
           playerLevelAtMatch: '4.0',
-          opponentLevelAtMatch: '3.5',
         },
       ],
     })
@@ -88,9 +91,11 @@ describe('MatchHistoryCard', () => {
           rated: false,
           result: null,
           setScores: [],
-          opponent: { publicCode: 'BEN123', displayName: 'Ben', photoUrl: null },
+          partners: [],
+          opponents: [
+            { publicCode: 'BEN123', displayName: 'Ben', photoUrl: null, levelAtMatch: null },
+          ],
           playerLevelAtMatch: null,
-          opponentLevelAtMatch: null,
         },
       ],
     })
@@ -115,9 +120,9 @@ describe('MatchHistoryCard', () => {
           rated: false,
           result: 'LOSS',
           setScores: ['4-6'],
-          opponent: undefined,
+          partners: [],
+          opponents: [],
           playerLevelAtMatch: null,
-          opponentLevelAtMatch: null,
         },
       ],
     })
@@ -139,13 +144,43 @@ describe('MatchHistoryCard', () => {
           rated: true,
           result: 'WIN',
           setScores: ['6-0', '6-0'],
-          opponent: { publicCode: 'BEN123', displayName: 'Ben', photoUrl: null },
+          partners: [],
+          opponents: [
+            { publicCode: 'BEN123', displayName: 'Ben', photoUrl: null, levelAtMatch: null },
+          ],
           playerLevelAtMatch: null,
-          opponentLevelAtMatch: null,
         },
       ],
     })
     renderCard()
     expect(screen.getByText(/NTRP — vs — \(at the time\)/)).toBeInTheDocument()
+  })
+
+  it('renders a doubles match with the partner and both opponents and their bands', () => {
+    useGetApiV1PlayersCodeMatchHistory.mockReturnValue({
+      isLoading: false,
+      data: [
+        {
+          matchId: 'm5',
+          publicCode: 'MATCH5',
+          matchDate: '2026-04-01',
+          status: 'COMPLETED',
+          rated: true,
+          result: 'WIN',
+          setScores: ['6-3'],
+          partners: [
+            { publicCode: 'BEA123', displayName: 'Bea', photoUrl: null, levelAtMatch: '3.5' },
+          ],
+          opponents: [
+            { publicCode: 'CYX123', displayName: 'Cy', photoUrl: null, levelAtMatch: '3.0' },
+            { publicCode: 'DEB123', displayName: 'Deb', photoUrl: null, levelAtMatch: '3.5' },
+          ],
+          playerLevelAtMatch: '4.0',
+        },
+      ],
+    })
+    renderCard()
+    expect(screen.getByText('with Bea · vs Cy, Deb')).toBeInTheDocument()
+    expect(screen.getByText(/NTRP 4.0 vs 3.0, 3.5 \(at the time\)/)).toBeInTheDocument()
   })
 })
