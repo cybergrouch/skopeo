@@ -440,6 +440,37 @@ paths:
         '404':
           description: No active player with that code
 
+  /api/v1/players/{code}/results-summary:
+    get:
+      summary: A player's win–loss record over time by code (viewable without login, #193)
+      description: >-
+        Win/loss counts bucketed by calendar month and split into singles vs doubles (MIXED_DOUBLES
+        counts as doubles), over every decided match the player took part in. Aggregated server-side,
+        so it is independent of how match history is listed/paginated. No ratings are exposed.
+      tags:
+        - Users
+      security:
+        - firebaseAuth: []
+        - {}
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The player's shareable public code (case-insensitive).
+      responses:
+        '200':
+          description: The player's win–loss summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerResultsSummary'
+        '401':
+          description: Missing or invalid Firebase token
+        '404':
+          description: No active player with that code
+
   /api/v1/players/{code}/rating-history:
     get:
       summary: A player's rating history by code (ADMINISTRATOR only)
@@ -2955,6 +2986,38 @@ components:
           type: string
           nullable: true
           description: This participant's published NTRP band at the time of the match (rated matches only).
+
+    PlayerResultsSummary:
+      type: object
+      description: A player's win–loss record over time (#276), split into singles and doubles; one bucket per month, oldest first.
+      required:
+        - singles
+        - doubles
+      properties:
+        singles:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResultsBucket'
+        doubles:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResultsBucket'
+
+    ResultsBucket:
+      type: object
+      description: Win/loss counts for one calendar month, from the viewed player's perspective.
+      required:
+        - period
+        - wins
+        - losses
+      properties:
+        period:
+          type: string
+          description: The calendar month as "yyyy-MM".
+        wins:
+          type: integer
+        losses:
+          type: integer
 
     UserSummaryPageResponse:
       type: object

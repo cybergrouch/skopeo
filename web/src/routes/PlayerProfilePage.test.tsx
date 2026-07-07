@@ -20,6 +20,10 @@ vi.mock('@/api/generated/users/users', () => ({
   useGetApiV1PlayersCodeRatingHistory,
   useGetApiV1UsersMe,
 }))
+// The win–loss card has its own API hook + tests (#276); stub it here.
+vi.mock('@/components/WinLossCard', () => ({
+  WinLossCard: ({ code }: { code: string }) => <div>win-loss:{code}</div>,
+}))
 // RatingHistoryCard pulls in the matches API (axios → firebase); mock it so the real Firebase
 // client never initializes in tests.
 vi.mock('@/api/generated/matches/matches', () => ({

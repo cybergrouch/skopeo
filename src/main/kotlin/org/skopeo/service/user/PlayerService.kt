@@ -10,12 +10,15 @@ import arrow.core.right
 import org.skopeo.dto.user.MatchHistoryParticipant
 import org.skopeo.dto.user.OpponentSummary
 import org.skopeo.dto.user.PlayerMatchHistoryEntry
+import org.skopeo.dto.user.PlayerResultsSummary
 import org.skopeo.dto.user.PublicPlayerResponse
 import org.skopeo.dto.user.PublicRatingDto
+import org.skopeo.dto.user.ResultsBucket
 import org.skopeo.model.Capability
 import org.skopeo.model.Match
 import org.skopeo.model.RatingHistoryEntry
 import org.skopeo.model.ServiceError
+import org.skopeo.model.TeamType
 import org.skopeo.model.User
 import org.skopeo.model.displayName
 import org.skopeo.repository.MatchRepository
@@ -115,6 +118,47 @@ class PlayerService(
         }
 
     /**
+     * A player's win–loss record over time (#276): every decided match (with a recorded winner) they
+     * played — a canonical account also including its duplicates' matches (#124) — bucketed by calendar
+     * month and split into singles vs doubles (MIXED_DOUBLES counts as doubles). Aggregated server-side
+     * so the chart is independent of how match history is listed/paginated. Only band-agnostic W/L
+     * counts leave the service — never a rating.
+     */
+    fun resultsSummary(code: String): Either<ServiceError, PlayerResultsSummary> =
+        either {
+            val user = resolve(code = code).bind()
+            val selfIds = (listOf(element = user.id) + users.findDuplicatesOf(canonicalId = user.id).map { it.id }).toSet()
+            val rows =
+                selfIds
+                    .flatMap { matches.listByUser(userId = it) }
+                    .distinctBy { it.id }
+                    .filter { it.winnerTeamId != null }
+                    .map { match ->
+                        val self = participantOf(match = match, selfIds = selfIds)
+                        val selfTeamId = if (self in match.team1.userIds) match.team1.teamId else match.team2.teamId
+                        ResultRow(
+                            singles = match.matchFormat == TeamType.SINGLES,
+                            period = match.matchDate.toString().take(n = 7),
+                            won = match.winnerTeamId == selfTeamId,
+                        )
+                    }
+
+            // One ResultsBucket per month (oldest first) for a given format's rows.
+            fun bucketsOf(formatRows: List<ResultRow>): List<ResultsBucket> =
+                formatRows
+                    .groupBy { it.period }
+                    .toSortedMap()
+                    .map { (period, monthRows) ->
+                        ResultsBucket(period = period, wins = monthRows.count { it.won }, losses = monthRows.count { !it.won })
+                    }
+
+            PlayerResultsSummary(
+                singles = bucketsOf(formatRows = rows.filter { it.singles }),
+                doubles = bucketsOf(formatRows = rows.filterNot { it.singles }),
+            )
+        }
+
+    /**
      * A player's full rating history by code, for ADMINISTRATORs only (issue #73). The owner reads
      * their own history via the user-id endpoint; this code-based variant exists so an admin viewing
      * a public profile can see it. Unlike match history, this is the precise audit view.
@@ -200,3 +244,10 @@ class PlayerService(
         )
     }
 }
+
+/** One decided match reduced to what the results summary needs (#276): format, month, and outcome. */
+private data class ResultRow(
+    val singles: Boolean,
+    val period: String,
+    val won: Boolean,
+)

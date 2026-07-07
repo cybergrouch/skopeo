@@ -42,6 +42,15 @@ fun Application.configurePlayerRoutes(service: PlayerService = PlayerService()) 
                         }
                     }
                 }
+                // Win–loss record over time (#276), split singles/doubles — aggregated server-side.
+                get(path = "/{code}/results-summary") {
+                    respondMappingErrors {
+                        val code = call.parameters["code"].orEmpty()
+                        respondEither(result = service.resultsSummary(code = code)) { summary ->
+                            call.respond(status = HttpStatusCode.OK, message = summary)
+                        }
+                    }
+                }
             }
             // ADMINISTRATOR only — the precise rating-history audit view for any player by code.
             authenticate(FIREBASE_AUTH) {

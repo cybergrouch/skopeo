@@ -87,6 +87,7 @@ export default defineConfig({
         'src/test/**',
         'src/main.tsx',
         'src/App.tsx', // router/provider composition
+        'src/components/WinLossChart.tsx', // Recharts presentation wrapper; doesn't render in jsdom (#276)
         'src/lib/firebase.ts', // Firebase SDK initialization
         'src/vite-env.d.ts',
         '**/*.d.ts',
