@@ -120,12 +120,12 @@ class ReportServiceTest {
     }
 
     @Test
-    fun `buckets players by net band movement over the window, counting stayers as the majority`() {
+    fun `buckets players by their farthest band excursion during the window, counting stayers as the majority`() {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
 
         // Stayed: no rating changes at all.
         ratedPlayer(uid = "stayer", currentLevel = "3.0")
-        // Stayed: churned within the window but ended where it began (net zero).
+        // Hopped: dipped to 3.5 and returned to 3.0 within the window — a reversing excursion still counts (#289).
         val roundtrip = ratedPlayer(uid = "roundtrip", currentLevel = "3.0")
         change(userId = roundtrip.id, at = "2026-03-05T10:00", from = "3.0", to = "3.5")
         change(userId = roundtrip.id, at = "2026-03-15T10:00", from = "3.5", to = "3.0")
@@ -136,9 +136,9 @@ class ReportServiceTest {
         val jumper = ratedPlayer(uid = "jumper", currentLevel = "4.0")
         change(userId = jumper.id, at = "2026-03-10T10:00", from = "3.0", to = "3.5")
         change(userId = jumper.id, at = "2026-03-20T10:00", from = "3.5", to = "4.0")
-        // A change AFTER the window close is excluded from the closing band (still 4.0, not 4.5).
+        // A change AFTER the window close is excluded (peak stays 4.0, not 4.5).
         change(userId = jumper.id, at = "2026-04-05T10:00", from = "4.0", to = "4.5")
-        // Dropped one band within the window (direction-agnostic): entered at 3.5, closed at 3.0.
+        // Dropped one band within the window: entered at 3.5, reached 3.0.
         val dropper = ratedPlayer(uid = "dropper", currentLevel = "3.0")
         change(userId = dropper.id, at = "2026-02-10T10:00", from = "3.0", to = "3.5")
         change(userId = dropper.id, at = "2026-03-12T10:00", from = "3.5", to = "3.0")
@@ -146,18 +146,21 @@ class ReportServiceTest {
         val result: BandHopReportResponse = report().shouldBeRight()
 
         result.totalPlayers shouldBe 5
-        result.stayedCount shouldBe 3
-        result.jumpedCount shouldBe 2
-        result.buckets.associate { it.hopDistance to it.count } shouldBe mapOf(0 to 3, 1 to 1, 2 to 1)
+        result.stayedCount shouldBe 2 // stayer + preMover
+        result.jumpedCount shouldBe 3 // roundtrip + jumper + dropper
+        result.buckets.associate { it.hopDistance to it.count } shouldBe mapOf(0 to 2, 1 to 2, 2 to 1)
 
         val jumped = result.buckets.single { it.hopDistance == 2 }.users.single()
         jumped.publicCode shouldBe jumper.publicCode
         jumped.fromBand shouldBe "3.0"
         jumped.toBand shouldBe "4.0"
 
-        val dropped = result.buckets.single { it.hopDistance == 1 }.users.single()
-        dropped.fromBand shouldBe "3.5"
-        dropped.toBand shouldBe "3.0"
+        val hop1 = result.buckets.single { it.hopDistance == 1 }.users.associateBy { it.publicCode }
+        // The reversing roundtrip is surfaced as a hop (from its entry band to the farthest band reached).
+        hop1.getValue(key = roundtrip.publicCode).fromBand shouldBe "3.0"
+        hop1.getValue(key = roundtrip.publicCode).toBand shouldBe "3.5"
+        hop1.getValue(key = dropper.publicCode).fromBand shouldBe "3.5"
+        hop1.getValue(key = dropper.publicCode).toBand shouldBe "3.0"
     }
 
     @Test
@@ -271,6 +274,26 @@ class ReportServiceTest {
         result.totalPlayers shouldBe 4
         result.buckets.associate { it.hopDistance to it.count } shouldBe mapOf(0 to 1, 1 to 2, 3 to 1)
         result.buckets.single { it.hopDistance == 3 }.users.single().publicCode shouldBe leaper.publicCode
+    }
+
+    @Test
+    fun `a boundary crossing that reverses within the window is still reported (#289)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        // Enters the window in the 3.0 band, dips into 2.5 (2.999301), then recovers to 3.0 (3.065162).
+        // Net window endpoints are 3.0 -> 3.0, but the 2.5 excursion is a real hop (it shows in match history).
+        val wobbler = ratedPlayer(uid = "wobbler", currentLevel = "3.0")
+        rawChange(userId = wobbler.id, at = "2026-02-20T10:00", fromRating = "3.010000", toRating = "3.035164") // enters at 3.0
+        rawChange(userId = wobbler.id, at = "2026-03-08T10:00", fromRating = "3.035164", toRating = "2.999301") // dips to 2.5
+        rawChange(userId = wobbler.id, at = "2026-03-22T10:00", fromRating = "2.993969", toRating = "3.065162") // back to 3.0
+
+        val result = report().shouldBeRight()
+
+        result.totalPlayers shouldBe 1
+        result.stayedCount shouldBe 0
+        val hop = result.buckets.single { it.hopDistance == 1 }.users.single()
+        hop.publicCode shouldBe wobbler.publicCode
+        hop.fromBand shouldBe "3.0" // entered in the 3.0 band
+        hop.toBand shouldBe "2.5" // the farthest band reached — surfaced even though it recovered to 3.0
     }
 
     @Test
