@@ -620,6 +620,59 @@ class MatchServiceTest {
     }
 
     @Test
+    fun `head-to-head counts and labels prior doubles meetings between the two players (#285)`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val p3 = provisionUser(uid = "p3", rated = true)
+        val p4 = provisionUser(uid = "p4", rated = true)
+
+        // A prior DOUBLES meeting where p1 & p2 were opponents; p1's side (team1) won.
+        val dbl =
+            service
+                .createFixture(
+                    token = token(uid = "host"),
+                    request =
+                        FixtureInput(
+                            matchFormat = TeamType.DOUBLES,
+                            matchType = MatchType.OPEN_PLAY,
+                            matchDate = LocalDate.parse("2026-01-15"),
+                            team1 = listOf(p1.id, p3.id),
+                            team2 = listOf(p2.id, p4.id),
+                        ),
+                ).shouldBeRight()
+        service.uploadResult(token = token(uid = "host"), matchId = dbl.id, request = straightSets()).shouldBeRight()
+
+        // A prior SINGLES meeting p2 won (team1 = p2), then the current singles match p1 vs p2.
+        val singlesMeeting =
+            service
+                .createFixture(
+                    token = token(uid = "host"),
+                    request = fixtureRequest(p1 = p2.id, p2 = p1.id, date = LocalDate.parse("2026-02-01")),
+                )
+                .shouldBeRight()
+        service.uploadResult(token = token(uid = "host"), matchId = singlesMeeting.id, request = straightSets()).shouldBeRight()
+        val current =
+            service
+                .createFixture(
+                    token = token(uid = "host"),
+                    request = fixtureRequest(p1 = p1.id, p2 = p2.id, date = LocalDate.parse("2026-03-01")),
+                )
+                .shouldBeRight()
+        service.uploadResult(token = token(uid = "host"), matchId = current.id, request = straightSets()).shouldBeRight()
+
+        val h2h = service.publicByCode(token = token(uid = "host"), code = current.publicCode).shouldBeRight().headToHead.shouldNotBeNull()
+
+        // Both meetings count — previously the doubles one was silently dropped from the tally (#285).
+        h2h.meetings shouldHaveSize 2
+        h2h.team1Wins shouldBe 1 // p1: the doubles win
+        h2h.team2Wins shouldBe 1 // p2: the singles win
+        val doublesEntry = h2h.meetings.single { it.matchFormat == "DOUBLES" }
+        doublesEntry.winnerPublicCode shouldBe p1.publicCode
+        h2h.meetings.count { it.matchFormat == "SINGLES" } shouldBe 1
+    }
+
+    @Test
     fun `publicByCode omits the head-to-head when there are no prior meetings (#188)`() {
         provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val p1 = provisionUser(uid = "p1", rated = true)

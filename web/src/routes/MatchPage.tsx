@@ -148,10 +148,12 @@ function HeadToHeadCard({ match }: { match: MatchPublicResponse }) {
               .map((s) => `${s.team1Games}-${s.team2Games}`)
               .join(' ')
             const won = winnerName(meeting.winnerPublicCode)
+            // Show whether the meeting was singles or doubles (#285), e.g. "mixed doubles".
+            const format = meeting.matchFormat.replaceAll('_', ' ').toLowerCase()
             return (
               <li key={meeting.publicCode} className="rounded-lg border p-3">
                 <div className="text-muted-foreground">
-                  {meeting.matchDate}
+                  {format} · {meeting.matchDate}
                   {score ? ` · ${score}` : ''}
                   {won ? ` · ${won} won` : ''}
                 </div>
