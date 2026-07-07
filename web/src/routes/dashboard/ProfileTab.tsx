@@ -8,6 +8,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { useAuth } from '@/auth/useAuth'
 import { MatchHistoryCard } from '@/components/MatchHistoryCard'
+import { WinLossCard } from '@/components/WinLossCard'
 import { UpcomingMatchesCard } from '@/components/UpcomingMatchesCard'
 import { EventsHistoryCard } from '@/components/EventsHistoryCard'
 import { RatingHistoryCard } from '@/components/RatingHistoryCard'
@@ -166,6 +167,8 @@ export function ProfileTab({
       <UpcomingMatchesCard />
 
       {publicCode ? <MatchHistoryCard code={publicCode} /> : null}
+
+      {publicCode ? <WinLossCard code={publicCode} /> : null}
 
       <EventsHistoryCard />
     </div>

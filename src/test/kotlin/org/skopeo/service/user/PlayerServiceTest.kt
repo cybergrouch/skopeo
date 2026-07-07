@@ -14,9 +14,11 @@ import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.dto.user.ResultsBucket
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.CreateFixtureCommand
+import org.skopeo.model.Match
 import org.skopeo.model.MatchSetResult
 import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
@@ -281,6 +283,59 @@ class PlayerServiceTest {
         historyForBen[0].result shouldBe "LOSS"
         historyForBen[0].setScores shouldBe listOf(element = "4-6")
         historyForBen[0].rated shouldBe false
+    }
+
+    /** Record a winner for [match] so it counts as a decided result. */
+    private fun decide(
+        match: Match,
+        winnerTeamId: UUID,
+        recordedBy: UUID,
+    ) = matches.addResult(
+        matchId = match.id,
+        sets = listOf(element = MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 4, winnerTeamId = winnerTeamId)),
+        winnerTeamId = winnerTeamId,
+        recordedBy = recordedBy,
+        completedAt = LocalDateTime.now(),
+    )
+
+    @Test
+    fun `results summary buckets wins and losses by month, split singles vs doubles (#276)`() {
+        val ana = newUser(uid = "a", names = display(name = "Ana"))
+        val ben = newUser(uid = "b", names = display(name = "Ben"))
+        val cy = newUser(uid = "c", names = display(name = "Cy"))
+        val deb = newUser(uid = "d", names = display(name = "Deb"))
+
+        // Singles: a Jan win + a Jan loss (Ana on team2 of a team1 win), and a Feb win.
+        val janWin = fixture(u1 = ana.id, u2 = ben.id, date = LocalDate.of(2026, 1, 5))
+        decide(match = janWin, winnerTeamId = janWin.team1.teamId, recordedBy = ana.id)
+        val janLoss = fixture(u1 = ben.id, u2 = ana.id, date = LocalDate.of(2026, 1, 20))
+        decide(match = janLoss, winnerTeamId = janLoss.team1.teamId, recordedBy = ben.id)
+        val febWin = fixture(u1 = ana.id, u2 = ben.id, date = LocalDate.of(2026, 2, 2))
+        decide(match = febWin, winnerTeamId = febWin.team1.teamId, recordedBy = ana.id)
+
+        // Doubles: a Jan win for Ana & Ben over Cy & Deb (MIXED_DOUBLES would count here too).
+        val dbl = doublesFixture(team1 = listOf(ana.id, ben.id), team2 = listOf(cy.id, deb.id), date = LocalDate.of(2026, 1, 10))
+        decide(match = dbl, winnerTeamId = dbl.team1.teamId, recordedBy = ana.id)
+
+        // A still-scheduled match (no recorded winner) must NOT count.
+        fixture(u1 = ana.id, u2 = ben.id, date = LocalDate.of(2026, 3, 1))
+
+        val summary = service.resultsSummary(code = ana.publicCode.lowercase()).shouldBeRight()
+
+        summary.singles shouldBe
+            listOf(
+                ResultsBucket(period = "2026-01", wins = 1, losses = 1),
+                ResultsBucket(period = "2026-02", wins = 1, losses = 0),
+            )
+        summary.doubles shouldBe listOf(element = ResultsBucket(period = "2026-01", wins = 1, losses = 0))
+    }
+
+    @Test
+    fun `results summary is empty for a player with no decided matches`() {
+        val user = newUser(uid = "solo", names = display(name = "Solo"))
+        val summary = service.resultsSummary(code = user.publicCode).shouldBeRight()
+        summary.singles.shouldBeEmpty()
+        summary.doubles.shouldBeEmpty()
     }
 
     @Test

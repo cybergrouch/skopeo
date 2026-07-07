@@ -12,6 +12,7 @@ import {
   useGetApiV1UsersMe,
 } from '@/api/generated/users/users'
 import { MatchHistoryCard } from '@/components/MatchHistoryCard'
+import { WinLossCard } from '@/components/WinLossCard'
 import { RatingHistoryCard } from '@/components/RatingHistoryCard'
 import { ShareCard } from '@/components/ShareCard'
 import { PublicPageNav } from '@/components/PublicPageNav'
@@ -135,6 +136,10 @@ export function PlayerProfilePage() {
 
         {player && !player.isDisabled ? (
           <MatchHistoryCard code={player.publicCode} />
+        ) : null}
+
+        {player && !player.isDisabled ? (
+          <WinLossCard code={player.publicCode} />
         ) : null}
 
         {player && !player.isDisabled && isAdmin ? (

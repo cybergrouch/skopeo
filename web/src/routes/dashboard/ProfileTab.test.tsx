@@ -37,6 +37,10 @@ vi.mock('@/components/RatingBandMeter', () => ({
 vi.mock('@/components/ReRateRequestCard', () => ({
   ReRateRequestCard: () => <div>re-rate card</div>,
 }))
+// The win–loss card has its own API hook + tests (#276); stub it here.
+vi.mock('@/components/WinLossCard', () => ({
+  WinLossCard: ({ code }: { code: string }) => <div>win-loss:{code}</div>,
+}))
 // The editable name/demographics form has its own tests (#196/#199); stub it here so this test
 // stays focused on the Profile shell.
 vi.mock('@/components/ProfileFieldsForm', () => ({

@@ -71,3 +71,22 @@ data class OpponentSummary(
     val displayName: String?,
     val photoUrl: String?,
 )
+
+/**
+ * A player's win–loss record over time (#276), aggregated server-side so it's independent of how
+ * match history is listed/paginated. [singles] and [doubles] each hold one bucket per calendar month
+ * that has a decided match (a recorded winner), oldest first. MIXED_DOUBLES counts as doubles.
+ */
+@Serializable
+data class PlayerResultsSummary(
+    val singles: List<ResultsBucket>,
+    val doubles: List<ResultsBucket>,
+)
+
+/** Win/loss counts for one calendar month ([period] = "yyyy-MM"), from the viewed player's perspective. */
+@Serializable
+data class ResultsBucket(
+    val period: String,
+    val wins: Int,
+    val losses: Int,
+)
