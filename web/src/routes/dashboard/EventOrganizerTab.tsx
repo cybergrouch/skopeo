@@ -159,11 +159,19 @@ export function EventOrganizerTab() {
                 <li key={event.id}>
                   <button
                     type="button"
-                    className="flex w-full items-center justify-between gap-2 rounded-lg border p-3 text-left text-sm hover:bg-muted/50"
+                    className="flex w-full items-start justify-between gap-2 rounded-lg border p-3 text-left text-sm hover:bg-muted/50"
                     onClick={() => setSelectedId(event.id)}
                   >
-                    <span className="font-medium">{event.name}</span>
-                    <span className="text-muted-foreground">
+                    <span className="flex flex-col">
+                      <span className="font-medium">{event.name}</span>
+                      {/* The filing host (#270), shown as text — the whole card is a button, so no nested link. */}
+                      {event.creatorDisplayName ? (
+                        <span className="text-xs text-muted-foreground">
+                          Filed by {event.creatorDisplayName}
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="shrink-0 text-muted-foreground">
                       {event.startDate} – {event.endDate} ·{' '}
                       {event.participants.length} player{plural(event.participants.length)}
                     </span>

@@ -16,6 +16,7 @@ import org.skopeo.dto.match.toPublicResponse
 import org.skopeo.model.Capability
 import org.skopeo.model.CreateEventCommand
 import org.skopeo.model.Event
+import org.skopeo.model.EventCreatorRef
 import org.skopeo.model.EventParticipantRef
 import org.skopeo.model.EventParticipantStatus
 import org.skopeo.model.EventView
@@ -294,8 +295,10 @@ class EventService(
     private fun toView(event: Event): EventView {
         val entries = events.participantsOf(eventId = event.id)
         val ids = entries.map { it.userId }
-        // A participant row always references an existing user (FK), so getValue is safe.
-        val byId = users.findAllByIds(ids = ids).associateBy { it.id }
+        // Resolve participants and the filing host (#270) in a single lookup. A participant row always
+        // references an existing user (FK), so getValue is safe; the creator is looked up nullably since
+        // created_by is nullable (ON DELETE SET NULL) for legacy/orphaned events.
+        val byId = users.findAllByIds(ids = (ids + listOfNotNull(element = event.createdBy)).distinct()).associateBy { it.id }
         val ratingById = ratings.findCurrentRatings(userIds = ids)
         val participants =
             entries.map { entry ->
@@ -310,7 +313,13 @@ class EventService(
                     status = entry.status,
                 )
             }
-        return EventView(event = event, participants = participants)
+        val creator =
+            event.createdBy?.let { creatorId ->
+                // A non-null created_by references an existing user (FK), so getValue is safe.
+                val host = byId.getValue(key = creatorId)
+                EventCreatorRef(displayName = host.displayName(), publicCode = host.publicCode)
+            }
+        return EventView(event = event, participants = participants, creator = creator)
     }
 }
 

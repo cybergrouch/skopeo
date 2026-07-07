@@ -61,10 +61,21 @@ data class EventParticipantRef(
     val status: EventParticipantStatus = EventParticipantStatus.APPROVED,
 )
 
-/** An event with its participants resolved to names/codes — the shape the API returns. */
+/**
+ * An event with its participants resolved to names/codes — the shape the API returns. [creator] is
+ * the filing host resolved to a display name + public code (#270), or null for legacy events with no
+ * recorded creator.
+ */
 data class EventView(
     val event: Event,
     val participants: List<EventParticipantRef>,
+    val creator: EventCreatorRef? = null,
+)
+
+/** The host who filed an event (#270), identified the privacy-conscious way — display name + public code. */
+data class EventCreatorRef(
+    val displayName: String?,
+    val publicCode: String?,
 )
 
 /** One of a player's own events plus their standing in it (#202) — backs the Profile "Events history". */

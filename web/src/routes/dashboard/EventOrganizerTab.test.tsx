@@ -62,6 +62,8 @@ const event = {
   endDate: '2026-03-03',
   isActive: true,
   participants: [{ userId: 'u1', displayName: 'Ana', publicCode: 'AAA111' }],
+  creatorDisplayName: 'Hank',
+  creatorPublicCode: 'HHH999',
 }
 
 describe('EventOrganizerTab', () => {
@@ -107,6 +109,16 @@ describe('EventOrganizerTab', () => {
     // Going back returns to the list.
     await user.click(screen.getByRole('button', { name: 'back' }))
     expect(screen.getByText('Events')).toBeInTheDocument()
+  })
+
+  it('shows the filing host on each event card, omitting it when unknown (#270)', () => {
+    const orphan = { ...event, id: 'e3', name: 'Orphan Cup', creatorDisplayName: null, creatorPublicCode: null }
+    useGetApiV1Events.mockReturnValue({ data: [event, orphan], isLoading: false })
+    renderTab()
+
+    expect(screen.getByText('Filed by Hank')).toBeInTheDocument()
+    // The creator-less event renders no "Filed by" line — only the one with a known creator does.
+    expect(screen.getAllByText(/Filed by/)).toHaveLength(1)
   })
 
   it('creates an event with a roster', async () => {
