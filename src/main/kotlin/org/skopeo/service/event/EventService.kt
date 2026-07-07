@@ -314,7 +314,11 @@ class EventService(
                 )
             }
         val creator =
-            event.createdBy?.let { byId[it] }?.let { EventCreatorRef(displayName = it.displayName(), publicCode = it.publicCode) }
+            event.createdBy?.let { creatorId ->
+                // A non-null created_by references an existing user (FK), so getValue is safe.
+                val host = byId.getValue(key = creatorId)
+                EventCreatorRef(displayName = host.displayName(), publicCode = host.publicCode)
+            }
         return EventView(event = event, participants = participants, creator = creator)
     }
 }
