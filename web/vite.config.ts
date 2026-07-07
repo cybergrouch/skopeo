@@ -32,6 +32,30 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Isolate large, rarely-changing vendors into their own long-cached chunks (#277): app-code
+        // changes no longer bust their cache, and the browser can fetch them in parallel. Route-level
+        // React.lazy (see App.tsx) handles per-page splitting; this covers the heavy shared deps.
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('/firebase/') || id.includes('/@firebase/')) return 'firebase'
+            if (id.includes('/@tanstack/')) return 'react-query'
+            if (
+              id.includes('/react/') ||
+              id.includes('/react-dom/') ||
+              id.includes('/react-router') ||
+              id.includes('/scheduler/')
+            ) {
+              return 'react-vendor'
+            }
+          }
+          return undefined
+        },
+      },
+    },
+  },
   server: {
     // Proxy API calls to the Ktor backend in dev so the browser talks to one
     // origin (no CORS) and the Firebase ID token rides along unchanged.
