@@ -206,6 +206,8 @@ data class MatchPublicHeadToHead(
 /**
  * One prior meeting in a head-to-head record (#188). [sets] are oriented to team1/team2 of the match
  * being viewed; [winnerPublicCode] is the winning player's code (one of the two), or null if undecided.
+ * [matchFormat] (SINGLES/DOUBLES/MIXED_DOUBLES) lets the card show whether the meeting was singles or
+ * doubles (#285).
  */
 @Serializable
 data class MatchPublicHeadToHeadEntry(
@@ -213,6 +215,7 @@ data class MatchPublicHeadToHeadEntry(
     val matchDate: String,
     val status: String,
     val rated: Boolean,
+    val matchFormat: String,
     val sets: List<MatchPublicSet>,
     val winnerPublicCode: String? = null,
 )

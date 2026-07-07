@@ -281,7 +281,13 @@ class MatchService(
             matches
                 .listBetweenUsers(userIdA = team1Id, userIdB = team2Id)
                 .filter { it.id != match.id && it.status == MatchStatus.COMPLETED }
-                .map { headToHeadEntry(meeting = it, team1Id = team1Id, codes = codes) }
+                // Count only meetings where the two were opponents (on opposite sides) — never partners
+                // on the same doubles team, which listBetweenUsers can otherwise surface (#285).
+                .filter { meeting ->
+                    (team1Id in meeting.team1.userIds && team2Id in meeting.team2.userIds) ||
+                        (team1Id in meeting.team2.userIds && team2Id in meeting.team1.userIds)
+                }
+                .map { headToHeadEntry(meeting = it, team1Id = team1Id, team2Id = team2Id, codes = codes) }
         return entries
             .takeIf { it.isNotEmpty() }
             ?.let {
@@ -501,18 +507,22 @@ private fun orientSet(
 private fun headToHeadEntry(
     meeting: Match,
     team1Id: UUID,
+    team2Id: UUID,
     codes: Map<UUID, String>,
 ): MatchPublicHeadToHeadEntry {
     val refIsTeam1 = team1Id in meeting.team1.userIds
+    // Attribute the win by which SIDE the reference player was on, not by the winning team's first
+    // player — so doubles meetings (two players a side) count for the right head-to-head player (#285).
     // Meetings are filtered to COMPLETED, so the winner is always team1 or team2.
-    val winnerSide = if (meeting.winnerTeamId == meeting.team1.teamId) meeting.team1 else meeting.team2
-    val winnerId = winnerSide.userIds.firstOrNull()
+    val refTeamId = if (refIsTeam1) meeting.team1.teamId else meeting.team2.teamId
+    val refSideWon = meeting.winnerTeamId == refTeamId
     return MatchPublicHeadToHeadEntry(
         publicCode = meeting.publicCode,
         matchDate = meeting.matchDate.toString(),
         status = meeting.status.name,
         rated = meeting.ratedAt != null,
+        matchFormat = meeting.matchFormat.name,
         sets = meeting.sets.map { orientSet(set = it, refIsTeam1 = refIsTeam1) },
-        winnerPublicCode = winnerId?.let { codes[it] },
+        winnerPublicCode = if (refSideWon) codes[team1Id] else codes[team2Id],
     )
 }

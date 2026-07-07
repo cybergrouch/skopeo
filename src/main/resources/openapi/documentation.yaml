@@ -4071,6 +4071,7 @@ components:
         - matchDate
         - status
         - rated
+        - matchFormat
         - sets
       properties:
         publicCode:
@@ -4082,6 +4083,9 @@ components:
           type: string
         rated:
           type: boolean
+        matchFormat:
+          type: string
+          description: SINGLES, DOUBLES, or MIXED_DOUBLES — whether the meeting was singles or doubles (#285).
         sets:
           type: array
           description: Set scores oriented to team1/team2 of the match being viewed.

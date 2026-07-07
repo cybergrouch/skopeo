@@ -244,6 +244,7 @@ describe('MatchPage', () => {
               matchDate: '2026-02-01',
               status: 'COMPLETED',
               rated: true,
+              matchFormat: 'DOUBLES',
               sets: [{ setNumber: 1, team1Games: 4, team2Games: 6 }],
               winnerPublicCode: 'BBB222', // Bob (team2) won
             },
@@ -252,6 +253,7 @@ describe('MatchPage', () => {
               matchDate: '2026-01-01',
               status: 'COMPLETED',
               rated: false,
+              matchFormat: 'SINGLES',
               sets: [{ setNumber: 1, team1Games: 6, team2Games: 3 }],
               winnerPublicCode: 'AAA111', // Ana (team1) won
             },
@@ -264,9 +266,9 @@ describe('MatchPage', () => {
 
     expect(screen.getByText('Head-to-head')).toBeInTheDocument()
     expect(screen.getByText('1 – 1')).toBeInTheDocument()
-    // Each meeting shows date · score · winner and links to its own public page.
-    expect(screen.getByText(/2026-02-01 · 4-6 · Bob won/)).toBeInTheDocument()
-    expect(screen.getByText(/2026-01-01 · 6-3 · Ana won/)).toBeInTheDocument()
+    // Each meeting shows format · date · score · winner and links to its own public page (#285).
+    expect(screen.getByText(/doubles · 2026-02-01 · 4-6 · Bob won/)).toBeInTheDocument()
+    expect(screen.getByText(/singles · 2026-01-01 · 6-3 · Ana won/)).toBeInTheDocument()
     const links = screen.getAllByRole('link', { name: 'Public page (QR)' })
     expect(links.map((l) => l.getAttribute('href'))).toEqual([
       '/matches/PREV02',
@@ -291,13 +293,14 @@ describe('MatchPage', () => {
           team2Wins: 0,
           meetings: [
             // Undecided + no sets: no score, no "won" suffix.
-            { publicCode: 'PREVX', matchDate: '2026-02-01', status: 'COMPLETED', rated: false, sets: [], winnerPublicCode: null },
+            { publicCode: 'PREVX', matchDate: '2026-02-01', status: 'COMPLETED', rated: false, matchFormat: 'SINGLES', sets: [], winnerPublicCode: null },
             // Winner code matching neither player → no resolvable name.
             {
               publicCode: 'PREVY',
               matchDate: '2026-01-01',
               status: 'COMPLETED',
               rated: true,
+              matchFormat: 'SINGLES',
               sets: [{ setNumber: 1, team1Games: 6, team2Games: 0 }],
               winnerPublicCode: 'ZZZ999',
             },
@@ -310,10 +313,10 @@ describe('MatchPage', () => {
 
     expect(screen.getByText('Head-to-head')).toBeInTheDocument()
     expect(screen.getByText(/Prior meetings between AAA111 and Unknown/)).toBeInTheDocument()
-    // Undecided meeting: just the date, no " · ... won".
-    expect(screen.getByText('2026-02-01')).toBeInTheDocument()
+    // Undecided meeting: format · date, no " · ... won".
+    expect(screen.getByText('singles · 2026-02-01')).toBeInTheDocument()
     // Unknown winner code resolves to no name → score shown but no "won" suffix.
-    expect(screen.getByText('2026-01-01 · 6-0')).toBeInTheDocument()
+    expect(screen.getByText('singles · 2026-01-01 · 6-0')).toBeInTheDocument()
     expect(screen.queryByText(/won/)).not.toBeInTheDocument()
   })
 })
