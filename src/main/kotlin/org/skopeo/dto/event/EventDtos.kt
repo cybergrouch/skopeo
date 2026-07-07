@@ -19,6 +19,16 @@ data class CreateEventRequest(
     val participantIds: List<String> = emptyList(),
 )
 
+/**
+ * Body for `PATCH /api/v1/events/{id}` — a partial update of an event (#269). Only [name] is
+ * editable today; the shape is a partial update so date/other-field edits can be added later
+ * without a new route. Fields left null are unchanged.
+ */
+@Serializable
+data class UpdateEventRequest(
+    val name: String? = null,
+)
+
 /** Body for `POST /api/v1/events/{id}/participants` — add a participant. */
 @Serializable
 data class AddParticipantRequest(

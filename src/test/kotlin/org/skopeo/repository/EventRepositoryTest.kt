@@ -89,4 +89,24 @@ class EventRepositoryTest {
         transaction { EventsTable.update(where = { EventsTable.id eq event.id }) { it[isActive] = false } }
         events.findByPublicCode(code = event.publicCode).shouldBeNull()
     }
+
+    @Test
+    fun `rename updates the name and returns the event, or null when absent`() {
+        val creator = newUser(uid = "creator")
+        val event =
+            events.create(
+                command =
+                    CreateEventCommand(
+                        name = "Old Name",
+                        startDate = LocalDate.parse("2026-06-01"),
+                        endDate = LocalDate.parse("2026-06-02"),
+                        participantIds = emptyList(),
+                        createdBy = creator,
+                    ),
+            )
+
+        events.rename(id = event.id, name = "New Name")!!.name shouldBe "New Name"
+        events.findById(id = event.id)!!.name shouldBe "New Name"
+        events.rename(id = UUID.randomUUID(), name = "Ghost").shouldBeNull()
+    }
 }

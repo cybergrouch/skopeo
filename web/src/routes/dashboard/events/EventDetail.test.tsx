@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { EventDetail } from './EventDetail'
 
-const { useGetApiV1EventsId, addMutate, removeMutate, decideMutate, createFixtureMutate, deleteMutate, state } =
+const { useGetApiV1EventsId, addMutate, removeMutate, decideMutate, createFixtureMutate, deleteMutate, renameMutate, state } =
   vi.hoisted(() => ({
     useGetApiV1EventsId: vi.fn(),
     addMutate: vi.fn(),
@@ -13,12 +13,15 @@ const { useGetApiV1EventsId, addMutate, removeMutate, decideMutate, createFixtur
     decideMutate: vi.fn(),
     createFixtureMutate: vi.fn(),
     deleteMutate: vi.fn(),
+    renameMutate: vi.fn(),
     state: {
       addFail: false,
       fixtureFail: false,
       deleteFail: false,
       deletePending: false,
       deleteErrorMessage: null as string | null,
+      renameFail: false,
+      renameErrorMessage: null as string | null,
     },
   }))
 
@@ -32,6 +35,16 @@ vi.mock('@/api/generated/events/events', () => ({
       deleteMutate(vars)
       if (state.deleteFail) {
         throw state.deleteErrorMessage ? { response: { data: { message: state.deleteErrorMessage } } } : new Error('boom')
+      }
+      opts?.mutation?.onSuccess?.()
+    },
+  }),
+  usePatchApiV1EventsId: (opts?: { mutation?: { onSuccess?: () => void } }) => ({
+    isPending: false,
+    mutateAsync: async (vars: unknown) => {
+      renameMutate(vars)
+      if (state.renameFail) {
+        throw state.renameErrorMessage ? { response: { data: { message: state.renameErrorMessage } } } : new Error('boom')
       }
       opts?.mutation?.onSuccess?.()
     },
@@ -138,6 +151,8 @@ describe('EventDetail', () => {
     state.deleteFail = false
     state.deletePending = false
     state.deleteErrorMessage = null
+    state.renameFail = false
+    state.renameErrorMessage = null
     useGetApiV1EventsId.mockReturnValue({ data: event, isLoading: false })
   })
 
@@ -492,5 +507,53 @@ describe('EventDetail', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('recorded matches first')
     expect(onBack).not.toHaveBeenCalled()
+  })
+
+  it('renames the event, trimming the name and sending a PATCH (#269)', async () => {
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.click(screen.getByRole('button', { name: 'Rename' }))
+    const input = screen.getByLabelText('Event name')
+    await user.clear(input)
+    await user.type(input, '  Summer Classic  ')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(renameMutate).toHaveBeenCalledWith({ id: 'e1', data: { name: 'Summer Classic' } })
+  })
+
+  it('rejects a blank rename without calling the API', async () => {
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.click(screen.getByRole('button', { name: 'Rename' }))
+    await user.clear(screen.getByLabelText('Event name'))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Event name is required')
+    expect(renameMutate).not.toHaveBeenCalled()
+  })
+
+  it('surfaces a server error when a rename fails', async () => {
+    state.renameFail = true
+    state.renameErrorMessage = 'Nope'
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.click(screen.getByRole('button', { name: 'Rename' }))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Nope')
+  })
+
+  it('cancels a rename without calling the API', async () => {
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.click(screen.getByRole('button', { name: 'Rename' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(screen.getByRole('button', { name: 'Rename' })).toBeInTheDocument()
+    expect(renameMutate).not.toHaveBeenCalled()
   })
 })

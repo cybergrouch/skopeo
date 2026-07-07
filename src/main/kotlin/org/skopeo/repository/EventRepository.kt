@@ -58,6 +58,20 @@ class EventRepository {
 
     fun findById(id: UUID): Event? = transaction { loadEvent(id = id) }
 
+    /** Rename an event (#269): update its name and return the event, or null if it doesn't exist. */
+    fun rename(
+        id: UUID,
+        name: String,
+    ): Event? =
+        transaction {
+            if (loadEvent(id = id) == null) {
+                null
+            } else {
+                EventsTable.update(where = { EventsTable.id eq id }) { it[EventsTable.name] = name }
+                loadEvent(id = id)
+            }
+        }
+
     /** Soft-delete/restore an event (#243): flip is_active and stamp/clear disabled_at. Returns false if absent. */
     fun setActive(
         id: UUID,

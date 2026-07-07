@@ -108,6 +108,28 @@ class EventService(
         }
 
     /**
+     * Rename an event (#269). Staff-only; a HOST may rename only their own event, an ADMINISTRATOR any.
+     * The name is validated (non-blank) and trimmed, consistent with event creation.
+     */
+    fun rename(
+        token: VerifiedFirebaseToken,
+        id: UUID,
+        name: String,
+    ): Either<ServiceError, EventView> =
+        either {
+            val caller = staffCaller(users = users, token = token).bind()
+            val event = ensureNotNull(value = events.findById(id = id)) { ServiceError.NotFound(message = "Event $id not found") }
+            val isAdmin = caller.capabilities.contains(element = Capability.ADMINISTRATOR)
+            ensure(condition = isAdmin || event.createdBy == caller.id) { ServiceError.Forbidden() }
+            ensure(condition = name.isNotBlank()) { ServiceError.Validation(message = "Event name is required") }
+            val updated =
+                ensureNotNull(value = events.rename(id = id, name = name.trim())) {
+                    ServiceError.NotFound(message = "Event $id not found")
+                }
+            toView(event = updated)
+        }
+
+    /**
      * Delete an event (#243), soft-delete via is_active. The event's matches gate it: any *rated* match
      * blocks deletion outright (results are permanent); any *recorded* (COMPLETED) but unrated match is
      * refused with advice to delete those matches first (they're still deletable while unrated, #138).

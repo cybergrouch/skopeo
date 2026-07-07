@@ -350,6 +350,51 @@ class EventServiceTest {
     }
 
     @Test
+    fun `a host renames their own event, trimming the name`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val event = service.create(token = token(uid = "host"), input = input(name = "Spring Open")).shouldBeRight().event
+
+        val renamed = service.rename(token = token(uid = "host"), id = event.id, name = "  Summer Classic  ").shouldBeRight()
+
+        renamed.event.name shouldBe "Summer Classic"
+        events.findById(id = event.id)!!.name shouldBe "Summer Classic"
+    }
+
+    @Test
+    fun `rename rejects a blank name`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight().event
+
+        service.rename(token = token(uid = "host"), id = event.id, name = "   ")
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        events.findById(id = event.id)!!.name shouldBe "Spring Open"
+    }
+
+    @Test
+    fun `a host cannot rename another host's event, but an administrator can`() {
+        provision(uid = "owner", roles = setOf(Capability.PLAYER, Capability.HOST))
+        provision(uid = "other", roles = setOf(Capability.PLAYER, Capability.HOST))
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val event = service.create(token = token(uid = "owner"), input = input(name = "Owner Cup")).shouldBeRight().event
+
+        service.rename(token = token(uid = "other"), id = event.id, name = "Hijacked")
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        events.findById(id = event.id)!!.name shouldBe "Owner Cup"
+
+        service.rename(token = token(uid = "admin"), id = event.id, name = "Admin Renamed").shouldBeRight()
+        events.findById(id = event.id)!!.name shouldBe "Admin Renamed"
+    }
+
+    @Test
+    fun `renaming a non-existent event is NotFound, and a non-staff caller is forbidden`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        service.rename(token = token(uid = "host"), id = UUID.randomUUID(), name = "X")
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+        service.rename(token = token(uid = "ghost"), id = UUID.randomUUID(), name = "X")
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
+    @Test
     fun `deleting a non-existent event is NotFound, and a non-staff caller is forbidden`() {
         provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         service
