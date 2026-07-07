@@ -15,6 +15,7 @@ import org.skopeo.model.Capability
 import org.skopeo.model.Level
 import org.skopeo.model.RatingHistoryEntry
 import org.skopeo.model.ServiceError
+import org.skopeo.model.UserRating
 import org.skopeo.model.displayName
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
@@ -32,16 +33,19 @@ private val NTRP_FLOOR = BigDecimal("1.0")
 
 /**
  * Admin reports (#216). The first report is NTRP band hops over a date range: for each rated player,
- * compare the band they were in entering the window with the band they were in at its close, and bucket
- * players by the absolute number of 0.5-wide bands moved. The intent is to confirm that most players
- * stay within their band (hop 0) and to surface the exceptions who jumped. Band labels only — never
- * exact ratings. ADMINISTRATOR only; expected failures are returned as an [Either] left ([ServiceError]).
+ * compare the band they were in entering the window with the FARTHEST band they reached during it, and
+ * bucket players by the absolute number of 0.5-wide bands moved. Using the farthest excursion (not the
+ * window's closing band) means a crossing that later reverses within the window still counts — a player
+ * who dips into another band and comes back is a real, qualified hop, not a stayer (#289). The intent is
+ * to confirm that most players stay within their band (hop 0) and to surface the exceptions who jumped.
+ * Band labels only — never exact ratings. ADMINISTRATOR only; expected failures are returned as an
+ * [Either] left ([ServiceError]).
  */
 class ReportService(
     private val users: UserRepository = UserRepository(),
     private val ratings: RatingRepository = RatingRepository(),
 ) {
-    /** One player's net band movement over the window (labels only). */
+    /** One player's farthest band excursion during the window, from their entry band (labels only). */
     private data class Hop(
         val userId: UUID,
         val fromBand: String,
@@ -71,20 +75,12 @@ class ReportService(
             // boundary always resolves (their current rating is the ultimate fallback), so no null hops.
             val hops =
                 ratings.allCurrentRatings().mapNotNull { rating ->
-                    // Guard on the current band, but derive the boundary bands from RAW ratings (#257): snap
-                    // each endpoint through Level.fromValue so banding matches the rest of the app and a real
-                    // crossing is never lost to a missing/stale stored label.
-                    rating.currentLevel?.let {
-                        val rows = historyByUser[rating.userId].orEmpty()
-                        val fromLevel = bandAt(rows = rows, instant = windowOpen, inclusive = false, fallback = rating.currentRating)
-                        val toLevel = bandAt(rows = rows, instant = windowClose, inclusive = true, fallback = rating.currentRating)
-                        Hop(
-                            userId = rating.userId,
-                            fromBand = fromLevel.value,
-                            toBand = toLevel.value,
-                            distance = abs(n = bandIndex(level = toLevel) - bandIndex(level = fromLevel)),
-                        )
-                    }
+                    hopFor(
+                        rating = rating,
+                        history = historyByUser[rating.userId].orEmpty(),
+                        windowOpen = windowOpen,
+                        windowClose = windowClose,
+                    )
                 }
 
             val namesById = users.findAllByIds(ids = hops.map { it.userId }).associateBy { it.id }
@@ -122,34 +118,54 @@ class ReportService(
             )
         }
 
-    /** The player's band as of [instant]: their raw rating there, snapped to a band via [Level.fromValue]. */
-    private fun bandAt(
-        rows: List<RatingHistoryEntry>,
-        instant: LocalDateTime,
-        inclusive: Boolean,
-        fallback: BigDecimal,
-    ): Level =
-        Level.fromValue(
-            value = ratingAsOf(rows = rows, instant = instant, inclusive = inclusive, fallback = fallback).toPlainString(),
+    /**
+     * One player's band excursion during the window, or null if they have no current band (the only
+     * skip). Guards on the current band but derives bands from RAW ratings via [Level.fromValue] (#257):
+     * the entry band vs the FARTHEST band reached in-window, so a crossing that later reverses still
+     * counts (#289) rather than netting to zero at the window's close.
+     */
+    private fun hopFor(
+        rating: UserRating,
+        history: List<RatingHistoryEntry>,
+        windowOpen: LocalDateTime,
+        windowClose: LocalDateTime,
+    ): Hop? {
+        if (rating.currentLevel == null) return null
+        val fromLevel = entryBand(rows = history, windowOpen = windowOpen, fallback = rating.currentRating)
+        val fromIndex = bandIndex(level = fromLevel)
+        val peakLevel =
+            history
+                .filter { !it.calculatedAt.isBefore(windowOpen) && !it.calculatedAt.isAfter(windowClose) }
+                .map { Level.fromValue(value = it.newRating.toPlainString()) }
+                .maxByOrNull { abs(n = bandIndex(level = it) - fromIndex) }
+                ?: fromLevel
+        return Hop(
+            userId = rating.userId,
+            fromBand = fromLevel.value,
+            toBand = peakLevel.value,
+            distance = abs(n = bandIndex(level = peakLevel) - fromIndex),
         )
+    }
+
+    /** The band a player was in ENTERING the window: their raw rating just before it, snapped via [Level.fromValue]. */
+    private fun entryBand(
+        rows: List<RatingHistoryEntry>,
+        windowOpen: LocalDateTime,
+        fallback: BigDecimal,
+    ): Level = Level.fromValue(value = entryRatingOf(rows = rows, windowOpen = windowOpen, fallback = fallback).toPlainString())
 
     /**
-     * The player's raw rating as of [instant]: the newRating of their latest change on/before it
-     * ([inclusive] decides whether a change exactly at the instant counts). With no earlier change, fall
-     * back to the rating before their first-ever change (its previousRating), and finally to [fallback]
-     * (their current rating — correct for a player who never had a calculated change). The caller snaps the
-     * result to a band via [Level.fromValue], so banding is consistent with the rest of the app (#257).
+     * The player's raw rating entering the window: the newRating of their latest change strictly before
+     * [windowOpen]. With no earlier change, fall back to the rating before their first-ever change (its
+     * previousRating), and finally to [fallback] (their current rating — correct for a player who never
+     * had a calculated change). Snapped to a band by the caller via [Level.fromValue] (#257).
      */
-    private fun ratingAsOf(
+    private fun entryRatingOf(
         rows: List<RatingHistoryEntry>,
-        instant: LocalDateTime,
-        inclusive: Boolean,
+        windowOpen: LocalDateTime,
         fallback: BigDecimal,
     ): BigDecimal {
-        val latestPrior =
-            rows
-                .filter { if (inclusive) !it.calculatedAt.isAfter(instant) else it.calculatedAt.isBefore(instant) }
-                .maxByOrNull { it.calculatedAt }
+        val latestPrior = rows.filter { it.calculatedAt.isBefore(windowOpen) }.maxByOrNull { it.calculatedAt }
         // newRating/previousRating are non-null, so an explicit branch (vs a ?. chain) avoids a dead
         // "present row but null rating" branch that could never be covered.
         if (latestPrior != null) return latestPrior.newRating
