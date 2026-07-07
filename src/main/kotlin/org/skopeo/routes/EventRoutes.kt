@@ -12,6 +12,7 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
+import io.ktor.server.routing.patch
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
@@ -19,6 +20,7 @@ import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.event.AddParticipantRequest
 import org.skopeo.dto.event.CreateEventRequest
 import org.skopeo.dto.event.DecideParticipantRequest
+import org.skopeo.dto.event.UpdateEventRequest
 import org.skopeo.dto.event.toResponse
 import org.skopeo.model.EventParticipantStatus
 import org.skopeo.service.event.CreateEventInput
@@ -42,6 +44,7 @@ fun Application.configureEventRoutes(service: EventService = EventService()) {
                 listAndCreate(service = service)
                 myEvents(service = service)
                 eventSelfSignup(service = service)
+                renameEvent(service = service)
                 byIdAndParticipants(service = service)
             }
         }
@@ -104,6 +107,18 @@ private fun Route.eventSelfSignup(service: EventService) {
             respondEither(result = service.selfSignup(token = verifiedToken(), code = code)) { event ->
                 call.respond(status = HttpStatusCode.OK, message = event)
             }
+        }
+    }
+}
+
+/** Rename an event (#269). Staff-only (HOST owns / ADMINISTRATOR any), enforced in the service. */
+private fun Route.renameEvent(service: EventService) {
+    patch(path = "/{id}") {
+        respondMappingErrors {
+            val name = requireNotNull(value = call.receive<UpdateEventRequest>().name) { "A name is required to update the event" }
+            respondEither(
+                result = service.rename(token = verifiedToken(), id = uuidParam(name = "id"), name = name),
+            ) { event -> call.respond(status = HttpStatusCode.OK, message = event.toResponse()) }
         }
     }
 }
@@ -173,23 +188,23 @@ private fun parseParticipantStatus(value: String): EventParticipantStatus =
     }
 
 /** Parse + validate the create-event request shape at the boundary (#116): dates and participant ids. */
-private fun toCreateEventInput(request: CreateEventRequest): CreateEventInput =
-    CreateEventInput(
+private fun toCreateEventInput(request: CreateEventRequest): CreateEventInput {
+    fun parseDate(
+        value: String,
+        field: String,
+    ): LocalDate =
+        try {
+            LocalDate.parse(value)
+        } catch (e: DateTimeParseException) {
+            throw IllegalArgumentException("Invalid $field '$value'; expected ISO-8601 (yyyy-MM-dd)", e)
+        }
+    return CreateEventInput(
         name = request.name,
-        startDate = parseEventDate(value = request.startDate, field = "startDate"),
-        endDate = parseEventDate(value = request.endDate, field = "endDate"),
+        startDate = parseDate(value = request.startDate, field = "startDate"),
+        endDate = parseDate(value = request.endDate, field = "endDate"),
         participantIds = request.participantIds.map { parseEventUserId(value = it) },
     )
-
-private fun parseEventDate(
-    value: String,
-    field: String,
-): LocalDate =
-    try {
-        LocalDate.parse(value)
-    } catch (e: DateTimeParseException) {
-        throw IllegalArgumentException("Invalid $field '$value'; expected ISO-8601 (yyyy-MM-dd)", e)
-    }
+}
 
 private fun parseEventUserId(value: String): UUID =
     try {

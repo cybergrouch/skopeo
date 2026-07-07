@@ -17,6 +17,7 @@ import {
   useDeleteApiV1EventsId,
   useDeleteApiV1EventsIdParticipantsUserId,
   useGetApiV1EventsId,
+  usePatchApiV1EventsId,
   usePostApiV1EventsIdParticipants,
   usePostApiV1EventsIdParticipantsUserIdDecision,
 } from '@/api/generated/events/events'
@@ -99,6 +100,9 @@ export function EventDetail({
   const [rosterError, setRosterError] = useState<string | null>(null)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [renaming, setRenaming] = useState(false)
+  const [nameDraft, setNameDraft] = useState('')
+  const [renameError, setRenameError] = useState<string | null>(null)
 
   function refreshEvent() {
     void queryClient.invalidateQueries({ queryKey: getGetApiV1EventsIdQueryKey(eventId) })
@@ -125,6 +129,32 @@ export function EventDetail({
       },
     },
   })
+
+  // Rename the event (#269). On success the query is refreshed so the new name shows immediately;
+  // the list is invalidated too so the Events section reflects it on return.
+  const renameEvent = usePatchApiV1EventsId({
+    mutation: {
+      onSuccess: () => {
+        refreshEvent()
+        void queryClient.invalidateQueries({ queryKey: getGetApiV1EventsQueryKey() })
+        setRenaming(false)
+      },
+    },
+  })
+
+  async function saveRename() {
+    const name = nameDraft.trim()
+    if (name === '') {
+      setRenameError('Event name is required.')
+      return
+    }
+    setRenameError(null)
+    try {
+      await renameEvent.mutateAsync({ id: eventId, data: { name } })
+    } catch (e) {
+      setRenameError(eventErrorMessage(e, 'Could not rename this event.'))
+    }
+  }
 
   // Delete the event (#243). The server refuses (409) while it has recorded/rated matches — surface
   // its guidance verbatim. On success, return to the list, which no longer includes this event.
@@ -216,7 +246,59 @@ export function EventDetail({
         <>
           <Card>
             <CardHeader>
-              <CardTitle>{event.name}</CardTitle>
+              {renaming ? (
+                <div className="space-y-2">
+                  <Label htmlFor="event-name" className="text-xs">
+                    Event name
+                  </Label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Input
+                      id="event-name"
+                      value={nameDraft}
+                      onChange={(e) => setNameDraft(e.target.value)}
+                      className="max-w-xs"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={renameEvent.isPending}
+                      onClick={saveRename}
+                    >
+                      {renameEvent.isPending ? 'Saving…' : 'Save'}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={renameEvent.isPending}
+                      onClick={() => setRenaming(false)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                  {renameError ? (
+                    <p className="text-sm text-destructive" role="alert">
+                      {renameError}
+                    </p>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-2">
+                  <CardTitle>{event.name}</CardTitle>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setRenameError(null)
+                      setNameDraft(event.name)
+                      setRenaming(true)
+                    }}
+                  >
+                    Rename
+                  </Button>
+                </div>
+              )}
               <CardDescription>
                 {event.startDate} – {event.endDate} · Event ID:{' '}
                 <code className="font-mono font-medium text-foreground">{event.publicCode}</code>

@@ -1609,6 +1609,35 @@ paths:
           description: Caller is not HOST/ADMINISTRATOR
         '404':
           description: No such event
+    patch:
+      summary: Rename an event (HOST owns / ADMINISTRATOR any)
+      description: |
+        Partial update of an event (#269). Currently only the name is editable; the name is
+        validated (non-blank) and trimmed. A HOST may rename only their own event; an ADMINISTRATOR
+        may rename any.
+      tags:
+        - Events
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateEventRequest'
+      responses:
+        '200':
+          description: The updated event
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventResponse'
+        '400':
+          description: Missing or blank name
+        '403':
+          description: Caller is not HOST/ADMINISTRATOR, or a HOST renaming another's event
+        '404':
+          description: No such event
     delete:
       summary: Delete an event (HOST owns / ADMINISTRATOR any)
       description: |
@@ -3668,6 +3697,14 @@ components:
           items:
             type: string
             format: uuid
+
+    UpdateEventRequest:
+      type: object
+      description: Partial update of an event (#269). Only the name is editable today; fields left unset are unchanged.
+      properties:
+        name:
+          type: string
+          description: The new event name (non-blank; trimmed).
 
     AddParticipantRequest:
       type: object
