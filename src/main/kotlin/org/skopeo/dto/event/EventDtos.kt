@@ -80,6 +80,9 @@ data class EventResponse(
     val endDate: String,
     val isActive: Boolean,
     val participants: List<EventParticipantResponse>,
+    // The filing host (#270): display name + public code, or null for legacy events with no creator.
+    val creatorDisplayName: String? = null,
+    val creatorPublicCode: String? = null,
 )
 
 fun MyEvent.toResponse(): MyEventResponse =
@@ -100,6 +103,8 @@ fun EventView.toResponse(): EventResponse =
         endDate = event.endDate.toString(),
         isActive = event.isActive,
         participants = participants.map { it.toResponse() },
+        creatorDisplayName = creator?.displayName,
+        creatorPublicCode = creator?.publicCode,
     )
 
 internal fun EventParticipantRef.toResponse(): EventParticipantResponse =

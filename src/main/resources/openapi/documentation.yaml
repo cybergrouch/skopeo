@@ -3818,6 +3818,14 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/EventParticipantResponse'
+        creatorDisplayName:
+          type: string
+          nullable: true
+          description: The filing host's display name (#270); null for legacy events with no recorded creator.
+        creatorPublicCode:
+          type: string
+          nullable: true
+          description: The filing host's public code (#270), for linking to their profile; null if unknown.
 
     EventPublicResponse:
       type: object

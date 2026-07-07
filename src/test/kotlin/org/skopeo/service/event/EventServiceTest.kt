@@ -8,9 +8,12 @@ import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.types.shouldBeInstanceOf
+import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.update
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -30,6 +33,7 @@ import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.model.ageInYears
 import org.skopeo.repository.EventRepository
+import org.skopeo.repository.EventsTable
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
@@ -98,6 +102,29 @@ class EventServiceTest {
         view.event.publicCode.length shouldBe 6
         view.participants.map { it.userId } shouldBe listOf(p1.id, p2.id)
         view.participants.first().displayName shouldBe "p1"
+    }
+
+    @Test
+    fun `the organizer view surfaces the filing host as the creator (#270)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val created = service.create(token = token(uid = "host"), input = input()).shouldBeRight()
+
+        created.creator?.displayName shouldBe "host"
+        created.creator?.publicCode shouldBe host.publicCode
+        // Also present on the list and single-event views (both go through toView).
+        service.list(token = token(uid = "host")).shouldBeRight().single().creator?.publicCode shouldBe host.publicCode
+        service.get(token = token(uid = "host"), id = created.event.id).shouldBeRight().creator?.publicCode shouldBe host.publicCode
+    }
+
+    @Test
+    fun `an event whose creator was removed has a null creator (#270)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight().event
+
+        // Orphan the creator — the FK is ON DELETE SET NULL (created_by becomes null).
+        transaction { EventsTable.update(where = { EventsTable.id eq event.id }) { it[createdBy] = null } }
+
+        service.get(token = token(uid = "host"), id = event.id).shouldBeRight().creator.shouldBeNull()
     }
 
     @Test
