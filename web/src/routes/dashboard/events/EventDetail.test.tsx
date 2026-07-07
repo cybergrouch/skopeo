@@ -21,6 +21,7 @@ const { useGetApiV1EventsId, addMutate, removeMutate, decideMutate, createFixtur
       deletePending: false,
       deleteErrorMessage: null as string | null,
       renameFail: false,
+      renamePending: false,
       renameErrorMessage: null as string | null,
     },
   }))
@@ -40,7 +41,7 @@ vi.mock('@/api/generated/events/events', () => ({
     },
   }),
   usePatchApiV1EventsId: (opts?: { mutation?: { onSuccess?: () => void } }) => ({
-    isPending: false,
+    isPending: state.renamePending,
     mutateAsync: async (vars: unknown) => {
       renameMutate(vars)
       if (state.renameFail) {
@@ -152,6 +153,7 @@ describe('EventDetail', () => {
     state.deletePending = false
     state.deleteErrorMessage = null
     state.renameFail = false
+    state.renamePending = false
     state.renameErrorMessage = null
     useGetApiV1EventsId.mockReturnValue({ data: event, isLoading: false })
   })
@@ -544,6 +546,15 @@ describe('EventDetail', () => {
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Nope')
+  })
+
+  it('shows a busy label while the rename is in flight', async () => {
+    state.renamePending = true
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.click(screen.getByRole('button', { name: 'Rename' }))
+    expect(screen.getByRole('button', { name: 'Saving…' })).toBeDisabled()
   })
 
   it('cancels a rename without calling the API', async () => {
