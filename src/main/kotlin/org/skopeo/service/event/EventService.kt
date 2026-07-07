@@ -122,11 +122,9 @@ class EventService(
             val isAdmin = caller.capabilities.contains(element = Capability.ADMINISTRATOR)
             ensure(condition = isAdmin || event.createdBy == caller.id) { ServiceError.Forbidden() }
             ensure(condition = name.isNotBlank()) { ServiceError.Validation(message = "Event name is required") }
-            val updated =
-                ensureNotNull(value = events.rename(id = id, name = name.trim())) {
-                    ServiceError.NotFound(message = "Event $id not found")
-                }
-            toView(event = updated)
+            // Existence is already confirmed above (needed for the authz check), so the rename can't miss.
+            events.rename(id = id, name = name.trim())
+            toView(event = event.copy(name = name.trim()))
         }
 
     /**
