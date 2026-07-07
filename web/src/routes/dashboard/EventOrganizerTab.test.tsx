@@ -121,6 +121,32 @@ describe('EventOrganizerTab', () => {
     expect(screen.getAllByText(/Filed by/)).toHaveLength(1)
   })
 
+  it('splits events into Upcoming and Past subsections by end date (#271)', () => {
+    const upcoming = { ...event, id: 'up', name: 'Future Fest', startDate: '2999-01-01', endDate: '2999-01-02' }
+    const past = { ...event, id: 'pa', name: 'Old Open', startDate: '2000-01-01', endDate: '2000-01-02' }
+    useGetApiV1Events.mockReturnValue({ data: [past, upcoming], isLoading: false })
+    renderTab()
+
+    expect(screen.getByText('Upcoming')).toBeInTheDocument()
+    expect(screen.getByText('Past')).toBeInTheDocument()
+    expect(screen.getByText('Future Fest')).toBeInTheDocument()
+    expect(screen.getByText('Old Open')).toBeInTheDocument()
+    // No per-section empty state when both sections have events.
+    expect(screen.queryByText('No upcoming events.')).not.toBeInTheDocument()
+    expect(screen.queryByText('No past events.')).not.toBeInTheDocument()
+  })
+
+  it('shows a per-section empty state when a section has no events (#271)', () => {
+    const past = { ...event, id: 'pa', name: 'Old Open', startDate: '2000-01-01', endDate: '2000-01-02' }
+    useGetApiV1Events.mockReturnValue({ data: [past], isLoading: false })
+    renderTab()
+
+    expect(screen.getByText('No upcoming events.')).toBeInTheDocument()
+    expect(screen.getByText('Old Open')).toBeInTheDocument()
+    // The Past section has the event, so no "No past events." message.
+    expect(screen.queryByText('No past events.')).not.toBeInTheDocument()
+  })
+
   it('creates an event with a roster', async () => {
     const user = userEvent.setup()
     renderTab()

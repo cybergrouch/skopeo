@@ -15,7 +15,7 @@ import {
   useGetApiV1Events,
   usePostApiV1Events,
 } from '@/api/generated/events/events'
-import type { UserSummaryResponse } from '@/api/generated/model'
+import type { EventResponse, UserSummaryResponse } from '@/api/generated/model'
 import { UserSearchSelect } from '@/components/UserSearchSelect'
 import { plural } from '@/lib/plural'
 import { playerLabel } from '@/lib/playerLabel'
@@ -127,6 +127,69 @@ function NewEventForm() {
   )
 }
 
+/** Today as yyyy-MM-dd (local), comparable lexicographically with an event's ISO end date. */
+function todayIso(): string {
+  const now = new Date()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${now.getFullYear()}-${month}-${day}`
+}
+
+/** One selectable event row: name, filing host, date range, and participant count; opens the event on click. */
+function EventRow({ event, onSelect }: { event: EventResponse; onSelect: () => void }) {
+  return (
+    <li>
+      <button
+        type="button"
+        className="flex w-full items-start justify-between gap-2 rounded-lg border p-3 text-left text-sm hover:bg-muted/50"
+        onClick={onSelect}
+      >
+        <span className="flex flex-col">
+          <span className="font-medium">{event.name}</span>
+          {/* The filing host (#270), shown as text — the whole card is a button, so no nested link. */}
+          {event.creatorDisplayName ? (
+            <span className="text-xs text-muted-foreground">
+              Filed by {event.creatorDisplayName}
+            </span>
+          ) : null}
+        </span>
+        <span className="shrink-0 text-muted-foreground">
+          {event.startDate} – {event.endDate} ·{' '}
+          {event.participants.length} player{plural(event.participants.length)}
+        </span>
+      </button>
+    </li>
+  )
+}
+
+/** A labelled subsection (Upcoming / Past) with its own empty state (#271). */
+function EventSection({
+  title,
+  events,
+  emptyLabel,
+  onSelect,
+}: {
+  title: string
+  events: EventResponse[]
+  emptyLabel: string
+  onSelect: (id: string) => void
+}) {
+  return (
+    <div>
+      <div className="text-xs font-medium uppercase text-muted-foreground">{title}</div>
+      {events.length > 0 ? (
+        <ul className="mt-1 space-y-2">
+          {events.map((event) => (
+            <EventRow key={event.id} event={event} onSelect={() => onSelect(event.id)} />
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-1 text-sm text-muted-foreground">{emptyLabel}</p>
+      )}
+    </div>
+  )
+}
+
 /**
  * The Event Organizer tab (#138, renamed from Matches): hosts run events/meets that contain matches.
  * The events table is the entry point; selecting a row opens that event's working page (participant-
@@ -136,6 +199,16 @@ export function EventOrganizerTab() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const eventsQuery = useGetApiV1Events()
   const events = eventsQuery.data ?? []
+
+  // Split by end date (today counts as upcoming), mirroring the Profile Events history card (#271).
+  // Upcoming is soonest-first; past is most-recent-first.
+  const today = todayIso()
+  const upcoming = events
+    .filter((e) => e.endDate >= today)
+    .sort((a, b) => a.startDate.localeCompare(b.startDate))
+  const past = events
+    .filter((e) => e.endDate < today)
+    .sort((a, b) => b.startDate.localeCompare(a.startDate))
 
   if (selectedId) {
     return <EventDetail eventId={selectedId} onBack={() => setSelectedId(null)} />
@@ -150,35 +223,14 @@ export function EventOrganizerTab() {
           <CardTitle>Events</CardTitle>
           <CardDescription>Select an event to manage its participants, fixtures, and results.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           {eventsQuery.isLoading ? (
             <p className="text-sm text-muted-foreground">Loading…</p>
           ) : events.length > 0 ? (
-            <ul className="space-y-2">
-              {events.map((event) => (
-                <li key={event.id}>
-                  <button
-                    type="button"
-                    className="flex w-full items-start justify-between gap-2 rounded-lg border p-3 text-left text-sm hover:bg-muted/50"
-                    onClick={() => setSelectedId(event.id)}
-                  >
-                    <span className="flex flex-col">
-                      <span className="font-medium">{event.name}</span>
-                      {/* The filing host (#270), shown as text — the whole card is a button, so no nested link. */}
-                      {event.creatorDisplayName ? (
-                        <span className="text-xs text-muted-foreground">
-                          Filed by {event.creatorDisplayName}
-                        </span>
-                      ) : null}
-                    </span>
-                    <span className="shrink-0 text-muted-foreground">
-                      {event.startDate} – {event.endDate} ·{' '}
-                      {event.participants.length} player{plural(event.participants.length)}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <>
+              <EventSection title="Upcoming" events={upcoming} emptyLabel="No upcoming events." onSelect={setSelectedId} />
+              <EventSection title="Past" events={past} emptyLabel="No past events." onSelect={setSelectedId} />
+            </>
           ) : (
             <p className="text-sm text-muted-foreground">No events yet. Create one above.</p>
           )}
