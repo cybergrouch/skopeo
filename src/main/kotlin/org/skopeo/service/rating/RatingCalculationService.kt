@@ -83,6 +83,9 @@ class RatingCalculationService(
     data class MatchCalculation(
         val matchId: UUID,
         val matchDate: LocalDate,
+        // The match's result-upload time — snapshotted onto each history row as the ordering
+        // tiebreaker (#301). Non-null in practice (only COMPLETED matches are processed).
+        val completedAt: LocalDateTime?,
         val changes: List<PlayerChange>,
     )
 
@@ -131,6 +134,7 @@ class RatingCalculationService(
                                 newLevel = change.newLevel,
                                 levelChanged = change.levelChanged,
                                 breakdown = change.breakdown.toSnapshot(),
+                                completedAt = calc.completedAt,
                                 calculatedAt = now,
                             ),
                     )
@@ -156,7 +160,7 @@ class RatingCalculationService(
 
             val changes = players.map { playerChange(userId = it, response = result.response, breakdowns = breakdowns).bind() }
             changes.forEach { snapshot[it.userId] = it.newRating }
-            MatchCalculation(matchId = match.id, matchDate = match.matchDate, changes = changes)
+            MatchCalculation(matchId = match.id, matchDate = match.matchDate, completedAt = match.completedAt, changes = changes)
         }
 
     /**

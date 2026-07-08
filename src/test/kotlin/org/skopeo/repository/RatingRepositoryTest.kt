@@ -123,6 +123,8 @@ class RatingRepositoryTest {
         userId: UUID,
         newRating: String,
         breakdown: CalculationBreakdownSnapshot?,
+        completedAt: LocalDateTime? = null,
+        calculatedAt: LocalDateTime = LocalDateTime.now(),
     ) = RatingHistoryWrite(
         userId = userId,
         matchId = null,
@@ -134,7 +136,8 @@ class RatingRepositoryTest {
         newLevel = "4.0",
         levelChanged = false,
         breakdown = breakdown,
-        calculatedAt = LocalDateTime.now(),
+        completedAt = completedAt,
+        calculatedAt = calculatedAt,
     )
 
     @Test
@@ -179,5 +182,59 @@ class RatingRepositoryTest {
         byRating.getValue(key = BigDecimal("4.100000")).setBreakdown shouldBe emptyList()
         byRating.getValue(key = BigDecimal("4.200000")).setBreakdown shouldBe emptyList()
         byRating.getValue(key = BigDecimal("4.300000")).setBreakdown shouldBe listOf(element = step)
+    }
+
+    @Test
+    fun `history is newest-first, breaking ties within a batch by completed_at, match-less rows last (#301)`() {
+        val userId = newUser(uid = "order")
+        val batch1 = LocalDateTime.of(2026, 6, 1, 12, 0, 0)
+        val batch2 = LocalDateTime.of(2026, 6, 2, 12, 0, 0)
+
+        // One calc batch stamps every row with the SAME calculatedAt (batch1); completed_at is the only
+        // discriminator. The match-less row (null completed_at) must sort last, i.e. earliest.
+        ratings.appendHistory(
+            write =
+                historyWrite(
+                    userId = userId,
+                    newRating = "4.1",
+                    breakdown = null,
+                    completedAt = LocalDateTime.of(2026, 5, 10, 9, 0),
+                    calculatedAt = batch1,
+                ),
+        )
+        ratings.appendHistory(
+            write =
+                historyWrite(
+                    userId = userId,
+                    newRating = "4.2",
+                    breakdown = null,
+                    completedAt = LocalDateTime.of(2026, 5, 20, 9, 0),
+                    calculatedAt = batch1,
+                ),
+        )
+        ratings.appendHistory(
+            write = historyWrite(userId = userId, newRating = "4.0", breakdown = null, completedAt = null, calculatedAt = batch1),
+        )
+        // A later batch leads regardless of its (earlier) completed_at — calculatedAt dominates.
+        ratings.appendHistory(
+            write =
+                historyWrite(
+                    userId = userId,
+                    newRating = "4.5",
+                    breakdown = null,
+                    completedAt = LocalDateTime.of(2026, 1, 1, 9, 0),
+                    calculatedAt = batch2,
+                ),
+        )
+
+        // Newest batch first (calculatedAt DESC); within batch1, completed_at DESC; the null-completed
+        // (match-less) row sorts last.
+        ratings.historyByUser(userId = userId).map { it.newRating } shouldBe
+            listOf(
+                BigDecimal("4.500000"),
+                BigDecimal("4.200000"),
+                BigDecimal("4.100000"),
+                BigDecimal("4.000000"),
+            )
     }
 }

@@ -86,8 +86,13 @@ class RatingRepository {
             UserRatingHistoryTable
                 .selectAll()
                 .where { UserRatingHistoryTable.userId eq userId }
-                .orderBy(UserRatingHistoryTable.calculatedAt to SortOrder.DESC)
-                .map { it.toRatingHistory() }
+                // Newest-first (#301). A calc batch stamps every row with one identical calculatedAt,
+                // so completedAt breaks the intra-batch ties with the true chronology; match-less rows
+                // (null completedAt) sort last, i.e. earliest.
+                .orderBy(
+                    UserRatingHistoryTable.calculatedAt to SortOrder.DESC,
+                    UserRatingHistoryTable.completedAt to SortOrder.DESC_NULLS_LAST,
+                ).map { it.toRatingHistory() }
         }
 
     /**
@@ -187,6 +192,7 @@ class RatingRepository {
                         RATING_HISTORY_JSON.encodeToString(serializer = SET_BREAKDOWN_SERIALIZER, value = steps)
                     }
                 it[calculatedAt] = write.calculatedAt
+                it[completedAt] = write.completedAt
             }
         }
     }
@@ -234,6 +240,7 @@ internal fun ResultRow.toRatingHistory(): RatingHistoryEntry =
             this[UserRatingHistoryTable.setBreakdown]
                 ?.let { RATING_HISTORY_JSON.decodeFromString(deserializer = SET_BREAKDOWN_SERIALIZER, string = it) }
                 .orEmpty(),
+        completedAt = this[UserRatingHistoryTable.completedAt],
         calculatedAt = this[UserRatingHistoryTable.calculatedAt],
     )
 

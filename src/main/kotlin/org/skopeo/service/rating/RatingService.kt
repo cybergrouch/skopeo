@@ -116,6 +116,8 @@ class RatingService(
                             newLevel = updated.currentLevel,
                             levelChanged = previous.currentLevel != updated.currentLevel,
                             breakdown = null,
+                            // Manual override, not match-driven — no completed_at; sorts last (#301).
+                            completedAt = null,
                             calculatedAt = LocalDateTime.now(),
                         ),
                 )

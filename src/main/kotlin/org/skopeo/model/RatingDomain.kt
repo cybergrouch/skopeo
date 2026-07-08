@@ -72,6 +72,9 @@ data class RatingHistoryEntry(
     val kFactor: BigDecimal? = null,
     // Per-set breakdown (#110); empty for v1/initial/pre-#110 rows.
     val setBreakdown: List<SetCalculationBreakdown> = emptyList(),
+    // Snapshot of the source match's completed_at at commit time (#301) — the intra-batch tiebreaker
+    // for ordering history newest-first. Null for match-less rows (initial assessments), which sort last.
+    val completedAt: LocalDateTime? = null,
     val calculatedAt: LocalDateTime,
 )
 
@@ -144,5 +147,7 @@ data class RatingHistoryWrite(
     val levelChanged: Boolean,
     // The calculation breakdown to persist alongside the change (#97).
     val breakdown: CalculationBreakdownSnapshot?,
+    // The source match's completed_at, snapshotted for ordering (#301); null for non-match rows.
+    val completedAt: LocalDateTime?,
     val calculatedAt: LocalDateTime,
 )
