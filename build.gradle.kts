@@ -389,7 +389,7 @@ tasks.register<JavaExec>("generateMatchupReport") {
     description = "Generate the NTRP matchup matrix report (text + Markdown)"
     dependsOn(tasks.named("testClasses"))
     classpath = sourceSets.getByName("test").runtimeClasspath
-    mainClass.set("org.skopeo.service.calculator.impl.v1.NtrpMatchupMatrixReportKt")
+    mainClass.set("org.skopeo.service.calculator.impl.v2.NtrpMatchupMatrixReportKt")
 }
 
 // Run the NTRP rating Monte Carlo simulation (a program, not a test). Writes
@@ -399,5 +399,5 @@ tasks.register<JavaExec>("generateMonteCarloReport") {
     description = "Monte Carlo simulation of NTRP rating evolution over N matches"
     dependsOn(tasks.named("testClasses"))
     classpath = sourceSets.getByName("test").runtimeClasspath
-    mainClass.set("org.skopeo.service.calculator.impl.v1.NtrpMonteCarloReportKt")
+    mainClass.set("org.skopeo.service.calculator.impl.v2.NtrpMonteCarloReportKt")
 }
