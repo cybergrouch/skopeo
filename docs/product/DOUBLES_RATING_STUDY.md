@@ -248,6 +248,48 @@ Illustration — **A = {5.0, 3.0} beats even B = {4.0, 4.0}, 6-2** (who gains?):
 | Scheme 1 | +0.000 (favourite, met expectation) | **+0.321** (underdog upset) |
 | Scheme 2 (mean) | **+0.100** (larger rating share) | +0.060 |
 
+And the mirror — **B = {4.0, 4.0} beats A = {5.0, 3.0}, 6-2** (the same pairs, A now *loses*):
+
+| | strong partner (5.0) | weak partner (3.0) |
+|---|---|---|
+| Scheme 1 | **−0.321** (favourite, upset loss) | +0.000 (underdog, expected loss) |
+| Scheme 2 (mean) | **−0.100** (larger rating share) | −0.060 |
+
+(The even winners B = {4.0, 4.0} each get **+0.080** under both schemes.)
+
+#### How the numbers are computed
+
+Both schemes reuse the singles master formula `change = K · dominance · scale · sign` (K = 0.16;
+competitive threshold = 0.5 NTRP = 8.3% of the 6.0 range; upset multiplier = 2.0) on a single set. A 6-2
+set has dominance `(6 − 2) / (6 + 2) = 0.5`.
+
+**Scheme 2 (mean) — evaluate the team mean, then split.** Both teams average 4.0, so the match is even
+(rating gap 0 → not an upset → scale = 1.0). The team change is `K · dominance · scale = 0.16 · 0.5 ·
+1.0 = 0.08`: the winning team's mean moves **+0.08**, the losing team's **−0.08**. Each partner then
+moves by their share of the team mean, `δᵢ = Δ_team · rᵢ / mean`:
+
+- **A loses** (mean 4.0): strong `−0.08 · 5.0/4.0 = −0.100`, weak `−0.08 · 3.0/4.0 = −0.060`.
+- **B wins** (mean 4.0): each `+0.08 · 4.0/4.0 = +0.080`.
+
+When A *won* the same set, the identical split gave the strong partner **+0.100** and the weak **+0.060**
+— so Scheme 2 is **symmetric**: the higher-rated partner takes the larger share of the move in *either*
+direction.
+
+**Scheme 1 — judge each A partner against the opponents' mean (4.0), independently.** A lost the set
+2-6, so each partner's own outcome is a loss with `|dominance| = 0.5`; only their rating gap to 4.0
+differs:
+
+- **strong (5.0) vs 4.0** — gap +1.0, so they were the **favourite**. A favourite who *loses* is an
+  **upset**, so scale = `(1.0/6 ÷ 0.083) · 2.0 ≈ 4.0`, giving `0.16 · 0.5 · 4.0 · (−1) ≈ −0.321` — a
+  full upset-sized hit.
+- **weak (3.0) vs 4.0** — gap −1.0, so they were the **underdog**. An underdog who loses is *expected*
+  (the 1.0 gap is well past the 0.5 threshold → scale = 0), so the change is **0.000**.
+
+When A *won*, the roles flipped: the underdog (3.0) collected the big upset **reward (+0.321)** and the
+favourite (5.0) got **0.000** (an expected win earns nothing). This is exactly the asymmetry behind
+finding 2 below — under Scheme 1 the strong carrier earns ≈0 for the wins they're expected to deliver but
+eats a full penalty when the team loses, so recurring strong carriers drift toward the pack.
+
 **Findings**
 
 1. **Scheme 2 (mean) recovers skill best** — lowest RMSE and highest correlation — *and* conserves
