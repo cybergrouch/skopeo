@@ -147,6 +147,20 @@ describe('EventOrganizerTab', () => {
     expect(screen.queryByText('No past events.')).not.toBeInTheDocument()
   })
 
+  it('shows only the start date for upcoming and only the end date for past events (#296)', () => {
+    const upcoming = { ...event, id: 'up', name: 'Future Fest', startDate: '2999-01-01', endDate: '2999-01-02' }
+    const past = { ...event, id: 'pa', name: 'Old Open', startDate: '2000-01-01', endDate: '2000-01-02' }
+    useGetApiV1Events.mockReturnValue({ data: [past, upcoming], isLoading: false })
+    renderTab()
+
+    // Upcoming: start date shown, end date hidden.
+    expect(screen.getByText(/Starts 2999-01-01/)).toBeInTheDocument()
+    expect(screen.queryByText(/2999-01-02/)).not.toBeInTheDocument()
+    // Past: end date shown, start date hidden.
+    expect(screen.getByText(/Ended 2000-01-02/)).toBeInTheDocument()
+    expect(screen.queryByText(/2000-01-01/)).not.toBeInTheDocument()
+  })
+
   it('creates an event with a roster', async () => {
     const user = userEvent.setup()
     renderTab()
