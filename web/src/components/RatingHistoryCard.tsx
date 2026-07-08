@@ -1,21 +1,25 @@
-import { useState } from 'react'
-import type { RatingHistoryResponse } from '@/api/generated/model'
-import { useGetApiV1MatchesIdCalculation } from '@/api/generated/matches/matches'
+import { useState } from "react";
+import type { RatingHistoryResponse } from "@/api/generated/model";
+import { useGetApiV1MatchesIdCalculation } from "@/api/generated/matches/matches";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { CalculationBreakdownDetail } from '@/components/CalculationBreakdownDetail'
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { CalculationBreakdownDetail } from "@/components/CalculationBreakdownDetail";
+import { NumberedPager } from "@/components/NumberedPager";
+
+/** Rating history is paginated newest-first, 25 rows per page (#301). */
+const PAGE_SIZE = 25;
 
 interface RatingHistoryCardProps {
-  entries: RatingHistoryResponse[]
-  isLoading?: boolean
+  entries: RatingHistoryResponse[];
+  isLoading?: boolean;
   /** Card subtitle — differs slightly between the owner's own view and an admin's. */
-  description?: string
+  description?: string;
 }
 
 /**
@@ -26,44 +30,44 @@ interface RatingHistoryCardProps {
 function MatchCalculationDetail({ matchId }: { matchId: string }) {
   const { data, isLoading } = useGetApiV1MatchesIdCalculation(matchId, {
     query: { enabled: Boolean(matchId) },
-  })
+  });
 
   if (isLoading) {
-    return <p className="text-xs text-muted-foreground">Loading…</p>
+    return <p className="text-xs text-muted-foreground">Loading…</p>;
   }
   if (!data) {
     return (
       <p className="text-xs text-muted-foreground">
         Calculation details aren’t available for this entry.
       </p>
-    )
+    );
   }
 
   const nameOf = (id: string) =>
-    data.changes.find((c) => c.userId === id)?.displayName ?? id.slice(0, 8)
+    data.changes.find((c) => c.userId === id)?.displayName ?? id.slice(0, 8);
   const scores = data.match.sets
     .map((s) => `${s.team1Games}-${s.team2Games}`)
-    .join(' ')
+    .join(" ");
   const winnerSide =
     data.match.winnerTeamId === data.match.team1.teamId
       ? data.match.team1
       : data.match.winnerTeamId === data.match.team2.teamId
         ? data.match.team2
-        : null
-  const winner = winnerSide ? winnerSide.userIds.map(nameOf).join(', ') : null
+        : null;
+  const winner = winnerSide ? winnerSide.userIds.map(nameOf).join(", ") : null;
 
   return (
     <div className="space-y-2 text-sm">
       <div className="text-muted-foreground">
         {data.match.matchDate}
-        {scores ? ` · ${scores}` : ''}
-        {winner ? ` · Winner: ${winner}` : ''}
+        {scores ? ` · ${scores}` : ""}
+        {winner ? ` · Winner: ${winner}` : ""}
       </div>
       <ul className="space-y-2">
         {data.changes.map((change) => (
           <li key={change.userId}>
             <div>
-              {nameOf(change.userId)}: {change.previousRating} →{' '}
+              {nameOf(change.userId)}: {change.previousRating} →{" "}
               {change.newRating} ({change.change})
             </div>
             {change.breakdown ? (
@@ -73,7 +77,7 @@ function MatchCalculationDetail({ matchId }: { matchId: string }) {
         ))}
       </ul>
     </div>
-  )
+  );
 }
 
 /**
@@ -86,20 +90,22 @@ function MatchCalculationDetail({ matchId }: { matchId: string }) {
 export function RatingHistoryCard({
   entries,
   isLoading = false,
-  description = 'Changes from rated matches.',
+  description = "Changes from rated matches.",
 }: RatingHistoryCardProps) {
-  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [page, setPage] = useState(0);
+  const pageEntries = entries.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   function toggle(id: string) {
     setExpanded((prev) => {
-      const next = new Set(prev)
+      const next = new Set(prev);
       if (next.has(id)) {
-        next.delete(id)
+        next.delete(id);
       } else {
-        next.add(id)
+        next.add(id);
       }
-      return next
-    })
+      return next;
+    });
   }
 
   return (
@@ -112,64 +118,79 @@ export function RatingHistoryCard({
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : entries.length > 0 ? (
-          <ul className="space-y-2">
-            {entries.map((entry) => {
-              const prevBand = entry.previousLevel ?? '—'
-              const newBand = entry.newLevel ?? '—'
-              const isOpen = expanded.has(entry.id)
-              const content = (
-                <>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-muted-foreground">
-                      {entry.calculatedAt.slice(0, 10)}
-                    </span>
-                    <span className="flex items-center gap-2">
-                      {entry.levelChanged ? (
-                        <Badge variant="secondary">{`Band ${prevBand} → ${newBand}`}</Badge>
-                      ) : null}
-                      {entry.matchId ? (
-                        <span aria-hidden="true" className="text-muted-foreground">
-                          {isOpen ? '▾' : '▸'}
-                        </span>
-                      ) : null}
-                    </span>
-                  </div>
-                  <div className="mt-1">{`${entry.previousRating} → ${entry.newRating}`}</div>
-                  <div className="text-muted-foreground">{`NTRP ${prevBand} → ${newBand}`}</div>
-                </>
-              )
-              return (
-                <li
-                  key={entry.id}
-                  className={`rounded-lg border text-sm ${
-                    entry.levelChanged ? 'border-primary bg-primary/5' : ''
-                  }`}
-                >
-                  {entry.matchId ? (
-                    <button
-                      type="button"
-                      className="block w-full p-3 text-left hover:bg-muted/50"
-                      aria-expanded={isOpen}
-                      onClick={() => toggle(entry.id)}
-                    >
-                      {content}
-                    </button>
-                  ) : (
-                    <div className="p-3">{content}</div>
-                  )}
-                  {entry.matchId && isOpen ? (
-                    <div className="border-t px-3 py-2">
-                      <MatchCalculationDetail matchId={entry.matchId} />
+          <>
+            <ul className="space-y-2">
+              {pageEntries.map((entry) => {
+                const prevBand = entry.previousLevel ?? "—";
+                const newBand = entry.newLevel ?? "—";
+                const isOpen = expanded.has(entry.id);
+                const content = (
+                  <>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-muted-foreground">
+                        {entry.calculatedAt.slice(0, 10)}
+                      </span>
+                      <span className="flex items-center gap-2">
+                        {entry.levelChanged ? (
+                          <Badge variant="secondary">{`Band ${prevBand} → ${newBand}`}</Badge>
+                        ) : null}
+                        {entry.matchId ? (
+                          <span
+                            aria-hidden="true"
+                            className="text-muted-foreground"
+                          >
+                            {isOpen ? "▾" : "▸"}
+                          </span>
+                        ) : null}
+                      </span>
                     </div>
-                  ) : null}
-                </li>
-              )
-            })}
-          </ul>
+                    <div className="mt-1">{`${entry.previousRating} → ${entry.newRating}`}</div>
+                    <div className="text-muted-foreground">{`NTRP ${prevBand} → ${newBand}`}</div>
+                  </>
+                );
+                return (
+                  <li
+                    key={entry.id}
+                    className={`rounded-lg border text-sm ${
+                      entry.levelChanged ? "border-primary bg-primary/5" : ""
+                    }`}
+                  >
+                    {entry.matchId ? (
+                      <button
+                        type="button"
+                        className="block w-full p-3 text-left hover:bg-muted/50"
+                        aria-expanded={isOpen}
+                        onClick={() => toggle(entry.id)}
+                      >
+                        {content}
+                      </button>
+                    ) : (
+                      <div className="p-3">{content}</div>
+                    )}
+                    {entry.matchId && isOpen ? (
+                      <div className="border-t px-3 py-2">
+                        <MatchCalculationDetail matchId={entry.matchId} />
+                      </div>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+            {entries.length > PAGE_SIZE ? (
+              <NumberedPager
+                page={page}
+                total={entries.length}
+                pageSize={PAGE_SIZE}
+                onPage={setPage}
+              />
+            ) : null}
+          </>
         ) : (
-          <p className="text-sm text-muted-foreground">No rating changes yet.</p>
+          <p className="text-sm text-muted-foreground">
+            No rating changes yet.
+          </p>
         )}
       </CardContent>
     </Card>
-  )
+  );
 }

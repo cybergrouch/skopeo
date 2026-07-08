@@ -229,6 +229,10 @@ class RatingCalculationServiceTest {
         }
         ratings.historyByUser(userId = p1.id).single().let {
             it.matchId shouldBe matchId
+            // The source match's completed_at is snapshotted onto the history row as the ordering
+            // tiebreaker (#301); it matches what the match itself records.
+            it.completedAt shouldBe matchRepo.findById(matchId = matchId).shouldBeRight().completedAt
+            it.completedAt.shouldNotBeNull()
             // The v2 per-set breakdown is persisted at commit and round-trips through the JSON column (#110);
             // the net fields stay null for v2.
             it.kFactor.shouldBeNull()

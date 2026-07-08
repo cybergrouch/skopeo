@@ -139,6 +139,7 @@ class PlayerServiceTest {
                 newLevel = previousLevel,
                 levelChanged = false,
                 breakdown = null,
+                completedAt = null,
                 calculatedAt = LocalDateTime.now(),
             ),
     )

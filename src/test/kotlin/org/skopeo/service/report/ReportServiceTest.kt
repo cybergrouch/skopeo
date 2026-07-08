@@ -93,6 +93,7 @@ class ReportServiceTest {
                     newLevel = to,
                     levelChanged = from != to,
                     breakdown = null,
+                    completedAt = null,
                     calculatedAt = LocalDateTime.parse(at),
                 ),
         )
@@ -196,6 +197,7 @@ class ReportServiceTest {
                     newLevel = null,
                     levelChanged = false,
                     breakdown = null,
+                    completedAt = null,
                     calculatedAt = LocalDateTime.parse("2026-03-10T10:00"),
                 ),
         )
@@ -227,6 +229,7 @@ class ReportServiceTest {
                     newLevel = newLevel,
                     levelChanged = false,
                     breakdown = null,
+                    completedAt = null,
                     calculatedAt = LocalDateTime.parse(at),
                 ),
         )

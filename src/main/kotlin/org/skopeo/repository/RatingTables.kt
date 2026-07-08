@@ -59,4 +59,8 @@ internal object UserRatingHistoryTable : UUIDTable(name = "user_rating_history")
     // Per-set breakdown (#110): JSON-encoded list of the v2 calculator's per-set steps; null for v1.
     val setBreakdown = text(name = "set_breakdown").nullable()
     val calculatedAt = datetime(name = "calculated_at")
+
+    // Snapshot of the source match's completed_at at commit (#301); the intra-batch tiebreaker used
+    // to order history newest-first. Null for match-less rows (initial assessments) → sort last.
+    val completedAt = datetime(name = "completed_at").nullable()
 }
