@@ -24,7 +24,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.dto.rating.RatingHistoryResponse
 import org.skopeo.dto.user.CreateUserRequest
-import org.skopeo.dto.user.PlayerMatchHistoryEntry
+import org.skopeo.dto.user.PlayerMatchHistoryPage
 import org.skopeo.dto.user.PublicPlayerResponse
 import org.skopeo.dto.user.UserResponse
 import org.skopeo.model.AuthProvider
@@ -135,7 +135,9 @@ class PlayerApiIntegrationTest {
                 }
 
             response.status shouldBe HttpStatusCode.OK
-            response.body<List<PlayerMatchHistoryEntry>>() shouldBe emptyList()
+            val page = response.body<PlayerMatchHistoryPage>()
+            page.items shouldBe emptyList()
+            page.total shouldBe 0
         }
 
     @Test

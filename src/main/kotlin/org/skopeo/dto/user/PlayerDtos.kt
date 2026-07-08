@@ -52,6 +52,16 @@ data class PlayerMatchHistoryEntry(
 )
 
 /**
+ * A page of a player's match history (#284): the requested slice plus [total], the count of matches
+ * matching the (optional) search — for a bounded profile preview and a numbered full-history page.
+ */
+@Serializable
+data class PlayerMatchHistoryPage(
+    val items: List<PlayerMatchHistoryEntry>,
+    val total: Int,
+)
+
+/**
  * A teammate or opponent on a match-history row (#256) — identified the same privacy-conscious way
  * as a public profile, plus their published NTRP band at the time of the match ([levelAtMatch] is
  * null for scheduled or unrated matches).

@@ -409,11 +409,12 @@ paths:
 
   /api/v1/players/{code}/match-history:
     get:
-      summary: A player's match history by code (viewable without login, #193; privacy-conscious)
+      summary: A page of a player's match history by code (viewable without login, #193; privacy-conscious)
       description: >-
-        Every active match the player took part in (scheduled, completed, and rated), newest first.
-        Ratings appear only as the published NTRP band at the time of the match, and only for rated
-        matches; `rated` indicates the match has contributed to the current rating.
+        A page of the player's matches (scheduled, completed, and rated), newest first, optionally
+        narrowed by `search`. Returns the requested slice plus the total matching count (#284), for a
+        bounded profile preview and a numbered full-history page. Ratings appear only as the published
+        NTRP band at the time of the match, and only for rated matches.
       tags:
         - Users
       security:
@@ -426,15 +427,33 @@ paths:
           schema:
             type: string
           description: The player's shareable public code (case-insensitive).
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+          description: Page size (1–100; default 20).
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+          description: Number of matching matches to skip.
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Case-insensitive substring over opponent/partner display names and public codes.
       responses:
         '200':
-          description: The player's match history
+          description: A page of the player's match history
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/PlayerMatchHistoryEntry'
+                $ref: '#/components/schemas/PlayerMatchHistoryPage'
         '401':
           description: Missing or invalid Firebase token
         '404':
@@ -2967,6 +2986,21 @@ components:
           type: string
           nullable: true
           description: This player's published NTRP band at the time of the match (rated matches only).
+
+    PlayerMatchHistoryPage:
+      type: object
+      description: A page of a player's match history (#284) — the requested slice plus the total matching count.
+      required:
+        - items
+        - total
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlayerMatchHistoryEntry'
+        total:
+          type: integer
+          description: Count of matches matching the (optional) search, for numbered pagination.
 
     MatchHistoryParticipant:
       type: object

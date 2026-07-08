@@ -207,7 +207,7 @@ class PlayerServiceTest {
         val match = fixture(u1 = dup.id, u2 = opp.id, date = LocalDate.of(2026, 1, 1))
         users.markDuplicates(canonicalId = canonical.id, duplicateIds = listOf(element = dup.id))
 
-        val history = service.matchHistory(code = canonical.publicCode).shouldBeRight()
+        val history = service.matchHistory(code = canonical.publicCode).shouldBeRight().items
 
         history shouldHaveSize 1
         history.single().let {
@@ -242,7 +242,7 @@ class PlayerServiceTest {
         // A later, still-scheduled fixture — no result, no bands.
         fixture(u1 = ben.id, u2 = ana.id, date = LocalDate.of(2026, 3, 1))
 
-        val historyForAna = service.matchHistory(code = ana.publicCode.lowercase()).shouldBeRight()
+        val historyForAna = service.matchHistory(code = ana.publicCode.lowercase()).shouldBeRight().items
 
         historyForAna shouldHaveSize 2
         val upcoming = historyForAna[0]
@@ -277,7 +277,7 @@ class PlayerServiceTest {
         )
 
         // Ben is on team2, so from his perspective the set reads 4-6 and the result is a loss.
-        val historyForBen = service.matchHistory(code = ben.publicCode).shouldBeRight()
+        val historyForBen = service.matchHistory(code = ben.publicCode).shouldBeRight().items
 
         historyForBen shouldHaveSize 1
         historyForBen[0].result shouldBe "LOSS"
@@ -360,7 +360,7 @@ class PlayerServiceTest {
         history(userId = cy.id, matchId = match.id, previousLevel = "3.0")
         history(userId = deb.id, matchId = match.id, previousLevel = "3.5")
 
-        val entry = service.matchHistory(code = ana.publicCode).shouldBeRight().single()
+        val entry = service.matchHistory(code = ana.publicCode).shouldBeRight().items.single()
 
         entry.result shouldBe "WIN"
         entry.playerLevelAtMatch shouldBe "4.0"
@@ -376,7 +376,34 @@ class PlayerServiceTest {
     fun `match history is empty for a player with no matches`() {
         val user = newUser(uid = "lonely", names = display(name = "Solo"))
 
-        service.matchHistory(code = user.publicCode).shouldBeRight() shouldHaveSize 0
+        service.matchHistory(code = user.publicCode).shouldBeRight().items shouldHaveSize 0
+    }
+
+    @Test
+    fun `match history paginates and searches by opponent (#284)`() {
+        val ana = newUser(uid = "a", names = display(name = "Ana"))
+        val ben = newUser(uid = "ben", names = display(name = "Ben"))
+        val cara = newUser(uid = "cara", names = display(name = "Cara"))
+        // Ana's matches, oldest to newest: two vs Ben, then one vs Cara.
+        fixture(u1 = ana.id, u2 = ben.id, date = LocalDate.of(2026, 1, 1))
+        fixture(u1 = ana.id, u2 = ben.id, date = LocalDate.of(2026, 2, 1))
+        fixture(u1 = ana.id, u2 = cara.id, date = LocalDate.of(2026, 3, 1))
+
+        // Page 1 (limit 2): the newest two, with the full total.
+        val page1 = service.matchHistory(code = ana.publicCode, limit = 2, offset = 0).shouldBeRight()
+        page1.total shouldBe 3
+        page1.items.map { it.matchDate } shouldBe listOf("2026-03-01", "2026-02-01")
+        // Page 2 (offset 2): the remaining oldest one.
+        val page2 = service.matchHistory(code = ana.publicCode, limit = 2, offset = 2).shouldBeRight()
+        page2.items.map { it.matchDate } shouldBe listOf(element = "2026-01-01")
+
+        // Search by opponent name narrows to the two Ben matches; total reflects the filter, not the page.
+        val benMatches = service.matchHistory(code = ana.publicCode, limit = 20, offset = 0, search = "ben").shouldBeRight()
+        benMatches.total shouldBe 2
+        benMatches.items.all { it.opponents.single().displayName == "Ben" } shouldBe true
+
+        // Search by public code matches too.
+        service.matchHistory(code = ana.publicCode, search = cara.publicCode).shouldBeRight().total shouldBe 1
     }
 
     @Test
