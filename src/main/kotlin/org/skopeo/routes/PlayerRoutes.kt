@@ -15,6 +15,9 @@ import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.rating.toResponse
 import org.skopeo.service.user.PlayerService
 
+// Page size used when a match-history request omits `limit` (#284) — the full-history page default.
+private const val DEFAULT_MATCH_HISTORY_PAGE_SIZE = 20
+
 /**
  * Shareable, auth-gated player profile resolved by public code (issue #61). Behind
  * [FIREBASE_AUTH] so it is visible only to logged-in users — never a public page — but open to
@@ -37,8 +40,17 @@ fun Application.configurePlayerRoutes(service: PlayerService = PlayerService()) 
                 get(path = "/{code}/match-history") {
                     respondMappingErrors {
                         val code = call.parameters["code"].orEmpty()
-                        respondEither(result = service.matchHistory(code = code)) { history ->
-                            call.respond(status = HttpStatusCode.OK, message = history)
+                        val query = call.request.queryParameters
+                        respondEither(
+                            result =
+                                service.matchHistory(
+                                    code = code,
+                                    limit = query["limit"]?.toIntOrNull() ?: DEFAULT_MATCH_HISTORY_PAGE_SIZE,
+                                    offset = query["offset"]?.toIntOrNull() ?: 0,
+                                    search = query["search"],
+                                ),
+                        ) { page ->
+                            call.respond(status = HttpStatusCode.OK, message = page)
                         }
                     }
                 }

@@ -19,6 +19,7 @@ const InviteAcceptPage = lazy(() => import('@/routes/InviteAcceptPage').then((m)
 const CompleteProfilePage = lazy(() => import('@/routes/CompleteProfilePage').then((m) => ({ default: m.CompleteProfilePage })))
 const DashboardPage = lazy(() => import('@/routes/DashboardPage').then((m) => ({ default: m.DashboardPage })))
 const PlayerProfilePage = lazy(() => import('@/routes/PlayerProfilePage').then((m) => ({ default: m.PlayerProfilePage })))
+const PlayerMatchesPage = lazy(() => import('@/routes/PlayerMatchesPage').then((m) => ({ default: m.PlayerMatchesPage })))
 const MatchPage = lazy(() => import('@/routes/MatchPage').then((m) => ({ default: m.MatchPage })))
 const EventPage = lazy(() => import('@/routes/EventPage').then((m) => ({ default: m.EventPage })))
 
@@ -68,6 +69,7 @@ function App() {
               {/* Public-by-code pages are viewable without login (#193); anonymous viewers get a
                   sign-up/login CTA and any account-requiring action prompts them to authenticate. */}
               <Route path="/players/:code" element={<PlayerProfilePage />} />
+              <Route path="/players/:code/matches" element={<PlayerMatchesPage />} />
               <Route path="/matches/:code" element={<MatchPage />} />
               <Route path="/events/:code" element={<EventPage />} />
               <Route path="/" element={<Navigate to="/dashboard" replace />} />

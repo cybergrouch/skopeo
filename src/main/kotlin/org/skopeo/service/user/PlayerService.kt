@@ -10,6 +10,7 @@ import arrow.core.right
 import org.skopeo.dto.user.MatchHistoryParticipant
 import org.skopeo.dto.user.OpponentSummary
 import org.skopeo.dto.user.PlayerMatchHistoryEntry
+import org.skopeo.dto.user.PlayerMatchHistoryPage
 import org.skopeo.dto.user.PlayerResultsSummary
 import org.skopeo.dto.user.PublicPlayerResponse
 import org.skopeo.dto.user.PublicRatingDto
@@ -25,6 +26,10 @@ import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import java.util.UUID
+
+// Match-history pagination (#284): the default page size and the hard cap, mirroring player search (#232).
+private const val DEFAULT_HISTORY_LIMIT = 20
+private const val MAX_HISTORY_LIMIT = 100
 
 /**
  * Resolves a player's shareable, auth-gated public profile from their [public code] (issue #61).
@@ -80,12 +85,18 @@ class PlayerService(
     }
 
     /**
-     * The player's match history (issue #65): every active match they played, newest first, with the
-     * opponent, result, and — for rated matches — each side's NTRP band at the time. Reconstructed
-     * from rating history (each rated match writes one history row per player carrying their pre-match
-     * level), so no per-match snapshot column is needed.
+     * A page of the player's match history (#65, #284), newest first, optionally narrowed by [search] (a
+     * case-insensitive substring over opponent/partner display names and public codes). Returns the
+     * requested [offset]/[limit] slice plus the total matching count, so the profile can show a bounded
+     * preview and a full page can paginate. The full oriented history is assembled server-side (as
+     * before) then filtered and sliced; the client no longer loads every row.
      */
-    fun matchHistory(code: String): Either<ServiceError, List<PlayerMatchHistoryEntry>> =
+    fun matchHistory(
+        code: String,
+        limit: Int = DEFAULT_HISTORY_LIMIT,
+        offset: Int = 0,
+        search: String? = null,
+    ): Either<ServiceError, PlayerMatchHistoryPage> =
         either {
             val user = resolve(code = code).bind()
             // A canonical account's history also surfaces its disabled duplicates' matches (#124,
@@ -111,10 +122,32 @@ class PlayerService(
                     (match.team1.userIds + match.team2.userIds).filterNot { it == self }
                 }
             val participantsById = users.findAllByIds(ids = otherIds).associateBy { it.id }
-            played.map { match ->
-                val participant = participantByMatch.getValue(key = match.id)
-                entry(match = match, playerId = participant, players = participantsById, levels = levelByMatchAndUser[match.id])
-            }
+            val entries =
+                played.map { match ->
+                    val participant = participantByMatch.getValue(key = match.id)
+                    entry(match = match, playerId = participant, players = participantsById, levels = levelByMatchAndUser[match.id])
+                }
+
+            // Case-insensitive match on any opponent/partner display name or public code.
+            fun rowMatches(
+                row: PlayerMatchHistoryEntry,
+                needle: String,
+            ): Boolean =
+                (row.opponents + row.partners).any { p ->
+                    p.publicCode.lowercase().contains(other = needle) || p.displayName?.lowercase()?.contains(other = needle) == true
+                }
+
+            val matched =
+                search?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }
+                    ?.let { needle -> entries.filter { rowMatches(row = it, needle = needle) } }
+                    ?: entries
+            PlayerMatchHistoryPage(
+                items =
+                    matched
+                        .drop(n = offset.coerceAtLeast(minimumValue = 0))
+                        .take(n = limit.coerceIn(minimumValue = 1, maximumValue = MAX_HISTORY_LIMIT)),
+                total = matched.size,
+            )
         }
 
     /**

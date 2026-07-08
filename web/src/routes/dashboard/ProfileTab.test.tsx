@@ -79,7 +79,7 @@ describe('ProfileTab', () => {
       isLoading: false,
     })
     useGetApiV1PlayersCodeMatchHistory.mockReturnValue({
-      data: [],
+      data: { items: [], total: 0 },
       isLoading: false,
     })
   })

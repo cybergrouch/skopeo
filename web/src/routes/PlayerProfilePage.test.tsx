@@ -46,7 +46,7 @@ describe('PlayerProfilePage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     useGetApiV1PlayersCodeMatchHistory.mockReturnValue({
-      data: [],
+      data: { items: [], total: 0 },
       isLoading: false,
     })
     // Default viewer: a plain player (no admin capability).
