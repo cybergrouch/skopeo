@@ -135,8 +135,20 @@ function todayIso(): string {
   return `${now.getFullYear()}-${month}-${day}`
 }
 
-/** One selectable event row: name, filing host, date range, and participant count; opens the event on click. */
-function EventRow({ event, onSelect }: { event: EventResponse; onSelect: () => void }) {
+/**
+ * One selectable event row: name, filing host, the relevant date, and participant count; opens the event
+ * on click. Upcoming events show only their start date, past events only their end date (#296).
+ */
+function EventRow({
+  event,
+  upcoming,
+  onSelect,
+}: {
+  event: EventResponse
+  upcoming: boolean
+  onSelect: () => void
+}) {
+  const date = upcoming ? `Starts ${event.startDate}` : `Ended ${event.endDate}`
   return (
     <li>
       <button
@@ -154,8 +166,7 @@ function EventRow({ event, onSelect }: { event: EventResponse; onSelect: () => v
           ) : null}
         </span>
         <span className="shrink-0 text-muted-foreground">
-          {event.startDate} – {event.endDate} ·{' '}
-          {event.participants.length} player{plural(event.participants.length)}
+          {date} · {event.participants.length} player{plural(event.participants.length)}
         </span>
       </button>
     </li>
@@ -166,11 +177,13 @@ function EventRow({ event, onSelect }: { event: EventResponse; onSelect: () => v
 function EventSection({
   title,
   events,
+  upcoming,
   emptyLabel,
   onSelect,
 }: {
   title: string
   events: EventResponse[]
+  upcoming: boolean
   emptyLabel: string
   onSelect: (id: string) => void
 }) {
@@ -180,7 +193,7 @@ function EventSection({
       {events.length > 0 ? (
         <ul className="mt-1 space-y-2">
           {events.map((event) => (
-            <EventRow key={event.id} event={event} onSelect={() => onSelect(event.id)} />
+            <EventRow key={event.id} event={event} upcoming={upcoming} onSelect={() => onSelect(event.id)} />
           ))}
         </ul>
       ) : (
@@ -228,8 +241,8 @@ export function EventOrganizerTab() {
             <p className="text-sm text-muted-foreground">Loading…</p>
           ) : events.length > 0 ? (
             <>
-              <EventSection title="Upcoming" events={upcoming} emptyLabel="No upcoming events." onSelect={setSelectedId} />
-              <EventSection title="Past" events={past} emptyLabel="No past events." onSelect={setSelectedId} />
+              <EventSection title="Upcoming" events={upcoming} upcoming emptyLabel="No upcoming events." onSelect={setSelectedId} />
+              <EventSection title="Past" events={past} upcoming={false} emptyLabel="No past events." onSelect={setSelectedId} />
             </>
           ) : (
             <p className="text-sm text-muted-foreground">No events yet. Create one above.</p>
