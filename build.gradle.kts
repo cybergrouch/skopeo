@@ -401,3 +401,14 @@ tasks.register<JavaExec>("generateMonteCarloReport") {
     classpath = sourceSets.getByName("test").runtimeClasspath
     mainClass.set("org.skopeo.service.calculator.impl.v2.NtrpMonteCarloReportKt")
 }
+
+// Run the doubles dominance study (a program, not a test). Shows how a doubles win's dominance and the
+// winning pair's within-team NTRP gap split the rating change between partners. Writes
+// /tmp/doubles_dominance.md and presentations/doubles_dominance.md.  Usage: ./gradlew generateDoublesDominanceReport
+tasks.register<JavaExec>("generateDoublesDominanceReport") {
+    group = "reports"
+    description = "Doubles: effect of dominance + within-team gap on each partner's rating change"
+    dependsOn(tasks.named("testClasses"))
+    classpath = sourceSets.getByName("test").runtimeClasspath
+    mainClass.set("org.skopeo.service.calculator.impl.v2.DoublesDominanceReportKt")
+}
