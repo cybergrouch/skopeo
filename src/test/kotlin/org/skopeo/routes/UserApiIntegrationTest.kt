@@ -27,6 +27,7 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.dto.user.CreateUserRequest
+import org.skopeo.dto.user.PhotoSettingsRequest
 import org.skopeo.dto.user.ProfileRequest
 import org.skopeo.dto.user.UserResponse
 import org.skopeo.module
@@ -164,6 +165,40 @@ class UserApiIntegrationTest {
 
             client.get(urlString = "/api/v1/users/me") { header(key = HttpHeaders.Authorization, value = "Bearer $token") }
                 .body<UserResponse>().isActive shouldBe false
+        }
+
+    @Test
+    fun `PUT photo sets a custom URL, rejects a bad URL, and hides (#303)`() =
+        withApp { client ->
+            val token = TestFirebaseAuth.mintToken(uid = "fb-photo")
+            val user = client.createUser(token = token).body<UserResponse>()
+
+            val set =
+                client.put(urlString = "/api/v1/users/${user.id}/photo") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $token")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = PhotoSettingsRequest(customPhotoUrl = "https://c/me.png", hidden = false))
+                }
+            set.status shouldBe HttpStatusCode.OK
+            set.body<UserResponse>().let {
+                it.customPhotoUrl shouldBe "https://c/me.png"
+                it.photoUrl shouldBe "https://c/me.png"
+                it.photoHidden shouldBe false
+            }
+
+            // A non-http(s) URL is rejected. Sent as raw JSON — the DTO's init validation would
+            // otherwise throw client-side before the request is even made.
+            client.put(urlString = "/api/v1/users/${user.id}/photo") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $token")
+                setBody(body = TextContent(text = """{"customPhotoUrl":"ftp://nope/x.jpg"}""", contentType = ContentType.Application.Json))
+            }.status shouldBe HttpStatusCode.BadRequest
+
+            // Hiding suppresses the effective photo.
+            client.put(urlString = "/api/v1/users/${user.id}/photo") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $token")
+                contentType(type = ContentType.Application.Json)
+                setBody(body = PhotoSettingsRequest(customPhotoUrl = "https://c/me.png", hidden = true))
+            }.body<UserResponse>().photoUrl shouldBe null
         }
 
     @Test

@@ -23,6 +23,7 @@ import org.skopeo.model.UserRating
 import org.skopeo.model.UserSearchPage
 import org.skopeo.model.UserSearchQuery
 import org.skopeo.model.ageRangeToDob
+import org.skopeo.model.effectivePhotoUrl
 import org.skopeo.repository.CapabilityRepository
 import org.skopeo.repository.InviteRepository
 import org.skopeo.repository.RatingRepository
@@ -196,19 +197,39 @@ class UserService(
     }
 
     /**
-     * Keep the stored profile photo in sync with the OAuth provider (#219): when the token carries a
-     * picture that differs from what's stored, persist it and return the updated user. A null/absent
-     * picture leaves the stored value intact (we never wipe it). Runs on the authenticated login paths.
+     * Keep the OAuth-provider photo in sync on login (#219): when the token carries a picture that
+     * differs from the stored provider photo, persist it. A null/absent picture leaves it intact (we
+     * never wipe it). This only ever touches the provider photo — a user's custom URL or hide choice
+     * (#303) is honored: the effective photo is recomputed but their override is never overwritten.
      */
     private fun refreshPhoto(
         token: VerifiedFirebaseToken,
         user: User,
     ): User {
         val picture = token.picture
-        if (picture == null || picture == user.photoUrl) return user
-        repository.updatePhotoUrl(userId = user.id, photoUrl = picture)
-        return user.copy(photoUrl = picture)
+        if (picture == null || picture == user.providerPhotoUrl) return user
+        repository.updateProviderPhotoUrl(userId = user.id, providerPhotoUrl = picture)
+        return user.copy(
+            providerPhotoUrl = picture,
+            photoUrl = effectivePhotoUrl(providerPhotoUrl = picture, customPhotoUrl = user.customPhotoUrl, photoHidden = user.photoHidden),
+        )
     }
+
+    /**
+     * Set the caller's (or, for an admin, a player's) photo controls (#303): a custom image URL and
+     * the hide flag. Authorized self-or-ADMINISTRATOR, like the rest of profile editing.
+     */
+    fun updatePhotoSettings(
+        token: VerifiedFirebaseToken,
+        id: UUID,
+        customPhotoUrl: String?,
+        photoHidden: Boolean,
+    ): Either<ServiceError, User> =
+        either {
+            val target = repository.findById(id = id).bind()
+            requireAccess(token = token, target = target).bind()
+            repository.updatePhotoSettings(id = id, customPhotoUrl = customPhotoUrl, photoHidden = photoHidden).bind()
+        }
 
     /** First-time sign-up: enforce the invite gate, write the aggregate, and audit the creation. */
     private fun provisionNew(

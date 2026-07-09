@@ -582,7 +582,7 @@ paths:
           description: No such user
     put:
       summary: Replace a user's mutable profile fields
-      description: Replaces photoUrl/dateOfBirth/sex/city wholesale — omitted fields are cleared. Self-or-ADMINISTRATOR only.
+      description: Replaces dateOfBirth/sex/city wholesale — omitted fields are cleared. The photo is set separately via PUT /photo (#303). Self-or-ADMINISTRATOR only.
       tags:
         - Users
       security:
@@ -618,6 +618,46 @@ paths:
           description: User deactivated
         '403':
           description: Forbidden
+        '404':
+          description: No such user
+
+  /api/v1/users/{id}/photo:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    put:
+      summary: Set a user's profile-photo controls
+      description: >-
+        Sets a custom public image URL (blank/absent clears it, reverting to the OAuth photo) and a
+        hide flag. A user-set custom photo or a hide is never overwritten by the login-time OAuth
+        photo sync (#303). Self-or-ADMINISTRATOR only.
+      tags:
+        - Users
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PhotoSettingsRequest'
+      responses:
+        '200':
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          description: Invalid body (e.g. customPhotoUrl is not an http(s) URL) or malformed id
+        '401':
+          description: Missing or invalid Firebase token
+        '403':
+          description: Caller is neither the target user nor an ADMINISTRATOR
         '404':
           description: No such user
 
@@ -2876,7 +2916,7 @@ components:
       description: |
         Mutable profile fields. PATCH leaves omitted (null) fields unchanged;
         PUT replaces all of them (omitted fields are cleared). The profile photo
-        is not editable here — it is provider-managed and synced on login (#219).
+        is set separately via PUT /api/v1/users/{id}/photo (#303).
       properties:
         dateOfBirth:
           type: string
@@ -2889,6 +2929,22 @@ components:
         city:
           type: string
           nullable: true
+
+    PhotoSettingsRequest:
+      type: object
+      description: |
+        Profile-photo controls (#303). A blank/absent customPhotoUrl clears the custom photo
+        (reverting to the OAuth photo); a non-blank value must be an http(s) URL. hidden suppresses
+        the photo everywhere. Neither is overwritten by the login-time OAuth photo sync.
+      properties:
+        customPhotoUrl:
+          type: string
+          nullable: true
+          description: Public http(s) image URL to show instead of the OAuth photo; blank/absent clears it.
+        hidden:
+          type: boolean
+          default: false
+          description: When true, the profile photo is suppressed everywhere.
 
     PublicPlayerResponse:
       type: object
@@ -3139,6 +3195,15 @@ components:
         photoUrl:
           type: string
           nullable: true
+          description: Effective photo to display — respects the hide flag and custom URL (#303).
+        customPhotoUrl:
+          type: string
+          nullable: true
+          description: User-set public image URL, if any (#303).
+        photoHidden:
+          type: boolean
+          default: false
+          description: When true, the profile photo is suppressed everywhere (#303).
         dateOfBirth:
           type: string
           format: date

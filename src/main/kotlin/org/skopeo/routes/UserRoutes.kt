@@ -20,6 +20,7 @@ import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.user.CreateUserRequest
 import org.skopeo.dto.user.MarkDuplicatesRequest
+import org.skopeo.dto.user.PhotoSettingsRequest
 import org.skopeo.dto.user.ProfileRequest
 import org.skopeo.dto.user.UserSummaryPageResponse
 import org.skopeo.dto.user.toResponse
@@ -239,6 +240,24 @@ private fun Route.userById(service: UserService) {
         respondMappingErrors {
             val patch = call.receive<ProfileRequest>().toProfilePatch()
             respondEither(result = service.replaceProfile(token = verifiedToken(), id = uuidParam(name = "id"), patch = patch)) { user ->
+                call.respond(status = HttpStatusCode.OK, message = user.toResponse())
+            }
+        }
+    }
+    put(path = "/{id}/photo") {
+        respondMappingErrors {
+            val body = call.receive<PhotoSettingsRequest>()
+            // Blank clears the custom photo (revert to provider); validation of a non-blank URL happens
+            // in the request's init block.
+            val customPhotoUrl = body.customPhotoUrl?.trim()?.ifEmpty { null }
+            val result =
+                service.updatePhotoSettings(
+                    token = verifiedToken(),
+                    id = uuidParam(name = "id"),
+                    customPhotoUrl = customPhotoUrl,
+                    photoHidden = body.hidden,
+                )
+            respondEither(result = result) { user ->
                 call.respond(status = HttpStatusCode.OK, message = user.toResponse())
             }
         }

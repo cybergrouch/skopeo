@@ -28,7 +28,12 @@ private const val RATING_SCALE = 6
  */
 internal object UsersTable : UUIDTable(name = "users") {
     val firebaseUid = varchar(name = "firebase_uid", length = FIREBASE_UID_MAX).nullable()
-    val photoUrl = text(name = "photo_url").nullable()
+
+    // Profile photo (#303): the OAuth photo synced on login, an optional user-set URL that overrides
+    // it, and a hide flag. The effective photo shown to the app is derived from these (see toUser).
+    val providerPhotoUrl = text(name = "provider_photo_url").nullable()
+    val customPhotoUrl = text(name = "custom_photo_url").nullable()
+    val photoHidden = bool(name = "photo_hidden").default(defaultValue = false)
     val dateOfBirth = date(name = "date_of_birth").nullable()
     val sex = varchar(name = "sex", length = SEX_MAX).nullable()
     val city = varchar(name = "city", length = CITY_MAX).nullable()

@@ -33,6 +33,7 @@ import org.skopeo.model.ServiceError
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserSearchQuery
+import org.skopeo.model.effectivePhotoUrl
 import java.text.Normalizer
 import java.util.UUID
 
@@ -54,7 +55,7 @@ class UserRepository {
                 UsersTable.insertAndGetId {
                     it[UsersTable.publicCode] = generateUniquePublicCode()
                     it[UsersTable.firebaseUid] = command.firebaseUid
-                    it[UsersTable.photoUrl] = command.photoUrl
+                    it[UsersTable.providerPhotoUrl] = command.photoUrl
                     it[UsersTable.dateOfBirth] = command.dateOfBirth
                     it[UsersTable.sex] = command.sex
                     it[UsersTable.city] = command.city
@@ -164,16 +165,35 @@ class UserRepository {
         }
 
     /** Refresh the provider-sourced profile photo (#219) — a narrow update to keep it in sync on login. */
-    fun updatePhotoUrl(
+    fun updateProviderPhotoUrl(
         userId: UUID,
-        photoUrl: String,
+        providerPhotoUrl: String,
     ) {
         transaction {
             UsersTable.update(where = { UsersTable.id eq userId }) {
-                it[UsersTable.photoUrl] = photoUrl
+                it[UsersTable.providerPhotoUrl] = providerPhotoUrl
             }
         }
     }
+
+    /**
+     * Set the user's photo controls (#303): a custom image URL (null clears it, reverting to the
+     * provider photo) and the hide flag. Full-replacement semantics — the request always carries the
+     * intended state. Returns the refreshed aggregate, or [ServiceError.NotFound].
+     */
+    fun updatePhotoSettings(
+        id: UUID,
+        customPhotoUrl: String?,
+        photoHidden: Boolean,
+    ): Either<ServiceError, User> =
+        transaction {
+            val updated =
+                UsersTable.update(where = { UsersTable.id eq id }) {
+                    it[UsersTable.customPhotoUrl] = customPhotoUrl
+                    it[UsersTable.photoHidden] = photoHidden
+                }
+            if (updated == 0) ServiceError.NotFound(message = "User $id not found").left() else aggregateOrNotFound(id = id)
+        }
 
     fun updateProfile(
         id: UUID,
@@ -383,7 +403,15 @@ private fun ResultRow.toUser(
         id = this[UsersTable.id].value,
         publicCode = this[UsersTable.publicCode],
         firebaseUid = this[UsersTable.firebaseUid],
-        photoUrl = this[UsersTable.photoUrl],
+        photoUrl =
+            effectivePhotoUrl(
+                providerPhotoUrl = this[UsersTable.providerPhotoUrl],
+                customPhotoUrl = this[UsersTable.customPhotoUrl],
+                photoHidden = this[UsersTable.photoHidden],
+            ),
+        providerPhotoUrl = this[UsersTable.providerPhotoUrl],
+        customPhotoUrl = this[UsersTable.customPhotoUrl],
+        photoHidden = this[UsersTable.photoHidden],
         dateOfBirth = this[UsersTable.dateOfBirth],
         sex = this[UsersTable.sex],
         city = this[UsersTable.city],

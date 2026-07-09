@@ -111,7 +111,14 @@ data class User(
     // Short, human-readable, shareable player code (e.g. "K7Q2MX"); unique. See issue #56.
     val publicCode: String,
     val firebaseUid: String?,
+    // The effective profile photo to display (#303) — derived from the fields below via
+    // [effectivePhotoUrl]: null when hidden, else the custom URL, else the provider photo.
     val photoUrl: String?,
+    // Raw photo state (#303). [providerPhotoUrl] is the OAuth photo (synced on login, retained for
+    // revert); [customPhotoUrl] is the user-set override; [photoHidden] suppresses display.
+    val providerPhotoUrl: String? = null,
+    val customPhotoUrl: String? = null,
+    val photoHidden: Boolean = false,
     val dateOfBirth: LocalDate?,
     val sex: String?,
     val city: String?,
@@ -128,6 +135,17 @@ data class User(
     val identities: List<UserIdentity>,
     val capabilities: Set<Capability>,
 )
+
+/**
+ * The profile photo to actually show (#303): nothing when hidden, otherwise the user's custom URL
+ * if set, otherwise the OAuth-provider photo. Centralized so every read site (and the login sync)
+ * derives the displayed photo identically.
+ */
+fun effectivePhotoUrl(
+    providerPhotoUrl: String?,
+    customPhotoUrl: String?,
+    photoHidden: Boolean,
+): String? = if (photoHidden) null else customPhotoUrl ?: providerPhotoUrl
 
 /** The user's single active display name, if any (names include disabled ones). */
 fun User.displayName(): String? = names.firstOrNull { it.type == NameType.DISPLAY && it.isActive }?.value
