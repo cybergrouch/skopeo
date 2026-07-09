@@ -225,6 +225,13 @@ class UserRepositoryTest {
     }
 
     @Test
+    fun `updatePhotoSettings is a NotFound for an unknown user (#303)`() {
+        repository.updatePhotoSettings(id = UUID.randomUUID(), customPhotoUrl = null, photoHidden = true)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
     fun `updateProfile changes sex when provided`() {
         val created = repository.provision(command = googleSignup()) // sex = Male
 
