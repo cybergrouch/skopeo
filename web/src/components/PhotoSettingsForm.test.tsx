@@ -111,4 +111,44 @@ describe("PhotoSettingsForm", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(/http\(s\) image URL/);
     expect(photoMutate).not.toHaveBeenCalled();
   });
+
+  it("defaults to an empty URL and unchecked when the user has no photo settings", () => {
+    useGetApiV1UsersId.mockReturnValue({
+      data: { id: "u1" },
+      isLoading: false,
+    });
+    renderForm();
+    expect(
+      (screen.getByLabelText("Custom photo URL") as HTMLInputElement).value,
+    ).toBe("");
+    expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(
+      false,
+    );
+  });
+
+  it("shows an error when saving fails", async () => {
+    usePutApiV1UsersIdPhoto.mockReturnValue({
+      isPending: false,
+      mutateAsync: async () => {
+        throw new Error("boom");
+      },
+    });
+    const user = userEvent.setup();
+    renderForm();
+    await user.click(screen.getByRole("button", { name: "Save photo" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /Could not save your photo settings/,
+    );
+  });
+
+  it("disables the button and shows a saving label while the request is pending", () => {
+    usePutApiV1UsersIdPhoto.mockReturnValue({
+      isPending: true,
+      mutateAsync: photoMutate,
+    });
+    renderForm();
+    const button = screen.getByRole("button", { name: "Saving…" });
+    expect(button).toBeDisabled();
+  });
 });
