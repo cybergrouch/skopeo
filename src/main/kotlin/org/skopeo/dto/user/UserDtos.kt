@@ -8,6 +8,7 @@ import org.skopeo.model.NameType
 import org.skopeo.model.User
 import org.skopeo.model.UserRating
 import org.skopeo.model.ageInYears
+import java.net.URI
 import java.time.LocalDate
 
 /**
@@ -76,6 +77,29 @@ data class ProfileRequest(
     val city: String? = null,
 )
 
+/**
+ * Body for `PUT /api/v1/users/{id}/photo` — the profile-photo controls (#303). A blank/absent
+ * [customPhotoUrl] clears the custom photo (reverting to the provider photo); a non-blank value must
+ * be an http(s) URL. [hidden] suppresses the photo everywhere. Authorized self-or-ADMINISTRATOR.
+ */
+@Serializable
+data class PhotoSettingsRequest(
+    val customPhotoUrl: String? = null,
+    val hidden: Boolean = false,
+) {
+    init {
+        val trimmed = customPhotoUrl?.trim()
+        require(value = trimmed.isNullOrEmpty() || isHttpUrl(value = trimmed)) {
+            "customPhotoUrl must be an http(s) URL"
+        }
+    }
+}
+
+/** True when [value] parses as an absolute http(s) URL — the only image sources we allow (#303). */
+private fun isHttpUrl(value: String): Boolean =
+    (value.startsWith(prefix = "http://") || value.startsWith(prefix = "https://")) &&
+        runCatching { URI(value).toURL() }.isSuccess
+
 /** Body for `POST /api/v1/users/{canonicalId}/duplicates` — mark these users as duplicates (#124). */
 @Serializable
 data class MarkDuplicatesRequest(
@@ -87,7 +111,11 @@ data class UserResponse(
     val id: String,
     val publicCode: String,
     val firebaseUid: String?,
+    // Effective photo to display (respects hide + custom, #303).
     val photoUrl: String?,
+    // Raw photo controls, so the owner/admin can prefill the edit form (#303).
+    val customPhotoUrl: String? = null,
+    val photoHidden: Boolean = false,
     val dateOfBirth: String?,
     val sex: String?,
     val city: String?,
@@ -108,6 +136,8 @@ fun User.toResponse(): UserResponse =
         publicCode = publicCode,
         firebaseUid = firebaseUid,
         photoUrl = photoUrl,
+        customPhotoUrl = customPhotoUrl,
+        photoHidden = photoHidden,
         dateOfBirth = dateOfBirth?.toString(),
         sex = sex,
         city = city,

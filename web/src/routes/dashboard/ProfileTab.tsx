@@ -4,82 +4,95 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { useAuth } from '@/auth/useAuth'
-import { MatchHistoryCard } from '@/components/MatchHistoryCard'
-import { WinLossCard } from '@/components/WinLossCard'
-import { UpcomingMatchesCard } from '@/components/UpcomingMatchesCard'
-import { EventsHistoryCard } from '@/components/EventsHistoryCard'
-import { RatingHistoryCard } from '@/components/RatingHistoryCard'
-import { RatingBandMeter } from '@/components/RatingBandMeter'
-import { ShareCard } from '@/components/ShareCard'
-import { ReRateRequestCard } from '@/components/ReRateRequestCard'
-import { ProfileFieldsForm } from '@/components/ProfileFieldsForm'
-import type { Capability } from '@/auth/capabilities'
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/auth/useAuth";
+import { MatchHistoryCard } from "@/components/MatchHistoryCard";
+import { WinLossCard } from "@/components/WinLossCard";
+import { UpcomingMatchesCard } from "@/components/UpcomingMatchesCard";
+import { EventsHistoryCard } from "@/components/EventsHistoryCard";
+import { RatingHistoryCard } from "@/components/RatingHistoryCard";
+import { RatingBandMeter } from "@/components/RatingBandMeter";
+import { ShareCard } from "@/components/ShareCard";
+import { ReRateRequestCard } from "@/components/ReRateRequestCard";
+import { ProfileFieldsForm } from "@/components/ProfileFieldsForm";
+import { PhotoSettingsForm } from "@/components/PhotoSettingsForm";
+import type { Capability } from "@/auth/capabilities";
 import {
   useGetApiV1UsersUserIdRatingHistory,
   useGetApiV1UsersUserIdRatings,
-} from '@/api/generated/ratings/ratings'
+} from "@/api/generated/ratings/ratings";
 
 interface ProfileTabProps {
-  userId: string
-  capabilities: readonly Capability[]
+  userId: string;
+  capabilities: readonly Capability[];
   /** Short, shareable player code (e.g. "K7Q2MX") others can search to find this player. */
-  publicCode?: string
+  publicCode?: string;
+  /**
+   * Effective profile photo from the API (#303) — already respects the hide flag and custom URL.
+   * Undefined while the profile loads; null means no photo (hidden or none) → show initials.
+   */
+  photoUrl?: string | null;
 }
 
 export function ProfileTab({
   userId,
   capabilities,
   publicCode,
+  photoUrl,
 }: ProfileTabProps) {
-  const { user } = useAuth()
-  const enabled = Boolean(userId)
+  const { user } = useAuth();
+  // Prefer the API's effective photo (honors hide/custom); fall back to the provider photo from the
+  // auth token only while the profile is still loading (photoUrl === undefined).
+  const avatarUrl =
+    photoUrl !== undefined ? photoUrl : (user?.photoURL ?? null);
+  const enabled = Boolean(userId);
   const ratingsQuery = useGetApiV1UsersUserIdRatings(userId, {
     query: { enabled },
-  })
+  });
   const historyQuery = useGetApiV1UsersUserIdRatingHistory(userId, {
     query: { enabled },
-  })
+  });
 
   const shareUrl = publicCode
     ? `${window.location.origin}/players/${publicCode}`
-    : ''
+    : "";
 
-  const ratings = ratingsQuery.data ?? []
-  const history = historyQuery.data ?? []
-  const hasRating = ratings.length > 0
+  const ratings = ratingsQuery.data ?? [];
+  const history = historyQuery.data ?? [];
+  const hasRating = ratings.length > 0;
 
   return (
     <div className="grid gap-4">
       <Card>
         <CardHeader>
           <div className="flex items-center gap-3">
-            {user?.photoURL ? (
+            {avatarUrl ? (
               <img
-                src={user.photoURL}
+                src={avatarUrl}
                 alt=""
                 referrerPolicy="no-referrer"
                 className="h-12 w-12 shrink-0 rounded-full object-cover"
               />
             ) : (
-              // No upload support: Google/Facebook supply a photo; everyone else gets initials.
+              // No photo (hidden, or none set): show the display-name/email initial (#303).
               <div
                 aria-hidden="true"
                 className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-muted text-lg font-medium text-muted-foreground"
               >
-                {(user?.displayName ?? user?.email ?? 'P').charAt(0).toUpperCase()}
+                {(user?.displayName ?? user?.email ?? "P")
+                  .charAt(0)
+                  .toUpperCase()}
               </div>
             )}
             <div className="min-w-0">
               <CardTitle>
-                {user?.displayName ?? user?.email ?? 'Player'}
+                {user?.displayName ?? user?.email ?? "Player"}
               </CardTitle>
               <CardDescription>{user?.email}</CardDescription>
               {publicCode ? (
                 <CardDescription className="mt-1">
-                  Player ID:{' '}
+                  Player ID:{" "}
                   <code className="select-all font-mono font-medium text-foreground">
                     {publicCode}
                   </code>
@@ -125,7 +138,9 @@ export function ProfileTab({
               </ul>
             ) : (
               <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                <p className="font-medium text-foreground">Pending assessment</p>
+                <p className="font-medium text-foreground">
+                  Pending assessment
+                </p>
                 <p className="mt-1">
                   An administrator will assign your starting rating. Once that's
                   done you'll be eligible to be scheduled in matches.
@@ -142,11 +157,22 @@ export function ProfileTab({
         <CardHeader>
           <CardTitle>Profile details</CardTitle>
           <CardDescription>
-            Edit your display name and (private) first/last name, plus your date of birth and sex.
+            Edit your display name and (private) first/last name, plus your date
+            of birth and sex.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <ProfileFieldsForm userId={userId} />
+          <div className="space-y-1 border-t pt-4">
+            <p className="text-sm font-medium">Photo</p>
+            <p className="text-xs text-muted-foreground">
+              Hide your photo, or show a custom image instead of your
+              Google/Facebook one.
+            </p>
+            <div className="pt-1">
+              <PhotoSettingsForm userId={userId} />
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -172,5 +198,5 @@ export function ProfileTab({
 
       <EventsHistoryCard />
     </div>
-  )
+  );
 }

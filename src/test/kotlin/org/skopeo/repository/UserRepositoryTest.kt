@@ -9,6 +9,7 @@ import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
@@ -186,14 +187,41 @@ class UserRepositoryTest {
     }
 
     @Test
-    fun `updatePhotoUrl refreshes the provider photo without touching other fields (#219)`() {
+    fun `updateProviderPhotoUrl refreshes the provider photo without touching other fields (#219)`() {
         val created = repository.provision(command = googleSignup())
 
-        repository.updatePhotoUrl(userId = created.id, photoUrl = "https://example.com/new.jpg")
+        repository.updateProviderPhotoUrl(userId = created.id, providerPhotoUrl = "https://example.com/new.jpg")
 
         val updated = repository.findById(id = created.id).shouldBeRight()
+        // No custom URL / hide, so the effective photo is the freshly synced provider photo.
         updated.photoUrl shouldBe "https://example.com/new.jpg"
         updated.city shouldBe "Manila" // untouched
+    }
+
+    @Test
+    fun `updatePhotoSettings sets a custom URL and hide, provider refresh never clobbers the custom photo (#303)`() {
+        val created = repository.provision(command = googleSignup())
+
+        // A custom photo overrides the provider photo as the effective photo.
+        repository.updatePhotoSettings(id = created.id, customPhotoUrl = "https://c/me.png", photoHidden = false)
+            .shouldBeRight()
+            .photoUrl shouldBe "https://c/me.png"
+
+        // Refreshing the provider photo (as login does) keeps the custom photo effective.
+        repository.updateProviderPhotoUrl(userId = created.id, providerPhotoUrl = "https://p/new.jpg")
+        repository.findById(id = created.id).shouldBeRight().let {
+            it.photoUrl shouldBe "https://c/me.png"
+            it.providerPhotoUrl shouldBe "https://p/new.jpg"
+        }
+
+        // Hiding suppresses the effective photo; clearing the custom URL reverts to the provider photo.
+        repository.updatePhotoSettings(id = created.id, customPhotoUrl = null, photoHidden = true)
+            .shouldBeRight()
+            .photoUrl
+            .shouldBeNull()
+        repository.updatePhotoSettings(id = created.id, customPhotoUrl = null, photoHidden = false)
+            .shouldBeRight()
+            .photoUrl shouldBe "https://p/new.jpg"
     }
 
     @Test

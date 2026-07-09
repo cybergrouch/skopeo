@@ -197,6 +197,53 @@ class UserServiceTest {
     }
 
     @Test
+    fun `a custom photo overrides the provider photo and survives login sync (#303)`() {
+        val user = service.provision(token = token(uid = "u4", picture = "https://p/old.jpg"), request = request).shouldBeRight().user
+
+        // A custom photo becomes the effective photo.
+        service.updatePhotoSettings(token = token(uid = "u4"), id = user.id, customPhotoUrl = "https://c/me.png", photoHidden = false)
+            .shouldBeRight()
+            .photoUrl shouldBe "https://c/me.png"
+
+        // A later login with a new provider picture refreshes the provider photo underneath but does
+        // NOT override the custom one.
+        val afterLogin = service.currentUser(token = token(uid = "u4", picture = "https://p/new.jpg"))!!
+        afterLogin.photoUrl shouldBe "https://c/me.png"
+        afterLogin.providerPhotoUrl shouldBe "https://p/new.jpg"
+
+        // Clearing the custom photo reverts to the (freshly synced) provider photo.
+        service.updatePhotoSettings(token = token(uid = "u4"), id = user.id, customPhotoUrl = null, photoHidden = false)
+            .shouldBeRight()
+            .photoUrl shouldBe "https://p/new.jpg"
+    }
+
+    @Test
+    fun `a hidden photo is suppressed and login sync never re-enables it (#303)`() {
+        val user = service.provision(token = token(uid = "u5", picture = "https://p/old.jpg"), request = request).shouldBeRight().user
+
+        service.updatePhotoSettings(token = token(uid = "u5"), id = user.id, customPhotoUrl = null, photoHidden = true)
+            .shouldBeRight()
+            .photoUrl
+            .shouldBeNull()
+
+        // Login still refreshes the underlying provider photo, but the effective photo stays hidden.
+        service.currentUser(token = token(uid = "u5", picture = "https://p/new.jpg"))!!.photoUrl.shouldBeNull()
+    }
+
+    @Test
+    fun `updatePhotoSettings is self-or-admin and 404s on unknown (#303)`() {
+        val alice = service.provision(token = token(uid = "ph-alice"), request = request).shouldBeRight().user
+        service.provision(token = token(uid = "ph-bob"), request = request).shouldBeRight()
+
+        service.updatePhotoSettings(token = token(uid = "ph-bob"), id = alice.id, customPhotoUrl = null, photoHidden = true)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+        service.updatePhotoSettings(token = token(uid = "ph-alice"), id = UUID.randomUUID(), customPhotoUrl = null, photoHidden = true)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
     fun `getById allows self, forbids others, 404s on unknown`() {
         val alice = service.provision(token = token(uid = "alice"), request = request).shouldBeRight().user
         service.provision(token = token(uid = "bob"), request = request).shouldBeRight()
