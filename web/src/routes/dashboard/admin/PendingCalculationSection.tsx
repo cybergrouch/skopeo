@@ -236,7 +236,6 @@ export function PendingCalculationSection() {
   const nameOf = (userId: string) => nameById.get(userId) ?? userId.slice(0, 8)
 
   const previewByMatch = new Map((preview?.matches ?? []).map((m) => [m.matchId, m]))
-  const positionOf = new Map(pending.map((m, i) => [m.id, i + 1]))
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -294,14 +293,21 @@ export function PendingCalculationSection() {
     if (from < 0 || to < 0) return
     const reordered = arrayMove(entries, from, to)
     const pos = reordered.findIndex((e) => e.id === active.id)
-    const prev = reordered[pos - 1]
-    const next = reordered[pos + 1]
-    // Slot the dragged event's key between its new neighbours (or just past the single edge).
-    const prevKey = prev ? entryKey(prev) : next ? entryKey(next) - 1 : 0
-    const nextKey = next ? entryKey(next) : prevKey + 1
     const dragged = reordered[pos]
     if (dragged.kind !== 'event') return
-    setPriority.mutate({ id: dragged.eventId, data: { priority: (prevKey + nextKey) / 2 } })
+    // Slot the dragged event's key between its new neighbours (or just past the single edge).
+    // A dropped event always has at least one neighbour (the drop target differs from itself).
+    const before = reordered[pos - 1]
+    const after = reordered[pos + 1]
+    let priority: number
+    if (before && after) {
+      priority = (entryKey(before) + entryKey(after)) / 2
+    } else if (before) {
+      priority = entryKey(before) + 1
+    } else {
+      priority = entryKey(after as Entry) - 1
+    }
+    setPriority.mutate({ id: dragged.eventId, data: { priority } })
   }
 
   function renderMatch(match: MatchResponse) {
@@ -309,7 +315,7 @@ export function PendingCalculationSection() {
       <MatchRow
         key={match.id}
         match={match}
-        position={positionOf.get(match.id) ?? 0}
+        position={pending.indexOf(match) + 1}
         nameOf={nameOf}
         isOpen={expanded.has(match.id)}
         onToggle={() => toggle(match.id)}

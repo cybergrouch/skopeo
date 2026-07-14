@@ -249,15 +249,16 @@ class MatchRepository {
         // Processing key: an evented match keys off its event; an eventless one off its own match date.
         fun processingKey(match: Match): Double = match.eventId?.let { keyByEvent[it] } ?: match.matchDate.toEpochDay().toDouble()
         return matches.sortedWith(
-            compareBy(
-                { processingKey(match = it) },
-                // Keep a single event's matches contiguous when two events share a key.
-                { it.eventId?.toString() ?: "" },
-                { it.matchDate },
-                { it.calcSequence ?: Int.MAX_VALUE },
-                { it.completedAt ?: LocalDateTime.MIN },
-                { it.id.toString() },
-            ),
+            comparator =
+                compareBy(
+                    { processingKey(match = it) },
+                    // Keep a single event's matches contiguous when two events share a key.
+                    { it.eventId?.toString().orEmpty() },
+                    { it.matchDate },
+                    { it.calcSequence ?: Int.MAX_VALUE },
+                    { it.completedAt ?: LocalDateTime.MIN },
+                    { it.id.toString() },
+                ),
         )
     }
 

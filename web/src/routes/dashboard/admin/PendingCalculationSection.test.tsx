@@ -162,6 +162,7 @@ describe('PendingCalculationSection', () => {
 
   it('shows a loading state', () => {
     useGetApiV1Matches.mockReturnValue({ data: undefined, isLoading: true })
+    useGetApiV1Events.mockReturnValue({ data: undefined, isLoading: true })
     renderSection()
     expect(screen.getByText('Loading…')).toBeInTheDocument()
   })
@@ -217,43 +218,49 @@ describe('PendingCalculationSection', () => {
 
   it('groups matches by event and reorders event priority on drag (#335)', () => {
     const epochDay = (iso: string) => Math.round(new Date(`${iso}T00:00:00Z`).getTime() / 86_400_000)
+    const priorityOf = () =>
+      (setPriorityMutate.mock.calls[0][0] as { id: string; data: { priority: number } }).data.priority
+    // Alpha (ends 1/10, two matches → one group), an eventless match (played 1/15), Beta (ends 1/20).
     useGetApiV1Matches.mockReturnValue({
-      // Two matches in Alpha (contiguous → one group), one in Beta.
       data: [
         match({ id: 'a1', eventId: 'evA' }),
         match({ id: 'a2', eventId: 'evA' }),
+        match({ id: 'mid', matchDate: '2026-01-15' }),
         match({ id: 'b1', eventId: 'evB' }),
       ],
       isLoading: false,
     })
     useGetApiV1Events.mockReturnValue({
       data: [
-        { id: 'evA', name: 'Alpha Cup', endDate: '2026-01-10', calcPriority: null },
+        // Alpha carries an explicit priority (equal to its end-date key) — exercises the override path.
+        { id: 'evA', name: 'Alpha Cup', endDate: '2026-01-10', calcPriority: epochDay('2026-01-10') },
         { id: 'evB', name: 'Beta Cup', endDate: '2026-01-20', calcPriority: null },
       ],
       isLoading: false,
     })
     renderSection()
 
-    // Two event groups (Alpha holds both its matches), each with a reorder handle.
     expect(screen.getByText('Alpha Cup')).toBeInTheDocument()
     expect(screen.getByText('Beta Cup')).toBeInTheDocument()
+    expect(screen.getByText('Open (no event)')).toBeInTheDocument()
+    // Only the two events are draggable (the Open entry is pinned by date).
     expect(screen.getAllByRole('button', { name: /Reorder event/ })).toHaveLength(2)
-    expect(screen.getAllByText('Alice vs Bob')).toHaveLength(3)
 
-    // Drag Beta above Alpha → Beta's priority is set just below Alpha's end-date key.
+    // Drop onto the first entry (no "before" neighbour) → just below Alpha's key.
     act(() => dnd.onDragEnd?.({ active: { id: 'event:evB' }, over: { id: 'event:evA' } }))
-    expect(setPriorityMutate).toHaveBeenCalledTimes(1)
-    const call = setPriorityMutate.mock.calls[0][0] as { id: string; data: { priority: number } }
-    expect(call.id).toBe('evB')
-    expect(call.data.priority).toBeLessThan(epochDay('2026-01-10'))
+    expect(priorityOf()).toBeLessThan(epochDay('2026-01-10'))
 
-    // Dragging Alpha to the end (past Beta) slots it just above Beta's end-date key.
+    // Drop between neighbours (Beta over the Open entry) → midpoint of Alpha's and the Open key.
+    setPriorityMutate.mockClear()
+    act(() => dnd.onDragEnd?.({ active: { id: 'event:evB' }, over: { id: 'open:mid' } }))
+    const mid = priorityOf()
+    expect(mid).toBeGreaterThan(epochDay('2026-01-10'))
+    expect(mid).toBeLessThan(epochDay('2026-01-15'))
+
+    // Drop onto the last entry (no "after" neighbour) → just above Beta's key.
     setPriorityMutate.mockClear()
     act(() => dnd.onDragEnd?.({ active: { id: 'event:evA' }, over: { id: 'event:evB' } }))
-    const call2 = setPriorityMutate.mock.calls[0][0] as { id: string; data: { priority: number } }
-    expect(call2.id).toBe('evA')
-    expect(call2.data.priority).toBeGreaterThan(epochDay('2026-01-20'))
+    expect(priorityOf()).toBeGreaterThan(epochDay('2026-01-20'))
   })
 
   it('ignores no-op / invalid drops and dragging an eventless entry (#335)', () => {
@@ -271,10 +278,11 @@ describe('PendingCalculationSection', () => {
     })
     renderSection()
 
-    // Dropped on nothing, onto itself, or with an unknown active id → no update.
+    // Dropped on nothing, onto itself, with an unknown active id, or an unknown target → no update.
     act(() => dnd.onDragEnd?.({ active: { id: 'event:evA' }, over: null }))
     act(() => dnd.onDragEnd?.({ active: { id: 'event:evA' }, over: { id: 'event:evA' } }))
     act(() => dnd.onDragEnd?.({ active: { id: 'event:gone' }, over: { id: 'event:evA' } }))
+    act(() => dnd.onDragEnd?.({ active: { id: 'event:evA' }, over: { id: 'event:nope' } }))
     // The Open (eventless) entry isn't an event, so dragging it changes no priority.
     act(() => dnd.onDragEnd?.({ active: { id: 'open:open1' }, over: { id: 'event:evA' } }))
     expect(setPriorityMutate).not.toHaveBeenCalled()
@@ -282,6 +290,22 @@ describe('PendingCalculationSection', () => {
     expect(screen.getByText('Open (no event)')).toBeInTheDocument()
     // A group whose event isn't loaded still renders with a generic label.
     expect(screen.getByText('Event')).toBeInTheDocument()
+  })
+
+  it('computes a priority next to an event that is not loaded (#335)', () => {
+    useGetApiV1Matches.mockReturnValue({
+      data: [match({ id: 'a1', eventId: 'evA' }), match({ id: 'g1', eventId: 'evGone' })],
+      isLoading: false,
+    })
+    useGetApiV1Events.mockReturnValue({
+      data: [{ id: 'evA', name: 'Alpha Cup', endDate: '2026-01-10', calcPriority: null }],
+      isLoading: false,
+    })
+    renderSection()
+
+    // Drag Alpha after the unloaded 'evGone' group — its key falls back to 0, so priority = 0 + 1.
+    act(() => dnd.onDragEnd?.({ active: { id: 'event:evA' }, over: { id: 'event:evGone' } }))
+    expect(setPriorityMutate).toHaveBeenCalledWith({ id: 'evA', data: { priority: 1 } })
   })
 
   it('disables Preview when nothing is pending', () => {
