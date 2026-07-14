@@ -1762,6 +1762,43 @@ paths:
         '409':
           description: The event has recorded or rated matches and cannot be deleted
 
+  /api/v1/events/{id}/club:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    put:
+      summary: Set or clear an event's club
+      description: >-
+        Set the event's club, or clear it when clubId is null/absent (#319). Staff-only — a HOST may
+        edit only their own event, an ADMINISTRATOR any. A non-null club must exist.
+      tags:
+        - Events
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetEventClubRequest'
+      responses:
+        '200':
+          description: The updated event
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventResponse'
+        '400':
+          description: Malformed id or unknown club
+        '403':
+          description: Caller is not HOST/ADMINISTRATOR, or a HOST editing another's event
+        '404':
+          description: No such event
+
   /api/v1/events/{id}/participants:
     parameters:
       - name: id
@@ -4005,6 +4042,16 @@ components:
         name:
           type: string
           description: The new event name (non-blank; trimmed).
+
+    SetEventClubRequest:
+      type: object
+      description: Set the event's club (#319); clubId null/absent clears it (event becomes "Open").
+      properties:
+        clubId:
+          type: string
+          format: uuid
+          nullable: true
+          description: The club to assign, or null to remove the event's club.
 
     AddParticipantRequest:
       type: object

@@ -5,15 +5,28 @@ import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { EventDetail } from './EventDetail'
 
-const { useGetApiV1EventsId, addMutate, removeMutate, decideMutate, createFixtureMutate, deleteMutate, renameMutate, state } =
+const {
+  useGetApiV1EventsId,
+  useGetApiV1Clubs,
+  addMutate,
+  removeMutate,
+  decideMutate,
+  createFixtureMutate,
+  deleteMutate,
+  renameMutate,
+  clubMutate,
+  state,
+} =
   vi.hoisted(() => ({
     useGetApiV1EventsId: vi.fn(),
+    useGetApiV1Clubs: vi.fn(),
     addMutate: vi.fn(),
     removeMutate: vi.fn(),
     decideMutate: vi.fn(),
     createFixtureMutate: vi.fn(),
     deleteMutate: vi.fn(),
     renameMutate: vi.fn(),
+    clubMutate: vi.fn(),
     state: {
       addFail: false,
       fixtureFail: false,
@@ -72,7 +85,15 @@ vi.mock('@/api/generated/events/events', () => ({
       opts?.mutation?.onSuccess?.()
     },
   }),
+  usePutApiV1EventsIdClub: (opts?: { mutation?: { onSuccess?: () => void } }) => ({
+    isPending: false,
+    mutateAsync: async (vars: unknown) => {
+      clubMutate(vars)
+      opts?.mutation?.onSuccess?.()
+    },
+  }),
 }))
+vi.mock('@/api/generated/clubs/clubs', () => ({ useGetApiV1Clubs }))
 vi.mock('@/api/generated/matches/matches', () => ({
   getGetApiV1MatchesQueryKey: () => ['matches'],
   usePostApiV1Matches: (opts?: { mutation?: { onSuccess?: () => void } }) => ({
@@ -156,6 +177,7 @@ describe('EventDetail', () => {
     state.renamePending = false
     state.renameErrorMessage = null
     useGetApiV1EventsId.mockReturnValue({ data: event, isLoading: false })
+    useGetApiV1Clubs.mockReturnValue({ data: [], isLoading: false })
   })
 
   it('shows a loading then a not-found state', () => {
@@ -566,5 +588,41 @@ describe('EventDetail', () => {
 
     expect(screen.getByRole('button', { name: 'Rename' })).toBeInTheDocument()
     expect(renameMutate).not.toHaveBeenCalled()
+  })
+
+  it('sets and clears the event club (#319)', async () => {
+    const user = userEvent.setup()
+    useGetApiV1Clubs.mockReturnValue({
+      data: [
+        { id: 'c1', name: 'Riverside' },
+        { id: 'c2', name: 'Lakeside' },
+      ],
+      isLoading: false,
+    })
+    const { unmount } = renderDetail()
+
+    // No club saved yet — assigning one sends the chosen id.
+    await user.selectOptions(screen.getByLabelText('Club'), 'c2')
+    expect(clubMutate).toHaveBeenCalledWith({ id: 'e1', data: { clubId: 'c2' } })
+    unmount()
+
+    // Clearing the club (choosing "Open") sends a null id.
+    useGetApiV1EventsId.mockReturnValue({ data: { ...event, clubId: 'c2' }, isLoading: false })
+    renderDetail()
+    await user.selectOptions(screen.getByLabelText('Club'), '')
+    expect(clubMutate).toHaveBeenLastCalledWith({ id: 'e1', data: { clubId: null } })
+  })
+
+  it('surfaces a server error when setting the club fails (#319)', async () => {
+    const user = userEvent.setup()
+    useGetApiV1Clubs.mockReturnValue({ data: [{ id: 'c1', name: 'Riverside' }], isLoading: false })
+    clubMutate.mockImplementationOnce(() => {
+      throw { response: { data: { message: 'Club not found' } } }
+    })
+    renderDetail()
+
+    await user.selectOptions(screen.getByLabelText('Club'), 'c1')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Club not found')
   })
 })

@@ -31,6 +31,12 @@ data class UpdateEventRequest(
     val name: String? = null,
 )
 
+/** Body for `PUT /api/v1/events/{id}/club` — set the event's club, or clear it when null (#319). */
+@Serializable
+data class SetEventClubRequest(
+    val clubId: String? = null,
+)
+
 /** Body for `POST /api/v1/events/{id}/participants` — add a participant. */
 @Serializable
 data class AddParticipantRequest(
