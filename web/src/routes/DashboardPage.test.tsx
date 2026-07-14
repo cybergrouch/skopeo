@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { DashboardPage } from './DashboardPage'
 
 const { useGetApiV1UsersMe, signOut, navigateMock } = vi.hoisted(() => ({
@@ -48,10 +48,17 @@ vi.mock('./dashboard/ReportTab', () => ({
   ReportTab: () => <div>report content</div>,
 }))
 
-function renderDashboard() {
+/** Surfaces the current query string so a test can assert the tab is synced into the URL (#323). */
+function SearchProbe() {
+  const location = useLocation()
+  return <div data-testid="search">{location.search}</div>
+}
+
+function renderDashboard(initialEntries: string[] = ['/']) {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={initialEntries}>
       <DashboardPage />
+      <SearchProbe />
     </MemoryRouter>,
   )
 }
@@ -195,6 +202,46 @@ describe('DashboardPage', () => {
     expect(screen.getByText('standings content')).toBeInTheDocument()
     // Selecting closed the drawer — its items are no longer rendered.
     expect(screen.queryByRole('button', { name: 'Profile' })).not.toBeInTheDocument()
+  })
+
+  it('restores the active tab from the URL so returning to the dashboard keeps it (#323)', () => {
+    useGetApiV1UsersMe.mockReturnValue({
+      data: { id: 'u1', capabilities: ['PLAYER'] },
+      isLoading: false,
+    })
+    renderDashboard(['/?tab=standings'])
+    // No menu interaction: the tab is read straight from the URL on mount.
+    expect(screen.getByRole('heading', { name: 'Standings' })).toBeInTheDocument()
+    expect(screen.getByText('standings content')).toBeInTheDocument()
+  })
+
+  it('syncs the selected tab into the URL (#323)', async () => {
+    useGetApiV1UsersMe.mockReturnValue({
+      data: { id: 'u1', capabilities: ['PLAYER'] },
+      isLoading: false,
+    })
+    const user = userEvent.setup()
+    renderDashboard()
+    expect(screen.getByTestId('search')).toHaveTextContent('')
+
+    await openMenu(user)
+    await user.click(screen.getByRole('button', { name: 'Standings' }))
+    expect(screen.getByTestId('search')).toHaveTextContent('tab=standings')
+
+    // Returning to Profile (the default) drops the param again for a clean URL.
+    await openMenu(user)
+    await user.click(screen.getByRole('button', { name: 'Profile' }))
+    expect(screen.getByTestId('search')).toHaveTextContent('')
+  })
+
+  it('falls back to Profile when the URL names a tab the viewer cannot access (#323)', () => {
+    useGetApiV1UsersMe.mockReturnValue({
+      data: { id: 'u1', capabilities: ['PLAYER'] },
+      isLoading: false,
+    })
+    renderDashboard(['/?tab=admin'])
+    expect(screen.getByRole('heading', { name: 'Profile' })).toBeInTheDocument()
+    expect(screen.getByText('profile content')).toBeInTheDocument()
   })
 
   it('still renders the profile section when the id is missing', () => {
