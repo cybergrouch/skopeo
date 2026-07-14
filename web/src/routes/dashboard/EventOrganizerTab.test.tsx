@@ -100,9 +100,13 @@ describe('EventOrganizerTab', () => {
     useGetApiV1Events.mockReturnValue({ data: [event, twoPlayers], isLoading: false })
     const user = userEvent.setup()
     renderTab()
-    // Both rows render — a singular (1 player) and a plural (2 players) participant count.
+    // Both rows render — a singular (1 player) and a plural (2 players) participant count (#307).
     expect(screen.getByText('Spring Open')).toBeInTheDocument()
     expect(screen.getByText('Doubles Day')).toBeInTheDocument()
+    expect(screen.getByText(/· 1 player$/)).toBeInTheDocument()
+    expect(screen.getByText(/· 2 players$/)).toBeInTheDocument()
+    // Regression guard: never the mis-pluralized "playeres" (#307).
+    expect(screen.queryByText(/playeres/)).not.toBeInTheDocument()
 
     await user.click(screen.getByText('Spring Open'))
     expect(screen.getByText('detail:e1')).toBeInTheDocument()
