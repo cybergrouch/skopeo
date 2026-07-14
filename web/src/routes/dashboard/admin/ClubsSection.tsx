@@ -13,8 +13,10 @@ import { Label } from "@/components/ui/label";
 import { UserSearchSelect } from "@/components/UserSearchSelect";
 import {
   getGetApiV1ClubsQueryKey,
+  useDeleteApiV1ClubsId,
   useDeleteApiV1ClubsIdOwnersUserId,
   useGetApiV1Clubs,
+  usePatchApiV1ClubsId,
   usePostApiV1Clubs,
   usePostApiV1ClubsIdOwners,
 } from "@/api/generated/clubs/clubs";
@@ -112,7 +114,14 @@ function ClubRow({
 }) {
   const assign = usePostApiV1ClubsIdOwners();
   const remove = useDeleteApiV1ClubsIdOwnersUserId();
+  const rename = usePatchApiV1ClubsId();
+  const del = useDeleteApiV1ClubsId();
   const busy = assign.isPending || remove.isPending;
+
+  const [editing, setEditing] = useState(false);
+  const [nameDraft, setNameDraft] = useState(club.name);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function addOwner(user: UserSummaryResponse) {
     await assign.mutateAsync({ id: club.id, data: { userId: user.id } });
@@ -124,9 +133,116 @@ function ClubRow({
     onChange();
   }
 
+  async function saveName() {
+    const trimmed = nameDraft.trim();
+    if (!trimmed) {
+      setError("Club name is required.");
+      return;
+    }
+    setError(null);
+    try {
+      await rename.mutateAsync({ id: club.id, data: { name: trimmed } });
+      setEditing(false);
+      onChange();
+    } catch {
+      setError("Could not rename the club.");
+    }
+  }
+
+  function cancelEdit() {
+    setNameDraft(club.name);
+    setError(null);
+    setEditing(false);
+  }
+
+  async function deleteClub() {
+    setError(null);
+    try {
+      await del.mutateAsync({ id: club.id });
+      onChange();
+    } catch {
+      setError("Could not delete the club.");
+      setConfirmingDelete(false);
+    }
+  }
+
   return (
     <li className="space-y-2 rounded-lg border p-3">
-      <p className="font-medium">{club.name}</p>
+      <div className="flex items-center justify-between gap-2">
+        {editing ? (
+          <div className="flex flex-1 items-center gap-2">
+            <Input
+              aria-label="Club name"
+              value={nameDraft}
+              onChange={(e) => setNameDraft(e.target.value)}
+            />
+            <Button size="sm" disabled={rename.isPending} onClick={saveName}>
+              {rename.isPending ? "Saving…" : "Save"}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={rename.isPending}
+              onClick={cancelEdit}
+            >
+              Cancel
+            </Button>
+          </div>
+        ) : (
+          <>
+            <p className="font-medium">{club.name}</p>
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setEditing(true)}
+              >
+                Edit
+              </Button>
+              {confirmingDelete ? (
+                <>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive hover:text-destructive"
+                    disabled={del.isPending}
+                    onClick={deleteClub}
+                  >
+                    {del.isPending ? "Deleting…" : "Confirm delete"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={del.isPending}
+                    onClick={() => setConfirmingDelete(false)}
+                  >
+                    Cancel
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => setConfirmingDelete(true)}
+                >
+                  Delete
+                </Button>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+      {error ? (
+        <p className="text-sm text-destructive" role="alert">
+          {error}
+        </p>
+      ) : null}
       {club.owners.length > 0 ? (
         <ul className="space-y-1">
           {club.owners.map((owner) => (

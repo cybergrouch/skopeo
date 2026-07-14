@@ -4,14 +4,30 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ClubsSection } from "./ClubsSection";
 
-const { useGetApiV1Clubs, createMutate, assignMutate, removeMutate, state } =
-  vi.hoisted(() => ({
-    useGetApiV1Clubs: vi.fn(),
-    createMutate: vi.fn(),
-    assignMutate: vi.fn(),
-    removeMutate: vi.fn(),
-    state: { createFail: false, createPending: false },
-  }));
+const {
+  useGetApiV1Clubs,
+  createMutate,
+  assignMutate,
+  removeMutate,
+  renameMutate,
+  deleteMutate,
+  state,
+} = vi.hoisted(() => ({
+  useGetApiV1Clubs: vi.fn(),
+  createMutate: vi.fn(),
+  assignMutate: vi.fn(),
+  removeMutate: vi.fn(),
+  renameMutate: vi.fn(),
+  deleteMutate: vi.fn(),
+  state: {
+    createFail: false,
+    createPending: false,
+    renameFail: false,
+    renamePending: false,
+    deleteFail: false,
+    deletePending: false,
+  },
+}));
 
 vi.mock("@/api/generated/clubs/clubs", () => ({
   useGetApiV1Clubs,
@@ -21,6 +37,20 @@ vi.mock("@/api/generated/clubs/clubs", () => ({
     mutateAsync: async (vars: unknown) => {
       createMutate(vars);
       if (state.createFail) throw new Error("boom");
+    },
+  }),
+  usePatchApiV1ClubsId: () => ({
+    isPending: state.renamePending,
+    mutateAsync: async (vars: unknown) => {
+      renameMutate(vars);
+      if (state.renameFail) throw new Error("boom");
+    },
+  }),
+  useDeleteApiV1ClubsId: () => ({
+    isPending: state.deletePending,
+    mutateAsync: async (vars: unknown) => {
+      deleteMutate(vars);
+      if (state.deleteFail) throw new Error("boom");
     },
   }),
   usePostApiV1ClubsIdOwners: () => ({
@@ -77,6 +107,10 @@ describe("ClubsSection", () => {
     vi.clearAllMocks();
     state.createFail = false;
     state.createPending = false;
+    state.renameFail = false;
+    state.renamePending = false;
+    state.deleteFail = false;
+    state.deletePending = false;
     useGetApiV1Clubs.mockReturnValue({ data: [], isLoading: false });
   });
 
@@ -201,5 +235,130 @@ describe("ClubsSection", () => {
     state.createPending = true;
     renderSection();
     expect(screen.getByRole("button", { name: "Creating…" })).toBeDisabled();
+  });
+
+  it("renames a club (#325)", async () => {
+    useGetApiV1Clubs.mockReturnValue({
+      data: [{ id: "c1", name: "Downtown TC", isActive: true, owners: [] }],
+      isLoading: false,
+    });
+    const user = userEvent.setup();
+    renderSection();
+
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    const input = screen.getByLabelText("Club name");
+    await user.clear(input);
+    await user.type(input, "Uptown TC");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(renameMutate).toHaveBeenCalledWith({
+        id: "c1",
+        data: { name: "Uptown TC" },
+      }),
+    );
+  });
+
+  it("rejects a blank rename and can be cancelled (#325)", async () => {
+    useGetApiV1Clubs.mockReturnValue({
+      data: [{ id: "c1", name: "Downtown TC", isActive: true, owners: [] }],
+      isLoading: false,
+    });
+    const user = userEvent.setup();
+    renderSection();
+
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.clear(screen.getByLabelText("Club name"));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Club name is required.");
+    expect(renameMutate).not.toHaveBeenCalled();
+
+    // Cancel restores the read-only name and hides the editor.
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByLabelText("Club name")).not.toBeInTheDocument();
+    expect(screen.getByText("Downtown TC")).toBeInTheDocument();
+  });
+
+  it("surfaces an error when a rename fails (#325)", async () => {
+    state.renameFail = true;
+    useGetApiV1Clubs.mockReturnValue({
+      data: [{ id: "c1", name: "Downtown TC", isActive: true, owners: [] }],
+      isLoading: false,
+    });
+    const user = userEvent.setup();
+    renderSection();
+
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not rename the club.",
+    );
+  });
+
+  it("deletes a club after a confirm step (#325)", async () => {
+    useGetApiV1Clubs.mockReturnValue({
+      data: [{ id: "c1", name: "Downtown TC", isActive: true, owners: [] }],
+      isLoading: false,
+    });
+    const user = userEvent.setup();
+    renderSection();
+
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    // A confirm step guards the delete.
+    expect(deleteMutate).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Confirm delete" }));
+    await waitFor(() =>
+      expect(deleteMutate).toHaveBeenCalledWith({ id: "c1" }),
+    );
+  });
+
+  it("cancels a pending delete without calling the API (#325)", async () => {
+    useGetApiV1Clubs.mockReturnValue({
+      data: [{ id: "c1", name: "Downtown TC", isActive: true, owners: [] }],
+      isLoading: false,
+    });
+    const user = userEvent.setup();
+    renderSection();
+
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(deleteMutate).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
+  });
+
+  it("shows busy labels while a rename or delete is in flight (#325)", async () => {
+    useGetApiV1Clubs.mockReturnValue({
+      data: [{ id: "c1", name: "Downtown TC", isActive: true, owners: [] }],
+      isLoading: false,
+    });
+    const user = userEvent.setup();
+
+    state.renamePending = true;
+    const { unmount } = renderSection();
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    expect(screen.getByRole("button", { name: "Saving…" })).toBeDisabled();
+    unmount();
+
+    state.renamePending = false;
+    state.deletePending = true;
+    renderSection();
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    expect(screen.getByRole("button", { name: "Deleting…" })).toBeDisabled();
+  });
+
+  it("surfaces an error when a delete fails (#325)", async () => {
+    state.deleteFail = true;
+    useGetApiV1Clubs.mockReturnValue({
+      data: [{ id: "c1", name: "Downtown TC", isActive: true, owners: [] }],
+      isLoading: false,
+    });
+    const user = userEvent.setup();
+    renderSection();
+
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    await user.click(screen.getByRole("button", { name: "Confirm delete" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not delete the club.",
+    );
   });
 });

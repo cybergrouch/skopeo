@@ -70,7 +70,7 @@ class EventRepositoryTest {
     }
 
     @Test
-    fun `findByPublicCode resolves an active event but not a disabled one`() {
+    fun `findByPublicCode resolves an event even once disabled, for traceability (#325)`() {
         val creator = newUser(uid = "creator")
         val event =
             events.create(
@@ -85,9 +85,10 @@ class EventRepositoryTest {
             )
         events.findByPublicCode(code = event.publicCode)!!.id shouldBe event.id
 
-        // Disable the event (no API for it yet) — it should drop out of the public lookup.
+        // A disabled (soft-deleted) event still resolves by code so its link stays honored (#325);
+        // it's simply flagged not-active.
         transaction { EventsTable.update(where = { EventsTable.id eq event.id }) { it[isActive] = false } }
-        events.findByPublicCode(code = event.publicCode).shouldBeNull()
+        events.findByPublicCode(code = event.publicCode)!!.isActive shouldBe false
     }
 
     @Test

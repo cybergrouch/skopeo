@@ -12,6 +12,7 @@ import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.update
 import org.skopeo.model.Club
 import org.skopeo.model.CreateClubCommand
 import java.util.UUID
@@ -37,6 +38,27 @@ class ClubRepository {
     fun list(): List<Club> =
         transaction {
             ClubsTable.selectAll().where { ClubsTable.isActive eq true }.orderBy(ClubsTable.name to SortOrder.ASC).map { it.toClub() }
+        }
+
+    /** Rename [id] (#325). Returns the refreshed club, or null if no such club. */
+    fun rename(
+        id: UUID,
+        name: String,
+    ): Club? =
+        transaction {
+            ClubsTable.selectAll().where { ClubsTable.id eq id }.singleOrNull() ?: return@transaction null
+            ClubsTable.update(where = { ClubsTable.id eq id }) { it[ClubsTable.name] = name }
+            ClubsTable.selectAll().where { ClubsTable.id eq id }.single().toClub()
+        }
+
+    /**
+     * Soft-delete [id] (#325): flip is_active to false, mirroring how users and events are retired
+     * rather than hard-deleted. Returns true if an active club was disabled (false if missing or
+     * already disabled). The row and its event associations are kept for history; [list] hides it.
+     */
+    fun disable(id: UUID): Boolean =
+        transaction {
+            ClubsTable.update(where = { (ClubsTable.id eq id) and (ClubsTable.isActive eq true) }) { it[isActive] = false } > 0
         }
 
     /** Add [userId] as an owner of [clubId] (idempotent). Returns the refreshed club, or null if no such club. */

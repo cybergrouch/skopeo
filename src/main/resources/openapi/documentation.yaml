@@ -2107,6 +2107,59 @@ paths:
         '403':
           description: Caller is not an ADMINISTRATOR
 
+  /api/v1/clubs/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    patch:
+      summary: Rename a club
+      description: ADMINISTRATOR only (#325). Renames the club; the name is validated (non-blank) and trimmed.
+      tags:
+        - Clubs
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateClubRequest'
+      responses:
+        '200':
+          description: The updated club
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClubResponse'
+        '400':
+          description: Invalid body (e.g. blank name) or malformed id
+        '403':
+          description: Caller is not an ADMINISTRATOR
+        '404':
+          description: No such club
+    delete:
+      summary: Delete a club
+      description: >-
+        ADMINISTRATOR only (#325). Soft-deletes the club (is_active → false), like users and events:
+        it drops out of the club list but the row and its event associations are kept for history.
+      tags:
+        - Clubs
+      security:
+        - firebaseAuth: []
+      responses:
+        '204':
+          description: The club was deleted
+        '400':
+          description: Malformed id
+        '403':
+          description: Caller is not an ADMINISTRATOR
+        '404':
+          description: No such club (or already deleted)
+
   /api/v1/clubs/{id}/owners:
     parameters:
       - name: id
@@ -4204,6 +4257,9 @@ components:
         endDate:
           type: string
           format: date
+        isActive:
+          type: boolean
+          description: False once the event is soft-deleted (#325); the public page flags it as deleted.
         participants:
           type: array
           items:
@@ -4298,6 +4354,9 @@ components:
           format: date
         status:
           type: string
+        isActive:
+          type: boolean
+          description: False once the match is soft-deleted (#325); the public page flags it as deleted.
         team1:
           type: array
           items:
@@ -4642,6 +4701,15 @@ components:
         name:
           type: string
           description: The club name (non-blank; trimmed server-side).
+
+    UpdateClubRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: The new club name (non-blank; trimmed server-side).
 
     AssignOwnerRequest:
       type: object

@@ -955,7 +955,7 @@ class MatchServiceTest {
     }
 
     @Test
-    fun `publicByCode excludes a disabled match (#136)`() {
+    fun `publicByCode still resolves a disabled match, flagged as deleted (#136, #325)`() {
         provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val p1 = provisionUser(uid = "p1", rated = true)
         val p2 = provisionUser(uid = "p2", rated = true)
@@ -963,9 +963,22 @@ class MatchServiceTest {
             service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
         service.setActive(token = token(uid = "host"), matchId = match.id, active = false).shouldBeRight()
 
-        service
-            .publicByCode(token = token(uid = "host"), code = match.publicCode)
-            .shouldBeLeft()
-            .shouldBeInstanceOf<ServiceError.NotFound>()
+        // Soft-deleted matches stay traceable (#325): the link resolves and is flagged not-active.
+        val public = service.publicByCode(token = token(uid = "host"), code = match.publicCode).shouldBeRight()
+        public.publicCode shouldBe match.publicCode
+        public.isActive shouldBe false
+    }
+
+    @Test
+    fun `match history includes a soft-deleted match, flagged not-active (#325)`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val match =
+            service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
+        service.setActive(token = token(uid = "host"), matchId = match.id, active = false).shouldBeRight()
+
+        matchRepo.listByUser(userId = p1.id).map { it.id } shouldContain match.id
+        matchRepo.listByUser(userId = p1.id).single { it.id == match.id }.isActive shouldBe false
     }
 }

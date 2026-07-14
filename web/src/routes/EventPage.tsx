@@ -175,6 +175,15 @@ export function EventPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 text-sm">
+              {/* A soft-deleted event stays reachable by link for traceability (#325) — flag it. */}
+              {event.isActive === false ? (
+                <p
+                  role="status"
+                  className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                >
+                  This event has been deleted. It’s kept for reference only.
+                </p>
+              ) : null}
               <div>
                 <div className="text-xs font-medium uppercase text-muted-foreground">Participants</div>
                 {event.participants.length > 0 ? (

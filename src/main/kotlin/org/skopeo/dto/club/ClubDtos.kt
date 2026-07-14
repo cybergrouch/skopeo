@@ -12,6 +12,12 @@ data class CreateClubRequest(
     val name: String,
 )
 
+/** Body for `PATCH /api/v1/clubs/{id}` — rename a club (#325). */
+@Serializable
+data class UpdateClubRequest(
+    val name: String,
+)
+
 /** Body for `POST /api/v1/clubs/{id}/owners` — assign an existing user as an owner of the club. */
 @Serializable
 data class AssignOwnerRequest(

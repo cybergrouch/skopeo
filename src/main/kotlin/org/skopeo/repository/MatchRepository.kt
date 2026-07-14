@@ -123,12 +123,16 @@ class MatchRepository {
             if (match == null) ServiceError.NotFound(message = "Match $matchId not found").left() else match.right()
         }
 
-    /** Resolve an active match by its shareable public code (#136); null if absent or disabled. */
+    /**
+     * Resolve a match by its shareable public code (#136); null if absent. Disabled (soft-deleted)
+     * matches still resolve (#325): they feed historical rating calculations, and deletion never
+     * touches ratings, so their links stay honored for traceability — the page flags them as deleted.
+     */
     fun findByPublicCode(code: String): Match? =
         transaction {
             MatchesTable
                 .selectAll()
-                .where { (MatchesTable.publicCode eq code) and MatchesTable.isActive }
+                .where { MatchesTable.publicCode eq code }
                 .singleOrNull()
                 ?.let { row -> buildMatch(id = row[MatchesTable.id].value, row = row) }
         }
@@ -252,8 +256,10 @@ class MatchRepository {
         }
 
     /**
-     * Every active match the user took part in (either side), newest match date first — the
-     * basis for their match history. Includes scheduled, completed, and rated fixtures alike.
+     * Every match the user took part in (either side), newest match date first — the basis for their
+     * match history. Includes scheduled, completed, and rated fixtures alike, and — for traceability
+     * (#325) — soft-deleted ones too: a match feeds historical rating calculations, so it stays in the
+     * record even once disabled (the history row flags it as deleted).
      */
     fun listByUser(userId: UUID): List<Match> =
         transaction {
@@ -264,8 +270,7 @@ class MatchRepository {
                 MatchesTable
                     .selectAll()
                     .where {
-                        MatchesTable.isActive and
-                            ((MatchesTable.team1Id inList teamIds) or (MatchesTable.team2Id inList teamIds))
+                        (MatchesTable.team1Id inList teamIds) or (MatchesTable.team2Id inList teamIds)
                     }.orderBy(MatchesTable.matchDate to SortOrder.DESC)
                     .map { loadMatch(id = it[MatchesTable.id].value)!! }
             }
@@ -289,11 +294,9 @@ class MatchRepository {
                 MatchesTable
                     .selectAll()
                     .where {
-                        MatchesTable.isActive and
-                            (
-                                ((MatchesTable.team1Id inList teamsA) and (MatchesTable.team2Id inList teamsB)) or
-                                    ((MatchesTable.team1Id inList teamsB) and (MatchesTable.team2Id inList teamsA))
-                            )
+                        // Soft-deleted meetings still count for traceability (#325); ratings are frozen.
+                        ((MatchesTable.team1Id inList teamsA) and (MatchesTable.team2Id inList teamsB)) or
+                            ((MatchesTable.team1Id inList teamsB) and (MatchesTable.team2Id inList teamsA))
                     }.orderBy(MatchesTable.matchDate to SortOrder.DESC)
                     .map { loadMatch(id = it[MatchesTable.id].value)!! }
             }

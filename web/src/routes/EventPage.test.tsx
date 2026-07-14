@@ -144,6 +144,25 @@ describe('EventPage', () => {
     expect(screen.queryByRole('button', { name: /Record result|Save result|Edit result/ })).not.toBeInTheDocument()
   })
 
+  it('flags a soft-deleted event but still renders it (#325)', () => {
+    useGetApiV1EventsCodeCode.mockReturnValue({
+      data: { ...event, isActive: false },
+      isLoading: false,
+    })
+    renderAt()
+    expect(screen.getByText('Spring Open')).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent(/this event has been deleted/i)
+  })
+
+  it('shows no deleted flag for an active event (#325)', () => {
+    useGetApiV1EventsCodeCode.mockReturnValue({
+      data: { ...event, isActive: true },
+      isLoading: false,
+    })
+    renderAt()
+    expect(screen.queryByText(/this event has been deleted/i)).not.toBeInTheDocument()
+  })
+
   it('shows empty states for an event with no participants or matches', () => {
     useGetApiV1EventsCodeCode.mockReturnValue({
       data: { ...event, participants: [], matches: [] },

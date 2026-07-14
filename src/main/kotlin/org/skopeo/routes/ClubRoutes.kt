@@ -11,12 +11,14 @@ import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
+import io.ktor.server.routing.patch
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.club.AssignOwnerRequest
 import org.skopeo.dto.club.CreateClubRequest
+import org.skopeo.dto.club.UpdateClubRequest
 import org.skopeo.dto.club.toResponse
 import org.skopeo.service.club.ClubService
 import java.util.UUID
@@ -41,6 +43,21 @@ fun Application.configureClubRoutes(service: ClubService = ClubService()) {
                     respondMappingErrors {
                         respondEither(result = service.list(token = verifiedToken())) { clubs ->
                             call.respond(status = HttpStatusCode.OK, message = clubs.map { it.toResponse() })
+                        }
+                    }
+                }
+                patch(path = "/{id}") {
+                    respondMappingErrors {
+                        val name = call.receive<UpdateClubRequest>().name
+                        respondEither(
+                            result = service.rename(token = verifiedToken(), clubId = uuidParam(name = "id"), name = name),
+                        ) { club -> call.respond(status = HttpStatusCode.OK, message = club.toResponse()) }
+                    }
+                }
+                delete(path = "/{id}") {
+                    respondMappingErrors {
+                        respondEither(result = service.delete(token = verifiedToken(), clubId = uuidParam(name = "id"))) {
+                            call.respond(status = HttpStatusCode.NoContent, message = "")
                         }
                     }
                 }

@@ -321,6 +321,7 @@ class EventService(
                 name = event.name,
                 startDate = event.startDate.toString(),
                 endDate = event.endDate.toString(),
+                isActive = event.isActive,
                 participants = participants,
                 matches = matchResponses,
                 viewerStatus = viewerStatus,

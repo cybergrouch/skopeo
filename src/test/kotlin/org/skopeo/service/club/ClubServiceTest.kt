@@ -14,16 +14,23 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
+import org.skopeo.model.CreateEventCommand
+import org.skopeo.model.CreateFixtureCommand
+import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.ServiceError
+import org.skopeo.model.TeamType
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.repository.ClubRepository
+import org.skopeo.repository.EventRepository
+import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.testsupport.PostgresTestDatabase
+import java.time.LocalDate
 import java.util.UUID
 
 class ClubServiceTest {
@@ -37,6 +44,8 @@ class ClubServiceTest {
 
     private val users = UserRepository()
     private val clubs = ClubRepository()
+    private val events = EventRepository()
+    private val matchRepo = MatchRepository()
     private val service = ClubService(clubs = clubs, users = users)
 
     @BeforeEach
@@ -123,6 +132,100 @@ class ClubServiceTest {
     fun `create rejects a blank name`() {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         service.create(token = token(uid = "admin"), name = "   ").shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `an admin renames a club, trimming the name, and the list reflects it (#325)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val club = service.create(token = token(uid = "admin"), name = "Old Name").shouldBeRight()
+
+        val renamed = service.rename(token = token(uid = "admin"), clubId = club.id, name = "  New Name  ").shouldBeRight()
+        renamed.name shouldBe "New Name"
+        service.list(token = token(uid = "admin")).shouldBeRight().single().name shouldBe "New Name"
+    }
+
+    @Test
+    fun `rename validates the name, checks existence, and is administrator-only (#325)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val club = service.create(token = token(uid = "admin"), name = "Club").shouldBeRight()
+
+        // Blank name → Validation.
+        service.rename(token = token(uid = "admin"), clubId = club.id, name = "   ")
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        // Unknown club → NotFound.
+        service.rename(token = token(uid = "admin"), clubId = UUID.randomUUID(), name = "X")
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+        // Non-admin → Forbidden.
+        service.rename(token = token(uid = "host"), clubId = club.id, name = "X")
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
+    @Test
+    fun `an admin soft-deletes a club, it drops from the list, and a second delete is not-found (#325)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val club = service.create(token = token(uid = "admin"), name = "Doomed").shouldBeRight()
+
+        service.delete(token = token(uid = "admin"), clubId = club.id).shouldBeRight()
+        service.list(token = token(uid = "admin")).shouldBeRight() shouldHaveSize 0
+        // Idempotent guard: deleting again (now inactive) is a not-found.
+        service.delete(token = token(uid = "admin"), clubId = club.id)
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
+    fun `deleting a club cascades to soft-delete its events and matches, kept traceable (#325)`() {
+        val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        val club = service.create(token = token(uid = "admin"), name = "Doomed").shouldBeRight()
+        val event =
+            events.create(
+                command =
+                    CreateEventCommand(
+                        name = "Meet",
+                        startDate = LocalDate.now(),
+                        endDate = LocalDate.now().plusDays(1),
+                        participantIds = listOf(p1.id, p2.id),
+                        createdBy = admin.id,
+                        clubId = club.id,
+                    ),
+            )
+        val match =
+            matchRepo.createFixture(
+                command =
+                    CreateFixtureCommand(
+                        matchFormat = TeamType.SINGLES,
+                        matchType = MatchType.OPEN_PLAY,
+                        matchDate = LocalDate.now(),
+                        team1UserIds = listOf(element = p1.id),
+                        team2UserIds = listOf(element = p2.id),
+                        team1Name = "p1",
+                        team2Name = "p2",
+                        createdBy = admin.id,
+                        eventId = event.id,
+                    ),
+            )
+
+        service.delete(token = token(uid = "admin"), clubId = club.id).shouldBeRight()
+
+        // The event and its match drop out of active lists…
+        events.findById(id = event.id)!!.isActive shouldBe false
+        // …but stay traceable by public code, flagged not-active (#325).
+        events.findByPublicCode(code = event.publicCode)!!.isActive shouldBe false
+        matchRepo.findByPublicCode(code = match.publicCode)!!.isActive shouldBe false
+    }
+
+    @Test
+    fun `delete checks existence and is administrator-only (#325)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val club = service.create(token = token(uid = "admin"), name = "Club").shouldBeRight()
+
+        service.delete(token = token(uid = "admin"), clubId = UUID.randomUUID())
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+        service.delete(token = token(uid = "host"), clubId = club.id)
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
