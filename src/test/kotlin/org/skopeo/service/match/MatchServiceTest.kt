@@ -781,8 +781,8 @@ class MatchServiceTest {
                 command =
                     CreateEventCommand(
                         name = "E",
-                        startDate = LocalDate.parse("2026-01-01"),
-                        endDate = LocalDate.parse("2026-01-02"),
+                        startDate = LocalDate.now(),
+                        endDate = LocalDate.now().plusDays(7),
                         participantIds = listOf(p1.id, p2.id),
                         createdBy = host.id,
                     ),
@@ -809,6 +809,43 @@ class MatchServiceTest {
     }
 
     @Test
+    fun `a host cannot create a fixture or record a result on an expired event, an admin can (#310)`() {
+        val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        provisionUser(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val event =
+            EventRepository().create(
+                command =
+                    CreateEventCommand(
+                        name = "Ended",
+                        startDate = LocalDate.now().minusDays(3),
+                        endDate = LocalDate.now().minusDays(1),
+                        participantIds = listOf(p1.id, p2.id),
+                        createdBy = host.id,
+                    ),
+            )
+
+        // HOST blocked from creating a fixture on the ended event.
+        service
+            .createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Conflict>()
+
+        // ADMINISTRATOR may create it.
+        val match =
+            service
+                .createFixture(token = token(uid = "admin"), request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id))
+                .shouldBeRight()
+
+        // HOST blocked from recording the result; ADMINISTRATOR may.
+        service.uploadResult(token = token(uid = "host"), matchId = match.id, request = straightSets())
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Conflict>()
+        service.uploadResult(token = token(uid = "admin"), matchId = match.id, request = straightSets()).shouldBeRight()
+    }
+
+    @Test
     fun `awaiting-results can be scoped to a single event (#138)`() {
         val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val p1 = provisionUser(uid = "p1", rated = true)
@@ -818,8 +855,8 @@ class MatchServiceTest {
                 command =
                     CreateEventCommand(
                         name = "E",
-                        startDate = LocalDate.parse("2026-01-01"),
-                        endDate = LocalDate.parse("2026-01-02"),
+                        startDate = LocalDate.now(),
+                        endDate = LocalDate.now().plusDays(7),
                         participantIds = listOf(p1.id, p2.id),
                         createdBy = host.id,
                     ),
@@ -845,8 +882,8 @@ class MatchServiceTest {
                 command =
                     CreateEventCommand(
                         name = "E",
-                        startDate = LocalDate.parse("2026-01-01"),
-                        endDate = LocalDate.parse("2026-01-02"),
+                        startDate = LocalDate.now(),
+                        endDate = LocalDate.now().plusDays(7),
                         participantIds = listOf(p1.id, p2.id),
                         createdBy = host.id,
                     ),
@@ -876,8 +913,8 @@ class MatchServiceTest {
                 command =
                     CreateEventCommand(
                         name = "E",
-                        startDate = LocalDate.parse("2026-01-01"),
-                        endDate = LocalDate.parse("2026-01-02"),
+                        startDate = LocalDate.now(),
+                        endDate = LocalDate.now().plusDays(7),
                         participantIds = listOf(p1.id, p2.id),
                         createdBy = host.id,
                     ),
