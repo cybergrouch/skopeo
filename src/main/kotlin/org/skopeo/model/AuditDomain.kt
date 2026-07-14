@@ -31,6 +31,9 @@ enum class AuditAction {
     DUPLICATE_CANDIDATE_FLAGGED,
     DUPLICATE_CANDIDATE_DISMISSED,
     DUPLICATE_CANDIDATE_CONFIRMED,
+    CLUB_CREATED,
+    CLUB_OWNER_ASSIGNED,
+    CLUB_OWNER_REMOVED,
 }
 
 /** The kind of entity an [AuditAction] concerns. */
@@ -40,6 +43,7 @@ enum class AuditEntityType {
     CAPABILITY,
     INVITE,
     MATCH,
+    CLUB,
 }
 
 /**
@@ -56,6 +60,7 @@ enum class AuditCategory {
     CAPABILITY_CHANGE,
     RATING_CHANGE,
     DUPLICATE_RECTIFICATION,
+    CLUB_MANAGEMENT,
 }
 
 /** The category an action rolls up into. */
@@ -80,6 +85,10 @@ val AuditAction.category: AuditCategory
             AuditAction.DUPLICATE_CANDIDATE_DISMISSED,
             AuditAction.DUPLICATE_CANDIDATE_CONFIRMED,
             -> AuditCategory.DUPLICATE_RECTIFICATION
+            AuditAction.CLUB_CREATED,
+            AuditAction.CLUB_OWNER_ASSIGNED,
+            AuditAction.CLUB_OWNER_REMOVED,
+            -> AuditCategory.CLUB_MANAGEMENT
         }
 
 /** The actions that roll up into a category (empty for categories whose events aren't wired yet). */

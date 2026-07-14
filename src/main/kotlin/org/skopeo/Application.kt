@@ -29,6 +29,7 @@ import mu.KotlinLogging
 import org.skopeo.config.DatabaseConfig
 import org.skopeo.routes.configureAuditRoutes
 import org.skopeo.routes.configureCapabilityRoutes
+import org.skopeo.routes.configureClubRoutes
 import org.skopeo.routes.configureContactRoutes
 import org.skopeo.routes.configureDuplicateCandidateRoutes
 import org.skopeo.routes.configureEventRoutes
@@ -97,6 +98,7 @@ fun Application.module(
     configureRatingRequestRoutes()
     configureMatchRoutes()
     configureEventRoutes()
+    configureClubRoutes()
     configureInviteRoutes()
     configureDuplicateCandidateRoutes()
     configurePlayerListRoutes()

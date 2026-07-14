@@ -2010,6 +2010,124 @@ paths:
         '409':
           description: The request is already resolved
 
+  /api/v1/clubs:
+    post:
+      summary: Create a club
+      description: ADMINISTRATOR only (#313). Creates a club that events can later be assigned to.
+      tags:
+        - Clubs
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateClubRequest'
+      responses:
+        '201':
+          description: The created club
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClubResponse'
+        '400':
+          description: Invalid body (e.g. blank name)
+        '401':
+          description: Missing or invalid Firebase token
+        '403':
+          description: Caller is not an ADMINISTRATOR
+    get:
+      summary: List clubs
+      description: ADMINISTRATOR only (#313). All active clubs, alphabetical by name, with their owners.
+      tags:
+        - Clubs
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The clubs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ClubResponse'
+        '403':
+          description: Caller is not an ADMINISTRATOR
+
+  /api/v1/clubs/{id}/owners:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      summary: Assign a club owner
+      description: >-
+        ADMINISTRATOR only (#313). Records an existing user as an owner of this club. Granting the
+        CLUB_OWNER capability is a separate admin action.
+      tags:
+        - Clubs
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignOwnerRequest'
+      responses:
+        '200':
+          description: The updated club
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClubResponse'
+        '400':
+          description: Invalid body, malformed id, or unknown/inactive user
+        '403':
+          description: Caller is not an ADMINISTRATOR
+        '404':
+          description: No such club
+
+  /api/v1/clubs/{id}/owners/{userId}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    delete:
+      summary: Remove a club owner
+      description: ADMINISTRATOR only (#313). Removes the user as an owner of this club (no-op if absent).
+      tags:
+        - Clubs
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The updated club
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClubResponse'
+        '400':
+          description: Malformed id
+        '403':
+          description: Caller is not an ADMINISTRATOR
+        '404':
+          description: No such club
+
   /api/v1/invites:
     post:
       summary: Invite an email to onboard (ADMINISTRATOR only)
@@ -2129,6 +2247,7 @@ paths:
               - CAPABILITY_CHANGE
               - RATING_CHANGE
               - DUPLICATE_RECTIFICATION
+              - CLUB_MANAGEMENT
           description: Scope to a single category; omit for all.
         - name: limit
           in: query
@@ -4439,6 +4558,57 @@ components:
           nullable: true
           allOf:
             - $ref: '#/components/schemas/CalculationBreakdownResponse'
+
+    CreateClubRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: The club name (non-blank; trimmed server-side).
+
+    AssignOwnerRequest:
+      type: object
+      required:
+        - userId
+      properties:
+        userId:
+          type: string
+          format: uuid
+          description: The existing user to record as an owner of the club.
+
+    ClubResponse:
+      type: object
+      required:
+        - id
+        - name
+        - isActive
+        - owners
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        isActive:
+          type: boolean
+        owners:
+          type: array
+          items:
+            type: object
+            required:
+              - userId
+              - publicCode
+            properties:
+              userId:
+                type: string
+                format: uuid
+              displayName:
+                type: string
+                nullable: true
+              publicCode:
+                type: string
 
     CreateInviteRequest:
       type: object
