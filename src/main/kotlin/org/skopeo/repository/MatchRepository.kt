@@ -247,7 +247,8 @@ class MatchRepository {
         val keyByEvent = eventProcessingKeys(eventIds = matches.mapNotNull { it.eventId }.distinct())
 
         // Processing key: an evented match keys off its event; an eventless one off its own match date.
-        fun processingKey(match: Match): Double = match.eventId?.let { keyByEvent[it] } ?: match.matchDate.toEpochDay().toDouble()
+        fun processingKey(match: Match): Double =
+            match.eventId?.let { keyByEvent.getValue(key = it) } ?: match.matchDate.toEpochDay().toDouble()
         return matches.sortedWith(
             comparator =
                 compareBy(
@@ -255,8 +256,9 @@ class MatchRepository {
                     // Keep a single event's matches contiguous when two events share a key.
                     { it.eventId?.toString().orEmpty() },
                     { it.matchDate },
+                    // An un-dragged match (null calc_sequence) sorts after dragged ones within its date.
                     { it.calcSequence ?: Int.MAX_VALUE },
-                    { it.completedAt ?: LocalDateTime.MIN },
+                    { it.completedAt },
                     { it.id.toString() },
                 ),
         )

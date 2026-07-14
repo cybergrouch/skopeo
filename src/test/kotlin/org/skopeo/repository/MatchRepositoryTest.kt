@@ -139,17 +139,20 @@ class MatchRepositoryTest {
         val u2 = newUser(uid = "u2")
         val eventA = event(creator = u1, endDate = LocalDate.of(2026, 1, 10), members = listOf(u1, u2))
         val eventB = event(creator = u1, endDate = LocalDate.of(2026, 1, 20), members = listOf(u1, u2))
+        // Two same-day matches in event A, hand-ordered a2-before-a1 via calc_sequence (#332).
         val a1 = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 8), eventId = eventA)
+        val a2 = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 8), eventId = eventA)
+        matches.reorderCalcSequence(matchIds = listOf(a2, a1))
         val b1 = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 18), eventId = eventB)
         // An eventless match played between the two events' end dates.
         val open = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 15))
 
-        // Default: event A (ends 1/10) → the eventless match (1/15) → event B (ends 1/20).
-        matches.listPendingCalculation().map { it.id } shouldBe listOf(a1, open, b1)
+        // Default: event A (ends 1/10, a2 before a1 by calc_sequence) → eventless (1/15) → event B (1/20).
+        matches.listPendingCalculation().map { it.id } shouldBe listOf(a2, a1, open, b1)
 
         // Admin bumps event B ahead of everything by giving it the lowest processing key.
         events.setCalcPriority(id = eventB, priority = 0.0)
-        matches.listPendingCalculation().map { it.id } shouldBe listOf(b1, a1, open)
+        matches.listPendingCalculation().map { it.id } shouldBe listOf(b1, a2, a1, open)
     }
 
     @Test
