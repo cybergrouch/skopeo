@@ -275,10 +275,12 @@ class EventServiceTest {
     }
 
     @Test
-    fun `a host cannot add a participant to an expired event, but an admin can (#310)`() {
+    fun `a host cannot add a participant to an expired event, but an admin or club owner can (#310)`() {
         provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        provision(uid = "owner", roles = setOf(Capability.PLAYER, Capability.CLUB_OWNER))
         val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
         val expired =
             input(start = LocalDate.now().minusDays(3).toString(), end = LocalDate.now().minusDays(1).toString())
         val event = service.create(token = token(uid = "host"), input = expired).shouldBeRight()
@@ -292,6 +294,11 @@ class EventServiceTest {
         service.addParticipant(token = token(uid = "admin"), eventId = event.event.id, userId = p1.id)
             .shouldBeRight()
             .participants shouldHaveSize 1
+
+        // A CLUB_OWNER may still add too (#310 follow-up).
+        service.addParticipant(token = token(uid = "owner"), eventId = event.event.id, userId = p2.id)
+            .shouldBeRight()
+            .participants shouldHaveSize 2
     }
 
     @Test
