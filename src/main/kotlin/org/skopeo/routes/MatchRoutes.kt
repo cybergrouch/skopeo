@@ -47,7 +47,6 @@ fun Application.configureMatchRoutes(service: MatchService = MatchService()) {
             authenticate(FIREBASE_AUTH) {
                 listAndCreate(service = service)
                 upcoming(service = service)
-                reorderCalculation(service = service)
                 byId(service = service)
             }
         }
@@ -66,33 +65,11 @@ private fun Route.upcoming(service: MatchService) {
     }
 }
 
-/**
- * Set the manual calculation order for a group of same-date matches (#331/#332). Literal path, so it
- * precedes `/{id}`. HOST/ADMINISTRATOR (enforced in [MatchService]); 204 on success.
- */
-private fun Route.reorderCalculation(service: MatchService) {
-    put(path = "/calculation-order") {
-        respondMappingErrors {
-            val ids = call.receive<ReorderMatchesRequest>().matchIds.map { parseMatchId(value = it) }
-            respondEither(result = service.reorder(token = verifiedToken(), matchIds = ids)) {
-                call.respond(status = HttpStatusCode.NoContent, message = "")
-            }
-        }
-    }
-}
-
-private fun parseMatchId(value: String): UUID =
-    try {
-        UUID.fromString(value)
-    } catch (e: IllegalArgumentException) {
-        throw IllegalArgumentException("Invalid match id '$value'", e)
-    }
-
 private fun Route.listAndCreate(service: MatchService) {
     get {
         respondMappingErrors {
             val view = matchQueryOf(value = call.request.queryParameters["filter"])
-            val eventId = call.request.queryParameters["eventId"]?.let { parseUserId(value = it) }
+            val eventId = call.request.queryParameters["eventId"]?.let { parseUuid(value = it) }
             respondEither(result = service.query(token = verifiedToken(), view = view, eventId = eventId)) { list ->
                 call.respond(status = HttpStatusCode.OK, message = list.map { it.toResponse() })
             }
@@ -106,13 +83,23 @@ private fun Route.listAndCreate(service: MatchService) {
             ) { match -> call.respond(status = HttpStatusCode.Created, message = match.toResponse()) }
         }
     }
+    // Set the manual calculation order for a group of same-date matches (#331/#332). A collection-level
+    // literal path, so it never collides with `/{id}`. HOST/ADMINISTRATOR (enforced in the service).
+    put(path = "/calculation-order") {
+        respondMappingErrors {
+            val ids = call.receive<ReorderMatchesRequest>().matchIds.map { parseUuid(value = it, field = "match id") }
+            respondEither(result = service.reorder(token = verifiedToken(), matchIds = ids)) {
+                call.respond(status = HttpStatusCode.NoContent, message = "")
+            }
+        }
+    }
 }
 
 /** Parse + validate the fixture request shape at the boundary (#116): enums, date, ids, composition. */
 private fun toFixtureInput(request: CreateFixtureRequest): FixtureInput {
     val matchFormat = parseEnumParam<TeamType>(value = request.matchFormat, field = "matchFormat")
-    val team1 = request.team1.map { parseUserId(value = it) }
-    val team2 = request.team2.map { parseUserId(value = it) }
+    val team1 = request.team1.map { parseUuid(value = it) }
+    val team2 = request.team2.map { parseUuid(value = it) }
     validateComposition(type = matchFormat, team1 = team1, team2 = team2)
     return FixtureInput(
         matchFormat = matchFormat,
@@ -122,7 +109,7 @@ private fun toFixtureInput(request: CreateFixtureRequest): FixtureInput {
         team2 = team2,
         venue = request.venue,
         tournamentName = request.tournamentName,
-        eventId = request.eventId?.let { parseUserId(value = it) },
+        eventId = request.eventId?.let { parseUuid(value = it, field = "event id") },
     )
 }
 
@@ -137,11 +124,14 @@ private fun validateComposition(
     require(value = all.toSet().size == all.size) { "a player cannot appear more than once in a match" }
 }
 
-private fun parseUserId(value: String): UUID =
+private fun parseUuid(
+    value: String,
+    field: String = "user id",
+): UUID =
     try {
         UUID.fromString(value)
     } catch (e: IllegalArgumentException) {
-        throw IllegalArgumentException("Invalid user id '$value'", e)
+        throw IllegalArgumentException("Invalid $field '$value'", e)
     }
 
 private fun parseMatchDate(value: String): LocalDate =
