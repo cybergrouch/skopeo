@@ -1,16 +1,32 @@
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/auth/useAuth'
 
 /**
- * Top-of-page nav for the public-by-code pages (#193). Logged in → "Back to dashboard". Logged out →
- * a sign-up / log-in call-to-action; the log-in link carries the current location so the user returns
- * here after authenticating.
+ * Top-of-page nav for the public-by-code pages (#193). Logged in → a Back control that returns to
+ * wherever the viewer came from (#323). Logged out → a sign-up / log-in call-to-action; the log-in
+ * link carries the current location so the user returns here after authenticating.
  */
 export function PublicPageNav() {
   const { user } = useAuth()
   const location = useLocation()
+  const navigate = useNavigate()
 
   if (user) {
+    // Return to the origin (#323): step back through the in-app history instead of always jumping to
+    // /dashboard. A public page is shareable and may be opened cold (pasted link / new tab); the very
+    // first history entry has key 'default', so in that case there's nothing to go back to and we
+    // fall back to the dashboard.
+    if (location.key !== 'default') {
+      return (
+        <button
+          type="button"
+          onClick={() => navigate(-1)}
+          className="text-sm text-primary hover:underline"
+        >
+          ← Back
+        </button>
+      )
+    }
     return (
       <Link to="/dashboard" className="text-sm text-primary hover:underline">
         ← Back to dashboard
