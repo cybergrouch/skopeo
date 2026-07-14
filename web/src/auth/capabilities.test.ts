@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   Capability,
+  canEditEndedEvents,
   canManageMatches,
   canRate,
   hasCapability,
@@ -36,6 +37,14 @@ describe('capabilities', () => {
     expect(canRate([Capability.PLAYER])).toBe(false)
     expect(canRate([Capability.HOST])).toBe(false)
     expect(canRate(undefined)).toBe(false)
+  })
+
+  it('canEditEndedEvents is true only for administrators and club owners (#310)', () => {
+    expect(canEditEndedEvents([Capability.ADMINISTRATOR])).toBe(true)
+    expect(canEditEndedEvents([Capability.CLUB_OWNER])).toBe(true)
+    expect(canEditEndedEvents([Capability.HOST])).toBe(false)
+    expect(canEditEndedEvents([Capability.PLAYER])).toBe(false)
+    expect(canEditEndedEvents(undefined)).toBe(false)
   })
 
   it('isResearcher is true for researchers and administrators (#107)', () => {

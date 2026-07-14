@@ -1,38 +1,38 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
-import { useQueryClient } from '@tanstack/react-query'
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   getGetApiV1MatchesQueryKey,
   useGetApiV1Matches,
   usePostApiV1MatchesIdResult,
   usePutApiV1MatchesIdState,
-} from '@/api/generated/matches/matches'
-import { useGetApiV1Users } from '@/api/generated/users/users'
-import { GetApiV1MatchesFilter } from '@/api/generated/model'
-import type { MatchResponse, SetScoreRequest } from '@/api/generated/model'
+} from "@/api/generated/matches/matches";
+import { useGetApiV1Users } from "@/api/generated/users/users";
+import { GetApiV1MatchesFilter } from "@/api/generated/model";
+import type { MatchResponse, SetScoreRequest } from "@/api/generated/model";
 
-const AWAITING = { filter: GetApiV1MatchesFilter['awaiting-results'] }
-const MAX_SETS = 5
+const AWAITING = { filter: GetApiV1MatchesFilter["awaiting-results"] };
+const MAX_SETS = 5;
 
 /** Today's local date as yyyy-MM-dd, comparable lexicographically with a match's matchDate. */
 function todayIso(): string {
-  const now = new Date()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  return `${now.getFullYear()}-${month}-${day}`
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
 }
 
-type BadgeVariant = 'default' | 'secondary' | 'outline'
+type BadgeVariant = "default" | "secondary" | "outline";
 
 /**
  * Where a scheduled fixture sits relative to today (issue #71). The schedule is only suggestive —
@@ -43,95 +43,115 @@ function scheduleBadge(
   matchDate: string,
   today: string,
 ): { label: string; variant: BadgeVariant } {
-  if (matchDate < today) return { label: 'Overdue', variant: 'default' }
-  if (matchDate === today) return { label: 'Today', variant: 'secondary' }
-  return { label: 'Upcoming', variant: 'outline' }
+  if (matchDate < today) return { label: "Overdue", variant: "default" };
+  if (matchDate === today) return { label: "Today", variant: "secondary" };
+  return { label: "Upcoming", variant: "outline" };
 }
 
 interface SetRow {
-  t1: string
-  t2: string
+  t1: string;
+  t2: string;
 }
 
 function toSets(rows: SetRow[]): SetScoreRequest[] {
   return rows
-    .filter((r) => r.t1.trim() !== '' && r.t2.trim() !== '')
-    .map((r) => ({ team1Games: Number(r.t1), team2Games: Number(r.t2) }))
+    .filter((r) => r.t1.trim() !== "" && r.t2.trim() !== "")
+    .map((r) => ({ team1Games: Number(r.t1), team2Games: Number(r.t2) }));
 }
 
 /** The set-score rows prefilled from an already-recorded match (games only; tiebreaks aren't edited). */
 function rowsFromMatch(match: MatchResponse): SetRow[] {
-  return match.sets.map((s) => ({ t1: String(s.team1Games), t2: String(s.team2Games) }))
+  return match.sets.map((s) => ({
+    t1: String(s.team1Games),
+    t2: String(s.team2Games),
+  }));
 }
 
 function MatchResultRow({
   match,
   nameOf,
+  readOnly = false,
 }: {
-  match: MatchResponse
-  nameOf: (userId: string) => string
+  match: MatchResponse;
+  nameOf: (userId: string) => string;
+  // When true (#310), suppress all data-entry controls — record/edit/delete — and just show the
+  // score. Used for a HOST viewing an event that has ended; the server is still the source of truth.
+  readOnly?: boolean;
 }) {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
   // A recorded fixture (has sets) starts collapsed as a score summary that can be expanded to edit;
   // a scheduled fixture starts as the entry form. Once rated (#138) it is frozen: read-only, no edit.
-  const recorded = match.sets.length > 0
-  const rated = match.ratedAt != null
-  const [editing, setEditing] = useState(false)
+  const recorded = match.sets.length > 0;
+  const rated = match.ratedAt != null;
+  const [editing, setEditing] = useState(false);
   const [rows, setRows] = useState<SetRow[]>(
-    recorded ? rowsFromMatch(match) : [{ t1: '', t2: '' }, { t1: '', t2: '' }],
-  )
-  const [error, setError] = useState<string | null>(null)
-  const [confirmingDelete, setConfirmingDelete] = useState(false)
+    recorded
+      ? rowsFromMatch(match)
+      : [
+          { t1: "", t2: "" },
+          { t1: "", t2: "" },
+        ],
+  );
+  const [error, setError] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   // Refresh every matches list (awaiting + recorded, global + event-scoped) via the base key prefix.
   const invalidateMatches = () =>
-    queryClient.invalidateQueries({ queryKey: getGetApiV1MatchesQueryKey() })
+    queryClient.invalidateQueries({ queryKey: getGetApiV1MatchesQueryKey() });
 
-  const upload = usePostApiV1MatchesIdResult({ mutation: { onSuccess: invalidateMatches } })
+  const upload = usePostApiV1MatchesIdResult({
+    mutation: { onSuccess: invalidateMatches },
+  });
 
   // Delete a fixture = soft-disable it (#138): the server refuses once a match has been rated.
-  const remove = usePutApiV1MatchesIdState({ mutation: { onSuccess: invalidateMatches } })
+  const remove = usePutApiV1MatchesIdState({
+    mutation: { onSuccess: invalidateMatches },
+  });
 
   async function deleteFixture() {
-    setError(null)
+    setError(null);
     try {
-      await remove.mutateAsync({ id: match.id, data: { isActive: false } })
+      await remove.mutateAsync({ id: match.id, data: { isActive: false } });
     } catch {
-      setError('Could not delete the fixture.')
-      setConfirmingDelete(false)
+      setError("Could not delete the fixture.");
+      setConfirmingDelete(false);
     }
   }
 
   function setCell(index: number, key: keyof SetRow, value: string) {
-    setRows((prev) => prev.map((r, i) => (i === index ? { ...r, [key]: value } : r)))
+    setRows((prev) =>
+      prev.map((r, i) => (i === index ? { ...r, [key]: value } : r)),
+    );
   }
 
   async function submit() {
-    setError(null)
-    const sets = toSets(rows)
+    setError(null);
+    const sets = toSets(rows);
     if (sets.length === 0) {
-      setError('Enter at least one set.')
-      return
+      setError("Enter at least one set.");
+      return;
     }
     try {
-      await upload.mutateAsync({ id: match.id, data: { sets } })
-      setEditing(false)
+      await upload.mutateAsync({ id: match.id, data: { sets } });
+      setEditing(false);
     } catch {
-      setError('Could not save the result. Each set needs a clear winner.')
+      setError("Could not save the result. Each set needs a clear winner.");
     }
   }
 
   function cancelEdit() {
-    setRows(rowsFromMatch(match))
-    setError(null)
-    setEditing(false)
+    setRows(rowsFromMatch(match));
+    setError(null);
+    setEditing(false);
   }
 
-  const player1 = match.team1.userIds.map(nameOf).join(', ')
-  const player2 = match.team2.userIds.map(nameOf).join(', ')
-  const badge = scheduleBadge(match.matchDate, todayIso())
-  const showForm = !recorded || editing
-  const summary = match.sets.map((s) => `${s.team1Games}–${s.team2Games}`).join(', ')
+  const player1 = match.team1.userIds.map(nameOf).join(", ");
+  const player2 = match.team2.userIds.map(nameOf).join(", ");
+  const badge = scheduleBadge(match.matchDate, todayIso());
+  const showForm = !readOnly && (!recorded || editing);
+  const summary = match.sets
+    .map((s) => `${s.team1Games}–${s.team2Games}`)
+    .join(", ");
 
   // Delete control with a confirm step (#138); offered both while entering scores and when collapsed.
   const deleteControls = confirmingDelete ? (
@@ -144,7 +164,7 @@ function MatchResultRow({
         disabled={remove.isPending}
         onClick={deleteFixture}
       >
-        {remove.isPending ? 'Deleting…' : 'Confirm delete'}
+        {remove.isPending ? "Deleting…" : "Confirm delete"}
       </Button>
       <Button
         type="button"
@@ -166,7 +186,7 @@ function MatchResultRow({
     >
       Delete fixture
     </Button>
-  )
+  );
 
   return (
     <div className="rounded-lg border p-3">
@@ -194,13 +214,15 @@ function MatchResultRow({
           <div className="space-y-2">
             {rows.map((row, index) => (
               <div key={index} className="flex items-center gap-2">
-                <span className="w-12 text-xs text-muted-foreground">Set {index + 1}</span>
+                <span className="w-12 text-xs text-muted-foreground">
+                  Set {index + 1}
+                </span>
                 <Input
                   aria-label={`set ${index + 1} player 1 games`}
                   className="w-16"
                   inputMode="numeric"
                   value={row.t1}
-                  onChange={(e) => setCell(index, 't1', e.target.value)}
+                  onChange={(e) => setCell(index, "t1", e.target.value)}
                 />
                 <span>–</span>
                 <Input
@@ -208,14 +230,16 @@ function MatchResultRow({
                   className="w-16"
                   inputMode="numeric"
                   value={row.t2}
-                  onChange={(e) => setCell(index, 't2', e.target.value)}
+                  onChange={(e) => setCell(index, "t2", e.target.value)}
                 />
                 {rows.length > 1 ? (
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={() => setRows((prev) => prev.filter((_, i) => i !== index))}
+                    onClick={() =>
+                      setRows((prev) => prev.filter((_, i) => i !== index))
+                    }
                   >
                     Remove
                   </Button>
@@ -229,7 +253,7 @@ function MatchResultRow({
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => setRows((prev) => [...prev, { t1: '', t2: '' }])}
+                onClick={() => setRows((prev) => [...prev, { t1: "", t2: "" }])}
               >
                 Add set
               </Button>
@@ -237,11 +261,11 @@ function MatchResultRow({
             <Button size="sm" disabled={upload.isPending} onClick={submit}>
               {upload.isPending
                 ? recorded
-                  ? 'Saving…'
-                  : 'Recording…'
+                  ? "Saving…"
+                  : "Recording…"
                 : recorded
-                  ? 'Save result'
-                  : 'Record result'}
+                  ? "Save result"
+                  : "Record result"}
             </Button>
             {recorded ? (
               <Button
@@ -259,10 +283,17 @@ function MatchResultRow({
         </>
       ) : (
         <div className="flex items-center justify-between gap-2">
-          <span className="text-sm font-medium">{summary}</span>
-          {rated ? null : (
+          <span className="text-sm font-medium">
+            {summary || "Awaiting result"}
+          </span>
+          {rated || readOnly ? null : (
             <div className="flex flex-wrap items-center gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={() => setEditing(true)}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setEditing(true)}
+              >
                 Edit result
               </Button>
               {deleteControls}
@@ -276,34 +307,45 @@ function MatchResultRow({
         </p>
       ) : null}
     </div>
-  )
+  );
 }
 
 /** Resolve the participant ids across [matches] to display names (id → name), with id-slice fallback. */
 function useNameResolver(matches: MatchResponse[]): (userId: string) => string {
-  const ids = [...new Set(matches.flatMap((m) => [...m.team1.userIds, ...m.team2.userIds]))]
+  const ids = [
+    ...new Set(
+      matches.flatMap((m) => [...m.team1.userIds, ...m.team2.userIds]),
+    ),
+  ];
   const usersQuery = useGetApiV1Users(
-    { ids: ids.join(',') },
+    { ids: ids.join(",") },
     { query: { enabled: ids.length > 0 } },
-  )
-  const nameById = new Map((usersQuery.data ?? []).map((u) => [u.id, u.displayName ?? u.id]))
-  return (userId: string) => nameById.get(userId) ?? userId.slice(0, 8)
+  );
+  const nameById = new Map(
+    (usersQuery.data ?? []).map((u) => [u.id, u.displayName ?? u.id]),
+  );
+  return (userId: string) => nameById.get(userId) ?? userId.slice(0, 8);
 }
 
-export function AwaitingResultsSection({ eventId }: { eventId?: string } = {}) {
+export function AwaitingResultsSection({
+  eventId,
+  readOnly = false,
+}: { eventId?: string; readOnly?: boolean } = {}) {
   // Scope to a single event's awaiting fixtures when given (#138), else the global oversight list.
-  const matchesQuery = useGetApiV1Matches(eventId ? { ...AWAITING, eventId } : AWAITING)
-  const matches = matchesQuery.data ?? []
-  const nameOf = useNameResolver(matches)
+  const matchesQuery = useGetApiV1Matches(
+    eventId ? { ...AWAITING, eventId } : AWAITING,
+  );
+  const matches = matchesQuery.data ?? [];
+  const nameOf = useNameResolver(matches);
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Awaiting results</CardTitle>
         <CardDescription>
-          Your scheduled fixtures awaiting results — they can be played anytime, so
-          record the set scores whenever the match happens; the server derives the
-          winner.
+          Your scheduled fixtures awaiting results — they can be played anytime,
+          so record the set scores whenever the match happens; the server
+          derives the winner.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -311,14 +353,21 @@ export function AwaitingResultsSection({ eventId }: { eventId?: string } = {}) {
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : matches.length > 0 ? (
           matches.map((match) => (
-            <MatchResultRow key={match.id} match={match} nameOf={nameOf} />
+            <MatchResultRow
+              key={match.id}
+              match={match}
+              nameOf={nameOf}
+              readOnly={readOnly}
+            />
           ))
         ) : (
-          <p className="text-sm text-muted-foreground">No fixtures awaiting results.</p>
+          <p className="text-sm text-muted-foreground">
+            No fixtures awaiting results.
+          </p>
         )}
       </CardContent>
     </Card>
-  )
+  );
 }
 
 /**
@@ -326,21 +375,27 @@ export function AwaitingResultsSection({ eventId }: { eventId?: string } = {}) {
  * remain editable until an admin runs the rating calculation, after which the match is frozen — it
  * stays here as a read-only record badged "Rated".
  */
-export function RecordedResultsSection({ eventId }: { eventId: string }) {
+export function RecordedResultsSection({
+  eventId,
+  readOnly = false,
+}: {
+  eventId: string;
+  readOnly?: boolean;
+}) {
   const matchesQuery = useGetApiV1Matches({
     filter: GetApiV1MatchesFilter.results,
     eventId,
-  })
-  const matches = matchesQuery.data ?? []
-  const nameOf = useNameResolver(matches)
+  });
+  const matches = matchesQuery.data ?? [];
+  const nameOf = useNameResolver(matches);
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Recorded results</CardTitle>
         <CardDescription>
-          Fixtures with results entered — editable until an admin runs the rating calculation, then
-          kept here as a read-only “Rated” record.
+          Fixtures with results entered — editable until an admin runs the
+          rating calculation, then kept here as a read-only “Rated” record.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -348,12 +403,19 @@ export function RecordedResultsSection({ eventId }: { eventId: string }) {
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : matches.length > 0 ? (
           matches.map((match) => (
-            <MatchResultRow key={match.id} match={match} nameOf={nameOf} />
+            <MatchResultRow
+              key={match.id}
+              match={match}
+              nameOf={nameOf}
+              readOnly={readOnly}
+            />
           ))
         ) : (
-          <p className="text-sm text-muted-foreground">No recorded results yet.</p>
+          <p className="text-sm text-muted-foreground">
+            No recorded results yet.
+          </p>
         )}
       </CardContent>
     </Card>
-  )
+  );
 }

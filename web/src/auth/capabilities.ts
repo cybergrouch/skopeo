@@ -1,14 +1,14 @@
-import { UserResponseCapabilitiesItem } from '@/api/generated/model'
+import { UserResponseCapabilitiesItem } from "@/api/generated/model";
 
 /** The capabilities the backend grants a user (PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR). */
-export const Capability = UserResponseCapabilitiesItem
-export type Capability = UserResponseCapabilitiesItem
+export const Capability = UserResponseCapabilitiesItem;
+export type Capability = UserResponseCapabilitiesItem;
 
 export function hasCapability(
   capabilities: readonly Capability[] | undefined,
   capability: Capability,
 ): boolean {
-  return Boolean(capabilities?.includes(capability))
+  return Boolean(capabilities?.includes(capability));
 }
 
 /**
@@ -23,13 +23,27 @@ export function canManageMatches(
     hasCapability(capabilities, Capability.HOST) ||
     hasCapability(capabilities, Capability.CLUB_OWNER) ||
     hasCapability(capabilities, Capability.ADMINISTRATOR)
-  )
+  );
 }
 
 export function isAdministrator(
   capabilities: readonly Capability[] | undefined,
 ): boolean {
-  return hasCapability(capabilities, Capability.ADMINISTRATOR)
+  return hasCapability(capabilities, Capability.ADMINISTRATOR);
+}
+
+/**
+ * Who may still enter data on an event after it has ended (#310, #326): administrators and club
+ * owners. A plain HOST is blocked once the event's end date has passed — this mirrors the backend
+ * EXPIRY_EXEMPT_ROLES, so the UI just avoids offering an action the server would 409.
+ */
+export function canEditEndedEvents(
+  capabilities: readonly Capability[] | undefined,
+): boolean {
+  return (
+    hasCapability(capabilities, Capability.ADMINISTRATOR) ||
+    hasCapability(capabilities, Capability.CLUB_OWNER)
+  );
 }
 
 /**
@@ -42,7 +56,7 @@ export function canRate(
   return (
     hasCapability(capabilities, Capability.RATER) ||
     hasCapability(capabilities, Capability.ADMINISTRATOR)
-  )
+  );
 }
 
 /**
@@ -55,5 +69,5 @@ export function isResearcher(
   return (
     hasCapability(capabilities, Capability.RESEARCHER) ||
     hasCapability(capabilities, Capability.ADMINISTRATOR)
-  )
+  );
 }
