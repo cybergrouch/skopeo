@@ -172,6 +172,23 @@ class EventServiceTest {
     }
 
     @Test
+    fun `setCalcPriority persists and is administrator-only (#335)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight()
+
+        // A non-admin staff member (host) cannot set the calculation priority.
+        service.setCalcPriority(token = token(uid = "host"), id = event.event.id, priority = 5.0)
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        // An ADMINISTRATOR sets it, and it round-trips on the view.
+        service.setCalcPriority(token = token(uid = "admin"), id = event.event.id, priority = 5.0)
+            .shouldBeRight().event.calcPriority shouldBe 5.0
+        // Unknown event → NotFound.
+        service.setCalcPriority(token = token(uid = "admin"), id = UUID.randomUUID(), priority = 1.0)
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
     fun `the organizer view surfaces the filing host as the creator (#270)`() {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val created = service.create(token = token(uid = "host"), input = input()).shouldBeRight()

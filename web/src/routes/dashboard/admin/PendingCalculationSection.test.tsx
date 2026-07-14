@@ -1,15 +1,25 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import type { ReactNode } from 'react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { PendingCalculationSection } from './PendingCalculationSection'
 
-const { useGetApiV1Matches, usePostApiV1RatingsCalculations, useGetApiV1Users } =
-  vi.hoisted(() => ({
-    useGetApiV1Matches: vi.fn(),
-    usePostApiV1RatingsCalculations: vi.fn(),
-    useGetApiV1Users: vi.fn(),
-  }))
+const {
+  useGetApiV1Matches,
+  usePostApiV1RatingsCalculations,
+  useGetApiV1Users,
+  useGetApiV1Events,
+  setPriorityMutate,
+  dnd,
+} = vi.hoisted(() => ({
+  useGetApiV1Matches: vi.fn(),
+  usePostApiV1RatingsCalculations: vi.fn(),
+  useGetApiV1Users: vi.fn(),
+  useGetApiV1Events: vi.fn(),
+  setPriorityMutate: vi.fn(),
+  dnd: { onDragEnd: undefined as undefined | ((e: unknown) => void) },
+}))
 
 vi.mock('@/api/generated/matches/matches', () => ({
   useGetApiV1Matches,
@@ -19,6 +29,47 @@ vi.mock('@/api/generated/ratings/ratings', () => ({
   usePostApiV1RatingsCalculations,
 }))
 vi.mock('@/api/generated/users/users', () => ({ useGetApiV1Users }))
+vi.mock('@/api/generated/events/events', () => ({
+  useGetApiV1Events,
+  getGetApiV1EventsQueryKey: () => ['events'],
+  usePutApiV1EventsIdCalculationPriority: (options?: { mutation?: { onSuccess?: () => void } }) => ({
+    isPending: false,
+    mutate: (vars: unknown) => {
+      setPriorityMutate(vars)
+      options?.mutation?.onSuccess?.()
+    },
+  }),
+}))
+vi.mock('@dnd-kit/core', () => ({
+  DndContext: ({ children, onDragEnd }: { children: ReactNode; onDragEnd: (e: unknown) => void }) => {
+    dnd.onDragEnd = onDragEnd
+    return children
+  },
+  closestCenter: () => undefined,
+  KeyboardSensor: function KeyboardSensor() {},
+  PointerSensor: function PointerSensor() {},
+  useSensor: () => ({}),
+  useSensors: () => [],
+}))
+vi.mock('@dnd-kit/sortable', () => ({
+  SortableContext: ({ children }: { children: ReactNode }) => children,
+  verticalListSortingStrategy: {},
+  sortableKeyboardCoordinates: () => undefined,
+  useSortable: () => ({
+    attributes: {},
+    listeners: {},
+    setNodeRef: () => undefined,
+    transform: null,
+    transition: undefined,
+  }),
+  arrayMove: <T,>(arr: T[], from: number, to: number): T[] => {
+    const copy = [...arr]
+    const [moved] = copy.splice(from, 1)
+    copy.splice(to, 0, moved)
+    return copy
+  },
+}))
+vi.mock('@dnd-kit/utilities', () => ({ CSS: { Transform: { toString: () => undefined } } }))
 
 function match(overrides = {}) {
   return {
@@ -91,6 +142,7 @@ describe('PendingCalculationSection', () => {
       ],
       isLoading: false,
     })
+    useGetApiV1Events.mockReturnValue({ data: [], isLoading: false })
     // mutate(vars) drives the component's onSuccess with a crafted response.
     usePostApiV1RatingsCalculations.mockImplementation(
       (options: {
@@ -161,6 +213,75 @@ describe('PendingCalculationSection', () => {
     expect(screen.getByText('1.')).toBeInTheDocument()
     expect(screen.getByText('2.')).toBeInTheDocument()
     expect(screen.getByText('3.')).toBeInTheDocument()
+  })
+
+  it('groups matches by event and reorders event priority on drag (#335)', () => {
+    const epochDay = (iso: string) => Math.round(new Date(`${iso}T00:00:00Z`).getTime() / 86_400_000)
+    useGetApiV1Matches.mockReturnValue({
+      // Two matches in Alpha (contiguous → one group), one in Beta.
+      data: [
+        match({ id: 'a1', eventId: 'evA' }),
+        match({ id: 'a2', eventId: 'evA' }),
+        match({ id: 'b1', eventId: 'evB' }),
+      ],
+      isLoading: false,
+    })
+    useGetApiV1Events.mockReturnValue({
+      data: [
+        { id: 'evA', name: 'Alpha Cup', endDate: '2026-01-10', calcPriority: null },
+        { id: 'evB', name: 'Beta Cup', endDate: '2026-01-20', calcPriority: null },
+      ],
+      isLoading: false,
+    })
+    renderSection()
+
+    // Two event groups (Alpha holds both its matches), each with a reorder handle.
+    expect(screen.getByText('Alpha Cup')).toBeInTheDocument()
+    expect(screen.getByText('Beta Cup')).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /Reorder event/ })).toHaveLength(2)
+    expect(screen.getAllByText('Alice vs Bob')).toHaveLength(3)
+
+    // Drag Beta above Alpha → Beta's priority is set just below Alpha's end-date key.
+    act(() => dnd.onDragEnd?.({ active: { id: 'event:evB' }, over: { id: 'event:evA' } }))
+    expect(setPriorityMutate).toHaveBeenCalledTimes(1)
+    const call = setPriorityMutate.mock.calls[0][0] as { id: string; data: { priority: number } }
+    expect(call.id).toBe('evB')
+    expect(call.data.priority).toBeLessThan(epochDay('2026-01-10'))
+
+    // Dragging Alpha to the end (past Beta) slots it just above Beta's end-date key.
+    setPriorityMutate.mockClear()
+    act(() => dnd.onDragEnd?.({ active: { id: 'event:evA' }, over: { id: 'event:evB' } }))
+    const call2 = setPriorityMutate.mock.calls[0][0] as { id: string; data: { priority: number } }
+    expect(call2.id).toBe('evA')
+    expect(call2.data.priority).toBeGreaterThan(epochDay('2026-01-20'))
+  })
+
+  it('ignores no-op / invalid drops and dragging an eventless entry (#335)', () => {
+    useGetApiV1Matches.mockReturnValue({
+      data: [
+        match({ id: 'a1', eventId: 'evA' }),
+        match({ id: 'open1' }),
+        match({ id: 'x1', eventId: 'evX' }), // event missing from the events list → "Event" fallback
+      ],
+      isLoading: false,
+    })
+    useGetApiV1Events.mockReturnValue({
+      data: [{ id: 'evA', name: 'Alpha Cup', endDate: '2026-01-10', calcPriority: 5 }],
+      isLoading: false,
+    })
+    renderSection()
+
+    // Dropped on nothing, onto itself, or with an unknown active id → no update.
+    act(() => dnd.onDragEnd?.({ active: { id: 'event:evA' }, over: null }))
+    act(() => dnd.onDragEnd?.({ active: { id: 'event:evA' }, over: { id: 'event:evA' } }))
+    act(() => dnd.onDragEnd?.({ active: { id: 'event:gone' }, over: { id: 'event:evA' } }))
+    // The Open (eventless) entry isn't an event, so dragging it changes no priority.
+    act(() => dnd.onDragEnd?.({ active: { id: 'open:open1' }, over: { id: 'event:evA' } }))
+    expect(setPriorityMutate).not.toHaveBeenCalled()
+
+    expect(screen.getByText('Open (no event)')).toBeInTheDocument()
+    // A group whose event isn't loaded still renders with a generic label.
+    expect(screen.getByText('Event')).toBeInTheDocument()
   })
 
   it('disables Preview when nothing is pending', () => {

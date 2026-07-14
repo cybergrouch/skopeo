@@ -197,36 +197,69 @@ class MatchRepository {
     }
 
     /**
-     * Active, completed, not-yet-rated matches, oldest completion first (calculation order).
-     * When [createdBy] is non-null, scoped to fixtures that user created (HOST oversight).
+     * Active, completed, not-yet-rated matches in calculation (processing) order (#335). Matches are
+     * grouped by event and the groups ordered by each event's *processing key* — its [Event.calcPriority]
+     * override if set, else its end date (as an epoch-day number); an eventless ("Open") match keys off
+     * its own match date, so it interleaves among the events. Within a group the #331/#332 order holds
+     * (match date, then calc_sequence, then completion time). When [createdBy] is non-null the list is
+     * scoped to fixtures that user created (HOST oversight).
      */
     fun listPendingCalculation(
         createdBy: UUID? = null,
         eventId: UUID? = null,
     ): List<Match> =
         transaction {
-            MatchesTable
-                .selectAll()
-                .where {
-                    val base =
-                        MatchesTable.isActive and
-                            (MatchesTable.status eq MatchStatus.COMPLETED.name) and
-                            MatchesTable.ratedAt.isNull()
-                    // An event scope shows every recorded fixture in the event (any creator); otherwise
-                    // a HOST is scoped to their own.
-                    when {
-                        eventId != null -> base and (MatchesTable.eventId eq eventId)
-                        createdBy != null -> base and (MatchesTable.createdBy eq createdBy)
-                        else -> base
-                    }
-                }.orderBy(
-                    MatchesTable.matchDate to SortOrder.ASC,
-                    MatchesTable.calcSequence to SortOrder.ASC_NULLS_LAST,
-                    MatchesTable.completedAt to SortOrder.ASC,
-                    MatchesTable.id to SortOrder.ASC,
-                )
-                .map { loadMatch(id = it[MatchesTable.id].value)!! }
+            val matches =
+                MatchesTable
+                    .selectAll()
+                    .where {
+                        val base =
+                            MatchesTable.isActive and
+                                (MatchesTable.status eq MatchStatus.COMPLETED.name) and
+                                MatchesTable.ratedAt.isNull()
+                        // An event scope shows every recorded fixture in the event (any creator);
+                        // otherwise a HOST is scoped to their own.
+                        when {
+                            eventId != null -> base and (MatchesTable.eventId eq eventId)
+                            createdBy != null -> base and (MatchesTable.createdBy eq createdBy)
+                            else -> base
+                        }
+                    }.map { loadMatch(id = it[MatchesTable.id].value)!! }
+            sortForCalculation(matches = matches)
         }
+
+    /** Each event's processing key: its calc_priority override, else its end date as an epoch day. */
+    private fun eventProcessingKeys(eventIds: List<UUID>): Map<UUID, Double> =
+        if (eventIds.isEmpty()) {
+            emptyMap()
+        } else {
+            EventsTable
+                .selectAll()
+                .where { EventsTable.id inList eventIds }
+                .associate { row ->
+                    row[EventsTable.id].value to
+                        (row[EventsTable.calcPriority] ?: row[EventsTable.endDate].toEpochDay().toDouble())
+                }
+        }
+
+    /** Order matches into the global calculation sequence (#335) — see [listPendingCalculation]. */
+    private fun sortForCalculation(matches: List<Match>): List<Match> {
+        val keyByEvent = eventProcessingKeys(eventIds = matches.mapNotNull { it.eventId }.distinct())
+
+        // Processing key: an evented match keys off its event; an eventless one off its own match date.
+        fun processingKey(match: Match): Double = match.eventId?.let { keyByEvent[it] } ?: match.matchDate.toEpochDay().toDouble()
+        return matches.sortedWith(
+            compareBy(
+                { processingKey(match = it) },
+                // Keep a single event's matches contiguous when two events share a key.
+                { it.eventId?.toString() ?: "" },
+                { it.matchDate },
+                { it.calcSequence ?: Int.MAX_VALUE },
+                { it.completedAt ?: LocalDateTime.MIN },
+                { it.id.toString() },
+            ),
+        )
+    }
 
     /**
      * All of an event's active, completed fixtures — rated or not (#138). Lets the event page keep a

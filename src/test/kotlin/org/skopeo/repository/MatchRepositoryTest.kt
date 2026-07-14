@@ -19,6 +19,7 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.model.AuthProvider
+import org.skopeo.model.CreateEventCommand
 import org.skopeo.model.CreateFixtureCommand
 import org.skopeo.model.MatchSetResult
 import org.skopeo.model.MatchStatus
@@ -45,6 +46,7 @@ class MatchRepositoryTest {
 
     private val users = UserRepository()
     private val matches = MatchRepository()
+    private val events = EventRepository()
 
     @BeforeEach
     fun reset() {
@@ -78,6 +80,77 @@ class MatchRepositoryTest {
                 createdBy = u1,
             ),
     )
+
+    /** Create a COMPLETED (pending-calculation) match on [matchDate], optionally under [eventId]. */
+    private fun completedMatch(
+        u1: UUID,
+        u2: UUID,
+        matchDate: LocalDate,
+        eventId: UUID? = null,
+    ): UUID {
+        val match =
+            matches.createFixture(
+                command =
+                    CreateFixtureCommand(
+                        matchFormat = TeamType.SINGLES,
+                        matchType = MatchType.OPEN_PLAY,
+                        matchDate = matchDate,
+                        team1UserIds = listOf(element = u1),
+                        team2UserIds = listOf(element = u2),
+                        team1Name = "T1",
+                        team2Name = "T2",
+                        createdBy = u1,
+                        eventId = eventId,
+                    ),
+            )
+        matches.addResult(
+            matchId = match.id,
+            sets =
+                listOf(
+                    MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 0, winnerTeamId = match.team1.teamId),
+                    MatchSetResult(setNumber = 2, team1Games = 6, team2Games = 0, winnerTeamId = match.team1.teamId),
+                ),
+            winnerTeamId = match.team1.teamId,
+            recordedBy = u1,
+            completedAt = LocalDateTime.now(),
+        )
+        return match.id
+    }
+
+    private fun event(
+        creator: UUID,
+        endDate: LocalDate,
+        members: List<UUID>,
+    ): UUID =
+        events.create(
+            command =
+                CreateEventCommand(
+                    name = "E-$endDate",
+                    startDate = endDate.minusDays(2),
+                    endDate = endDate,
+                    participantIds = members,
+                    createdBy = creator,
+                ),
+        ).id
+
+    @Test
+    fun `pending-calculation orders by event end date, interleaves eventless by match date, honors override (#335)`() {
+        val u1 = newUser(uid = "u1")
+        val u2 = newUser(uid = "u2")
+        val eventA = event(creator = u1, endDate = LocalDate.of(2026, 1, 10), members = listOf(u1, u2))
+        val eventB = event(creator = u1, endDate = LocalDate.of(2026, 1, 20), members = listOf(u1, u2))
+        val a1 = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 8), eventId = eventA)
+        val b1 = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 18), eventId = eventB)
+        // An eventless match played between the two events' end dates.
+        val open = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 15))
+
+        // Default: event A (ends 1/10) → the eventless match (1/15) → event B (ends 1/20).
+        matches.listPendingCalculation().map { it.id } shouldBe listOf(a1, open, b1)
+
+        // Admin bumps event B ahead of everything by giving it the lowest processing key.
+        events.setCalcPriority(id = eventB, priority = 0.0)
+        matches.listPendingCalculation().map { it.id } shouldBe listOf(b1, a1, open)
+    }
 
     @Test
     fun `createFixture stores a scheduled match with its teams`() {

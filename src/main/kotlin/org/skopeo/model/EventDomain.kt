@@ -36,6 +36,8 @@ data class Event(
     val createdBy: UUID? = null,
     // The club this event belongs to (#313), or null for a clubless ("Open") event.
     val clubId: UUID? = null,
+    // Admin override for calculation processing order (#335); null = order by end date.
+    val calcPriority: Double? = null,
 )
 
 /**
