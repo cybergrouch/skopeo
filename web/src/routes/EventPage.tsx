@@ -112,6 +112,35 @@ function MatchRow({ match }: { match: MatchPublicResponse }) {
 }
 
 /**
+ * A read-only list of matches under a heading, mirroring the private organizer view's
+ * "Awaiting results" / "Recorded results" split (#321) — but without any data-entry controls.
+ */
+function MatchSection({
+  title,
+  matches,
+  emptyText,
+}: {
+  title: string
+  matches: MatchPublicResponse[]
+  emptyText: string
+}) {
+  return (
+    <div>
+      <div className="text-xs font-medium uppercase text-muted-foreground">{title}</div>
+      {matches.length > 0 ? (
+        <ul className="mt-1 space-y-1">
+          {matches.map((m) => (
+            <MatchRow key={m.publicCode} match={m} />
+          ))}
+        </ul>
+      ) : (
+        <p className="text-muted-foreground">{emptyText}</p>
+      )}
+    </div>
+  )
+}
+
+/**
  * Public, read-only event page reached via `/events/:code` (issue #138). Resolves the event by its
  * shareable code and shows its details, participants (linking to profiles), and matches (linking to
  * their public pages), with a QR for sharing. Viewable without login (#193); joining prompts sign-in.
@@ -160,18 +189,18 @@ export function EventPage() {
                   <p className="text-muted-foreground">No participants yet.</p>
                 )}
               </div>
-              <div>
-                <div className="text-xs font-medium uppercase text-muted-foreground">Matches</div>
-                {event.matches.length > 0 ? (
-                  <ul className="mt-1 space-y-1">
-                    {event.matches.map((m) => (
-                      <MatchRow key={m.publicCode} match={m} />
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-muted-foreground">No matches yet.</p>
-                )}
-              </div>
+              {/* Matches, grouped like the private organizer view but read-only (#321): a fixture
+                  with recorded set scores is a result; one without is still awaiting play. */}
+              <MatchSection
+                title="Awaiting results"
+                matches={event.matches.filter((m) => m.sets.length === 0)}
+                emptyText="No fixtures awaiting results."
+              />
+              <MatchSection
+                title="Recorded results"
+                matches={event.matches.filter((m) => m.sets.length > 0)}
+                emptyText="No recorded results yet."
+              />
               <div className="border-t pt-3">
                 <JoinCard code={event.publicCode} viewerStatus={event.viewerStatus} />
               </div>

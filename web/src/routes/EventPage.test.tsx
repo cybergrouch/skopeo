@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -116,13 +116,32 @@ describe('EventPage', () => {
     expect(screen.getByRole('link', { name: 'Ana' })).toHaveAttribute('href', '/players/AAA111')
     expect(screen.getByText('abcdef12')).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'abcdef12' })).not.toBeInTheDocument()
-    // Each match row links to its public match page.
+    // Each match row links to its public match page (ordering is asserted per-section below).
     const matchLinks = screen.getAllByRole('link', { name: /Ana vs Bob/ })
-    expect(matchLinks).toHaveLength(3)
-    expect(matchLinks[0]).toHaveAttribute('href', '/matches/MTCH01')
+    expect(matchLinks.map((l) => l.getAttribute('href')).sort()).toEqual([
+      '/matches/MTCH01',
+      '/matches/MTCH02',
+      '/matches/MTCH03',
+    ])
     // Share card.
     expect(screen.getByText('Share this event')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Copy link' })).toBeInTheDocument()
+  })
+
+  it('splits matches into read-only Awaiting and Recorded sections (#321)', () => {
+    useGetApiV1EventsCodeCode.mockReturnValue({ data: event, isLoading: false })
+    renderAt()
+
+    // Both section headings render...
+    const awaiting = screen.getByText('Awaiting results').parentElement as HTMLElement
+    const recorded = screen.getByText('Recorded results').parentElement as HTMLElement
+    // ...the scheduled (no-sets) fixture is under Awaiting...
+    expect(within(awaiting).getByRole('link', { name: /Ana vs Bob/ })).toHaveAttribute('href', '/matches/MTCH03')
+    // ...and the two played fixtures under Recorded.
+    const recordedLinks = within(recorded).getAllByRole('link', { name: /Ana vs Bob/ })
+    expect(recordedLinks.map((l) => l.getAttribute('href'))).toEqual(['/matches/MTCH01', '/matches/MTCH02'])
+    // The public page has no result-entry controls (read-only).
+    expect(screen.queryByRole('button', { name: /Record result|Save result|Edit result/ })).not.toBeInTheDocument()
   })
 
   it('shows empty states for an event with no participants or matches', () => {
@@ -132,7 +151,8 @@ describe('EventPage', () => {
     })
     renderAt()
     expect(screen.getByText('No participants yet.')).toBeInTheDocument()
-    expect(screen.getByText('No matches yet.')).toBeInTheDocument()
+    expect(screen.getByText('No fixtures awaiting results.')).toBeInTheDocument()
+    expect(screen.getByText('No recorded results yet.')).toBeInTheDocument()
   })
 
   it('offers Request to join and signs up when the viewer has no status (#201)', async () => {
