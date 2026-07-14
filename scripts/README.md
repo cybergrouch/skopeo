@@ -220,6 +220,47 @@ Next steps:
 
 ---
 
+### 💾 Database Backup & Restore
+
+See [database-setup.md → Backup and Restore](../docs/engineering/operations/database-setup.md#backup-and-restore) for the full runbook (managed Cloud SQL backups + PITR, portability, PII handling). ⚠️ Production dumps contain real personal data — keep them in the backup bucket or a local temp file only.
+
+#### `backup-db.sh`
+Portable logical backup of the production database to GCS (Cloud SQL export). Complements Cloud SQL's managed daily backups; this artifact is engine-restorable (off-GCP) and feeds `restore-prod-to-local.sh`.
+
+**Usage:**
+```bash
+BACKUP_BUCKET=gs://<backup-bucket> ./scripts/backup-db.sh
+```
+
+#### `schedule-backup.sh`
+One-time setup to automate `backup-db.sh` via Cloud Scheduler (creates a versioned bucket, the IAM grant, and a weekly job).
+
+**Usage:**
+```bash
+BACKUP_BUCKET=gs://<backup-bucket> \
+SCHEDULER_SA=<sa>@skopeo-prod.iam.gserviceaccount.com \
+./scripts/schedule-backup.sh
+```
+
+#### `restore-prod-to-local.sh`
+Restore the latest production backup into a **throwaway** local database (`skopeo_prodcopy`) for debugging — never touches your dev `SkopeoDb`. Prompts before pulling real data.
+
+**Usage:**
+```bash
+BACKUP_BUCKET=gs://<backup-bucket> ./scripts/restore-prod-to-local.sh
+DATABASE_URL=jdbc:postgresql://localhost:5432/skopeo_prodcopy ./gradlew run
+```
+
+#### `health-check.sh`
+Health/smoke check against a running API (default `http://localhost:8080`). Doubles as the "restore verified" step — samples row counts from the restored db.
+
+**Usage:**
+```bash
+./scripts/health-check.sh [BASE_URL]
+```
+
+---
+
 ### 📚 Reference
 
 #### `curl-examples.sh`
