@@ -32,6 +32,8 @@ enum class AuditAction {
     DUPLICATE_CANDIDATE_DISMISSED,
     DUPLICATE_CANDIDATE_CONFIRMED,
     CLUB_CREATED,
+    CLUB_RENAMED,
+    CLUB_DELETED,
     CLUB_OWNER_ASSIGNED,
     CLUB_OWNER_REMOVED,
 }
@@ -86,6 +88,8 @@ val AuditAction.category: AuditCategory
             AuditAction.DUPLICATE_CANDIDATE_CONFIRMED,
             -> AuditCategory.DUPLICATE_RECTIFICATION
             AuditAction.CLUB_CREATED,
+            AuditAction.CLUB_RENAMED,
+            AuditAction.CLUB_DELETED,
             AuditAction.CLUB_OWNER_ASSIGNED,
             AuditAction.CLUB_OWNER_REMOVED,
             -> AuditCategory.CLUB_MANAGEMENT

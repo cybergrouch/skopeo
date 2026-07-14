@@ -176,6 +176,9 @@ data class MatchPublicResponse(
     val matchType: String,
     val matchDate: String,
     val status: String,
+    // False once the match has been soft-deleted (#325): its link stays honored for traceability, and
+    // the public page flags it as deleted.
+    val isActive: Boolean = true,
     val team1: List<MatchPublicPlayer>,
     val team2: List<MatchPublicPlayer>,
     // The winning side, named relative to team1/team2: "TEAM1" | "TEAM2" | "NONE".
@@ -255,6 +258,7 @@ fun Match.toPublicResponse(
         matchType = matchType.name,
         matchDate = matchDate.toString(),
         status = status.name,
+        isActive = isActive,
         team1 = side(userIds = team1.userIds),
         team2 = side(userIds = team2.userIds),
         winner = winnerSide,

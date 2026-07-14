@@ -214,6 +214,15 @@ export function MatchPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
+              {/* A soft-deleted match stays reachable by link for traceability (#325) — flag it. */}
+              {match.isActive === false ? (
+                <p
+                  role="status"
+                  className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                >
+                  This match has been deleted. It’s kept for reference only.
+                </p>
+              ) : null}
               <div className="text-muted-foreground">
                 {match.matchDate} · {match.matchType.replaceAll('_', ' ').toLowerCase()}
                 {match.venue ? ` · ${match.venue}` : ''}

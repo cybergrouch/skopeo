@@ -20,9 +20,12 @@ import org.skopeo.model.CreateClubCommand
 import org.skopeo.model.ServiceError
 import org.skopeo.model.displayName
 import org.skopeo.repository.ClubRepository
+import org.skopeo.repository.EventRepository
+import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService
 import org.skopeo.service.user.VerifiedFirebaseToken
+import java.time.LocalDateTime
 import java.util.UUID
 
 /** Roles that may read the club list (e.g. to pick a club when creating an event, #313). */
@@ -39,6 +42,8 @@ private val CLUB_STAFF_ROLES = setOf(Capability.HOST, Capability.CLUB_OWNER, Cap
 class ClubService(
     private val clubs: ClubRepository = ClubRepository(),
     private val users: UserRepository = UserRepository(),
+    private val events: EventRepository = EventRepository(),
+    private val matches: MatchRepository = MatchRepository(),
     private val audit: AuditService = AuditService(),
 ) {
     fun create(
@@ -68,6 +73,70 @@ class ClubService(
         either {
             requireStaff(token = token).bind()
             clubs.list().map { toView(club = it) }
+        }
+
+    /** Rename a club (#325). ADMINISTRATOR-only; the name is validated (non-blank) and trimmed. */
+    fun rename(
+        token: VerifiedFirebaseToken,
+        clubId: UUID,
+        name: String,
+    ): Either<ServiceError, ClubView> =
+        either {
+            val adminId = requireAdmin(token = token).bind()
+            ensure(condition = name.isNotBlank()) { ServiceError.Validation(message = "Club name is required") }
+            val updated =
+                ensureNotNull(value = clubs.rename(id = clubId, name = name.trim())) {
+                    ServiceError.NotFound(message = "Club $clubId not found")
+                }
+            audit.record(
+                write =
+                    AuditWrite(
+                        actorUserId = adminId,
+                        action = AuditAction.CLUB_RENAMED,
+                        entityType = AuditEntityType.CLUB,
+                        entityId = clubId,
+                        summary = "Renamed club to ${updated.name}",
+                        details = mapOf("clubId" to clubId.toString(), "name" to updated.name),
+                    ),
+            )
+            toView(club = updated)
+        }
+
+    /**
+     * Delete a club (#325). ADMINISTRATOR-only. A soft-delete (is_active → false), like users and
+     * events: the row is retired rather than removed, so it drops out of the club list but its
+     * history stays intact. Deleting a missing or already-deleted club is a [ServiceError.NotFound].
+     *
+     * The delete cascades: the club's events and their matches are soft-deleted too, so they leave
+     * the active organizer lists. This is non-destructive — public links (QR) and match history still
+     * resolve for traceability, and ratings (built from historical matches) are never affected.
+     */
+    fun delete(
+        token: VerifiedFirebaseToken,
+        clubId: UUID,
+    ): Either<ServiceError, Unit> =
+        either {
+            val adminId = requireAdmin(token = token).bind()
+            val club = ensureNotNull(value = clubs.findById(id = clubId)) { ServiceError.NotFound(message = "Club $clubId not found") }
+            ensure(condition = clubs.disable(id = clubId)) { ServiceError.NotFound(message = "Club $clubId not found") }
+            val now = LocalDateTime.now()
+            events.listByClub(clubId = clubId).forEach { event ->
+                matches.listByEvent(eventId = event.id).forEach { match ->
+                    matches.setActive(matchId = match.id, active = false, disabledAt = now).bind()
+                }
+                events.setActive(id = event.id, active = false, disabledAt = now)
+            }
+            audit.record(
+                write =
+                    AuditWrite(
+                        actorUserId = adminId,
+                        action = AuditAction.CLUB_DELETED,
+                        entityType = AuditEntityType.CLUB,
+                        entityId = clubId,
+                        summary = "Deleted club ${club.name}",
+                        details = mapOf("clubId" to clubId.toString(), "name" to club.name),
+                    ),
+            )
         }
 
     fun assignOwner(

@@ -66,6 +66,16 @@ describe('MatchPage', () => {
     expect(screen.getByRole('button', { name: 'Copy link' })).toBeInTheDocument()
   })
 
+  it('flags a soft-deleted match but still renders it (#325)', () => {
+    useGetApiV1MatchesCodeCode.mockReturnValue({
+      data: { ...match, isActive: false },
+      isLoading: false,
+    })
+    renderAt()
+    expect(screen.getByText('MTCH01')).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent(/this match has been deleted/i)
+  })
+
   it('handles doubles, name/code fallbacks, and a match with no venue', () => {
     useGetApiV1MatchesCodeCode.mockReturnValue({
       data: {

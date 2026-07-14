@@ -141,6 +141,9 @@ data class EventPublicResponse(
     val name: String,
     val startDate: String,
     val endDate: String,
+    // False once the event has been soft-deleted (#325): its link stays honored for traceability, and
+    // the public page flags it as deleted.
+    val isActive: Boolean = true,
     val participants: List<EventParticipantResponse>,
     val matches: List<MatchPublicResponse>,
     // The viewer's own standing on this event (#201): "APPROVED" | "PENDING" | "HOLD", or null if

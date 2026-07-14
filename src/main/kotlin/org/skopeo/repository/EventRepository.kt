@@ -59,6 +59,15 @@ class EventRepository {
 
     fun findById(id: UUID): Event? = transaction { loadEvent(id = id) }
 
+    /** Active events belonging to [clubId] (#325) — the club-delete cascade soft-deletes each of these. */
+    fun listByClub(clubId: UUID): List<Event> =
+        transaction {
+            EventsTable
+                .selectAll()
+                .where { EventsTable.isActive and (EventsTable.clubId eq clubId) }
+                .map { buildEvent(row = it) }
+        }
+
     /** Rename an event (#269): update its name and return the event, or null if it doesn't exist. */
     fun rename(
         id: UUID,
@@ -100,12 +109,16 @@ class EventRepository {
             } > 0
         }
 
-    /** Resolve an active event by its shareable public code (#138); null if absent or disabled. */
+    /**
+     * Resolve an event by its shareable public code (#138); null if absent. Disabled (soft-deleted)
+     * events still resolve (#325): their links stay honored for traceability — the public page flags
+     * them as deleted. Ratings depend on historical matches, and deletion never touches ratings.
+     */
     fun findByPublicCode(code: String): Event? =
         transaction {
             EventsTable
                 .selectAll()
-                .where { (EventsTable.publicCode eq code) and EventsTable.isActive }
+                .where { EventsTable.publicCode eq code }
                 .singleOrNull()
                 ?.let { buildEvent(row = it) }
         }
