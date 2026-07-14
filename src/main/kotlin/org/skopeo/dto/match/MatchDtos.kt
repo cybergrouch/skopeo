@@ -65,6 +65,15 @@ data class MatchStateRequest(
     val isActive: Boolean,
 )
 
+/**
+ * Body for `PUT /api/v1/matches/calculation-order` (#331/#332): the desired processing order of a
+ * group of same-date matches. Each id is assigned calc_sequence = its index.
+ */
+@Serializable
+data class ReorderMatchesRequest(
+    val matchIds: List<String>,
+)
+
 @Serializable
 data class MatchSideResponse(
     val teamId: String,

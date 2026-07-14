@@ -45,6 +45,9 @@ internal object MatchesTable : UUIDTable(name = "matches") {
     val isActive = bool(name = "is_active").default(defaultValue = true)
     val disabledAt = datetime(name = "disabled_at").nullable()
     val eventId = reference(name = "event_id", foreign = EventsTable, onDelete = ReferenceOption.SET_NULL).nullable()
+
+    // Manual same-date ordering tiebreaker for the rating calculation (#331/#332); null = default.
+    val calcSequence = integer(name = "calc_sequence").nullable()
 }
 
 internal object MatchSetsTable : UUIDTable(name = "match_sets") {

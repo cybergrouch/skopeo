@@ -1490,6 +1490,36 @@ paths:
         '404':
           description: No such match, or no calculation has been committed for it
 
+  /api/v1/matches/calculation-order:
+    put:
+      summary: Reorder same-date matches for calculation (HOST/ADMINISTRATOR)
+      description: |
+        Set the manual calculation-order tiebreaker (#331/#332). The rating calculation orders matches
+        by match date first, so this only re-sequences matches that share the same date. The request
+        lists the match ids in the desired order; each is assigned its position. Rated matches are
+        frozen and cannot be reordered.
+      tags:
+        - Matches
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReorderMatchesRequest'
+      responses:
+        '204':
+          description: The order was updated
+        '400':
+          description: Empty/duplicate ids, a disabled match, or matches spanning more than one date
+        '403':
+          description: Caller is not HOST/ADMINISTRATOR
+        '404':
+          description: No such match
+        '409':
+          description: A listed match has already been rated
+
   /api/v1/matches/{id}/result:
     parameters:
       - name: id
@@ -3947,6 +3977,18 @@ components:
       properties:
         isActive:
           type: boolean
+
+    ReorderMatchesRequest:
+      type: object
+      required:
+        - matchIds
+      properties:
+        matchIds:
+          type: array
+          description: Same-date match ids in the desired calculation order (#331/#332).
+          items:
+            type: string
+            format: uuid
 
     MatchSideResponse:
       type: object

@@ -981,4 +981,54 @@ class MatchServiceTest {
         matchRepo.listByUser(userId = p1.id).map { it.id } shouldContain match.id
         matchRepo.listByUser(userId = p1.id).single { it.id == match.id }.isActive shouldBe false
     }
+
+    @Test
+    fun `reorder assigns calc sequence to same-date matches in the given order (#331, #332)`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val p3 = provisionUser(uid = "p3", rated = true)
+        val date = LocalDate.parse("2026-02-01")
+        val m1 = create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p2.id, date = date))
+        val m2 = create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p3.id, date = date))
+
+        service.reorder(token = token(uid = "host"), matchIds = listOf(m2.id, m1.id)).shouldBeRight()
+
+        matchRepo.findById(matchId = m2.id).shouldBeRight().calcSequence shouldBe 0
+        matchRepo.findById(matchId = m1.id).shouldBeRight().calcSequence shouldBe 1
+    }
+
+    @Test
+    fun `reorder rejects empty, duplicate, cross-date, unknown, and non-staff requests (#332)`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        provisionUser(uid = "player")
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val m1 = create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p2.id, date = LocalDate.parse("2026-02-01")))
+        val m2 = create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p2.id, date = LocalDate.parse("2026-02-02")))
+
+        service.reorder(token = token(uid = "player"), matchIds = listOf(element = m1.id))
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service.reorder(token = token(uid = "host"), matchIds = emptyList())
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        service.reorder(token = token(uid = "host"), matchIds = listOf(m1.id, m1.id))
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        service.reorder(token = token(uid = "host"), matchIds = listOf(m1.id, m2.id))
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        service.reorder(token = token(uid = "host"), matchIds = listOf(element = UUID.randomUUID()))
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
+    fun `reorder refuses a match that has already been rated (#332)`() {
+        val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val match = create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p2.id))
+        service.uploadResult(token = token(uid = "host"), matchId = match.id, request = straightSets()).shouldBeRight()
+        matchRepo.markRated(matchId = match.id, ratedAt = LocalDateTime.now(), ratedBy = host.id)
+
+        service.reorder(token = token(uid = "host"), matchIds = listOf(element = match.id))
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Conflict>()
+    }
 }

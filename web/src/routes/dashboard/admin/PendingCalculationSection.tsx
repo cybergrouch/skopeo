@@ -85,8 +85,9 @@ export function PendingCalculationSection() {
       <CardHeader>
         <CardTitle>Pending calculation</CardTitle>
         <CardDescription>
-          Completed matches awaiting a rating calculation, processed
-          oldest-first. Preview before committing.
+          Completed matches awaiting a rating calculation, numbered in the exact
+          order they’ll be processed — by match date, with any host fine-tuning
+          of same-day order (#331/#332). Preview before committing.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -101,7 +102,7 @@ export function PendingCalculationSection() {
 
         {pending.length > 0 ? (
           <ul className="space-y-2">
-            {pending.map((match) => {
+            {pending.map((match, index) => {
               const player1 = match.team1.userIds.map(nameOf).join(', ')
               const player2 = match.team2.userIds.map(nameOf).join(', ')
               const scores = match.sets.map((s) => `${s.team1Games}-${s.team2Games}`).join(' ')
@@ -116,14 +117,19 @@ export function PendingCalculationSection() {
                     aria-expanded={isOpen}
                     onClick={() => toggle(match.id)}
                   >
-                    <span className="min-w-0">
-                      <span className="block font-medium">
-                        {player1} vs {player2}
+                    <span className="flex min-w-0 items-start gap-2">
+                      <span className="mt-0.5 shrink-0 font-mono text-xs tabular-nums text-muted-foreground">
+                        {index + 1}.
                       </span>
-                      <span className="block text-muted-foreground">
-                        {match.matchDate}
-                        {scores ? ` · ${scores}` : ''}
-                        {winner ? ` · Winner: ${winner}` : ''}
+                      <span className="min-w-0">
+                        <span className="block font-medium">
+                          {player1} vs {player2}
+                        </span>
+                        <span className="block text-muted-foreground">
+                          {match.matchDate}
+                          {scores ? ` · ${scores}` : ''}
+                          {winner ? ` · Winner: ${winner}` : ''}
+                        </span>
                       </span>
                     </span>
                     <span aria-hidden="true" className="shrink-0 text-muted-foreground">

@@ -51,6 +51,8 @@ data class Match(
     val createdBy: UUID? = null,
     val recordedBy: UUID? = null,
     val eventId: UUID? = null,
+    // Manual same-date ordering tiebreaker for the rating calculation (#331/#332); null = default.
+    val calcSequence: Int? = null,
 )
 
 /** Everything needed to create a fixture (the result is uploaded separately). */
