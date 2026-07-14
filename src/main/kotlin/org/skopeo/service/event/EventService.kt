@@ -38,7 +38,11 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
 
-private val STAFF_ROLES = setOf(Capability.HOST, Capability.ADMINISTRATOR)
+private val STAFF_ROLES = setOf(Capability.HOST, Capability.CLUB_OWNER, Capability.ADMINISTRATOR)
+
+// Roles that may still enter data on an event after it has ended (#310): administrators and club
+// owners are exempt from the expiry gate, unlike a plain host.
+private val EXPIRY_EXEMPT_ROLES = setOf(Capability.CLUB_OWNER, Capability.ADMINISTRATOR)
 
 /** Event-creation input, parsed/validated at the route boundary (#116): name, date range, roster, optional club. */
 data class CreateEventInput(
@@ -371,18 +375,18 @@ private fun staffCaller(
 }
 
 /**
- * Gate host data entry on an event (#310): once the event has ended, a HOST may no longer modify it
- * (add participants, create fixtures, record results) — only an ADMINISTRATOR may. A
- * [ServiceError.Conflict] otherwise.
+ * Gate host data entry on an event (#310): once the event has ended, a plain HOST may no longer
+ * modify it (add participants, create fixtures, record results) — only an ADMINISTRATOR or a
+ * CLUB_OWNER may. A [ServiceError.Conflict] otherwise.
  */
 private fun ensureHostMayEnter(
     event: Event,
     caller: User,
 ): Either<ServiceError, Unit> =
     either {
-        val isAdmin = caller.capabilities.contains(element = Capability.ADMINISTRATOR)
-        ensure(condition = isAdmin || !event.isExpired(asOf = LocalDate.now())) {
-            ServiceError.Conflict(message = "This event has ended; only an administrator can modify it.")
+        val exempt = caller.capabilities.any { it in EXPIRY_EXEMPT_ROLES }
+        ensure(condition = exempt || !event.isExpired(asOf = LocalDate.now())) {
+            ServiceError.Conflict(message = "This event has ended; only an administrator or club owner can modify it.")
         }
     }
 

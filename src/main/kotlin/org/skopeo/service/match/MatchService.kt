@@ -47,7 +47,11 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
 
-private val STAFF_ROLES = setOf(Capability.HOST, Capability.ADMINISTRATOR)
+private val STAFF_ROLES = setOf(Capability.HOST, Capability.CLUB_OWNER, Capability.ADMINISTRATOR)
+
+// Roles exempt from the expired-event data-entry gate (#310): administrators and club owners may
+// still create fixtures / record results after an event has ended; a plain host may not.
+private val EXPIRY_EXEMPT_ROLES = setOf(Capability.CLUB_OWNER, Capability.ADMINISTRATOR)
 
 /**
  * Fixture-creation input resolved at the route boundary (#116): the match format/type enums are
@@ -434,17 +438,18 @@ class MatchService(
     private fun requireStaff(token: VerifiedFirebaseToken): Either<ServiceError, UUID> = staffCaller(token = token).map { it.id }
 
     /**
-     * Gate host data entry on an event (#310): once the event has ended, a HOST may no longer create
-     * fixtures or record results on it — only an ADMINISTRATOR may. A [ServiceError.Conflict] otherwise.
+     * Gate host data entry on an event (#310): once the event has ended, a plain HOST may no longer
+     * create fixtures or record results on it — only an ADMINISTRATOR or a CLUB_OWNER may. A
+     * [ServiceError.Conflict] otherwise.
      */
     private fun ensureHostMayEnter(
         event: Event,
         caller: User,
     ): Either<ServiceError, Unit> =
         either {
-            val isAdmin = caller.capabilities.contains(element = Capability.ADMINISTRATOR)
-            ensure(condition = isAdmin || !event.isExpired(asOf = LocalDate.now())) {
-                ServiceError.Conflict(message = "This event has ended; only an administrator can modify it.")
+            val exempt = caller.capabilities.any { it in EXPIRY_EXEMPT_ROLES }
+            ensure(condition = exempt || !event.isExpired(asOf = LocalDate.now())) {
+                ServiceError.Conflict(message = "This event has ended; only an administrator or club owner can modify it.")
             }
         }
 

@@ -809,9 +809,10 @@ class MatchServiceTest {
     }
 
     @Test
-    fun `a host cannot create a fixture or record a result on an expired event, an admin can (#310)`() {
+    fun `a host cannot create a fixture or record a result on an expired event, an admin or club owner can (#310)`() {
         val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         provisionUser(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        provisionUser(uid = "owner", roles = setOf(Capability.PLAYER, Capability.CLUB_OWNER))
         val p1 = provisionUser(uid = "p1", rated = true)
         val p2 = provisionUser(uid = "p2", rated = true)
         val event =
@@ -843,6 +844,13 @@ class MatchServiceTest {
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Conflict>()
         service.uploadResult(token = token(uid = "admin"), matchId = match.id, request = straightSets()).shouldBeRight()
+
+        // A CLUB_OWNER is exempt from the expiry gate too (#310 follow-up): it may create + record.
+        val ownerMatch =
+            service
+                .createFixture(token = token(uid = "owner"), request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id))
+                .shouldBeRight()
+        service.uploadResult(token = token(uid = "owner"), matchId = ownerMatch.id, request = straightSets()).shouldBeRight()
     }
 
     @Test
