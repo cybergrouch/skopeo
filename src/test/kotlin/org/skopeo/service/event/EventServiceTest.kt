@@ -19,6 +19,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
+import org.skopeo.model.CreateClubCommand
 import org.skopeo.model.CreateFixtureCommand
 import org.skopeo.model.EventParticipantStatus
 import org.skopeo.model.Match
@@ -32,6 +33,7 @@ import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.model.ageInYears
+import org.skopeo.repository.ClubRepository
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.EventsTable
 import org.skopeo.repository.MatchRepository
@@ -55,6 +57,7 @@ class EventServiceTest {
 
     private val users = UserRepository()
     private val events = EventRepository()
+    private val clubs = ClubRepository()
     private val service = EventService(events = events, users = users)
 
     @BeforeEach
@@ -85,11 +88,13 @@ class EventServiceTest {
         start: String = LocalDate.now().toString(),
         end: String = LocalDate.now().plusDays(7).toString(),
         participants: List<UUID> = emptyList(),
+        clubId: UUID? = null,
     ) = CreateEventInput(
         name = name,
         startDate = LocalDate.parse(start),
         endDate = LocalDate.parse(end),
         participantIds = participants,
+        clubId = clubId,
     )
 
     @Test
@@ -104,6 +109,23 @@ class EventServiceTest {
         view.event.publicCode.length shouldBe 6
         view.participants.map { it.userId } shouldBe listOf(p1.id, p2.id)
         view.participants.first().displayName shouldBe "p1"
+        view.club.shouldBeNull() // clubless by default
+    }
+
+    @Test
+    fun `an event can be created under a club, and an unknown club is rejected (#313)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val club = clubs.create(command = CreateClubCommand(name = "Downtown TC", createdBy = host.id))
+
+        val view = service.create(token = token(uid = "host"), input = input(clubId = club.id)).shouldBeRight()
+        view.club?.id shouldBe club.id
+        view.club?.name shouldBe "Downtown TC"
+        view.event.clubId shouldBe club.id
+
+        // An unknown club is rejected at create.
+        service.create(token = token(uid = "host"), input = input(clubId = UUID.randomUUID()))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
     }
 
     @Test

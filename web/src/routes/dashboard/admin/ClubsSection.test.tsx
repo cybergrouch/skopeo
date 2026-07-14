@@ -41,9 +41,11 @@ vi.mock("@/api/generated/clubs/clubs", () => ({
 vi.mock("@/components/UserSearchSelect", () => ({
   UserSearchSelect: ({
     label,
+    filters,
     onSelect,
   }: {
     label: string;
+    filters?: { capability?: string };
     onSelect: (u: {
       id: string;
       publicCode: string;
@@ -52,6 +54,7 @@ vi.mock("@/components/UserSearchSelect", () => ({
   }) => (
     <button
       type="button"
+      data-capability={filters?.capability ?? ""}
       onClick={() =>
         onSelect({ id: "u-new", publicCode: "NEW", displayName: "New Owner" })
       }
@@ -135,9 +138,10 @@ describe("ClubsSection", () => {
     });
     const user = userEvent.setup();
     renderSection();
-    await user.click(
-      screen.getByRole("button", { name: "pick:Assign an owner" }),
-    );
+    const picker = screen.getByRole("button", { name: "pick:Assign an owner" });
+    // The picker is scoped to users with the CLUB_OWNER capability (#317).
+    expect(picker).toHaveAttribute("data-capability", "CLUB_OWNER");
+    await user.click(picker);
     await waitFor(() =>
       expect(assignMutate).toHaveBeenCalledWith({
         id: "c1",

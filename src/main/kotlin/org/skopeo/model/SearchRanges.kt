@@ -107,6 +107,8 @@ data class UserSearchQuery(
     val dobMin: LocalDate?,
     val dobMax: LocalDate?,
     val rating: NumericRange?,
+    // Restrict to users holding this capability (#317) — e.g. CLUB_OWNER for the club-owner picker.
+    val capability: Capability? = null,
 )
 
 /** A page of user-search results plus the total match count, for numbered pagination (#232). */

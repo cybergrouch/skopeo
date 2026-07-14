@@ -191,6 +191,13 @@ paths:
           schema:
             type: string
           description: 'NTRP rating interval, e.g. "[3.0,4.0)".'
+        - name: capability
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER]
+          description: Restrict to users holding this capability (#317), e.g. CLUB_OWNER.
         - name: limit
           in: query
           required: false
@@ -281,6 +288,13 @@ paths:
           schema:
             type: string
           description: 'NTRP rating interval, e.g. "[3.0,4.0)" (search mode).'
+        - name: capability
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER]
+          description: Restrict to users holding this capability (#317), e.g. CLUB_OWNER.
         - name: ids
           in: query
           required: false

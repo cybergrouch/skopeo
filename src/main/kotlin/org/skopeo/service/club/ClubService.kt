@@ -79,6 +79,10 @@ class ClubService(
             val adminId = requireAdmin(token = token).bind()
             val owner = users.findById(id = userId).mapLeft { ServiceError.Validation(message = "Unknown user $userId") }.bind()
             ensure(condition = owner.isActive) { ServiceError.Validation(message = "User $userId is not active") }
+            // A club owner must hold the CLUB_OWNER capability (#317) — grant it first via capabilities.
+            ensure(condition = owner.capabilities.contains(element = Capability.CLUB_OWNER)) {
+                ServiceError.Validation(message = "User $userId does not have the CLUB_OWNER capability")
+            }
             val updated =
                 ensureNotNull(value = clubs.addOwner(clubId = clubId, userId = userId)) {
                     ServiceError.NotFound(message = "Club $clubId not found")
