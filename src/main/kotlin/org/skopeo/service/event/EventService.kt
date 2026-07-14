@@ -26,6 +26,7 @@ import org.skopeo.model.ServiceError
 import org.skopeo.model.User
 import org.skopeo.model.ageInYears
 import org.skopeo.model.displayName
+import org.skopeo.model.isExpired
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RatingRepository
@@ -166,10 +167,13 @@ class EventService(
         userId: UUID,
     ): Either<ServiceError, EventView> =
         either {
-            val actor = staffCaller(users = users, token = token).bind().id
+            val caller = staffCaller(users = users, token = token).bind()
+            val event =
+                ensureNotNull(value = events.findById(id = eventId)) { ServiceError.NotFound(message = "Event $eventId not found") }
+            ensureHostMayEnter(event = event, caller = caller).bind()
             ensureKnownUsers(users = users, ids = listOf(element = userId)).bind()
             val updated =
-                ensureNotNull(value = events.addParticipant(eventId = eventId, userId = userId, approvedBy = actor)) {
+                ensureNotNull(value = events.addParticipant(eventId = eventId, userId = userId, approvedBy = caller.id)) {
                     ServiceError.NotFound(message = "Event $eventId not found")
                 }
             toView(event = updated)
@@ -331,6 +335,22 @@ private fun staffCaller(
     val caller = users.findByFirebaseUid(firebaseUid = token.uid)
     return if (caller == null || caller.capabilities.none { it in STAFF_ROLES }) ServiceError.Forbidden().left() else caller.right()
 }
+
+/**
+ * Gate host data entry on an event (#310): once the event has ended, a HOST may no longer modify it
+ * (add participants, create fixtures, record results) — only an ADMINISTRATOR may. A
+ * [ServiceError.Conflict] otherwise.
+ */
+private fun ensureHostMayEnter(
+    event: Event,
+    caller: User,
+): Either<ServiceError, Unit> =
+    either {
+        val isAdmin = caller.capabilities.contains(element = Capability.ADMINISTRATOR)
+        ensure(condition = isAdmin || !event.isExpired(asOf = LocalDate.now())) {
+            ServiceError.Conflict(message = "This event has ended; only an administrator can modify it.")
+        }
+    }
 
 /** Every id must map to an existing user, else a [ServiceError.Validation]. */
 private fun ensureKnownUsers(

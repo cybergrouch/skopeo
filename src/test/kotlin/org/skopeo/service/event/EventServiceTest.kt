@@ -78,10 +78,12 @@ class EventServiceTest {
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
+    // Default to a currently-running event (ends a week out) so host data-entry stays allowed; the
+    // expired-event tests (#310) pass explicit past dates.
     private fun input(
         name: String = "Spring Open",
-        start: String = "2026-03-01",
-        end: String = "2026-03-03",
+        start: String = LocalDate.now().toString(),
+        end: String = LocalDate.now().plusDays(7).toString(),
         participants: List<UUID> = emptyList(),
     ) = CreateEventInput(
         name = name,
@@ -205,6 +207,37 @@ class EventServiceTest {
 
         val removed = service.removeParticipant(token = token(uid = "host"), eventId = event.event.id, userId = p1.id).shouldBeRight()
         removed.participants shouldHaveSize 0
+    }
+
+    @Test
+    fun `a host cannot add a participant to an expired event, but an admin can (#310)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val p1 = provision(uid = "p1")
+        val expired =
+            input(start = LocalDate.now().minusDays(3).toString(), end = LocalDate.now().minusDays(1).toString())
+        val event = service.create(token = token(uid = "host"), input = expired).shouldBeRight()
+
+        // The event has ended → the HOST is blocked.
+        service.addParticipant(token = token(uid = "host"), eventId = event.event.id, userId = p1.id)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Conflict>()
+
+        // An ADMINISTRATOR may still add.
+        service.addParticipant(token = token(uid = "admin"), eventId = event.event.id, userId = p1.id)
+            .shouldBeRight()
+            .participants shouldHaveSize 1
+    }
+
+    @Test
+    fun `a host may still add on the event's last day (#310)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val endsToday = input(start = LocalDate.now().minusDays(2).toString(), end = LocalDate.now().toString())
+        val event = service.create(token = token(uid = "host"), input = endsToday).shouldBeRight()
+
+        // today == endDate is not yet expired → still allowed.
+        service.addParticipant(token = token(uid = "host"), eventId = event.event.id, userId = p1.id).shouldBeRight()
     }
 
     @Test

@@ -23,6 +23,7 @@ import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
 import org.skopeo.model.Capability
 import org.skopeo.model.CreateFixtureCommand
+import org.skopeo.model.Event
 import org.skopeo.model.Match
 import org.skopeo.model.MatchCalculationDetail
 import org.skopeo.model.MatchPlayerCalculation
@@ -35,6 +36,7 @@ import org.skopeo.model.ServiceError
 import org.skopeo.model.TeamType
 import org.skopeo.model.User
 import org.skopeo.model.displayName
+import org.skopeo.model.isExpired
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RatingRepository
@@ -88,8 +90,15 @@ class MatchService(
         request: FixtureInput,
     ): Either<ServiceError, Match> =
         either {
-            val createdBy = requireStaff(token = token).bind()
+            val caller = staffCaller(token = token).bind()
+            val createdBy = caller.id
             ensureEventParticipants(request = request).bind()
+            // A HOST cannot add fixtures to an event that has ended; an ADMINISTRATOR still can (#310).
+            request.eventId?.let { eventId ->
+                val event =
+                    ensureNotNull(value = events.findById(id = eventId)) { ServiceError.Validation(message = "Event $eventId not found") }
+                ensureHostMayEnter(event = event, caller = caller).bind()
+            }
             val team1Users = resolveRatedParticipants(ids = request.team1).bind()
             val team2Users = resolveRatedParticipants(ids = request.team2).bind()
 
@@ -135,13 +144,20 @@ class MatchService(
         request: MatchResultRequest,
     ): Either<ServiceError, Match> =
         either {
-            val recordedBy = requireStaff(token = token).bind()
+            val caller = staffCaller(token = token).bind()
+            val recordedBy = caller.id
             val match = matches.findById(matchId = matchId).bind()
             ensure(condition = match.isActive) { ServiceError.Conflict(message = "Match is disabled") }
             // Results can be recorded on a scheduled fixture and re-recorded (edited) on a completed one,
             // but only while the match is still unrated — a rated result is frozen.
             ensure(condition = match.ratedAt == null) {
                 ServiceError.Conflict(message = "Cannot edit a match that has already been rated")
+            }
+            // A HOST cannot record results on an event that has ended; an ADMINISTRATOR still can (#310).
+            match.eventId?.let { eventId ->
+                val event =
+                    ensureNotNull(value = events.findById(id = eventId)) { ServiceError.NotFound(message = "Event $eventId not found") }
+                ensureHostMayEnter(event = event, caller = caller).bind()
             }
             val (resolvedSets, winner) =
                 deriveOutcome(
@@ -416,6 +432,21 @@ class MatchService(
     }
 
     private fun requireStaff(token: VerifiedFirebaseToken): Either<ServiceError, UUID> = staffCaller(token = token).map { it.id }
+
+    /**
+     * Gate host data entry on an event (#310): once the event has ended, a HOST may no longer create
+     * fixtures or record results on it — only an ADMINISTRATOR may. A [ServiceError.Conflict] otherwise.
+     */
+    private fun ensureHostMayEnter(
+        event: Event,
+        caller: User,
+    ): Either<ServiceError, Unit> =
+        either {
+            val isAdmin = caller.capabilities.contains(element = Capability.ADMINISTRATOR)
+            ensure(condition = isAdmin || !event.isExpired(asOf = LocalDate.now())) {
+                ServiceError.Conflict(message = "This event has ended; only an administrator can modify it.")
+            }
+        }
 
     private fun staffCaller(token: VerifiedFirebaseToken): Either<ServiceError, User> {
         val caller = users.findByFirebaseUid(firebaseUid = token.uid)

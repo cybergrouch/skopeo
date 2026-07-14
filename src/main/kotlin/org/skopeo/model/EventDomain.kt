@@ -36,6 +36,13 @@ data class Event(
     val createdBy: UUID? = null,
 )
 
+/**
+ * True once the event is over — [asOf] is past its [Event.endDate]. Used to gate host data entry
+ * (#310): a HOST may not add participants / create fixtures / record results on an expired event,
+ * while an ADMINISTRATOR still may. Entry is allowed through the end date itself.
+ */
+fun Event.isExpired(asOf: LocalDate): Boolean = asOf.isAfter(endDate)
+
 /** Everything needed to create an event. */
 data class CreateEventCommand(
     val name: String,
