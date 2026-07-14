@@ -452,32 +452,109 @@ For production deployments:
 
 ## Backup and Restore
 
-### Backup Database
+Two complementary layers:
+
+- **Managed (Cloud SQL)** — automated daily backups + point-in-time recovery (PITR). Fast in-place
+  disaster recovery, but restorable **only back into Cloud SQL**.
+- **Portable (logical export)** — a `pg_dump`-style dump to GCS. Engine-restorable: this is what
+  moves to another database/provider, and what you pull into a local db to debug a production issue.
+
+The schema itself is reproducible from the Flyway migrations in `src/main/resources/db/migration/`,
+so a clean migration to another PostgreSQL is "run Flyway to build the schema, then load a data dump."
+
+> ⚠️ Every production dump contains **real personal data** (emails, dates of birth, Firebase UIDs).
+> Store it only in the access-controlled backup bucket or a local temp file, never in the repo or
+> `presentations/`, and delete local copies when done.
+
+### Production: managed backups (Cloud SQL)
+
+Verify the instance is protected:
 
 ```bash
-# Backup entire database
-docker exec SkopeoDb_db pg_dump -U postgres SkopeoDb > backup.sql
-
-# Backup with compression
-docker exec SkopeoDb_db pg_dump -U postgres SkopeoDb | gzip > backup.sql.gz
-
-# Backup specific tables only
-docker exec SkopeoDb_db pg_dump -U postgres -t users -t user_ratings SkopeoDb > users_backup.sql
+gcloud sql instances describe skopeo-db --project skopeo-prod \
+  --format="value(settings.backupConfiguration.enabled, \
+settings.backupConfiguration.pointInTimeRecoveryEnabled, \
+settings.deletionProtectionEnabled)"
+# expect: True  True  True
 ```
 
-### Restore Database
+Enable/repair if any are off (one patch; PITR archiving is online for PostgreSQL, no restart):
 
 ```bash
-# Restore from backup
-cat backup.sql | docker exec -i SkopeoDb_db psql -U postgres -d SkopeoDb
-
-# Restore from compressed backup
-gunzip -c backup.sql.gz | docker exec -i SkopeoDb_db psql -U postgres -d SkopeoDb
-
-# Create new database and restore
-docker exec SkopeoDb_db psql -U postgres -c "CREATE DATABASE SkopeoDb_restored;"
-cat backup.sql | docker exec -i SkopeoDb_db psql -U postgres -d SkopeoDb_restored
+gcloud sql instances patch skopeo-db --project skopeo-prod \
+  --backup-start-time=18:00 \            # UTC → 02:00 PHT (low traffic)
+  --enable-point-in-time-recovery \
+  --retained-backups-count=30 \
+  --retained-transaction-log-days=7 \
+  --deletion-protection
 ```
+
+Take an on-demand backup (also bootstraps the base backup PITR needs):
+
+```bash
+gcloud sql backups create --instance=skopeo-db --project skopeo-prod
+```
+
+PITR restore (clones to a **new** instance at a timestamp — the original is untouched):
+
+```bash
+gcloud sql instances clone skopeo-db skopeo-db-pitr --project skopeo-prod \
+  --point-in-time '2026-07-14T09:00:00Z'
+```
+
+### Production: portable logical backups → GCS
+
+On-demand (Cloud SQL export → GCS; `--offload` keeps prod unloaded):
+
+```bash
+BACKUP_BUCKET=gs://<backup-bucket> ./scripts/backup-db.sh
+```
+
+Automated (one-time setup — creates a versioned bucket, grants the Cloud SQL service account write,
+and a Cloud Scheduler job). Managed backups cover daily DR, so the logical export defaults to
+**weekly**:
+
+```bash
+BACKUP_BUCKET=gs://<backup-bucket> \
+SCHEDULER_SA=<sa>@skopeo-prod.iam.gserviceaccount.com \
+./scripts/schedule-backup.sh
+```
+
+(GitHub Actions on a `schedule:` cron calling `gcloud sql export` is a reasonable alternative if you
+prefer the backup job to live with CI — it just needs GCP auth via Workload Identity Federation.)
+
+### Production → local (for debugging)
+
+Restore the latest production export into a throwaway local database, then run the app against it:
+
+```bash
+BACKUP_BUCKET=gs://<backup-bucket> ./scripts/restore-prod-to-local.sh
+# → restores into db 'skopeo_prodcopy' (never touches your dev 'SkopeoDb')
+
+DATABASE_URL=jdbc:postgresql://localhost:5432/skopeo_prodcopy ./gradlew run
+./scripts/health-check.sh        # verifies /health UP + samples row counts
+```
+
+The dump includes `flyway_schema_history`, so the app won't re-migrate; if your local code has newer
+migrations than production, Flyway applies just those on startup — usually exactly what you want when
+reproducing a bug against an about-to-ship change.
+
+### Local backups (docker)
+
+```bash
+# Backup the local dev database
+docker exec skopeo_db pg_dump -U postgres SkopeoDb | gzip > backup.sql.gz
+
+# Restore it
+gunzip -c backup.sql.gz | docker exec -i skopeo_db psql -U postgres -d SkopeoDb
+
+# Specific tables only
+docker exec skopeo_db pg_dump -U postgres -t users -t user_ratings SkopeoDb > users_backup.sql
+```
+
+> **Don't forget Firebase Auth.** Users are keyed by `firebase_uid`; the Postgres rows are incomplete
+> without the matching identities. A full migration/DR backup must also include a
+> `firebase auth:export` (store it alongside the DB dumps in the backup bucket).
 
 ---
 
