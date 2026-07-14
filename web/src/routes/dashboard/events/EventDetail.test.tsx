@@ -8,6 +8,7 @@ import { EventDetail } from './EventDetail'
 const {
   useGetApiV1EventsId,
   useGetApiV1Clubs,
+  useGetApiV1UsersMe,
   addMutate,
   removeMutate,
   decideMutate,
@@ -20,6 +21,7 @@ const {
   vi.hoisted(() => ({
     useGetApiV1EventsId: vi.fn(),
     useGetApiV1Clubs: vi.fn(),
+    useGetApiV1UsersMe: vi.fn(),
     addMutate: vi.fn(),
     removeMutate: vi.fn(),
     decideMutate: vi.fn(),
@@ -118,9 +120,14 @@ vi.mock('@/components/UserSearchSelect', () => ({
     </button>
   ),
 }))
+vi.mock('@/api/generated/users/users', () => ({ useGetApiV1UsersMe }))
 vi.mock('../matches/AwaitingResultsSection', () => ({
-  AwaitingResultsSection: ({ eventId }: { eventId?: string }) => <div>awaiting:{eventId}</div>,
-  RecordedResultsSection: ({ eventId }: { eventId?: string }) => <div>recorded:{eventId}</div>,
+  AwaitingResultsSection: ({ eventId, readOnly }: { eventId?: string; readOnly?: boolean }) => (
+    <div>awaiting:{eventId}:{String(readOnly ?? false)}</div>
+  ),
+  RecordedResultsSection: ({ eventId, readOnly }: { eventId?: string; readOnly?: boolean }) => (
+    <div>recorded:{eventId}:{String(readOnly ?? false)}</div>
+  ),
 }))
 
 const event = {
@@ -178,6 +185,9 @@ describe('EventDetail', () => {
     state.renameErrorMessage = null
     useGetApiV1EventsId.mockReturnValue({ data: event, isLoading: false })
     useGetApiV1Clubs.mockReturnValue({ data: [], isLoading: false })
+    // Default to an administrator so data-entry controls stay available on the (past-dated) fixture;
+    // the #310 tests below override this to a plain HOST.
+    useGetApiV1UsersMe.mockReturnValue({ data: { capabilities: ['ADMINISTRATOR'] } })
   })
 
   it('shows a loading then a not-found state', () => {
@@ -203,8 +213,8 @@ describe('EventDetail', () => {
     expect(screen.getByText(/\(BBB222\)/)).toBeInTheDocument()
     // The roster shows sex · age · NTRP band to disambiguate same-named players.
     expect(screen.getByText('Female · 34 · NTRP 4.0')).toBeInTheDocument()
-    expect(screen.getByText('awaiting:e1')).toBeInTheDocument()
-    expect(screen.getByText('recorded:e1')).toBeInTheDocument()
+    expect(screen.getByText('awaiting:e1:false')).toBeInTheDocument()
+    expect(screen.getByText('recorded:e1:false')).toBeInTheDocument()
     // The event's share/QR card is surfaced in the dashboard (#179).
     expect(screen.getByText('Share this event')).toBeInTheDocument()
   })
@@ -633,5 +643,38 @@ describe('EventDetail', () => {
     await user.selectOptions(screen.getByLabelText('Club'), 'c1')
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Club not found')
+  })
+
+  it('blocks a HOST from entering data on an ended event (#310)', () => {
+    useGetApiV1UsersMe.mockReturnValue({ data: { capabilities: ['HOST'] } })
+    // The default fixture ended 2026-03-03 (in the past).
+    renderDetail()
+
+    expect(screen.getByText(/this event has ended/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Search players…' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Schedule fixture' })).not.toBeInTheDocument()
+    // The match sections are told to render read-only.
+    expect(screen.getByText('awaiting:e1:true')).toBeInTheDocument()
+    expect(screen.getByText('recorded:e1:true')).toBeInTheDocument()
+  })
+
+  it('keeps data-entry controls for a HOST while the event is still running (#310)', () => {
+    useGetApiV1UsersMe.mockReturnValue({ data: { capabilities: ['HOST'] } })
+    useGetApiV1EventsId.mockReturnValue({ data: { ...event, endDate: '2999-01-01' }, isLoading: false })
+    renderDetail()
+
+    expect(screen.queryByText(/this event has ended/i)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Search players…' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Schedule fixture' })).toBeInTheDocument()
+    expect(screen.getByText('awaiting:e1:false')).toBeInTheDocument()
+  })
+
+  it('keeps data-entry controls for an admin even on an ended event (#310)', () => {
+    // beforeEach defaults the caller to ADMINISTRATOR; the fixture is ended.
+    renderDetail()
+
+    expect(screen.queryByText(/this event has ended/i)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Search players…' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Schedule fixture' })).toBeInTheDocument()
   })
 })

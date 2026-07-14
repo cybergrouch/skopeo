@@ -374,4 +374,34 @@ describe('RecordedResultsSection', () => {
     await user.click(screen.getByRole('button', { name: 'Edit result' }))
     expect(screen.getByRole('button', { name: 'Saving…' })).toBeDisabled()
   })
+
+  it('renders an awaiting row read-only, with no entry controls (#310)', () => {
+    useGetApiV1Matches.mockReturnValue({ data: [match], isLoading: false })
+    render(
+      <MemoryRouter>
+        <QueryClientProvider client={new QueryClient()}>
+          <AwaitingResultsSection eventId="evt-1" readOnly />
+        </QueryClientProvider>
+      </MemoryRouter>,
+    )
+    expect(screen.getByText('Awaiting result')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Record result/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Delete fixture/ })).not.toBeInTheDocument()
+    // The public page link (navigation, not data entry) stays available.
+    expect(screen.getByRole('link', { name: 'Public page (QR)' })).toBeInTheDocument()
+  })
+
+  it('renders a recorded row read-only: score shown, no edit or delete (#310)', () => {
+    useGetApiV1Matches.mockReturnValue({ data: [recordedMatch], isLoading: false })
+    render(
+      <MemoryRouter>
+        <QueryClientProvider client={new QueryClient()}>
+          <RecordedResultsSection eventId="evt-1" readOnly />
+        </QueryClientProvider>
+      </MemoryRouter>,
+    )
+    expect(screen.getByText('6–4, 6–3')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Edit result/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Delete fixture/ })).not.toBeInTheDocument()
+  })
 })
