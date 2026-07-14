@@ -143,6 +143,20 @@ class UserRepository {
             query.code?.let { code -> add(element = Op.build { UsersTable.publicCode like "$code%" }) }
             query.q?.let { term -> add(element = nameOrCodeMatches(term = term)) }
             query.rating?.let { range -> add(element = ratingMatches(range = range)) }
+            // Correlated EXISTS: the user has an active grant of the requested capability (#317).
+            query.capability?.let { capability ->
+                add(
+                    element =
+                        exists(
+                            query =
+                                UserCapabilitiesTable.selectAll().where {
+                                    (UserCapabilitiesTable.userId eq UsersTable.id) and
+                                        (UserCapabilitiesTable.capability eq capability.name) and
+                                        UserCapabilitiesTable.isActive
+                                },
+                        ),
+                )
+            }
         }.reduce { acc, op -> acc and op }
 
     fun findByFirebaseUid(firebaseUid: String): User? =

@@ -19,6 +19,7 @@ import {
   usePostApiV1ClubsIdOwners,
 } from "@/api/generated/clubs/clubs";
 import type { ClubResponse, UserSummaryResponse } from "@/api/generated/model";
+import { GetApiV1UsersCapability } from "@/api/generated/model";
 
 /**
  * Admin club management (#313): create clubs and assign/remove CLUB_OWNER(s). ADMINISTRATOR-only
@@ -149,9 +150,11 @@ function ClubRow({
       ) : (
         <p className="text-xs text-muted-foreground">No owners yet.</p>
       )}
+      {/* Only surface users who hold the CLUB_OWNER capability (#317). */}
       <UserSearchSelect
         label="Assign an owner"
         excludeIds={club.owners.map((o) => o.userId)}
+        filters={{ capability: GetApiV1UsersCapability.CLUB_OWNER }}
         onSelect={addOwner}
       />
     </li>

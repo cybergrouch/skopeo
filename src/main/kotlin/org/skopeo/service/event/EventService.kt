@@ -333,7 +333,8 @@ class EventService(
                 EventCreatorRef(displayName = host.displayName(), publicCode = host.publicCode)
             }
         // Resolve the club (#313) to id + name for grouping/display; null for a clubless event.
-        val club = event.clubId?.let { clubId -> clubs.findById(id = clubId)?.let { EventClubRef(id = it.id, name = it.name) } }
+        val clubEntity = event.clubId?.let { clubs.findById(id = it) }
+        val club = clubEntity?.let { EventClubRef(id = it.id, name = it.name) }
         return EventView(event = event, participants = participants, creator = creator, club = club)
     }
 }

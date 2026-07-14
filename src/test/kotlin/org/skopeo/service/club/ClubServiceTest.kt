@@ -161,6 +161,17 @@ class ClubServiceTest {
     }
 
     @Test
+    fun `assignOwner rejects a user without the CLUB_OWNER capability (#317)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val plain = provision(uid = "plain", roles = setOf(element = Capability.PLAYER))
+        val club = service.create(token = token(uid = "admin"), name = "Club").shouldBeRight()
+
+        service.assignOwner(token = token(uid = "admin"), clubId = club.id, userId = plain.id)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
     fun `an owner without a display name is shown by public code`() {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val owner =
@@ -170,6 +181,7 @@ class ClubServiceTest {
                         firebaseUid = "nameless",
                         identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "nameless", isPrimary = true),
                         names = emptyList(),
+                        capabilities = setOf(element = Capability.CLUB_OWNER),
                     ),
             )
         val club = service.create(token = token(uid = "admin"), name = "Club").shouldBeRight()

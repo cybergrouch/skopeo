@@ -53,6 +53,8 @@ data class UserSearchFilters(
     val sex: String? = null,
     val age: NumericRange? = null,
     val rating: NumericRange? = null,
+    // Restrict to users holding this capability (#317).
+    val capability: Capability? = null,
 )
 
 /**
@@ -128,9 +130,9 @@ class UserService(
             ensure(
                 condition =
                     nameTerm != null || codeTerm != null || qTerm != null ||
-                        filters.sex != null || filters.age != null || filters.rating != null,
+                        filters.sex != null || filters.age != null || filters.rating != null || filters.capability != null,
             ) {
-                ServiceError.Validation(message = "at least one filter (name, code, q, sex, age, rating) is required")
+                ServiceError.Validation(message = "at least one filter (name, code, q, sex, age, rating, capability) is required")
             }
             val dob = filters.age?.let { ageRangeToDob(range = it, today = LocalDate.now()) }
             UserSearchQuery(
@@ -141,6 +143,7 @@ class UserService(
                 dobMin = dob?.min,
                 dobMax = dob?.max,
                 rating = filters.rating,
+                capability = filters.capability,
             )
         }
 

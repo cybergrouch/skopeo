@@ -142,6 +142,22 @@ class UserSearchApiIntegrationTest {
         }
 
     @Test
+    fun `the capability filter returns only users holding that capability (#317)`() =
+        withApp { client ->
+            val host = seedStaff(uid = "host", roles = setOf(element = Capability.HOST))
+            seedStaff(uid = "clubby", roles = setOf(element = Capability.CLUB_OWNER))
+            client.provisionNamed(uid = "u1", displayName = "PlainPlayer")
+
+            val names =
+                client.lookup(token = host, params = "capability=CLUB_OWNER").body<List<UserSummaryResponse>>().map { it.displayName }
+            names.contains(element = "clubby") shouldBe true
+            names.contains(element = "PlainPlayer") shouldBe false
+
+            // An unknown capability value is a 400.
+            client.lookup(token = host, params = "capability=NOPE").status shouldBe HttpStatusCode.BadRequest
+        }
+
+    @Test
     fun `name search is accent-insensitive, finding accented and plain spellings alike`() =
         withApp { client ->
             val host = seedStaff(uid = "host", roles = setOf(Capability.HOST))
