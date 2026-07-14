@@ -95,7 +95,7 @@ export function PendingCalculationSection() {
         ) : (
           <p className="text-sm">
             <span className="font-medium">{pending.length}</span> match
-            {plural(pending.length)} pending calculation.
+            {plural(pending.length, 'es')} pending calculation.
           </p>
         )}
 
@@ -189,7 +189,7 @@ export function PendingCalculationSection() {
 
         {committed !== null ? (
           <p className="text-sm text-foreground" role="status">
-            Committed ratings for {committed} match{plural(committed)}.
+            Committed ratings for {committed} match{plural(committed, 'es')}.
           </p>
         ) : null}
 
@@ -200,7 +200,7 @@ export function PendingCalculationSection() {
             role="status"
           >
             Preview ready — {preview.matchesProcessed} match
-            {plural(preview.matchesProcessed)}, no changes saved yet. Expand a match
+            {plural(preview.matchesProcessed, 'es')}, no changes saved yet. Expand a match
             to see its projection and how it's calculated.
           </p>
         ) : null}
