@@ -33,17 +33,15 @@ if [[ "$LOCAL_DB" == "SkopeoDb" ]]; then
   exit 1
 fi
 
-# Resolve the object to restore: an explicit gs:// arg, else the newest backup in the bucket.
+# Resolve the object to restore: an explicit gs:// arg wins; otherwise default to the canonical
+# scheduled backup (fixed name, kept current by the weekly Cloud Scheduler job). To restore a
+# specific ad-hoc/timestamped dump from backup-db.sh, pass its gs:// path as the argument.
 if [[ -z "$OBJECT" ]]; then
   if [[ -z "$BACKUP_BUCKET" ]]; then
-    echo "❌ Pass a gs:// object, or set BACKUP_BUCKET to pull the latest backup." >&2
+    echo "❌ Pass a gs:// object, or set BACKUP_BUCKET to use the scheduled backup." >&2
     exit 1
   fi
-  OBJECT="$(gcloud storage ls "${BACKUP_BUCKET%/}/skopeodb-*.sql.gz" | sort | tail -1 || true)"
-  if [[ -z "$OBJECT" ]]; then
-    echo "❌ No backups matching skopeodb-*.sql.gz in ${BACKUP_BUCKET}" >&2
-    exit 1
-  fi
+  OBJECT="${BACKUP_BUCKET%/}/skopeodb-scheduled.sql.gz"
 fi
 
 echo "⚠️  This restores REAL production data (PII) into local db '${LOCAL_DB}'."

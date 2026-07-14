@@ -552,9 +552,24 @@ gunzip -c backup.sql.gz | docker exec -i skopeo_db psql -U postgres -d SkopeoDb
 docker exec skopeo_db pg_dump -U postgres -t users -t user_ratings SkopeoDb > users_backup.sql
 ```
 
-> **Don't forget Firebase Auth.** Users are keyed by `firebase_uid`; the Postgres rows are incomplete
-> without the matching identities. A full migration/DR backup must also include a
-> `firebase auth:export` (store it alongside the DB dumps in the backup bucket).
+### Firebase Auth users
+
+Users are keyed by `firebase_uid`, so a DB dump is only half a restorable dataset — a full
+migration/DR backup must also capture the Firebase Auth users (they hold the credentials and the
+identity the `firebase_uid` points to).
+
+```bash
+# On-demand (needs firebase-tools auth + gcloud auth; SA needs Firebase Authentication Admin)
+FIREBASE_PROJECT=<firebase-project-id> BACKUP_BUCKET=gs://<backup-bucket> \
+  ./scripts/backup-firebase-auth.sh
+```
+
+Automated weekly by `.github/workflows/firebase-auth-backup.yml` (inert until the `BACKUP_BUCKET`
+and `FIREBASE_PROJECT_ID` repo variables are set; reuses the deploy workflows' WIF +
+`FIREBASE_SERVICE_ACCOUNT` auth). The export lands at
+`gs://<backup-bucket>/firebase-auth/users.json.gz` (versioned).
+
+> ⚠️ This export contains password hashes/salts and PII — treat it exactly like the DB dumps.
 
 ---
 

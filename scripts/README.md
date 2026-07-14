@@ -242,6 +242,14 @@ SCHEDULER_SA=<sa>@skopeo-prod.iam.gserviceaccount.com \
 ./scripts/schedule-backup.sh
 ```
 
+#### `backup-firebase-auth.sh`
+Portable backup of Firebase Auth users to GCS (users are keyed by `firebase_uid`, so a DB dump alone isn't a complete restore). Automated weekly by `.github/workflows/firebase-auth-backup.yml`. ⚠️ Contains password hashes + PII.
+
+**Usage:**
+```bash
+FIREBASE_PROJECT=<firebase-project-id> BACKUP_BUCKET=gs://<backup-bucket> ./scripts/backup-firebase-auth.sh
+```
+
 #### `restore-prod-to-local.sh`
 Restore the latest production backup into a **throwaway** local database (`skopeo_prodcopy`) for debugging — never touches your dev `SkopeoDb`. Prompts before pulling real data.
 
