@@ -1,0 +1,45 @@
+name: Firebase Auth backup
+
+# Weekly portable backup of Firebase Auth users to the GCS backup bucket, alongside the DB export
+# (Cloud Scheduler handles the DB; Firebase Auth has no equivalent scheduler-friendly API, so it
+# runs here). Users are keyed by firebase_uid, so this completes the restorable dataset.
+#
+# Inert until configured: skipped unless the BACKUP_BUCKET and FIREBASE_PROJECT_ID repo variables
+# are set. Reuses the same auth as the deploy workflows — WIF (vars.WIF_PROVIDER/DEPLOY_SA) for
+# gcloud/GCS, and secrets.FIREBASE_SERVICE_ACCOUNT for firebase-tools.
+on:
+  schedule:
+    - cron: '0 18 * * 0' # weekly, Sun 18:00 UTC (02:00 PHT) — matches the DB export
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  id-token: write # for Workload Identity Federation
+
+concurrency:
+  group: firebase-auth-backup
+  cancel-in-progress: true
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    if: ${{ vars.BACKUP_BUCKET != '' && vars.FIREBASE_PROJECT_ID != '' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # Authenticate gcloud (for the GCS upload) via WIF, same as deploy-api.yml. The DEPLOY_SA
+      # needs write on the backup bucket (github-deployer already holds roles/storage.admin).
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.DEPLOY_SA }}
+      - uses: google-github-actions/setup-gcloud@v2
+
+      # firebase-tools authenticates via the service-account JSON (as in deploy-web.yml); that SA
+      # needs the Firebase Authentication Admin role to export users.
+      - name: Export Firebase Auth users to GCS
+        env:
+          FIREBASE_PROJECT: ${{ vars.FIREBASE_PROJECT_ID }}
+          BACKUP_BUCKET: ${{ vars.BACKUP_BUCKET }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: ./scripts/backup-firebase-auth.sh
