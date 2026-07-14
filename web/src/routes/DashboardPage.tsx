@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { LogOut, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BrandLogo } from "@/components/BrandLogo";
@@ -52,9 +52,12 @@ export function DashboardPage() {
   const showReport = isAdministrator(capabilities);
   const showAdmin = isAdministrator(capabilities);
 
-  // The selected section + the menu's open state. One menu drives navigation at every breakpoint —
-  // a hamburger drawer on mobile and desktop alike (#187) — so there's a single nav to reason about.
-  const [active, setActive] = useState("profile");
+  // The selected section lives in the URL (?tab=…, #323) so it survives leaving and returning to the
+  // dashboard — e.g. Back from a public page lands on the tab the user was on, not a reset to Profile.
+  // The menu's open state stays local. One menu drives navigation at every breakpoint — a hamburger
+  // drawer on mobile and desktop alike (#187) — so there's a single nav to reason about.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const active = searchParams.get("tab") ?? "profile";
   const [navOpen, setNavOpen] = useState(false);
 
   // One capability-gated list of sections: the single source of truth for the menu items and the
@@ -105,9 +108,8 @@ export function DashboardPage() {
       : []),
   ];
 
-  // `active` always names a section (default 'profile', and the menu only sets values from this
-  // list), so the find resolves; sections[0] (Profile) is a typed, never-taken safety net.
-  /* v8 ignore next */
+  // `active` comes from the URL, so it may name a section the viewer can't access (a hand-edited or
+  // stale ?tab=…); sections[0] (Profile) is the fallback in that case.
   const activeSection: Section =
     sections.find((s) => s.value === active) ?? sections[0];
 
@@ -117,7 +119,12 @@ export function DashboardPage() {
   }
 
   function selectSection(value: string) {
-    setActive(value);
+    // Sync the tab into the URL. Replace (not push) so switching tabs isn't itself a Back step;
+    // Profile is the default, so it drops the param to keep the URL clean.
+    const next = new URLSearchParams(searchParams);
+    if (value === "profile") next.delete("tab");
+    else next.set("tab", value);
+    setSearchParams(next, { replace: true });
     setNavOpen(false);
   }
 
