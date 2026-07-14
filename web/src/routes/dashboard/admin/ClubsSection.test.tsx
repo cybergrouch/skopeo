@@ -10,14 +10,14 @@ const { useGetApiV1Clubs, createMutate, assignMutate, removeMutate, state } =
     createMutate: vi.fn(),
     assignMutate: vi.fn(),
     removeMutate: vi.fn(),
-    state: { createFail: false },
+    state: { createFail: false, createPending: false },
   }));
 
 vi.mock("@/api/generated/clubs/clubs", () => ({
   useGetApiV1Clubs,
   getGetApiV1ClubsQueryKey: () => ["clubs"],
   usePostApiV1Clubs: () => ({
-    isPending: false,
+    isPending: state.createPending,
     mutateAsync: async (vars: unknown) => {
       createMutate(vars);
       if (state.createFail) throw new Error("boom");
@@ -73,6 +73,7 @@ describe("ClubsSection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     state.createFail = false;
+    state.createPending = false;
     useGetApiV1Clubs.mockReturnValue({ data: [], isLoading: false });
   });
 
@@ -163,5 +164,38 @@ describe("ClubsSection", () => {
     await waitFor(() =>
       expect(removeMutate).toHaveBeenCalledWith({ id: "c1", userId: "o1" }),
     );
+  });
+
+  it("shows an error when club creation fails", async () => {
+    state.createFail = true;
+    const user = userEvent.setup();
+    renderSection();
+    await user.type(screen.getByLabelText("New club"), "Bad Club");
+    await user.click(screen.getByRole("button", { name: "Create" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not create the club.",
+    );
+  });
+
+  it("shows an owner without a display name by public code", () => {
+    useGetApiV1Clubs.mockReturnValue({
+      data: [
+        {
+          id: "c1",
+          name: "Downtown TC",
+          isActive: true,
+          owners: [{ userId: "o1", displayName: null, publicCode: "AAA" }],
+        },
+      ],
+      isLoading: false,
+    });
+    renderSection();
+    expect(screen.getByText("AAA")).toBeInTheDocument();
+  });
+
+  it("disables the create button while the request is pending", () => {
+    state.createPending = true;
+    renderSection();
+    expect(screen.getByRole("button", { name: "Creating…" })).toBeDisabled();
   });
 });
