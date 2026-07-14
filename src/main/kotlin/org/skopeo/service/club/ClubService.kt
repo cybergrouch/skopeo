@@ -118,19 +118,17 @@ class ClubService(
             toView(club = updated)
         }
 
-    /** Resolve a club's owner ids to display refs (name + public code), dropping any missing user. */
-    private fun toView(club: Club): ClubView {
-        val ownersById = users.findAllByIds(ids = club.ownerIds).associateBy { it.id }
-        return ClubView(
+    /** Resolve a club's owner ids to display refs (name + public code); findAllByIds drops any missing user. */
+    private fun toView(club: Club): ClubView =
+        ClubView(
             id = club.id,
             name = club.name,
             isActive = club.isActive,
             owners =
-                club.ownerIds.mapNotNull { id ->
-                    ownersById[id]?.let { ClubOwnerRef(userId = it.id, displayName = it.displayName(), publicCode = it.publicCode) }
+                users.findAllByIds(ids = club.ownerIds).map {
+                    ClubOwnerRef(userId = it.id, displayName = it.displayName(), publicCode = it.publicCode)
                 },
         )
-    }
 
     /** ADMINISTRATOR-only access; returns the caller's id (the audit actor). */
     private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
