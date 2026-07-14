@@ -613,6 +613,15 @@ describe('EventDetail', () => {
     expect(clubMutate).toHaveBeenLastCalledWith({ id: 'e1', data: { clubId: null } })
   })
 
+  it('renders the club picker with only the Open option when no clubs load (#319)', () => {
+    useGetApiV1Clubs.mockReturnValue({ data: undefined, isLoading: false })
+    renderDetail()
+
+    const options = within(screen.getByLabelText('Club')).getAllByRole('option')
+    expect(options).toHaveLength(1)
+    expect(options[0]).toHaveTextContent('No club (Open)')
+  })
+
   it('surfaces a server error when setting the club fails (#319)', async () => {
     const user = userEvent.setup()
     useGetApiV1Clubs.mockReturnValue({ data: [{ id: 'c1', name: 'Riverside' }], isLoading: false })
