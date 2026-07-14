@@ -126,7 +126,7 @@ class ClubApiIntegrationTest {
     fun `a host cannot create clubs but may list them, a plain player cannot list (#313)`() =
         withApp { client ->
             seedUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
-            seedUser(uid = "player", roles = setOf(Capability.PLAYER))
+            seedUser(uid = "player", roles = setOf(element = Capability.PLAYER))
             val hostToken = TestFirebaseAuth.mintToken(uid = "host")
             val playerToken = TestFirebaseAuth.mintToken(uid = "player")
 
