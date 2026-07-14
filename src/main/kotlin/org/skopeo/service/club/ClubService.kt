@@ -25,6 +25,9 @@ import org.skopeo.service.audit.AuditService
 import org.skopeo.service.user.VerifiedFirebaseToken
 import java.util.UUID
 
+/** Roles that may read the club list (e.g. to pick a club when creating an event, #313). */
+private val CLUB_STAFF_ROLES = setOf(Capability.HOST, Capability.CLUB_OWNER, Capability.ADMINISTRATOR)
+
 /**
  * Admin-only management of clubs (#313): create clubs and assign/remove CLUB_OWNER(s). A club's
  * owners are surfaced with their display name + public code for the admin UI. Assigning an owner
@@ -60,9 +63,10 @@ class ClubService(
             toView(club = club)
         }
 
+    /** Readable by staff (HOST/CLUB_OWNER/ADMINISTRATOR) so event creators can pick a club (#313). */
     fun list(token: VerifiedFirebaseToken): Either<ServiceError, List<ClubView>> =
         either {
-            requireAdmin(token = token).bind()
+            requireStaff(token = token).bind()
             clubs.list().map { toView(club = it) }
         }
 
@@ -135,5 +139,12 @@ class ClubService(
         val caller = users.findByFirebaseUid(firebaseUid = token.uid)
         val isAdmin = caller != null && caller.capabilities.contains(element = Capability.ADMINISTRATOR)
         return if (caller == null || !isAdmin) ServiceError.Forbidden().left() else caller.id.right()
+    }
+
+    /** Staff (HOST/CLUB_OWNER/ADMINISTRATOR) access, for reads like the club list. */
+    private fun requireStaff(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+        val isStaff = caller != null && caller.capabilities.any { it in CLUB_STAFF_ROLES }
+        return if (caller == null || !isStaff) ServiceError.Forbidden().left() else caller.id.right()
     }
 }

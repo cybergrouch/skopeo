@@ -123,13 +123,20 @@ class ClubApiIntegrationTest {
         }
 
     @Test
-    fun `a non-admin cannot manage clubs`() =
+    fun `a host cannot create clubs but may list them, a plain player cannot list (#313)`() =
         withApp { client ->
             seedUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+            seedUser(uid = "player", roles = setOf(Capability.PLAYER))
             val hostToken = TestFirebaseAuth.mintToken(uid = "host")
+            val playerToken = TestFirebaseAuth.mintToken(uid = "player")
 
+            // Creating remains ADMINISTRATOR-only.
             client.createClub(token = hostToken, name = "Nope").status shouldBe HttpStatusCode.Forbidden
+            // Listing is staff-readable (event creators pick a club), so a HOST may list…
             client.get(urlString = "/api/v1/clubs") { header(key = HttpHeaders.Authorization, value = "Bearer $hostToken") }
+                .status shouldBe HttpStatusCode.OK
+            // …but a plain player may not.
+            client.get(urlString = "/api/v1/clubs") { header(key = HttpHeaders.Authorization, value = "Bearer $playerToken") }
                 .status shouldBe HttpStatusCode.Forbidden
         }
 

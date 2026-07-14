@@ -21,6 +21,9 @@ internal object EventsTable : UUIDTable(name = "events") {
     val createdBy = reference(name = "created_by", foreign = UsersTable, onDelete = ReferenceOption.SET_NULL).nullable()
     val isActive = bool(name = "is_active").default(defaultValue = true)
     val disabledAt = datetime(name = "disabled_at").nullable()
+
+    // The club this event belongs to (#313), or null for a clubless event. SET NULL on club delete.
+    val clubId = reference(name = "club_id", foreign = ClubsTable, onDelete = ReferenceOption.SET_NULL).nullable()
 }
 
 internal object EventParticipantsTable : UUIDTable(name = "event_participants") {
