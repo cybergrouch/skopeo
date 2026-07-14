@@ -141,6 +141,8 @@ data class EventPublicResponse(
     val name: String,
     val startDate: String,
     val endDate: String,
+    // The organizing club's name (#313), read-only; null for a clubless ("Open") event.
+    val clubName: String? = null,
     // False once the event has been soft-deleted (#325): its link stays honored for traceability, and
     // the public page flags it as deleted.
     val isActive: Boolean = true,

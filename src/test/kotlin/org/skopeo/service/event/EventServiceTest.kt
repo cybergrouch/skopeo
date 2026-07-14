@@ -374,6 +374,17 @@ class EventServiceTest {
             .shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
+    @Test
+    fun `publicByCode surfaces the organizing club's name, and null when clubless (#313)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val club = clubs.create(command = CreateClubCommand(name = "Downtown TC", createdBy = host.id))
+        val underClub = service.create(token = token(uid = "host"), input = input(clubId = club.id)).shouldBeRight()
+        val clubless = service.create(token = token(uid = "host"), input = input()).shouldBeRight()
+
+        service.publicByCode(token = null, code = underClub.event.publicCode).shouldBeRight().clubName shouldBe "Downtown TC"
+        service.publicByCode(token = null, code = clubless.event.publicCode).shouldBeRight().clubName.shouldBeNull()
+    }
+
     // --- Event deletion (#243) ---
 
     private val matchRepo = MatchRepository()
