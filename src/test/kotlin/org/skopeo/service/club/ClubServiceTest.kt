@@ -6,6 +6,7 @@ package org.skopeo.service.club
 import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
@@ -125,5 +126,50 @@ class ClubServiceTest {
         service.assignOwner(token = token(uid = "admin"), clubId = club.id, userId = UUID.randomUUID())
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `removeOwner is a not-found for a missing club`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val owner = provision(uid = "owner", roles = setOf(Capability.PLAYER, Capability.CLUB_OWNER))
+        service.removeOwner(token = token(uid = "admin"), clubId = UUID.randomUUID(), userId = owner.id)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
+    fun `assignOwner rejects an inactive user`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val owner = provision(uid = "owner", roles = setOf(Capability.PLAYER, Capability.CLUB_OWNER))
+        users.deactivate(id = owner.id).shouldBeRight()
+        val club = service.create(token = token(uid = "admin"), name = "Club").shouldBeRight()
+
+        service.assignOwner(token = token(uid = "admin"), clubId = club.id, userId = owner.id)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `an owner without a display name is shown by public code`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val owner =
+            users.provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = "nameless",
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "nameless", isPrimary = true),
+                        names = emptyList(),
+                    ),
+            )
+        val club = service.create(token = token(uid = "admin"), name = "Club").shouldBeRight()
+
+        service.assignOwner(token = token(uid = "admin"), clubId = club.id, userId = owner.id)
+            .shouldBeRight()
+            .owners
+            .single()
+            .let {
+                it.displayName.shouldBeNull()
+                it.publicCode shouldBe owner.publicCode
+            }
     }
 }
