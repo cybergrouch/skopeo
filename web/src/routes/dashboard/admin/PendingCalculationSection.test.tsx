@@ -150,6 +150,19 @@ describe('PendingCalculationSection', () => {
     expect(screen.getByText('2026-01-01')).toBeInTheDocument()
   })
 
+  it('numbers the matches in processing order, first to last (#331)', () => {
+    useGetApiV1Matches.mockReturnValue({
+      data: [match({ id: 'm1' }), match({ id: 'm2' }), match({ id: 'm3' })],
+      isLoading: false,
+    })
+    renderSection()
+
+    // Each card is prefixed with its 1-based processing position.
+    expect(screen.getByText('1.')).toBeInTheDocument()
+    expect(screen.getByText('2.')).toBeInTheDocument()
+    expect(screen.getByText('3.')).toBeInTheDocument()
+  })
+
   it('disables Preview when nothing is pending', () => {
     useGetApiV1Matches.mockReturnValue({ data: [], isLoading: false })
     renderSection()

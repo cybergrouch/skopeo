@@ -207,6 +207,35 @@ class MatchService(
             matches.setActive(matchId = matchId, active = active, disabledAt = disabledAt).bind()
         }
 
+    /**
+     * Set the manual calculation order for a set of same-date matches (#331/#332). Staff-only. The
+     * rating calculation orders by match date first, so a manual drag only re-sequences matches that
+     * share a date — hence the same-date guard. Rated matches are frozen, so they can't be reordered.
+     * [matchIds] is the desired order; each gets calc_sequence = its index.
+     */
+    fun reorder(
+        token: VerifiedFirebaseToken,
+        matchIds: List<UUID>,
+    ): Either<ServiceError, Unit> =
+        either {
+            requireStaff(token = token).bind()
+            ensure(condition = matchIds.isNotEmpty()) { ServiceError.Validation(message = "No matches to reorder") }
+            ensure(condition = matchIds.size == matchIds.distinct().size) {
+                ServiceError.Validation(message = "Duplicate match ids in the reorder request")
+            }
+            val loaded = matchIds.map { matches.findById(matchId = it).bind() }
+            ensure(condition = loaded.all { it.isActive }) {
+                ServiceError.Validation(message = "Cannot reorder a disabled match")
+            }
+            ensure(condition = loaded.all { it.ratedAt == null }) {
+                ServiceError.Conflict(message = "Cannot reorder a match that has already been rated")
+            }
+            ensure(condition = loaded.map { it.matchDate }.toSet().size == 1) {
+                ServiceError.Validation(message = "Only matches on the same date can be reordered")
+            }
+            matches.reorderCalcSequence(matchIds = matchIds)
+        }
+
     fun getById(
         token: VerifiedFirebaseToken,
         matchId: UUID,

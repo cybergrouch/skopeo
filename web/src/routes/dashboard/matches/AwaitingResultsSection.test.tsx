@@ -1,19 +1,30 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import type { ReactNode } from 'react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AwaitingResultsSection, RecordedResultsSection } from './AwaitingResultsSection'
 
-const { useGetApiV1Matches, useGetApiV1Users, mutateAsync, deleteMutateAsync, busy, deleteBusy } =
-  vi.hoisted(() => ({
-    useGetApiV1Matches: vi.fn(),
-    useGetApiV1Users: vi.fn(),
-    mutateAsync: vi.fn(),
-    deleteMutateAsync: vi.fn(),
-    busy: { value: false },
-    deleteBusy: { value: false },
-  }))
+const {
+  useGetApiV1Matches,
+  useGetApiV1Users,
+  mutateAsync,
+  deleteMutateAsync,
+  reorderMutate,
+  busy,
+  deleteBusy,
+  dnd,
+} = vi.hoisted(() => ({
+  useGetApiV1Matches: vi.fn(),
+  useGetApiV1Users: vi.fn(),
+  mutateAsync: vi.fn(),
+  deleteMutateAsync: vi.fn(),
+  reorderMutate: vi.fn(),
+  busy: { value: false },
+  deleteBusy: { value: false },
+  dnd: { onDragEnd: undefined as undefined | ((e: unknown) => void) },
+}))
 
 vi.mock('@/api/generated/matches/matches', () => ({
   useGetApiV1Matches,
@@ -38,8 +49,50 @@ vi.mock('@/api/generated/matches/matches', () => ({
       return r
     },
   }),
+  usePutApiV1MatchesCalculationOrder: (options?: {
+    mutation?: { onSuccess?: () => void }
+  }) => ({
+    isPending: false,
+    mutate: (vars: unknown) => {
+      reorderMutate(vars)
+      options?.mutation?.onSuccess?.()
+    },
+  }),
 }))
 vi.mock('@/api/generated/users/users', () => ({ useGetApiV1Users }))
+// dnd-kit relies on layout measurement that jsdom can't provide; stub it to passthrough components
+// and capture the DndContext onDragEnd so a test can simulate a drop.
+vi.mock('@dnd-kit/core', () => ({
+  DndContext: ({ children, onDragEnd }: { children: ReactNode; onDragEnd: (e: unknown) => void }) => {
+    dnd.onDragEnd = onDragEnd
+    return children
+  },
+  closestCenter: () => undefined,
+  KeyboardSensor: function KeyboardSensor() {},
+  PointerSensor: function PointerSensor() {},
+  useSensor: () => ({}),
+  useSensors: () => [],
+}))
+vi.mock('@dnd-kit/sortable', () => ({
+  SortableContext: ({ children }: { children: React.ReactNode }) => children,
+  verticalListSortingStrategy: {},
+  sortableKeyboardCoordinates: () => undefined,
+  useSortable: () => ({
+    attributes: {},
+    listeners: {},
+    setNodeRef: () => undefined,
+    transform: null,
+    transition: undefined,
+    isDragging: false,
+  }),
+  arrayMove: <T,>(arr: T[], from: number, to: number): T[] => {
+    const copy = [...arr]
+    const [moved] = copy.splice(from, 1)
+    copy.splice(to, 0, moved)
+    return copy
+  },
+}))
+vi.mock('@dnd-kit/utilities', () => ({ CSS: { Transform: { toString: () => undefined } } }))
 
 const match = {
   id: 'm1',
@@ -403,5 +456,62 @@ describe('RecordedResultsSection', () => {
     expect(screen.getByText('6–4, 6–3')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Edit result/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Delete fixture/ })).not.toBeInTheDocument()
+  })
+
+  it('lets a host drag to reorder same-date matches, persisting the new order (#331/#332)', () => {
+    useGetApiV1Matches.mockReturnValue({
+      data: [
+        { ...match, id: 'm1', matchDate: '2026-01-01' },
+        { ...recordedMatch, id: 'm2', matchDate: '2026-01-01' },
+      ],
+      isLoading: false,
+    })
+    render(
+      <MemoryRouter>
+        <QueryClientProvider client={new QueryClient()}>
+          <RecordedResultsSection eventId="evt-1" />
+        </QueryClientProvider>
+      </MemoryRouter>,
+    )
+    // Two matches on the same date → each card offers a reorder handle.
+    expect(screen.getAllByRole('button', { name: 'Reorder match' })).toHaveLength(2)
+
+    // A drop with no target, or onto itself, is a no-op.
+    act(() => dnd.onDragEnd?.({ active: { id: 'm2' }, over: null }))
+    act(() => dnd.onDragEnd?.({ active: { id: 'm2' }, over: { id: 'm2' } }))
+    expect(reorderMutate).not.toHaveBeenCalled()
+
+    // Dropping m2 above m1 persists the new order.
+    act(() => dnd.onDragEnd?.({ active: { id: 'm2' }, over: { id: 'm1' } }))
+    expect(reorderMutate).toHaveBeenCalledWith({ data: { matchIds: ['m2', 'm1'] } })
+  })
+
+  it('offers no reorder handle for a single match or a read-only list (#332)', () => {
+    useGetApiV1Matches.mockReturnValue({ data: [{ ...recordedMatch, id: 'm2' }], isLoading: false })
+    const { rerender } = render(
+      <MemoryRouter>
+        <QueryClientProvider client={new QueryClient()}>
+          <RecordedResultsSection eventId="evt-1" />
+        </QueryClientProvider>
+      </MemoryRouter>,
+    )
+    expect(screen.queryByRole('button', { name: 'Reorder match' })).not.toBeInTheDocument()
+
+    // Two same-date matches but read-only → still no handles (#310).
+    useGetApiV1Matches.mockReturnValue({
+      data: [
+        { ...match, id: 'm1', matchDate: '2026-01-01' },
+        { ...recordedMatch, id: 'm2', matchDate: '2026-01-01' },
+      ],
+      isLoading: false,
+    })
+    rerender(
+      <MemoryRouter>
+        <QueryClientProvider client={new QueryClient()}>
+          <RecordedResultsSection eventId="evt-1" readOnly />
+        </QueryClientProvider>
+      </MemoryRouter>,
+    )
+    expect(screen.queryByRole('button', { name: 'Reorder match' })).not.toBeInTheDocument()
   })
 })

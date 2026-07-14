@@ -19,6 +19,7 @@ import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.match.CreateFixtureRequest
 import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.dto.match.MatchStateRequest
+import org.skopeo.dto.match.ReorderMatchesRequest
 import org.skopeo.dto.match.toResponse
 import org.skopeo.dto.rating.toResponse
 import org.skopeo.model.MatchQuery
@@ -46,6 +47,7 @@ fun Application.configureMatchRoutes(service: MatchService = MatchService()) {
             authenticate(FIREBASE_AUTH) {
                 listAndCreate(service = service)
                 upcoming(service = service)
+                reorderCalculation(service = service)
                 byId(service = service)
             }
         }
@@ -63,6 +65,28 @@ private fun Route.upcoming(service: MatchService) {
         }
     }
 }
+
+/**
+ * Set the manual calculation order for a group of same-date matches (#331/#332). Literal path, so it
+ * precedes `/{id}`. HOST/ADMINISTRATOR (enforced in [MatchService]); 204 on success.
+ */
+private fun Route.reorderCalculation(service: MatchService) {
+    put(path = "/calculation-order") {
+        respondMappingErrors {
+            val ids = call.receive<ReorderMatchesRequest>().matchIds.map { parseMatchId(value = it) }
+            respondEither(result = service.reorder(token = verifiedToken(), matchIds = ids)) {
+                call.respond(status = HttpStatusCode.NoContent, message = "")
+            }
+        }
+    }
+}
+
+private fun parseMatchId(value: String): UUID =
+    try {
+        UUID.fromString(value)
+    } catch (e: IllegalArgumentException) {
+        throw IllegalArgumentException("Invalid match id '$value'", e)
+    }
 
 private fun Route.listAndCreate(service: MatchService) {
     get {

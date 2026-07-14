@@ -2,6 +2,24 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { GripVertical } from "lucide-react";
+import {
   Card,
   CardContent,
   CardDescription,
@@ -15,6 +33,7 @@ import {
   getGetApiV1MatchesQueryKey,
   useGetApiV1Matches,
   usePostApiV1MatchesIdResult,
+  usePutApiV1MatchesCalculationOrder,
   usePutApiV1MatchesIdState,
 } from "@/api/generated/matches/matches";
 import { useGetApiV1Users } from "@/api/generated/users/users";
@@ -327,6 +346,151 @@ function useNameResolver(matches: MatchResponse[]): (userId: string) => string {
   return (userId: string) => nameById.get(userId) ?? userId.slice(0, 8);
 }
 
+/** Group matches by match date, preserving the incoming (already date-sorted) order. */
+function groupByDate(
+  matches: MatchResponse[],
+): { date: string; items: MatchResponse[] }[] {
+  const groups: { date: string; items: MatchResponse[] }[] = [];
+  for (const m of matches) {
+    const last = groups[groups.length - 1];
+    if (last && last.date === m.matchDate) last.items.push(m);
+    else groups.push({ date: m.matchDate, items: [m] });
+  }
+  return groups;
+}
+
+/** A draggable wrapper around a match card (#332): a grip handle carries the drag listeners. */
+function SortableMatchCard({
+  match,
+  nameOf,
+}: {
+  match: MatchResponse;
+  nameOf: (userId: string) => string;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition } =
+    useSortable({ id: match.id });
+  const style = { transform: CSS.Transform.toString(transform), transition };
+  return (
+    <div ref={setNodeRef} style={style} className="relative">
+      <button
+        type="button"
+        aria-label="Reorder match"
+        className="absolute left-1 top-1 cursor-grab touch-none rounded p-1 text-muted-foreground hover:bg-muted"
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="h-4 w-4" />
+      </button>
+      <div className="pl-6">
+        <MatchResultRow match={match} nameOf={nameOf} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A same-date group of match cards (#331/#332). When reorderable (event-scoped, not read-only, and
+ * more than one match on the date), a host can drag to set the calculation order within that date;
+ * the new order persists via PUT /matches/calculation-order. Otherwise the cards render plainly.
+ */
+function MatchDateGroup({
+  items,
+  nameOf,
+  readOnly,
+  reorderable,
+}: {
+  items: MatchResponse[];
+  nameOf: (userId: string) => string;
+  readOnly: boolean;
+  reorderable: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const reorder = usePutApiV1MatchesCalculationOrder({
+    mutation: {
+      onSuccess: () =>
+        void queryClient.invalidateQueries({
+          queryKey: getGetApiV1MatchesQueryKey(),
+        }),
+    },
+  });
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
+
+  if (!reorderable || readOnly || items.length < 2) {
+    return (
+      <>
+        {items.map((m) => (
+          <MatchResultRow
+            key={m.id}
+            match={m}
+            nameOf={nameOf}
+            readOnly={readOnly}
+          />
+        ))}
+      </>
+    );
+  }
+
+  const ids = items.map((m) => m.id);
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const next = arrayMove(
+      ids,
+      ids.indexOf(active.id as string),
+      ids.indexOf(over.id as string),
+    );
+    // The server order is the source of truth; persist and refetch reflects the new sequence.
+    reorder.mutate({ data: { matchIds: next } });
+  }
+
+  return (
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragEnd={handleDragEnd}
+    >
+      <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+        {items.map((m) => (
+          <SortableMatchCard key={m.id} match={m} nameOf={nameOf} />
+        ))}
+      </SortableContext>
+    </DndContext>
+  );
+}
+
+/** Render matches grouped by date, each group drag-reorderable within its date when [reorderable]. */
+function ReorderableMatchList({
+  matches,
+  nameOf,
+  readOnly,
+  reorderable,
+}: {
+  matches: MatchResponse[];
+  nameOf: (userId: string) => string;
+  readOnly: boolean;
+  reorderable: boolean;
+}) {
+  return (
+    <>
+      {groupByDate(matches).map((g) => (
+        <MatchDateGroup
+          key={g.date}
+          items={g.items}
+          nameOf={nameOf}
+          readOnly={readOnly}
+          reorderable={reorderable}
+        />
+      ))}
+    </>
+  );
+}
+
 export function AwaitingResultsSection({
   eventId,
   readOnly = false,
@@ -352,14 +516,12 @@ export function AwaitingResultsSection({
         {matchesQuery.isLoading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : matches.length > 0 ? (
-          matches.map((match) => (
-            <MatchResultRow
-              key={match.id}
-              match={match}
-              nameOf={nameOf}
-              readOnly={readOnly}
-            />
-          ))
+          <ReorderableMatchList
+            matches={matches}
+            nameOf={nameOf}
+            readOnly={readOnly}
+            reorderable={eventId != null}
+          />
         ) : (
           <p className="text-sm text-muted-foreground">
             No fixtures awaiting results.
@@ -402,14 +564,12 @@ export function RecordedResultsSection({
         {matchesQuery.isLoading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : matches.length > 0 ? (
-          matches.map((match) => (
-            <MatchResultRow
-              key={match.id}
-              match={match}
-              nameOf={nameOf}
-              readOnly={readOnly}
-            />
-          ))
+          <ReorderableMatchList
+            matches={matches}
+            nameOf={nameOf}
+            readOnly={readOnly}
+            reorderable
+          />
         ) : (
           <p className="text-sm text-muted-foreground">
             No recorded results yet.

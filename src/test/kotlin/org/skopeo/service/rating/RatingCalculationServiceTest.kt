@@ -127,6 +127,83 @@ class RatingCalculationServiceTest {
         return match.id
     }
 
+    /** Schedule a singles fixture on [date]; returns the match id (no result yet). */
+    private fun scheduledOn(
+        admin: String,
+        a: UUID,
+        b: UUID,
+        date: LocalDate,
+    ): UUID =
+        matchService.createFixture(
+            token = token(uid = admin),
+            request =
+                FixtureInput(
+                    matchFormat = TeamType.SINGLES,
+                    matchType = MatchType.OPEN_PLAY,
+                    matchDate = date,
+                    team1 = listOf(element = a),
+                    team2 = listOf(element = b),
+                ),
+        ).shouldBeRight().id
+
+    private fun recordResult(
+        admin: String,
+        matchId: UUID,
+    ) {
+        matchService.uploadResult(
+            token = token(uid = admin),
+            matchId = matchId,
+            request =
+                MatchResultRequest(
+                    sets =
+                        listOf(
+                            SetScoreRequest(team1Games = 6, team2Games = 4),
+                            SetScoreRequest(team1Games = 6, team2Games = 2),
+                        ),
+                ),
+        ).shouldBeRight()
+    }
+
+    @Test
+    fun `processes matches in match-date order, not result-entry order (#331)`() {
+        provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val p3 = provisionUser(uid = "p3", rated = true)
+        val p4 = provisionUser(uid = "p4", rated = true)
+        // 'later' is played on a later date but its result is entered first (earlier completedAt).
+        val later = scheduledOn(admin = "root", a = p3.id, b = p4.id, date = LocalDate.parse("2026-01-02"))
+        val earlier = scheduledOn(admin = "root", a = p1.id, b = p2.id, date = LocalDate.parse("2026-01-01"))
+        recordResult(admin = "root", matchId = later)
+        recordResult(admin = "root", matchId = earlier)
+
+        val order = calc.calculate(token = token(uid = "root"), dryRun = true).shouldBeRight().matches.map { it.matchId }
+
+        // Match date wins over result-entry (completed_at) order.
+        order shouldBe listOf(earlier, later)
+    }
+
+    @Test
+    fun `a manual reorder re-sequences same-date matches for calculation (#332)`() {
+        provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val p3 = provisionUser(uid = "p3", rated = true)
+        val p4 = provisionUser(uid = "p4", rated = true)
+        val date = LocalDate.parse("2026-01-01")
+        val m1 = scheduledOn(admin = "root", a = p1.id, b = p2.id, date = date)
+        val m2 = scheduledOn(admin = "root", a = p3.id, b = p4.id, date = date)
+        recordResult(admin = "root", matchId = m1)
+        recordResult(admin = "root", matchId = m2)
+
+        // A manual drag sets the exact same-date processing order (no reliance on the completed_at tiebreak).
+        matchService.reorder(token = token(uid = "root"), matchIds = listOf(m2, m1)).shouldBeRight()
+        calc.calculate(token = token(uid = "root"), dryRun = true).shouldBeRight().matches.map { it.matchId } shouldBe listOf(m2, m1)
+
+        matchService.reorder(token = token(uid = "root"), matchIds = listOf(m1, m2)).shouldBeRight()
+        calc.calculate(token = token(uid = "root"), dryRun = true).shouldBeRight().matches.map { it.matchId } shouldBe listOf(m1, m2)
+    }
+
     @Test
     fun `recalculates a match recorded with a flexible, win-by-one set score`() {
         // Regression: recording accepts flexible scores (#213), but the calculation rebuilt each set

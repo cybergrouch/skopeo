@@ -117,6 +117,18 @@ class MatchRepository {
             }
         }
 
+    /**
+     * Set the manual calculation-order tiebreaker (#331/#332): assign calc_sequence = 0,1,2,… to
+     * [matchIds] in the given order, in one transaction. The service validates the set first.
+     */
+    fun reorderCalcSequence(matchIds: List<UUID>) {
+        transaction {
+            matchIds.forEachIndexed { index, matchId ->
+                MatchesTable.update(where = { MatchesTable.id eq matchId }) { it[calcSequence] = index }
+            }
+        }
+    }
+
     fun findById(matchId: UUID): Either<ServiceError, Match> =
         transaction {
             val match = loadMatch(id = matchId)
@@ -207,7 +219,12 @@ class MatchRepository {
                         createdBy != null -> base and (MatchesTable.createdBy eq createdBy)
                         else -> base
                     }
-                }.orderBy(MatchesTable.completedAt to SortOrder.ASC)
+                }.orderBy(
+                    MatchesTable.matchDate to SortOrder.ASC,
+                    MatchesTable.calcSequence to SortOrder.ASC_NULLS_LAST,
+                    MatchesTable.completedAt to SortOrder.ASC,
+                    MatchesTable.id to SortOrder.ASC,
+                )
                 .map { loadMatch(id = it[MatchesTable.id].value)!! }
         }
 
@@ -223,7 +240,12 @@ class MatchRepository {
                     MatchesTable.isActive and
                         (MatchesTable.status eq MatchStatus.COMPLETED.name) and
                         (MatchesTable.eventId eq eventId)
-                }.orderBy(MatchesTable.completedAt to SortOrder.ASC)
+                }.orderBy(
+                    MatchesTable.matchDate to SortOrder.ASC,
+                    MatchesTable.calcSequence to SortOrder.ASC_NULLS_LAST,
+                    MatchesTable.completedAt to SortOrder.ASC,
+                    MatchesTable.id to SortOrder.ASC,
+                )
                 .map { loadMatch(id = it[MatchesTable.id].value)!! }
         }
 
@@ -251,7 +273,12 @@ class MatchRepository {
                         createdBy != null -> base and (MatchesTable.createdBy eq createdBy)
                         else -> base
                     }
-                }.orderBy(MatchesTable.matchDate to SortOrder.ASC)
+                }.orderBy(
+                    MatchesTable.matchDate to SortOrder.ASC,
+                    MatchesTable.calcSequence to SortOrder.ASC_NULLS_LAST,
+                    MatchesTable.completedAt to SortOrder.ASC,
+                    MatchesTable.id to SortOrder.ASC,
+                )
                 .map { loadMatch(id = it[MatchesTable.id].value)!! }
         }
 
@@ -364,6 +391,7 @@ private fun buildMatch(
         createdBy = row[MatchesTable.createdBy]?.value,
         recordedBy = row[MatchesTable.recordedBy]?.value,
         eventId = row[MatchesTable.eventId]?.value,
+        calcSequence = row[MatchesTable.calcSequence],
     )
 
 private fun sideOf(teamId: UUID): MatchSide =
