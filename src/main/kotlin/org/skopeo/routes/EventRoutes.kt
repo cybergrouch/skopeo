@@ -14,12 +14,14 @@ import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.patch
 import io.ktor.server.routing.post
+import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.event.AddParticipantRequest
 import org.skopeo.dto.event.CreateEventRequest
 import org.skopeo.dto.event.DecideParticipantRequest
+import org.skopeo.dto.event.SetEventClubRequest
 import org.skopeo.dto.event.UpdateEventRequest
 import org.skopeo.dto.event.toResponse
 import org.skopeo.model.EventParticipantStatus
@@ -111,13 +113,22 @@ private fun Route.eventSelfSignup(service: EventService) {
     }
 }
 
-/** Rename an event (#269). Staff-only (HOST owns / ADMINISTRATOR any), enforced in the service. */
+/** Rename an event (#269) / set its club (#319). Staff-only (HOST owns / ADMINISTRATOR any), enforced in the service. */
 private fun Route.renameEvent(service: EventService) {
     patch(path = "/{id}") {
         respondMappingErrors {
             val name = requireNotNull(value = call.receive<UpdateEventRequest>().name) { "A name is required to update the event" }
             respondEither(
                 result = service.rename(token = verifiedToken(), id = uuidParam(name = "id"), name = name),
+            ) { event -> call.respond(status = HttpStatusCode.OK, message = event.toResponse()) }
+        }
+    }
+    put(path = "/{id}/club") {
+        respondMappingErrors {
+            // A null/absent clubId clears the club (event becomes "Open"); a non-null id must parse + exist.
+            val clubId = call.receive<SetEventClubRequest>().clubId?.let { parseEventUuid(value = it, field = "club id") }
+            respondEither(
+                result = service.setClub(token = verifiedToken(), id = uuidParam(name = "id"), clubId = clubId),
             ) { event -> call.respond(status = HttpStatusCode.OK, message = event.toResponse()) }
         }
     }

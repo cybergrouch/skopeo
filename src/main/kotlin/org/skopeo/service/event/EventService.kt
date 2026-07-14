@@ -139,6 +139,28 @@ class EventService(
         }
 
     /**
+     * Set (or clear, when [clubId] is null) an event's club (#319). Staff-only; a HOST may edit only
+     * their own event, an ADMINISTRATOR any — the same authz as rename. A non-null club must exist.
+     */
+    fun setClub(
+        token: VerifiedFirebaseToken,
+        id: UUID,
+        clubId: UUID?,
+    ): Either<ServiceError, EventView> =
+        either {
+            val caller = staffCaller(users = users, token = token).bind()
+            val event = ensureNotNull(value = events.findById(id = id)) { ServiceError.NotFound(message = "Event $id not found") }
+            val isAdmin = caller.capabilities.contains(element = Capability.ADMINISTRATOR)
+            ensure(condition = isAdmin || event.createdBy == caller.id) { ServiceError.Forbidden() }
+            clubId?.let { cid ->
+                ensureNotNull(value = clubs.findById(id = cid)) { ServiceError.Validation(message = "Club $cid not found") }
+            }
+            // Existence is already confirmed above (needed for the authz check), so the update can't miss.
+            events.updateClub(id = id, clubId = clubId)
+            toView(event = event.copy(clubId = clubId))
+        }
+
+    /**
      * Delete an event (#243), soft-delete via is_active. The event's matches gate it: any *rated* match
      * blocks deletion outright (results are permanent); any *recorded* (COMPLETED) but unrated match is
      * refused with advice to delete those matches first (they're still deletable while unrated, #138).

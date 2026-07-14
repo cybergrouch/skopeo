@@ -129,6 +129,49 @@ class EventServiceTest {
     }
 
     @Test
+    fun `setClub sets, changes, and clears an event's club (#319)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val clubA = clubs.create(command = CreateClubCommand(name = "Downtown TC", createdBy = host.id))
+        val clubB = clubs.create(command = CreateClubCommand(name = "West End", createdBy = host.id))
+        val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight()
+        event.club.shouldBeNull() // clubless to start
+
+        // Add a club.
+        service.setClub(token = token(uid = "host"), id = event.event.id, clubId = clubA.id).shouldBeRight().club?.id shouldBe clubA.id
+        // Change it.
+        service.setClub(token = token(uid = "host"), id = event.event.id, clubId = clubB.id).shouldBeRight().let {
+            it.club?.id shouldBe clubB.id
+            it.club?.name shouldBe "West End"
+        }
+        // Clear it (back to Open).
+        service.setClub(token = token(uid = "host"), id = event.event.id, clubId = null).shouldBeRight().club.shouldBeNull()
+    }
+
+    @Test
+    fun `setClub validates the club and is owner-or-admin only (#319)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        provision(uid = "other", roles = setOf(Capability.PLAYER, Capability.HOST))
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val club = clubs.create(command = CreateClubCommand(name = "Downtown TC", createdBy = host.id))
+        val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight()
+
+        // Unknown club → Validation.
+        service.setClub(token = token(uid = "host"), id = event.event.id, clubId = UUID.randomUUID())
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+        // A different host (not the creator) → Forbidden.
+        service.setClub(token = token(uid = "other"), id = event.event.id, clubId = club.id)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+        // An ADMINISTRATOR may edit any event's club.
+        service.setClub(token = token(uid = "admin"), id = event.event.id, clubId = club.id).shouldBeRight().club?.id shouldBe club.id
+        // Unknown event → NotFound.
+        service.setClub(token = token(uid = "admin"), id = UUID.randomUUID(), clubId = null)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
     fun `the organizer view surfaces the filing host as the creator (#270)`() {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val created = service.create(token = token(uid = "host"), input = input()).shouldBeRight()

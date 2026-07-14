@@ -20,7 +20,9 @@ import {
   usePatchApiV1EventsId,
   usePostApiV1EventsIdParticipants,
   usePostApiV1EventsIdParticipantsUserIdDecision,
+  usePutApiV1EventsIdClub,
 } from '@/api/generated/events/events'
+import { useGetApiV1Clubs } from '@/api/generated/clubs/clubs'
 import {
   getGetApiV1MatchesQueryKey,
   usePostApiV1Matches,
@@ -103,6 +105,10 @@ export function EventDetail({
   const [renaming, setRenaming] = useState(false)
   const [nameDraft, setNameDraft] = useState('')
   const [renameError, setRenameError] = useState<string | null>(null)
+  const [clubError, setClubError] = useState<string | null>(null)
+
+  // Clubs to (re)assign the event to (#319); staff-readable, empty when none exist.
+  const clubs = useGetApiV1Clubs().data ?? []
 
   function refreshEvent() {
     void queryClient.invalidateQueries({ queryKey: getGetApiV1EventsIdQueryKey(eventId) })
@@ -141,6 +147,26 @@ export function EventDetail({
       },
     },
   })
+
+  // Set/change/clear the event's club (#319). On success refresh so the Organizer regrouping reflects
+  // it on return; the empty option clears the club (event becomes "Open").
+  const setClub = usePutApiV1EventsIdClub({
+    mutation: {
+      onSuccess: () => {
+        refreshEvent()
+        void queryClient.invalidateQueries({ queryKey: getGetApiV1EventsQueryKey() })
+      },
+    },
+  })
+
+  async function saveClub(clubId: string) {
+    setClubError(null)
+    try {
+      await setClub.mutateAsync({ id: eventId, data: { clubId: clubId || null } })
+    } catch (e) {
+      setClubError(eventErrorMessage(e, 'Could not update the club.'))
+    }
+  }
 
   async function saveRename() {
     const name = nameDraft.trim()
@@ -309,6 +335,32 @@ export function EventDetail({
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
+              {/* Club (#319): set, change, or clear the event's club. */}
+              <div className="space-y-1">
+                <Label htmlFor="event-club-edit" className="text-xs font-medium uppercase text-muted-foreground">
+                  Club
+                </Label>
+                <select
+                  id="event-club-edit"
+                  value={event.clubId ?? ''}
+                  disabled={setClub.isPending}
+                  onChange={(e) => saveClub(e.target.value)}
+                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+                >
+                  <option value="">No club (Open)</option>
+                  {clubs.map((club) => (
+                    <option key={club.id} value={club.id}>
+                      {club.name}
+                    </option>
+                  ))}
+                </select>
+                {clubError ? (
+                  <p className="text-sm text-destructive" role="alert">
+                    {clubError}
+                  </p>
+                ) : null}
+              </div>
+
               <div className="text-xs font-medium uppercase text-muted-foreground">Participants</div>
               {participants.length > 0 ? (
                 <ul className="space-y-1 text-sm">
