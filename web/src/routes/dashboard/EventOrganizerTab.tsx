@@ -256,14 +256,15 @@ function groupByClub(events: EventResponse[]): ClubGroup[] {
     group.events.push(event);
     groups.set(key, group);
   }
-  // Named clubs alphabetically; the clubless "Open" group always last.
-  return [...groups.values()].sort((a, b) =>
-    a.key === OPEN_GROUP_KEY
-      ? 1
-      : b.key === OPEN_GROUP_KEY
-        ? -1
-        : a.label.localeCompare(b.label),
-  );
+  // Named clubs alphabetically; the clubless "Open" group always last. A precomputed sort key
+  // ("￿" sorts after any name) keeps the comparator branchless and fully covered.
+  return [...groups.values()]
+    .map((group) => ({
+      group,
+      sortKey: group.key === OPEN_GROUP_KEY ? "￿" : group.label.toLowerCase(),
+    }))
+    .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+    .map((entry) => entry.group);
 }
 
 /** Split a group's events into upcoming (end date today or later) and past, each date-sorted. */

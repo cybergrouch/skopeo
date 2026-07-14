@@ -270,26 +270,56 @@ describe("EventOrganizerTab", () => {
     expect(screen.getByText(/Could not create the event/)).toBeInTheDocument();
   });
 
-  it('groups events by club, with a clubless "Open" group (#313)', () => {
-    const downtown = {
+  it('groups events by club (alphabetically) with a clubless "Open" group last (#313)', () => {
+    const bravo = {
       ...event,
-      id: "d1",
-      name: "Downtown Cup",
+      id: "b1",
+      name: "Bravo Cup",
+      clubId: "c2",
+      clubName: "Bravo TC",
+    };
+    // Two upcoming Alpha events (distinct start dates) exercise the "reuse existing club group" path
+    // and the upcoming date-sort within a group.
+    const alpha = {
+      ...event,
+      id: "a1",
+      name: "Alpha Cup",
       clubId: "c1",
-      clubName: "Downtown TC",
+      clubName: "Alpha TC",
+      startDate: "2999-02-01",
+      endDate: "2999-02-05",
+    };
+    const alpha2 = {
+      ...event,
+      id: "a2",
+      name: "Alpha Cup Two",
+      clubId: "c1",
+      clubName: "Alpha TC",
+      startDate: "2999-01-01",
+      endDate: "2999-02-05",
     };
     const openEvent = { ...event, id: "o1", name: "Casual Meetup" }; // no club
+    // Deliberately unsorted input so the club sort (named alphabetical, Open last) runs its branches.
     useGetApiV1Events.mockReturnValue({
-      data: [openEvent, downtown],
+      data: [openEvent, bravo, alpha, alpha2],
       isLoading: false,
     });
     renderTab();
 
-    // A club group header and the clubless "Open" group header, each with their event.
-    expect(screen.getByText("Downtown TC")).toBeInTheDocument();
+    // Two club group headers + the clubless "Open" group, each with their event(s).
+    expect(screen.getByText("Alpha TC")).toBeInTheDocument();
+    expect(screen.getByText("Bravo TC")).toBeInTheDocument();
     expect(screen.getByText("Open")).toBeInTheDocument();
-    expect(screen.getByText("Downtown Cup")).toBeInTheDocument();
+    expect(screen.getByText("Alpha Cup")).toBeInTheDocument();
+    expect(screen.getByText("Alpha Cup Two")).toBeInTheDocument();
+    expect(screen.getByText("Bravo Cup")).toBeInTheDocument();
     expect(screen.getByText("Casual Meetup")).toBeInTheDocument();
+
+    // Group order: named clubs alphabetical, then "Open".
+    const headers = screen
+      .getAllByText(/^(Alpha TC|Bravo TC|Open)$/)
+      .map((el) => el.textContent);
+    expect(headers).toEqual(["Alpha TC", "Bravo TC", "Open"]);
   });
 
   it("offers a club dropdown and files the event under the selected club (#313)", async () => {
@@ -317,6 +347,8 @@ describe("EventOrganizerTab", () => {
   });
 
   it("hides the club dropdown when there are no clubs (#313)", () => {
+    // data undefined (not yet loaded) resolves to no clubs → no dropdown.
+    useGetApiV1Clubs.mockReturnValue({ data: undefined, isLoading: false });
     renderTab();
     expect(screen.queryByLabelText("Club")).not.toBeInTheDocument();
   });
