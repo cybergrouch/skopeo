@@ -87,6 +87,7 @@ class MatchRepositoryTest {
         u2: UUID,
         matchDate: LocalDate,
         eventId: UUID? = null,
+        completedAt: LocalDateTime = LocalDateTime.now(),
     ): UUID {
         val match =
             matches.createFixture(
@@ -112,7 +113,7 @@ class MatchRepositoryTest {
                 ),
             winnerTeamId = match.team1.teamId,
             recordedBy = u1,
-            completedAt = LocalDateTime.now(),
+            completedAt = completedAt,
         )
         return match.id
     }
@@ -139,20 +140,31 @@ class MatchRepositoryTest {
         val u2 = newUser(uid = "u2")
         val eventA = event(creator = u1, endDate = LocalDate.of(2026, 1, 10), members = listOf(u1, u2))
         val eventB = event(creator = u1, endDate = LocalDate.of(2026, 1, 20), members = listOf(u1, u2))
-        // Two same-day matches in event A, hand-ordered a2-before-a1 via calc_sequence (#332).
-        val a1 = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 8), eventId = eventA)
-        val a2 = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 8), eventId = eventA)
-        matches.reorderCalcSequence(matchIds = listOf(a2, a1))
+        val day = LocalDate.of(2026, 1, 8)
+        // Three same-day matches in event A: a2 is dragged to the front (calc_sequence); a1 and a3 are
+        // un-dragged (null calc_sequence) and share a completion time, so they tie down to the id.
+        val a2 = completedMatch(u1 = u1, u2 = u2, matchDate = day, eventId = eventA)
+        matches.reorderCalcSequence(matchIds = listOf(element = a2))
+        val tie = LocalDateTime.of(2026, 1, 8, 12, 0)
+        val a1 = completedMatch(u1 = u1, u2 = u2, matchDate = day, eventId = eventA, completedAt = tie)
+        val a3 = completedMatch(u1 = u1, u2 = u2, matchDate = day, eventId = eventA, completedAt = tie)
         val b1 = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 18), eventId = eventB)
         // An eventless match played between the two events' end dates.
         val open = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 15))
 
-        // Default: event A (ends 1/10, a2 before a1 by calc_sequence) → eventless (1/15) → event B (1/20).
-        matches.listPendingCalculation().map { it.id } shouldBe listOf(a2, a1, open, b1)
+        // Default: event A (ends 1/10; a2 dragged first, then the a1/a3 tie) → eventless (1/15) → event B.
+        val order = matches.listPendingCalculation().map { it.id }
+        order.first() shouldBe a2
+        order.subList(fromIndex = 1, toIndex = 3).toSet() shouldBe setOf(a1, a3)
+        order.subList(fromIndex = 3, toIndex = 5) shouldBe listOf(open, b1)
 
         // Admin bumps event B ahead of everything by giving it the lowest processing key.
         events.setCalcPriority(id = eventB, priority = 0.0)
-        matches.listPendingCalculation().map { it.id } shouldBe listOf(b1, a2, a1, open)
+        val overridden = matches.listPendingCalculation().map { it.id }
+        overridden.first() shouldBe b1
+        overridden[1] shouldBe a2
+        overridden.subList(fromIndex = 2, toIndex = 4).toSet() shouldBe setOf(a1, a3)
+        overridden.last() shouldBe open
     }
 
     @Test
