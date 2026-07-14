@@ -184,6 +184,13 @@ export function EventPage() {
                   This event has been deleted. It’s kept for reference only.
                 </p>
               ) : null}
+              {/* The organizing club (#313), read-only; omitted for a clubless ("Open") event. */}
+              {event.clubName ? (
+                <div>
+                  <div className="text-xs font-medium uppercase text-muted-foreground">Club</div>
+                  <p className="mt-1">{event.clubName}</p>
+                </div>
+              ) : null}
               <div>
                 <div className="text-xs font-medium uppercase text-muted-foreground">Participants</div>
                 {event.participants.length > 0 ? (

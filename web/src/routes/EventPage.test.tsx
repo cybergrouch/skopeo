@@ -128,6 +128,22 @@ describe('EventPage', () => {
     expect(screen.getByRole('button', { name: 'Copy link' })).toBeInTheDocument()
   })
 
+  it('shows the organizing club, and omits it when clubless (#313)', () => {
+    useGetApiV1EventsCodeCode.mockReturnValue({
+      data: { ...event, clubName: 'Downtown TC' },
+      isLoading: false,
+    })
+    const { unmount } = renderAt()
+    expect(screen.getByText('Club')).toBeInTheDocument()
+    expect(screen.getByText('Downtown TC')).toBeInTheDocument()
+    unmount()
+
+    // A clubless event shows no Club section.
+    useGetApiV1EventsCodeCode.mockReturnValue({ data: { ...event, clubName: null }, isLoading: false })
+    renderAt()
+    expect(screen.queryByText('Club')).not.toBeInTheDocument()
+  })
+
   it('splits matches into read-only Awaiting and Recorded sections (#321)', () => {
     useGetApiV1EventsCodeCode.mockReturnValue({ data: event, isLoading: false })
     renderAt()

@@ -4257,6 +4257,10 @@ components:
         endDate:
           type: string
           format: date
+        clubName:
+          type: string
+          nullable: true
+          description: The organizing club's name (#313), read-only; null for a clubless ("Open") event.
         isActive:
           type: boolean
           description: False once the event is soft-deleted (#325); the public page flags it as deleted.

@@ -316,11 +316,15 @@ class EventService(
                         }
                     match.toPublicResponse(players = players)
                 }
+            // Surface the organizing club's name (#313), read-only; null for a clubless event.
+            val clubEntity = event.clubId?.let { clubs.findById(id = it) }
+            val clubName = clubEntity?.name
             EventPublicResponse(
                 publicCode = event.publicCode,
                 name = event.name,
                 startDate = event.startDate.toString(),
                 endDate = event.endDate.toString(),
+                clubName = clubName,
                 isActive = event.isActive,
                 participants = participants,
                 matches = matchResponses,
