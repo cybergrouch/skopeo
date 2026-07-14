@@ -73,18 +73,18 @@ class EventRepository {
             }
         }
 
-    /** Set (or clear, when [clubId] is null) an event's club (#319); returns the event, or null if absent. */
+    /**
+     * Set (or clear, when [clubId] is null) an event's club (#319). The caller (EventService.setClub)
+     * has already confirmed the event exists (for authz), so this just writes the club FK; an update
+     * against a missing id is a harmless no-op.
+     */
     fun updateClub(
         id: UUID,
         clubId: UUID?,
-    ): Event? =
+    ): Unit =
         transaction {
-            if (loadEvent(id = id) == null) {
-                null
-            } else {
-                EventsTable.update(where = { EventsTable.id eq id }) { it[EventsTable.clubId] = clubId }
-                loadEvent(id = id)
-            }
+            EventsTable.update(where = { EventsTable.id eq id }) { it[EventsTable.clubId] = clubId }
+            Unit
         }
 
     /** Soft-delete/restore an event (#243): flip is_active and stamp/clear disabled_at. Returns false if absent. */

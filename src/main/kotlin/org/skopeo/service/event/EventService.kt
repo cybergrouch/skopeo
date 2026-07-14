@@ -155,11 +155,9 @@ class EventService(
             clubId?.let { cid ->
                 ensureNotNull(value = clubs.findById(id = cid)) { ServiceError.Validation(message = "Club $cid not found") }
             }
-            val updated =
-                ensureNotNull(
-                    value = events.updateClub(id = id, clubId = clubId),
-                ) { ServiceError.NotFound(message = "Event $id not found") }
-            toView(event = updated)
+            // Existence is already confirmed above (needed for the authz check), so the update can't miss.
+            events.updateClub(id = id, clubId = clubId)
+            toView(event = event.copy(clubId = clubId))
         }
 
     /**
