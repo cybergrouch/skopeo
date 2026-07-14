@@ -33,6 +33,7 @@ class EventRepository {
                     it[startDate] = command.startDate
                     it[endDate] = command.endDate
                     it[createdBy] = command.createdBy
+                    it[clubId] = command.clubId
                 }.value
             // Host-listed participants join APPROVED outright, attributed to the creator.
             command.participantIds.distinct().forEach { uid ->
@@ -258,6 +259,7 @@ class EventRepository {
             participantIds = approvedParticipantIdsOf(eventId = id),
             isActive = row[EventsTable.isActive],
             createdBy = row[EventsTable.createdBy]?.value,
+            clubId = row[EventsTable.clubId]?.value,
         )
     }
 

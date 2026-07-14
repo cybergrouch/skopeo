@@ -16,6 +16,7 @@ import org.skopeo.dto.match.toPublicResponse
 import org.skopeo.model.Capability
 import org.skopeo.model.CreateEventCommand
 import org.skopeo.model.Event
+import org.skopeo.model.EventClubRef
 import org.skopeo.model.EventCreatorRef
 import org.skopeo.model.EventParticipantRef
 import org.skopeo.model.EventParticipantStatus
@@ -27,6 +28,7 @@ import org.skopeo.model.User
 import org.skopeo.model.ageInYears
 import org.skopeo.model.displayName
 import org.skopeo.model.isExpired
+import org.skopeo.repository.ClubRepository
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RatingRepository
@@ -38,12 +40,13 @@ import java.util.UUID
 
 private val STAFF_ROLES = setOf(Capability.HOST, Capability.ADMINISTRATOR)
 
-/** Event-creation input, parsed/validated at the route boundary (#116): name, date range, roster. */
+/** Event-creation input, parsed/validated at the route boundary (#116): name, date range, roster, optional club. */
 data class CreateEventInput(
     val name: String,
     val startDate: LocalDate,
     val endDate: LocalDate,
     val participantIds: List<UUID>,
+    val clubId: UUID? = null,
 )
 
 /**
@@ -56,6 +59,7 @@ class EventService(
     private val users: UserRepository = UserRepository(),
     private val matches: MatchRepository = MatchRepository(),
     private val ratings: RatingRepository = RatingRepository(),
+    private val clubs: ClubRepository = ClubRepository(),
 ) {
     fun create(
         token: VerifiedFirebaseToken,
@@ -68,6 +72,10 @@ class EventService(
                 ServiceError.Validation(message = "End date cannot be before the start date")
             }
             ensureKnownUsers(users = users, ids = input.participantIds).bind()
+            // An optional club must exist (#313); a clubless event is fine.
+            input.clubId?.let { clubId ->
+                ensureNotNull(value = clubs.findById(id = clubId)) { ServiceError.Validation(message = "Club $clubId not found") }
+            }
             val event =
                 events.create(
                     command =
@@ -77,6 +85,7 @@ class EventService(
                             endDate = input.endDate,
                             participantIds = input.participantIds.distinct(),
                             createdBy = createdBy,
+                            clubId = input.clubId,
                         ),
                 )
             toView(event = event)
@@ -323,7 +332,9 @@ class EventService(
                 val host = byId.getValue(key = creatorId)
                 EventCreatorRef(displayName = host.displayName(), publicCode = host.publicCode)
             }
-        return EventView(event = event, participants = participants, creator = creator)
+        // Resolve the club (#313) to id + name for grouping/display; null for a clubless event.
+        val club = event.clubId?.let { clubId -> clubs.findById(id = clubId)?.let { EventClubRef(id = it.id, name = it.name) } }
+        return EventView(event = event, participants = participants, creator = creator, club = club)
     }
 }
 

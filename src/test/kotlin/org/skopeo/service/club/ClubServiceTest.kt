@@ -99,11 +99,22 @@ class ClubServiceTest {
     }
 
     @Test
-    fun `club management is administrator-only`() {
+    fun `creating and owner management is administrator-only`() {
         provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
-        provision(uid = "player")
 
         service.create(token = token(uid = "host"), name = "X").shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
+    @Test
+    fun `listing is readable by staff but not plain players (#313)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        provision(uid = "player")
+        service.create(token = token(uid = "admin"), name = "Club").shouldBeRight()
+
+        // A HOST (event creator) may read the list to pick a club…
+        service.list(token = token(uid = "host")).shouldBeRight() shouldHaveSize 1
+        // …but a plain player and an unprovisioned caller cannot.
         service.list(token = token(uid = "player")).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
         service.list(token = token(uid = "ghost")).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
     }

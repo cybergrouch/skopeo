@@ -77,7 +77,7 @@
     <ID>NamedArguments:MatchRepositoryTest.kt$MatchRepositoryTest$listOf(u1)</ID>
     <ID>NamedArguments:MatchRepositoryTest.kt$MatchRepositoryTest$listOf(u2)</ID>
     <ID>NamedArguments:EventRoutes.kt$IllegalArgumentException("Invalid $field '$value'; expected ISO-8601 (yyyy-MM-dd)", e)</ID>
-    <ID>NamedArguments:EventRoutes.kt$IllegalArgumentException("Invalid user id '$value'", e)</ID>
+    <ID>NamedArguments:EventRoutes.kt$IllegalArgumentException("Invalid $field '$value'", e)</ID>
     <ID>NamedArguments:MatchRoutes.kt$IllegalArgumentException("Invalid matchDate '$value'; expected ISO-8601 (yyyy-MM-dd)", e)</ID>
     <ID>NamedArguments:MatchRoutes.kt$IllegalArgumentException("Invalid user id '$value'", e)</ID>
     <ID>NamedArguments:MatchRoutes.kt$IllegalArgumentException("filter must be 'pending-calculation', 'awaiting-results', or 'results'")</ID>

@@ -139,7 +139,7 @@ private fun Route.byIdAndParticipants(service: EventService) {
                     service.addParticipant(
                         token = verifiedToken(),
                         eventId = uuidParam(name = "id"),
-                        userId = parseEventUserId(value = request.userId),
+                        userId = parseEventUuid(value = request.userId),
                     ),
             ) { event -> call.respond(status = HttpStatusCode.OK, message = event.toResponse()) }
         }
@@ -202,13 +202,17 @@ private fun toCreateEventInput(request: CreateEventRequest): CreateEventInput {
         name = request.name,
         startDate = parseDate(value = request.startDate, field = "startDate"),
         endDate = parseDate(value = request.endDate, field = "endDate"),
-        participantIds = request.participantIds.map { parseEventUserId(value = it) },
+        participantIds = request.participantIds.map { parseEventUuid(value = it) },
+        clubId = request.clubId?.let { parseEventUuid(value = it, field = "club id") },
     )
 }
 
-private fun parseEventUserId(value: String): UUID =
+private fun parseEventUuid(
+    value: String,
+    field: String = "user id",
+): UUID =
     try {
         UUID.fromString(value)
     } catch (e: IllegalArgumentException) {
-        throw IllegalArgumentException("Invalid user id '$value'", e)
+        throw IllegalArgumentException("Invalid $field '$value'", e)
     }

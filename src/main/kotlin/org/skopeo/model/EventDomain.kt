@@ -34,6 +34,8 @@ data class Event(
     val participantIds: List<UUID>,
     val isActive: Boolean = true,
     val createdBy: UUID? = null,
+    // The club this event belongs to (#313), or null for a clubless ("Open") event.
+    val clubId: UUID? = null,
 )
 
 /**
@@ -50,6 +52,7 @@ data class CreateEventCommand(
     val endDate: LocalDate,
     val participantIds: List<UUID>,
     val createdBy: UUID,
+    val clubId: UUID? = null,
 )
 
 /**
@@ -77,6 +80,14 @@ data class EventView(
     val event: Event,
     val participants: List<EventParticipantRef>,
     val creator: EventCreatorRef? = null,
+    // The event's club (#313), resolved to id + name for grouping/display; null for a clubless event.
+    val club: EventClubRef? = null,
+)
+
+/** The club an event belongs to (#313), resolved to its id + name for grouping and display. */
+data class EventClubRef(
+    val id: UUID,
+    val name: String,
 )
 
 /** The host who filed an event (#270), identified the privacy-conscious way — display name + public code. */

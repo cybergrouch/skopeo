@@ -17,6 +17,8 @@ data class CreateEventRequest(
     val startDate: String,
     val endDate: String,
     val participantIds: List<String> = emptyList(),
+    // Optional club (#313) to assign the event to; omit for a clubless ("Open") event.
+    val clubId: String? = null,
 )
 
 /**
@@ -83,6 +85,9 @@ data class EventResponse(
     // The filing host (#270): display name + public code, or null for legacy events with no creator.
     val creatorDisplayName: String? = null,
     val creatorPublicCode: String? = null,
+    // The event's club (#313): id + name, or null for a clubless event.
+    val clubId: String? = null,
+    val clubName: String? = null,
 )
 
 fun MyEvent.toResponse(): MyEventResponse =
@@ -105,6 +110,8 @@ fun EventView.toResponse(): EventResponse =
         participants = participants.map { it.toResponse() },
         creatorDisplayName = creator?.displayName,
         creatorPublicCode = creator?.publicCode,
+        clubId = club?.id?.toString(),
+        clubName = club?.name,
     )
 
 internal fun EventParticipantRef.toResponse(): EventParticipantResponse =

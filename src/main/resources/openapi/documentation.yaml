@@ -2039,7 +2039,7 @@ paths:
           description: Caller is not an ADMINISTRATOR
     get:
       summary: List clubs
-      description: ADMINISTRATOR only (#313). All active clubs, alphabetical by name, with their owners.
+      description: Staff (HOST/CLUB_OWNER/ADMINISTRATOR, #313) — e.g. to pick a club when creating an event. All active clubs, alphabetical, with owners.
       tags:
         - Clubs
       security:
@@ -3978,6 +3978,11 @@ components:
           items:
             type: string
             format: uuid
+        clubId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Optional club to file the event under (#313); omit for a clubless ("Open") event.
 
     UpdateEventRequest:
       type: object
@@ -4107,6 +4112,15 @@ components:
           type: string
           nullable: true
           description: The filing host's public code (#270), for linking to their profile; null if unknown.
+        clubId:
+          type: string
+          format: uuid
+          nullable: true
+          description: The event's club (#313); null for a clubless event.
+        clubName:
+          type: string
+          nullable: true
+          description: The event's club name (#313), for grouping/display; null for a clubless event.
 
     EventPublicResponse:
       type: object
