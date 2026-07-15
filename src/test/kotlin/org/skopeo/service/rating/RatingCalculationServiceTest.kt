@@ -360,6 +360,11 @@ class RatingCalculationServiceTest {
             total shouldBe 1L
             rows.single().details["matches"] shouldBe "2"
         }
+
+        // With nothing left pending, a dry-run preview writes no new summary (the empty-guard branch);
+        // the PREVIEWED count stays at the two from earlier.
+        calc.calculate(token = token(uid = "root"), dryRun = true).shouldBeRight().matches.shouldBe(expected = emptyList())
+        audit.list(actions = listOf(element = AuditAction.RATING_CALCULATION_PREVIEWED), limit = 50, offset = 0).second shouldBe 2L
     }
 
     @Test
