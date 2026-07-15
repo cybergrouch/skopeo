@@ -115,8 +115,9 @@ function sideNames(players: MatchPublicPlayer[]): string {
 
 /**
  * Head-to-head record between the two players (#188): the running win tally and prior meetings,
- * newest first, each linking to its own public match page. Hidden when there are no prior meetings
- * (the backend returns no head-to-head for those, or for non-singles matches).
+ * newest first, each linking to its own public match page. Shown for every singles match, including a
+ * first-ever meeting — the tally reflects the match being viewed (#339) and the list reads "No prior
+ * meetings" (#366). Hidden only for non-singles matches (the backend returns no head-to-head then).
  */
 function HeadToHeadCard({ match }: { match: MatchPublicResponse }) {
   const h2h = match.headToHead
@@ -147,31 +148,35 @@ function HeadToHeadCard({ match }: { match: MatchPublicResponse }) {
           </span>
           <span>{playerName(team2)}</span>
         </div>
-        <ul className="space-y-2">
-          {h2h.meetings.map((meeting) => {
-            const score = meeting.sets
-              .map((s) => `${s.team1Games}-${s.team2Games}`)
-              .join(' ')
-            const won = winnerName(meeting.winnerPublicCode)
-            // Show whether the meeting was singles or doubles (#285), e.g. "mixed doubles".
-            const format = meeting.matchFormat.replaceAll('_', ' ').toLowerCase()
-            return (
-              <li key={meeting.publicCode} className="rounded-lg border p-3">
-                <div className="text-muted-foreground">
-                  {format} · {meeting.matchDate}
-                  {score ? ` · ${score}` : ''}
-                  {won ? ` · ${won} won` : ''}
-                </div>
-                <Link
-                  to={`/matches/${meeting.publicCode}`}
-                  className="mt-1 inline-block text-xs text-primary hover:underline"
-                >
-                  Public page (QR)
-                </Link>
-              </li>
-            )
-          })}
-        </ul>
+        {h2h.meetings.length === 0 ? (
+          <p className="text-center text-muted-foreground">No prior meetings.</p>
+        ) : (
+          <ul className="space-y-2">
+            {h2h.meetings.map((meeting) => {
+              const score = meeting.sets
+                .map((s) => `${s.team1Games}-${s.team2Games}`)
+                .join(' ')
+              const won = winnerName(meeting.winnerPublicCode)
+              // Show whether the meeting was singles or doubles (#285), e.g. "mixed doubles".
+              const format = meeting.matchFormat.replaceAll('_', ' ').toLowerCase()
+              return (
+                <li key={meeting.publicCode} className="rounded-lg border p-3">
+                  <div className="text-muted-foreground">
+                    {format} · {meeting.matchDate}
+                    {score ? ` · ${score}` : ''}
+                    {won ? ` · ${won} won` : ''}
+                  </div>
+                  <Link
+                    to={`/matches/${meeting.publicCode}`}
+                    className="mt-1 inline-block text-xs text-primary hover:underline"
+                  >
+                    Public page (QR)
+                  </Link>
+                </li>
+              )
+            })}
+          </ul>
+        )}
       </CardContent>
     </Card>
   )

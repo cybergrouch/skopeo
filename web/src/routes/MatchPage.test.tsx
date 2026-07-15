@@ -323,10 +323,21 @@ describe('MatchPage', () => {
     ])
   })
 
-  it('hides the head-to-head section when there are no prior meetings (#188)', () => {
+  it('hides the head-to-head section when the backend omits it (e.g. non-singles) (#366)', () => {
     useGetApiV1MatchesCodeCode.mockReturnValue({ data: { ...match, headToHead: null }, isLoading: false })
     renderAt()
     expect(screen.queryByText('Head-to-head')).not.toBeInTheDocument()
+  })
+
+  it('shows head-to-head with the tally and a "No prior meetings" note for a first meeting (#366)', () => {
+    useGetApiV1MatchesCodeCode.mockReturnValue({
+      data: { ...match, headToHead: { team1Wins: 1, team2Wins: 0, meetings: [] } },
+      isLoading: false,
+    })
+    renderAt()
+    expect(screen.getByText('Head-to-head')).toBeInTheDocument()
+    expect(screen.getByText('1 – 0')).toBeInTheDocument()
+    expect(screen.getByText('No prior meetings.')).toBeInTheDocument()
   })
 
   it('head-to-head copes with missing names, scores, and undecided/unknown winners (#188)', () => {
