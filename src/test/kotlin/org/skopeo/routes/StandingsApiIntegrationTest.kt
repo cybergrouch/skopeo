@@ -106,9 +106,10 @@ class StandingsApiIntegrationTest {
                 }
             response.status shouldBe HttpStatusCode.OK
 
-            // The 4.0–4.5 band lists the player; the exact rating (4.200000) never appears (privacy).
+            // The 4.0–4.5 band (headed "NTRP 4.0 Band Race", #346) lists the player; the exact rating
+            // (4.200000) never appears (privacy).
             val raw = response.bodyAsText()
-            raw shouldContain "4.0–4.5"
+            raw shouldContain "NTRP 4.0 Band Race"
             raw shouldContain player.id
             raw shouldNotContain "4.200000"
 
