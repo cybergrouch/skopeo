@@ -602,9 +602,10 @@ class MatchServiceTest {
         val public = service.publicByCode(token = token(uid = "host"), code = current.publicCode).shouldBeRight()
         val h2h = public.headToHead.shouldNotBeNull()
 
-        // Excludes the viewed match; newest first.
+        // The meetings list is the prior meetings only (the viewed match isn't repeated), newest first.
         h2h.meetings.map { it.matchDate } shouldBe listOf("2026-02-01", "2026-01-01", "2025-12-01")
-        h2h.team1Wins shouldBe 1 // p1: the Jan meeting
+        // …but the win tally includes the viewed March match, which p1 won (#339).
+        h2h.team1Wins shouldBe 2 // p1: the Jan meeting + the viewed March match
         h2h.team2Wins shouldBe 2 // p2: the Feb + reversed-Dec meetings
 
         // Winner resolved to the player's code; set scores oriented to the viewed match's team1 (p1).
@@ -663,10 +664,11 @@ class MatchServiceTest {
 
         val h2h = service.publicByCode(token = token(uid = "host"), code = current.publicCode).shouldBeRight().headToHead.shouldNotBeNull()
 
-        // Both meetings count — previously the doubles one was silently dropped from the tally (#285).
+        // Both prior meetings count — previously the doubles one was silently dropped from the tally (#285).
         h2h.meetings shouldHaveSize 2
-        h2h.team1Wins shouldBe 1 // p1: the doubles win
-        h2h.team2Wins shouldBe 1 // p2: the singles win
+        // The tally also includes the current March match, which p1 won (#339).
+        h2h.team1Wins shouldBe 2 // p1: the prior doubles win + the current match
+        h2h.team2Wins shouldBe 1 // p2: the prior singles win
         val doublesEntry = h2h.meetings.single { it.matchFormat == "DOUBLES" }
         doublesEntry.winnerPublicCode shouldBe p1.publicCode
         h2h.meetings.count { it.matchFormat == "SINGLES" } shouldBe 1

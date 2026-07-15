@@ -314,9 +314,11 @@ class MatchService(
 
     /**
      * Head-to-head record between a singles match's two players (#188): the win tally and prior
-     * completed meetings, newest first, excluding [match] itself. Null when the match is not singles
-     * (one player per side) or there are no other completed meetings. Both players are already in
-     * [usersById], so no extra lookups are needed; wins and set scores are oriented to team1/team2.
+     * completed meetings, newest first. The [meetings] list is the *prior* meetings (this match is not
+     * repeated there — it's already the page's subject), but the win tally **includes** this match when
+     * it's decided (#339), so the head-to-head reflects the result being viewed. Null when the match is
+     * not singles (one player per side) or there are no prior completed meetings. Both players are
+     * already in [usersById]; wins and set scores are oriented to team1/team2.
      */
     private fun headToHeadFor(
         match: Match,
@@ -326,7 +328,7 @@ class MatchService(
         val team1Id = match.team1.userIds.first()
         val team2Id = match.team2.userIds.first()
         val codes = usersById.mapValues { (_, user) -> user.publicCode }
-        val entries =
+        val prior =
             matches
                 .listBetweenUsers(userIdA = team1Id, userIdB = team2Id)
                 .filter { it.id != match.id && it.status == MatchStatus.COMPLETED }
@@ -337,12 +339,18 @@ class MatchService(
                         (team1Id in meeting.team2.userIds && team2Id in meeting.team1.userIds)
                 }
                 .map { headToHeadEntry(meeting = it, team1Id = team1Id, team2Id = team2Id, codes = codes) }
-        return entries
+        // The current match counts toward the tally once it has a result (#339); it stays out of the list.
+        val current =
+            match
+                .takeIf { it.status == MatchStatus.COMPLETED }
+                ?.let { headToHeadEntry(meeting = it, team1Id = team1Id, team2Id = team2Id, codes = codes) }
+        val forTally = prior + listOfNotNull(element = current)
+        return prior
             .takeIf { it.isNotEmpty() }
             ?.let {
                 MatchPublicHeadToHead(
-                    team1Wins = it.count { entry -> entry.winnerPublicCode == codes[team1Id] },
-                    team2Wins = it.count { entry -> entry.winnerPublicCode == codes[team2Id] },
+                    team1Wins = forTally.count { entry -> entry.winnerPublicCode == codes[team1Id] },
+                    team2Wins = forTally.count { entry -> entry.winnerPublicCode == codes[team2Id] },
                     meetings = it,
                 )
             }
