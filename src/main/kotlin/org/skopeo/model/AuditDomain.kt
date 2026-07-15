@@ -27,6 +27,9 @@ enum class AuditAction {
     MATCH_FIXTURE_CREATED,
     MATCH_RESULT_RECORDED,
     EVENT_CREATED,
+    EVENT_RENAMED,
+    EVENT_CLUB_CHANGED,
+    EVENT_DELETED,
     RATING_CALCULATION_PREVIEWED,
     RATING_CALCULATION_MATCH_RATED,
     RATING_CALCULATION_COMMITTED,
@@ -89,7 +92,11 @@ val AuditAction.category: AuditCategory
             AuditAction.INVITE_CREATED, AuditAction.INVITE_REVOKED -> AuditCategory.INVITE
             AuditAction.MATCH_FIXTURE_CREATED -> AuditCategory.MATCH_FIXTURE
             AuditAction.MATCH_RESULT_RECORDED -> AuditCategory.MATCH_RESULT
-            AuditAction.EVENT_CREATED -> AuditCategory.EVENT_MANAGEMENT
+            AuditAction.EVENT_CREATED,
+            AuditAction.EVENT_RENAMED,
+            AuditAction.EVENT_CLUB_CHANGED,
+            AuditAction.EVENT_DELETED,
+            -> AuditCategory.EVENT_MANAGEMENT
             AuditAction.RATING_CALCULATION_PREVIEWED,
             AuditAction.RATING_CALCULATION_MATCH_RATED,
             AuditAction.RATING_CALCULATION_COMMITTED,

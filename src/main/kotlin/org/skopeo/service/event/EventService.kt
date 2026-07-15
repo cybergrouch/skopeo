@@ -162,8 +162,26 @@ class EventService(
             ensure(condition = isAdmin || event.createdBy == caller.id) { ServiceError.Forbidden() }
             ensure(condition = name.isNotBlank()) { ServiceError.Validation(message = "Event name is required") }
             // Existence is already confirmed above (needed for the authz check), so the rename can't miss.
-            events.rename(id = id, name = name.trim())
-            toView(event = event.copy(name = name.trim()))
+            val trimmed = name.trim()
+            events.rename(id = id, name = trimmed)
+            // Activity Log entry for the rename (#354).
+            audit.record(
+                write =
+                    AuditWrite(
+                        actorUserId = caller.id,
+                        action = AuditAction.EVENT_RENAMED,
+                        entityType = AuditEntityType.EVENT,
+                        entityId = event.id,
+                        summary = "Renamed event ${event.name} → $trimmed",
+                        details =
+                            mapOf(
+                                "publicCode" to event.publicCode,
+                                "oldName" to event.name,
+                                "newName" to trimmed,
+                            ),
+                    ),
+            )
+            toView(event = event.copy(name = trimmed))
         }
 
     /**
@@ -185,6 +203,23 @@ class EventService(
             }
             // Existence is already confirmed above (needed for the authz check), so the update can't miss.
             events.updateClub(id = id, clubId = clubId)
+            // Activity Log entry for the club change (#354).
+            audit.record(
+                write =
+                    AuditWrite(
+                        actorUserId = caller.id,
+                        action = AuditAction.EVENT_CLUB_CHANGED,
+                        entityType = AuditEntityType.EVENT,
+                        entityId = event.id,
+                        summary = "Set event ${event.name} club to ${clubId?.toString() ?: "Open"}",
+                        details =
+                            mapOf(
+                                "publicCode" to event.publicCode,
+                                "oldClubId" to event.clubId?.toString(),
+                                "newClubId" to clubId?.toString(),
+                            ),
+                    ),
+            )
             toView(event = event.copy(clubId = clubId))
         }
 
@@ -236,6 +271,22 @@ class EventService(
             // Only scheduled (unrecorded, unrated) fixtures remain; soft-disable them so none outlive the event.
             eventMatches.forEach { matches.setActive(matchId = it.id, active = false, disabledAt = now).bind() }
             events.setActive(id = id, active = false, disabledAt = now)
+            // Activity Log entry for the (soft) delete (#354).
+            audit.record(
+                write =
+                    AuditWrite(
+                        actorUserId = caller.id,
+                        action = AuditAction.EVENT_DELETED,
+                        entityType = AuditEntityType.EVENT,
+                        entityId = event.id,
+                        summary = "Deleted event ${event.name}",
+                        details =
+                            mapOf(
+                                "publicCode" to event.publicCode,
+                                "disabledFixtures" to eventMatches.size.toString(),
+                            ),
+                    ),
+            )
         }
 
     fun addParticipant(

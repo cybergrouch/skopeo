@@ -160,6 +160,13 @@ class EventServiceTest {
         }
         // Clear it (back to Open).
         service.setClub(token = token(uid = "host"), id = event.event.id, clubId = null).shouldBeRight().club.shouldBeNull()
+
+        // Each club change writes an Activity Log entry (#354); the newest records the clear as "Open".
+        val entries = AuditRepository().list(actions = listOf(element = AuditAction.EVENT_CLUB_CHANGED), limit = 10, offset = 0).first
+        entries shouldHaveSize 3
+        entries.first().actorUserId shouldBe host.id
+        entries.first().summary shouldBe "Set event ${event.event.name} club to Open"
+        entries.first().details["newClubId"].shouldBeNull()
     }
 
     @Test
@@ -465,6 +472,12 @@ class EventServiceTest {
 
         events.findById(id = event.id)!!.isActive.shouldBeFalse()
         service.list(token = token(uid = "host")).shouldBeRight() shouldHaveSize 0
+        // The soft-delete writes an Activity Log entry (#354).
+        AuditRepository().list(actions = listOf(element = AuditAction.EVENT_DELETED), limit = 10, offset = 0).first.single().let {
+            it.actorUserId shouldBe host.id
+            it.entityId shouldBe event.id
+            it.summary shouldBe "Deleted event ${event.name}"
+        }
     }
 
     @Test
@@ -524,14 +537,20 @@ class EventServiceTest {
     }
 
     @Test
-    fun `a host renames their own event, trimming the name`() {
-        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+    fun `a host renames their own event, trimming the name, and it writes an Activity Log entry (#354)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val event = service.create(token = token(uid = "host"), input = input(name = "Spring Open")).shouldBeRight().event
 
         val renamed = service.rename(token = token(uid = "host"), id = event.id, name = "  Summer Classic  ").shouldBeRight()
 
         renamed.event.name shouldBe "Summer Classic"
         events.findById(id = event.id)!!.name shouldBe "Summer Classic"
+        AuditRepository().list(actions = listOf(element = AuditAction.EVENT_RENAMED), limit = 10, offset = 0).first.single().let {
+            it.actorUserId shouldBe host.id
+            it.entityId shouldBe event.id
+            it.summary shouldBe "Renamed event Spring Open → Summer Classic"
+            it.details["oldName"] shouldBe "Spring Open"
+        }
     }
 
     @Test
