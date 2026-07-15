@@ -10,6 +10,17 @@ import java.util.UUID
 /** Lifecycle of a match record (mirrors the matches.status CHECK). */
 enum class MatchStatus { SCHEDULED, IN_PROGRESS, COMPLETED, CANCELLED }
 
+/**
+ * A player's decided win–loss record (#342), aggregated across singles and doubles. [total] is the
+ * count of decided matches (a decided match is always a win or a loss — tennis has no ties).
+ */
+data class WinLossRecord(
+    val wins: Int,
+    val losses: Int,
+) {
+    val total: Int get() = wins + losses
+}
+
 /** One side of a match: a (temporary) team and its participating users, in position order. */
 data class MatchSide(
     val teamId: UUID,

@@ -514,4 +514,23 @@ describe('RecordedResultsSection', () => {
     )
     expect(screen.queryByRole('button', { name: 'Reorder match' })).not.toBeInTheDocument()
   })
+
+  it('offers no reorder handle once any same-date match is rated / frozen (#337)', () => {
+    // Two same-date matches, but m2 is already rated → the whole group is frozen, no handles.
+    useGetApiV1Matches.mockReturnValue({
+      data: [
+        { ...match, id: 'm1', matchDate: '2026-01-01' },
+        { ...recordedMatch, id: 'm2', matchDate: '2026-01-01', ratedAt: '2026-02-01T00:00:00Z' },
+      ],
+      isLoading: false,
+    })
+    render(
+      <MemoryRouter>
+        <QueryClientProvider client={new QueryClient()}>
+          <RecordedResultsSection eventId="evt-1" />
+        </QueryClientProvider>
+      </MemoryRouter>,
+    )
+    expect(screen.queryByRole('button', { name: 'Reorder match' })).not.toBeInTheDocument()
+  })
 })

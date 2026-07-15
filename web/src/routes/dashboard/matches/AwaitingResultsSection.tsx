@@ -392,6 +392,10 @@ function SortableMatchCard({
  * A same-date group of match cards (#331/#332). When reorderable (event-scoped, not read-only, and
  * more than one match on the date), a host can drag to set the calculation order within that date;
  * the new order persists via PUT /matches/calculation-order. Otherwise the cards render plainly.
+ *
+ * A group with any already-rated match is NOT reorderable (#337): ratings are frozen, so the backend
+ * rejects a reorder touching a rated match — disabling drag for the whole group keeps the UI honest
+ * rather than letting the host discover the refusal only on drop.
  */
 function MatchDateGroup({
   items,
@@ -420,7 +424,11 @@ function MatchDateGroup({
     }),
   );
 
-  if (!reorderable || readOnly || items.length < 2) {
+  // A rated match freezes the group's order (#337): the backend rejects any reorder touching one, so
+  // don't offer drag handles for a group that has one — render plain cards instead.
+  const anyRated = items.some((m) => m.ratedAt != null);
+
+  if (!reorderable || readOnly || anyRated || items.length < 2) {
     return (
       <>
         {items.map((m) => (

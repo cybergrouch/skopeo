@@ -26,6 +26,15 @@ function metaLine(user: UserSummaryResponse): string {
   return parts.join(' · ')
 }
 
+/**
+ * "3–1 · 4 matches" — the player's decided win–loss record and total match count (#342, singles +
+ * doubles combined). Null when the player has no decided matches on record.
+ */
+function recordLine(record: UserSummaryResponse['record']): string | null {
+  if (!record) return null
+  return `${record.wins}–${record.losses} · ${record.total} ${record.total === 1 ? 'match' : 'matches'}`
+}
+
 export function ResearchTab() {
   const [applied, setApplied] = useState<GetApiV1UsersParams | null>(null)
   const [page, setPage] = useState(0)
@@ -105,13 +114,20 @@ export function ResearchTab() {
                             <div className="text-muted-foreground">{meta}</div>
                           ) : null}
                         </div>
-                        {user.rating ? (
-                          <span className="shrink-0 font-medium">
-                            NTRP {user.rating.level ?? user.rating.value}
-                            {formatConfidence(user.rating.confidence)
-                              ? ` · ${formatConfidence(user.rating.confidence)}`
-                              : ''}
-                          </span>
+                        {user.rating || user.record ? (
+                          <div className="shrink-0 text-right">
+                            {user.rating ? (
+                              <div className="font-medium">
+                                NTRP {user.rating.level ?? user.rating.value}
+                                {formatConfidence(user.rating.confidence)
+                                  ? ` · ${formatConfidence(user.rating.confidence)}`
+                                  : ''}
+                              </div>
+                            ) : null}
+                            {recordLine(user.record) ? (
+                              <div className="text-xs text-muted-foreground">{recordLine(user.record)}</div>
+                            ) : null}
+                          </div>
                         ) : null}
                       </Link>
                     </li>

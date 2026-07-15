@@ -3,6 +3,7 @@
 
 package org.skopeo.routes
 
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -29,14 +30,22 @@ import org.skopeo.dto.user.UserSummaryPageResponse
 import org.skopeo.dto.user.UserSummaryResponse
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
+import org.skopeo.model.CreateFixtureCommand
+import org.skopeo.model.MatchSetResult
+import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
+import org.skopeo.model.TeamType
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.module
+import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
 import org.skopeo.testsupport.TestFirebaseAuth
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.util.UUID
 
 /**
  * End-to-end exercise of user search: staff (HOST/ADMINISTRATOR) can find users by name
@@ -388,6 +397,52 @@ class UserSearchApiIntegrationTest {
                 }.body<UserSummaryPageResponse>()
             second.total shouldBe 3
             second.items.size shouldBe 1 // the remainder
+        }
+
+    @Test
+    fun `paged search results carry each player's decided win-loss record (#342)`() =
+        withApp { client ->
+            val host = seedStaff(uid = "host", roles = setOf(Capability.HOST))
+            val alice = client.provisionNamed(uid = "alice", displayName = "Alice Racer")
+            val bob = client.provisionNamed(uid = "bob", displayName = "Bob Racer")
+
+            // Alice beats Bob in one completed singles match (seeded directly).
+            val matches = MatchRepository()
+            val match =
+                matches.createFixture(
+                    command =
+                        CreateFixtureCommand(
+                            matchFormat = TeamType.SINGLES,
+                            matchType = MatchType.OPEN_PLAY,
+                            matchDate = LocalDate.of(2026, 1, 1),
+                            team1UserIds = listOf(element = UUID.fromString(alice.id)),
+                            team2UserIds = listOf(element = UUID.fromString(bob.id)),
+                            team1Name = "T1",
+                            team2Name = "T2",
+                            createdBy = UUID.fromString(alice.id),
+                        ),
+                )
+            matches.addResult(
+                matchId = match.id,
+                sets =
+                    listOf(element = MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 0, winnerTeamId = match.team1.teamId)),
+                winnerTeamId = match.team1.teamId,
+                recordedBy = UUID.fromString(alice.id),
+                completedAt = LocalDateTime.now(),
+            )
+
+            val page =
+                client.get(urlString = "/api/v1/users/search?name=Racer&limit=25&offset=0") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                }.body<UserSummaryPageResponse>()
+
+            val aliceRecord = page.items.single { it.id == alice.id }.record.shouldNotBeNull()
+            aliceRecord.wins shouldBe 1
+            aliceRecord.losses shouldBe 0
+            aliceRecord.total shouldBe 1
+            val bobRecord = page.items.single { it.id == bob.id }.record.shouldNotBeNull()
+            bobRecord.wins shouldBe 0
+            bobRecord.losses shouldBe 1
         }
 
     @Test
