@@ -37,6 +37,12 @@ data class SetEventClubRequest(
     val clubId: String? = null,
 )
 
+/** Body for `PUT /api/v1/events/{id}/calculation-priority` — set the calculation processing order (#335). */
+@Serializable
+data class SetCalcPriorityRequest(
+    val priority: Double,
+)
+
 /** Body for `POST /api/v1/events/{id}/participants` — add a participant. */
 @Serializable
 data class AddParticipantRequest(
@@ -94,6 +100,8 @@ data class EventResponse(
     // The event's club (#313): id + name, or null for a clubless event.
     val clubId: String? = null,
     val clubName: String? = null,
+    // Admin override for calculation processing order (#335); null = order by end date.
+    val calcPriority: Double? = null,
 )
 
 fun MyEvent.toResponse(): MyEventResponse =
@@ -118,6 +126,7 @@ fun EventView.toResponse(): EventResponse =
         creatorPublicCode = creator?.publicCode,
         clubId = club?.id?.toString(),
         clubName = club?.name,
+        calcPriority = event.calcPriority,
     )
 
 internal fun EventParticipantRef.toResponse(): EventParticipantResponse =

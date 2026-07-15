@@ -96,6 +96,19 @@ class EventRepository {
             Unit
         }
 
+    /**
+     * Set an event's calculation-order priority (#335). The caller (EventService) has already
+     * confirmed the event exists, so an update against a missing id is a harmless no-op.
+     */
+    fun setCalcPriority(
+        id: UUID,
+        priority: Double,
+    ): Unit =
+        transaction {
+            EventsTable.update(where = { EventsTable.id eq id }) { it[calcPriority] = priority }
+            Unit
+        }
+
     /** Soft-delete/restore an event (#243): flip is_active and stamp/clear disabled_at. Returns false if absent. */
     fun setActive(
         id: UUID,
@@ -287,6 +300,7 @@ class EventRepository {
             isActive = row[EventsTable.isActive],
             createdBy = row[EventsTable.createdBy]?.value,
             clubId = row[EventsTable.clubId]?.value,
+            calcPriority = row[EventsTable.calcPriority],
         )
     }
 

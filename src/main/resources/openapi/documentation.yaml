@@ -1829,6 +1829,44 @@ paths:
         '404':
           description: No such event
 
+  /api/v1/events/{id}/calculation-priority:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    put:
+      summary: Set an event's rating-calculation processing priority
+      description: >-
+        ADMINISTRATOR only (#335). Sets the event's processing order for the rating calculation
+        (Pending Calculation groups by event); persisted on the same scale as the event's end date so
+        a dragged event slots between date-ordered neighbours.
+      tags:
+        - Events
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetCalcPriorityRequest'
+      responses:
+        '200':
+          description: The updated event
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventResponse'
+        '400':
+          description: Malformed id or body
+        '403':
+          description: Caller is not an ADMINISTRATOR
+        '404':
+          description: No such event
+
   /api/v1/events/{id}/participants:
     parameters:
       - name: id
@@ -4148,6 +4186,17 @@ components:
           nullable: true
           description: The club to assign, or null to remove the event's club.
 
+    SetCalcPriorityRequest:
+      type: object
+      required:
+        - priority
+      description: Set an event's rating-calculation processing priority (#335).
+      properties:
+        priority:
+          type: number
+          format: double
+          description: The processing key (end-date epoch-day scale); lower = processed earlier.
+
     AddParticipantRequest:
       type: object
       required:
@@ -4277,6 +4326,11 @@ components:
           type: string
           nullable: true
           description: The event's club name (#313), for grouping/display; null for a clubless event.
+        calcPriority:
+          type: number
+          format: double
+          nullable: true
+          description: Admin override for calculation processing order (#335); null = order by end date.
 
     EventPublicResponse:
       type: object

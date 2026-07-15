@@ -1,5 +1,23 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { GripVertical } from 'lucide-react'
 import {
   Card,
   CardContent,
@@ -12,10 +30,19 @@ import {
   getGetApiV1MatchesQueryKey,
   useGetApiV1Matches,
 } from '@/api/generated/matches/matches'
+import {
+  getGetApiV1EventsQueryKey,
+  useGetApiV1Events,
+  usePutApiV1EventsIdCalculationPriority,
+} from '@/api/generated/events/events'
 import { usePostApiV1RatingsCalculations } from '@/api/generated/ratings/ratings'
 import { useGetApiV1Users } from '@/api/generated/users/users'
 import { GetApiV1MatchesFilter } from '@/api/generated/model'
-import type { CalculationResponse, MatchResponse } from '@/api/generated/model'
+import type {
+  MatchCalculationResponse,
+  CalculationResponse,
+  MatchResponse,
+} from '@/api/generated/model'
 import { plural } from '@/lib/plural'
 import { CalculationBreakdownDetail } from '@/components/CalculationBreakdownDetail'
 
@@ -31,6 +58,160 @@ function winnerName(
   return null
 }
 
+/** A yyyy-MM-dd date as an epoch-day number — the scale event calc priorities live on (#335). */
+function epochDay(iso: string): number {
+  return Math.round(new Date(`${iso}T00:00:00Z`).getTime() / 86_400_000)
+}
+
+/** An event's processing key: its calc_priority override if set, else its end date as an epoch day. */
+type EventInfo = { name: string; endDate: string; calcPriority?: number | null }
+
+// The pending list arrives already in processing order; walk it into display entries: consecutive
+// same-event matches form one event group; each eventless match is its own "Open" entry (#335).
+type Entry =
+  | { kind: 'event'; id: string; eventId: string; matches: MatchResponse[] }
+  | { kind: 'open'; id: string; match: MatchResponse }
+
+function buildEntries(pending: MatchResponse[]): Entry[] {
+  const entries: Entry[] = []
+  for (const match of pending) {
+    if (!match.eventId) {
+      entries.push({ kind: 'open', id: `open:${match.id}`, match })
+      continue
+    }
+    const last = entries[entries.length - 1]
+    if (last && last.kind === 'event' && last.eventId === match.eventId) {
+      last.matches.push(match)
+    } else {
+      entries.push({ kind: 'event', id: `event:${match.eventId}`, eventId: match.eventId, matches: [match] })
+    }
+  }
+  return entries
+}
+
+/** One expandable match row (shared by event groups and Open entries), numbered by processing order. */
+function MatchRow({
+  match,
+  position,
+  nameOf,
+  isOpen,
+  onToggle,
+  matchPreview,
+}: {
+  match: MatchResponse
+  position: number
+  nameOf: (id: string) => string
+  isOpen: boolean
+  onToggle: () => void
+  matchPreview?: MatchCalculationResponse
+}) {
+  const player1 = match.team1.userIds.map(nameOf).join(', ')
+  const player2 = match.team2.userIds.map(nameOf).join(', ')
+  const scores = match.sets.map((s) => `${s.team1Games}-${s.team2Games}`).join(' ')
+  const winner = winnerName(match, nameOf)
+  return (
+    <li className="rounded-lg border text-sm">
+      <button
+        type="button"
+        className="flex w-full items-start justify-between gap-2 p-3 text-left hover:bg-muted/50"
+        aria-expanded={isOpen}
+        onClick={onToggle}
+      >
+        <span className="flex min-w-0 items-start gap-2">
+          <span className="mt-0.5 shrink-0 font-mono text-xs tabular-nums text-muted-foreground">
+            {position}.
+          </span>
+          <span className="min-w-0">
+            <span className="block font-medium">
+              {player1} vs {player2}
+            </span>
+            <span className="block text-muted-foreground">
+              {match.matchDate}
+              {scores ? ` · ${scores}` : ''}
+              {winner ? ` · Winner: ${winner}` : ''}
+            </span>
+          </span>
+        </span>
+        <span aria-hidden="true" className="shrink-0 text-muted-foreground">
+          {isOpen ? '▾' : '▸'}
+        </span>
+      </button>
+      {isOpen ? (
+        <div className="border-t px-3 py-2">
+          {matchPreview ? (
+            <ul className="space-y-2">
+              {matchPreview.changes.map((change) => (
+                <li key={change.userId}>
+                  <div>
+                    {nameOf(change.userId)}: {change.previousRating} →{' '}
+                    {change.newRating} ({change.change})
+                  </div>
+                  <CalculationBreakdownDetail breakdown={change.breakdown} />
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Run Preview to see the projected ratings and how they're calculated.
+            </p>
+          )}
+        </div>
+      ) : null}
+    </li>
+  )
+}
+
+/** A draggable event group (#335): a grip-handled header + its matches; drag reorders event priority. */
+function EventGroup({
+  entry,
+  eventName,
+  renderMatch,
+}: {
+  entry: Extract<Entry, { kind: 'event' }>
+  eventName: string
+  renderMatch: (match: MatchResponse) => ReactNode
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: entry.id })
+  const style = { transform: CSS.Transform.toString(transform), transition }
+  return (
+    <li ref={setNodeRef} style={style} className="rounded-lg border">
+      <div className="flex items-center gap-2 border-b bg-muted/40 px-2 py-1.5">
+        <button
+          type="button"
+          aria-label={`Reorder event ${eventName}`}
+          className="cursor-grab touch-none rounded p-1 text-muted-foreground hover:bg-muted"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
+        <span className="text-xs font-medium uppercase text-muted-foreground">{eventName}</span>
+      </div>
+      <ul className="space-y-2 p-2">{entry.matches.map(renderMatch)}</ul>
+    </li>
+  )
+}
+
+/** A non-draggable, date-pinned eventless match entry (#335), rendered inline among the event groups. */
+function OpenEntry({
+  entry,
+  renderMatch,
+}: {
+  entry: Extract<Entry, { kind: 'open' }>
+  renderMatch: (match: MatchResponse) => ReactNode
+}) {
+  const { setNodeRef, transform, transition } = useSortable({ id: entry.id })
+  const style = { transform: CSS.Transform.toString(transform), transition }
+  return (
+    <li ref={setNodeRef} style={style} className="rounded-lg border">
+      <div className="border-b bg-muted/40 px-3 py-1.5 text-xs font-medium uppercase text-muted-foreground">
+        Open (no event)
+      </div>
+      <ul className="space-y-2 p-2">{renderMatch(entry.match)}</ul>
+    </li>
+  )
+}
+
 export function PendingCalculationSection() {
   const queryClient = useQueryClient()
   const [preview, setPreview] = useState<CalculationResponse | null>(null)
@@ -39,6 +220,12 @@ export function PendingCalculationSection() {
 
   const matchesQuery = useGetApiV1Matches(PENDING_FILTER)
   const pending = matchesQuery.data ?? []
+  const eventsById = new Map<string, EventInfo>(
+    (useGetApiV1Events().data ?? []).map((e) => [
+      e.id,
+      { name: e.name, endDate: e.endDate, calcPriority: e.calcPriority },
+    ]),
+  )
 
   const ids = [...new Set(pending.flatMap((m) => [...m.team1.userIds, ...m.team2.userIds]))]
   const usersQuery = useGetApiV1Users(
@@ -48,17 +235,18 @@ export function PendingCalculationSection() {
   const nameById = new Map((usersQuery.data ?? []).map((u) => [u.id, u.displayName ?? u.id]))
   const nameOf = (userId: string) => nameById.get(userId) ?? userId.slice(0, 8)
 
-  // The dry-run preview, keyed by match id, so each card can show its own projection + breakdown.
   const previewByMatch = new Map((preview?.matches ?? []).map((m) => [m.matchId, m]))
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
 
   function toggle(id: string) {
     setExpanded((prev) => {
       const next = new Set(prev)
-      if (next.has(id)) {
-        next.delete(id)
-      } else {
-        next.add(id)
-      }
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
       return next
     })
   }
@@ -72,22 +260,78 @@ export function PendingCalculationSection() {
         } else {
           setPreview(null)
           setCommitted(data.matchesProcessed)
-          queryClient.invalidateQueries({
-            queryKey: getGetApiV1MatchesQueryKey(PENDING_FILTER),
-          })
+          queryClient.invalidateQueries({ queryKey: getGetApiV1MatchesQueryKey(PENDING_FILTER) })
         }
       },
     },
   })
+
+  const setPriority = usePutApiV1EventsIdCalculationPriority({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getGetApiV1MatchesQueryKey(PENDING_FILTER) })
+        queryClient.invalidateQueries({ queryKey: getGetApiV1EventsQueryKey() })
+      },
+    },
+  })
+
+  const entries = buildEntries(pending)
+
+  // An entry's processing key on the epoch-day scale: an event's calc_priority override or its end
+  // date; an eventless entry keys off its match date (so events and Open entries interleave by date).
+  function entryKey(entry: Entry): number {
+    if (entry.kind === 'open') return epochDay(entry.match.matchDate)
+    const info = eventsById.get(entry.eventId)
+    return info?.calcPriority ?? (info ? epochDay(info.endDate) : 0)
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const from = entries.findIndex((e) => e.id === active.id)
+    const to = entries.findIndex((e) => e.id === over.id)
+    if (from < 0 || to < 0) return
+    const reordered = arrayMove(entries, from, to)
+    const pos = reordered.findIndex((e) => e.id === active.id)
+    const dragged = reordered[pos]
+    if (dragged.kind !== 'event') return
+    // Slot the dragged event's key between its new neighbours (or just past the single edge).
+    // A dropped event always has at least one neighbour (the drop target differs from itself).
+    const before = reordered[pos - 1]
+    const after = reordered[pos + 1]
+    let priority: number
+    if (before && after) {
+      priority = (entryKey(before) + entryKey(after)) / 2
+    } else if (before) {
+      priority = entryKey(before) + 1
+    } else {
+      priority = entryKey(after as Entry) - 1
+    }
+    setPriority.mutate({ id: dragged.eventId, data: { priority } })
+  }
+
+  function renderMatch(match: MatchResponse) {
+    return (
+      <MatchRow
+        key={match.id}
+        match={match}
+        position={pending.indexOf(match) + 1}
+        nameOf={nameOf}
+        isOpen={expanded.has(match.id)}
+        onToggle={() => toggle(match.id)}
+        matchPreview={previewByMatch.get(match.id)}
+      />
+    )
+  }
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Pending calculation</CardTitle>
         <CardDescription>
-          Completed matches awaiting a rating calculation, numbered in the exact
-          order they’ll be processed — by match date, with any host fine-tuning
-          of same-day order (#331/#332). Preview before committing.
+          Completed matches awaiting a rating calculation, grouped by event and numbered in the exact
+          order they’ll be processed — events by end date (drag to reorder), matches within an event
+          by date (#331/#332/#335). Preview before committing.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -101,66 +345,24 @@ export function PendingCalculationSection() {
         )}
 
         {pending.length > 0 ? (
-          <ul className="space-y-2">
-            {pending.map((match, index) => {
-              const player1 = match.team1.userIds.map(nameOf).join(', ')
-              const player2 = match.team2.userIds.map(nameOf).join(', ')
-              const scores = match.sets.map((s) => `${s.team1Games}-${s.team2Games}`).join(' ')
-              const winner = winnerName(match, nameOf)
-              const isOpen = expanded.has(match.id)
-              const matchPreview = previewByMatch.get(match.id)
-              return (
-                <li key={match.id} className="rounded-lg border text-sm">
-                  <button
-                    type="button"
-                    className="flex w-full items-start justify-between gap-2 p-3 text-left hover:bg-muted/50"
-                    aria-expanded={isOpen}
-                    onClick={() => toggle(match.id)}
-                  >
-                    <span className="flex min-w-0 items-start gap-2">
-                      <span className="mt-0.5 shrink-0 font-mono text-xs tabular-nums text-muted-foreground">
-                        {index + 1}.
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block font-medium">
-                          {player1} vs {player2}
-                        </span>
-                        <span className="block text-muted-foreground">
-                          {match.matchDate}
-                          {scores ? ` · ${scores}` : ''}
-                          {winner ? ` · Winner: ${winner}` : ''}
-                        </span>
-                      </span>
-                    </span>
-                    <span aria-hidden="true" className="shrink-0 text-muted-foreground">
-                      {isOpen ? '▾' : '▸'}
-                    </span>
-                  </button>
-                  {isOpen ? (
-                    <div className="border-t px-3 py-2">
-                      {matchPreview ? (
-                        <ul className="space-y-2">
-                          {matchPreview.changes.map((change) => (
-                            <li key={change.userId}>
-                              <div>
-                                {nameOf(change.userId)}: {change.previousRating} →{' '}
-                                {change.newRating} ({change.change})
-                              </div>
-                              <CalculationBreakdownDetail breakdown={change.breakdown} />
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="text-xs text-muted-foreground">
-                          Run Preview to see the projected ratings and how they're calculated.
-                        </p>
-                      )}
-                    </div>
-                  ) : null}
-                </li>
-              )
-            })}
-          </ul>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={entries.map((e) => e.id)} strategy={verticalListSortingStrategy}>
+              <ul className="space-y-2">
+                {entries.map((entry) =>
+                  entry.kind === 'event' ? (
+                    <EventGroup
+                      key={entry.id}
+                      entry={entry}
+                      eventName={eventsById.get(entry.eventId)?.name ?? 'Event'}
+                      renderMatch={renderMatch}
+                    />
+                  ) : (
+                    <OpenEntry key={entry.id} entry={entry} renderMatch={renderMatch} />
+                  ),
+                )}
+              </ul>
+            </SortableContext>
+          </DndContext>
         ) : null}
 
         <div className="flex flex-wrap gap-2">

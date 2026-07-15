@@ -165,6 +165,24 @@ class EventService(
         }
 
     /**
+     * Set an event's rating-calculation processing priority (#335). ADMINISTRATOR-only — the
+     * calculation is admin-run and its order is global. Persisted on the same scale as the event's
+     * end date so a dragged event slots between date-ordered neighbours.
+     */
+    fun setCalcPriority(
+        token: VerifiedFirebaseToken,
+        id: UUID,
+        priority: Double,
+    ): Either<ServiceError, EventView> =
+        either {
+            val caller = staffCaller(users = users, token = token).bind()
+            ensure(condition = caller.capabilities.contains(element = Capability.ADMINISTRATOR)) { ServiceError.Forbidden() }
+            val event = ensureNotNull(value = events.findById(id = id)) { ServiceError.NotFound(message = "Event $id not found") }
+            events.setCalcPriority(id = id, priority = priority)
+            toView(event = event.copy(calcPriority = priority))
+        }
+
+    /**
      * Delete an event (#243), soft-delete via is_active. The event's matches gate it: any *rated* match
      * blocks deletion outright (results are permanent); any *recorded* (COMPLETED) but unrated match is
      * refused with advice to delete those matches first (they're still deletable while unrated, #138).
