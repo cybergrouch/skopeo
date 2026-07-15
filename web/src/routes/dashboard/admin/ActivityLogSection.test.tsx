@@ -148,6 +148,15 @@ describe('ActivityLogSection', () => {
     })
   })
 
+  it('offers the Events and Rating-calculation category filters (#333/#334)', async () => {
+    const user = userEvent.setup()
+    renderSection()
+    await user.selectOptions(screen.getByLabelText('Category'), 'EVENT_MANAGEMENT')
+    expect(useGetApiV1Audit).toHaveBeenLastCalledWith({ category: 'EVENT_MANAGEMENT', limit: 25, offset: 0 })
+    await user.selectOptions(screen.getByLabelText('Category'), 'RATING_CALCULATION')
+    expect(useGetApiV1Audit).toHaveBeenLastCalledWith({ category: 'RATING_CALCULATION', limit: 25, offset: 0 })
+  })
+
   it('paginates 25 rows per page, enabling/disabling Previous and Next at the ends', async () => {
     useGetApiV1Audit.mockReturnValue(page([entry()], 60)) // 60 / 25 = 3 pages
     const user = userEvent.setup()

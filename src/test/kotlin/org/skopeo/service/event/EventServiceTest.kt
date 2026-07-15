@@ -17,6 +17,7 @@ import org.jetbrains.exposed.sql.update
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.CreateClubCommand
@@ -33,6 +34,7 @@ import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.model.ageInYears
+import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.ClubRepository
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.EventsTable
@@ -110,6 +112,19 @@ class EventServiceTest {
         view.participants.map { it.userId } shouldBe listOf(p1.id, p2.id)
         view.participants.first().displayName shouldBe "p1"
         view.club.shouldBeNull() // clubless by default
+    }
+
+    @Test
+    fun `creating an event writes an Activity Log entry (#334)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val view = service.create(token = token(uid = "host"), input = input()).shouldBeRight()
+
+        AuditRepository().list(actions = listOf(element = AuditAction.EVENT_CREATED), limit = 10, offset = 0).first.single().let {
+            it.actorUserId shouldBe host.id
+            it.entityId shouldBe view.event.id
+            it.summary shouldBe "Created event Spring Open"
+            it.details["publicCode"] shouldBe view.event.publicCode
+        }
     }
 
     @Test

@@ -26,6 +26,10 @@ enum class AuditAction {
     INVITE_REVOKED,
     MATCH_FIXTURE_CREATED,
     MATCH_RESULT_RECORDED,
+    EVENT_CREATED,
+    RATING_CALCULATION_PREVIEWED,
+    RATING_CALCULATION_MATCH_RATED,
+    RATING_CALCULATION_COMMITTED,
     USER_MARKED_DUPLICATE,
     USER_UNMARKED_DUPLICATE,
     DUPLICATE_CANDIDATE_FLAGGED,
@@ -46,6 +50,8 @@ enum class AuditEntityType {
     INVITE,
     MATCH,
     CLUB,
+    EVENT,
+    CALCULATION,
 }
 
 /**
@@ -61,8 +67,10 @@ enum class AuditCategory {
     MATCH_RESULT,
     CAPABILITY_CHANGE,
     RATING_CHANGE,
+    RATING_CALCULATION,
     DUPLICATE_RECTIFICATION,
     CLUB_MANAGEMENT,
+    EVENT_MANAGEMENT,
 }
 
 /** The category an action rolls up into. */
@@ -81,6 +89,11 @@ val AuditAction.category: AuditCategory
             AuditAction.INVITE_CREATED, AuditAction.INVITE_REVOKED -> AuditCategory.INVITE
             AuditAction.MATCH_FIXTURE_CREATED -> AuditCategory.MATCH_FIXTURE
             AuditAction.MATCH_RESULT_RECORDED -> AuditCategory.MATCH_RESULT
+            AuditAction.EVENT_CREATED -> AuditCategory.EVENT_MANAGEMENT
+            AuditAction.RATING_CALCULATION_PREVIEWED,
+            AuditAction.RATING_CALCULATION_MATCH_RATED,
+            AuditAction.RATING_CALCULATION_COMMITTED,
+            -> AuditCategory.RATING_CALCULATION
             AuditAction.USER_MARKED_DUPLICATE,
             AuditAction.USER_UNMARKED_DUPLICATE,
             AuditAction.DUPLICATE_CANDIDATE_FLAGGED,
