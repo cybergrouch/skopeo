@@ -15,7 +15,7 @@
 # Because the scheduled export writes a fixed object name, bucket versioning retains history.
 #
 # Usage:
-#   BACKUP_BUCKET=gs://skopeo-backups \
+#   BACKUP_BUCKET=gs://skopeo-prod-db-backups \
 #   SCHEDULER_SA=<sa>@skopeo-prod.iam.gserviceaccount.com \
 #   ./scripts/schedule-backup.sh
 #

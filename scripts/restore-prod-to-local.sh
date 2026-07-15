@@ -10,8 +10,8 @@
 #     need real identities.
 #
 # Usage:
-#   BACKUP_BUCKET=gs://skopeo-backups ./scripts/restore-prod-to-local.sh
-#   ./scripts/restore-prod-to-local.sh gs://skopeo-backups/skopeodb-20260714T....sql.gz
+#   BACKUP_BUCKET=gs://skopeo-prod-db-backups ./scripts/restore-prod-to-local.sh
+#   ./scripts/restore-prod-to-local.sh gs://skopeo-prod-db-backups/skopeodb-20260714T....sql.gz
 #
 # Config via env:
 #   BACKUP_BUCKET  gs:// bucket to pull the latest backup from (if no object arg is given)
@@ -59,7 +59,9 @@ echo "⬇️  Downloading backup…"
 gcloud storage cp "$OBJECT" "$TMP"
 
 echo "🗄️  Recreating '${LOCAL_DB}' in container '${CONTAINER}'…"
-docker exec "$CONTAINER" psql -U "$PGUSER" -c "DROP DATABASE IF EXISTS ${LOCAL_DB};"
+# WITH (FORCE) terminates any lingering connections (e.g. an app still pointed at the restored copy)
+# so the drop can't fail with "database is being accessed by other users" (Postgres 13+).
+docker exec "$CONTAINER" psql -U "$PGUSER" -c "DROP DATABASE IF EXISTS ${LOCAL_DB} WITH (FORCE);"
 docker exec "$CONTAINER" psql -U "$PGUSER" -c "CREATE DATABASE ${LOCAL_DB};"
 
 # Cloud SQL dumps reference cloud-managed roles (cloudsqladmin, cloudsqlsuperuser) and the app role
@@ -81,4 +83,4 @@ echo "Then verify:"
 echo "   ./scripts/health-check.sh"
 echo
 echo "Clean up when done:"
-echo "   docker exec ${CONTAINER} psql -U ${PGUSER} -c \"DROP DATABASE ${LOCAL_DB};\""
+echo "   docker exec ${CONTAINER} psql -U ${PGUSER} -c \"DROP DATABASE ${LOCAL_DB} WITH (FORCE);\""
