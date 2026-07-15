@@ -22,10 +22,12 @@ import org.skopeo.model.User
 import org.skopeo.model.UserRating
 import org.skopeo.model.UserSearchPage
 import org.skopeo.model.UserSearchQuery
+import org.skopeo.model.WinLossRecord
 import org.skopeo.model.ageRangeToDob
 import org.skopeo.model.effectivePhotoUrl
 import org.skopeo.repository.CapabilityRepository
 import org.skopeo.repository.InviteRepository
+import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService
@@ -69,12 +71,16 @@ class UserService(
     private val capabilities: CapabilityRepository = CapabilityRepository(),
     private val ratings: RatingRepository = RatingRepository(),
     private val invites: InviteRepository = InviteRepository(),
+    private val matches: MatchRepository = MatchRepository(),
     private val audit: AuditService = AuditService(),
     // Verified-email allowlist for the ADMINISTRATOR bootstrap (from ADMIN_EMAILS); empty = none.
     private val adminEmails: Set<String> = emptySet(),
 ) {
     /** Current ratings for the given users, keyed by id — enriches search summaries (issue #64). */
     fun currentRatings(ids: List<UUID>): Map<UUID, UserRating> = ratings.findCurrentRatings(userIds = ids)
+
+    /** Decided win–loss records (singles + doubles) for the given users, keyed by id — enriches research (#342). */
+    fun winLossRecords(ids: List<UUID>): Map<UUID, WinLossRecord> = matches.winLossByUsers(userIds = ids)
 
     /**
      * Player search backing the player-picker, role-grants, and the Research tab — RESEARCHER or staff

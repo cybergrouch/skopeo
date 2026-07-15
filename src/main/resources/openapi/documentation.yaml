@@ -3476,6 +3476,22 @@ components:
           items:
             type: string
             enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER]
+        record:
+          nullable: true
+          type: object
+          description: Decided win–loss record, singles + doubles combined (#342); populated for research results, else absent.
+          required:
+            - wins
+            - losses
+            - total
+          properties:
+            wins:
+              type: integer
+            losses:
+              type: integer
+            total:
+              type: integer
+              description: Total decided matches (wins + losses).
 
     UserResponse:
       type: object

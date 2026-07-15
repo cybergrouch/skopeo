@@ -166,12 +166,15 @@ private fun Route.searchUsersPaged(service: UserService) {
                     offset = params["offset"]?.toIntOrNull() ?: 0,
                 )
             respondEither(result = page) { result ->
-                val ratings = service.currentRatings(ids = result.items.map { it.id })
+                val ids = result.items.map { it.id }
+                val ratings = service.currentRatings(ids = ids)
+                // Research results also carry each player's win–loss record (#342).
+                val records = service.winLossRecords(ids = ids)
                 call.respond(
                     status = HttpStatusCode.OK,
                     message =
                         UserSummaryPageResponse(
-                            items = result.items.map { it.toSummary(rating = ratings[it.id]) },
+                            items = result.items.map { it.toSummary(rating = ratings[it.id], record = records[it.id]) },
                             total = result.total.toInt(),
                         ),
                 )

@@ -7,6 +7,7 @@ import kotlinx.serialization.Serializable
 import org.skopeo.model.NameType
 import org.skopeo.model.User
 import org.skopeo.model.UserRating
+import org.skopeo.model.WinLossRecord
 import org.skopeo.model.ageInYears
 import java.net.URI
 import java.time.LocalDate
@@ -189,9 +190,22 @@ data class UserSummaryResponse(
     val age: Int?,
     val rating: PublicRatingDto?,
     val capabilities: List<String>,
+    // Decided win–loss record (singles + doubles) — populated for research results (#342), else null.
+    val record: WinLossDto? = null,
 )
 
-fun User.toSummary(rating: UserRating? = null): UserSummaryResponse =
+/** A player's decided win–loss record (#342): singles + doubles combined; [total] = wins + losses. */
+@Serializable
+data class WinLossDto(
+    val wins: Int,
+    val losses: Int,
+    val total: Int,
+)
+
+fun User.toSummary(
+    rating: UserRating? = null,
+    record: WinLossRecord? = null,
+): UserSummaryResponse =
     UserSummaryResponse(
         id = id.toString(),
         publicCode = publicCode,
@@ -208,6 +222,7 @@ fun User.toSummary(rating: UserRating? = null): UserSummaryResponse =
                 )
             },
         capabilities = capabilities.map { it.name }.sorted(),
+        record = record?.let { WinLossDto(wins = it.wins, losses = it.losses, total = it.total) },
     )
 
 /** A page of search results plus the total match count, for numbered pagination (#232). */

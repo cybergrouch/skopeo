@@ -30,6 +30,7 @@ import org.skopeo.model.ServiceError
 import org.skopeo.model.TeamType
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
+import org.skopeo.model.WinLossRecord
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -133,6 +134,59 @@ class MatchRepositoryTest {
                     createdBy = creator,
                 ),
         ).id
+
+    /** A COMPLETED doubles match (two a side) where [winners] beat [losers]. */
+    private fun completedDoubles(
+        winners: List<UUID>,
+        losers: List<UUID>,
+    ): UUID {
+        val match =
+            matches.createFixture(
+                command =
+                    CreateFixtureCommand(
+                        matchFormat = TeamType.DOUBLES,
+                        matchType = MatchType.OPEN_PLAY,
+                        matchDate = LocalDate.of(2026, 2, 1),
+                        team1UserIds = winners,
+                        team2UserIds = losers,
+                        team1Name = "T1",
+                        team2Name = "T2",
+                        createdBy = winners.first(),
+                    ),
+            )
+        matches.addResult(
+            matchId = match.id,
+            sets = listOf(element = MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 0, winnerTeamId = match.team1.teamId)),
+            winnerTeamId = match.team1.teamId,
+            recordedBy = winners.first(),
+            completedAt = LocalDateTime.now(),
+        )
+        return match.id
+    }
+
+    @Test
+    fun `winLossByUsers aggregates decided singles and doubles, ignores undecided, omits the matchless (#342)`() {
+        val u1 = newUser(uid = "u1")
+        val u2 = newUser(uid = "u2")
+        val u3 = newUser(uid = "u3")
+        val u4 = newUser(uid = "u4")
+        val u5 = newUser(uid = "u5") // plays nothing
+
+        completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 1)) // u1 beats u2 (singles)
+        completedMatch(u1 = u2, u2 = u1, matchDate = LocalDate.of(2026, 1, 8)) // u2 beats u1 (singles)
+        completedDoubles(winners = listOf(u1, u3), losers = listOf(u2, u4)) // u1,u3 beat u2,u4
+        fixture(u1 = u1, u2 = u2, date = LocalDate.of(2026, 3, 1)) // scheduled, undecided → not counted
+
+        val records = matches.winLossByUsers(userIds = listOf(u1, u2, u3, u4, u5))
+
+        records.getValue(key = u1) shouldBe WinLossRecord(wins = 2, losses = 1)
+        records.getValue(key = u1).total shouldBe 3
+        records.getValue(key = u2) shouldBe WinLossRecord(wins = 1, losses = 2)
+        records.getValue(key = u3) shouldBe WinLossRecord(wins = 1, losses = 0)
+        records.getValue(key = u4) shouldBe WinLossRecord(wins = 0, losses = 1)
+        records.containsKey(key = u5) shouldBe false
+        matches.winLossByUsers(userIds = emptyList()) shouldBe emptyMap()
+    }
 
     @Test
     fun `pending-calculation orders by event end date, interleaves eventless by match date, honors override (#335)`() {

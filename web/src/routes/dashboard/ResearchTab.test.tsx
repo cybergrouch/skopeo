@@ -91,6 +91,45 @@ describe('ResearchTab', () => {
     expect(screen.getByText(/· 87%/)).toBeInTheDocument()
   })
 
+  it('shows the win–loss record and total match count when present (#342)', async () => {
+    useGetApiV1UsersSearch.mockReturnValue(
+      page([
+        {
+          id: 'u1',
+          publicCode: 'AAA111',
+          displayName: 'Alice',
+          photoUrl: null,
+          sex: 'Female',
+          age: 34,
+          rating: { value: '4.000000', level: '4.0' },
+          record: { wins: 3, losses: 1, total: 4 },
+          capabilities: ['PLAYER'],
+        },
+      ]),
+    )
+    const user = userEvent.setup()
+    renderTab()
+    await user.type(screen.getByLabelText('Name'), 'ali')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+    expect(screen.getByText('3–1 · 4 matches')).toBeInTheDocument()
+  })
+
+  it('singularises the match count and omits the record when absent (#342)', async () => {
+    useGetApiV1UsersSearch.mockReturnValue(
+      page([
+        { id: 'a', publicCode: 'AAA111', displayName: 'One Match', photoUrl: null, rating: undefined, record: { wins: 1, losses: 0, total: 1 }, capabilities: [] },
+        { id: 'b', publicCode: 'BBB222', displayName: 'No Matches', photoUrl: null, rating: undefined, record: undefined, capabilities: [] },
+      ]),
+    )
+    const user = userEvent.setup()
+    renderTab()
+    await user.type(screen.getByLabelText('Name'), 'match')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+    expect(screen.getByText('1–0 · 1 match')).toBeInTheDocument()
+    expect(screen.getByText('No Matches')).toBeInTheDocument()
+    expect(screen.queryByText(/matches$/)).not.toBeInTheDocument() // the record-less row shows nothing
+  })
+
   it('shows both same-named players, each distinguished by its public code', async () => {
     useGetApiV1UsersSearch.mockReturnValue(
       page([

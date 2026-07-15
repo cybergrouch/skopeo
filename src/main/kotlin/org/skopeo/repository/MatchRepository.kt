@@ -26,6 +26,7 @@ import org.skopeo.model.MatchStatus
 import org.skopeo.model.MatchType
 import org.skopeo.model.ServiceError
 import org.skopeo.model.TeamType
+import org.skopeo.model.WinLossRecord
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -337,6 +338,50 @@ class MatchRepository {
                     }.orderBy(MatchesTable.matchDate to SortOrder.DESC)
                     .map { loadMatch(id = it[MatchesTable.id].value)!! }
             }
+        }
+
+    /**
+     * Decided win–loss records for many users at once (#342), aggregated across singles and doubles.
+     * Counts every match with a recorded winner that a user played in (soft-deleted matches included,
+     * mirroring [listByUser]); a user sits on exactly one team per match, so each is one win or loss.
+     * Users with no decided matches are absent. Own matches only — a canonical account's merged
+     * duplicates (#124) are not folded in here, keeping this cheap for a whole search-result page.
+     */
+    fun winLossByUsers(userIds: List<UUID>): Map<UUID, WinLossRecord> =
+        transaction {
+            if (userIds.isEmpty()) {
+                return@transaction emptyMap()
+            }
+            // team id → the queried users on that team (doubles partners may both be in the query).
+            val usersByTeam =
+                TeamUsersTable
+                    .selectAll()
+                    .where { TeamUsersTable.userId inList userIds }
+                    .groupBy(
+                        keySelector = { it[TeamUsersTable.teamId].value },
+                        valueTransform = { it[TeamUsersTable.userId].value },
+                    )
+            if (usersByTeam.isEmpty()) {
+                return@transaction emptyMap()
+            }
+            val teamIds = usersByTeam.keys.toList()
+            val outcomes =
+                MatchesTable
+                    .selectAll()
+                    .where {
+                        ((MatchesTable.team1Id inList teamIds) or (MatchesTable.team2Id inList teamIds)) and
+                            MatchesTable.winnerTeamId.isNotNull()
+                    }.flatMap { row ->
+                        val winnerTeam = row[MatchesTable.winnerTeamId]?.value ?: return@flatMap emptyList<Pair<UUID, Boolean>>()
+                        val team1 = row[MatchesTable.team1Id].value
+                        val team2 = row[MatchesTable.team2Id].value
+                        val loserTeam = if (winnerTeam == team1) team2 else team1
+                        usersByTeam[winnerTeam].orEmpty().map { it to true } +
+                            usersByTeam[loserTeam].orEmpty().map { it to false }
+                    }
+            outcomes
+                .groupBy(keySelector = { it.first }, valueTransform = { it.second })
+                .mapValues { (_, results) -> WinLossRecord(wins = results.count { it }, losses = results.count { !it }) }
         }
 
     /**
