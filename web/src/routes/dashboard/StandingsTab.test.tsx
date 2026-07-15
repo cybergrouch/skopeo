@@ -24,7 +24,7 @@ vi.mock('@/api/generated/users/users', () => ({ useGetApiV1UsersMe }))
 // One (band, sex) row each: Men in two bands, Women in one, plus an Unspecified group.
 const bands = [
   {
-    band: '4.0–4.5',
+    band: 'NTRP 4.0 Band Race',
     sex: 'Male',
     entries: [
       { rank: 1, userId: 'm1', displayName: 'Bob Cruz', publicCode: 'BBB222', sex: 'Male', age: 40 },
@@ -33,17 +33,17 @@ const bands = [
     ],
   },
   {
-    band: '4.0–4.5',
+    band: 'NTRP 4.0 Band Race',
     sex: 'Female',
     entries: [{ rank: 1, userId: 'f1', displayName: 'Ana Cruz', publicCode: 'AAA111', sex: 'Female', age: 34 }],
   },
   {
-    band: '3.5–4.0',
+    band: 'NTRP 3.5 Band Race',
     sex: 'Male',
     entries: [{ rank: 1, userId: 'm3', displayName: 'Cy Young', publicCode: 'DDD444', sex: 'Male', age: 28 }],
   },
   {
-    band: '4.0–4.5',
+    band: 'NTRP 4.0 Band Race',
     sex: null,
     entries: [{ rank: 1, userId: 'u1', displayName: 'No Sex', publicCode: 'EEE555', sex: null, age: null }],
   },
@@ -84,8 +84,8 @@ describe('StandingsTab', () => {
     expect(screen.getByRole('button', { name: 'Unspecified' })).toBeInTheDocument()
 
     // Both Men's bands show; Ana (Female) does not.
-    expect(screen.getByText('4.0–4.5')).toBeInTheDocument()
-    expect(screen.getByText('3.5–4.0')).toBeInTheDocument()
+    expect(screen.getByText('NTRP 4.0 Band Race')).toBeInTheDocument()
+    expect(screen.getByText('NTRP 3.5 Band Race')).toBeInTheDocument()
     expect(screen.getByText('Bob Cruz')).toBeInTheDocument()
     expect(screen.getByText('40')).toBeInTheDocument() // age-only meta
     expect(screen.getByText('CCC333')).toBeInTheDocument() // name fallback to code
@@ -100,7 +100,7 @@ describe('StandingsTab', () => {
     await user.click(screen.getByRole('button', { name: 'Women' }))
     expect(screen.getByText('Ana Cruz')).toBeInTheDocument()
     expect(screen.queryByText('Bob Cruz')).not.toBeInTheDocument()
-    expect(screen.queryByText('3.5–4.0')).not.toBeInTheDocument() // no Women in that band
+    expect(screen.queryByText('NTRP 3.5 Band Race')).not.toBeInTheDocument() // no Women in that band
   })
 
   it('switches to the Unspecified group when toggled (#212)', async () => {
@@ -158,7 +158,7 @@ describe('StandingsTab', () => {
     useGetApiV1Standings.mockReturnValue({
       data: [
         {
-          band: '4.0–4.5',
+          band: 'NTRP 4.0 Band Race',
           sex: 'Male',
           entries: [
             { rank: 1, userId: 'm1', displayName: 'Bob Cruz', publicCode: 'BBB222', sex: 'Male', age: 40, currentRating: '4.230000' },
