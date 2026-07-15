@@ -14,6 +14,7 @@ import type {
 } from '@/api/generated/model'
 import { ShareCard } from '@/components/ShareCard'
 import { PublicPageNav } from '@/components/PublicPageNav'
+import { formatConfidence } from '@/lib/confidence'
 
 /** A player's name as a link to their public profile, falling back to the code or "Unknown". */
 function PlayerLink({ player }: { player: MatchPublicPlayer }) {
@@ -66,6 +67,8 @@ function signed(value: string): string {
 function RatingChangeRow({ change }: { change: MatchPublicRatingChange }) {
   const name = change.displayName ?? change.publicCode ?? 'Unknown'
   const showRates = change.previousRating != null && change.newRating != null
+  // The player's current rating confidence (#343), shown beside the band/rate move as a percentage.
+  const pct = formatConfidence(change.confidence)
   return (
     <div className="flex items-center justify-between gap-2">
       <span>
@@ -88,10 +91,12 @@ function RatingChangeRow({ change }: { change: MatchPublicRatingChange }) {
               ({signed(change.ratingChange)})
             </span>
           ) : null}
+          {pct ? <span className="ml-1 text-muted-foreground">· {pct}</span> : null}
         </span>
       ) : (
         <span className="font-medium">
           {change.previousLevel ?? '—'} → {change.newLevel ?? '—'}
+          {pct ? <span className="ml-1 font-normal text-muted-foreground">· {pct}</span> : null}
         </span>
       )}
     </div>

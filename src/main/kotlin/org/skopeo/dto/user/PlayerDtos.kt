@@ -52,6 +52,8 @@ data class PlayerMatchHistoryEntry(
     val partners: List<MatchHistoryParticipant>,
     val opponents: List<MatchHistoryParticipant>,
     val playerLevelAtMatch: String?,
+    // The player's *current* rating confidence (#343), a 0..1 decimal string shown as a percentage.
+    val playerConfidence: String? = null,
 )
 
 /**
@@ -75,6 +77,8 @@ data class MatchHistoryParticipant(
     val displayName: String?,
     val photoUrl: String?,
     val levelAtMatch: String?,
+    // This participant's *current* rating confidence (#343), a 0..1 decimal string shown as a percentage.
+    val confidence: String? = null,
 )
 
 /** A related player identified the same privacy-conscious way as a public profile (e.g. a merged card's canonical). */

@@ -371,6 +371,9 @@ class MatchService(
         val names = usersById.mapValues { (_, user) -> user.displayName() }
         val codes = usersById.mapValues { (_, user) -> user.publicCode }
         val order = match.team1.userIds + match.team2.userIds
+        // Each player's *current* rating confidence (#343), shown beside the historical band change.
+        val confidenceByUser =
+            ratings.findCurrentRatings(userIds = order).mapValues { (_, rating) -> rating.confidence.toPlainString() }
         return ratings
             .historyForMatches(matchIds = listOf(element = match.id))
             .sortedBy { order.indexOf(element = it.userId) }
@@ -383,6 +386,7 @@ class MatchService(
                     previousRating = if (revealRates) history.previousRating.toPlainString() else null,
                     newRating = if (revealRates) history.newRating.toPlainString() else null,
                     ratingChange = if (revealRates) history.ratingChange.toPlainString() else null,
+                    confidence = confidenceByUser[history.userId],
                 )
             }
     }

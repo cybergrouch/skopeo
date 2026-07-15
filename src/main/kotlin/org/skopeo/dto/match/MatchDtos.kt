@@ -235,7 +235,8 @@ data class MatchPublicHeadToHeadEntry(
 /**
  * One player's rating change for a rated match (#136). [previousLevel]/[newLevel] are the public NTRP
  * bands (shown to everyone). [previousRating]/[newRating]/[ratingChange] are the precise values (NUMERIC
- * 10,6 → 6 fractional digits) and are null unless the viewer is a RATER or ADMINISTRATOR.
+ * 10,6 → 6 fractional digits) and are null unless the viewer is a RATER or ADMINISTRATOR. [confidence]
+ * is the player's *current* rating confidence (#343), a 0..1 decimal string shown as a percentage.
  */
 @Serializable
 data class MatchPublicRatingChange(
@@ -246,6 +247,7 @@ data class MatchPublicRatingChange(
     val previousRating: String? = null,
     val newRating: String? = null,
     val ratingChange: String? = null,
+    val confidence: String? = null,
 )
 
 /** Build the public response, resolving each side's players via [players] (id → name/code). */

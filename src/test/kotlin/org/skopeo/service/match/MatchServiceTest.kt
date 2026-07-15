@@ -739,6 +739,8 @@ class MatchServiceTest {
             change.previousRating.shouldBeNull()
             change.newRating.shouldBeNull()
             change.ratingChange.shouldBeNull()
+            // The current rating confidence (#343) is public — shown to every viewer, unlike the rates.
+            change.confidence.shouldNotBeNull()
         }
 
         // A viewer with a valid token but no provisioned Skopeo profile still gets the public bands, no rates.

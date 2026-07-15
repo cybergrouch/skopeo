@@ -151,6 +151,7 @@ export function PlayerProfilePage() {
             entries={ratingHistoryQuery.data ?? []}
             isLoading={ratingHistoryQuery.isLoading}
             description="Full rating history (admin view)."
+            confidence={player.rating?.confidence}
           />
         ) : null}
       </div>
