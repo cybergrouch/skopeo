@@ -211,7 +211,7 @@ class EventService(
                         action = AuditAction.EVENT_CLUB_CHANGED,
                         entityType = AuditEntityType.EVENT,
                         entityId = event.id,
-                        summary = "Set event ${event.name} club to ${clubId?.toString() ?: "Open"}",
+                        summary = "Set event ${event.name} club to ${if (clubId == null) "Open" else clubId.toString()}",
                         details =
                             mapOf(
                                 "publicCode" to event.publicCode,
