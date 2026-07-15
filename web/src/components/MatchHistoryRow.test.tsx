@@ -38,6 +38,17 @@ describe('MatchHistoryRow', () => {
     expect(container.querySelector('img')).toHaveAttribute('src', 'https://example.com/ben.jpg')
   })
 
+  it("appends each player's current rating confidence beside their at-the-time band (#343)", () => {
+    renderRow({
+      ...base,
+      playerConfidence: '1',
+      opponents: [
+        { publicCode: 'BEN123', displayName: 'Ben', photoUrl: null, levelAtMatch: '3.5', confidence: '0.2' },
+      ],
+    })
+    expect(screen.getByText(/NTRP 4.0 · 100% vs 3.5 · 20% \(at the time\)/)).toBeInTheDocument()
+  })
+
   it('renders a scheduled match with initials, no result and no bands', () => {
     const { container } = renderRow({
       ...base,

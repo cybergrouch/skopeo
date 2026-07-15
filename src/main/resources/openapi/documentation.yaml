@@ -3337,6 +3337,10 @@ components:
           type: string
           nullable: true
           description: This player's published NTRP band at the time of the match (rated matches only).
+        playerConfidence:
+          type: string
+          nullable: true
+          description: The player's current rating confidence 0..1 (#343), shown as a %; 0 when not match-derived.
 
     PlayerMatchHistoryPage:
       type: object
@@ -3371,6 +3375,10 @@ components:
           type: string
           nullable: true
           description: This participant's published NTRP band at the time of the match (rated matches only).
+        confidence:
+          type: string
+          nullable: true
+          description: This participant's current rating confidence 0..1 (#343), shown as a %; 0 when not match-derived.
 
     PlayerResultsSummary:
       type: object
@@ -4589,6 +4597,10 @@ components:
           type: string
           nullable: true
           description: Precise net change (6 fractional digits); null unless viewer is RATER/ADMINISTRATOR.
+        confidence:
+          type: string
+          nullable: true
+          description: The player's current rating confidence 0..1 (#343), shown as a %; 0 when not match-derived.
 
     CalculationRequest:
       type: object

@@ -11,6 +11,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { CalculationBreakdownDetail } from "@/components/CalculationBreakdownDetail";
 import { NumberedPager } from "@/components/NumberedPager";
+import { formatConfidence } from "@/lib/confidence";
 
 /** Rating history is paginated newest-first, 25 rows per page (#301). */
 const PAGE_SIZE = 25;
@@ -20,6 +21,11 @@ interface RatingHistoryCardProps {
   isLoading?: boolean;
   /** Card subtitle — differs slightly between the owner's own view and an admin's. */
   description?: string;
+  /**
+   * The player's *current* rating confidence (#343) as a 0..1 decimal string — shown once in the
+   * header (their current rating's freshness), not repeated per historical row.
+   */
+  confidence?: string | null;
 }
 
 /**
@@ -91,7 +97,9 @@ export function RatingHistoryCard({
   entries,
   isLoading = false,
   description = "Changes from rated matches.",
+  confidence,
 }: RatingHistoryCardProps) {
+  const confidencePct = formatConfidence(confidence);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(0);
   const pageEntries = entries.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
@@ -111,7 +119,14 @@ export function RatingHistoryCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Rating history</CardTitle>
+        <CardTitle>
+          Rating history
+          {confidencePct ? (
+            <span className="ml-2 text-sm font-normal text-muted-foreground">
+              Current confidence: {confidencePct}
+            </span>
+          ) : null}
+        </CardTitle>
         <CardDescription>{description}</CardDescription>
       </CardHeader>
       <CardContent>

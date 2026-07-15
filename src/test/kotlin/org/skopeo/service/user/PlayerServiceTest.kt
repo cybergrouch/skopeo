@@ -19,6 +19,7 @@ import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.CreateFixtureCommand
 import org.skopeo.model.Match
+import org.skopeo.model.MatchRatingWrite
 import org.skopeo.model.MatchSetResult
 import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
@@ -262,6 +263,50 @@ class PlayerServiceTest {
         win.opponents.single().publicCode shouldBe ben.publicCode
         win.playerLevelAtMatch shouldBe "4.0"
         win.opponents.single().levelAtMatch shouldBe "3.5"
+    }
+
+    /** Give [userId] a match-derived current rating fresh today; [matchCount] drives the confidence ramp. */
+    private fun rampCurrentRating(
+        userId: UUID,
+        matchCount: Int,
+    ) {
+        ratings.setRating(userId = userId, rating = BigDecimal("4.0"), level = "4.0")
+        repeat(times = matchCount) {
+            ratings.applyMatchRating(
+                write =
+                    MatchRatingWrite(
+                        userId = userId,
+                        newRating = BigDecimal("4.0"),
+                        newLevel = "4.0",
+                        matchDate = LocalDate.now(),
+                        ratedAt = LocalDateTime.now(),
+                        bandJumped = false,
+                    ),
+            )
+        }
+    }
+
+    @Test
+    fun `match history carries each player's current rating confidence (#343)`() {
+        val ana = newUser(uid = "a", names = display(name = "Ana"))
+        val ben = newUser(uid = "b", names = display(name = "Ben"))
+        val match = fixture(u1 = ana.id, u2 = ben.id, date = LocalDate.of(2026, 1, 1))
+        matches.addResult(
+            matchId = match.id,
+            sets = listOf(element = MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 4, winnerTeamId = match.team1.teamId)),
+            winnerTeamId = match.team1.teamId,
+            recordedBy = ana.id,
+            completedAt = LocalDateTime.now(),
+        )
+        matches.markRated(matchId = match.id, ratedAt = LocalDateTime.now(), ratedBy = ana.id)
+
+        // Current, match-derived ratings: Ana fully ramped (≥5 matches ⇒ 100%), Ben one match (⇒ 20%).
+        rampCurrentRating(userId = ana.id, matchCount = 5)
+        rampCurrentRating(userId = ben.id, matchCount = 1)
+
+        val win = service.matchHistory(code = ana.publicCode).shouldBeRight().items.single()
+        win.playerConfidence shouldBe "1.000000"
+        win.opponents.single().confidence shouldBe "0.200000"
     }
 
     @Test

@@ -194,6 +194,7 @@ export function ProfileTab({
         entries={history}
         isLoading={historyQuery.isLoading}
         description="Changes from your rated matches."
+        confidence={ratings[0]?.confidence}
       />
 
       <UpcomingMatchesCard />

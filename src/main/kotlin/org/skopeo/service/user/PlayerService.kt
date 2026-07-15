@@ -129,10 +129,21 @@ class PlayerService(
                     (match.team1.userIds + match.team2.userIds).filterNot { it == self }
                 }
             val participantsById = users.findAllByIds(ids = otherIds).associateBy { it.id }
+            // Every participant's *current* rating confidence (#343), shown beside the at-the-time band.
+            val confidenceById =
+                ratings
+                    .findCurrentRatings(userIds = (selfIds + otherIds).toList())
+                    .mapValues { (_, rating) -> rating.confidence.toPlainString() }
             val entries =
                 played.map { match ->
                     val participant = participantByMatch.getValue(key = match.id)
-                    entry(match = match, playerId = participant, players = participantsById, levels = levelByMatchAndUser[match.id])
+                    entry(
+                        match = match,
+                        playerId = participant,
+                        players = participantsById,
+                        levels = levelByMatchAndUser[match.id],
+                        confidences = confidenceById,
+                    )
                 }
 
             // Case-insensitive match on any opponent/partner display name or public code.
@@ -250,6 +261,7 @@ class PlayerService(
         playerId: UUID,
         players: Map<UUID, User>,
         levels: Map<UUID, String?>?,
+        confidences: Map<UUID, String>,
     ): PlayerMatchHistoryEntry {
         val onTeam1 = playerId in match.team1.userIds
         val playerTeam = if (onTeam1) match.team1 else match.team2
@@ -262,6 +274,7 @@ class PlayerService(
                 displayName = user.displayName(),
                 photoUrl = user.photoUrl,
                 levelAtMatch = levels?.get(key = userId),
+                confidence = confidences[userId],
             )
         }
 
@@ -281,6 +294,7 @@ class PlayerService(
             partners = playerTeam.userIds.filterNot { it == playerId }.map(transform = ::participant),
             opponents = opposingTeam.userIds.map(transform = ::participant),
             playerLevelAtMatch = levels?.get(key = playerId),
+            playerConfidence = confidences[playerId],
         )
     }
 }

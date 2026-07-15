@@ -1,6 +1,14 @@
 import { Link } from 'react-router-dom'
 import type { PlayerMatchHistoryEntry } from '@/api/generated/model'
 import { Badge } from '@/components/ui/badge'
+import { formatConfidence } from '@/lib/confidence'
+
+/** An at-the-time band with the player's *current* rating confidence appended (#343), e.g. "3.5 · 40%". */
+function bandWithConfidence(level: string | null | undefined, confidence: string | null | undefined): string {
+  const band = level ?? '—'
+  const pct = formatConfidence(confidence)
+  return pct ? `${band} · ${pct}` : band
+}
 
 /** How far along the rating pipeline a match is — drives the per-row status badge. */
 function statusLabel(match: PlayerMatchHistoryEntry): string {
@@ -14,9 +22,12 @@ function names(side: PlayerMatchHistoryEntry['opponents']): string {
   return side.map((p) => p.displayName ?? 'Player').join(', ')
 }
 
-/** Comma-separated NTRP bands at match time for a side, e.g. "3.5, 4.0" (dash for any missing). */
+/**
+ * Comma-separated NTRP bands at match time for a side, each with the participant's *current* rating
+ * confidence appended (#343), e.g. "3.5 · 40%, 4.0 · 100%" (dash for any missing band).
+ */
 function bands(side: PlayerMatchHistoryEntry['opponents']): string {
-  return side.map((p) => p.levelAtMatch ?? '—').join(', ')
+  return side.map((p) => bandWithConfidence(p.levelAtMatch, p.confidence)).join(', ')
 }
 
 /**
@@ -59,7 +70,8 @@ export function MatchHistoryRow({ match }: { match: PlayerMatchHistoryEntry }) {
           </div>
           {match.rated ? (
             <div className="mt-1 text-muted-foreground">
-              NTRP {match.playerLevelAtMatch ?? '—'} vs {bands(match.opponents)} (at the time)
+              NTRP {bandWithConfidence(match.playerLevelAtMatch, match.playerConfidence)} vs{' '}
+              {bands(match.opponents)} (at the time)
             </div>
           ) : null}
           <Link

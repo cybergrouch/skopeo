@@ -89,6 +89,16 @@ describe("RatingHistoryCard", () => {
     expect(screen.getByText("No rating changes yet.")).toBeInTheDocument();
   });
 
+  it("shows the current rating confidence once in the header when provided (#343)", () => {
+    render(<RatingHistoryCard entries={[entry()]} confidence="0.87" />);
+    expect(screen.getByText("Current confidence: 87%")).toBeInTheDocument();
+  });
+
+  it("omits the header confidence when none is provided (#343)", () => {
+    render(<RatingHistoryCard entries={[entry()]} />);
+    expect(screen.queryByText(/Current confidence:/)).not.toBeInTheDocument();
+  });
+
   it("shows the full value and the band, and highlights a band change", () => {
     const { container } = render(
       <RatingHistoryCard

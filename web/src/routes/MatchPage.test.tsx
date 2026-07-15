@@ -174,6 +174,43 @@ describe('MatchPage', () => {
     expect(screen.queryByText('4.0 → 4.5')).not.toBeInTheDocument()
   })
 
+  it('shows each player\'s current rating confidence beside the change, in both the band and rate views (#343)', () => {
+    useGetApiV1MatchesCodeCode.mockReturnValue({
+      data: {
+        ...match,
+        ratingChanges: [
+          // Band-only view (non-rater): confidence appended beside the band move.
+          {
+            displayName: 'Ana',
+            publicCode: 'AAA111',
+            previousLevel: '4.0',
+            newLevel: '4.5',
+            previousRating: null,
+            newRating: null,
+            ratingChange: null,
+            confidence: '0.4',
+          },
+          // Precise-rate view (rater): confidence appended beside the rate move.
+          {
+            displayName: 'Bob',
+            publicCode: 'BBB222',
+            previousLevel: '4.0',
+            newLevel: '4.0',
+            previousRating: '4.000000',
+            newRating: '4.010000',
+            ratingChange: '0.010000',
+            confidence: '1',
+          },
+        ],
+      },
+      isLoading: false,
+    })
+    renderAt()
+
+    expect(screen.getByText(/· 40%/)).toBeInTheDocument()
+    expect(screen.getByText(/· 100%/)).toBeInTheDocument()
+  })
+
   it('falls back to code/"Unknown" names, an em-dash band, and omits an absent delta', () => {
     useGetApiV1MatchesCodeCode.mockReturnValue({
       data: {
