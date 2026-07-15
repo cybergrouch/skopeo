@@ -85,7 +85,6 @@ class RatingCalculationServiceTest {
                 userId = user.id,
                 rating = BigDecimal("4.0"),
                 level = "4.0",
-                confidence = BigDecimal("0.50"),
             )
         }
         return user
@@ -445,11 +444,11 @@ class RatingCalculationServiceTest {
         // team change identical to the equal-partner case, but the stronger partner absorbs a larger share.
         val a1 =
             provisionUser(uid = "a1", rated = true).also {
-                ratings.setRating(userId = it.id, rating = BigDecimal("5.0"), level = "5.0", confidence = BigDecimal("0.50"))
+                ratings.setRating(userId = it.id, rating = BigDecimal("5.0"), level = "5.0")
             }
         val a2 =
             provisionUser(uid = "a2", rated = true).also {
-                ratings.setRating(userId = it.id, rating = BigDecimal("3.0"), level = "3.0", confidence = BigDecimal("0.50"))
+                ratings.setRating(userId = it.id, rating = BigDecimal("3.0"), level = "3.0")
             }
         val b1 = provisionUser(uid = "b1", rated = true)
         val b2 = provisionUser(uid = "b2", rated = true)

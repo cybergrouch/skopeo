@@ -199,7 +199,14 @@ fun User.toSummary(rating: UserRating? = null): UserSummaryResponse =
         photoUrl = photoUrl,
         sex = sex,
         age = dateOfBirth?.let { ageInYears(dateOfBirth = it, asOf = LocalDate.now()) },
-        rating = rating?.let { PublicRatingDto(value = it.currentRating.toPlainString(), level = it.currentLevel) },
+        rating =
+            rating?.let {
+                PublicRatingDto(
+                    value = it.currentRating.toPlainString(),
+                    level = it.currentLevel,
+                    confidence = it.confidence.toPlainString(),
+                )
+            },
         capabilities = capabilities.map { it.name }.sorted(),
     )
 

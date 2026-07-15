@@ -31,7 +31,6 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
 
-private val DEFAULT_CONFIDENCE = BigDecimal("0.50")
 private const val MAX_PAGE_SIZE = 100
 
 /**
@@ -85,20 +84,18 @@ class RatingService(
         token: VerifiedFirebaseToken,
         userId: UUID,
         value: BigDecimal,
-        confidence: BigDecimal?,
     ): Either<ServiceError, UserRating> =
         either {
             val adminId = requireRater(token = token).bind()
             requireUserExists(userId = userId).bind()
             val level = Rating.fromValue(value = value.toPlainString()).publishedLevel.value
-            val confidenceValue = confidence ?: DEFAULT_CONFIDENCE
             val previous = ratings.findCurrentRating(userId = userId)
+            // A manual assessment/override is not match-derived, so confidence computes to 0% (#343).
             val updated =
                 ratings.setRating(
                     userId = userId,
                     rating = value,
                     level = level,
-                    confidence = confidenceValue,
                 )
             // A manual override of an existing rating is recorded in history for traceability (#96);
             // the initial assessment (no prior rating) is the baseline and writes no history row.

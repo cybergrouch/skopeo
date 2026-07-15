@@ -103,7 +103,7 @@ class UserServiceTest {
     fun `currentRatings returns the current rating per user, omitting the unrated`() {
         val rated = service.provision(token = token(uid = "r"), request = request).shouldBeRight().user
         val unrated = service.provision(token = token(uid = "u"), request = request).shouldBeRight().user
-        RatingRepository().setRating(userId = rated.id, rating = BigDecimal("4.0"), level = "4.0", confidence = BigDecimal("0.50"))
+        RatingRepository().setRating(userId = rated.id, rating = BigDecimal("4.0"), level = "4.0")
 
         val map = service.currentRatings(ids = listOf(rated.id, unrated.id))
 

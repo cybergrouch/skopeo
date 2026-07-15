@@ -11,6 +11,7 @@ import { PlayerSearchForm } from '@/components/PlayerSearchForm'
 import { NumberedPager } from '@/components/NumberedPager'
 import { SetRatingForm } from '@/components/SetRatingForm'
 import { getGetApiV1UsersSearchQueryKey, useGetApiV1UsersSearch } from '@/api/generated/users/users'
+import { formatConfidence } from '@/lib/confidence'
 import type { GetApiV1UsersParams, UserSummaryResponse } from '@/api/generated/model'
 
 const PAGE_SIZE = 25
@@ -85,6 +86,9 @@ export function RatingsSearchSection() {
                         {user.rating ? (
                           <span className="shrink-0 text-xs font-medium">
                             NTRP {user.rating.level ?? user.rating.value}
+                            {formatConfidence(user.rating.confidence)
+                              ? ` · ${formatConfidence(user.rating.confidence)}`
+                              : ''}
                           </span>
                         ) : (
                           <span className="shrink-0 text-xs text-muted-foreground">Unrated</span>

@@ -69,7 +69,7 @@ class ReportServiceTest {
         currentLevel: String,
     ): User {
         val user = provision(uid = uid)
-        ratings.setRating(userId = user.id, rating = currentLevel.toBigDecimal(), level = currentLevel, confidence = BigDecimal("0.5"))
+        ratings.setRating(userId = user.id, rating = currentLevel.toBigDecimal(), level = currentLevel)
         return user
     }
 
@@ -170,7 +170,7 @@ class ReportServiceTest {
         ratedPlayer(uid = "banded", currentLevel = "3.0")
         // A rating row with no band label (and no history) can't be placed on the band scale.
         val user = provision(uid = "unbanded")
-        ratings.setRating(userId = user.id, rating = BigDecimal("3.2"), level = null, confidence = BigDecimal("0.5"))
+        ratings.setRating(userId = user.id, rating = BigDecimal("3.2"), level = null)
 
         val result = report().shouldBeRight()
 

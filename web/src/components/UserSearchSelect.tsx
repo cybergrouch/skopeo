@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { formatConfidence } from "@/lib/confidence";
 import { useGetApiV1Users } from "@/api/generated/users/users";
 import type {
   GetApiV1UsersParams,
@@ -15,7 +16,10 @@ function detailLine(user: UserSummaryResponse): string {
   const parts: string[] = [];
   if (user.sex) parts.push(user.sex);
   if (user.age != null) parts.push(String(user.age));
-  if (user.rating) parts.push(`NTRP ${user.rating.level ?? user.rating.value}`);
+  if (user.rating) {
+    const pct = formatConfidence(user.rating.confidence);
+    parts.push(`NTRP ${user.rating.level ?? user.rating.value}${pct ? ` · ${pct}` : ""}`);
+  }
   return parts.join(" · ");
 }
 

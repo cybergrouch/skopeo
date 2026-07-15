@@ -38,9 +38,13 @@ data class UserRating(
     val userId: UUID,
     val currentRating: BigDecimal,
     val currentLevel: String?,
+    // Computed (#343), never stored: log-logistic decay from [matchRatedAt] via `confidenceAt`; 0 when
+    // the current rating is not match-derived (self-rating / admin override, i.e. matchRatedAt is null).
     val confidence: BigDecimal,
     val matchesPlayed: Int,
     val lastMatchDate: LocalDate? = null,
+    // Timestamp of the match calc that set this rating (#343); null for self-ratings / overrides.
+    val matchRatedAt: LocalDateTime? = null,
 )
 
 /**
@@ -150,4 +154,18 @@ data class RatingHistoryWrite(
     // The source match's completed_at, snapshotted for ordering (#301); null for non-match rows.
     val completedAt: LocalDateTime?,
     val calculatedAt: LocalDateTime,
+)
+
+/**
+ * A match-driven rating update applied to a player's current rating (#343). [ratedAt] stamps the
+ * match-calc time confidence decays from; [bandJumped] marks an NTRP band change, which resets the
+ * confidence ramp (matches-since-reset → 0).
+ */
+data class MatchRatingWrite(
+    val userId: UUID,
+    val newRating: BigDecimal,
+    val newLevel: String?,
+    val matchDate: LocalDate,
+    val ratedAt: LocalDateTime,
+    val bandJumped: Boolean,
 )

@@ -13,6 +13,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.CalculationBreakdownSnapshot
+import org.skopeo.model.MatchRatingWrite
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.RatingHistoryWrite
@@ -21,6 +22,7 @@ import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.math.BigDecimal
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -55,16 +57,59 @@ class RatingRepositoryTest {
     fun `setRating inserts then updates, per system`() {
         val userId = newUser(uid = "u1")
 
-        ratings.setRating(userId = userId, rating = BigDecimal("3.5"), level = "3.5", confidence = BigDecimal("0.50"))
+        ratings.setRating(userId = userId, rating = BigDecimal("3.5"), level = "3.5")
         ratings.findCurrentRating(userId = userId)!!.let {
             it.currentRating shouldBe BigDecimal("3.500000")
             it.currentLevel shouldBe "3.5"
             it.matchesPlayed shouldBe 0
         }
 
-        ratings.setRating(userId = userId, rating = BigDecimal("4.0"), level = "4.0", confidence = BigDecimal("0.60"))
+        ratings.setRating(userId = userId, rating = BigDecimal("4.0"), level = "4.0")
         ratings.findCurrentRating(userId = userId)!!.currentRating shouldBe BigDecimal("4.000000")
         ratings.findByUser(userId = userId).size shouldBe 1
+    }
+
+    @Test
+    fun `confidence is computed (#343) - zero for an override, non-zero once match-derived, reset on a band jump`() {
+        val userId = newUser(uid = "conf")
+
+        // A bare admin override is not match-derived → confidence 0.
+        ratings.setRating(userId = userId, rating = BigDecimal("4.0"), level = "4.0")
+        ratings.findCurrentRating(userId = userId)!!.confidence.compareTo(other = BigDecimal.ZERO) shouldBe 0
+
+        // A fresh match calculation ramps confidence up over matches; two matches ⇒ scale 2/5, decay ≈ 1.
+        val now = LocalDateTime.now()
+        repeat(times = 2) {
+            ratings.applyMatchRating(
+                write =
+                    MatchRatingWrite(
+                        userId = userId,
+                        newRating = BigDecimal("4.0"),
+                        newLevel = "4.0",
+                        matchDate = LocalDate.now(),
+                        ratedAt = now,
+                        bandJumped = false,
+                    ),
+            )
+        }
+        ratings.findCurrentRating(userId = userId)!!.let {
+            (it.confidence > BigDecimal.ZERO) shouldBe true
+            it.confidence.compareTo(other = BigDecimal("0.4")) shouldBe 0
+        }
+
+        // An NTRP band jump resets the ramp (matches-since-reset → 0), so confidence drops back to ~0.
+        ratings.applyMatchRating(
+            write =
+                MatchRatingWrite(
+                    userId = userId,
+                    newRating = BigDecimal("4.5"),
+                    newLevel = "4.5",
+                    matchDate = LocalDate.now(),
+                    ratedAt = now,
+                    bandJumped = true,
+                ),
+        )
+        ratings.findCurrentRating(userId = userId)!!.confidence.compareTo(other = BigDecimal.ZERO) shouldBe 0
     }
 
     @Test
@@ -82,7 +127,7 @@ class RatingRepositoryTest {
     fun `findCurrentRatings returns a map keyed by user, omitting the unrated and the empty input`() {
         val rated = newUser(uid = "rated")
         val unrated = newUser(uid = "unrated")
-        ratings.setRating(userId = rated, rating = BigDecimal("4.5"), level = "4.5", confidence = BigDecimal("0.50"))
+        ratings.setRating(userId = rated, rating = BigDecimal("4.5"), level = "4.5")
 
         val map = ratings.findCurrentRatings(userIds = listOf(rated, unrated))
         map.keys shouldBe setOf(element = rated)
@@ -95,7 +140,7 @@ class RatingRepositoryTest {
     fun `pending assessment lists active users without a rating, with a total`() {
         val unrated = newUser(uid = "unrated")
         val rated = newUser(uid = "rated")
-        ratings.setRating(userId = rated, rating = BigDecimal("3.0"), level = "3.0", confidence = BigDecimal("0.50"))
+        ratings.setRating(userId = rated, rating = BigDecimal("3.0"), level = "3.0")
 
         val (ids, total) = ratings.userIdsPendingAssessment(limit = 50, offset = 0)
         ids shouldContain unrated

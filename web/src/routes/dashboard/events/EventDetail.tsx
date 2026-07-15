@@ -31,6 +31,7 @@ import { useGetApiV1UsersMe } from "@/api/generated/users/users";
 import { canEditEndedEvents } from "@/auth/capabilities";
 import { UserSearchSelect } from "@/components/UserSearchSelect";
 import { playerLabel } from "@/lib/playerLabel";
+import { formatConfidence } from "@/lib/confidence";
 import type { EventParticipantResponse } from "@/api/generated/model";
 import { ShareCard } from "@/components/ShareCard";
 import {
@@ -43,7 +44,10 @@ function participantMeta(p: EventParticipantResponse): string {
   const parts: string[] = [];
   if (p.sex) parts.push(p.sex);
   if (p.age != null) parts.push(String(p.age));
-  if (p.rating) parts.push(`NTRP ${p.rating.level ?? p.rating.value}`);
+  if (p.rating) {
+    const pct = formatConfidence(p.rating.confidence);
+    parts.push(`NTRP ${p.rating.level ?? p.rating.value}${pct ? ` · ${pct}` : ""}`);
+  }
   return parts.join(" · ");
 }
 

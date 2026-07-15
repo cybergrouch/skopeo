@@ -3263,6 +3263,10 @@ components:
             level:
               type: string
               nullable: true
+            confidence:
+              type: string
+              nullable: true
+              description: Computed rating confidence 0..1 (#343), shown as a %; 0 when not match-derived.
         isDisabled:
           type: boolean
           description: True when this profile was marked a duplicate and disabled (#124); the card is a "merged" notice.
@@ -3455,6 +3459,10 @@ components:
             level:
               type: string
               nullable: true
+            confidence:
+              type: string
+              nullable: true
+              description: Computed rating confidence 0..1 (#343), shown as a %; 0 when not match-derived.
         capabilities:
           type: array
           items:
@@ -3722,10 +3730,6 @@ components:
           type: string
           nullable: true
           description: Precise NTRP value (1.0–7.0) for an override; stored as-is.
-        confidence:
-          type: string
-          nullable: true
-          description: 0–1; defaults to 0.50.
 
     UserRatingResponse:
       type: object
@@ -3751,6 +3755,9 @@ components:
             own-profile "speed meter" (#114). Never reveals the exact rating.
         confidence:
           type: string
+          description: >-
+            Computed rating confidence 0..1 (#343), shown as a %: log-logistic time decay since the
+            last match calc, ramped over ~5 matches; 0 when the rating isn't match-derived.
         matchesPlayed:
           type: integer
         lastMatchDate:
@@ -4249,6 +4256,10 @@ components:
             level:
               type: string
               nullable: true
+            confidence:
+              type: string
+              nullable: true
+              description: Computed rating confidence 0..1 (#343), shown as a %; 0 when not match-derived.
         status:
           type: string
           nullable: true

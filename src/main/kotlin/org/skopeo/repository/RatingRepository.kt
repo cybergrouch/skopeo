@@ -11,15 +11,18 @@ import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.SqlExpressionBuilder
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.intLiteral
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
+import org.skopeo.model.MatchRatingWrite
 import org.skopeo.model.RatingHistoryEntry
 import org.skopeo.model.RatingHistoryWrite
 import org.skopeo.model.SetCalculationBreakdown
 import org.skopeo.model.UserRating
+import org.skopeo.model.confidenceAt
 import java.math.BigDecimal
-import java.time.LocalDate
+import java.time.LocalDateTime
 import java.util.UUID
 
 /**
@@ -55,12 +58,15 @@ class RatingRepository {
             }
         }
 
-    /** Insert or update the user's rating (admin assessment). */
+    /**
+     * Set a rating directly (admin/RATER assessment or override, #343). This is NOT a match-result
+     * calculation, so it clears [UserRatingsTable.matchRatedAt] — the current rating is no longer
+     * match-derived, and its computed confidence is therefore 0.
+     */
     fun setRating(
         userId: UUID,
         rating: BigDecimal,
         level: String?,
-        confidence: BigDecimal,
     ): UserRating =
         transaction {
             if (ratingRow(userId = userId) == null) {
@@ -68,13 +74,15 @@ class RatingRepository {
                     it[UserRatingsTable.userId] = userId
                     it[currentRating] = rating
                     it[currentLevel] = level
-                    it[confidenceScore] = confidence
+                    it[matchRatedAt] = null
+                    it[matchesSinceReset] = 0
                 }
             } else {
                 UserRatingsTable.update(where = { UserRatingsTable.userId eq userId }) {
                     it[currentRating] = rating
                     it[currentLevel] = level
-                    it[confidenceScore] = confidence
+                    it[matchRatedAt] = null
+                    it[matchesSinceReset] = 0
                 }
             }
             val row = UserRatingsTable.selectAll().where { UserRatingsTable.userId eq userId }.single()
@@ -145,19 +153,23 @@ class RatingRepository {
             ids to total
         }
 
-    /** Apply a match-driven rating update: set the new rating/level, bump matches played + last match date. */
-    fun applyMatchRating(
-        userId: UUID,
-        newRating: BigDecimal,
-        newLevel: String?,
-        matchDate: LocalDate,
-    ) {
+    /**
+     * Apply a match-driven rating update: set the new rating/level, bump matches played + last match
+     * date, and stamp [MatchRatingWrite.ratedAt] as the match-calc time so confidence decays from it
+     * (#343). A band jump ([MatchRatingWrite.bandJumped]) is a confidence reset — matches-since-reset
+     * goes to 0 (confidence ~0, then ramps); otherwise it increments.
+     */
+    fun applyMatchRating(write: MatchRatingWrite) {
         transaction {
-            UserRatingsTable.update(where = { UserRatingsTable.userId eq userId }) {
-                with(receiver = SqlExpressionBuilder) { it[matchesPlayed] = matchesPlayed + 1 }
-                it[currentRating] = newRating
-                it[currentLevel] = newLevel
-                it[lastMatchDate] = matchDate
+            UserRatingsTable.update(where = { UserRatingsTable.userId eq write.userId }) {
+                with(receiver = SqlExpressionBuilder) {
+                    it[matchesPlayed] = matchesPlayed + 1
+                    it[matchesSinceReset] = if (write.bandJumped) intLiteral(value = 0) else matchesSinceReset + 1
+                }
+                it[currentRating] = write.newRating
+                it[currentLevel] = write.newLevel
+                it[lastMatchDate] = write.matchDate
+                it[matchRatedAt] = write.ratedAt
             }
         }
     }
@@ -204,15 +216,25 @@ class RatingRepository {
             .singleOrNull()
 }
 
-internal fun ResultRow.toUserRating(): UserRating =
-    UserRating(
+internal fun ResultRow.toUserRating(): UserRating {
+    val matchRatedAt = this[UserRatingsTable.matchRatedAt]
+    return UserRating(
         userId = this[UserRatingsTable.userId].value,
         currentRating = this[UserRatingsTable.currentRating],
         currentLevel = this[UserRatingsTable.currentLevel],
-        confidence = this[UserRatingsTable.confidenceScore],
+        // Computed on read (#343): time-decays from the last match calc, ramped by matches since the
+        // last reset; 0 when not match-derived.
+        confidence =
+            confidenceAt(
+                matchRatedAt = matchRatedAt,
+                matchesSinceReset = this[UserRatingsTable.matchesSinceReset],
+                now = LocalDateTime.now(),
+            ),
         matchesPlayed = this[UserRatingsTable.matchesPlayed],
         lastMatchDate = this[UserRatingsTable.lastMatchDate],
+        matchRatedAt = matchRatedAt,
     )
+}
 
 internal fun ResultRow.toRatingHistory(): RatingHistoryEntry =
     RatingHistoryEntry(
