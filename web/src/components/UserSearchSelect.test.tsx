@@ -85,7 +85,7 @@ describe('UserSearchSelect', () => {
           displayName: 'Alice',
           sex: 'Female',
           age: 34,
-          rating: { value: '4.000000', level: '4.0' },
+          rating: { value: '4.000000', level: '4.0', confidence: '0.87' },
           capabilities: [],
         },
         {
@@ -103,7 +103,8 @@ describe('UserSearchSelect', () => {
     const user = userEvent.setup()
     render(<UserSearchSelect label="Player 1" onSelect={vi.fn()} />)
     await user.type(screen.getByLabelText('Player 1'), 'al')
-    expect(screen.getByText('Female · 34 · NTRP 4.0')).toBeInTheDocument()
+    // The computed confidence (#343) is appended as a percentage; an absent confidence is omitted.
+    expect(screen.getByText('Female · 34 · NTRP 4.0 · 87%')).toBeInTheDocument()
     expect(screen.getByText('Male · 41 · NTRP 8.500000')).toBeInTheDocument()
   })
 

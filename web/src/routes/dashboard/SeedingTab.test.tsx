@@ -93,7 +93,7 @@ const listDetail = {
       displayName: 'Ana',
       sex: 'Female',
       age: 30,
-      rating: { value: '4.000000', level: '4.0' },
+      rating: { value: '4.000000', level: '4.0', confidence: '0.87' },
       capabilities: [],
     },
     { id: 'u2', publicCode: 'BBB222', displayName: null, capabilities: [] },
@@ -190,10 +190,11 @@ describe('SeedingTab', () => {
     renderTab()
     await user.click(screen.getByRole('button', { name: /Summer Open/ }))
     expect(screen.getByText('Ana')).toBeInTheDocument()
-    expect(screen.getByText('Female · 30 · NTRP 4.0')).toBeInTheDocument()
+    // The computed confidence (#343) is appended as a percentage.
+    expect(screen.getByText('Female · 30 · NTRP 4.0 · 87%')).toBeInTheDocument()
     // No-display-name member falls back to the public code.
     expect(screen.getByText('BBB222')).toBeInTheDocument()
-    // A rating without an NTRP level falls back to its raw value.
+    // A rating without an NTRP level falls back to its raw value (no confidence ⇒ no percentage).
     expect(screen.getByText('Female · 25 · NTRP 3.500000')).toBeInTheDocument()
   })
 

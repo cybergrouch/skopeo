@@ -101,6 +101,21 @@ describe('PlayerProfilePage', () => {
     expect(screen.getByRole('button', { name: 'Copy link' })).toBeInTheDocument()
   })
 
+  it('appends the computed rating confidence as a percentage (#343)', () => {
+    useGetApiV1PlayersCode.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: {
+        publicCode: 'ABC234',
+        displayName: 'Ana',
+        photoUrl: null,
+        rating: { value: '4.000000', level: '4.0', confidence: '0.87' },
+      },
+    })
+    renderAt()
+    expect(screen.getByText(/· 87%/)).toBeInTheDocument()
+  })
+
   it('shows a rating without a level', () => {
     useGetApiV1PlayersCode.mockReturnValue({
       isLoading: false,

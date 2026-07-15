@@ -144,7 +144,7 @@ const event = {
       publicCode: 'AAA111',
       sex: 'Female',
       age: 34,
-      rating: { value: '4.000000', level: '4.0' },
+      rating: { value: '4.000000', level: '4.0', confidence: '0.87' },
       status: 'APPROVED',
     },
     { userId: 'u2', displayName: 'Bob', publicCode: 'BBB222', status: 'APPROVED' },
@@ -211,8 +211,8 @@ describe('EventDetail', () => {
     // Name appears in both the roster and the fixture pickers; the code is unique to the roster line.
     expect(screen.getByText(/\(AAA111\)/)).toBeInTheDocument()
     expect(screen.getByText(/\(BBB222\)/)).toBeInTheDocument()
-    // The roster shows sex · age · NTRP band to disambiguate same-named players.
-    expect(screen.getByText('Female · 34 · NTRP 4.0')).toBeInTheDocument()
+    // The roster shows sex · age · NTRP band (with the computed confidence % appended, #343).
+    expect(screen.getByText('Female · 34 · NTRP 4.0 · 87%')).toBeInTheDocument()
     expect(screen.getByText('awaiting:e1:false')).toBeInTheDocument()
     expect(screen.getByText('recorded:e1:false')).toBeInTheDocument()
     // The event's share/QR card is surfaced in the dashboard (#179).

@@ -65,6 +65,15 @@ describe('RatingsSearchSection', () => {
     expect(screen.getByText('NTRP 4.0')).toBeInTheDocument()
   })
 
+  it('appends the computed rating confidence as a percentage (#343)', async () => {
+    const user = userEvent.setup()
+    renderSection()
+    useGetApiV1UsersSearch.mockReturnValue(page([{ ...row, rating: { value: '4.000000', level: '4.0', confidence: '0.87' } }]))
+    await user.type(screen.getByLabelText('Name'), 'ana')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+    expect(screen.getByText(/· 87%/)).toBeInTheDocument()
+  })
+
   it('rates a player from the results, preselected with their current band (#205)', async () => {
     useGetApiV1UsersSearch.mockReturnValue(page([row]))
     const user = userEvent.setup()
