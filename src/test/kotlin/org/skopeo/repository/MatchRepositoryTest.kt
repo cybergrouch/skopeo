@@ -218,9 +218,15 @@ class MatchRepositoryTest {
         )
 
         // Query only the winner: the loser's team has no queried user, so the loser-side lookup is empty.
-        matches.winLossByUsers(userIds = listOf(element = b)) shouldBe mapOf(b to WinLossRecord(wins = 1, losses = 0))
+        matches.winLossByUsers(userIds = listOf(element = b)).let { r ->
+            r.keys shouldBe setOf(element = b)
+            r.getValue(key = b) shouldBe WinLossRecord(wins = 1, losses = 0)
+        }
         // Query only the loser: the winner's team has no queried user, so the winner-side lookup is empty.
-        matches.winLossByUsers(userIds = listOf(element = a)) shouldBe mapOf(a to WinLossRecord(wins = 0, losses = 1))
+        matches.winLossByUsers(userIds = listOf(element = a)).let { r ->
+            r.keys shouldBe setOf(element = a)
+            r.getValue(key = a) shouldBe WinLossRecord(wins = 0, losses = 1)
+        }
         // A user who never joined any team → no memberships → empty result.
         matches.winLossByUsers(userIds = listOf(element = c)) shouldBe emptyMap()
     }
