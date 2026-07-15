@@ -110,4 +110,29 @@ class EventRepositoryTest {
         events.findById(id = event.id)!!.name shouldBe "New Name"
         events.rename(id = UUID.randomUUID(), name = "Ghost").shouldBeNull()
     }
+
+    @Test
+    fun `setCalcPriority stores the override and a missing id is a harmless no-op (#335)`() {
+        val creator = newUser(uid = "creator")
+        val event =
+            events.create(
+                command =
+                    CreateEventCommand(
+                        name = "Priority Cup",
+                        startDate = LocalDate.parse("2026-07-01"),
+                        endDate = LocalDate.parse("2026-07-02"),
+                        participantIds = emptyList(),
+                        createdBy = creator,
+                    ),
+            )
+        // No override to start with.
+        events.findById(id = event.id)!!.calcPriority.shouldBeNull()
+
+        events.setCalcPriority(id = event.id, priority = 3.5)
+        events.findById(id = event.id)!!.calcPriority shouldBe 3.5
+
+        // Updating a missing id matches no rows and must not throw or touch the real event.
+        events.setCalcPriority(id = UUID.randomUUID(), priority = 9.0)
+        events.findById(id = event.id)!!.calcPriority shouldBe 3.5
+    }
 }

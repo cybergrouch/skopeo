@@ -119,6 +119,43 @@ class MatchRepositoryTest {
         return match.id
     }
 
+    /** As [completedMatch] but recorded by an explicit [creator] — for creator/event scoping tests. */
+    private fun completedMatchCreatedBy(
+        creator: UUID,
+        u1: UUID,
+        u2: UUID,
+        matchDate: LocalDate,
+        eventId: UUID? = null,
+    ): UUID {
+        val match =
+            matches.createFixture(
+                command =
+                    CreateFixtureCommand(
+                        matchFormat = TeamType.SINGLES,
+                        matchType = MatchType.OPEN_PLAY,
+                        matchDate = matchDate,
+                        team1UserIds = listOf(element = u1),
+                        team2UserIds = listOf(element = u2),
+                        team1Name = "T1",
+                        team2Name = "T2",
+                        createdBy = creator,
+                        eventId = eventId,
+                    ),
+            )
+        matches.addResult(
+            matchId = match.id,
+            sets =
+                listOf(
+                    MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 0, winnerTeamId = match.team1.teamId),
+                    MatchSetResult(setNumber = 2, team1Games = 6, team2Games = 0, winnerTeamId = match.team1.teamId),
+                ),
+            winnerTeamId = match.team1.teamId,
+            recordedBy = creator,
+            completedAt = LocalDateTime.now(),
+        )
+        return match.id
+    }
+
     private fun event(
         creator: UUID,
         endDate: LocalDate,
@@ -262,6 +299,49 @@ class MatchRepositoryTest {
         overridden[1] shouldBe a2
         overridden.subList(fromIndex = 2, toIndex = 4).toSet() shouldBe setOf(a1, a3)
         overridden.last() shouldBe open
+    }
+
+    @Test
+    fun `pending-calculation scoped to an event shows that event's fixtures from any creator (#335)`() {
+        val host = newUser(uid = "host")
+        val otherHost = newUser(uid = "otherHost")
+        val p1 = newUser(uid = "p1")
+        val p2 = newUser(uid = "p2")
+        val target = event(creator = host, endDate = LocalDate.of(2026, 2, 10), members = listOf(host, otherHost, p1, p2))
+        val other = event(creator = host, endDate = LocalDate.of(2026, 2, 20), members = listOf(host, p1, p2))
+        // Two fixtures in the target event, recorded by different creators — both must appear.
+        val byHost = completedMatch(u1 = host, u2 = p1, matchDate = LocalDate.of(2026, 2, 8), eventId = target)
+        val byOther =
+            completedMatchCreatedBy(creator = otherHost, u1 = otherHost, u2 = p2, matchDate = LocalDate.of(2026, 2, 8), eventId = target)
+        // A fixture in a different event and an eventless one — both must be excluded by the event scope.
+        completedMatch(u1 = host, u2 = p2, matchDate = LocalDate.of(2026, 2, 18), eventId = other)
+        completedMatch(u1 = host, u2 = p1, matchDate = LocalDate.of(2026, 2, 15))
+
+        matches.listPendingCalculation(eventId = target).map { it.id }.toSet() shouldBe setOf(byHost, byOther)
+    }
+
+    @Test
+    fun `pending-calculation scoped to a creator shows only that host's fixtures (#335)`() {
+        val host = newUser(uid = "host")
+        val otherHost = newUser(uid = "otherHost")
+        val p1 = newUser(uid = "p1")
+        val p2 = newUser(uid = "p2")
+        val mine = completedMatch(u1 = host, u2 = p1, matchDate = LocalDate.of(2026, 3, 1))
+        // A fixture created by another host must be excluded from a creator-scoped list.
+        completedMatchCreatedBy(creator = otherHost, u1 = otherHost, u2 = p2, matchDate = LocalDate.of(2026, 3, 1))
+
+        matches.listPendingCalculation(createdBy = host).map { it.id } shouldBe listOf(element = mine)
+    }
+
+    @Test
+    fun `reorderCalcSequence on an empty list is a harmless no-op (#331)`() {
+        // The empty-input path runs no updates and must not throw.
+        matches.reorderCalcSequence(matchIds = emptyList())
+
+        val u1 = newUser(uid = "u1")
+        val u2 = newUser(uid = "u2")
+        val only = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 1))
+        matches.listPendingCalculation(createdBy = u1).map { it.id } shouldBe listOf(element = only)
     }
 
     @Test
