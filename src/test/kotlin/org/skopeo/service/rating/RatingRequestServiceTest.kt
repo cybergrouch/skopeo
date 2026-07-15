@@ -67,7 +67,7 @@ class RatingRequestServiceTest {
                     ),
             )
         if (rated) {
-            ratings.setRating(userId = user.id, rating = BigDecimal("4.0"), level = "4.0", confidence = BigDecimal("0.50"))
+            ratings.setRating(userId = user.id, rating = BigDecimal("4.0"), level = "4.0")
         }
         return user
     }

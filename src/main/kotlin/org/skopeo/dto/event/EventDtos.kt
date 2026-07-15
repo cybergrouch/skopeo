@@ -136,7 +136,14 @@ internal fun EventParticipantRef.toResponse(): EventParticipantResponse =
         publicCode = publicCode,
         sex = sex,
         age = age,
-        rating = rating?.let { PublicRatingDto(value = it.currentRating.toPlainString(), level = it.currentLevel) },
+        rating =
+            rating?.let {
+                PublicRatingDto(
+                    value = it.currentRating.toPlainString(),
+                    level = it.currentLevel,
+                    confidence = it.confidence.toPlainString(),
+                )
+            },
         status = status.name,
     )
 

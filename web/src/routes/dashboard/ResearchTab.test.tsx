@@ -69,6 +69,28 @@ describe('ResearchTab', () => {
     )
   })
 
+  it('shows the computed rating confidence as a percentage beside the band (#343)', async () => {
+    useGetApiV1UsersSearch.mockReturnValue(
+      page([
+        {
+          id: 'u1',
+          publicCode: 'AAA111',
+          displayName: 'Alice',
+          photoUrl: null,
+          sex: 'Female',
+          age: 34,
+          rating: { value: '4.000000', level: '4.0', confidence: '0.87' },
+          capabilities: ['PLAYER'],
+        },
+      ]),
+    )
+    const user = userEvent.setup()
+    renderTab()
+    await user.type(screen.getByLabelText('Name'), 'ali')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+    expect(screen.getByText(/· 87%/)).toBeInTheDocument()
+  })
+
   it('shows both same-named players, each distinguished by its public code', async () => {
     useGetApiV1UsersSearch.mockReturnValue(
       page([

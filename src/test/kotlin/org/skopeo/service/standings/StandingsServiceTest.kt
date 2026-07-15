@@ -11,6 +11,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
+import org.skopeo.model.MatchRatingWrite
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.StandingsBand
@@ -23,6 +24,7 @@ import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.math.BigDecimal
 import java.time.LocalDate
+import java.time.LocalDateTime
 
 class StandingsServiceTest {
     companion object {
@@ -75,16 +77,29 @@ class StandingsServiceTest {
                 ),
         )
 
+    // Confidence is computed (#343): min(1, matches/5) when the rating is match-derived and fresh
+    // (matchRatedAt = now ⇒ decay ≈ 1.0). `matches` = 0 leaves it a bare override (confidence 0).
     private fun rate(
         user: User,
         value: String,
-        confidence: String = "0.5",
-    ) = ratings.setRating(
-        userId = user.id,
-        rating = BigDecimal(value),
-        level = value.toBigDecimal().let { "${it.toInt()}.${if (it.toDouble() % 1.0 >= 0.5) 5 else 0}" },
-        confidence = BigDecimal(confidence),
-    )
+        matches: Int = 0,
+    ) {
+        val level = value.toBigDecimal().let { "${it.toInt()}.${if (it.toDouble() % 1.0 >= 0.5) 5 else 0}" }
+        ratings.setRating(userId = user.id, rating = BigDecimal(value), level = level)
+        repeat(times = matches) {
+            ratings.applyMatchRating(
+                write =
+                    MatchRatingWrite(
+                        userId = user.id,
+                        newRating = BigDecimal(value),
+                        newLevel = level,
+                        matchDate = LocalDate.now(),
+                        ratedAt = LocalDateTime.now(),
+                        bandJumped = false,
+                    ),
+            )
+        }
+    }
 
     private fun band(label: StandingsBand) = service.standings(token = viewerToken).single { it.band == label }
 
@@ -140,16 +155,16 @@ class StandingsServiceTest {
 
     @Test
     fun `rating ties within a band break by confidence then name`() {
-        val low = provision(uid = "zoe").also { rate(user = it, value = "4.0", confidence = "0.3") }
-        val high = provision(uid = "amy").also { rate(user = it, value = "4.0", confidence = "0.9") }
+        val low = provision(uid = "zoe").also { rate(user = it, value = "4.0", matches = 1) }
+        val high = provision(uid = "amy").also { rate(user = it, value = "4.0", matches = 5) }
 
         band(label = StandingsBand.FROM_4_0).entries.map { it.userId } shouldBe listOf(high.id, low.id)
     }
 
     @Test
     fun `ties on rating and confidence break by name, fall back to code, and omit age when no DOB`() {
-        val bravo = provision(uid = "Bravo").also { rate(user = it, value = "4.0", confidence = "0.5") }
-        val nameless = provisionPlain(uid = "nameless").also { rate(user = it, value = "4.0", confidence = "0.5") }
+        val bravo = provision(uid = "Bravo").also { rate(user = it, value = "4.0", matches = 5) }
+        val nameless = provisionPlain(uid = "nameless").also { rate(user = it, value = "4.0", matches = 5) }
 
         val entries = band(label = StandingsBand.FROM_4_0).entries
         entries shouldHaveSize 2

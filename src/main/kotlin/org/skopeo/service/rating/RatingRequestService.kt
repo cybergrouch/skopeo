@@ -118,7 +118,7 @@ class RatingRequestService(
                         ),
                 ) { ServiceError.Conflict(message = "This request has already been resolved") }
             // Apply the new rating now that the resolution is ours (records the override + history).
-            ratingService.setRating(token = token, userId = request.userId, value = newRating, confidence = null).bind()
+            ratingService.setRating(token = token, userId = request.userId, value = newRating).bind()
             resolved
         }
 

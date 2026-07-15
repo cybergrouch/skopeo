@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useGetApiV1Users } from '@/api/generated/users/users'
+import { formatConfidence } from '@/lib/confidence'
 import {
   getGetApiV1PlayerListsIdQueryKey,
   getGetApiV1PlayerListsIdSeedingQueryKey,
@@ -37,7 +38,10 @@ function memberMeta(member: UserSummaryResponse): string {
   const parts: string[] = []
   if (member.sex) parts.push(member.sex)
   if (member.age != null) parts.push(String(member.age))
-  if (member.rating) parts.push(`NTRP ${member.rating.level ?? member.rating.value}`)
+  if (member.rating) {
+    const pct = formatConfidence(member.rating.confidence)
+    parts.push(`NTRP ${member.rating.level ?? member.rating.value}${pct ? ` · ${pct}` : ''}`)
+  }
   return parts.join(' · ')
 }
 

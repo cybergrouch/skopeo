@@ -230,7 +230,6 @@ class EventServiceTest {
             userId = player.id,
             rating = BigDecimal("4.000000"),
             level = "4.0",
-            confidence = BigDecimal("0.50"),
         )
 
         val view =

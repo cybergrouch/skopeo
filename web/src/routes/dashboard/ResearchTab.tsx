@@ -10,6 +10,7 @@ import {
 import { PlayerSearchForm } from '@/components/PlayerSearchForm'
 import { NumberedPager } from '@/components/NumberedPager'
 import { useGetApiV1UsersSearch } from '@/api/generated/users/users'
+import { formatConfidence } from '@/lib/confidence'
 import type {
   GetApiV1UsersParams,
   UserSummaryResponse,
@@ -107,6 +108,9 @@ export function ResearchTab() {
                         {user.rating ? (
                           <span className="shrink-0 font-medium">
                             NTRP {user.rating.level ?? user.rating.value}
+                            {formatConfidence(user.rating.confidence)
+                              ? ` · ${formatConfidence(user.rating.confidence)}`
+                              : ''}
                           </span>
                         ) : null}
                       </Link>

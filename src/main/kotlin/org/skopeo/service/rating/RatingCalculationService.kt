@@ -13,6 +13,7 @@ import org.skopeo.dto.RankingCalculationRequest
 import org.skopeo.model.CalculationBreakdownSnapshot
 import org.skopeo.model.Capability
 import org.skopeo.model.Match
+import org.skopeo.model.MatchRatingWrite
 import org.skopeo.model.MatchScore
 import org.skopeo.model.PlayerProfile
 import org.skopeo.model.Rating
@@ -116,10 +117,16 @@ class RatingCalculationService(
             processed.forEach { calc ->
                 calc.changes.forEach { change ->
                     ratings.applyMatchRating(
-                        userId = change.userId,
-                        newRating = change.newRating,
-                        newLevel = change.newLevel,
-                        matchDate = calc.matchDate,
+                        write =
+                            MatchRatingWrite(
+                                userId = change.userId,
+                                newRating = change.newRating,
+                                newLevel = change.newLevel,
+                                matchDate = calc.matchDate,
+                                ratedAt = now,
+                                // A band jump resets confidence (#343): it ramps back up over ~5 matches.
+                                bandJumped = change.levelChanged,
+                            ),
                     )
                     ratings.appendHistory(
                         write =

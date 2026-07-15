@@ -20,14 +20,16 @@ internal object UserRatingsTable : UUIDTable(name = "user_ratings") {
     val userId = reference(name = "user_id", foreign = UsersTable, onDelete = ReferenceOption.CASCADE)
     val currentRating = decimal(name = "current_rating", precision = RATING_PRECISION, scale = RATING_SCALE)
     val currentLevel = varchar(name = "current_level", length = LEVEL_MAX).nullable()
-    val confidenceScore =
-        decimal(
-            name = "confidence_score",
-            precision = CONFIDENCE_PRECISION,
-            scale = CONFIDENCE_SCALE,
-        ).default(defaultValue = java.math.BigDecimal("0.50"))
     val matchesPlayed = integer(name = "matches_played").default(defaultValue = 0)
     val lastMatchDate = date(name = "last_match_date").nullable()
+
+    // Timestamp of the match-result calculation that last set this rating (#343); null when the current
+    // rating is a self-rating or an admin/RATER override. Confidence decays from this; null ⇒ 0%.
+    val matchRatedAt = datetime(name = "match_rated_at").nullable()
+
+    // Matches applied since the last reset — an override/self-rating or an NTRP band jump (#343). Ramps
+    // confidence up over ~5 matches (scale = min(1, m/5)); reset to 0 on any override or band jump.
+    val matchesSinceReset = integer(name = "matches_since_reset").default(defaultValue = 0)
 }
 
 /** Append-only rating-change history (match-driven, or initial assessment when match_id is null). */

@@ -19,7 +19,6 @@ import org.skopeo.model.UserRating
 data class SetRatingRequest(
     val band: String? = null,
     val value: String? = null,
-    val confidence: String? = null,
 )
 
 @Serializable

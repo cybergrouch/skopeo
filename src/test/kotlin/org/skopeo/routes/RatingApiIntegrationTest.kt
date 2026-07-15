@@ -136,7 +136,7 @@ class RatingApiIntegrationTest {
         }
 
     @Test
-    fun `an out-of-range rating or confidence is rejected at the route with a 400 (#116)`() =
+    fun `an out-of-range or missing rating is rejected at the route with a 400 (#116)`() =
         withApp { client ->
             val adminToken = seedAdminToken()
             val user = client.provisionSelf(token = TestFirebaseAuth.mintToken(uid = "fb-bad"))
@@ -148,11 +148,9 @@ class RatingApiIntegrationTest {
                     setBody(body = request)
                 }.status
 
-            // Value outside the NTRP 1.0–7.0 range, a non-numeric value, and confidence outside [0, 1].
+            // Value outside the NTRP 1.0–7.0 range and a non-numeric value are both rejected.
             setRating(request = SetRatingRequest(value = "9.0")) shouldBe HttpStatusCode.BadRequest
             setRating(request = SetRatingRequest(value = "not-a-number")) shouldBe HttpStatusCode.BadRequest
-            setRating(request = SetRatingRequest(value = "4.0", confidence = "1.5")) shouldBe HttpStatusCode.BadRequest
-            setRating(request = SetRatingRequest(value = "4.0", confidence = "-0.1")) shouldBe HttpStatusCode.BadRequest
             // A band selection is validated the same way; an out-of-range band is a 400.
             setRating(request = SetRatingRequest(band = "9.0")) shouldBe HttpStatusCode.BadRequest
             // Neither band nor value is a 400.

@@ -54,7 +54,14 @@ class PlayerService(
                     publicCode = located.publicCode,
                     displayName = located.displayName(),
                     photoUrl = located.photoUrl,
-                    rating = rating?.let { PublicRatingDto(value = it.currentRating.toPlainString(), level = it.currentLevel) },
+                    rating =
+                        rating?.let {
+                            PublicRatingDto(
+                                value = it.currentRating.toPlainString(),
+                                level = it.currentLevel,
+                                confidence = it.confidence.toPlainString(),
+                            )
+                        },
                 )
             }
         }

@@ -13,6 +13,7 @@ import { UpcomingMatchesCard } from "@/components/UpcomingMatchesCard";
 import { EventsHistoryCard } from "@/components/EventsHistoryCard";
 import { RatingHistoryCard } from "@/components/RatingHistoryCard";
 import { RatingBandMeter } from "@/components/RatingBandMeter";
+import { formatConfidence } from "@/lib/confidence";
 import { ShareCard } from "@/components/ShareCard";
 import { ReRateRequestCard } from "@/components/ReRateRequestCard";
 import { ProfileFieldsForm } from "@/components/ProfileFieldsForm";
@@ -126,7 +127,12 @@ export function ProfileTab({
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-medium">NTRP</span>
-                      <span>{rating.level ?? rating.value}</span>
+                      <span>
+                        {rating.level ?? rating.value}
+                        {formatConfidence(rating.confidence)
+                          ? ` · ${formatConfidence(rating.confidence)}`
+                          : ""}
+                      </span>
                     </div>
                     {rating.bandPosition != null ? (
                       <div className="mt-2 flex justify-center">

@@ -13,6 +13,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
+import org.skopeo.model.MatchRatingWrite
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.ServiceError
@@ -24,6 +25,8 @@ import org.skopeo.repository.UserRepository
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.math.BigDecimal
+import java.time.LocalDate
+import java.time.LocalDateTime
 import java.util.UUID
 
 class SeedingServiceTest {
@@ -73,16 +76,29 @@ class SeedingServiceTest {
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
+    // Confidence is computed (#343): min(1, matches/5) when the rating is match-derived and fresh
+    // (matchRatedAt = now ⇒ decay ≈ 1.0). `matches` = 0 leaves it a bare override (confidence 0).
     private fun rate(
         user: User,
         value: String,
-        confidence: String = "0.5",
-    ) = ratings.setRating(
-        userId = user.id,
-        rating = BigDecimal(value),
-        level = value.toBigDecimal().let { "${it.toInt()}.${if (it.toDouble() % 1.0 >= 0.5) 5 else 0}" },
-        confidence = BigDecimal(confidence),
-    )
+        matches: Int = 0,
+    ) {
+        val level = value.toBigDecimal().let { "${it.toInt()}.${if (it.toDouble() % 1.0 >= 0.5) 5 else 0}" }
+        ratings.setRating(userId = user.id, rating = BigDecimal(value), level = level)
+        repeat(times = matches) {
+            ratings.applyMatchRating(
+                write =
+                    MatchRatingWrite(
+                        userId = user.id,
+                        newRating = BigDecimal(value),
+                        newLevel = level,
+                        matchDate = LocalDate.now(),
+                        ratedAt = LocalDateTime.now(),
+                        bandJumped = false,
+                    ),
+            )
+        }
+    }
 
     /** A HOST with a list containing [members]; returns the list id. */
     private fun listWith(members: List<User>): UUID {
@@ -113,8 +129,8 @@ class SeedingServiceTest {
     @Test
     fun `rating ties break by confidence, then matches, then name`() {
         provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
-        val low = provision(uid = "zoe").also { rate(user = it, value = "4.0", confidence = "0.3") }
-        val high = provision(uid = "amy").also { rate(user = it, value = "4.0", confidence = "0.9") }
+        val low = provision(uid = "zoe").also { rate(user = it, value = "4.0", matches = 1) }
+        val high = provision(uid = "amy").also { rate(user = it, value = "4.0", matches = 5) }
         val listId = listWith(members = listOf(low, high))
 
         val seeding = service.generate(token = token(uid = "host"), listId = listId).shouldBeRight()
@@ -126,9 +142,9 @@ class SeedingServiceTest {
     fun `ties on rating and confidence break by name, falling back to the player code`() {
         provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         // All equal on rating and confidence, so only the name (or code) tie-break decides the order.
-        val bravo = provision(uid = "Bravo").also { rate(user = it, value = "4.0", confidence = "0.5") }
-        val alpha = provision(uid = "Alpha").also { rate(user = it, value = "4.0", confidence = "0.5") }
-        val unnamed = provisionUnnamed(uid = "nameless").also { rate(user = it, value = "4.0", confidence = "0.5") }
+        val bravo = provision(uid = "Bravo").also { rate(user = it, value = "4.0", matches = 5) }
+        val alpha = provision(uid = "Alpha").also { rate(user = it, value = "4.0", matches = 5) }
+        val unnamed = provisionUnnamed(uid = "nameless").also { rate(user = it, value = "4.0", matches = 5) }
         val listId = listWith(members = listOf(bravo, alpha, unnamed))
 
         val ids = service.generate(token = token(uid = "host"), listId = listId).shouldBeRight().entries.map { it.userId }

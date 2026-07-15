@@ -224,6 +224,15 @@ describe("ProfileTab", () => {
     expect(screen.queryByText("Pending assessment")).not.toBeInTheDocument();
   });
 
+  it("appends the computed rating confidence as a percentage (#343)", () => {
+    useGetApiV1UsersUserIdRatings.mockReturnValue({
+      data: [{ system: "NTRP", value: "4.000000", level: "4.0", confidence: "0.87" }],
+      isLoading: false,
+    });
+    renderProfile();
+    expect(screen.getByText(/· 87%/)).toBeInTheDocument();
+  });
+
   it("renders the band meter when a rating exposes a band position", () => {
     useGetApiV1UsersUserIdRatings.mockReturnValue({
       data: [{ system: "NTRP", value: null, level: "4.0", bandPosition: 0.7 }],

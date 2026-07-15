@@ -94,7 +94,6 @@ private fun Route.ratings(service: RatingService) {
                         token = verifiedToken(),
                         userId = uuidParam(name = "userId"),
                         value = resolvedRating(request = request),
-                        confidence = validatedConfidence(raw = request.confidence),
                     ),
                 // The setter is a RATER/ADMINISTRATOR, so echo back the exact value they just set.
             ) { rating -> call.respond(status = HttpStatusCode.OK, message = rating.toResponse(revealRawValue = true)) }
@@ -117,11 +116,4 @@ private fun resolvedRating(request: SetRatingRequest): BigDecimal {
     val value = requireNotNull(value = request.value) { "a band or value is required" }
     Rating.fromValue(value = value)
     return BigDecimal(value)
-}
-
-/** Validate confidence at the boundary (#116): absent, or a number in [0, 1]; otherwise a 400. */
-private fun validatedConfidence(raw: String?): BigDecimal? {
-    val value = raw?.let { BigDecimal(it) } ?: return null
-    require(value = value in BigDecimal.ZERO..BigDecimal.ONE) { "confidence must be between 0 and 1" }
-    return value
 }
