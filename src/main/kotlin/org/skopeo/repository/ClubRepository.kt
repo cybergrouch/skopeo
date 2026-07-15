@@ -27,12 +27,21 @@ class ClubRepository {
             val id =
                 ClubsTable.insertAndGetId {
                     it[name] = command.name
+                    it[publicCode] = generateUniqueClubCode()
                     it[createdBy] = command.createdBy
                 }.value
             ClubsTable.selectAll().where { ClubsTable.id eq id }.single().toClub()
         }
 
     fun findById(id: UUID): Club? = transaction { ClubsTable.selectAll().where { ClubsTable.id eq id }.singleOrNull()?.toClub() }
+
+    /**
+     * Resolve a club by its shareable public code (#327) for the public-by-code page. Unlike [list]
+     * this does NOT filter on is_active — a soft-deleted club's link stays honored for traceability,
+     * and the caller flags it (mirrors events/matches).
+     */
+    fun findByPublicCode(code: String): Club? =
+        transaction { ClubsTable.selectAll().where { ClubsTable.publicCode eq code }.singleOrNull()?.toClub() }
 
     /** All active clubs, alphabetical by name. */
     fun list(): List<Club> =
@@ -101,9 +110,14 @@ class ClubRepository {
         return Club(
             id = clubId,
             name = this[ClubsTable.name],
+            publicCode = this[ClubsTable.publicCode],
             isActive = this[ClubsTable.isActive],
             createdBy = this[ClubsTable.createdBy]?.value,
             ownerIds = ownerIds,
         )
     }
+
+    /** A fresh, unique club code (#327), reusing the shared generator; runs in the caller's transaction. */
+    private fun generateUniqueClubCode(): String =
+        PublicCode.generate { code -> ClubsTable.selectAll().where { ClubsTable.publicCode eq code }.any() }
 }

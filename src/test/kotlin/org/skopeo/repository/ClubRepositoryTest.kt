@@ -5,7 +5,9 @@ package org.skopeo.repository
 
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldHaveLength
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -77,6 +79,21 @@ class ClubRepositoryTest {
         // A missing club yields null from either mutation.
         clubs.addOwner(clubId = UUID.randomUUID(), userId = owner).shouldBeNull()
         clubs.removeOwner(clubId = UUID.randomUUID(), userId = owner).shouldBeNull()
+    }
+
+    @Test
+    fun `create generates a unique public code and findByPublicCode round-trips it (#327)`() {
+        val admin = newUser(uid = "admin")
+        val a = clubs.create(command = CreateClubCommand(name = "A", createdBy = admin))
+        val b = clubs.create(command = CreateClubCommand(name = "B", createdBy = admin))
+
+        a.publicCode shouldHaveLength 6
+        // Each club gets its own code.
+        (a.publicCode == b.publicCode) shouldBe false
+
+        // findByPublicCode resolves the right club, and is null for an unknown code.
+        clubs.findByPublicCode(code = a.publicCode).shouldNotBeNull().id shouldBe a.id
+        clubs.findByPublicCode(code = "ZZZZZZ").shouldBeNull()
     }
 
     @Test

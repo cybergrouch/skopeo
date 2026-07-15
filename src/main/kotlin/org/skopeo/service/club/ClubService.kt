@@ -15,6 +15,8 @@ import org.skopeo.model.AuditWrite
 import org.skopeo.model.Capability
 import org.skopeo.model.Club
 import org.skopeo.model.ClubOwnerRef
+import org.skopeo.model.ClubPublicEvent
+import org.skopeo.model.ClubPublicView
 import org.skopeo.model.ClubView
 import org.skopeo.model.CreateClubCommand
 import org.skopeo.model.ServiceError
@@ -25,6 +27,7 @@ import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService
 import org.skopeo.service.user.VerifiedFirebaseToken
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -195,11 +198,42 @@ class ClubService(
             toView(club = updated)
         }
 
+    /**
+     * Read-only public summary of a club by its shareable code (#327). Viewable by anyone (anonymous
+     * included, like the event/match/player public pages): the club's name plus its events split into
+     * [ClubPublicView.upcoming] (still running or in the future) and [ClubPublicView.past] (already
+     * ended), by end date vs today. Only non-sensitive fields are exposed — no owners/roster.
+     */
+    fun publicByCode(code: String): Either<ServiceError, ClubPublicView> =
+        either {
+            val club =
+                ensureNotNull(value = clubs.findByPublicCode(code = code)) {
+                    ServiceError.NotFound(message = "Club $code not found")
+                }
+            val today = LocalDate.now()
+            // Active events under the club; a deleted club's events are soft-deleted too, so this is
+            // empty for one (mirrors listByClub in the delete cascade).
+            val (upcoming, past) =
+                events
+                    .listByClub(clubId = club.id)
+                    .map { ClubPublicEvent(publicCode = it.publicCode, name = it.name, startDate = it.startDate, endDate = it.endDate) }
+                    .partition { !it.endDate.isBefore(today) }
+            ClubPublicView(
+                publicCode = club.publicCode,
+                name = club.name,
+                isActive = club.isActive,
+                // Upcoming soonest-first; past most-recent-first.
+                upcoming = upcoming.sortedBy { it.startDate },
+                past = past.sortedByDescending { it.endDate },
+            )
+        }
+
     /** Resolve a club's owner ids to display refs (name + public code); findAllByIds drops any missing user. */
     private fun toView(club: Club): ClubView =
         ClubView(
             id = club.id,
             name = club.name,
+            publicCode = club.publicCode,
             isActive = club.isActive,
             owners =
                 users.findAllByIds(ids = club.ownerIds).map {

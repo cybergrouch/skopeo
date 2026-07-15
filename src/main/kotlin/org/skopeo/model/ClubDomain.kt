@@ -3,6 +3,7 @@
 
 package org.skopeo.model
 
+import java.time.LocalDate
 import java.util.UUID
 
 /**
@@ -12,6 +13,8 @@ import java.util.UUID
 data class Club(
     val id: UUID,
     val name: String,
+    // The shareable code for the club's public-by-code page (#327), mirroring events/matches.
+    val publicCode: String,
     val isActive: Boolean = true,
     val createdBy: UUID? = null,
     val ownerIds: List<UUID> = emptyList(),
@@ -34,6 +37,33 @@ data class ClubOwnerRef(
 data class ClubView(
     val id: UUID,
     val name: String,
+    // The shareable code for the club's public-by-code page (#327).
+    val publicCode: String,
     val isActive: Boolean,
     val owners: List<ClubOwnerRef>,
+)
+
+/**
+ * One of a club's events on its public page (#327), reduced to the non-sensitive fields the page
+ * links on: the shareable code, name, and date range. No roster/owner PII is surfaced here.
+ */
+data class ClubPublicEvent(
+    val publicCode: String,
+    val name: String,
+    val startDate: LocalDate,
+    val endDate: LocalDate,
+)
+
+/**
+ * Read-only public view of a club (#327): its name plus the events it organizes, split into
+ * [upcoming] (still running or in the future) and [past] (already ended), each sorted for display.
+ * Owners and other sensitive fields are deliberately withheld. [isActive] is false once the club has
+ * been soft-deleted — the link stays honored for traceability and the page flags it as deleted.
+ */
+data class ClubPublicView(
+    val publicCode: String,
+    val name: String,
+    val isActive: Boolean,
+    val upcoming: List<ClubPublicEvent>,
+    val past: List<ClubPublicEvent>,
 )
