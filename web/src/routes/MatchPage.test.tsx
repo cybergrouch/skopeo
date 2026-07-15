@@ -366,4 +366,26 @@ describe('MatchPage', () => {
     expect(screen.getByText('singles · 2026-01-01 · 6-0')).toBeInTheDocument()
     expect(screen.queryByText(/won/)).not.toBeInTheDocument()
   })
+
+  it('links to the owning event when the match belongs to one (#358)', () => {
+    useGetApiV1MatchesCodeCode.mockReturnValue({
+      data: { ...match, event: { publicCode: 'EVT001', name: 'Spring Open' } },
+      isLoading: false,
+    })
+    renderAt()
+
+    const link = screen.getByRole('link', { name: 'Spring Open' })
+    expect(link).toHaveAttribute('href', '/events/EVT001')
+    expect(screen.getByText(/Part of event:/)).toBeInTheDocument()
+  })
+
+  it('omits the event link for an eventless (open-play) match (#358)', () => {
+    useGetApiV1MatchesCodeCode.mockReturnValue({
+      data: { ...match, event: null },
+      isLoading: false,
+    })
+    renderAt()
+
+    expect(screen.queryByText(/Part of event:/)).not.toBeInTheDocument()
+  })
 })

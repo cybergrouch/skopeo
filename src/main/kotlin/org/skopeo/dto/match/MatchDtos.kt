@@ -201,6 +201,19 @@ data class MatchPublicResponse(
     // Prior meetings between the same two players (#188); null when there are none or the match is not
     // singles. Wins and set scores are oriented to team1/team2 of THIS match.
     val headToHead: MatchPublicHeadToHead? = null,
+    // The event this match belongs to (#358), resolved to its shareable code + name so the page can
+    // link to the event's public page. Null/omitted for eventless (open-play) matches.
+    val event: MatchPublicEvent? = null,
+)
+
+/**
+ * The event a match belongs to (#358), for a link from the public match page to the event's public
+ * page. Only the non-sensitive shareable code + display name are exposed.
+ */
+@Serializable
+data class MatchPublicEvent(
+    val publicCode: String,
+    val name: String,
 )
 
 /**
@@ -255,6 +268,7 @@ fun Match.toPublicResponse(
     players: Map<UUID, MatchPublicPlayer>,
     ratingChanges: List<MatchPublicRatingChange>? = null,
     headToHead: MatchPublicHeadToHead? = null,
+    event: MatchPublicEvent? = null,
 ): MatchPublicResponse {
     fun side(userIds: List<UUID>) = userIds.map { players[it] ?: MatchPublicPlayer() }
     val winnerSide =
@@ -287,5 +301,6 @@ fun Match.toPublicResponse(
         tournamentName = tournamentName,
         ratingChanges = ratingChanges,
         headToHead = headToHead,
+        event = event,
     )
 }

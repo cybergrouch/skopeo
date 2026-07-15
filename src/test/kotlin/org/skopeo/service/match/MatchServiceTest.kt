@@ -557,6 +557,47 @@ class MatchServiceTest {
     }
 
     @Test
+    fun `publicByCode links to the owning event, and omits it for an open-play match (#358)`() {
+        val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val event =
+            EventRepository().create(
+                command =
+                    CreateEventCommand(
+                        name = "Spring Open",
+                        startDate = LocalDate.now(),
+                        endDate = LocalDate.now().plusDays(7),
+                        participantIds = listOf(p1.id, p2.id),
+                        createdBy = host.id,
+                    ),
+            )
+
+        // A fixture scoped to the event surfaces the event's code + name.
+        val evented =
+            service
+                .createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id))
+                .shouldBeRight()
+        val eventRef =
+            service
+                .publicByCode(token = token(uid = "host"), code = evented.publicCode)
+                .shouldBeRight()
+                .event
+                .shouldNotBeNull()
+        eventRef.publicCode shouldBe event.publicCode
+        eventRef.name shouldBe "Spring Open"
+
+        // An eventless (open-play) match has no event reference.
+        val openPlay =
+            service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
+        service
+            .publicByCode(token = token(uid = "host"), code = openPlay.publicCode)
+            .shouldBeRight()
+            .event
+            .shouldBeNull()
+    }
+
+    @Test
     fun `publicByCode includes the head-to-head record between the two players (#188)`() {
         provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val p1 = provisionUser(uid = "p1", rated = true)

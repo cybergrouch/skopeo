@@ -9,6 +9,7 @@ import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
+import org.skopeo.dto.match.MatchPublicEvent
 import org.skopeo.dto.match.MatchPublicHeadToHead
 import org.skopeo.dto.match.MatchPublicHeadToHeadEntry
 import org.skopeo.dto.match.MatchPublicPlayer
@@ -273,7 +274,13 @@ class MatchService(
                 if (match.ratedAt != null) ratingChangesFor(match = match, usersById = usersById, token = token) else null
             // Prior meetings between the same two players (#188), if any.
             val headToHead = headToHeadFor(match = match, usersById = usersById)
-            match.toPublicResponse(players = players, ratingChanges = ratingChanges, headToHead = headToHead)
+            // The owning event (#358), if the match belongs to one — resolved to its shareable code + name
+            // so the public page can link to the event. Null for eventless (open-play) matches.
+            val event =
+                match.eventId
+                    ?.let { events.findById(id = it) }
+                    ?.let { MatchPublicEvent(publicCode = it.publicCode, name = it.name) }
+            match.toPublicResponse(players = players, ratingChanges = ratingChanges, headToHead = headToHead, event = event)
         }
 
     /**
