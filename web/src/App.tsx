@@ -22,6 +22,7 @@ const PlayerProfilePage = lazy(() => import('@/routes/PlayerProfilePage').then((
 const PlayerMatchesPage = lazy(() => import('@/routes/PlayerMatchesPage').then((m) => ({ default: m.PlayerMatchesPage })))
 const MatchPage = lazy(() => import('@/routes/MatchPage').then((m) => ({ default: m.MatchPage })))
 const EventPage = lazy(() => import('@/routes/EventPage').then((m) => ({ default: m.EventPage })))
+const ClubPage = lazy(() => import('@/routes/ClubPage').then((m) => ({ default: m.ClubPage })))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -72,6 +73,7 @@ function App() {
               <Route path="/players/:code/matches" element={<PlayerMatchesPage />} />
               <Route path="/matches/:code" element={<MatchPage />} />
               <Route path="/events/:code" element={<EventPage />} />
+              <Route path="/clubs/:code" element={<ClubPage />} />
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>

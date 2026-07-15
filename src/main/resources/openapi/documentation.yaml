@@ -2175,6 +2175,34 @@ paths:
         '403':
           description: Caller is not an ADMINISTRATOR
 
+  /api/v1/clubs/code/{code}:
+    parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      summary: Get a club's public page by code (#327)
+      description: >-
+        Read-only public summary of a club resolved by its shareable public code: the club's name plus
+        the events it organizes, split into upcoming and past by end date. Viewable without login
+        (#193); no owner or roster PII is exposed.
+      tags:
+        - Clubs
+      security:
+        - firebaseAuth: []
+        - {}
+      responses:
+        '200':
+          description: The public club summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClubPublicResponse'
+        '404':
+          description: No club with that code
+
   /api/v1/clubs/{id}:
     parameters:
       - name: id
@@ -4867,6 +4895,7 @@ components:
       required:
         - id
         - name
+        - publicCode
         - isActive
         - owners
       properties:
@@ -4875,6 +4904,9 @@ components:
           format: uuid
         name:
           type: string
+        publicCode:
+          type: string
+          description: The shareable code for the club's public-by-code page (#327).
         isActive:
           type: boolean
         owners:
@@ -4893,6 +4925,53 @@ components:
                 nullable: true
               publicCode:
                 type: string
+
+    ClubPublicResponse:
+      type: object
+      description: >-
+        Read-only public summary of a club (#327) — its name plus the events it organizes, split into
+        upcoming and past. No owner or roster PII is exposed.
+      required:
+        - publicCode
+        - name
+        - upcoming
+        - past
+      properties:
+        publicCode:
+          type: string
+        name:
+          type: string
+        isActive:
+          type: boolean
+          description: False once the club is soft-deleted (#325); the public page flags it as deleted.
+        upcoming:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClubPublicEventResponse'
+        past:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClubPublicEventResponse'
+
+    ClubPublicEventResponse:
+      type: object
+      description: One of a club's events on its public page (#327) — code, name, and date range.
+      required:
+        - publicCode
+        - name
+        - startDate
+        - endDate
+      properties:
+        publicCode:
+          type: string
+        name:
+          type: string
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
 
     CreateInviteRequest:
       type: object

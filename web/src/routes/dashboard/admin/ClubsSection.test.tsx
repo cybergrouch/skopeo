@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 import { ClubsSection } from "./ClubsSection";
 
 const {
@@ -97,7 +98,9 @@ vi.mock("@/components/UserSearchSelect", () => ({
 function renderSection() {
   return render(
     <QueryClientProvider client={new QueryClient()}>
-      <ClubsSection />
+      <MemoryRouter>
+        <ClubsSection />
+      </MemoryRouter>
     </QueryClientProvider>,
   );
 }
@@ -143,6 +146,25 @@ describe("ClubsSection", () => {
     expect(screen.getByText("Ann")).toBeInTheDocument();
     expect(screen.getByText("West End")).toBeInTheDocument();
     expect(screen.getByText("No owners yet.")).toBeInTheDocument();
+  });
+
+  it("links each club to its public page (#327)", () => {
+    useGetApiV1Clubs.mockReturnValue({
+      data: [
+        {
+          id: "c1",
+          name: "Downtown TC",
+          publicCode: "CLB001",
+          isActive: true,
+          owners: [],
+        },
+      ],
+      isLoading: false,
+    });
+    renderSection();
+    expect(
+      screen.getByRole("link", { name: "Public page (QR)" }),
+    ).toHaveAttribute("href", "/clubs/CLB001");
   });
 
   it("creates a club", async () => {

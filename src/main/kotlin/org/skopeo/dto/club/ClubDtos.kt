@@ -4,6 +4,8 @@
 package org.skopeo.dto.club
 
 import kotlinx.serialization.Serializable
+import org.skopeo.model.ClubPublicEvent
+import org.skopeo.model.ClubPublicView
 import org.skopeo.model.ClubView
 
 /** Body for `POST /api/v1/clubs` — an administrator creates a club. */
@@ -35,6 +37,8 @@ data class ClubOwnerDto(
 data class ClubResponse(
     val id: String,
     val name: String,
+    // The shareable code for the club's public-by-code page (#327).
+    val publicCode: String,
     val isActive: Boolean,
     val owners: List<ClubOwnerDto>,
 )
@@ -43,9 +47,50 @@ fun ClubView.toResponse(): ClubResponse =
     ClubResponse(
         id = id.toString(),
         name = name,
+        publicCode = publicCode,
         isActive = isActive,
         owners =
             owners.map {
                 ClubOwnerDto(userId = it.userId.toString(), displayName = it.displayName, publicCode = it.publicCode)
             },
+    )
+
+/** One of a club's events on its public page (#327): the shareable code, name, and date range. */
+@Serializable
+data class ClubPublicEventDto(
+    val publicCode: String,
+    val name: String,
+    val startDate: String,
+    val endDate: String,
+)
+
+/**
+ * Read-only public summary of a club (#327): its name plus the events it organizes, split into
+ * [upcoming] and [past]. No owner/roster PII is exposed. [isActive] is false once the club has been
+ * soft-deleted, so the public page can flag it while the link stays honored.
+ */
+@Serializable
+data class ClubPublicResponse(
+    val publicCode: String,
+    val name: String,
+    val isActive: Boolean = true,
+    val upcoming: List<ClubPublicEventDto>,
+    val past: List<ClubPublicEventDto>,
+)
+
+private fun ClubPublicEvent.toDto(): ClubPublicEventDto =
+    ClubPublicEventDto(
+        publicCode = publicCode,
+        name = name,
+        startDate = startDate.toString(),
+        endDate = endDate.toString(),
+    )
+
+fun ClubPublicView.toResponse(): ClubPublicResponse =
+    ClubPublicResponse(
+        publicCode = publicCode,
+        name = name,
+        isActive = isActive,
+        upcoming = upcoming.map { it.toDto() },
+        past = past.map { it.toDto() },
     )

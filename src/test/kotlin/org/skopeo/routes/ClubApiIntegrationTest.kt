@@ -24,6 +24,7 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.dto.club.AssignOwnerRequest
+import org.skopeo.dto.club.ClubPublicResponse
 import org.skopeo.dto.club.ClubResponse
 import org.skopeo.dto.club.CreateClubRequest
 import org.skopeo.model.AuthProvider
@@ -138,6 +139,28 @@ class ClubApiIntegrationTest {
             // …but a plain player may not.
             client.get(urlString = "/api/v1/clubs") { header(key = HttpHeaders.Authorization, value = "Bearer $playerToken") }
                 .status shouldBe HttpStatusCode.Forbidden
+        }
+
+    @Test
+    fun `the public club page is reachable anonymously and 404s for an unknown code (#327)`() =
+        withApp { client ->
+            seedUser(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+            val adminToken = TestFirebaseAuth.mintToken(uid = "admin")
+            val club = client.createClub(token = adminToken, name = "Downtown TC").body<ClubResponse>()
+
+            // No Authorization header at all → the public page still serves (optional auth).
+            val anon = client.get(urlString = "/api/v1/clubs/code/${club.publicCode}")
+            anon.status shouldBe HttpStatusCode.OK
+            anon.body<ClubPublicResponse>().let {
+                it.name shouldBe "Downtown TC"
+                it.publicCode shouldBe club.publicCode
+            }
+
+            // An unknown code is a 404 (also anonymous).
+            client.get(urlString = "/api/v1/clubs/code/ZZZZZZ").status shouldBe HttpStatusCode.NotFound
+
+            // A management route remains auth-required without a token.
+            client.get(urlString = "/api/v1/clubs").status shouldBe HttpStatusCode.Unauthorized
         }
 
     @Test

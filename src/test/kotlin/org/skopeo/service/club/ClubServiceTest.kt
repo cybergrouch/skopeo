@@ -275,6 +275,69 @@ class ClubServiceTest {
     }
 
     @Test
+    fun `publicByCode returns the club name and splits its events into upcoming and past (#327)`() {
+        val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val p1 = provision(uid = "p1")
+        val club = service.create(token = token(uid = "admin"), name = "Downtown TC").shouldBeRight()
+
+        val today = LocalDate.now()
+        // A past event (ended yesterday), a still-running one (ends today), and a future one.
+        events.create(
+            command =
+                CreateEventCommand(
+                    name = "Last Week",
+                    startDate = today.minusDays(7),
+                    endDate = today.minusDays(1),
+                    participantIds = listOf(element = p1.id),
+                    createdBy = admin.id,
+                    clubId = club.id,
+                ),
+        )
+        events.create(
+            command =
+                CreateEventCommand(
+                    name = "Running Now",
+                    startDate = today.minusDays(1),
+                    endDate = today,
+                    participantIds = listOf(element = p1.id),
+                    createdBy = admin.id,
+                    clubId = club.id,
+                ),
+        )
+        events.create(
+            command =
+                CreateEventCommand(
+                    name = "Next Month",
+                    startDate = today.plusDays(30),
+                    endDate = today.plusDays(31),
+                    participantIds = listOf(element = p1.id),
+                    createdBy = admin.id,
+                    clubId = club.id,
+                ),
+        )
+
+        val view = service.publicByCode(code = club.publicCode).shouldBeRight()
+        view.name shouldBe "Downtown TC"
+        view.isActive shouldBe true
+        // Ends-today and future are upcoming, soonest-first; ended-yesterday is past.
+        view.upcoming.map { it.name } shouldBe listOf("Running Now", "Next Month")
+        view.past.map { it.name } shouldBe listOf(element = "Last Week")
+    }
+
+    @Test
+    fun `publicByCode is anonymous (no roster PII) and not-found for an unknown code (#327)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val club = service.create(token = token(uid = "admin"), name = "Empty Club").shouldBeRight()
+
+        // A club with no events resolves with empty splits.
+        val view = service.publicByCode(code = club.publicCode).shouldBeRight()
+        view.upcoming shouldHaveSize 0
+        view.past shouldHaveSize 0
+
+        service.publicByCode(code = "ZZZZZZ").shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
     fun `an owner without a display name is shown by public code`() {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val owner =
