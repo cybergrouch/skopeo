@@ -4559,6 +4559,27 @@ components:
           description: >-
             Prior meetings between the same two players (#188); null when there are none or the
             match is not singles. Wins and set scores are oriented to team1/team2 of this match.
+        event:
+          allOf:
+            - $ref: '#/components/schemas/MatchPublicEvent'
+          nullable: true
+          description: >-
+            The event this match belongs to (#358), resolved to its shareable code + name so the
+            public page can link to the event. Null/omitted for eventless (open-play) matches.
+
+    MatchPublicEvent:
+      type: object
+      description: >-
+        The event a match belongs to (#358), for a link from the public match page to the event's
+        public page. Only the non-sensitive shareable code + display name are exposed.
+      required:
+        - publicCode
+        - name
+      properties:
+        publicCode:
+          type: string
+        name:
+          type: string
 
     MatchPublicHeadToHead:
       type: object

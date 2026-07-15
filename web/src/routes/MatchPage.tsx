@@ -232,6 +232,18 @@ export function MatchPage() {
                 {match.matchDate} · {match.matchType.replaceAll('_', ' ').toLowerCase()}
                 {match.venue ? ` · ${match.venue}` : ''}
               </div>
+              {/* When the match belongs to an event (#358), link to that event's public page. */}
+              {match.event ? (
+                <div>
+                  Part of event:{' '}
+                  <Link
+                    to={`/events/${match.event.publicCode}`}
+                    className="text-primary hover:underline"
+                  >
+                    {match.event.name}
+                  </Link>
+                </div>
+              ) : null}
               <Side players={match.team1} isWinner={match.winner === 'TEAM1'} />
               <div className="text-xs uppercase text-muted-foreground">vs</div>
               <Side players={match.team2} isWinner={match.winner === 'TEAM2'} />
