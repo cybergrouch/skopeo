@@ -59,6 +59,13 @@ class EventRepository {
 
     fun findById(id: UUID): Event? = transaction { loadEvent(id = id) }
 
+    /**
+     * The event with [id], which the caller knows exists — e.g. resolving a match's `event_id`, an
+     * FK (`ON DELETE SET NULL`) so a non-null value always points to a live row (#358). Throws if
+     * absent, rather than silently swallowing an impossible null.
+     */
+    fun getById(id: UUID): Event = transaction { loadEventOrThrow(id = id) }
+
     /** Active events belonging to [clubId] (#325) — the club-delete cascade soft-deletes each of these. */
     fun listByClub(clubId: UUID): List<Event> =
         transaction {

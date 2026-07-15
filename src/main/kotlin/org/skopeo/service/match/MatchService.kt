@@ -277,9 +277,10 @@ class MatchService(
             // The owning event (#358), if the match belongs to one — resolved to its shareable code + name
             // so the public page can link to the event. Null for eventless (open-play) matches.
             val event =
-                match.eventId
-                    ?.let { events.findById(id = it) }
-                    ?.let { MatchPublicEvent(publicCode = it.publicCode, name = it.name) }
+                match.eventId?.let { eventId ->
+                    val owning = events.getById(id = eventId)
+                    MatchPublicEvent(publicCode = owning.publicCode, name = owning.name)
+                }
             match.toPublicResponse(players = players, ratingChanges = ratingChanges, headToHead = headToHead, event = event)
         }
 
