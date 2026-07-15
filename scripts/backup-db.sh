@@ -11,7 +11,7 @@
 # Managed backups can only restore back into Cloud SQL; this logical dump is engine-restorable.
 #
 # Usage:
-#   BACKUP_BUCKET=gs://skopeo-backups ./scripts/backup-db.sh
+#   BACKUP_BUCKET=gs://skopeo-prod-db-backups ./scripts/backup-db.sh
 #
 # Config via env (defaults match the pilot GCP project):
 #   PROJECT        GCP project           (default: skopeo-prod)
@@ -33,7 +33,7 @@ DATABASE="${DATABASE:-SkopeoDb}"
 BACKUP_BUCKET="${BACKUP_BUCKET:-}"
 
 if [[ -z "$BACKUP_BUCKET" ]]; then
-  echo "❌ Set BACKUP_BUCKET, e.g. BACKUP_BUCKET=gs://skopeo-backups ./scripts/backup-db.sh" >&2
+  echo "❌ Set BACKUP_BUCKET, e.g. BACKUP_BUCKET=gs://skopeo-prod-db-backups ./scripts/backup-db.sh" >&2
   exit 1
 fi
 

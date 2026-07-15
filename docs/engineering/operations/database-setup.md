@@ -504,6 +504,10 @@ gcloud sql instances clone skopeo-db skopeo-db-pitr --project skopeo-prod \
 
 ### Production: portable logical backups → GCS
 
+The production backup bucket is **`gs://skopeo-prod-db-backups`** (project `skopeo-prod`); substitute it
+for `gs://<backup-bucket>` in the commands below. The weekly scheduled export lands there under the
+fixed name `skopeodb-scheduled.sql.gz`, with Firebase auth exports under the `firebase-auth/` prefix.
+
 On-demand (Cloud SQL export → GCS; `--offload` keeps prod unloaded):
 
 ```bash

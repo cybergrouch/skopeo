@@ -10,8 +10,8 @@
 #     need real identities.
 #
 # Usage:
-#   BACKUP_BUCKET=gs://skopeo-backups ./scripts/restore-prod-to-local.sh
-#   ./scripts/restore-prod-to-local.sh gs://skopeo-backups/skopeodb-20260714T....sql.gz
+#   BACKUP_BUCKET=gs://skopeo-prod-db-backups ./scripts/restore-prod-to-local.sh
+#   ./scripts/restore-prod-to-local.sh gs://skopeo-prod-db-backups/skopeodb-20260714T....sql.gz
 #
 # Config via env:
 #   BACKUP_BUCKET  gs:// bucket to pull the latest backup from (if no object arg is given)
