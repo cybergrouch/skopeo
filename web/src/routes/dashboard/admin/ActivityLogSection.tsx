@@ -34,8 +34,10 @@ const CATEGORIES = [
   { value: 'INVITE', label: 'Invites' },
   { value: 'MATCH_FIXTURE', label: 'Match fixtures' },
   { value: 'MATCH_RESULT', label: 'Match results' },
+  { value: 'EVENT_MANAGEMENT', label: 'Events' },
   { value: 'CAPABILITY_CHANGE', label: 'Capability changes' },
   { value: 'RATING_CHANGE', label: 'Rating changes' },
+  { value: 'RATING_CALCULATION', label: 'Rating calculations' },
 ] as const
 
 type CategoryFilter = (typeof CATEGORIES)[number]['value']

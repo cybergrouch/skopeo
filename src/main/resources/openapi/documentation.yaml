@@ -2418,8 +2418,10 @@ paths:
               - MATCH_RESULT
               - CAPABILITY_CHANGE
               - RATING_CHANGE
+              - RATING_CALCULATION
               - DUPLICATE_RECTIFICATION
               - CLUB_MANAGEMENT
+              - EVENT_MANAGEMENT
           description: Scope to a single category; omit for all.
         - name: limit
           in: query

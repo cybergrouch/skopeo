@@ -10,6 +10,9 @@ import arrow.core.raise.ensureNotNull
 import arrow.core.right
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.skopeo.dto.RankingCalculationRequest
+import org.skopeo.model.AuditAction
+import org.skopeo.model.AuditEntityType
+import org.skopeo.model.AuditWrite
 import org.skopeo.model.CalculationBreakdownSnapshot
 import org.skopeo.model.Capability
 import org.skopeo.model.Match
@@ -28,6 +31,7 @@ import org.skopeo.model.TiebreakScore
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
+import org.skopeo.service.audit.AuditService
 import org.skopeo.service.calculator.AuditEntry
 import org.skopeo.service.calculator.RankingCalculator
 import org.skopeo.service.calculator.impl.v2.PerformanceBasedRankingCalculatorImpl
@@ -51,6 +55,7 @@ class RatingCalculationService(
     private val ratings: RatingRepository = RatingRepository(),
     private val users: UserRepository = UserRepository(),
     private val calculator: RankingCalculator = PerformanceBasedRankingCalculatorImpl(),
+    private val audit: AuditService = AuditService(),
 ) {
     /**
      * The internal calculator derivatives behind one player's change (issue #89), as precise strings.
@@ -104,9 +109,32 @@ class RatingCalculationService(
             val snapshot = mutableMapOf<UUID, BigDecimal>()
             val processed = matches.listPendingCalculation().map { processMatch(match = it, snapshot = snapshot).bind() }
 
-            if (!dryRun) commit(processed = processed, ratedBy = adminId)
+            if (!dryRun) {
+                commit(processed = processed, ratedBy = adminId)
+            } else if (processed.isNotEmpty()) {
+                // One compact Activity Log summary per preview (#333): the per-match order trace is
+                // reserved for the committed run, so repeated dry-runs don't flood the log.
+                audit.record(
+                    write =
+                        AuditWrite(
+                            actorUserId = adminId,
+                            action = AuditAction.RATING_CALCULATION_PREVIEWED,
+                            entityType = AuditEntityType.CALCULATION,
+                            entityId = null,
+                            summary = "Previewed rating calculation for ${processed.size} pending matches",
+                            details = calculationDetails(processed = processed),
+                        ),
+                )
+            }
             CalculationOutcome(dryRun = dryRun, matches = processed)
         }
+
+    /** Shared summary details for a preview/commit audit entry: match count + distinct players affected. */
+    private fun calculationDetails(processed: List<MatchCalculation>): Map<String, String?> =
+        mapOf(
+            "matches" to processed.size.toString(),
+            "players" to processed.flatMap { calc -> calc.changes.map { it.userId } }.distinct().size.toString(),
+        )
 
     private fun commit(
         processed: List<MatchCalculation>,
@@ -149,6 +177,48 @@ class RatingCalculationService(
                 matches.markRated(matchId = calc.matchId, ratedAt = now, ratedBy = ratedBy)
             }
         }
+        if (processed.isNotEmpty()) recordCommitTrace(processed = processed, ratedBy = ratedBy)
+    }
+
+    /**
+     * Activity Log trace for a committed calculation (#333): one entry per match in processing order
+     * (the `position` makes the ORDER traceable regardless of identical timestamps), then a single
+     * summary entry. Recorded after the commit transaction so the log reflects a persisted run.
+     */
+    private fun recordCommitTrace(
+        processed: List<MatchCalculation>,
+        ratedBy: UUID,
+    ) {
+        processed.forEachIndexed { index, calc ->
+            audit.record(
+                write =
+                    AuditWrite(
+                        actorUserId = ratedBy,
+                        action = AuditAction.RATING_CALCULATION_MATCH_RATED,
+                        entityType = AuditEntityType.MATCH,
+                        entityId = calc.matchId,
+                        summary = "Rated match ${index + 1} of ${processed.size} in the calculation",
+                        details =
+                            mapOf(
+                                "position" to (index + 1).toString(),
+                                "totalMatches" to processed.size.toString(),
+                                "matchDate" to calc.matchDate.toString(),
+                                "playersRated" to calc.changes.size.toString(),
+                            ),
+                    ),
+            )
+        }
+        audit.record(
+            write =
+                AuditWrite(
+                    actorUserId = ratedBy,
+                    action = AuditAction.RATING_CALCULATION_COMMITTED,
+                    entityType = AuditEntityType.CALCULATION,
+                    entityId = null,
+                    summary = "Committed rating calculation for ${processed.size} matches",
+                    details = calculationDetails(processed = processed),
+                ),
+        )
     }
 
     private fun processMatch(

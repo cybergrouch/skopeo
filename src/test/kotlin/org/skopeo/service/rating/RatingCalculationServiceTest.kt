@@ -21,6 +21,7 @@ import org.skopeo.dto.RankingCalculationRequest
 import org.skopeo.dto.RankingCalculationResponse
 import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.dto.match.SetScoreRequest
+import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.MatchType
@@ -31,6 +32,7 @@ import org.skopeo.model.TeamType
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
+import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRatingsTable
@@ -326,6 +328,43 @@ class RatingCalculationServiceTest {
 
         // idempotent — nothing left to process
         calc.calculate(token = token(uid = "root"), dryRun = false).shouldBeRight().matches.shouldBe(expected = emptyList())
+    }
+
+    @Test
+    fun `preview logs one summary, commit logs a per-match order trace plus one summary (#333)`() {
+        provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val p3 = provisionUser(uid = "p3", rated = true)
+        val p4 = provisionUser(uid = "p4", rated = true)
+        playedMatch(admin = "root", winner = p1.id, loser = p2.id)
+        playedMatch(admin = "root", winner = p3.id, loser = p4.id)
+        val audit = AuditRepository()
+
+        // A dry-run preview writes a single compact summary — no per-match rows, even run twice.
+        calc.calculate(token = token(uid = "root"), dryRun = true).shouldBeRight()
+        calc.calculate(token = token(uid = "root"), dryRun = true).shouldBeRight()
+        audit.list(actions = listOf(element = AuditAction.RATING_CALCULATION_PREVIEWED), limit = 50, offset = 0).let { (rows, total) ->
+            total shouldBe 2L
+            rows.first().details["matches"] shouldBe "2"
+        }
+        audit.list(actions = listOf(element = AuditAction.RATING_CALCULATION_MATCH_RATED), limit = 50, offset = 0).second shouldBe 0L
+
+        // Commit writes one per-match row (positions 1..N, the processing ORDER) + one commit summary.
+        calc.calculate(token = token(uid = "root"), dryRun = false).shouldBeRight()
+        val perMatch = audit.list(actions = listOf(element = AuditAction.RATING_CALCULATION_MATCH_RATED), limit = 50, offset = 0).first
+        perMatch.size shouldBe 2
+        perMatch.mapNotNull { it.details["position"] }.toSet() shouldBe setOf("1", "2")
+        perMatch.all { it.details["totalMatches"] == "2" }.shouldBeTrue()
+        audit.list(actions = listOf(element = AuditAction.RATING_CALCULATION_COMMITTED), limit = 50, offset = 0).let { (rows, total) ->
+            total shouldBe 1L
+            rows.single().details["matches"] shouldBe "2"
+        }
+
+        // With nothing left pending, a dry-run preview writes no new summary (the empty-guard branch);
+        // the PREVIEWED count stays at the two from earlier.
+        calc.calculate(token = token(uid = "root"), dryRun = true).shouldBeRight().matches.shouldBe(expected = emptyList())
+        audit.list(actions = listOf(element = AuditAction.RATING_CALCULATION_PREVIEWED), limit = 50, offset = 0).second shouldBe 2L
     }
 
     @Test

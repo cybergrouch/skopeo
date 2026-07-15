@@ -13,6 +13,9 @@ import org.skopeo.dto.event.EventParticipantResponse
 import org.skopeo.dto.event.EventPublicResponse
 import org.skopeo.dto.match.MatchPublicPlayer
 import org.skopeo.dto.match.toPublicResponse
+import org.skopeo.model.AuditAction
+import org.skopeo.model.AuditEntityType
+import org.skopeo.model.AuditWrite
 import org.skopeo.model.Capability
 import org.skopeo.model.CreateEventCommand
 import org.skopeo.model.Event
@@ -33,6 +36,7 @@ import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
+import org.skopeo.service.audit.AuditService
 import org.skopeo.service.user.VerifiedFirebaseToken
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -64,6 +68,7 @@ class EventService(
     private val matches: MatchRepository = MatchRepository(),
     private val ratings: RatingRepository = RatingRepository(),
     private val clubs: ClubRepository = ClubRepository(),
+    private val audit: AuditService = AuditService(),
 ) {
     fun create(
         token: VerifiedFirebaseToken,
@@ -92,6 +97,25 @@ class EventService(
                             clubId = input.clubId,
                         ),
                 )
+            // Activity Log entry for the creation (#334); rename/set-club/delete are follow-ups.
+            audit.record(
+                write =
+                    AuditWrite(
+                        actorUserId = createdBy,
+                        action = AuditAction.EVENT_CREATED,
+                        entityType = AuditEntityType.EVENT,
+                        entityId = event.id,
+                        summary = "Created event ${event.name}",
+                        details =
+                            mapOf(
+                                "publicCode" to event.publicCode,
+                                "startDate" to event.startDate.toString(),
+                                "endDate" to event.endDate.toString(),
+                                "participants" to event.participantIds.size.toString(),
+                                "clubId" to event.clubId?.toString(),
+                            ),
+                    ),
+            )
             toView(event = event)
         }
 
