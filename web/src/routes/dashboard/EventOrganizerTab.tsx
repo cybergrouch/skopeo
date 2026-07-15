@@ -342,7 +342,7 @@ export function EventOrganizerTab() {
         <CardHeader>
           <CardTitle>Events</CardTitle>
           <CardDescription>
-            Grouped by club (#313); clubless events are under “Open”. Select an
+            Grouped by club; clubless events are under “Open”. Select an
             event to manage its participants, fixtures, and results.
           </CardDescription>
         </CardHeader>

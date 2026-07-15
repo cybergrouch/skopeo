@@ -331,7 +331,7 @@ export function PendingCalculationSection() {
         <CardDescription>
           Completed matches awaiting a rating calculation, grouped by event and numbered in the exact
           order they’ll be processed — events by end date (drag to reorder), matches within an event
-          by date (#331/#332/#335). Preview before committing.
+          by date. Preview before committing.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
