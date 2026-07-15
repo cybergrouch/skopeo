@@ -189,6 +189,43 @@ class MatchRepositoryTest {
     }
 
     @Test
+    fun `winLossByUsers covers a team2 win, one-sided queries, and a user with no team history (#342)`() {
+        val a = newUser(uid = "a")
+        val b = newUser(uid = "b")
+        val c = newUser(uid = "c") // never played — no team membership at all
+
+        // A singles match where TEAM 2 wins (b beats a): exercises the winner-is-team2 branch.
+        val match =
+            matches.createFixture(
+                command =
+                    CreateFixtureCommand(
+                        matchFormat = TeamType.SINGLES,
+                        matchType = MatchType.OPEN_PLAY,
+                        matchDate = LocalDate.of(2026, 1, 1),
+                        team1UserIds = listOf(element = a),
+                        team2UserIds = listOf(element = b),
+                        team1Name = "T1",
+                        team2Name = "T2",
+                        createdBy = a,
+                    ),
+            )
+        matches.addResult(
+            matchId = match.id,
+            sets = listOf(element = MatchSetResult(setNumber = 1, team1Games = 2, team2Games = 6, winnerTeamId = match.team2.teamId)),
+            winnerTeamId = match.team2.teamId,
+            recordedBy = a,
+            completedAt = LocalDateTime.now(),
+        )
+
+        // Query only the winner: the loser's team has no queried user, so the loser-side lookup is empty.
+        matches.winLossByUsers(userIds = listOf(element = b)) shouldBe mapOf(b to WinLossRecord(wins = 1, losses = 0))
+        // Query only the loser: the winner's team has no queried user, so the winner-side lookup is empty.
+        matches.winLossByUsers(userIds = listOf(element = a)) shouldBe mapOf(a to WinLossRecord(wins = 0, losses = 1))
+        // A user who never joined any team → no memberships → empty result.
+        matches.winLossByUsers(userIds = listOf(element = c)) shouldBe emptyMap()
+    }
+
+    @Test
     fun `pending-calculation orders by event end date, interleaves eventless by match date, honors override (#335)`() {
         val u1 = newUser(uid = "u1")
         val u2 = newUser(uid = "u2")
