@@ -1,6 +1,6 @@
 # Points Awarding & Budget — Design Discussion
 
-**Status:** 🟡 Draft / discussion — decisions below are tentative; open questions are called out.
+**Status:** 🟢 Decisions locked (agreed on [#403](https://github.com/cybergrouch/skopeo/issues/403)); implementation proceeds by the A–E phases (§8). Phase A in progress.
 **Issue:** [#403](https://github.com/cybergrouch/skopeo/issues/403). Builds on [#146](https://github.com/cybergrouch/skopeo/issues/146)/[#392](https://github.com/cybergrouch/skopeo/issues/392) (points ledger), [#393](https://github.com/cybergrouch/skopeo/issues/393) (serving layer) and [#400](https://github.com/cybergrouch/skopeo/issues/400) (recompute). Subsumes the ATP stage-table sketch and reshapes [#390](https://github.com/cybergrouch/skopeo/issues/390) (tournaments). Sequenced **before** [#389](https://github.com/cybergrouch/skopeo/issues/389) (scheduler).
 
 This is the **"how points are earned"** layer beneath Standings Phase 2: how ranking points get associated with matches, awarded to winners conveniently by hosts, and kept **budget-controlled and fully auditable**.
@@ -96,14 +96,14 @@ Every step — global-policy set, club allocation, event points-policy, fixture 
 
 ---
 
-## 7. Open decisions (to lock before building)
-1. **Reservation timing** — reserve-on-designation vs check-only. *Lean: reserve on designation, convert on finalize, release unused; `Free = Budgeted − Reserved − ActiveAwarded`.*
-2. **Recompute band-scoping** — extend #400 to count an award only when `award.band == player's current band`. (A real change to the current sum-by-tag logic.)
-3. **Finalize ↔ rating-queue** — define behavior for **event-less/ad-hoc matches** (queue immediately as today?), and whether finalize is **terminal** or has an audited **un-finalize** escape hatch.
-4. **League (team) award semantics** — points to the winning team → each member gets the designated amount, or split? Define "winner" for team play.
-5. **Coexistence with manual/ad-hoc grants (#392)** — do admin grants draw from the club budget, or are `EXTERNAL`/ad-hoc grants a **non-budgeted** class? *Lean: event awards are budgeted; EXTERNAL is non-budgeted (else external credits break accounting).*
-6. **Units** — integer vs `BigDecimal` (the ledger uses `BigDecimal`).
-7. **Budget seeding** — who sets the master policy + total; how club allocations are provisioned/adjusted (admin UI; monetization later).
+## 7. Resolved decisions (locked on #403)
+1. **Reservation model** — reserve on **designation** (`designated × team_size`), convert to awards on **finalize**, release unused (voided/no-winner); `Free = Budgeted − Reserved − ActiveAwarded`.
+2. **Recompute band-scoping** — count an award only when `award.band == player's *current* band` (extends #400's sum-by-tag). Phase D.
+3. **Finalize / rating-queue** — finalize is **terminal** (no un-finalize; audited). Rating **queues on finalize**. Event-less/ad-hoc matches aren't a supported flow and **carry no points** (no budget source); the `event_id IS NULL → queue immediately` branch is a defensive fallback only (rated, never awarded).
+4. **League (team) award** — **each winning-team member gets the full designated points** (not split). Budget cost per fixture = `designated × team_size` (deterministic — both sides same size). Fixture validation is **cumulative per event**: `Σ(event fixtures' designated × team_size) ≤ the event/club allocation for the type`; editing a fixture re-checks.
+5. **Manual/ad-hoc grants (#392)** — event awards are **budgeted**; `EXTERNAL`/ad-hoc grants are a **non-budgeted** class (outside the club budget).
+6. **Units** — `BigDecimal` stored type, **integer values only** (reject any fractional part at every entry point; the Phase 5 open-play formula rounds to an integer). Supersedes the earlier "fractional open-play points" note.
+7. **Budget seeding** — ADMINISTRATOR / POINTS_MANAGER sets the master policy + total and provisions/adjusts club allocations (Points Management tab, §5.2); monetization later.
 
 ---
 
