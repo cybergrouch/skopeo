@@ -10,7 +10,7 @@ Admin-controlled, tennis-season / court-surface **color themes** for the web UI,
 
 The app is visually dominated by plain white and needs color/personality.
 
-> **Correction to the original framing.** An earlier take worried about the *page background* and *font contrast*. On closer look there are **two surfaces**: the **page canvas behind the cards**, and the **cards themselves (also white)**. Font contrast is therefore a **non-issue for the light themes** (dark text on white cards) — it only matters for the **dark themes (US Open, Christmas)**, where text goes light on dark cards.
+> **Correction to the original framing.** An earlier take worried about the *page background* and *font contrast*. On closer look there are **two surfaces**: the **page canvas behind the cards**, and the **cards themselves (also white)**. Font contrast is therefore a **non-issue for the light themes** (dark text on white cards) — it only matters for the **dark theme (US Open)**, where text goes light on dark cards. (Christmas is a light theme but uses a lightly-tinted Frosted-Pine card with dark-green text — still high contrast.)
 
 ---
 
@@ -57,7 +57,7 @@ When the Admin switches the theme, every open client should reflect it. We chose
 
 ## 4. Theme catalog
 
-Six themes give a cohesive **year-round rotation**. Two are dark (**US Open**, **Christmas**). Swatches below are illustrative.
+Six themes give a cohesive **year-round rotation**. One is dark (**US Open**); the rest are light (Christmas uses a lightly-tinted card fill rather than pure white). Swatches below are illustrative.
 
 ### ⚙️ Off-Season — *Sleek, structural, minimal*
 Winter training / rest vibe (late Nov–Dec): premium sleek monochrome + concrete, evoking indoor practice facilities and empty stadiums.
@@ -70,16 +70,16 @@ Winter training / rest vibe (late Nov–Dec): premium sleek monochrome + concret
 
 **Border strategy:** thin, sharp Steel Gray border `#CED4DA` on cards; use neon `#D2FE00` **only** for hover states / primary buttons.
 
-### 🎄 Christmas — *Festive, cozy, premium* · **dark**
-"Crisp Winter Night" — festive colors act as glowing decorations against an elegant green-black.
+### 🎄 Christmas — *Festive, elegant, bright* (Winter Wonderland)
+A clean, bright holiday look: festive colors act as accents against snow-white and frosted-pine, rather than a dark night scene.
 
 | Role | Swatch | Color |
 |---|---|---|
-| Background (60%) | ![bg](https://placehold.co/90x24/0B1A14/0B1A14.png) | `#0B1A14` Midnight Spruce |
-| Card (30%) | ![card](https://placehold.co/90x24/162E25/162E25.png) | `#162E25` Muted Pine · font `#F8F9FA` Off-White |
-| Accent (10%) | ![red](https://placehold.co/44x24/D92B34/D92B34.png) ![gold](https://placehold.co/44x24/E5B842/E5B842.png) | `#D92B34` Ribbon Red + `#E5B842` Champagne Gold |
+| Background (60%) | ![bg](https://placehold.co/90x24/F8FAF9/F8FAF9.png) | `#F8FAF9` Snow White (a microscopic cool-mist hint) |
+| Card (30%) | ![card](https://placehold.co/90x24/E2ECE9/E2ECE9.png) | `#E2ECE9` Frosted Pine · font `#0F2E22` Deep Forest Spruce |
+| Accent (10%) | ![red](https://placehold.co/44x24/D92B34/D92B34.png) ![gold](https://placehold.co/44x24/D4AF37/D4AF37.png) | `#D92B34` Ribbon Red or `#D4AF37` Champagne Gold |
 
-**Border strategy:** thin **Champagne Gold** border on cards; use **Ribbon Red** exclusively for main CTAs / festive badge icons.
+**Border strategy:** Ribbon Red or Champagne Gold for card borders, interactive hover states, and primary action buttons. Unlike the other light themes, the **card fill is a light pastel (Frosted Pine), not pure white** — it pops off the snow-white canvas while the dark-green text stays fully legible.
 
 ### 🔵 Australian Open — *Electric, cool, summer*
 | Role | Swatch | Color |
@@ -124,7 +124,7 @@ Winter training / rest vibe (late Nov–Dec): premium sleek monochrome + concret
 | Theme | 60% Background | 30% Card fill | 10% Accents & borders | Mood |
 |---|---|---|---|---|
 | **Off-Season** | `#F1F3F5` Fog Gray | `#FFFFFF` White | `#495057` & `#D2FE00` (Steel / Neon) | Sleek, structural, minimal |
-| **Christmas** *(dark)* | `#0B1A14` Spruce | `#162E25` Pine | `#D92B34` & `#E5B842` (Red / Gold) | Festive, cozy, premium |
+| **Christmas** | `#F8FAF9` Snow White | `#E2ECE9` Frosted Pine | `#D92B34` / `#D4AF37` (Red / Gold) | Festive, elegant, bright |
 | **Australian Open** | `#F0F6FA` Ice Blue | `#FFFFFF` White | `#0080C8` & `#CCFF00` (Blue / Neon) | Electric, cool, summer |
 | **Clay** | `#FDF6F0` Sand | `#FFFFFF` White | `#C1522D` (Clay Orange) | Warm, organic, earthy |
 | **Grass** | `#F4F9F5` Mint Cream | `#FFFFFF` White | `#452263` & `#00703C` (Purple / Green) | Classic, elegant, prestigious |
@@ -153,9 +153,9 @@ When the setting is `AUTO`, a small data-driven table maps today's date → them
 
 ## 7. Contrast checklist
 
-- **No dark-on-dark:** in the dark themes (US Open, Christmas) never use dark-gray text on the dark cards — use the off-white/white font (`#F8F9FA` / `#FFFFFF`) or a bright neon accent.
+- **No dark-on-dark:** in the dark theme (US Open) never use dark-gray text on the dark cards — use the white font (`#FFFFFF`) or a bright neon accent.
 - **No vibrancy collisions:** never place a vivid accent border directly against a vivid background. The muted pastel / dark canvases above are chosen so the vivid card borders/accents pop cleanly.
-- Verify each theme's card-font + accent tokens meet **WCAG AA** against the card fill — automatic for the light themes; the real work is the two dark themes.
+- Verify each theme's card-font + accent tokens meet **WCAG AA** against the card fill — automatic for the pure-white light themes; the real work is the US Open dark theme, plus confirming the Christmas Frosted-Pine card (`#E2ECE9`) keeps AA with its Deep Forest Spruce text (`#0F2E22`).
 
 ---
 
@@ -163,7 +163,7 @@ When the setting is `AUTO`, a small data-driven table maps today's date → them
 
 ### Web
 - Each theme is an override of the existing CSS custom properties in `web/src/index.css`. Map 60/30/10 onto the shadcn tokens: `--background` (canvas), `--card` / `--card-foreground` (cards), `--primary` / `--border` / `--ring` / `--accent` (accents). **No per-component color hard-coding.**
-- The two **dark themes reuse the existing dark-mode token path**; the four light themes retint the canvas + recolor accents/borders while cards stay white.
+- The **US Open dark theme reuses the existing dark-mode token path**; the light themes retint the canvas + recolor accents/borders while cards stay white — except **Christmas**, whose card is a light Frosted-Pine tint (`--card` overridden) rather than pure white.
 - **Live swap:** a small theme provider applies the active theme's token set to `:root` (or a `data-theme` attribute); switching = swapping that set, no reload.
 - **Poll:** a lightweight hook re-fetching `GET /api/v1/theme` on an interval + `visibilitychange`, re-applying on `version` change.
 
