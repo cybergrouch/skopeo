@@ -5,8 +5,11 @@ package org.skopeo.service.settings
 
 import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
+import org.jetbrains.exposed.sql.deleteAll
+import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -20,6 +23,7 @@ import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.repository.AppSettingsRepository
+import org.skopeo.repository.AppSettingsTable
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.testsupport.PostgresTestDatabase
@@ -100,5 +104,21 @@ class ThemeServiceTest {
         service.setTheme(token = token(uid = "admin"), theme = "NEON")
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `getTheme falls back to AUTO when the stored value is unrecognized (#378)`() {
+        val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        // A value that no longer maps to a known theme (e.g. a renamed/removed theme) reads back as AUTO.
+        settings.upsert(key = "ui_theme", value = "RETIRED_THEME", updatedBy = admin.id)
+        service.getTheme().theme shouldBe ThemeSetting.AUTO
+    }
+
+    @Test
+    fun `getTheme falls back to AUTO when no setting row exists (#378)`() {
+        transaction { AppSettingsTable.deleteAll() }
+        val current = service.getTheme()
+        current.theme shouldBe ThemeSetting.AUTO
+        current.updatedBy.shouldBeNull()
     }
 }

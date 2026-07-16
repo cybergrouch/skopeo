@@ -64,6 +64,17 @@ class AppSettingsRepositoryTest {
     }
 
     @Test
+    fun `upsert inserts a brand-new key not present after reset (#378)`() {
+        val admin = newUser(uid = "admin")
+        // ui_theme is seeded by reset, so a different key exercises the insert (not update) branch.
+        val written = settings.upsert(key = "feature_banner", value = "on", updatedBy = admin)
+        written.value shouldBe "on"
+        written.updatedBy shouldBe admin
+
+        settings.get(key = "feature_banner").shouldNotBeNull().value shouldBe "on"
+    }
+
+    @Test
     fun `upsert overwrites an existing key in place (#378)`() {
         val admin1 = newUser(uid = "admin1")
         val admin2 = newUser(uid = "admin2")

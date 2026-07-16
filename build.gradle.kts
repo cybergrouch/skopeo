@@ -292,6 +292,7 @@ tasks.jacocoTestReport {
                         "**/routes/PlayerListRoutes*.*",
                         "**/routes/StandingsRoutes*.*",
                         "**/routes/ReportRoutes*.*",
+                        "**/routes/ThemeRoutes*.*",
                         // Handler IS tested (RankingCalculationApiErrorTest), but JaCoCo can't
                         // attribute coverage to the Ktor suspend route lambda run in testApplication.
                         "**/routes/RankingRoutes*.*",
@@ -359,6 +360,7 @@ tasks.jacocoTestCoverageVerification {
                         "**/routes/PlayerListRoutes*.*",
                         "**/routes/StandingsRoutes*.*",
                         "**/routes/ReportRoutes*.*",
+                        "**/routes/ThemeRoutes*.*",
                         // Handler IS tested (RankingCalculationApiErrorTest), but JaCoCo can't
                         // attribute coverage to the Ktor suspend route lambda run in testApplication.
                         "**/routes/RankingRoutes*.*",
