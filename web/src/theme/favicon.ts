@@ -65,9 +65,8 @@ export function accentFor(theme: ThemeName | undefined): string {
  * rather than piling up new links — and creates it once on first call.
  */
 export function applyThemeFavicon(theme: ThemeName | undefined): void {
+  // document.head is always present client-side (this runs from the ThemeProvider effect).
   const head = document.head;
-  if (head == null) return;
-
   let link = head.querySelector<HTMLLinkElement>("link[data-theme-favicon]");
   if (link == null) {
     link = document.createElement("link");
