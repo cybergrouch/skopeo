@@ -715,7 +715,7 @@ class MatchServiceTest {
     }
 
     @Test
-    fun `publicByCode omits the head-to-head when there are no prior meetings (#188)`() {
+    fun `publicByCode shows head-to-head for a first singles meeting, tallying the current match (#366)`() {
         provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val p1 = provisionUser(uid = "p1", rated = true)
         val p2 = provisionUser(uid = "p2", rated = true)
@@ -723,7 +723,27 @@ class MatchServiceTest {
             service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
         service.uploadResult(token = token(uid = "host"), matchId = match.id, request = straightSets()).shouldBeRight()
 
-        service.publicByCode(token = token(uid = "host"), code = match.publicCode).shouldBeRight().headToHead.shouldBeNull()
+        // A first-ever meeting still shows head-to-head (#366): no prior meetings listed, but the tally
+        // reflects the match being viewed (#339) — p1 (team1) won the straight-sets result.
+        val h2h = service.publicByCode(token = token(uid = "host"), code = match.publicCode).shouldBeRight().headToHead.shouldNotBeNull()
+        h2h.meetings shouldBe emptyList()
+        h2h.team1Wins shouldBe 1
+        h2h.team2Wins shouldBe 0
+    }
+
+    @Test
+    fun `publicByCode shows a scheduled first singles meeting with an empty 0-0 head-to-head (#366)`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        // Not-yet-played fixture: no priors and no result → tally stays 0–0, meetings empty, still shown.
+        val match =
+            service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
+
+        val h2h = service.publicByCode(token = token(uid = "host"), code = match.publicCode).shouldBeRight().headToHead.shouldNotBeNull()
+        h2h.meetings shouldBe emptyList()
+        h2h.team1Wins shouldBe 0
+        h2h.team2Wins shouldBe 0
     }
 
     @Test
