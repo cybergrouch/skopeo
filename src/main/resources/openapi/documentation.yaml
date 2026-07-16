@@ -29,6 +29,8 @@ tags:
     description: Host-curated player lists and generated seedings (HOST/CLUB_OWNER/ADMINISTRATOR)
   - name: Standings
     description: Per-band "Ranking Race" standings (interim, ratings-derived); any signed-in player
+  - name: Ranking Points
+    description: Append-only ranking-points ledger; admins grant/revoke awards (manual & ad-hoc)
   - name: Settings
     description: Global app settings; the UI theme is publicly readable and administrator-writable
 
@@ -2993,6 +2995,101 @@ paths:
         '404':
           description: The caller is not in the current standings
 
+  /api/v1/users/{userId}/ranking-points:
+    post:
+      summary: Grant a ranking-point award (#146)
+      description: >-
+        Admin-only. Append a ranking-point award to the user's ledger. The award is band-tagged at
+        award time (band defaults to the target's current NTRP band, overridable) and sex-tagged from
+        the target. Validity defaults from the point-class policy and is overridable. An external /
+        ad-hoc grant (sourceType EXTERNAL) requires a reason for traceability.
+      tags:
+        - Ranking Points
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GrantRankingPointsRequest'
+      responses:
+        '201':
+          description: The created award
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RankingPointAwardResponse'
+        '400':
+          description: Validation error (non-positive points, missing reason, unknown class, bad band)
+        '403':
+          description: Not an administrator
+    get:
+      summary: List a user's ranking-point awards (#146)
+      description: Admin-only. Every ledger row for the user, newest first (including REVOKED markers).
+      tags:
+        - Ranking Points
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The user's ledger rows
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RankingPointAwardResponse'
+        '403':
+          description: Not an administrator
+        '404':
+          description: No such user
+
+  /api/v1/ranking-points/{awardId}/revoke:
+    post:
+      summary: Revoke a ranking-point award (#146)
+      description: >-
+        Admin-only. Flip the original award to REVOKED and append a REVOKED marker row referencing it,
+        keeping the ledger append-only. Idempotent: revoking an already-revoked or missing award is a 404.
+      tags:
+        - Ranking Points
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: awardId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RevokeRankingPointsRequest'
+      responses:
+        '204':
+          description: Revoked
+        '403':
+          description: Not an administrator
+        '404':
+          description: No active award with that id
+
 components:
   securitySchemes:
     firebaseAuth:
@@ -5637,3 +5734,120 @@ components:
           type: integer
         offset:
           type: integer
+
+    GrantRankingPointsRequest:
+      type: object
+      description: Body for granting a ranking-point award (#146). points is a decimal string.
+      required:
+        - points
+        - pointClass
+      properties:
+        points:
+          type: string
+          description: The award amount as a decimal string (must be > 0).
+        pointClass:
+          type: string
+          enum:
+            - ANNUAL_TOURNAMENT
+            - SEASONAL_TOURNAMENT_1M
+            - SEASONAL_TOURNAMENT_3M
+            - SEASONAL_TOURNAMENT_6M
+            - OPEN_PLAY
+            - EXTERNAL
+        sourceType:
+          type: string
+          enum:
+            - INTERNAL
+            - EXTERNAL
+          default: INTERNAL
+        sourceId:
+          type: string
+          nullable: true
+          description: Provenance reference (a system id or a free-text external ref).
+        band:
+          type: string
+          nullable: true
+          description: Optional NTRP band override; defaults to the target's current band.
+        reason:
+          type: string
+          nullable: true
+          description: Human-readable justification; required for an EXTERNAL / ad-hoc grant.
+        validFrom:
+          type: string
+          format: date-time
+          nullable: true
+          description: Optional start of the validity window; defaults to now.
+        validUntil:
+          type: string
+          format: date-time
+          nullable: true
+          description: Optional end of the validity window; defaults from the point-class policy.
+
+    RevokeRankingPointsRequest:
+      type: object
+      description: Body for revoking a ranking-point award (#146) — an optional reason.
+      properties:
+        reason:
+          type: string
+          nullable: true
+
+    RankingPointAwardResponse:
+      type: object
+      description: One ranking-points ledger row (#146). Points and timestamps are strings.
+      required:
+        - id
+        - userId
+        - points
+        - pointClass
+        - sourceType
+        - band
+        - sex
+        - validFrom
+        - validUntil
+        - status
+        - awardedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        points:
+          type: string
+        pointClass:
+          type: string
+        sourceType:
+          type: string
+        sourceId:
+          type: string
+          nullable: true
+        band:
+          type: string
+        sex:
+          type: string
+        reason:
+          type: string
+          nullable: true
+        validFrom:
+          type: string
+          format: date-time
+        validUntil:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum:
+            - ACTIVE
+            - REVOKED
+        revokesAwardId:
+          type: string
+          format: uuid
+          nullable: true
+        grantedBy:
+          type: string
+          format: uuid
+          nullable: true
+        awardedAt:
+          type: string
+          format: date-time

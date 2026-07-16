@@ -291,6 +291,7 @@ tasks.jacocoTestReport {
                         "**/routes/DuplicateCandidateRoutes*.*",
                         "**/routes/PlayerListRoutes*.*",
                         "**/routes/StandingsRoutes*.*",
+                        "**/routes/RankingPointRoutes*.*",
                         "**/routes/ReportRoutes*.*",
                         "**/routes/ThemeRoutes*.*",
                         // Handler IS tested (RankingCalculationApiErrorTest), but JaCoCo can't
@@ -359,6 +360,7 @@ tasks.jacocoTestCoverageVerification {
                         "**/routes/DuplicateCandidateRoutes*.*",
                         "**/routes/PlayerListRoutes*.*",
                         "**/routes/StandingsRoutes*.*",
+                        "**/routes/RankingPointRoutes*.*",
                         "**/routes/ReportRoutes*.*",
                         "**/routes/ThemeRoutes*.*",
                         // Handler IS tested (RankingCalculationApiErrorTest), but JaCoCo can't

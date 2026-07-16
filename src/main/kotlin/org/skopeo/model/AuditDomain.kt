@@ -44,6 +44,8 @@ enum class AuditAction {
     CLUB_OWNER_ASSIGNED,
     CLUB_OWNER_REMOVED,
     SETTINGS_THEME_CHANGED,
+    RANKING_POINTS_AWARDED,
+    RANKING_POINTS_REVOKED,
 }
 
 /** The kind of entity an [AuditAction] concerns. */
@@ -57,6 +59,7 @@ enum class AuditEntityType {
     EVENT,
     CALCULATION,
     SETTING,
+    RANKING_POINT,
 }
 
 /**
@@ -77,6 +80,7 @@ enum class AuditCategory {
     CLUB_MANAGEMENT,
     EVENT_MANAGEMENT,
     SETTINGS_MANAGEMENT,
+    RANKING_POINTS,
 }
 
 /** The category an action rolls up into. */
@@ -117,6 +121,9 @@ val AuditAction.category: AuditCategory
             AuditAction.CLUB_OWNER_REMOVED,
             -> AuditCategory.CLUB_MANAGEMENT
             AuditAction.SETTINGS_THEME_CHANGED -> AuditCategory.SETTINGS_MANAGEMENT
+            AuditAction.RANKING_POINTS_AWARDED,
+            AuditAction.RANKING_POINTS_REVOKED,
+            -> AuditCategory.RANKING_POINTS
         }
 
 /** The actions that roll up into a category (empty for categories whose events aren't wired yet). */
