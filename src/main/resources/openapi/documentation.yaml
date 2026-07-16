@@ -4519,6 +4519,11 @@ components:
           format: date
         status:
           type: string
+        rated:
+          type: boolean
+          description: >-
+            True once the rating calculation has committed this match (#361); lets a list view
+            derive the Scheduled / Awaiting rating / Rated status without the precise rating changes.
         isActive:
           type: boolean
           description: False once the match is soft-deleted (#325); the public page flags it as deleted.

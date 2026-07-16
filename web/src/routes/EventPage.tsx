@@ -9,6 +9,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import {
   getGetApiV1EventsCodeCodeQueryKey,
   useGetApiV1EventsCodeCode,
@@ -90,16 +91,34 @@ function ParticipantLink({ p }: { p: EventParticipantResponse }) {
   )
 }
 
-/** A one-line match summary linking to its public page. */
+type StatusBadge = { label: string; variant: 'default' | 'secondary' | 'outline' }
+
+/**
+ * The read-only lifecycle status of a fixture on the public event page (#361), mirroring the
+ * organizer's derivation: a match the calculation has committed is "Rated"; one with a recorded
+ * result but not yet rated is "Awaiting rating"; anything else is still "Scheduled". Compact — the
+ * public match page carries the full detail — so no scores or edit affordances live here.
+ */
+function statusBadge(match: MatchPublicResponse): StatusBadge {
+  if (match.rated) return { label: 'Rated', variant: 'default' }
+  if (match.status === 'COMPLETED') return { label: 'Awaiting rating', variant: 'secondary' }
+  return { label: 'Scheduled', variant: 'outline' }
+}
+
+/** A one-line, read-only match summary with a status badge, linking to its public page. */
 function MatchRow({ match }: { match: MatchPublicResponse }) {
   const side = (players: MatchPublicResponse['team1']) =>
     players.map((pl) => playerLabel(pl.displayName, pl.publicCode, '')).join(' & ')
   const score = match.sets.map((s) => `${s.team1Games}-${s.team2Games}`).join(' ')
+  const badge = statusBadge(match)
   return (
     <li>
       <Link to={`/matches/${match.publicCode}`} className="block rounded-lg border p-2 hover:bg-muted/50">
-        <span className="block">
-          {side(match.team1)} vs {side(match.team2)}
+        <span className="flex items-center gap-2">
+          <span className="flex-1">
+            {side(match.team1)} vs {side(match.team2)}
+          </span>
+          <Badge variant={badge.variant}>{badge.label}</Badge>
         </span>
         <span className="block text-xs text-muted-foreground">
           {match.matchDate}
