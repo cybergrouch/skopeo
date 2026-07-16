@@ -115,6 +115,12 @@ class ClubServiceTest {
     }
 
     @Test
+    fun `an unprovisioned caller is forbidden from admin-only actions (#362)`() {
+        // A token whose uid resolves to no user hits the null-caller arm of requireAdmin.
+        service.create(token = token(uid = "ghost"), name = "X").shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
+    @Test
     fun `listing is readable by staff but not plain players (#313)`() {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))

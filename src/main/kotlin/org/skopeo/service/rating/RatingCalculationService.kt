@@ -246,7 +246,7 @@ class RatingCalculationService(
      * #110). Per-set entries are grouped into an ordered [SetCalculationBreakdown] list with the net
      * fields left null; net entries keep the existing net breakdown with no sets.
      */
-    private fun breakdownsByPlayer(audit: List<AuditEntry>): Map<String, CalculationBreakdown> {
+    internal fun breakdownsByPlayer(audit: List<AuditEntry>): Map<String, CalculationBreakdown> {
         // Every breakdown entry (v1 net or v2 per-set) carries a "dominance" key alongside "playerId";
         // match-level audit entries carry neither. Filtering on the one key avoids a permanently dead
         // "playerId without dominance" branch (the two keys are always emitted together).
