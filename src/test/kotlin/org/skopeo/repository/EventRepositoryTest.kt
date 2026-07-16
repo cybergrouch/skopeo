@@ -135,4 +135,14 @@ class EventRepositoryTest {
         events.setCalcPriority(id = UUID.randomUUID(), priority = 9.0)
         events.findById(id = event.id)!!.calcPriority shouldBe 3.5
     }
+
+    @Test
+    fun `addParticipant returns null when the event does not exist (#201)`() {
+        val host = newUser(uid = "host")
+        val player = newUser(uid = "player")
+
+        events
+            .addParticipant(eventId = UUID.randomUUID(), userId = player, approvedBy = host)
+            .shouldBeNull()
+    }
 }
