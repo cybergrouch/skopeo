@@ -155,10 +155,15 @@ class PlayerService(
                     p.publicCode.lowercase().contains(other = needle) || p.displayName?.lowercase()?.contains(other = needle) == true
                 }
 
+            // A blank/absent search returns everything; otherwise filter on the normalized needle. A single
+            // `if` keeps both arms cleanly coverable (the `?.…?.takeIf?.let ?: entries` chain did not).
+            val needle = search?.trim()?.lowercase().orEmpty()
             val matched =
-                search?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }
-                    ?.let { needle -> entries.filter { rowMatches(row = it, needle = needle) } }
-                    ?: entries
+                if (needle.isEmpty()) {
+                    entries
+                } else {
+                    entries.filter { rowMatches(row = it, needle = needle) }
+                }
             PlayerMatchHistoryPage(
                 items =
                     matched
