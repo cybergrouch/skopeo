@@ -44,6 +44,14 @@ enum class StandingsBand(
 
         /** The band whose persisted [code] equals [code], or null when [code] isn't a known band. */
         fun ofCode(code: String): StandingsBand? = entries.firstOrNull { it.code == code }
+
+        /**
+         * The band whose persisted [code] equals [code], for a [code] the caller knows is valid — it was
+         * written by the snapshot builder, so it is always one of the enum's own codes (#220). Throws on
+         * the impossible unknown-code case rather than swallowing it behind a nullable, so the read path
+         * carries no unreachable null branch.
+         */
+        fun requireCode(code: String): StandingsBand = ofCode(code = code) ?: error(message = "unknown standings band code: $code")
     }
 }
 

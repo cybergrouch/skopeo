@@ -81,8 +81,8 @@ class StandingsSnapshotRepository {
                 .select(columns = listOf(StandingsEntriesTable.band, StandingsEntriesTable.sex))
                 .where { StandingsEntriesTable.snapshotId eq snapshotId }
                 .withDistinct()
-                .mapNotNull { row ->
-                    StandingsBand.ofCode(code = row[StandingsEntriesTable.band])?.let { it to row.sexValue() }
+                .map { row ->
+                    StandingsBand.requireCode(code = row[StandingsEntriesTable.band]) to row.sexValue()
                 }.sortedWith(comparator = groupComparator())
         }
 
@@ -116,9 +116,8 @@ class StandingsSnapshotRepository {
                 .where { (StandingsEntriesTable.snapshotId eq snapshotId) and (StandingsEntriesTable.userId eq userId) }
                 .firstOrNull()
                 ?.let { row ->
-                    StandingsBand.ofCode(code = row[StandingsEntriesTable.band])?.let { band ->
-                        StandingsLocation(band = band, sex = row.sexValue(), rank = row[StandingsEntriesTable.rank])
-                    }
+                    val band = StandingsBand.requireCode(code = row[StandingsEntriesTable.band])
+                    StandingsLocation(band = band, sex = row.sexValue(), rank = row[StandingsEntriesTable.rank])
                 }
         }
 

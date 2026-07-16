@@ -157,6 +157,63 @@ describe('StandingsTab', () => {
     expect(screen.getByRole('link', { name: 'CCC333' })).toHaveAttribute('href', '/players/CCC333')
   })
 
+  it('switches the served sex when a sex toggle is clicked then "View"ed', async () => {
+    const user = userEvent.setup()
+    renderTab()
+
+    await user.click(screen.getByRole('button', { name: 'Women' }))
+    // The pressed state follows the pending selection before "View".
+    expect(screen.getByRole('button', { name: 'Women' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Men' })).toHaveAttribute('aria-pressed', 'false')
+
+    await user.click(screen.getByRole('button', { name: 'View' }))
+    await waitFor(() => {
+      const lastCall = useGetApiV1Standings.mock.calls.at(-1)?.[0]
+      expect(lastCall).toMatchObject({ band: '4.0', sex: 'Female', offset: 0 })
+    })
+  })
+
+  it('queries with no sex for the Unspecified group (sex omitted)', async () => {
+    useGetApiV1Standings.mockReturnValue({
+      data: {
+        ...defaultPage,
+        groups: [{ band: '4.0', label: 'NTRP 4.0 Band Race', sex: null }],
+      },
+      isLoading: false,
+    })
+    const user = userEvent.setup()
+    renderTab()
+
+    await user.click(screen.getByRole('button', { name: 'Unspecified' }))
+    await user.click(screen.getByRole('button', { name: 'View' }))
+    await waitFor(() => {
+      const lastCall = useGetApiV1Standings.mock.calls.at(-1)?.[0]
+      expect(lastCall).toMatchObject({ band: '4.0', sex: undefined, offset: 0 })
+    })
+  })
+
+  it('renders an empty-group page (band/label/total absent) with a placeholder heading', async () => {
+    // A requested (band, sex) group with no members: groups still list the band, but this page is empty.
+    useGetApiV1Standings.mockReturnValue({
+      data: { band: null, label: null, sex: null, limit: 25, offset: 0, entries: [], groups },
+      isLoading: false,
+    })
+    const user = userEvent.setup()
+    renderTab()
+
+    // The served card heading falls back to "Standings" (no page label) — appearing alongside the tab's
+    // own top card title of the same name — and the body reports the empty group.
+    expect(screen.getByText('No players in this group.')).toBeInTheDocument()
+    expect(screen.getAllByText('Standings').length).toBeGreaterThan(1)
+
+    // "View" is enabled (bands exist) and, with no served band, queries with band undefined.
+    await user.click(screen.getByRole('button', { name: 'View' }))
+    await waitFor(() => {
+      const lastCall = useGetApiV1Standings.mock.calls.at(-1)?.[0]
+      expect(lastCall).toMatchObject({ band: undefined, offset: 0 })
+    })
+  })
+
   it('shows the precise rating when the payload includes it (raters/admins, #186)', () => {
     useGetApiV1Standings.mockReturnValue({
       data: {

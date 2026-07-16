@@ -8,6 +8,9 @@ import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.deleteWhere
+import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -21,6 +24,7 @@ import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.repository.RatingRepository
+import org.skopeo.repository.UserRatingsTable
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.testsupport.PostgresTestDatabase
@@ -54,14 +58,16 @@ class StandingsServiceTest {
         uid: String,
         sex: String? = null,
         capabilities: Set<Capability> = setOf(element = Capability.PLAYER),
+        dateOfBirth: LocalDate? = LocalDate.of(2000, 1, 1),
+        withName: Boolean = true,
     ): User =
         users.provision(
             command =
                 ProvisionUserCommand(
                     firebaseUid = uid,
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
-                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
-                    dateOfBirth = LocalDate.of(2000, 1, 1),
+                    names = if (withName) listOf(element = UserName(type = NameType.DISPLAY, value = uid)) else emptyList(),
+                    dateOfBirth = dateOfBirth,
                     sex = sex,
                     capabilities = capabilities,
                 ),
@@ -215,5 +221,70 @@ class StandingsServiceTest {
         service.locateMe(token = token(uid = "unrated"), limit = 25).shouldBeNull()
         service.locateMe(token = token(uid = "ghost"), limit = 25).shouldBeNull()
         unrated.isActive shouldBe true // sanity: the user exists but simply isn't in the snapshot
+    }
+
+    @Test
+    fun `locateMe is null when no snapshot has been published (#220)`() {
+        // The caller has a profile but rebuild was never run, so there is no published snapshot to locate in.
+        provision(uid = "me", sex = "Male").also { rate(user = it, value = "4.0") }
+        service.locateMe(token = token(uid = "me"), limit = 25).shouldBeNull()
+    }
+
+    @Test
+    fun `page for a band, sex group absent from the snapshot returns an empty view still carrying groups (#220)`() {
+        // Only a Male 4.0 group exists; requesting Female for that band yields an empty page, not a fallback.
+        provision(uid = "m", sex = "Male").also { rate(user = it, value = "4.0") }
+        service.rebuild()
+
+        val view = page(band = StandingsBand.FROM_4_0, sex = "Female")
+        view.entries shouldHaveSize 0
+        view.total shouldBe 0
+        // The selectors still advertise the group that does exist.
+        view.groups.map { it.band to it.sex } shouldContainExactly listOf(element = StandingsBand.FROM_4_0 to "Male")
+    }
+
+    @Test
+    fun `page fills age only for entries whose user has a date of birth (#220)`() {
+        val withDob =
+            provision(uid = "withdob", sex = "Male", dateOfBirth = LocalDate.of(1990, 6, 1))
+                .also { rate(user = it, value = "4.3") }
+        val noDob =
+            provision(uid = "nodob", sex = "Male", dateOfBirth = null)
+                .also { rate(user = it, value = "4.1") }
+        service.rebuild()
+
+        val entries = page(band = StandingsBand.FROM_4_0, sex = "Male").entries.associateBy { it.userId }
+        entries.getValue(key = withDob.id).age.shouldNotBeNull()
+        entries.getValue(key = noDob.id).age.shouldBeNull()
+    }
+
+    @Test
+    fun `precise rating is null for an entry whose current rating is absent (#186)`() {
+        provision(uid = "rater", capabilities = setOf(Capability.PLAYER, Capability.RATER))
+        val kept = provision(uid = "kept", sex = "Male").also { rate(user = it, value = "4.3") }
+        val gone = provision(uid = "gone", sex = "Male").also { rate(user = it, value = "4.1") }
+        service.rebuild()
+        // The snapshot ranks both, but the current-rating row for one is removed before the read — the
+        // privileged reveal then has no live rating to show for that entry.
+        transaction { UserRatingsTable.deleteWhere { UserRatingsTable.userId eq gone.id } }
+
+        val entries =
+            page(band = StandingsBand.FROM_4_0, sex = "Male", token = token(uid = "rater")).entries.associateBy { it.userId }
+        entries.getValue(key = kept.id).currentRating shouldBe "4.300000"
+        entries.getValue(key = gone.id).currentRating.shouldBeNull()
+    }
+
+    @Test
+    fun `tie-break falls back to public code when a tied player has no display name (#220)`() {
+        // Two players tie on rating, confidence and matches, so the tie-break falls to the name comparison;
+        // one has no display name and must sort by its public code rather than blow up.
+        val named = provision(uid = "named", sex = "Male").also { rate(user = it, value = "4.2") }
+        val unnamed = provision(uid = "unnamed", sex = "Male", withName = false).also { rate(user = it, value = "4.2") }
+        service.rebuild()
+
+        val entries = page(band = StandingsBand.FROM_4_0, sex = "Male").entries
+        entries shouldHaveSize 2
+        entries.map { it.userId }.toSet() shouldBe setOf(named.id, unnamed.id)
+        entries.single { it.userId == unnamed.id }.displayName.shouldBeNull()
     }
 }
