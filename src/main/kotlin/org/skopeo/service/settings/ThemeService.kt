@@ -39,7 +39,10 @@ class ThemeService(
     /** The current global theme, or the [ThemeSetting.AUTO] default when unset/unrecognized. Public — no auth. */
     fun getTheme(): ThemeSettingValue {
         val row = settings.get(key = THEME_KEY)
-        val theme = row?.value?.let { value -> ThemeSetting.entries.firstOrNull { it.name == value } } ?: ThemeSetting.AUTO
+        // Coalesce to AUTO when unset (row null) or when the stored value no longer maps to a theme.
+        // Compared directly against row?.value rather than via a nested ?.let, so there is no unreachable
+        // safe-call arm (value is non-null once row is) for a test to chase.
+        val theme = ThemeSetting.entries.firstOrNull { it.name == row?.value } ?: ThemeSetting.AUTO
         return ThemeSettingValue(theme = theme, updatedBy = row?.updatedBy, updatedAt = row?.updatedAt)
     }
 
