@@ -46,6 +46,8 @@ class OpenAPIIntegrationTest {
             body shouldContain "/api/v1/standings/calculations"
             body shouldContain "StandingsCalculationResponse"
             body shouldContain "/ranking-points"
+            // Event types + finalize state (#403 Phase A): the finalize path is documented.
+            body shouldContain "/api/v1/events/{id}/finalize"
         }
 
     @Test

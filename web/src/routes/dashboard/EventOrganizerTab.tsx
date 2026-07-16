@@ -28,6 +28,15 @@ import { plural } from "@/lib/plural";
 import { playerLabel } from "@/lib/playerLabel";
 import { EventDetail } from "./events/EventDetail";
 
+/** The event classes a host can pick at creation (#403); mirrors the backend EventType enum. */
+type EventType = "OPEN_PLAY" | "LEAGUE" | "TOURNAMENT";
+
+const EVENT_TYPE_OPTIONS: ReadonlyArray<{ value: EventType; label: string }> = [
+  { value: "OPEN_PLAY", label: "Open play" },
+  { value: "LEAGUE", label: "League" },
+  { value: "TOURNAMENT", label: "Tournament" },
+];
+
 /**
  * The single club a CLUB_OWNER should default the create-event Club selector to (#364), or "" when
  * there is no unambiguous default: own exactly one club → that club's id; own multiple → "" (don't
@@ -57,6 +66,8 @@ function NewEventForm() {
     undefined,
   );
   const [roster, setRoster] = useState<UserSummaryResponse[]>([]);
+  // The event's class (#403); OPEN_PLAY is the default and the backward-compatible choice.
+  const [type, setType] = useState<EventType>("OPEN_PLAY");
   const [error, setError] = useState<string | null>(null);
 
   // Clubs to optionally file the event under (#313). Readable by staff; empty when none exist.
@@ -80,6 +91,7 @@ function NewEventForm() {
         setEndDate("");
         setClubIdChoice(undefined);
         setRoster([]);
+        setType("OPEN_PLAY");
         void queryClient.invalidateQueries({
           queryKey: getGetApiV1EventsQueryKey(),
         });
@@ -96,6 +108,7 @@ function NewEventForm() {
           name,
           startDate,
           endDate,
+          type,
           participantIds: roster.map((u) => u.id),
           ...(clubId ? { clubId } : {}),
         },
@@ -153,6 +166,23 @@ function NewEventForm() {
                 onChange={(e) => setEndDate(e.target.value)}
               />
             </div>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="event-type" className="text-xs">
+              Type
+            </Label>
+            <select
+              id="event-type"
+              value={type}
+              onChange={(e) => setType(e.target.value as EventType)}
+              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+            >
+              {EVENT_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </div>
           {clubs.length > 0 ? (
             <div className="space-y-1">
