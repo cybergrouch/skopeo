@@ -6,14 +6,18 @@ package org.skopeo.repository
 import arrow.core.Either
 import arrow.core.left
 import arrow.core.right
+import org.jetbrains.exposed.sql.ISqlExpressionBuilder
+import org.jetbrains.exposed.sql.Op
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.inSubQuery
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.or
+import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
@@ -218,16 +222,31 @@ class MatchRepository {
                             MatchesTable.isActive and
                                 (MatchesTable.status eq MatchStatus.COMPLETED.name) and
                                 MatchesTable.ratedAt.isNull()
-                        // An event scope shows every recorded fixture in the event (any creator);
-                        // otherwise a HOST is scoped to their own.
+                        // The rating-queue eligibility (#403): a completed, unrated match queues only if
+                        // it is event-less (queues immediately, as before) OR its event is finalized. An
+                        // explicit event scope is a pre-finalize organizer preview, so it lists the event's
+                        // recorded fixtures without the finalize gate.
                         when {
                             eventId != null -> base and (MatchesTable.eventId eq eventId)
-                            createdBy != null -> base and (MatchesTable.createdBy eq createdBy)
-                            else -> base
+                            createdBy != null -> base and (MatchesTable.createdBy eq createdBy) and queueEligible()
+                            else -> base and queueEligible()
                         }
                     }.map { loadMatch(id = it[MatchesTable.id].value)!! }
             sortForCalculation(matches = matches)
         }
+
+    /**
+     * The rating-queue eligibility clause (#403): a match qualifies when it is event-less (event_id is
+     * null → queues immediately, unchanged) OR its event is finalized (finalized_at is non-null). Built
+     * as a membership test against the ids of finalized events, so the queue trigger for an evented match
+     * moves from result-upload time to finalize time.
+     */
+    private fun ISqlExpressionBuilder.queueEligible(): Op<Boolean> =
+        MatchesTable.eventId.isNull() or
+            (
+                MatchesTable.eventId inSubQuery
+                    EventsTable.select(columns = listOf(element = EventsTable.id)).where { EventsTable.finalizedAt.isNotNull() }
+            )
 
     /** Each event's processing key: its calc_priority override, else its end date as an epoch day. */
     private fun eventProcessingKeys(eventIds: List<UUID>): Map<UUID, Double> =

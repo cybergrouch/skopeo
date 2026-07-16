@@ -285,6 +285,10 @@ class MatchRepositoryTest {
         val b1 = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 18), eventId = eventB)
         // An eventless match played between the two events' end dates.
         val open = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 15))
+        // Evented matches queue only once their event is finalized (#403); finalize both so this ordering
+        // test sees the full set (the eventless match queues immediately regardless).
+        events.finalize(id = eventA, finalizedAt = LocalDateTime.now(), finalizedBy = u1)
+        events.finalize(id = eventB, finalizedAt = LocalDateTime.now(), finalizedBy = u1)
 
         // Default: event A (ends 1/10; a2 dragged first, then the a1/a3 tie) → eventless (1/15) → event B.
         val order = matches.listPendingCalculation().map { it.id }
@@ -342,6 +346,33 @@ class MatchRepositoryTest {
         val u2 = newUser(uid = "u2")
         val only = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 1))
         matches.listPendingCalculation(createdBy = u1).map { it.id } shouldBe listOf(element = only)
+    }
+
+    @Test
+    fun `pending-calculation excludes an evented match until its event is finalized, always includes eventless (#403)`() {
+        val u1 = newUser(uid = "u1")
+        val u2 = newUser(uid = "u2")
+        val eventId = event(creator = u1, endDate = LocalDate.of(2026, 1, 3), members = listOf(u1, u2))
+        val evented = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 1), eventId = eventId)
+        val eventless = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 2))
+
+        // While the event is open, only the event-less match is eligible; the evented one is held back.
+        matches.listPendingCalculation().map { it.id }.let { queued ->
+            queued shouldContain eventless
+            queued shouldNotContain evented
+        }
+        matches.listPendingCalculation(createdBy = u1).map { it.id }.let { queued ->
+            queued shouldContain eventless
+            queued shouldNotContain evented
+        }
+
+        // Once the event is finalized, its match becomes eligible too.
+        events.finalize(id = eventId, finalizedAt = LocalDateTime.now(), finalizedBy = u1)
+        matches.listPendingCalculation().map { it.id }.let { queued ->
+            queued shouldContain eventless
+            queued shouldContain evented
+        }
+        matches.listPendingCalculation(createdBy = u1).map { it.id } shouldContain evented
     }
 
     @Test

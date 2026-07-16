@@ -24,6 +24,7 @@ import org.skopeo.dto.match.SetScoreRequest
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
+import org.skopeo.model.CreateEventCommand
 import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
@@ -33,6 +34,7 @@ import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.repository.AuditRepository
+import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRatingsTable
@@ -46,6 +48,7 @@ import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.math.BigDecimal
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.util.UUID
 
 class RatingCalculationServiceTest {
@@ -328,6 +331,54 @@ class RatingCalculationServiceTest {
 
         // idempotent — nothing left to process
         calc.calculate(token = token(uid = "root"), dryRun = false).shouldBeRight().matches.shouldBe(expected = emptyList())
+    }
+
+    @Test
+    fun `an evented match is rated only after the event is finalized, an eventless match is rated as before (#403)`() {
+        provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val p3 = provisionUser(uid = "p3", rated = true)
+        val p4 = provisionUser(uid = "p4", rated = true)
+        val eventRepo = EventRepository()
+        val event =
+            eventRepo.create(
+                command =
+                    CreateEventCommand(
+                        name = "E",
+                        startDate = LocalDate.parse("2026-01-01"),
+                        endDate = LocalDate.parse("2026-01-03"),
+                        participantIds = listOf(p1.id, p2.id),
+                        createdBy = users.findByFirebaseUid(firebaseUid = "root")!!.id,
+                    ),
+            )
+        // An evented match (recorded while the event is open) and an event-less one.
+        val eventedFixture =
+            matchService.createFixture(
+                token = token(uid = "root"),
+                request =
+                    FixtureInput(
+                        matchFormat = TeamType.SINGLES,
+                        matchType = MatchType.OPEN_PLAY,
+                        matchDate = LocalDate.parse("2026-01-02"),
+                        team1 = listOf(element = p1.id),
+                        team2 = listOf(element = p2.id),
+                        eventId = event.id,
+                    ),
+            ).shouldBeRight()
+        recordResult(admin = "root", matchId = eventedFixture.id)
+        val eventless = playedMatch(admin = "root", winner = p3.id, loser = p4.id)
+
+        // Commit while the event is still open: the event-less match is rated, the evented one is not.
+        calc.calculate(token = token(uid = "root"), dryRun = false).shouldBeRight()
+        matchRepo.findById(matchId = eventless).shouldBeRight().ratedAt.shouldNotBeNull()
+        matchRepo.findById(matchId = eventedFixture.id).shouldBeRight().ratedAt.shouldBeNull()
+
+        // After finalizing the event, its match becomes eligible and a commit rates it.
+        val root = users.findByFirebaseUid(firebaseUid = "root")!!.id
+        eventRepo.finalize(id = event.id, finalizedAt = LocalDateTime.now(), finalizedBy = root)
+        calc.calculate(token = token(uid = "root"), dryRun = false).shouldBeRight()
+        matchRepo.findById(matchId = eventedFixture.id).shouldBeRight().ratedAt.shouldNotBeNull()
     }
 
     @Test

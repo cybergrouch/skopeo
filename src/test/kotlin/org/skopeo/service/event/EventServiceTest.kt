@@ -23,6 +23,7 @@ import org.skopeo.model.Capability
 import org.skopeo.model.CreateClubCommand
 import org.skopeo.model.CreateFixtureCommand
 import org.skopeo.model.EventParticipantStatus
+import org.skopeo.model.EventType
 import org.skopeo.model.Match
 import org.skopeo.model.MatchSetResult
 import org.skopeo.model.MatchType
@@ -91,12 +92,14 @@ class EventServiceTest {
         end: String = LocalDate.now().plusDays(7).toString(),
         participants: List<UUID> = emptyList(),
         clubId: UUID? = null,
+        type: EventType = EventType.OPEN_PLAY,
     ) = CreateEventInput(
         name = name,
         startDate = LocalDate.parse(start),
         endDate = LocalDate.parse(end),
         participantIds = participants,
         clubId = clubId,
+        type = type,
     )
 
     @Test
@@ -576,6 +579,109 @@ class EventServiceTest {
 
         service.rename(token = token(uid = "admin"), id = event.id, name = "Admin Renamed").shouldBeRight()
         events.findById(id = event.id)!!.name shouldBe "Admin Renamed"
+    }
+
+    @Test
+    fun `an event is created with each type, defaulting to OPEN_PLAY (#403)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+
+        service.create(token = token(uid = "host"), input = input(name = "Default")).shouldBeRight()
+            .event.type shouldBe EventType.OPEN_PLAY
+        service.create(token = token(uid = "host"), input = input(name = "League", type = EventType.LEAGUE)).shouldBeRight()
+            .event.type shouldBe EventType.LEAGUE
+        val tourney =
+            service.create(token = token(uid = "host"), input = input(name = "Tourney", type = EventType.TOURNAMENT)).shouldBeRight()
+        tourney.event.type shouldBe EventType.TOURNAMENT
+        // The type round-trips through persistence.
+        events.findById(id = tourney.event.id)!!.type shouldBe EventType.TOURNAMENT
+    }
+
+    @Test
+    fun `a host finalizes their own event, setting state and writing an Activity Log entry (#403)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight().event
+        event.isFinalized.shouldBeFalse()
+
+        val finalized = service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+
+        finalized.event.isFinalized.shouldBeTrue()
+        finalized.event.finalizedBy shouldBe host.id
+        val persisted = events.findById(id = event.id)!!
+        persisted.isFinalized.shouldBeTrue()
+        persisted.finalizedBy shouldBe host.id
+        AuditRepository().list(actions = listOf(element = AuditAction.EVENT_FINALIZED), limit = 10, offset = 0).first.single().let {
+            it.actorUserId shouldBe host.id
+            it.entityId shouldBe event.id
+            it.summary shouldBe "Finalized event Spring Open"
+        }
+    }
+
+    @Test
+    fun `finalize is terminal - a second finalize is rejected as Validation (#403)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight().event
+        service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+
+        service.finalize(token = token(uid = "host"), id = event.id)
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `a non-staff caller cannot finalize, and a host cannot finalize another host's event (#403)`() {
+        provision(uid = "owner", roles = setOf(Capability.PLAYER, Capability.HOST))
+        provision(uid = "other", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val event = service.create(token = token(uid = "owner"), input = input()).shouldBeRight().event
+
+        service.finalize(token = token(uid = "ghost"), id = event.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service.finalize(token = token(uid = "other"), id = event.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        events.findById(id = event.id)!!.isFinalized.shouldBeFalse()
+
+        // A club owner may finalize an event they didn't create.
+        provision(uid = "clubowner", roles = setOf(Capability.PLAYER, Capability.CLUB_OWNER))
+        service.finalize(token = token(uid = "clubowner"), id = event.id).shouldBeRight().event.isFinalized.shouldBeTrue()
+    }
+
+    @Test
+    fun `an administrator may finalize any event (#403)`() {
+        provision(uid = "owner", roles = setOf(Capability.PLAYER, Capability.HOST))
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val event = service.create(token = token(uid = "owner"), input = input()).shouldBeRight().event
+
+        service.finalize(token = token(uid = "admin"), id = event.id).shouldBeRight().event.isFinalized.shouldBeTrue()
+    }
+
+    @Test
+    fun `finalizing a non-existent event is NotFound, and a deleted event is Validation (#403)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        service.finalize(token = token(uid = "host"), id = UUID.randomUUID())
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+
+        // A soft-deleted (inactive) event cannot be finalized.
+        val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight().event
+        service.delete(token = token(uid = "host"), id = event.id).shouldBeRight()
+        service.finalize(token = token(uid = "host"), id = event.id)
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `a finalized event rejects rename, set-club, and participant mutations as Validation (#403)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val player = provision(uid = "player")
+        val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight().event
+        service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+
+        service.rename(token = token(uid = "host"), id = event.id, name = "New Name")
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        service.setClub(token = token(uid = "host"), id = event.id, clubId = null)
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        service.addParticipant(token = token(uid = "host"), eventId = event.id, userId = player.id)
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        service.decideParticipant(
+            token = token(uid = "host"),
+            eventId = event.id,
+            userId = player.id,
+            status = EventParticipantStatus.APPROVED,
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
     }
 
     @Test

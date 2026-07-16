@@ -19,6 +19,8 @@ data class CreateEventRequest(
     val participantIds: List<String> = emptyList(),
     // Optional club (#313) to assign the event to; omit for a clubless ("Open") event.
     val clubId: String? = null,
+    // The event's class (#403): OPEN_PLAY | LEAGUE | TOURNAMENT; omit for the OPEN_PLAY default.
+    val type: String? = null,
 )
 
 /**
@@ -102,6 +104,12 @@ data class EventResponse(
     val clubName: String? = null,
     // Admin override for calculation processing order (#335); null = order by end date.
     val calcPriority: Double? = null,
+    // The event's class (#403): "OPEN_PLAY" | "LEAGUE" | "TOURNAMENT".
+    val type: String,
+    // When the event was finalized (#403), ISO-8601; null while open.
+    val finalizedAt: String? = null,
+    // True once the event has been finalized (#403) — closed to changes; its matches queue for rating.
+    val isFinalized: Boolean = false,
 )
 
 fun MyEvent.toResponse(): MyEventResponse =
@@ -127,6 +135,9 @@ fun EventView.toResponse(): EventResponse =
         clubId = club?.id?.toString(),
         clubName = club?.name,
         calcPriority = event.calcPriority,
+        type = event.type.name,
+        finalizedAt = event.finalizedAt?.toString(),
+        isFinalized = event.isFinalized,
     )
 
 internal fun EventParticipantRef.toResponse(): EventParticipantResponse =

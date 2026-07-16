@@ -18,6 +18,7 @@ import {
   useDeleteApiV1EventsIdParticipantsUserId,
   useGetApiV1EventsId,
   usePatchApiV1EventsId,
+  usePostApiV1EventsIdFinalize,
   usePostApiV1EventsIdParticipants,
   usePostApiV1EventsIdParticipantsUserIdDecision,
   usePutApiV1EventsIdClub,
@@ -66,6 +67,13 @@ const MATCH_TYPE_LABELS: Record<(typeof MATCH_TYPES)[number], string> = {
   TOURNAMENT_PLAYOFFS: "Tournament playoffs",
 };
 
+/** Human labels for the event's class (#403). */
+const EVENT_TYPE_LABELS: Record<string, string> = {
+  OPEN_PLAY: "Open play",
+  LEAGUE: "League",
+  TOURNAMENT: "Tournament",
+};
+
 const MATCH_FORMATS = ["SINGLES", "DOUBLES", "MIXED_DOUBLES"] as const;
 const MATCH_FORMAT_LABELS: Record<(typeof MATCH_FORMATS)[number], string> = {
   SINGLES: "Singles",
@@ -112,6 +120,10 @@ export function EventDetail({
     !!event &&
     event.endDate < todayIso &&
     !canEditEndedEvents(me?.capabilities);
+  // A finalized event is terminal (#403): no rename/club/participant edits, no fixtures/results. This
+  // is independent of the ended-event gate and applies to everyone (the server rejects it too).
+  const finalized = !!event?.isFinalized;
+  const locked = readOnly || finalized;
 
   // Two slots per side; the "b" slots are only used (and shown) for doubles/mixed doubles.
   const [team1a, setTeam1a] = useState("");
@@ -131,6 +143,8 @@ export function EventDetail({
   const [nameDraft, setNameDraft] = useState("");
   const [renameError, setRenameError] = useState<string | null>(null);
   const [clubError, setClubError] = useState<string | null>(null);
+  const [confirmingFinalize, setConfirmingFinalize] = useState(false);
+  const [finalizeError, setFinalizeError] = useState<string | null>(null);
 
   // Clubs to (re)assign the event to (#319); staff-readable, empty when none exist.
   const clubs = useGetApiV1Clubs().data ?? [];
@@ -238,6 +252,30 @@ export function EventDetail({
     } catch (e) {
       setDeleteError(eventErrorMessage(e, "Could not delete this event."));
       setConfirmingDelete(false);
+    }
+  }
+
+  // Finalize the event (#403): terminal — closes it to changes and queues its matches for rating. On
+  // success refresh so the badge shows and the controls disable; the list is invalidated for the return.
+  const finalizeEvent = usePostApiV1EventsIdFinalize({
+    mutation: {
+      onSuccess: () => {
+        refreshEvent();
+        void queryClient.invalidateQueries({
+          queryKey: getGetApiV1EventsQueryKey(),
+        });
+        setConfirmingFinalize(false);
+      },
+    },
+  });
+
+  async function confirmFinalize() {
+    setFinalizeError(null);
+    try {
+      await finalizeEvent.mutateAsync({ id: eventId });
+    } catch (e) {
+      setFinalizeError(eventErrorMessage(e, "Could not finalize this event."));
+      setConfirmingFinalize(false);
     }
   }
 
@@ -370,22 +408,36 @@ export function EventDetail({
                 </div>
               ) : (
                 <div className="flex items-center justify-between gap-2">
-                  <CardTitle>{event.name}</CardTitle>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setRenameError(null);
-                      setNameDraft(event.name);
-                      setRenaming(true);
-                    }}
-                  >
-                    Rename
-                  </Button>
+                  <span className="flex items-center gap-2">
+                    <CardTitle>{event.name}</CardTitle>
+                    {finalized ? (
+                      <span
+                        className="rounded-full border border-emerald-500/50 bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-400"
+                        data-testid="finalized-badge"
+                      >
+                        Finalized
+                      </span>
+                    ) : null}
+                  </span>
+                  {finalized ? null : (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setRenameError(null);
+                        setNameDraft(event.name);
+                        setRenaming(true);
+                      }}
+                    >
+                      Rename
+                    </Button>
+                  )}
                 </div>
               )}
               <CardDescription>
+                {EVENT_TYPE_LABELS[event.type] ?? event.type}
+                {" · "}
                 {event.startDate} – {event.endDate} · Event ID:{" "}
                 <code className="font-mono font-medium text-foreground">
                   {event.publicCode}
@@ -408,7 +460,7 @@ export function EventDetail({
                 <select
                   id="event-club-edit"
                   value={event.clubId ?? ""}
-                  disabled={setClub.isPending}
+                  disabled={setClub.isPending || locked}
                   onChange={(e) => saveClub(e.target.value)}
                   className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
                 >
@@ -477,7 +529,7 @@ export function EventDetail({
                   No participants yet.
                 </p>
               )}
-              {readOnly ? null : (
+              {locked ? null : (
                 <div className="space-y-1">
                   <UserSearchSelect
                     label="Add a participant"
@@ -543,7 +595,7 @@ export function EventDetail({
                           <Button
                             type="button"
                             size="sm"
-                            disabled={decideParticipant.isPending}
+                            disabled={decideParticipant.isPending || locked}
                             onClick={() =>
                               decideParticipant.mutate({
                                 id: eventId,
@@ -559,7 +611,7 @@ export function EventDetail({
                               type="button"
                               variant="outline"
                               size="sm"
-                              disabled={decideParticipant.isPending}
+                              disabled={decideParticipant.isPending || locked}
                               onClick={() =>
                                 decideParticipant.mutate({
                                   id: eventId,
@@ -580,7 +632,15 @@ export function EventDetail({
             </Card>
           ) : null}
 
-          {readOnly ? (
+          {finalized ? (
+            <p
+              role="status"
+              className="rounded-md border border-emerald-500/50 bg-emerald-500/10 px-3 py-2 text-sm"
+            >
+              This event is finalized. It is closed to changes and its matches
+              have been queued for rating.
+            </p>
+          ) : readOnly ? (
             <p
               role="status"
               className="rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-sm"
@@ -590,7 +650,7 @@ export function EventDetail({
             </p>
           ) : null}
 
-          {readOnly ? null : (
+          {locked ? null : (
             <Card>
               <CardHeader>
                 <CardTitle>Schedule a fixture</CardTitle>
@@ -729,14 +789,67 @@ export function EventDetail({
             </Card>
           )}
 
-          <AwaitingResultsSection eventId={eventId} readOnly={readOnly} />
-          <RecordedResultsSection eventId={eventId} readOnly={readOnly} />
+          <AwaitingResultsSection eventId={eventId} readOnly={locked} />
+          <RecordedResultsSection eventId={eventId} readOnly={locked} />
 
           <ShareCard
             url={`${window.location.origin}/events/${event.publicCode}`}
             title="Share this event"
             description="Scan this code or copy the link to open this event's public page."
           />
+
+          {finalized ? null : (
+            <Card>
+              <CardHeader>
+                <CardTitle>Finalize event</CardTitle>
+                <CardDescription>
+                  Finalizing closes this event to further changes and queues its
+                  matches for rating. This cannot be undone.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {confirmingFinalize ? (
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={finalizeEvent.isPending}
+                      onClick={confirmFinalize}
+                    >
+                      {finalizeEvent.isPending
+                        ? "Finalizing…"
+                        : "Confirm finalize"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={finalizeEvent.isPending}
+                      onClick={() => setConfirmingFinalize(false)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => {
+                      setFinalizeError(null);
+                      setConfirmingFinalize(true);
+                    }}
+                  >
+                    Finalize event
+                  </Button>
+                )}
+                {finalizeError ? (
+                  <p className="text-sm text-destructive" role="alert">
+                    {finalizeError}
+                  </p>
+                ) : null}
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader>

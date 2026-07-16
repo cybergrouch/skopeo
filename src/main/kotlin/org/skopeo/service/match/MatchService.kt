@@ -103,6 +103,7 @@ class MatchService(
                 val event =
                     ensureNotNull(value = events.findById(id = eventId)) { ServiceError.Validation(message = "Event $eventId not found") }
                 ensureHostMayEnter(event = event, caller = caller).bind()
+                ensureEventNotFinalized(event = event).bind()
             }
             val team1Users = resolveRatedParticipants(ids = request.team1).bind()
             val team2Users = resolveRatedParticipants(ids = request.team2).bind()
@@ -163,6 +164,7 @@ class MatchService(
                 val event =
                     ensureNotNull(value = events.findById(id = eventId)) { ServiceError.NotFound(message = "Event $eventId not found") }
                 ensureHostMayEnter(event = event, caller = caller).bind()
+                ensureEventNotFinalized(event = event).bind()
             }
             val (resolvedSets, winner) =
                 deriveOutcome(
@@ -512,6 +514,15 @@ class MatchService(
             ensure(condition = exempt || !event.isExpired(asOf = LocalDate.now())) {
                 ServiceError.Conflict(message = "This event has ended; only an administrator or club owner can modify it.")
             }
+        }
+
+    /**
+     * Reject entering matches on a finalized event (#403): finalize is terminal and closes the event
+     * to further changes, so a fixture cannot be created on it and a result cannot be recorded.
+     */
+    private fun ensureEventNotFinalized(event: Event): Either<ServiceError, Unit> =
+        either {
+            ensure(condition = !event.isFinalized) { ServiceError.Validation(message = "Event is finalized") }
         }
 
     private fun staffCaller(token: VerifiedFirebaseToken): Either<ServiceError, User> {

@@ -23,6 +23,7 @@ import org.skopeo.model.EventClubRef
 import org.skopeo.model.EventCreatorRef
 import org.skopeo.model.EventParticipantRef
 import org.skopeo.model.EventParticipantStatus
+import org.skopeo.model.EventType
 import org.skopeo.model.EventView
 import org.skopeo.model.MatchStatus
 import org.skopeo.model.MyEvent
@@ -55,6 +56,8 @@ data class CreateEventInput(
     val endDate: LocalDate,
     val participantIds: List<UUID>,
     val clubId: UUID? = null,
+    // The event's class (#403); defaults to OPEN_PLAY for backward compatibility.
+    val type: EventType = EventType.OPEN_PLAY,
 )
 
 /**
@@ -95,6 +98,7 @@ class EventService(
                             participantIds = input.participantIds.distinct(),
                             createdBy = createdBy,
                             clubId = input.clubId,
+                            type = input.type,
                         ),
                 )
             // Activity Log entry for the creation (#334); rename/set-club/delete are follow-ups.
@@ -113,6 +117,7 @@ class EventService(
                                 "endDate" to event.endDate.toString(),
                                 "participants" to event.participantIds.size.toString(),
                                 "clubId" to event.clubId?.toString(),
+                                "type" to event.type.name,
                             ),
                     ),
             )
@@ -160,6 +165,7 @@ class EventService(
             val event = ensureNotNull(value = events.findById(id = id)) { ServiceError.NotFound(message = "Event $id not found") }
             val isAdmin = caller.capabilities.contains(element = Capability.ADMINISTRATOR)
             ensure(condition = isAdmin || event.createdBy == caller.id) { ServiceError.Forbidden() }
+            ensureNotFinalized(event = event).bind()
             ensure(condition = name.isNotBlank()) { ServiceError.Validation(message = "Event name is required") }
             // Existence is already confirmed above (needed for the authz check), so the rename can't miss.
             val trimmed = name.trim()
@@ -198,6 +204,7 @@ class EventService(
             val event = ensureNotNull(value = events.findById(id = id)) { ServiceError.NotFound(message = "Event $id not found") }
             val isAdmin = caller.capabilities.contains(element = Capability.ADMINISTRATOR)
             ensure(condition = isAdmin || event.createdBy == caller.id) { ServiceError.Forbidden() }
+            ensureNotFinalized(event = event).bind()
             clubId?.let { cid ->
                 ensureNotNull(value = clubs.findById(id = cid)) { ServiceError.Validation(message = "Club $cid not found") }
             }
@@ -239,6 +246,44 @@ class EventService(
             val event = ensureNotNull(value = events.findById(id = id)) { ServiceError.NotFound(message = "Event $id not found") }
             events.setCalcPriority(id = id, priority = priority)
             toView(event = event.copy(calcPriority = priority))
+        }
+
+    /**
+     * Finalize an event (#403), the terminal state that closes it to further changes and moves the
+     * event's matches into the rating queue (finalize-time queuing, replacing result-upload-time
+     * queuing for evented matches). Staff-only: a HOST may finalize only their own event, an
+     * ADMINISTRATOR/CLUB_OWNER any. Idempotency guard: an already-finalized event is a
+     * [ServiceError.Validation] (there is no un-finalize in Phase A). Audited as EVENT_FINALIZED.
+     */
+    fun finalize(
+        token: VerifiedFirebaseToken,
+        id: UUID,
+    ): Either<ServiceError, EventView> =
+        either {
+            val caller = staffCaller(users = users, token = token).bind()
+            val event = ensureNotNull(value = events.findById(id = id)) { ServiceError.NotFound(message = "Event $id not found") }
+            val isAdminOrOwner = caller.capabilities.any { it == Capability.ADMINISTRATOR || it == Capability.CLUB_OWNER }
+            ensure(condition = isAdminOrOwner || event.createdBy == caller.id) { ServiceError.Forbidden() }
+            ensure(condition = event.isActive) { ServiceError.Validation(message = "A deleted event cannot be finalized") }
+            ensure(condition = !event.isFinalized) { ServiceError.Validation(message = "Event is already finalized") }
+            val now = LocalDateTime.now()
+            events.finalize(id = id, finalizedAt = now, finalizedBy = caller.id)
+            audit.record(
+                write =
+                    AuditWrite(
+                        actorUserId = caller.id,
+                        action = AuditAction.EVENT_FINALIZED,
+                        entityType = AuditEntityType.EVENT,
+                        entityId = event.id,
+                        summary = "Finalized event ${event.name}",
+                        details =
+                            mapOf(
+                                "publicCode" to event.publicCode,
+                                "type" to event.type.name,
+                            ),
+                    ),
+            )
+            toView(event = event.copy(finalizedAt = now, finalizedBy = caller.id))
         }
 
     /**
@@ -299,6 +344,7 @@ class EventService(
             val event =
                 ensureNotNull(value = events.findById(id = eventId)) { ServiceError.NotFound(message = "Event $eventId not found") }
             ensureHostMayEnter(event = event, caller = caller).bind()
+            ensureNotFinalized(event = event).bind()
             ensureKnownUsers(users = users, ids = listOf(element = userId)).bind()
             val updated =
                 ensureNotNull(value = events.addParticipant(eventId = eventId, userId = userId, approvedBy = caller.id)) {
@@ -355,6 +401,9 @@ class EventService(
     ): Either<ServiceError, EventView> =
         either {
             val actor = staffCaller(users = users, token = token).bind().id
+            val event =
+                ensureNotNull(value = events.findById(id = eventId)) { ServiceError.NotFound(message = "Event $eventId not found") }
+            ensureNotFinalized(event = event).bind()
             ensure(condition = status == EventParticipantStatus.APPROVED || status == EventParticipantStatus.HOLD) {
                 ServiceError.Validation(message = "A decision must be APPROVED or HOLD")
             }
@@ -486,6 +535,15 @@ private fun ensureHostMayEnter(
         ensure(condition = exempt || !event.isExpired(asOf = LocalDate.now())) {
             ServiceError.Conflict(message = "This event has ended; only an administrator or club owner can modify it.")
         }
+    }
+
+/**
+ * Reject a mutation of a finalized event (#403): finalize is terminal and closes the event to further
+ * changes, so rename / set-club / participant edits are refused with a [ServiceError.Validation].
+ */
+private fun ensureNotFinalized(event: Event): Either<ServiceError, Unit> =
+    either {
+        ensure(condition = !event.isFinalized) { ServiceError.Validation(message = "Event is finalized") }
     }
 
 /** Every id must map to an existing user, else a [ServiceError.Validation]. */

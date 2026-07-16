@@ -26,6 +26,7 @@ import org.skopeo.dto.event.SetEventClubRequest
 import org.skopeo.dto.event.UpdateEventRequest
 import org.skopeo.dto.event.toResponse
 import org.skopeo.model.EventParticipantStatus
+import org.skopeo.model.EventType
 import org.skopeo.service.event.CreateEventInput
 import org.skopeo.service.event.EventService
 import java.time.LocalDate
@@ -144,6 +145,14 @@ private fun Route.renameEvent(service: EventService) {
             ) { event -> call.respond(status = HttpStatusCode.OK, message = event.toResponse()) }
         }
     }
+    // Finalize an event (#403): terminal, closes it to changes and queues its matches for rating.
+    post(path = "/{id}/finalize") {
+        respondMappingErrors {
+            respondEither(
+                result = service.finalize(token = verifiedToken(), id = uuidParam(name = "id")),
+            ) { event -> call.respond(status = HttpStatusCode.OK, message = event.toResponse()) }
+        }
+    }
 }
 
 private fun Route.byIdAndParticipants(service: EventService) {
@@ -221,12 +230,23 @@ private fun toCreateEventInput(request: CreateEventRequest): CreateEventInput {
         } catch (e: DateTimeParseException) {
             throw IllegalArgumentException("Invalid $field '$value'; expected ISO-8601 (yyyy-MM-dd)", e)
         }
+
+    // Parse the optional event type (#403): one of the enum names, defaulting to OPEN_PLAY when absent.
+    fun parseType(value: String?): EventType =
+        if (value == null) {
+            EventType.OPEN_PLAY
+        } else {
+            requireNotNull(value = EventType.entries.firstOrNull { it.name == value }) {
+                "Invalid event type '$value'; expected OPEN_PLAY, LEAGUE, or TOURNAMENT"
+            }
+        }
     return CreateEventInput(
         name = request.name,
         startDate = parseDate(value = request.startDate, field = "startDate"),
         endDate = parseDate(value = request.endDate, field = "endDate"),
         participantIds = request.participantIds.map { parseEventUuid(value = it) },
         clubId = request.clubId?.let { parseEventUuid(value = it, field = "club id") },
+        type = parseType(value = request.type),
     )
 }
 
