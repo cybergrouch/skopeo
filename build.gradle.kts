@@ -115,6 +115,10 @@ dependencies {
     // Architecture tests — enforce layered package dependencies (issue #69). Bytecode-based, so
     // it's robust against Kotlin compiler versions (unlike source-scanning tools).
     testImplementation("com.tngtech.archunit:archunit:1.3.0")
+
+    // YAML parser for OpenAPIIntegrationTest (#401): parse the served spec so a malformed
+    // documentation.yaml fails the backend gate instead of only breaking the web orval step.
+    testImplementation("org.yaml:snakeyaml:2.3")
 }
 
 kotlin {
