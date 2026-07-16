@@ -9,6 +9,8 @@ import io.ktor.server.application.call
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
 import io.ktor.server.plugins.BadRequestException
+import io.ktor.server.request.httpMethod
+import io.ktor.server.request.path
 import io.ktor.server.response.respond
 import io.ktor.server.routing.RoutingContext
 import kotlinx.serialization.SerializationException
@@ -80,26 +82,22 @@ internal inline fun <reified T : Enum<T>> parseEnumParam(
  * This is the single place the error taxonomy meets the transport layer.
  */
 internal suspend fun RoutingContext.respondError(error: ServiceError) {
+    // Every ServiceError (an Either left, #115) is logged here — the one sink where the error taxonomy
+    // meets the transport — so EVERY handled failure is traceable, not just uncaught exceptions. Logged
+    // at WARN with request context (method + path + error type) so it surfaces regardless of the prod
+    // log level (previously NotFound logged at INFO and was easily filtered out) and points at the call.
+    logger.warn { "${call.request.httpMethod.value} ${call.request.path()} → ${error::class.simpleName}: ${error.message}" }
     when (error) {
-        is ServiceError.NotFound -> {
-            logger.info { error.message }
+        is ServiceError.NotFound ->
             call.respond(status = HttpStatusCode.NotFound, message = errorBody(error = "Not found", message = error.message))
-        }
-        is ServiceError.Forbidden -> {
-            logger.warn { "Access denied: ${error.message}" }
+        is ServiceError.Forbidden ->
             call.respond(status = HttpStatusCode.Forbidden, message = errorBody(error = "Forbidden", message = error.message))
-        }
-        is ServiceError.Conflict -> {
-            logger.warn { "Conflict: ${error.message}" }
+        is ServiceError.Conflict ->
             call.respond(status = HttpStatusCode.Conflict, message = errorBody(error = "Conflict", message = error.message))
-        }
-        is ServiceError.Validation -> {
-            logger.warn { "Validation error: ${error.message}" }
+        is ServiceError.Validation ->
             call.respond(status = HttpStatusCode.BadRequest, message = errorBody(error = "Validation error", message = error.message))
-        }
         is ServiceError.AccountMerged -> {
             // A merged duplicate's sign-in (#124): 403 + the canonical code so the client can link to it.
-            logger.warn { "Account merged: ${error.message}" }
             val base = errorBody(error = "Account merged", message = error.message)
             val body = error.canonicalPublicCode?.let { base + ("canonicalCode" to it) } ?: base
             call.respond(status = HttpStatusCode.Forbidden, message = body)
