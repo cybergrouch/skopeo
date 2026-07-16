@@ -2916,24 +2916,82 @@ paths:
 
   /api/v1/standings:
     get:
-      summary: Per-band "Ranking Race" standings (#113)
+      summary: One page of the per-band standings (#113, #220)
       description: >-
-        Interim, ratings-derived standings — within each NTRP band, active rated players ordered by
-        rating (highest first) and ranked. Readable by any signed-in player. The exact rating is never
-        returned (order only); bands are returned strongest-first.
+        Interim, ratings-derived standings served from a persisted, published snapshot (#220). Returns
+        one (band, sex) page ordered by rank, the group's total, and the (band, sex) selectors on offer.
+        Readable by any signed-in player; the exact rating is returned only to RATER/ADMINISTRATOR
+        viewers (#186). Omitting `band` defaults to the strongest available group (Men first). The
+        snapshot is source-agnostic — points replace rating as the ordering source under #146 without
+        changing this read path.
       tags:
         - Standings
       security:
         - firebaseAuth: []
+      parameters:
+        - name: band
+          in: query
+          required: false
+          schema:
+            type: string
+          description: >-
+            Band code to view (e.g. "4.0", "<3.0", "6.0+"); one of the codes listed in the response
+            `groups`. Defaults to the strongest available band when omitted.
+        - name: sex
+          in: query
+          required: false
+          schema:
+            type: string
+          description: The group's sex ("Male"/"Female"); omit for the Unspecified group (#212).
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 25
+          description: Page size (default 25, capped at 100).
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+          description: Zero-based row offset within the (band, sex) group.
       responses:
         '200':
-          description: The standings, one entry per band
+          description: One page of the selected (band, sex) group plus totals and selectors
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/BandStandingsResponse'
+                $ref: '#/components/schemas/StandingsPageResponse'
+  /api/v1/standings/me:
+    get:
+      summary: Locate the caller in the standings (jump-to-me, #220)
+      description: >-
+        Where the caller sits in the latest published snapshot — their (band, sex, rank) — plus the
+        page offset (with the limit used) that contains their row, so the client can load exactly that
+        page. 404 when the caller isn't in the current standings (e.g. unrated).
+      tags:
+        - Standings
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 25
+          description: Page size used to compute the containing page offset (default 25, capped at 100).
+      responses:
+        '200':
+          description: The caller's location and the containing page offset
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandingsLocateResponse'
+        '404':
+          description: The caller is not in the current standings
 
 components:
   securitySchemes:
@@ -5498,22 +5556,84 @@ components:
             Precise NTRP rating (6 fractional digits); present only for RATER/ADMINISTRATOR viewers
             (#186), null for everyone else.
 
-    BandStandingsResponse:
+    StandingsGroupResponse:
       type: object
-      description: >-
-        A single (band, sex) leaderboard (#212). One row per (band, sex) that has players; ranks
-        restart at 1 within each.
+      description: A selectable (band, sex) group present in the current snapshot (#220).
       required:
         - band
-        - entries
+        - label
       properties:
         band:
           type: string
+          description: The band code (e.g. "4.0") to pass as the `band` query parameter.
+        label:
+          type: string
+          description: The human-readable band header (e.g. "NTRP 4.0 Band Race").
         sex:
           type: string
           nullable: true
           description: The group's sex ("Male"/"Female"), or null for the Unspecified group.
+
+    StandingsPageResponse:
+      type: object
+      description: >-
+        One page of a (band, sex) leaderboard from the latest published snapshot (#220), plus the
+        group's total and the (band, sex) selectors on offer. Ranks restart at 1 within each group.
+      required:
+        - limit
+        - offset
+        - total
+        - entries
+        - groups
+      properties:
+        band:
+          type: string
+          nullable: true
+          description: The band code served (null only for an empty snapshot).
+        label:
+          type: string
+          nullable: true
+          description: The served band's human-readable header.
+        sex:
+          type: string
+          nullable: true
+          description: The group's sex ("Male"/"Female"), or null for the Unspecified group.
+        limit:
+          type: integer
+        offset:
+          type: integer
+        total:
+          type: integer
+          description: The full size of the (band, sex) group (for pagination).
         entries:
           type: array
           items:
             $ref: '#/components/schemas/StandingEntryResponse'
+        groups:
+          type: array
+          items:
+            $ref: '#/components/schemas/StandingsGroupResponse'
+
+    StandingsLocateResponse:
+      type: object
+      description: The caller's location in the current standings plus the containing page offset (#220).
+      required:
+        - band
+        - label
+        - rank
+        - limit
+        - offset
+      properties:
+        band:
+          type: string
+        label:
+          type: string
+        sex:
+          type: string
+          nullable: true
+        rank:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer

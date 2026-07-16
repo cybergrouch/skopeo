@@ -44,6 +44,10 @@ object PostgresTestDatabase {
     fun truncate() {
         transaction {
             exec("TRUNCATE users CASCADE")
+            // standings_snapshots isn't a child of users (only its entries are), so it survives the
+            // cascade above; truncate it explicitly (cascading to standings_entries) so a snapshot from
+            // one test doesn't leak into the next (#220).
+            exec(stmt = "TRUNCATE standings_snapshots CASCADE")
             // app_settings isn't a child of users (updated_by is SET NULL), so reset the global
             // settings back to their V11 seed so theme state doesn't leak across tests (#378).
             exec(stmt = "TRUNCATE app_settings")
