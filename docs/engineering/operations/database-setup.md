@@ -543,6 +543,20 @@ The dump includes `flyway_schema_history`, so the app won't re-migrate; if your 
 migrations than production, Flyway applies just those on startup — usually exactly what you want when
 reproducing a bug against an about-to-ship change.
 
+> **Freshness:** `restore-prod-to-local.sh` (with no explicit object) pulls the fixed-name
+> `skopeodb-scheduled.sql.gz`, refreshed by a **weekly** Cloud Scheduler job — so it can be up to a
+> week stale. For up-to-the-minute data, take a fresh export first and restore from it:
+> `BACKUP_BUCKET=gs://<backup-bucket> ./scripts/backup-db.sh` then pass the new
+> `gs://…/skopeodb-<timestamp>.sql.gz` to the restore script.
+
+> **Admin access on a restored copy:** the backend authorizes by the capabilities stored in the DB it's
+> pointed at. Admin actions (rename/delete a club, set ratings, etc.) are `ADMINISTRATOR`-gated, so if
+> your account isn't an admin in the production data — or you sign in with a different identity than the
+> one in that data — those actions return **403**, even though the UI shows the admin tabs (it gates on
+> your client-side Firebase claims, not that DB). To exercise admin flows locally, grant yourself the
+> capability in the copy: `./scripts/grant-admin-local.sh` (lists users) then
+> `./scripts/grant-admin-local.sh <your-provider_uid-or-id>`. It's effective on your next request.
+
 ### Local backups (docker)
 
 ```bash

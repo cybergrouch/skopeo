@@ -261,6 +261,15 @@ BACKUP_BUCKET=gs://<backup-bucket> ./scripts/restore-prod-to-local.sh
 DATABASE_URL=jdbc:postgresql://localhost:5432/skopeo_prodcopy ./gradlew run
 ```
 
+#### `grant-admin-local.sh`
+Grant `ADMINISTRATOR` to a user in a **local** database (default `skopeo_prodcopy`) so you can exercise admin flows when debugging against a restored production copy where your identity isn't an admin. ⚠️ Local only — refuses to touch the dev `SkopeoDb`. Effective on the next request (capabilities are read per-request).
+
+**Usage:**
+```bash
+./scripts/grant-admin-local.sh                       # list users (provider_uid, id, name, capabilities)
+./scripts/grant-admin-local.sh <provider_uid-or-id>  # grant ADMINISTRATOR
+```
+
 #### `health-check.sh`
 Health/smoke check against a running API (default `http://localhost:8080`). Doubles as the "restore verified" step — samples row counts from the restored db.
 
