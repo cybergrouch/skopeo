@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
+import org.skopeo.model.SnapshotSource
 import org.skopeo.model.SnapshotStatus
 import org.skopeo.model.StandingsBand
 import org.skopeo.model.StandingsEntryWrite
@@ -213,5 +214,96 @@ class StandingsSnapshotRepositoryTest {
         located.rank shouldBe 2
 
         repo.locate(snapshotId = id, userId = absent).shouldBeNull()
+    }
+
+    @Test
+    fun `the source column round-trips a POINTS generation and defaults to RATING (#146)`() {
+        val u = newUser(uid = "u1")
+        // An explicit POINTS generation is the only PUBLISHED one → prefer-points returns it.
+        val points =
+            repo.create(
+                computedAt = LocalDateTime.now(),
+                asOf = LocalDate.now(),
+                status = SnapshotStatus.PUBLISHED,
+                entries = listOf(element = write(band = StandingsBand.FROM_4_0, sex = "Male", rank = 1, userId = u, rating = "4.0")),
+                source = SnapshotSource.POINTS,
+            )
+        repo.latestPublishedPreferringPoints() shouldBe points
+
+        // The default source (RATING) is used when omitted; latestPublished still finds the newest overall.
+        val rating =
+            repo.create(
+                computedAt = LocalDateTime.now(),
+                asOf = LocalDate.now(),
+                status = SnapshotStatus.PUBLISHED,
+                entries = listOf(element = write(band = StandingsBand.FROM_4_0, sex = "Male", rank = 1, userId = u, rating = "4.1")),
+            )
+        repo.latestPublished() shouldBe rating
+    }
+
+    @Test
+    fun `latestPublishedPreferringPoints prefers POINTS over a newer RATING generation (#146)`() {
+        val u = newUser(uid = "u1")
+        val points =
+            repo.create(
+                computedAt = LocalDateTime.now().minusHours(1),
+                asOf = LocalDate.now(),
+                status = SnapshotStatus.PUBLISHED,
+                entries = listOf(element = write(band = StandingsBand.FROM_4_0, sex = "Male", rank = 1, userId = u, rating = "4.0")),
+                source = SnapshotSource.POINTS,
+            )
+        // A NEWER rating-derived generation lands after the points one.
+        repo.create(
+            computedAt = LocalDateTime.now(),
+            asOf = LocalDate.now(),
+            status = SnapshotStatus.PUBLISHED,
+            entries = listOf(element = write(band = StandingsBand.FROM_4_0, sex = "Male", rank = 1, userId = u, rating = "4.3")),
+            source = SnapshotSource.RATING,
+        )
+        // Reads still prefer the committed POINTS generation (the flip is sticky, not time-based).
+        repo.latestPublishedPreferringPoints() shouldBe points
+    }
+
+    @Test
+    fun `latestPublishedPreferringPoints falls back to RATING when no POINTS generation exists (#146)`() {
+        val u = newUser(uid = "u1")
+        val rating =
+            repo.create(
+                computedAt = LocalDateTime.now(),
+                asOf = LocalDate.now(),
+                status = SnapshotStatus.PUBLISHED,
+                entries = listOf(element = write(band = StandingsBand.FROM_4_0, sex = "Male", rank = 1, userId = u, rating = "4.0")),
+                source = SnapshotSource.RATING,
+            )
+        repo.latestPublishedPreferringPoints() shouldBe rating
+    }
+
+    @Test
+    fun `latestPublishedPreferringPoints prefers the newest POINTS generation and ignores a DRAFT (#146)`() {
+        val u = newUser(uid = "u1")
+        repo.create(
+            computedAt = LocalDateTime.now().minusHours(2),
+            asOf = LocalDate.now(),
+            status = SnapshotStatus.PUBLISHED,
+            entries = listOf(element = write(band = StandingsBand.FROM_4_0, sex = "Male", rank = 1, userId = u, rating = "4.0")),
+            source = SnapshotSource.POINTS,
+        )
+        // A DRAFT points generation must not be served.
+        repo.create(
+            computedAt = LocalDateTime.now(),
+            asOf = LocalDate.now(),
+            status = SnapshotStatus.DRAFT,
+            entries = listOf(element = write(band = StandingsBand.FROM_4_0, sex = "Male", rank = 1, userId = u, rating = "4.5")),
+            source = SnapshotSource.POINTS,
+        )
+        val newerPublished =
+            repo.create(
+                computedAt = LocalDateTime.now(),
+                asOf = LocalDate.now(),
+                status = SnapshotStatus.PUBLISHED,
+                entries = listOf(element = write(band = StandingsBand.FROM_4_0, sex = "Male", rank = 1, userId = u, rating = "4.3")),
+                source = SnapshotSource.POINTS,
+            )
+        repo.latestPublishedPreferringPoints() shouldBe newerPublished
     }
 }
