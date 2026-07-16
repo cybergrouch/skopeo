@@ -140,12 +140,12 @@ Public-page / share links (the "Public page (QR)" anchors and similar) get an ex
 |---|---|---|---|---|
 | **Off-Season** | `#212529` Dark Slate | `#495057` Steel | `#000000` Black | 15.4:1 — AA ✅ |
 | **Christmas** *(dark)* | `#FFFFFF` White | `#E5B842` Gold | `#E5B842` Gold (color shifts to gold; underline already gold) | 10.2:1 — AA ✅ |
-| **Australian Open** | `#0080C8` AO Blue | `#0080C8` AO Blue | `#0A1D37` Midnight | 4.27:1 — AA-large ✅ / AA-normal ⚠️ (see note) |
+| **Australian Open** | `#006BA6` Deep AO Blue | `#006BA6` Deep AO Blue | `#0A1D37` Midnight | 5.1:1 — AA ✅ |
 | **Clay** | `#C1522D` Clay Orange | `#C1522D` Clay Orange | `#2B1A12` Dark Chocolate | 4.65:1 — AA ✅ |
 | **Grass** | `#452263` Wimbledon Purple | `#452263` Purple | `#00703C` Lawn Green | 12.6:1 — AA ✅ |
 | **US Open** *(dark)* | `#63B233` Apple Green | `#63B233` Apple Green | `#FFFFFF` White | 5.5:1 — AA ✅ |
 
-> **AO note:** AO Blue `#0080C8` on white is 4.27:1 — it clears WCAG AA for *large* text (≥3:1) but is just under the 4.5:1 bar for *normal-size* text. It is a large improvement over the previous generic treatment and is the brand's on-court blue; kept per the #394 palette. If a stricter AA-normal pass is required, darken toward `#006BA6` (≈5.1:1).
+> **AO note:** The AO **link** uses a slightly deeper blue `#006BA6` (≈5.1:1 on white → **AA-normal ✅**) rather than the `#0080C8` accent used for AO borders/buttons (4.27:1 — AA-large only). Links are small (12px bold), so they take the stricter-contrast blue; the vivid `#0080C8` stays for the 10% accent (borders/buttons) where AA-large suffices.
 
 ---
 
