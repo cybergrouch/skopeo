@@ -59,6 +59,8 @@ When the Admin switches the theme, every open client should reflect it. We chose
 
 Six themes give a cohesive **year-round rotation**. One is dark (**US Open**); the rest are light (Christmas uses a lightly-tinted card fill rather than pure white). Swatches below are illustrative.
 
+> 🖼️ **Interactive preview:** [`ui-seasonal-theming-preview.html`](./ui-seasonal-theming-preview.html) renders all six themes (canvas + card + accented button/border) live. Open it in a browser, or view a branch copy via [htmlpreview.github.io](https://htmlpreview.github.io/). Its CSS is also the reference for the per-theme **muted body-text** color (a `--muted-foreground` token), which the swatch tables below omit — e.g. Off-Season `#495057`, Christmas `#1C4837`, AO `#4A5568`, Clay `#614E43`, Grass `#4A5D50`, US Open `#94A3B8`.
+
 ### ⚙️ Off-Season — *Sleek, structural, minimal*
 Winter training / rest vibe (late Nov–Dec): premium sleek monochrome + concrete, evoking indoor practice facilities and empty stadiums.
 
@@ -188,6 +190,7 @@ When the setting is `AUTO`, a small data-driven table maps today's date → them
 
 ## 10. References
 
+- **Interactive preview:** [`ui-seasonal-theming-preview.html`](./ui-seasonal-theming-preview.html) (this folder).
 - Tracking issue [#378](https://github.com/cybergrouch/skopeo/issues/378).
 - `web/src/index.css` (theme tokens / dark-mode block), Tailwind config, shadcn UI under `web/src/components/ui/`.
 - Admin tab: `web/src/routes/dashboard/AdminTab.tsx`.
