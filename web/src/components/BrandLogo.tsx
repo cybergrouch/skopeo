@@ -1,17 +1,20 @@
+import { BrandMark } from "./BrandMark";
+
 interface BrandLogoProps {
-  className?: string
+  className?: string;
 }
 
 /**
  * The Skopeo brand mark — the telescope-and-tennis-ball icon plus the wordmark (#109).
- * Uses /logo-mark.svg (the bare mark), NOT /favicon.svg, so the tab favicon's dark-mode contrast
- * plate (#177) doesn't bleed a white box into the in-app logo.
+ * The icon is rendered as an inline vector `<BrandMark>` colored with the `text-foreground` theme
+ * token (#397), so it recolors with the seasonal theme and stays legible on the dark US Open and
+ * Christmas backgrounds (an `<img>` to the raster /logo-mark.svg could do neither).
  */
 export function BrandLogo({ className }: BrandLogoProps) {
   return (
-    <span className={`inline-flex items-center gap-2 ${className ?? ''}`}>
-      <img src="/logo-mark.svg" alt="" aria-hidden="true" className="h-6 w-6 shrink-0" />
+    <span className={`inline-flex items-center gap-2 ${className ?? ""}`}>
+      <BrandMark className="h-6 w-6 shrink-0 text-foreground" />
       <span className="font-semibold">Skopeo</span>
     </span>
-  )
+  );
 }
