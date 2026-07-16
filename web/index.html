@@ -2,9 +2,15 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
+    <!--
+      Tab favicon is SVG-only and fully theme-driven (#386): ThemeProvider recolors an inline SVG
+      data-URI icon link to the active seasonal accent. This static SVG link is the pre-hydration
+      brand mark; the dynamic themed link (appended by ThemeProvider) supersedes it. SVG favicons
+      work in modern Chrome/Firefox/Edge and Safari 16.4+ — no .ico/.png tab fallback is shipped.
+      iOS home-screen (apple-touch-icon.png) and PWA installed-app icons (site.webmanifest) require
+      PNG and stay the static, unthemed brand mark.
+    -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="shortcut icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
     <meta name="apple-mobile-web-app-title" content="Skopeo" />
