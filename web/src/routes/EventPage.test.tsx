@@ -43,6 +43,7 @@ const event = {
       matchType: 'OPEN_PLAY',
       matchDate: '2026-03-02',
       status: 'COMPLETED',
+      rated: true, // committed by the calculation → "Rated"
       team1: [{ displayName: 'Ana', publicCode: 'AAA111' }],
       team2: [{ displayName: 'Bob', publicCode: 'BBB222' }],
       winner: 'TEAM1',
@@ -54,6 +55,7 @@ const event = {
       matchType: 'OPEN_PLAY',
       matchDate: '2026-03-02',
       status: 'COMPLETED',
+      rated: false, // recorded but not yet rated → "Awaiting rating"
       team1: [{ displayName: 'Ana', publicCode: 'AAA111' }],
       team2: [{ displayName: 'Bob', publicCode: 'BBB222' }],
       winner: 'TEAM2',
@@ -66,6 +68,7 @@ const event = {
       matchType: 'OPEN_PLAY',
       matchDate: '2026-03-03',
       status: 'SCHEDULED',
+      rated: false, // no result → "Scheduled"
       team1: [{ displayName: 'Ana', publicCode: 'AAA111' }],
       team2: [{ displayName: 'Bob', publicCode: 'BBB222' }],
       winner: 'NONE',
@@ -158,6 +161,26 @@ describe('EventPage', () => {
     expect(recordedLinks.map((l) => l.getAttribute('href'))).toEqual(['/matches/MTCH01', '/matches/MTCH02'])
     // The public page has no result-entry controls (read-only).
     expect(screen.queryByRole('button', { name: /Record result|Save result|Edit result/ })).not.toBeInTheDocument()
+  })
+
+  it('renders a status badge per fixture and no data-entry controls (#361)', () => {
+    useGetApiV1EventsCodeCode.mockReturnValue({ data: event, isLoading: false })
+    renderAt()
+
+    // The three statuses are derived read-only: rated → Rated, completed-unrated → Awaiting rating,
+    // no result → Scheduled.
+    expect(screen.getByText('Rated')).toBeInTheDocument()
+    expect(screen.getByText('Awaiting rating')).toBeInTheDocument()
+    expect(screen.getByText('Scheduled')).toBeInTheDocument()
+
+    // Strictly read-only (#361): no result upload, scheduling, reorder, or delete affordances.
+    expect(
+      screen.queryByRole('button', {
+        name: /Record result|Save result|Edit result|Delete fixture|Add set/i,
+      }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Reorder match/i })).not.toBeInTheDocument()
   })
 
   it('flags a soft-deleted event but still renders it (#325)', () => {

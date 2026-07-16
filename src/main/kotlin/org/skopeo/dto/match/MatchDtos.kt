@@ -185,6 +185,10 @@ data class MatchPublicResponse(
     val matchType: String,
     val matchDate: String,
     val status: String,
+    // True once the rating calculation has committed this match (#361): lets a list view derive the
+    // Scheduled / Awaiting rating / Rated status without the precise rating changes. On the standalone
+    // match page the [ratingChanges] carry the detail; in an event's match list they aren't populated.
+    val rated: Boolean = false,
     // False once the match has been soft-deleted (#325): its link stays honored for traceability, and
     // the public page flags it as deleted.
     val isActive: Boolean = true,
@@ -283,6 +287,7 @@ fun Match.toPublicResponse(
         matchType = matchType.name,
         matchDate = matchDate.toString(),
         status = status.name,
+        rated = ratedAt != null,
         isActive = isActive,
         team1 = side(userIds = team1.userIds),
         team2 = side(userIds = team2.userIds),
