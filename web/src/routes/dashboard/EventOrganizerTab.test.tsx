@@ -4,14 +4,19 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { EventOrganizerTab } from "./EventOrganizerTab";
 
-const { useGetApiV1Events, useGetApiV1Clubs, createMutate, state } = vi.hoisted(
-  () => ({
-    useGetApiV1Events: vi.fn(),
-    useGetApiV1Clubs: vi.fn(),
-    createMutate: vi.fn(),
-    state: { fail: false },
-  }),
-);
+const {
+  useGetApiV1Events,
+  useGetApiV1Clubs,
+  useGetApiV1UsersMe,
+  createMutate,
+  state,
+} = vi.hoisted(() => ({
+  useGetApiV1Events: vi.fn(),
+  useGetApiV1Clubs: vi.fn(),
+  useGetApiV1UsersMe: vi.fn(),
+  createMutate: vi.fn(),
+  state: { fail: false },
+}));
 
 vi.mock("@/api/generated/events/events", () => ({
   useGetApiV1Events,
@@ -26,6 +31,7 @@ vi.mock("@/api/generated/events/events", () => ({
   }),
 }));
 vi.mock("@/api/generated/clubs/clubs", () => ({ useGetApiV1Clubs }));
+vi.mock("@/api/generated/users/users", () => ({ useGetApiV1UsersMe }));
 vi.mock("@/components/UserSearchSelect", () => ({
   UserSearchSelect: ({
     placeholder,
@@ -91,6 +97,10 @@ describe("EventOrganizerTab", () => {
     state.fail = false;
     useGetApiV1Events.mockReturnValue({ data: [], isLoading: false });
     useGetApiV1Clubs.mockReturnValue({ data: [], isLoading: false });
+    // Default: a plain user with no CLUB_OWNER capability (so the #364 default never fires).
+    useGetApiV1UsersMe.mockReturnValue({
+      data: { id: "me", capabilities: ["HOST"] },
+    });
   });
 
   it("shows loading and empty states", () => {
@@ -306,10 +316,10 @@ describe("EventOrganizerTab", () => {
     });
     renderTab();
 
-    // Two club group headers + the clubless "Open" group, each with their event(s).
-    expect(screen.getByText("Alpha TC")).toBeInTheDocument();
-    expect(screen.getByText("Bravo TC")).toBeInTheDocument();
-    expect(screen.getByText("Open")).toBeInTheDocument();
+    // Two club group headers (with per-club counts, #367) + the clubless "Open" group.
+    expect(screen.getByText("Alpha TC (2)")).toBeInTheDocument();
+    expect(screen.getByText("Bravo TC (1)")).toBeInTheDocument();
+    expect(screen.getByText("Open (1)")).toBeInTheDocument();
     expect(screen.getByText("Alpha Cup")).toBeInTheDocument();
     expect(screen.getByText("Alpha Cup Two")).toBeInTheDocument();
     expect(screen.getByText("Bravo Cup")).toBeInTheDocument();
@@ -317,9 +327,9 @@ describe("EventOrganizerTab", () => {
 
     // Group order: named clubs alphabetical, then "Open".
     const headers = screen
-      .getAllByText(/^(Alpha TC|Bravo TC|Open)$/)
+      .getAllByText(/^(Alpha TC|Bravo TC|Open) \(\d+\)$/)
       .map((el) => el.textContent);
-    expect(headers).toEqual(["Alpha TC", "Bravo TC", "Open"]);
+    expect(headers).toEqual(["Alpha TC (2)", "Bravo TC (1)", "Open (1)"]);
   });
 
   it("offers a club dropdown and files the event under the selected club (#313)", async () => {
@@ -368,5 +378,107 @@ describe("EventOrganizerTab", () => {
     expect(
       screen.queryByRole("button", { name: /Ana ✕/ }),
     ).not.toBeInTheDocument();
+  });
+
+  it("pre-selects a CLUB_OWNER's single owned club, still allowing a change or clear (#364)", async () => {
+    useGetApiV1UsersMe.mockReturnValue({
+      data: { id: "me", capabilities: ["CLUB_OWNER"] },
+    });
+    useGetApiV1Clubs.mockReturnValue({
+      data: [
+        {
+          id: "c1",
+          name: "Downtown TC",
+          isActive: true,
+          owners: [{ userId: "me", publicCode: "MEE000" }],
+        },
+        { id: "c2", name: "Uptown TC", isActive: true, owners: [] },
+      ],
+      isLoading: false,
+    });
+    const user = userEvent.setup();
+    renderTab();
+
+    // The owned club is pre-selected rather than defaulting to "Open".
+    const select = screen.getByLabelText("Club") as HTMLSelectElement;
+    expect(select.value).toBe("c1");
+
+    // Editable: the owner can switch to another club…
+    await user.selectOptions(select, "c2");
+    expect(select.value).toBe("c2");
+    // …and clear it back to "Open".
+    await user.selectOptions(select, "");
+    expect(select.value).toBe("");
+  });
+
+  it("does not default the club when a CLUB_OWNER owns multiple clubs (#364)", () => {
+    useGetApiV1UsersMe.mockReturnValue({
+      data: { id: "me", capabilities: ["CLUB_OWNER"] },
+    });
+    useGetApiV1Clubs.mockReturnValue({
+      data: [
+        {
+          id: "c1",
+          name: "Downtown TC",
+          isActive: true,
+          owners: [{ userId: "me", publicCode: "MEE000" }],
+        },
+        {
+          id: "c2",
+          name: "Uptown TC",
+          isActive: true,
+          owners: [{ userId: "me", publicCode: "MEE000" }],
+        },
+      ],
+      isLoading: false,
+    });
+    renderTab();
+    // Ambiguous ownership → no guess; the selector stays on "Open".
+    expect((screen.getByLabelText("Club") as HTMLSelectElement).value).toBe("");
+  });
+
+  it("does not default the club for a non-owner even if they own it in data (#364)", () => {
+    // Plain HOST (the beforeEach default) — the club owns the user, but no CLUB_OWNER capability.
+    useGetApiV1Clubs.mockReturnValue({
+      data: [
+        {
+          id: "c1",
+          name: "Downtown TC",
+          isActive: true,
+          owners: [{ userId: "me", publicCode: "MEE000" }],
+        },
+      ],
+      isLoading: false,
+    });
+    renderTab();
+    expect((screen.getByLabelText("Club") as HTMLSelectElement).value).toBe("");
+  });
+
+  it("collapses and expands a club group, showing a per-club count (#367)", async () => {
+    const alpha = {
+      ...event,
+      id: "a1",
+      name: "Alpha Cup",
+      clubId: "c1",
+      clubName: "Alpha TC",
+    };
+    useGetApiV1Events.mockReturnValue({ data: [alpha], isLoading: false });
+    const user = userEvent.setup();
+    renderTab();
+
+    // The header shows the club name with its event count and is expanded by default.
+    const toggle = screen.getByRole("button", { name: /Alpha TC \(1\)/ });
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("Alpha Cup")).toBeInTheDocument();
+
+    // Collapsing hides the event rows…
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("Alpha Cup")).not.toBeInTheDocument();
+
+    // …and re-expanding shows them again.
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("Alpha Cup")).toBeInTheDocument();
   });
 });
