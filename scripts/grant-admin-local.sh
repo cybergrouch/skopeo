@@ -15,9 +15,16 @@
 #   # List users (Google provider_uid, id, display name, current capabilities) to find yourself:
 #   ./scripts/grant-admin-local.sh
 #
-#   # Grant ADMINISTRATOR — pass EITHER your Google provider_uid OR your user UUID:
+#   # Grant ADMINISTRATOR — pass EITHER a Google provider_uid OR a user UUID:
 #   ./scripts/grant-admin-local.sh 101769105285479018175
 #   ./scripts/grant-admin-local.sh 4cf0530e-9704-40ce-bb40-3365d1741eec
+#
+#   # ADOPT an existing account as YOUR local login: point its firebase_uid at your local token's uid
+#   # and grant ADMINISTRATOR — so signing in locally resolves to that account. Needed because a prod
+#   # copy stores prod Firebase uids, which won't match your local (dev-project) login.
+#   #   <local-uid>: your local Firebase uid — from the browser: DevTools → Network → any /api/v1
+#   #   request → Authorization: Bearer <jwt> → decode at jwt.io → the "user_id"/"sub" claim.
+#   ./scripts/grant-admin-local.sh --adopt <local-uid> <target-provider_uid-or-id>
 #
 # Config via env:
 #   LOCAL_DB    target database   (default: skopeo_prodcopy)
@@ -41,6 +48,47 @@ fi
 
 psql() { docker exec -i "$CONTAINER" psql -U "$PGUSER" -d "$LOCAL_DB" "$@"; }
 
+# Resolve a Google provider_uid or a user UUID to a single user id (empty when none matches).
+resolve_user_id() {
+  psql -tA -c "
+    SELECT u.id FROM users u
+    LEFT JOIN user_identities i ON i.user_id = u.id
+    WHERE u.id::text = '$1' OR i.provider_uid = '$1'
+    LIMIT 1;
+  "
+}
+
+# Idempotent grant: the partial unique index (user_id, capability) WHERE is_active makes a re-grant a no-op.
+grant_admin() {
+  psql -c "
+    INSERT INTO user_capabilities (user_id, capability, is_active)
+    VALUES ('$1', 'ADMINISTRATOR', true)
+    ON CONFLICT (user_id, capability) WHERE is_active DO NOTHING;
+  "
+}
+
+# --adopt <local-uid> <target>: repoint an existing account's firebase_uid at your local login and grant
+# ADMINISTRATOR, so signing in locally resolves to that account (a prod copy holds prod Firebase uids
+# that won't match your local dev-project login).
+if [[ "$IDENTIFIER" == "--adopt" ]]; then
+  LOCAL_UID="${2:-}"
+  TARGET="${3:-}"
+  if [[ -z "$LOCAL_UID" || -z "$TARGET" ]]; then
+    echo "❌ Usage: $0 --adopt <local-firebase-uid> <target-provider_uid-or-id>" >&2
+    exit 1
+  fi
+  USER_ID="$(resolve_user_id "$TARGET")"
+  if [[ -z "$USER_ID" ]]; then
+    echo "❌ No user found for '${TARGET}' in '${LOCAL_DB}'. Run with no argument to list users." >&2
+    exit 1
+  fi
+  echo "🪄 Repointing ${USER_ID} to your local login (firebase_uid=${LOCAL_UID}) and granting ADMINISTRATOR…"
+  psql -c "UPDATE users SET firebase_uid = '${LOCAL_UID}' WHERE id = '${USER_ID}';"
+  grant_admin "$USER_ID"
+  echo "✅ Done. Sign in locally as that identity and you'll resolve to ${USER_ID} as an admin."
+  exit 0
+fi
+
 # No identifier → list users so you can find your own Google provider_uid / id.
 if [[ -z "$IDENTIFIER" ]]; then
   echo "Users in '${LOCAL_DB}' (pass a provider_uid or id to grant ADMINISTRATOR):"
@@ -59,26 +107,14 @@ if [[ -z "$IDENTIFIER" ]]; then
   exit 0
 fi
 
-# Resolve the identifier (a Google provider_uid or a user UUID) to a single user id.
-USER_ID="$(psql -tA -c "
-  SELECT u.id FROM users u
-  LEFT JOIN user_identities i ON i.user_id = u.id
-  WHERE u.id::text = '${IDENTIFIER}' OR i.provider_uid = '${IDENTIFIER}'
-  LIMIT 1;
-")"
-
+USER_ID="$(resolve_user_id "$IDENTIFIER")"
 if [[ -z "$USER_ID" ]]; then
   echo "❌ No user found for '${IDENTIFIER}' in '${LOCAL_DB}'. Run with no argument to list users." >&2
   exit 1
 fi
 
 echo "🔑 Granting ADMINISTRATOR to user ${USER_ID} in '${LOCAL_DB}'…"
-# Idempotent: the partial unique index (user_id, capability) WHERE is_active makes a re-grant a no-op.
-psql -c "
-  INSERT INTO user_capabilities (user_id, capability, is_active)
-  VALUES ('${USER_ID}', 'ADMINISTRATOR', true)
-  ON CONFLICT (user_id, capability) WHERE is_active DO NOTHING;
-"
+grant_admin "$USER_ID"
 
 echo "✅ Done. Current active capabilities:"
 psql -tA -c "SELECT capability FROM user_capabilities WHERE user_id = '${USER_ID}' AND is_active ORDER BY capability;"

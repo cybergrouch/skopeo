@@ -268,6 +268,9 @@ Grant `ADMINISTRATOR` to a user in a **local** database (default `skopeo_prodcop
 ```bash
 ./scripts/grant-admin-local.sh                       # list users (provider_uid, id, name, capabilities)
 ./scripts/grant-admin-local.sh <provider_uid-or-id>  # grant ADMINISTRATOR
+# Adopt an account as your local login (repoint its firebase_uid) + grant admin — needed on a prod copy,
+# whose stored prod Firebase uids won't match your local dev-project login:
+./scripts/grant-admin-local.sh --adopt <local-firebase-uid> <target-provider_uid-or-id>
 ```
 
 #### `health-check.sh`
