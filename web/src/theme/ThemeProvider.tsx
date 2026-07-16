@@ -1,6 +1,7 @@
-import { useEffect } from 'react'
-import { useGetApiV1Theme } from '@/api/generated/settings/settings'
-import { resolveActiveTheme } from '@/lib/season'
+import { useEffect } from "react";
+import { useGetApiV1Theme } from "@/api/generated/settings/settings";
+import { resolveActiveTheme } from "@/lib/season";
+import { applyThemeFavicon } from "./favicon";
 
 /**
  * Global theme provider (#378). Polls the public `GET /api/v1/theme` setting (~60s, plus on tab
@@ -16,18 +17,21 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       staleTime: 30_000,
       retry: false,
     },
-  })
-  const setting = data?.theme
+  });
+  const setting = data?.theme;
 
   useEffect(() => {
     const apply = () => {
-      document.documentElement.dataset.theme = resolveActiveTheme(setting, new Date())
-    }
-    apply()
+      const theme = resolveActiveTheme(setting, new Date());
+      document.documentElement.dataset.theme = theme;
+      // Keep the tab favicon in lockstep with the theme (#386): same single source of truth.
+      applyThemeFavicon(theme);
+    };
+    apply();
     // Re-resolve periodically so an AUTO day-rollover swaps the season without a refetch.
-    const id = setInterval(apply, 60 * 60_000)
-    return () => clearInterval(id)
-  }, [setting])
+    const id = setInterval(apply, 60 * 60_000);
+    return () => clearInterval(id);
+  }, [setting]);
 
-  return <>{children}</>
+  return <>{children}</>;
 }
