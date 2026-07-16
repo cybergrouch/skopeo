@@ -29,6 +29,8 @@ tags:
     description: Host-curated player lists and generated seedings (HOST/CLUB_OWNER/ADMINISTRATOR)
   - name: Standings
     description: Per-band "Ranking Race" standings (interim, ratings-derived); any signed-in player
+  - name: Settings
+    description: Global app settings; the UI theme is publicly readable and administrator-writable
 
 paths:
   /api/v1/calculate-ranking:
@@ -2327,6 +2329,51 @@ paths:
           description: Caller is not an ADMINISTRATOR
         '404':
           description: No such club
+
+  /api/v1/theme:
+    get:
+      summary: Get the global UI theme (#378)
+      description: >-
+        The single global UI theme the web reads to skin itself. Publicly readable (viewable without
+        login, #378) so unauthenticated pages can theme themselves; defaults to AUTO when unset.
+      tags:
+        - Settings
+      security:
+        - firebaseAuth: []
+        - {}
+      responses:
+        '200':
+          description: The current global theme
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThemeResponse'
+    put:
+      summary: Set the global UI theme (#378)
+      description: ADMINISTRATOR only (#378). Sets the global UI theme; the write is audit-logged.
+      tags:
+        - Settings
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetThemeRequest'
+      responses:
+        '200':
+          description: The updated global theme
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThemeResponse'
+        '400':
+          description: Unknown theme value
+        '401':
+          description: Missing or invalid Firebase token
+        '403':
+          description: Caller is not an ADMINISTRATOR
 
   /api/v1/invites:
     post:
@@ -4887,6 +4934,35 @@ components:
           nullable: true
           allOf:
             - $ref: '#/components/schemas/CalculationBreakdownResponse'
+
+    ThemeResponse:
+      type: object
+      required:
+        - theme
+      properties:
+        theme:
+          type: string
+          enum: [AUTO, GRASS, CLAY, AO, US_OPEN, OFF_SEASON, CHRISTMAS]
+          description: The current global UI theme (#378); AUTO when unset.
+        updatedAt:
+          type: string
+          nullable: true
+          description: ISO timestamp of the last theme change; null when never set.
+        updatedBy:
+          type: string
+          format: uuid
+          nullable: true
+          description: The administrator who last set the theme; null when never set.
+
+    SetThemeRequest:
+      type: object
+      required:
+        - theme
+      properties:
+        theme:
+          type: string
+          enum: [AUTO, GRASS, CLAY, AO, US_OPEN, OFF_SEASON, CHRISTMAS]
+          description: The UI theme to set (#378).
 
     CreateClubRequest:
       type: object

@@ -32,6 +32,7 @@ class OpenAPIIntegrationTest {
             body shouldContain "openapi: 3.0.0"
             body shouldContain "Skopeo API"
             body shouldContain "/api/v1/calculate-ranking"
+            body shouldContain "/api/v1/theme"
         }
 
     @Test
