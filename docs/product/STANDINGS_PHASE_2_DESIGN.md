@@ -1,9 +1,56 @@
-# Standings Phase 2 — Points-Based Ranking (Design Discussion)
+# Standings Phase 2 — Points-Based Ranking (Design & Decisions)
 
-**Status:** 🟡 Draft / discussion — decisions below are *tentative*; open questions are called out explicitly.
-**Issues:** [#146](https://github.com/cybergrouch/skopeo/issues/146) (independent points-based ranking), [#220](https://github.com/cybergrouch/skopeo/issues/220) (persist a recompute-on-change snapshot; per-band selector, paging, jump-to-me). Builds on [#113](https://github.com/cybergrouch/skopeo/issues/113) (Phase 1, ratings-derived standings) and [#212](https://github.com/cybergrouch/skopeo/issues/212) (sex split).
+**Status:** 🟢 Decisions locked for the initial slice (see §0). The detailed design (§1+) stands; a few later-phase questions remain open and are marked.
+**Issues:** [#220](https://github.com/cybergrouch/skopeo/issues/220) (serving layer — persisted snapshot, paging, jump-to-me), [#146](https://github.com/cybergrouch/skopeo/issues/146) (points model — ledger + manual recompute), [#389](https://github.com/cybergrouch/skopeo/issues/389) (scheduled auto-recompute, later), and [#390](https://github.com/cybergrouch/skopeo/issues/390) (tournaments/leagues model — gates #146 tournament auto-awards). Builds on [#113](https://github.com/cybergrouch/skopeo/issues/113) (Phase 1, ratings-derived standings) and [#212](https://github.com/cybergrouch/skopeo/issues/212) (sex split).
 
-This document captures the technical points, options, and (tentative) decisions from the ongoing discussion about how Standings should work in Phase 2. It is a living design doc, not a spec — edit as decisions firm up.
+This document is the single source of truth for Standings Phase 2 technical decisions. §0 records the locked decisions, scope split, and ticket map; §1+ is the detailed design behind them.
+
+---
+
+## 0. Decisions & ticket map (locked 2026-07-16)
+
+### 0.1 Locked decisions
+| # | Decision | Choice | Notes |
+|---|---|---|---|
+| D1 | **Sequencing of #220 vs #146** | Ship **#220 first** as a standalone serving layer on today's rating-derived standings; then #146 swaps the source to points. | #146 reuses #220's read/paging layer rather than rebuilding it. |
+| D2 | **Band transition (points on promotion)** | **Band-tagged awards** (doc option B): each award records the band it was earned in; a band's race counts only points earned in that band. | Fits tournaments (band-specific draws); expiry retires old-band points. See §5. |
+| D3 | **Recompute trigger** | **Manual admin trigger now** (dry-run→commit, like `RatingCalculationService`). Automated/scheduled recompute is **deferred to #389** (reuses the same path). | #220 also rebuilds event-triggered on rating change. See §6.2–6.3. |
+| D4 | **Tournaments dependency** | **Gate tournament auto-awards (phase 4) behind [#390](https://github.com/cybergrouch/skopeo/issues/390)** (tournaments/leagues model). Ship ledger + manual/ad-hoc grants without it. | #108 (occasion) / #111 (seeding) are closed but are *not* that model. See §4.3, §9. |
+| D5 | **Points unit** | **`BigDecimal`** (fractional open-play points), formatted for display. | Reuse `BigDecimalUtils`. |
+| D6 | **Point-class config** | **Enum + policy defaults + per-award override** of `valid_from`/`valid_until`. | Revisit an admin-editable table later. See §4.2. |
+| D7 | **Publish mode** | **Scheduled/manual run produces a DRAFT; an admin explicitly publishes** (preserves adjust-before-apply). | See §6.2. |
+| D8 | **Tie-break within equal points** | Higher **current rating**, then **earliest-achieved** total. Stored in `standings_entries` tiebreak fields. | Revisit (ATP uses #results / higher-tier finishes) once tournaments exist. |
+
+Still open (later phases, non-blocking): open-play points formula & horizon (§4.4); external-request intake workflow (§7); exact tournament stage tables (§4.3, needs the tournaments model); scheduled cadence & auto-publish option (#389).
+
+### 0.2 Scope split — #220 (serving) vs #146 (points)
+The guiding principle: **#220 owns *how standings are stored & served*; #146 owns *what the number is & when it's recomputed*.** #146 plugs into #220's layer.
+
+**#220 — Standings serving layer (build now, rating-derived):**
+- **Source-agnostic** persisted snapshot: `standings_snapshots` (`id`, `computed_at`, `as_of`, `status`) + `standings_entries` (`snapshot_id`, `band`, `sex`, `rank`, `user_id`, `ordering_value`, tiebreak fields). `ordering_value` = rating today, points later — the read path never changes.
+- Recompute **event-triggered** on rating change (calc commit / admin set/override).
+- Read API `GET /api/v1/standings?band=&sex=&limit=25&offset=` + `GET /api/v1/standings/me` (jump-to-me); UI band selector + sex toggle + "View" + 25/page pager + "Find me".
+
+**#146 — Points-based ranking (later, reuses #220's layer):**
+- `ranking_point_awards` ledger (append-only, **band-tagged**, expiring, `status` ACTIVE/REVOKED, `granted_by`/`reason`/`source`); admin grant/revoke incl. external/ad-hoc; audited.
+- `StandingsCalculationService` (dry-run→commit) recomputes the snapshot **from the ledger** and adds **DRAFT/PUBLISHED** generations; **manual** admin trigger (automation → #389).
+- **Swaps the snapshot's source** rating→points; read API/UI/paging/jump-to-me untouched (delivered by #220).
+- Tournament stage→points **gated** on the tournaments-model issue.
+
+### 0.3 Ticket map
+- **#220** — serving layer (above). Ships first, independently useful.
+- **#146** — points ledger + manual recompute/publish; consumes #220's layer.
+- **#389** — automates #146's manual trigger on a schedule (Cloud Scheduler), later.
+- **[#390](https://github.com/cybergrouch/skopeo/issues/390)** — tournaments/leagues model (brackets/rounds/stages); gates #146 phase 4 (ATP/WTA stage auto-awards).
+
+### 0.4 Differences reconciled (previously overlapping/conflicting across the tickets)
+| Tension | Resolution |
+|---|---|
+| **Trigger** — #220 said "recompute *only* on rating change"; #146 needs time-based (expiry) | #220 stays event-triggered; #146 adds a **manual** recompute; **scheduled** automation is **#389**. #220's "only on rating change" wording is superseded. |
+| **Data source** — #220 rating-derived vs #146 points | Snapshot stores a generic `ordering_value` + tiebreak; #146 changes only the *producer*. |
+| **Paging / jump-to-me / band-sex selector** — described in both | Belongs to **#220**; removed from #146's scope (delivered by #220). |
+| **Snapshot semantics** — #220 "the snapshot" vs #146 DRAFT/PUBLISHED generations | `status` column exists from #220 (ships PUBLISHED-only); #146 adds DRAFT + adjust-before-publish on the same table. |
+| **Tie-break** — unspecified | Locked (D8): higher current rating, then earliest-achieved. |
 
 ---
 
@@ -36,7 +83,7 @@ The two issues converge: #146 defines *what the number is* (accumulated points),
 
 Phase 1 (and #220's original framing) assumes standings change **only when a rating changes**, so the snapshot can be rebuilt on that event. **Phase 2 breaks that assumption**: because points **expire**, a player's total — and therefore the ranking — changes **as time passes even with no new awards**.
 
-➡️ **Therefore a purely event-triggered rebuild is insufficient.** Phase 2 *requires* a **time-based scheduled recompute** (e.g. fortnightly). This is the single most important architectural consequence and it's why #220's "recompute only on ratings change" evolves into "recompute on a schedule (and optionally on demand)".
+➡️ **Therefore a purely event-triggered rebuild is insufficient for points.** Phase 2 eventually needs a **time-based recompute**. **Decision (D3):** for now #146 ships a **manual admin recompute** (on demand, dry-run→commit); the **scheduled automation is deferred to [#389](https://github.com/cybergrouch/skopeo/issues/389)**, which reuses the same path. #220's original "recompute only on ratings change" is therefore superseded: #220 stays event-triggered while it's rating-derived, and #146 adds the manual (later scheduled) recompute.
 
 ---
 
@@ -75,7 +122,7 @@ A **`point_class`** carries a default validity duration and semantics. Options f
 
 A tournament defines a **points schedule by finishing stage**: `{ WINNER: 500, FINALIST: 300, SF: 180, QF: 90, R16: 45, … }`. When results finalize, each participant is awarded the points for the stage they reached — as ledger rows of the tournament's `point_class` with the tournament's validity window.
 
-⚠️ **Dependency (#146):** this needs a **tournaments/leagues model that does not yet exist** (relates to #108 occasions, #111 seeding). The ledger + ad-hoc/external grants can ship *without* it; tournament auto-awards come once that model lands. See phasing (§9).
+⚠️ **Dependency (#146):** this needs a **tournaments/leagues model that does not yet exist** — now tracked as **[#390](https://github.com/cybergrouch/skopeo/issues/390)** (relates to #108 occasions, #111 seeding, but is neither). The ledger + ad-hoc/external grants ship *without* it; tournament auto-awards come once #390 lands. See phasing (§9).
 
 ### 4.4 Open-play points
 
@@ -116,8 +163,10 @@ A **`StandingsCalculationService`** analogous to `RatingCalculationService`:
 2. **Adjust:** allow point corrections (append ledger rows) before publishing.
 3. **Publish (commit):** mark the snapshot PUBLISHED; it becomes what reads serve. Audited.
 
-### 6.3 Schedule
-A **Cloud Scheduler** job (like the DB backup schedule) triggers the recompute+publish on a cadence (fortnightly candidate). Because of expiry (§3), this runs on **time**, not just on award events. **Open question:** cadence (fortnightly vs weekly vs monthly), and whether publish is automatic or requires an admin's explicit commit each cycle. **Tentative:** scheduled **draft**, admin **publishes** (keeps the adjust-before-apply guarantee) — with an option to auto-publish if unattended.
+### 6.3 Trigger — manual now, scheduled later (D3, #389)
+**Now:** an **admin manually triggers** the recompute → review → publish (the §6.2 flow). No scheduler in the initial slice.
+
+**Later ([#389](https://github.com/cybergrouch/skopeo/issues/389)):** a **Cloud Scheduler** job (like the DB-backup schedule) invokes the *same* recompute path on a cadence, because expiry (§3) means the ranking changes with time. Deferred so #146 isn't gated on it. **Open (in #389):** cadence (fortnightly vs weekly vs monthly) and whether the scheduled run auto-publishes or produces a DRAFT an admin commits. **Lean (D7):** DRAFT + admin publish, with an option to auto-publish if unattended.
 
 ### 6.4 Reads / API (from #220)
 - `GET /api/v1/standings?band=&sex=&limit=25&offset=` → one page of a `(band, sex)` group from the latest published snapshot + `total` + available bands/sexes.
@@ -134,17 +183,16 @@ Every award/revoke/adjust and every recompute/publish is recorded in the **audit
 
 ---
 
-## 8. Open questions (decisions to make)
+## 8. Open questions
 
-- **Points unit:** integer vs `BigDecimal` (fractional open-play points?). *Lean: `BigDecimal`.*
-- **Band tagging (§5):** band-agnostic (A) vs band-tagged (B) vs hybrid (C). *Lean: (B).*
-- **Point-class config:** enum+policy (a) vs table (b). *Lean: (a) + per-award override.*
-- **Schedule cadence & publish mode:** fortnightly? auto-publish vs admin-commit. *Lean: scheduled draft + admin publish.*
-- **Tie-breaking within equal points:** count of tournaments, most-recent award, head-to-head, or fall back to rating? (ATP breaks ties by number of results / higher-tier finishes.)
-- **Open-play formula:** dominance × match-up → points, and its validity horizon.
-- **External-request workflow:** direct admin grant vs request/approval.
-- **Coexistence/rollout:** Phase 1 (rating-derived) stays until the ledger has enough points; how/when to flip the UI (§9).
-- **Tournaments model dependency (#146):** build minimally as part of this, or gate tournament auto-awards behind #108/#111.
+**Resolved — locked in §0:** sequencing (D1, #220 first), band tagging (D2, band-tagged), trigger (D3, manual now → #389), tournaments dependency (D4, gated on a new issue), points unit (D5, `BigDecimal`), point-class config (D6, enum+policy+override), publish mode (D7, DRAFT + admin publish), tie-break (D8, current rating then earliest-achieved).
+
+**Still open (later phases, non-blocking):**
+- **Open-play formula:** dominance × match-up → points, and its validity horizon (§4.4).
+- **External-request workflow:** direct admin grant vs request/approval (§7).
+- **Scheduled cadence & auto-publish option:** tracked in [#389](https://github.com/cybergrouch/skopeo/issues/389).
+- **Tournament stage tables:** the exact per-tournament stage→points schedules, once the tournaments/leagues model exists.
+- **Coexistence/rollout:** Phase 1 (rating-derived, served via #220) stays until the ledger has enough points; when to flip the snapshot's source to points (§9).
 
 ---
 
@@ -153,7 +201,7 @@ Every award/revoke/adjust and every recompute/publish is recorded in the **audit
 1. **Ledger + manual/ad-hoc award/revoke + audit.** The `ranking_point_awards` store, admin endpoints to grant/revoke (incl. external), full traceability. No tournaments model needed. *(Unblocks the "flexible, external, traceable" requirement immediately.)*
 2. **Snapshot recompute + schedule + publish** (`StandingsCalculationService`, dry-run/commit, Cloud Scheduler, `standings_snapshots`/entries). *(Delivers the precomputed, expiry-aware, published standings — the #220 persistence goal, now points-based.)*
 3. **Read API + UI** (#220: paged per (band, sex), band/sex selector, jump-to-me) served from the published snapshot.
-4. **Tournament points tables (ATP/WTA stage guarantees)** — once the tournaments/leagues model (#108/#111) exists: per-tournament stage→points, auto-awarded on result finalization.
+4. **Tournament points tables (ATP/WTA stage guarantees)** — once the tournaments/leagues model ([#390](https://github.com/cybergrouch/skopeo/issues/390)) exists: per-tournament stage→points, auto-awarded on result finalization.
 5. **Open-play auto-points** (dominance × match-up), hooked into the rating-calculation commit.
 
 Each step is independently useful; 1–3 give a working points-based, scheduled, published standings even before tournaments are modeled.
