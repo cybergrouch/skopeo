@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<!--
+  UI Seasonal Theming — interactive preview
+  Companion to docs/product/UI_SEASONAL_THEMING.md (issue #378).
+  Open this file directly in a browser, or preview the version on a branch via
+  https://htmlpreview.github.io/ . Each panel shows a theme's 60% canvas,
+  30% card, and 10% accent (border + button), following the 60-30-10 "Muted Base" rule.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Skopeo — Seasonal Theme Preview</title>
+</head>
+<body style="margin:0; background:#ffffff;">
+
+<header style="font-family:system-ui,-apple-system,sans-serif; padding:24px 24px 0;">
+  <h1 style="margin:0 0 4px; font-size:1.4rem;">Skopeo — Seasonal Theme Preview</h1>
+  <p style="margin:0; color:#556; font-size:0.9rem;">
+    Six admin-selectable themes (60% canvas · 30% card · 10% accent). See
+    <code>docs/product/UI_SEASONAL_THEMING.md</code> for the full spec.
+  </p>
+</header>
+
+<div class="theme-grid">
+
+  <!-- 1. OFF-SEASON THEME -->
+  <div class="canvas theme-offseason">
+    <div class="card">
+      <h3>Off-Season</h3>
+      <p>Sleek, structural training focus.</p>
+      <button class="btn">View Stats</button>
+    </div>
+  </div>
+
+  <!-- 2. REVISED CHRISTMAS THEME (Bright Winter Wonderland) -->
+  <div class="canvas theme-christmas-revised">
+    <div class="card">
+      <span class="badge">Holiday Special</span>
+      <h3>Winter Wonderland</h3>
+      <p>Enjoy a crisp, snowy layout featuring festive greens.</p>
+      <button class="btn">View Gift Guide</button>
+    </div>
+  </div>
+
+  <!-- 3. AUSTRALIAN OPEN THEME -->
+  <div class="canvas theme-ao">
+    <div class="card">
+      <h3>Melbourne Park</h3>
+      <p>Electric, cool oceanic summer.</p>
+      <button class="btn">Live Scores</button>
+    </div>
+  </div>
+
+  <!-- 4. CLAY SEASON THEME -->
+  <div class="canvas theme-clay">
+    <div class="card">
+      <h3>Roland Garros</h3>
+      <p>Warm, organic earthy tones.</p>
+      <button class="btn">Match Center</button>
+    </div>
+  </div>
+
+  <!-- 5. GRASS SEASON THEME -->
+  <div class="canvas theme-grass">
+    <div class="card">
+      <h3>Wimbledon</h3>
+      <p>Classic, prestigious lawn green.</p>
+      <button class="btn">Order of Play</button>
+    </div>
+  </div>
+
+  <!-- 6. US OPEN THEME -->
+  <div class="canvas theme-uso">
+    <div class="card">
+      <h3>Flushing Meadows</h3>
+      <p>High-octane night session energy.</p>
+      <button class="btn">Buy Tickets</button>
+    </div>
+  </div>
+
+</div>
+
+<style>
+  /* Global Layout Setup */
+  .theme-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 24px;
+    font-family: system-ui, -apple-system, sans-serif;
+    padding: 24px;
+  }
+  .canvas {
+    padding: 40px 20px;
+    border-radius: 12px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    box-sizing: border-box;
+  }
+  .card {
+    padding: 24px;
+    border-radius: 12px;
+    width: 100%;
+    max-width: 240px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+    box-sizing: border-box;
+  }
+  .card h3 { margin: 0 0 8px 0; font-size: 1.25rem; font-weight: 700; }
+  .card p { margin: 0 0 20px 0; font-size: 0.9rem; line-height: 1.4; }
+  .btn {
+    border: none;
+    padding: 10px 16px;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+    width: 100%;
+    transition: background 0.2s ease, opacity 0.2s ease;
+  }
+  .btn:hover { opacity: 0.9; }
+
+  /* --- 1. OFF-SEASON THEME (Light, Gray, Neon Accent) --- */
+  .theme-offseason { background-color: #F1F3F5; border: 1px solid #E2E8F0; }
+  .theme-offseason .card { background-color: #FFFFFF; border: 1px solid #CED4DA; color: #212529; }
+  .theme-offseason .card p { color: #495057; }
+  .theme-offseason .btn { background-color: #D2FE00; color: #212529; border: 1px solid #495057; }
+
+  /* --- 2. REVISED CHRISTMAS THEME (Bright Snow, Frosted Pine Card, Red Accent) --- */
+  .theme-christmas-revised { background-color: #F8FAF9; border: 1px solid #E2E8F0; }
+  .theme-christmas-revised .card { background-color: #E2ECE9; border: 2px solid #D4AF37; color: #0F2E22; }
+  .theme-christmas-revised .card p { color: #1C4837; }
+  .theme-christmas-revised .btn { background-color: #D92B34; color: #FFFFFF; }
+  .theme-christmas-revised .badge {
+    display: inline-block;
+    padding: 2px 6px;
+    background-color: #0F2E22;
+    color: #FFFFFF;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-radius: 4px;
+    margin-bottom: 8px;
+  }
+
+  /* --- 3. AUSTRALIAN OPEN THEME (Light Ice Blue, Blue/Neon Accent) --- */
+  .theme-ao { background-color: #F0F6FA; border: 1px solid #E2E8F0; }
+  .theme-ao .card { background-color: #FFFFFF; border: 1px solid #0080C8; color: #0A1D37; }
+  .theme-ao .card p { color: #4A5568; }
+  .theme-ao .btn { background-color: #CCFF00; color: #0A1D37; border: 1px solid #0080C8; }
+
+  /* --- 4. CLAY SEASON THEME (Warm Sand, Terracotta Accent) --- */
+  .theme-clay { background-color: #FDF6F0; border: 1px solid #E2E8F0; }
+  .theme-clay .card { background-color: #FFFFFF; border: 1px solid #C1522D; color: #2B1A12; }
+  .theme-clay .card p { color: #614E43; }
+  .theme-clay .btn { background-color: #C1522D; color: #FFFFFF; }
+
+  /* --- 5. GRASS SEASON THEME (Mint, Purple/Green Accent) --- */
+  .theme-grass { background-color: #F4F9F5; border: 1px solid #E2E8F0; }
+  .theme-grass .card { background-color: #FFFFFF; border: 1px solid #00703C; color: #1B3B2B; }
+  .theme-grass .card p { color: #4A5D50; }
+  .theme-grass .btn { background-color: #452263; color: #FFFFFF; }
+
+  /* --- 6. US OPEN THEME (Dark Midnight, Blue/Green Accent) --- */
+  .theme-uso { background-color: #121824; }
+  .theme-uso .card { background-color: #1E293B; border: 1px solid #63B233; color: #FFFFFF; }
+  .theme-uso .card p { color: #94A3B8; }
+  .theme-uso .btn { background-color: #005DAA; color: #FFFFFF; }
+</style>
+
+</body>
+</html>
