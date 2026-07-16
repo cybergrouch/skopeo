@@ -1,26 +1,33 @@
 # UI Seasonal Theming — Design Discussion
 
-**Status:** Design discussion (not yet built) · **Tracking issue:** [#378](https://github.com/cybergrouch/skopeo/issues/378)
+**Status:** Built · **Tracking issues:** [#378](https://github.com/cybergrouch/skopeo/issues/378) (original palettes) · [#399](https://github.com/cybergrouch/skopeo/issues/399) (all-dark inversion)
 
 Admin-controlled, tennis-season / court-surface **color themes** for the web UI, propagated live to all connected clients. This document captures the discussion, decisions, palettes (with visual swatches), and an implementation plan.
 
+> **Inverted to all-dark (#399).** The original #378 design mixed four light themes (white cards) with two dark ones (US Open, Christmas). The page backgrounds read too light, so the whole system was **inverted into an immersive dark mode**: every season is now a **dark canvas + dark card + vibrant accent + near-white font**, keeping each season's mood but far moodier. The palettes and link colors below reflect that inversion (and **supersede the #394/#395 link palette**). A few passages marked *(historical)* preserve the original light-theme reasoning for context.
+
 ---
 
-## 1. Problem & corrected framing
+## 1. Problem & framing
 
 The app is visually dominated by plain white and needs color/personality.
 
-> **Correction to the original framing.** An earlier take worried about the *page background* and *font contrast*. On closer look there are **two surfaces**: the **page canvas behind the cards**, and the **cards themselves (also white)**. Font contrast is therefore a **non-issue for the light themes** (dark text on white cards) — it only matters for the **dark themes (US Open, Christmas)**, where text goes light on dark cards.
+Under the all-dark inversion (#399) there are still **two surfaces** — the **page canvas** behind the cards and the **cards** themselves — but now **both are dark**. Font contrast therefore matters **everywhere**: light (near-white) text sits on dark cards in every theme. This actually *simplifies* the prior logic — the "US Open/Christmas are the only dark themes" special case is gone, so `--foreground`/`--card-foreground` are light in every block, and the header `BrandMark` (#398, `currentColor`=foreground) auto-adapts to light on every theme with no per-theme code.
+
+> *(historical, #378)* The original framing treated font contrast as a non-issue for the four light themes (dark text on white cards) and a concern only for the two dark themes. The inversion makes it a uniform light-on-dark concern.
 
 ---
 
-## 2. Design strategy — 60-30-10 with a "Muted Base"
+## 2. Design strategy — inverted 60-30-10 (immersive dark)
 
-Rather than flooding the UI with a saturated court color, apply the classic **60-30-10** rule:
+Apply the classic **60-30-10** rule, inverted into dark mode (#399):
 
-- **60% — Background (page canvas):** an **ultra-muted, tinted** version of the theme color (or a dark desaturated slate for the dark themes). This replaces the flat white canvas.
-- **30% — Cards:** a **clean neutral** — pure white (light themes) or deep pine/slate (dark themes) — giving text a safe, high-contrast surface. Cards are themed via their **border/accent**, not their fill.
-- **10% — Accents & borders:** the **vibrant, authentic** colors (court colors + optic tennis yellow), used *strictly* for card borders, primary buttons, links, icons, and hover states.
+- **60% — Background (page canvas):** a **deep, desaturated shadow shade** of the season color — dark, but still carrying the season's mood. This replaces the flat white / muted-pastel canvas.
+- **30% — Cards:** a **rich neutral dark layer** (dark charcoal / midnight slate / season-tinted dark) so the light text is highly readable. Cards are themed via their **tint + border/accent**, not a white fill.
+- **10% — Accents & borders:** the **vibrant, authentic** colors (court colors + optic tennis neons + lavender), reserved *strictly* for card rims, primary buttons, badges, links, and hover states — popping against the dark canvas.
+- **Font:** a **high-contrast near-white** per theme.
+
+> *(historical, #378)* The original "Muted Base" strategy used an ultra-muted pastel canvas with **pure-white cards** for the four light themes; only US Open/Christmas were dark. #399 inverts this everywhere.
 
 ---
 
@@ -57,95 +64,97 @@ When the Admin switches the theme, every open client should reflect it. We chose
 
 ## 4. Theme catalog
 
-Six themes give a cohesive **year-round rotation**. Two are dark (**US Open**, **Christmas**); the other four are light (white cards, dark text). Swatches below are illustrative.
+Six themes give a cohesive **year-round rotation**. Under #399 **all six are dark** — a deep season-tinted canvas, a rich dark card carrying near-white text, and a vibrant 10% accent. Swatches below are illustrative.
 
-> 🖼️ **Interactive preview:** [`ui-seasonal-theming-preview.html`](./ui-seasonal-theming-preview.html) renders all six themes (canvas + card + accented button/border) live. Open it in a browser, or view a branch copy via [htmlpreview.github.io](https://htmlpreview.github.io/). Its CSS is also the reference for the per-theme **muted body-text** color (a `--muted-foreground` token), which the swatch tables below omit — e.g. Off-Season `#495057`, Christmas `#E2ECE9`, AO `#4A5568`, Clay `#614E43`, Grass `#4A5D50`, US Open `#94A3B8`.
+> 🖼️ **Interactive preview:** [`ui-seasonal-theming-preview.html`](./ui-seasonal-theming-preview.html) renders all six dark themes (canvas + card + accented button/border/link) live. Open it in a browser, or view a branch copy via [htmlpreview.github.io](https://htmlpreview.github.io/). Its CSS is also the reference for the per-theme **muted body-text** color (a `--muted-foreground` token): Off-Season `#CED4DA`, Christmas `#E2ECE9`, AO `#E2E8F0`, Clay `#FDF6F0`, Grass `#F4F9F5`, US Open `#94A3B8`.
 
 ### ⚙️ Off-Season — *Sleek, structural, minimal*
-Winter training / rest vibe (late Nov–Dec): premium sleek monochrome + concrete, evoking indoor practice facilities and empty stadiums.
+Winter training / rest vibe (late Nov–Dec): premium sleek monochrome + concrete, evoking dimly lit indoor practice facilities and empty night stadiums.
 
 | Role | Swatch | Color |
 |---|---|---|
-| Background (60%) | ![bg](https://placehold.co/90x24/F1F3F5/F1F3F5.png) | `#F1F3F5` Fog Gray |
-| Card (30%) | ![card](https://placehold.co/90x24/FFFFFF/E0E0E0.png?text=card) | `#FFFFFF` White · font `#212529` Dark Slate |
-| Accent (10%) | ![steel](https://placehold.co/44x24/495057/495057.png) ![neon](https://placehold.co/44x24/D2FE00/D2FE00.png) | `#495057` Steel + `#D2FE00` Tennis Neon |
+| Background (60%) | ![bg](https://placehold.co/90x24/1A1D20/1A1D20.png) | `#1A1D20` Ink Gray |
+| Card (30%) | ![card](https://placehold.co/90x24/2B3035/F8F9FA.png?text=card) | `#2B3035` Steel Slate · font `#F8F9FA` Snow White · muted `#CED4DA` |
+| Accent (10%) | ![neon](https://placehold.co/44x24/D2FE00/D2FE00.png) ![steel](https://placehold.co/44x24/495057/495057.png) | `#D2FE00` Neon Yellow (button, font `#212529`) + `#495057` Steel card rim |
 
-**Border strategy:** thin, sharp Steel Gray border `#CED4DA` on cards; use neon `#D2FE00` **only** for hover states / primary buttons.
+**Border strategy:** a steel `#495057` card rim against the ink canvas; the neon `#D2FE00` is the button + link pop.
 
-### 🎄 Christmas — *Festive, cozy, premium* · **dark**
-A rich, joyful holiday look: a bold crimson canvas with a deep-pine card anchor, crisp white text and border, and a champagne-gold call to action.
+### 🎄 Christmas — *Festive, cozy, premium*
+A rich, joyful holiday look: a bold velvet-wine canvas with a deep-spruce card anchor, crisp white text, a gold rim, and a champagne-gold call to action.
 
 | Role | Swatch | Color |
 |---|---|---|
-| Background (60%) | ![bg](https://placehold.co/90x24/A6192E/A6192E.png) | `#A6192E` Classic Holiday Crimson |
-| Card (30%) | ![card](https://placehold.co/90x24/164A35/164A35.png) | `#164A35` Deep Festive Pine · font `#FFFFFF` Snow White · muted `#E2ECE9` |
-| Accent (10%) | ![gold](https://placehold.co/44x24/E5B842/E5B842.png) ![white](https://placehold.co/44x24/FFFFFF/E0E0E0.png?text=+) | `#E5B842` Champagne Gold (button, font `#112A1F`) + `#FFFFFF` white card border |
+| Background (60%) | ![bg](https://placehold.co/90x24/2B050B/2B050B.png) | `#2B050B` Velvet Wine |
+| Card (30%) | ![card](https://placehold.co/90x24/1A2E26/FFFFFF.png?text=card) | `#1A2E26` Deep Spruce · font `#FFFFFF` Pure White · muted `#E2ECE9` |
+| Accent (10%) | ![gold](https://placehold.co/44x24/E5B842/E5B842.png) | `#E5B842` Champagne Gold (button, font `#112A1F`; card rim + link) |
 
-**Border strategy:** a crisp **white** card border/outline against the deep pine, for a clean winter feel; the **Champagne Gold** button (dark `#112A1F` text for AA) is the festive call to action. The white typography + border keep everything legible over the dark green.
+**Card fill note:** the #399 matrix specifies `#1A2E26` (Deep Spruce); the earlier HTML sample used `#164A35` (Pine). We ship the deeper **`#1A2E26`**. The gold rim/link + white text stay legible over the spruce (white 14.4:1, gold 7.7:1).
 
-### 🔵 Australian Open — *Electric, cool, summer*
+### 🔵 Australian Open — *Electric, cool, summer night*
 | Role | Swatch | Color |
 |---|---|---|
-| Background (60%) | ![bg](https://placehold.co/90x24/F0F6FA/F0F6FA.png) | `#F0F6FA` Ice Blue |
-| Card (30%) | ![card](https://placehold.co/90x24/FFFFFF/E0E0E0.png?text=card) | `#FFFFFF` White · font `#0A1D37` Midnight Blue |
-| Accent (10%) | ![blue](https://placehold.co/44x24/0080C8/0080C8.png) ![neon](https://placehold.co/44x24/CCFF00/CCFF00.png) | `#0080C8` AO Blue + `#CCFF00` Highlighter Neon |
+| Background (60%) | ![bg](https://placehold.co/90x24/081626/081626.png) | `#081626` Deep Abyss |
+| Card (30%) | ![card](https://placehold.co/90x24/12253A/F0F6FA.png?text=card) | `#12253A` Oceanic Slate · font `#F0F6FA` Ice White · muted `#E2E8F0` |
+| Accent (10%) | ![neon](https://placehold.co/44x24/CCFF00/CCFF00.png) ![blue](https://placehold.co/44x24/0080C8/0080C8.png) | `#CCFF00` Volt Yellow (button, font `#0A1D37`; link) + `#0080C8` AO Blue card rim |
 
-**Border strategy:** AO Blue on card rims / key actions; neon yellow for electric contrast on buttons.
+**Border strategy:** AO Blue on card rims; volt yellow for the electric button + link pop.
 
 ### 🟠 Clay — *Warm, organic, earthy*
 | Role | Swatch | Color |
 |---|---|---|
-| Background (60%) | ![bg](https://placehold.co/90x24/FDF6F0/FDF6F0.png) | `#FDF6F0` Warm Sand |
-| Card (30%) | ![card](https://placehold.co/90x24/FFFFFF/E0E0E0.png?text=card) | `#FFFFFF` White · font `#2B1A12` Dark Chocolate |
-| Accent (10%) | ![clay](https://placehold.co/90x24/C1522D/C1522D.png) | `#C1522D` Classic Clay Orange |
+| Background (60%) | ![bg](https://placehold.co/90x24/2B140C/2B140C.png) | `#2B140C` Burnt Umber |
+| Card (30%) | ![card](https://placehold.co/90x24/3D2015/FDF6F0.png?text=card) | `#3D2015` Warm Espresso · font `#FDF6F0` Sand White · muted `#FDF6F0` |
+| Accent (10%) | ![clay](https://placehold.co/44x24/C1522D/C1522D.png) ![terra](https://placehold.co/44x24/E07A5F/E07A5F.png) | `#C1522D` Clay Orange (button + card rim) + `#E07A5F` Light Terracotta link |
 
-**Border strategy:** Clay Orange on card borders + key action items.
+**Border strategy:** Clay Orange on card rims + the button; the lighter terracotta `#E07A5F` is the link so it clears AA on the dark espresso card.
 
 ### 🟢 Grass — *Classic, elegant, prestigious*
 | Role | Swatch | Color |
 |---|---|---|
-| Background (60%) | ![bg](https://placehold.co/90x24/F4F9F5/F4F9F5.png) | `#F4F9F5` Mint Cream |
-| Card (30%) | ![card](https://placehold.co/90x24/FFFFFF/E0E0E0.png?text=card) | `#FFFFFF` White · font `#1B3B2B` Dark Green |
-| Accent (10%) | ![purple](https://placehold.co/44x24/452263/452263.png) ![green](https://placehold.co/44x24/00703C/00703C.png) | `#452263` Wimbledon Purple + `#00703C` Lawn Green |
+| Background (60%) | ![bg](https://placehold.co/90x24/0B1F13/0B1F13.png) | `#0B1F13` Midnight Lawn |
+| Card (30%) | ![card](https://placehold.co/90x24/183624/F4F9F5.png?text=card) | `#183624` English Ivy · font `#F4F9F5` Mint White · muted `#F4F9F5` |
+| Accent (10%) | ![lavender](https://placehold.co/44x24/9362C4/9362C4.png) ![purple](https://placehold.co/44x24/452263/452263.png) | `#9362C4` Bright Lavender (button) + `#452263` Wimbledon Purple card rim + `#C5A3E8` link |
 
-**Border strategy:** court color (purple or lawn green) on card borders, primary links, buttons.
+**Border strategy:** deep Wimbledon Purple `#452263` on card rims; bright lavender `#9362C4` on the button, and a lighter lavender `#C5A3E8` link for AA on the dark ivy card.
 
-### 🌃 US Open — *High-octane, modern, night session* · **dark**
+### 🌃 US Open — *High-octane, modern, night session*
 | Role | Swatch | Color |
 |---|---|---|
-| Background (60%) | ![bg](https://placehold.co/90x24/121824/121824.png) | `#121824` Midnight Slate |
-| Card (30%) | ![card](https://placehold.co/90x24/1E293B/1E293B.png) | `#1E293B` Deep Slate · font `#FFFFFF` White |
-| Accent (10%) | ![blue](https://placehold.co/44x24/005DAA/005DAA.png) ![green](https://placehold.co/44x24/63B233/63B233.png) | `#005DAA` US Open Blue + `#63B233` Apple Green |
+| Background (60%) | ![bg](https://placehold.co/90x24/0B0F19/0B0F19.png) | `#0B0F19` Midnight |
+| Card (30%) | ![card](https://placehold.co/90x24/1E293B/FFFFFF.png?text=card) | `#1E293B` Slate Navy · font `#FFFFFF` Pure White · muted `#94A3B8` |
+| Accent (10%) | ![blue](https://placehold.co/44x24/005DAA/005DAA.png) ![green](https://placehold.co/44x24/63B233/63B233.png) | `#005DAA` US Open Blue (button) + `#63B233` Apple Green card rim + link |
 
-**Border strategy:** Apple Green as a thin glowing card border; US Open Blue for primary nav.
+**Border strategy:** Apple Green as a thin glowing card rim + link; US Open Blue for the primary button. (US Open keeps the two-accent split — blue primary, green accent — from #378.)
 
 ---
 
 ## 5. Summary matrix
 
-| Theme | 60% Background | 30% Card fill | 10% Accents & borders | Mood |
-|---|---|---|---|---|
-| **Off-Season** | `#F1F3F5` Fog Gray | `#FFFFFF` White | `#495057` & `#D2FE00` (Steel / Neon) | Sleek, structural, minimal |
-| **Christmas** *(dark)* | `#A6192E` Crimson | `#164A35` Festive Pine | `#E5B842` Gold + `#FFFFFF` border (white text) | Festive, cozy, premium |
-| **Australian Open** | `#F0F6FA` Ice Blue | `#FFFFFF` White | `#0080C8` & `#CCFF00` (Blue / Neon) | Electric, cool, summer |
-| **Clay** | `#FDF6F0` Sand | `#FFFFFF` White | `#C1522D` (Clay Orange) | Warm, organic, earthy |
-| **Grass** | `#F4F9F5` Mint Cream | `#FFFFFF` White | `#452263` & `#00703C` (Purple / Green) | Classic, elegant, prestigious |
-| **US Open** *(dark)* | `#121824` Midnight | `#1E293B` Slate | `#005DAA` & `#63B233` (Blue / Green) | High-octane, modern, night session |
+All six themes are dark (#399). Font = the near-white `--foreground`/`--card-foreground`; button = `--primary` (with `--primary-foreground` label); card rim = `--border`/`--ring`; pop accent = `--accent`.
 
-### 5.1 Content-link colors (#394)
+| Theme | 60% Canvas | 30% Card + font | 10% Accent (pop) | Card rim | Mood |
+|---|---|---|---|---|---|
+| **Off-Season** | `#1A1D20` Ink Gray | `#2B3035` Steel Slate · `#F8F9FA` | `#D2FE00` Neon Yellow | `#495057` Steel | Sleek, structural, minimal |
+| **Christmas** | `#2B050B` Velvet Wine | `#1A2E26` Deep Spruce · `#FFFFFF` | `#E5B842` Champagne Gold | `#E5B842` Gold | Festive, cozy, premium |
+| **Australian Open** | `#081626` Deep Abyss | `#12253A` Oceanic Slate · `#F0F6FA` | `#CCFF00` Volt Yellow | `#0080C8` AO Blue | Electric, cool, summer night |
+| **Clay** | `#2B140C` Burnt Umber | `#3D2015` Warm Espresso · `#FDF6F0` | `#C1522D` Clay Orange | `#C1522D` Clay | Warm, organic, earthy |
+| **Grass** | `#0B1F13` Midnight Lawn | `#183624` English Ivy · `#F4F9F5` | `#9362C4` Bright Lavender | `#452263` Wimbledon Purple | Classic, elegant, prestigious |
+| **US Open** | `#0B0F19` Midnight | `#1E293B` Slate Navy · `#FFFFFF` | `#63B233` Apple Green (+ `#005DAA` blue button) | `#63B233` Green | High-octane, modern, night session |
 
-Public-page / share links (the "Public page (QR)" anchors and similar) get an explicit **per-theme link color + underline**, not the generic primary color — that color was hard to read on the AO and Off-Season card surfaces. The shared `.public-page-link` treatment (used by the `PublicPageLink` component) is always **bold + underlined** and pulls color from the `--link` / `--link-underline` / `--link-hover` tokens below. Colors are read against each theme's **card surface** (`#FFFFFF` for the light themes; Pine `#164A35` for Christmas; Slate `#1E293B` for US Open).
+### 5.1 Content-link colors (#399, supersedes #394/#395)
 
-| Theme | `--link` (default) | `--link-underline` | `--link-hover` (color + underline) | Contrast vs card |
-|---|---|---|---|---|
-| **Off-Season** | `#212529` Dark Slate | `#495057` Steel | `#000000` Black | 15.4:1 — AA ✅ |
-| **Christmas** *(dark)* | `#FFFFFF` White | `#E5B842` Gold | `#E5B842` Gold (color shifts to gold; underline already gold) | 10.2:1 — AA ✅ |
-| **Australian Open** | `#006BA6` Deep AO Blue | `#006BA6` Deep AO Blue | `#0A1D37` Midnight | 5.1:1 — AA ✅ |
-| **Clay** | `#C1522D` Clay Orange | `#C1522D` Clay Orange | `#2B1A12` Dark Chocolate | 4.65:1 — AA ✅ |
-| **Grass** | `#452263` Wimbledon Purple | `#452263` Purple | `#00703C` Lawn Green | 12.6:1 — AA ✅ |
-| **US Open** *(dark)* | `#63B233` Apple Green | `#63B233` Apple Green | `#FFFFFF` White | 5.5:1 — AA ✅ |
+Public-page / share links (the "Public page (QR)" anchors and similar) get an explicit **per-theme link color + underline**, not the generic primary color. The shared `.public-page-link` treatment (used by the `PublicPageLink` component) is always **bold + underlined**, pulls color from the `--link` / `--link-underline` / `--link-hover` tokens below, and brightens toward white on hover. Colors are read against each theme's **dark card surface** (the card fill above). All clear **WCAG AA-normal (≥4.5:1)** (measured, sRGB relative-luminance).
 
-> **AO note:** The AO **link** uses a slightly deeper blue `#006BA6` (≈5.1:1 on white → **AA-normal ✅**) rather than the `#0080C8` accent used for AO borders/buttons (4.27:1 — AA-large only). Links are small (12px bold), so they take the stricter-contrast blue; the vivid `#0080C8` stays for the 10% accent (borders/buttons) where AA-large suffices.
+| Theme | `--link` (+ underline) | `--link-hover` | Contrast vs card |
+|---|---|---|---|
+| **Off-Season** | `#D2FE00` Neon Yellow | `#FFFFFF` White | 11.4:1 — AA ✅ |
+| **Christmas** | `#E5B842` Champagne Gold | `#FFFFFF` White | 7.7:1 — AA ✅ |
+| **Australian Open** | `#CCFF00` Volt Yellow | `#FFFFFF` White | 13.2:1 — AA ✅ |
+| **Clay** | `#E07A5F` Light Terracotta | `#FFFFFF` White | 5.0:1 — AA ✅ |
+| **Grass** | `#C5A3E8` Bright Lavender | `#FFFFFF` White | 6.1:1 — AA ✅ |
+| **US Open** | `#63B233` Apple Green | `#FFFFFF` White | 5.5:1 — AA ✅ |
+
+> **Clay/Grass link note:** the *accent* clay orange `#C1522D` (2.9:1 on the espresso card) and Wimbledon purple `#452263` (1.5:1 on the ivy card) are too dark for a link on a dark surface, so links use the lighter **terracotta `#E07A5F`** and **lavender `#C5A3E8`** — both clear AA-normal — while the darker accents stay for card rims/buttons where they sit against text or the canvas.
 
 ---
 
@@ -170,17 +179,31 @@ When the setting is `AUTO`, a small data-driven table maps today's date → them
 
 ## 7. Contrast checklist
 
-- **No dark-on-dark:** in the dark themes (US Open, Christmas) never use dark-gray text on the dark cards — use white (`#FFFFFF`) or a bright accent; Christmas keeps the gold button's text dark (`#112A1F`) since gold is light.
-- **No vibrancy collisions:** never place a vivid accent border directly against a vivid background. The muted pastel / dark canvases above are chosen so the vivid card borders/accents pop cleanly.
-- Verify each theme's card-font + accent tokens meet **WCAG AA** against the card fill — automatic for the pure-white light themes; the real work is the two dark themes (white text on `#1E293B` US Open / `#164A35` Christmas cards, and the dark `#112A1F` text on the gold Christmas button).
+Under the all-dark inversion (#399) **every** theme is light-on-dark, so the checklist applies uniformly:
+
+- **No dark-on-dark:** never put dark text on the dark cards — use the near-white `--foreground`/`--card-foreground` or a bright accent. Button *labels* stay dark only where the button fill is light (neon `#212529`, volt `#0A1D37`, gold `#112A1F`).
+- **No vibrancy collisions:** don't place a vivid accent border directly against a vivid background. The deep, desaturated canvases are chosen so the vivid rims/accents/links pop cleanly.
+- **Links use a lighter variant where the accent is too dark:** clay and grass links are `#E07A5F` / `#C5A3E8` (not the darker `#C1522D` / `#452263` accents) so they clear AA on the dark card.
+- **Measured WCAG AA (sRGB relative-luminance) — all pass AA-normal (≥4.5:1) for font + link:**
+
+  | Theme | Font vs card | Link vs card | Muted vs card | Button label vs button |
+  |---|---|---|---|---|
+  | Off-Season | 12.6:1 ✅ | 11.4:1 ✅ | 8.9:1 ✅ | 13.2:1 ✅ |
+  | Christmas | 14.4:1 ✅ | 7.7:1 ✅ | 11.9:1 ✅ | 8.2:1 ✅ |
+  | Australian Open | 14.3:1 ✅ | 13.2:1 ✅ | 12.6:1 ✅ | 14.4:1 ✅ |
+  | Clay | 13.9:1 ✅ | 5.0:1 ✅ | 13.9:1 ✅ | 4.65:1 ✅ |
+  | Grass | 12.4:1 ✅ | 6.1:1 ✅ | 12.4:1 ✅ | 4.39:1 — AA-large ✅ (14px+ bold button) |
+  | US Open | 14.6:1 ✅ | 5.5:1 ✅ | 5.7:1 ✅ | 6.7:1 ✅ |
+
+  > **Grass button:** white on lavender `#9362C4` is 4.39:1 — below AA-normal but above **AA-large (≥3.0:1)**, which the bold ≥14px button label qualifies for. All font/link/muted pairs clear AA-normal.
 
 ---
 
 ## 8. Implementation plan
 
 ### Web
-- Each theme is an override of the existing CSS custom properties in `web/src/index.css`. Map 60/30/10 onto the shadcn tokens: `--background` (canvas), `--card` / `--card-foreground` (cards), `--primary` / `--border` / `--ring` / `--accent` (accents). **No per-component color hard-coding.**
-- The **two dark themes (US Open, Christmas) reuse the existing dark-mode token path** (dark canvas/cards + light `--foreground`/`--card-foreground`); the four light themes retint the canvas + recolor accents/borders while cards stay white.
+- Each theme is an override of the existing CSS custom properties in `web/src/index.css`. Map 60/30/10 onto the shadcn tokens: `--background` (canvas), `--card` / `--card-foreground` (cards), `--primary` / `--border` / `--ring` / `--accent` (accents), plus `--link` / `--link-underline` / `--link-hover` for content links. **No per-component color hard-coding.**
+- Under #399 **every theme is a full dark token set** (dark canvas/card + light `--foreground`/`--card-foreground` + sensible dark `--popover`/`--secondary`/`--muted`/`--input` neutrals). The prior split — four light themes with white cards vs. two dark ones — is gone; the header `BrandMark` (#398, `currentColor`) and `PublicPageLink` (#395, `--link*`) auto-adapt with no component changes. The favicon accents (#396) are reconciled to the new palette (grass → lavender `#9362C4`; other tints kept pragmatic for 16px tab legibility).
 - **Live swap:** a small theme provider applies the active theme's token set to `:root` (or a `data-theme` attribute); switching = swapping that set, no reload.
 - **Poll:** a lightweight hook re-fetching `GET /api/v1/theme` on an interval + `visibilitychange`, re-applying on `version` change.
 

@@ -1,10 +1,11 @@
 <!DOCTYPE html>
 <!--
   UI Seasonal Theming — interactive preview
-  Companion to docs/product/UI_SEASONAL_THEMING.md (issue #378).
+  Companion to docs/product/UI_SEASONAL_THEMING.md (issues #378, all-dark inversion #399).
   Open this file directly in a browser, or preview the version on a branch via
   https://htmlpreview.github.io/ . Each panel shows a theme's 60% canvas,
-  30% card, and 10% accent (border + button), following the 60-30-10 "Muted Base" rule.
+  30% card, and 10% accent (border + button + link), following the inverted all-dark
+  60-30-10 rule. The grid sits on a global dark backing (#121214) as in the app dashboard.
 -->
 <html lang="en">
 <head>
@@ -12,17 +13,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Skopeo — Seasonal Theme Preview</title>
 </head>
-<body style="margin:0; background:#ffffff;">
+<body style="margin:0; background:#121214;">
 
 <header style="font-family:system-ui,-apple-system,sans-serif; padding:24px 24px 0;">
-  <h1 style="margin:0 0 4px; font-size:1.4rem;">Skopeo — Seasonal Theme Preview</h1>
-  <p style="margin:0; color:#556; font-size:0.9rem;">
-    Six admin-selectable themes (60% canvas · 30% card · 10% accent). See
+  <h1 style="margin:0 0 4px; font-size:1.4rem; color:#F8F9FA;">Skopeo — Seasonal Theme Preview</h1>
+  <p style="margin:0; color:#adb5bd; font-size:0.9rem;">
+    Six admin-selectable themes, all dark (60% canvas · 30% card · 10% accent). See
     <code>docs/product/UI_SEASONAL_THEMING.md</code> for the full spec.
   </p>
 </header>
 
-<div class="theme-grid">
+<div class="theme-grid dark-mode-system">
 
   <!-- 1. OFF-SEASON THEME -->
   <div class="canvas theme-offseason">
@@ -90,6 +91,8 @@
     font-family: system-ui, -apple-system, sans-serif;
     padding: 24px;
   }
+  /* Global dark dashboard backing behind the canvases (#399). Preview-only. */
+  .theme-grid.dark-mode-system { background-color: #121214; }
   .canvas {
     padding: 40px 20px;
     border-radius: 12px;
@@ -129,26 +132,26 @@
   }
   .btn:hover { opacity: 0.9; }
 
-  /* --- 1. OFF-SEASON THEME (Light, Gray, Neon Accent) --- */
-  .theme-offseason { background-color: #F1F3F5; border: 1px solid #E2E8F0; }
-  .theme-offseason .card { background-color: #FFFFFF; border: 1px solid #CED4DA; color: #212529; }
-  .theme-offseason .card p { color: #495057; }
-  .theme-offseason .card p a { color: #212529; text-decoration-color: #495057; }
-  .theme-offseason .card p a:hover { color: #000000; text-decoration-color: #000000; }
-  .theme-offseason .btn { background-color: #D2FE00; color: #212529; border: 1px solid #495057; }
+  /* --- 1. OFF-SEASON THEME (Ink canvas, Steel-slate card, Neon accent) --- */
+  .theme-offseason { background-color: #1A1D20; }
+  .theme-offseason .card { background-color: #2B3035; border: 1px solid #495057; color: #F8F9FA; }
+  .theme-offseason .card p { color: #CED4DA; }
+  .theme-offseason .card p a { color: #D2FE00; text-decoration-color: #D2FE00; }
+  .theme-offseason .card p a:hover { color: #FFFFFF; text-decoration-color: #FFFFFF; }
+  .theme-offseason .btn { background-color: #D2FE00; color: #212529; }
 
-  /* --- 2. CHRISTMAS THEME (Red Canvas, Pine Card, White Typography/Borders, Gold Button) --- */
-  .theme-christmas { background-color: #A6192E; }
-  .theme-christmas .card { background-color: #164A35; border: 2px solid #FFFFFF; color: #FFFFFF; }
+  /* --- 2. CHRISTMAS THEME (Velvet-wine canvas, Deep-spruce card, Gold accent) --- */
+  .theme-christmas { background-color: #2B050B; }
+  .theme-christmas .card { background-color: #1A2E26; border: 1px solid #E5B842; color: #FFFFFF; }
   .theme-christmas .card p { color: #E2ECE9; }
-  .theme-christmas .card p a { color: #FFFFFF; text-decoration-color: #E5B842; }
-  .theme-christmas .card p a:hover { color: #E5B842; text-decoration-color: #E5B842; }
+  .theme-christmas .card p a { color: #E5B842; text-decoration-color: #E5B842; }
+  .theme-christmas .card p a:hover { color: #FFFFFF; text-decoration-color: #FFFFFF; }
   .theme-christmas .btn { background-color: #E5B842; color: #112A1F; }
   .theme-christmas .badge {
     display: inline-block;
     padding: 2px 6px;
-    background-color: #FFFFFF;
-    color: #164A35;
+    background-color: #E5B842;
+    color: #112A1F;
     font-size: 0.65rem;
     font-weight: 700;
     text-transform: uppercase;
@@ -157,32 +160,32 @@
     margin-bottom: 8px;
   }
 
-  /* --- 3. AUSTRALIAN OPEN THEME (Light Ice Blue, Blue/Neon Accent) --- */
-  .theme-ao { background-color: #F0F6FA; border: 1px solid #E2E8F0; }
-  .theme-ao .card { background-color: #FFFFFF; border: 1px solid #0080C8; color: #0A1D37; }
-  .theme-ao .card p { color: #4A5568; }
-  .theme-ao .card p a { color: #006BA6; text-decoration-color: #006BA6; }
-  .theme-ao .card p a:hover { color: #0A1D37; text-decoration-color: #0A1D37; }
-  .theme-ao .btn { background-color: #CCFF00; color: #0A1D37; border: 1px solid #0080C8; }
+  /* --- 3. AUSTRALIAN OPEN THEME (Deep-abyss canvas, Oceanic-slate card, Volt accent) --- */
+  .theme-ao { background-color: #081626; }
+  .theme-ao .card { background-color: #12253A; border: 1px solid #0080C8; color: #F0F6FA; }
+  .theme-ao .card p { color: #E2E8F0; }
+  .theme-ao .card p a { color: #CCFF00; text-decoration-color: #CCFF00; }
+  .theme-ao .card p a:hover { color: #FFFFFF; text-decoration-color: #FFFFFF; }
+  .theme-ao .btn { background-color: #CCFF00; color: #0A1D37; }
 
-  /* --- 4. CLAY SEASON THEME (Warm Sand, Terracotta Accent) --- */
-  .theme-clay { background-color: #FDF6F0; border: 1px solid #E2E8F0; }
-  .theme-clay .card { background-color: #FFFFFF; border: 1px solid #C1522D; color: #2B1A12; }
-  .theme-clay .card p { color: #614E43; }
-  .theme-clay .card p a { color: #C1522D; text-decoration-color: #C1522D; }
-  .theme-clay .card p a:hover { color: #2B1A12; text-decoration-color: #2B1A12; }
+  /* --- 4. CLAY SEASON THEME (Burnt-umber canvas, Warm-espresso card, Clay accent) --- */
+  .theme-clay { background-color: #2B140C; }
+  .theme-clay .card { background-color: #3D2015; border: 1px solid #C1522D; color: #FDF6F0; }
+  .theme-clay .card p { color: #FDF6F0; }
+  .theme-clay .card p a { color: #E07A5F; text-decoration-color: #E07A5F; }
+  .theme-clay .card p a:hover { color: #FFFFFF; text-decoration-color: #FFFFFF; }
   .theme-clay .btn { background-color: #C1522D; color: #FFFFFF; }
 
-  /* --- 5. GRASS SEASON THEME (Mint, Purple/Green Accent) --- */
-  .theme-grass { background-color: #F4F9F5; border: 1px solid #E2E8F0; }
-  .theme-grass .card { background-color: #FFFFFF; border: 1px solid #00703C; color: #1B3B2B; }
-  .theme-grass .card p { color: #4A5D50; }
-  .theme-grass .card p a { color: #452263; text-decoration-color: #452263; }
-  .theme-grass .card p a:hover { color: #00703C; text-decoration-color: #00703C; }
-  .theme-grass .btn { background-color: #452263; color: #FFFFFF; }
+  /* --- 5. GRASS SEASON THEME (Midnight-lawn canvas, English-ivy card, Lavender accent) --- */
+  .theme-grass { background-color: #0B1F13; }
+  .theme-grass .card { background-color: #183624; border: 1px solid #452263; color: #F4F9F5; }
+  .theme-grass .card p { color: #F4F9F5; }
+  .theme-grass .card p a { color: #C5A3E8; text-decoration-color: #C5A3E8; }
+  .theme-grass .card p a:hover { color: #FFFFFF; text-decoration-color: #FFFFFF; }
+  .theme-grass .btn { background-color: #9362C4; color: #FFFFFF; }
 
-  /* --- 6. US OPEN THEME (Dark Midnight, Blue/Green Accent) --- */
-  .theme-uso { background-color: #121824; }
+  /* --- 6. US OPEN THEME (Midnight canvas, Slate-navy card, Blue button / Green accent) --- */
+  .theme-uso { background-color: #0B0F19; }
   .theme-uso .card { background-color: #1E293B; border: 1px solid #63B233; color: #FFFFFF; }
   .theme-uso .card p { color: #94A3B8; }
   .theme-uso .card p a { color: #63B233; text-decoration-color: #63B233; }
