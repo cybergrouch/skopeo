@@ -343,10 +343,7 @@ class MatchService(
                 .filter { it.id != match.id && it.status == MatchStatus.COMPLETED }
                 // Count only meetings where the two were opponents (on opposite sides) — never partners
                 // on the same doubles team, which listBetweenUsers can otherwise surface (#285).
-                .filter { meeting ->
-                    (team1Id in meeting.team1.userIds && team2Id in meeting.team2.userIds) ||
-                        (team1Id in meeting.team2.userIds && team2Id in meeting.team1.userIds)
-                }
+                .filter { meeting -> wereOpponents(meeting = meeting, playerA = team1Id, playerB = team2Id) }
                 .map { headToHeadEntry(meeting = it, team1Id = team1Id, team2Id = team2Id, codes = codes) }
         // The current match counts toward the tally once it has a result (#339); it stays out of the list.
         val current =
@@ -359,6 +356,24 @@ class MatchService(
             team2Wins = forTally.count { entry -> entry.winnerPublicCode == codes[team2Id] },
             meetings = prior,
         )
+    }
+
+    /**
+     * True when [playerA] and [playerB] faced each other as opponents in [meeting] — one on each side,
+     * in either orientation. Doubles partners on the same team are excluded, which is why a meeting
+     * surfaced by `listBetweenUsers` isn't automatically a head-to-head (#285). Written as a single
+     * membership check per side (rather than a compound boolean) so each side/orientation is coverable.
+     */
+    private fun wereOpponents(
+        meeting: Match,
+        playerA: UUID,
+        playerB: UUID,
+    ): Boolean {
+        val aOnTeam1 = playerA in meeting.team1.userIds
+        val aOnTeam2 = playerA in meeting.team2.userIds
+        val bOnTeam1 = playerB in meeting.team1.userIds
+        val bOnTeam2 = playerB in meeting.team2.userIds
+        return (aOnTeam1 && bOnTeam2) || (aOnTeam2 && bOnTeam1)
     }
 
     /**

@@ -453,6 +453,63 @@ class PlayerServiceTest {
     }
 
     @Test
+    fun `match history search matches on a public code even when the opponent has no display name`() {
+        val ana = newUser(uid = "a", names = display(name = "Ana"))
+        // An opponent with only a FIRST name has a null display name (the DISPLAY-only filter yields none).
+        val noDisplay = newUser(uid = "nd", names = listOf(element = UserName(type = NameType.FIRST, value = "Nemo")))
+        fixture(u1 = ana.id, u2 = noDisplay.id, date = LocalDate.of(2026, 1, 1))
+
+        // Searching by the null-display opponent's public code hits the left (publicCode) arm.
+        val byCode = service.matchHistory(code = ana.publicCode, search = noDisplay.publicCode.lowercase()).shouldBeRight()
+        byCode.total shouldBe 1
+        byCode.items.single().opponents.single().displayName.shouldBeNull()
+
+        // A needle that matches neither the code nor the (null) display name exercises the right arm's null branch.
+        service.matchHistory(code = ana.publicCode, search = "zzz-no-such-needle").shouldBeRight().total shouldBe 0
+    }
+
+    @Test
+    fun `match history search hits by display name when the public code does not match`() {
+        val ana = newUser(uid = "a", names = display(name = "Ana"))
+        val ben = newUser(uid = "ben", names = display(name = "Benjamin"))
+        fixture(u1 = ana.id, u2 = ben.id, date = LocalDate.of(2026, 1, 1))
+
+        // "benjamin" cannot be a public code (codes are short), so only the display-name (right) arm can match.
+        val byName = service.matchHistory(code = ana.publicCode, search = "benjamin").shouldBeRight()
+        byName.total shouldBe 1
+        byName.items.single().opponents.single().displayName shouldBe "Benjamin"
+    }
+
+    @Test
+    fun `a whitespace-only search returns the full history unfiltered`() {
+        val ana = newUser(uid = "a", names = display(name = "Ana"))
+        val ben = newUser(uid = "ben", names = display(name = "Ben"))
+        fixture(u1 = ana.id, u2 = ben.id, date = LocalDate.of(2026, 1, 1))
+        fixture(u1 = ana.id, u2 = ben.id, date = LocalDate.of(2026, 2, 1))
+
+        // A blank needle (the empty-needle arm) must not filter anything out.
+        val page = service.matchHistory(code = ana.publicCode, search = "   ").shouldBeRight()
+        page.total shouldBe 2
+        page.items shouldHaveSize 2
+    }
+
+    @Test
+    fun `results summary for a canonical includes a merged duplicate's decided matches (#124)`() {
+        val canonical = newUser(uid = "keep", names = display(name = "Real"))
+        val dup = newUser(uid = "dup", names = display(name = "Dupe"))
+        val opp = newUser(uid = "opp", names = display(name = "Opp"))
+        // A decided match the DUPLICATE played, then folded into the canonical (exercises the findDuplicatesOf arm).
+        val match = fixture(u1 = dup.id, u2 = opp.id, date = LocalDate.of(2026, 1, 1))
+        decide(match = match, winnerTeamId = match.team1.teamId, recordedBy = dup.id)
+        users.markDuplicates(canonicalId = canonical.id, duplicateIds = listOf(element = dup.id))
+
+        val summary = service.resultsSummary(code = canonical.publicCode).shouldBeRight()
+
+        summary.singles shouldBe listOf(element = ResultsBucket(period = "2026-01", wins = 1, losses = 0))
+        summary.doubles.shouldBeEmpty()
+    }
+
+    @Test
     fun `match history for an unknown code is a not-found`() {
         service.matchHistory(code = "ZZZZZZ").shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
     }
