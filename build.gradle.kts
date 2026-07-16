@@ -292,6 +292,9 @@ tasks.jacocoTestReport {
                         "**/routes/PlayerListRoutes*.*",
                         "**/routes/StandingsRoutes*.*",
                         "**/routes/ReportRoutes*.*",
+                        // Handler IS tested (RankingCalculationApiErrorTest), but JaCoCo can't
+                        // attribute coverage to the Ktor suspend route lambda run in testApplication.
+                        "**/routes/RankingRoutes*.*",
                         // Only the route glue (OpenGraphRoutes); the pure OG logic in OpenGraph.kt stays measured.
                         "**/routes/OpenGraphRoutes*.*",
                         "**/routes/RouteSupport*.*",
@@ -356,6 +359,9 @@ tasks.jacocoTestCoverageVerification {
                         "**/routes/PlayerListRoutes*.*",
                         "**/routes/StandingsRoutes*.*",
                         "**/routes/ReportRoutes*.*",
+                        // Handler IS tested (RankingCalculationApiErrorTest), but JaCoCo can't
+                        // attribute coverage to the Ktor suspend route lambda run in testApplication.
+                        "**/routes/RankingRoutes*.*",
                         // Only the route glue (OpenGraphRoutes); the pure OG logic in OpenGraph.kt stays measured.
                         "**/routes/OpenGraphRoutes*.*",
                         "**/routes/RouteSupport*.*",

@@ -133,9 +133,15 @@ The exclude patterns below are configured **identically** on both
    - `**/routes/RouteSupport*.*` (shared route helpers)
    - All route classes: `**/routes/UserRoutes*.*`, `**/routes/ContactRoutes*.*`,
      `**/routes/NameRoutes*.*`, `**/routes/CapabilityRoutes*.*`,
-     `**/routes/RatingRoutes*.*`, `**/routes/MatchRoutes*.*`
+     `**/routes/RatingRoutes*.*`, `**/routes/MatchRoutes*.*`,
+     `**/routes/RankingRoutes*.*`
    - Reason: Happy paths need a Firebase token (to be covered via the auth
-     emulator once provisioning lands)
+     emulator once provisioning lands). `RankingRoutes*` is auth-free, but its
+     handler is a Ktor **suspend route lambda** dispatched inside
+     `testApplication`; JaCoCo cannot attribute the exercised coverage back to
+     the synthetic lambda class even though `RankingCalculationApiErrorTest`
+     asserts its 200 / 400 / 500 behaviour. Excluding it (consistent with every
+     other route) removes the misleading uncovered-branch noise.
 
 In addition, the **branch-coverage rule** excludes the route error-handling
 lambdas in `*.configureRankingRoutes.*`, since exception-handling branches are
@@ -165,6 +171,30 @@ fun main() {
 }
 // Infrastructure code - tested via integration tests
 ```
+
+---
+
+## Intentionally-Uncovered Lines (accepted gaps)
+
+A small set of lines inside **measured** files stay red or partially-covered by
+design. They are defensive guards, compiler-synthetic paths, or table-DSL
+declarations — not real, reachable branches worth a test. They are recorded here
+so future coverage triage does not re-litigate them. **Do not chase artificial
+coverage for these.**
+
+| Location | What it is | Why it stays uncovered |
+|----------|------------|------------------------|
+| `service/event/EventService.kt` (`addParticipant`, ~line 305) | `ensureNotNull(events.addParticipant(...))` null arm | **TOCTOU guard.** The event was resolved a few lines earlier; this second null only fires if the row vanishes (concurrent delete) between the two calls. A defensive check, not a reachable path. |
+| `service/calculator/AuditTrail.kt` (`AuditEntry`) | Data-class default-arg synthetics (`context` default; synthetic `copy`/constructor path) | Compiler-generated default-argument bytecode. Would be excluded if it lived under `model/`; it earns its place beside the calculator, so the synthetic arm is simply accepted. |
+| `service/rating/RatingCalculationService.kt` (`CalculationBreakdown`) | Data-class default-arg synthetics (`sets` default) | Same as `AuditEntry` — synthetic default-argument path, no logic to test. |
+| `repository/ClubsTables.kt`, `repository/MatchTables.kt` | Exposed column declarations with `.default(...)` | Table-DSL declaration noise (mirrors the `dto/`/`model/` exclusion rationale). Not executable branch logic. |
+| `service/club/ClubService.kt` (`publicByCode` → `sortedByDescending { it.endDate }`, attributed to a phantom `Comparisons.kt`) | Stdlib synthetic comparator | JaCoCo attributes the inlined stdlib nullable-key comparator (its null-handling arm) to a synthetic `Comparisons.kt`. Library code, not app logic. |
+
+For contrast, the previously-flagged unreachable Elvis in
+`repository/MatchRepository.kt#winLossByUsers` was **removed** rather than
+accepted: the surrounding query already filters `winnerTeamId.isNotNull()`, so
+the phantom `?: return@flatMap emptyList()` arm was replaced with a documented
+`checkNotNull(...)` non-null read.
 
 ---
 

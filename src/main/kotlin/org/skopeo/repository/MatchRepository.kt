@@ -372,7 +372,8 @@ class MatchRepository {
                         ((MatchesTable.team1Id inList teamIds) or (MatchesTable.team2Id inList teamIds)) and
                             MatchesTable.winnerTeamId.isNotNull()
                     }.flatMap { row ->
-                        val winnerTeam = row[MatchesTable.winnerTeamId]?.value ?: return@flatMap emptyList<Pair<UUID, Boolean>>()
+                        // Guaranteed non-null by the winnerTeamId.isNotNull() filter in the WHERE clause above.
+                        val winnerTeam = checkNotNull(value = row[MatchesTable.winnerTeamId]).value
                         val team1 = row[MatchesTable.team1Id].value
                         val team2 = row[MatchesTable.team2Id].value
                         val loserTeam = if (winnerTeam == team1) team2 else team1
