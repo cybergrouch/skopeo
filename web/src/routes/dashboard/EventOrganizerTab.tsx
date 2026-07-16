@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Card,
@@ -16,11 +16,34 @@ import {
   usePostApiV1Events,
 } from "@/api/generated/events/events";
 import { useGetApiV1Clubs } from "@/api/generated/clubs/clubs";
-import type { EventResponse, UserSummaryResponse } from "@/api/generated/model";
+import { useGetApiV1UsersMe } from "@/api/generated/users/users";
+import type {
+  ClubResponse,
+  EventResponse,
+  UserSummaryResponse,
+} from "@/api/generated/model";
+import { Capability, hasCapability } from "@/auth/capabilities";
 import { UserSearchSelect } from "@/components/UserSearchSelect";
 import { plural } from "@/lib/plural";
 import { playerLabel } from "@/lib/playerLabel";
 import { EventDetail } from "./events/EventDetail";
+
+/**
+ * The single club a CLUB_OWNER should default the create-event Club selector to (#364), or "" when
+ * there is no unambiguous default: own exactly one club → that club's id; own multiple → "" (don't
+ * guess); own zero, or not a CLUB_OWNER → "". Non-owners are unaffected.
+ */
+function defaultOwnedClubId(
+  clubs: ClubResponse[],
+  meId: string | undefined,
+  capabilities: readonly Capability[] | undefined,
+): string {
+  if (!meId || !hasCapability(capabilities, Capability.CLUB_OWNER)) return "";
+  const owned = clubs.filter((club) =>
+    club.owners.some((owner) => owner.userId === meId),
+  );
+  return owned.length === 1 ? owned[0].id : "";
+}
 
 /** The new-event roster being assembled before the event is created. */
 function NewEventForm() {
@@ -28,12 +51,26 @@ function NewEventForm() {
   const [name, setName] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [clubId, setClubId] = useState("");
+  // Undefined until the user picks a club; that keeps the CLUB_OWNER default (#364) from clobbering
+  // an explicit choice (including clearing to "Open", i.e. an empty string the user chose).
+  const [clubIdChoice, setClubIdChoice] = useState<string | undefined>(
+    undefined,
+  );
   const [roster, setRoster] = useState<UserSummaryResponse[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   // Clubs to optionally file the event under (#313). Readable by staff; empty when none exist.
-  const clubs = useGetApiV1Clubs().data ?? [];
+  const clubsData = useGetApiV1Clubs().data;
+  const clubs = clubsData ?? [];
+  const me = useGetApiV1UsersMe().data;
+
+  // Default the selector to a CLUB_OWNER's own club (#364), but only while the field is untouched;
+  // once the user selects anything (including "Open") their choice wins.
+  const ownerDefault = useMemo(
+    () => defaultOwnedClubId(clubsData ?? [], me?.id, me?.capabilities),
+    [clubsData, me?.id, me?.capabilities],
+  );
+  const clubId = clubIdChoice ?? ownerDefault;
 
   const create = usePostApiV1Events({
     mutation: {
@@ -41,7 +78,7 @@ function NewEventForm() {
         setName("");
         setStartDate("");
         setEndDate("");
-        setClubId("");
+        setClubIdChoice(undefined);
         setRoster([]);
         void queryClient.invalidateQueries({
           queryKey: getGetApiV1EventsQueryKey(),
@@ -125,7 +162,7 @@ function NewEventForm() {
               <select
                 id="event-club"
                 value={clubId}
-                onChange={(e) => setClubId(e.target.value)}
+                onChange={(e) => setClubIdChoice(e.target.value)}
                 className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
               >
                 <option value="">No club (Open)</option>
@@ -317,6 +354,62 @@ function EventSection({
 }
 
 /**
+ * A collapsible per-club group (#367): the header is an accessible toggle (aria-expanded, keyboard-
+ * operable button) showing the club name and its event count; the Upcoming/Past subsections render
+ * only while expanded.
+ */
+function ClubGroupSection({
+  group,
+  today,
+  isOpen,
+  onToggle,
+  onSelect,
+}: {
+  group: ClubGroup;
+  today: string;
+  isOpen: boolean;
+  onToggle: () => void;
+  onSelect: (id: string) => void;
+}) {
+  const { upcoming, past } = splitByDate(group.events, today);
+  return (
+    <div className="space-y-3">
+      <button
+        type="button"
+        className="flex w-full items-center justify-between gap-2 text-left text-sm font-semibold hover:text-foreground/80"
+        aria-expanded={isOpen}
+        onClick={onToggle}
+      >
+        <span>
+          {group.label} ({group.events.length})
+        </span>
+        <span aria-hidden className="text-muted-foreground">
+          {isOpen ? "▾" : "▸"}
+        </span>
+      </button>
+      {isOpen ? (
+        <>
+          <EventSection
+            title="Upcoming"
+            events={upcoming}
+            upcoming
+            emptyLabel="No upcoming events."
+            onSelect={onSelect}
+          />
+          <EventSection
+            title="Past"
+            events={past}
+            upcoming={false}
+            emptyLabel="No past events."
+            onSelect={onSelect}
+          />
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+/**
  * The Event Organizer tab (#138, renamed from Matches): hosts run events/meets that contain matches.
  * The events table is the entry point; selecting a row opens that event's working page (participant-
  * scoped fixtures + results).
@@ -327,6 +420,18 @@ export function EventOrganizerTab() {
   const events = eventsQuery.data ?? [];
   // Today counts as upcoming; the split mirrors the Profile Events history card (#271).
   const today = todayIso();
+
+  const groups = groupByClub(events);
+  // Collapsed-group keys (#367). Default: all expanded — nothing is hidden on first load; the user
+  // opts into collapsing. A group holding the selected event is force-expanded so it stays visible.
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+  const toggle = (key: string) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
 
   if (selectedId) {
     return (
@@ -350,28 +455,16 @@ export function EventOrganizerTab() {
           {eventsQuery.isLoading ? (
             <p className="text-sm text-muted-foreground">Loading…</p>
           ) : events.length > 0 ? (
-            groupByClub(events).map((group) => {
-              const { upcoming, past } = splitByDate(group.events, today);
-              return (
-                <div key={group.key} className="space-y-3">
-                  <div className="text-sm font-semibold">{group.label}</div>
-                  <EventSection
-                    title="Upcoming"
-                    events={upcoming}
-                    upcoming
-                    emptyLabel="No upcoming events."
-                    onSelect={setSelectedId}
-                  />
-                  <EventSection
-                    title="Past"
-                    events={past}
-                    upcoming={false}
-                    emptyLabel="No past events."
-                    onSelect={setSelectedId}
-                  />
-                </div>
-              );
-            })
+            groups.map((group) => (
+              <ClubGroupSection
+                key={group.key}
+                group={group}
+                today={today}
+                isOpen={!collapsed.has(group.key)}
+                onToggle={() => toggle(group.key)}
+                onSelect={setSelectedId}
+              />
+            ))
           ) : (
             <p className="text-sm text-muted-foreground">
               No events yet. Create one above.
