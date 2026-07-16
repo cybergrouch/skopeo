@@ -74,6 +74,7 @@ class RankingPointServiceTest {
         points: String = "100",
         pointClass: PointClass = PointClass.ANNUAL_TOURNAMENT,
         sourceType: PointSourceType = PointSourceType.INTERNAL,
+        sourceId: String? = null,
         band: String? = null,
         reason: String? = null,
         validFrom: LocalDateTime? = null,
@@ -83,7 +84,7 @@ class RankingPointServiceTest {
         points = BigDecimal(points),
         pointClass = pointClass,
         sourceType = sourceType,
-        sourceId = null,
+        sourceId = sourceId,
         band = band,
         reason = reason,
         validFrom = validFrom,
@@ -218,5 +219,104 @@ class RankingPointServiceTest {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         service.listForUser(token = token(uid = "admin"), userId = UUID.randomUUID())
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
+    fun `granting to an unknown user is a validation error`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        service.grant(token = token(uid = "admin"), command = grantCommand(userId = UUID.randomUUID(), band = "4.0"))
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `granting to a deactivated user is a validation error`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val player = provision(uid = "player")
+        users.deactivate(id = player.id).shouldBeRight()
+
+        service.grant(token = token(uid = "admin"), command = grantCommand(userId = player.id, band = "4.0"))
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `a validity window that does not advance is a validation error`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val player = provision(uid = "player")
+        val now = LocalDateTime.now()
+
+        service.grant(
+            token = token(uid = "admin"),
+            command = grantCommand(userId = player.id, band = "4.0", validFrom = now, validUntil = now.minusDays(1)),
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `a blank explicit band falls back to the target's current band`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val player = provision(uid = "player")
+        ratings.setRating(userId = player.id, rating = BigDecimal("4.3"), level = "4.0")
+
+        val award =
+            service.grant(token = token(uid = "admin"), command = grantCommand(userId = player.id, band = "  ")).shouldBeRight()
+        award.band shouldBe "4.0"
+    }
+
+    @Test
+    fun `an award records a trimmed sourceId and defaults sex to Unspecified for a sexless target`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val player = provision(uid = "player", sex = null)
+        ratings.setRating(userId = player.id, rating = BigDecimal("4.0"), level = "4.0")
+
+        val award =
+            service.grant(
+                token = token(uid = "admin"),
+                command = grantCommand(userId = player.id, sourceId = "event-42"),
+            ).shouldBeRight()
+        award.sourceId shouldBe "event-42"
+        award.sex shouldBe "Unspecified"
+
+        // A blank sourceId normalizes to null (the ifBlank arm).
+        val blankSource =
+            service.grant(token = token(uid = "admin"), command = grantCommand(userId = player.id, sourceId = "  ")).shouldBeRight()
+        blankSource.sourceId shouldBe null
+    }
+
+    @Test
+    fun `an internal grant with a blank reason stores no reason`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val player = provision(uid = "player")
+        ratings.setRating(userId = player.id, rating = BigDecimal("4.0"), level = "4.0")
+
+        val award =
+            service.grant(token = token(uid = "admin"), command = grantCommand(userId = player.id, reason = "   ")).shouldBeRight()
+        award.reason shouldBe null
+    }
+
+    @Test
+    fun `revoke accepts and normalizes a blank reason`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val player = provision(uid = "player")
+        ratings.setRating(userId = player.id, rating = BigDecimal("4.0"), level = "4.0")
+        val award = service.grant(token = token(uid = "admin"), command = grantCommand(userId = player.id)).shouldBeRight()
+
+        service.revoke(token = token(uid = "admin"), awardId = award.id, reason = "   ").shouldBeRight()
+    }
+
+    @Test
+    fun `an external grant with a blank reason is a validation error`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val player = provision(uid = "player")
+
+        service.grant(
+            token = token(uid = "admin"),
+            command =
+                grantCommand(
+                    userId = player.id,
+                    band = "4.0",
+                    pointClass = PointClass.EXTERNAL,
+                    sourceType = PointSourceType.EXTERNAL,
+                    reason = "   ",
+                ),
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
     }
 }

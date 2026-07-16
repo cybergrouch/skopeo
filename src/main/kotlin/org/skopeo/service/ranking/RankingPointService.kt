@@ -70,12 +70,13 @@ class RankingPointService(
             ensure(condition = validUntil.isAfter(validFrom)) {
                 ServiceError.Validation(message = "valid_until must be after valid_from")
             }
-            // Band recorded at award time: an explicit override, else the target's current band, else a
-            // Validation (an unrated player has no band to tag, so an explicit band must be supplied).
+            // Band recorded at award time: an explicit override, else the target's current band. An
+            // unrated player with no explicit band has nothing to tag → Validation.
+            val resolvedBand = command.band?.ifBlank { null } ?: currentBand(userId = command.userId)
             val band =
-                command.band?.ifBlank { null }
-                    ?: currentBand(userId = command.userId)
-                    ?: raise(r = ServiceError.Validation(message = "User ${command.userId} has no rating; supply an explicit band"))
+                ensureNotNull(value = resolvedBand) {
+                    ServiceError.Validation(message = "User ${command.userId} has no rating; supply an explicit band")
+                }
 
             val award =
                 awards.award(

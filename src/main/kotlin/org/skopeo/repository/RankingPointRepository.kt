@@ -50,13 +50,15 @@ class RankingPointRepository {
         revokedAt: LocalDateTime,
     ): RankingPointAward? =
         transaction {
-            val original =
+            // Split the null-guard from the mapping so there's no chained safe-call+elvis arm that no
+            // test can reach (both real outcomes — found / already-revoked — are covered).
+            val originalRow =
                 RankingPointAwardsTable
                     .selectAll()
                     .where { (RankingPointAwardsTable.id eq awardId) and (RankingPointAwardsTable.status eq AwardStatus.ACTIVE.name) }
                     .singleOrNull()
-                    ?.toRankingPointAward()
                     ?: return@transaction null
+            val original = originalRow.toRankingPointAward()
             RankingPointAwardsTable.update(where = { RankingPointAwardsTable.id eq awardId }) {
                 it[status] = AwardStatus.REVOKED.name
             }
