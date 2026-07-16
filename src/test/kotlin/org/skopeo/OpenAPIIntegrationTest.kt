@@ -38,6 +38,7 @@ class OpenAPIIntegrationTest {
             body shouldContain "/api/v1/standings/me"
             body shouldContain "StandingsPageResponse"
             body shouldContain "StandingsLocateResponse"
+            body shouldContain "/ranking-points"
         }
 
     @Test
