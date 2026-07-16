@@ -20,6 +20,9 @@ vi.mock("./admin/BuildInfoSection", () => ({
 vi.mock("./admin/ClubsSection", () => ({
   ClubsSection: () => <div>clubs section</div>,
 }));
+vi.mock("./admin/ThemeSection", () => ({
+  ThemeSection: () => <div>theme section</div>,
+}));
 
 describe("AdminTab", () => {
   it("renders the admin sections (invites #135 and activity log #134 now live in their own tabs)", () => {
@@ -31,6 +34,7 @@ describe("AdminTab", () => {
       screen.getByText("duplicate candidates section"),
     ).toBeInTheDocument();
     expect(screen.getByText("pending calculation section")).toBeInTheDocument();
+    expect(screen.getByText("theme section")).toBeInTheDocument();
     expect(screen.getByText("build info section")).toBeInTheDocument();
     expect(screen.queryByText("invites section")).not.toBeInTheDocument();
     expect(screen.queryByText("activity log section")).not.toBeInTheDocument();

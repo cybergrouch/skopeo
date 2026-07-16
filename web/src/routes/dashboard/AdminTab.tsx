@@ -4,6 +4,7 @@ import { DuplicateCandidatesSection } from "./admin/DuplicateCandidatesSection";
 import { DuplicatesSection } from "./admin/DuplicatesSection";
 import { ManagePlayerSection } from "./admin/ManagePlayerSection";
 import { PendingCalculationSection } from "./admin/PendingCalculationSection";
+import { ThemeSection } from "./admin/ThemeSection";
 
 export function AdminTab() {
   return (
@@ -13,6 +14,7 @@ export function AdminTab() {
       <DuplicatesSection />
       <DuplicateCandidatesSection />
       <PendingCalculationSection />
+      <ThemeSection />
       <BuildInfoSection />
     </div>
   );

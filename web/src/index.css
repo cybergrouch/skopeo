@@ -47,6 +47,94 @@
   --ring: oklch(0.556 0 0);
 }
 
+/*
+ * Seasonal UI themes (#378). Each `[data-theme="…"]` block retints the palette tokens; a small
+ * ThemeProvider sets `document.documentElement.dataset.theme` from the global setting (or the AUTO
+ * season resolver), so switching is a live token swap with no reload. `:root` stays the neutral
+ * default/fallback (used when no theme is applied). Hex values come from docs/product —
+ * UI_SEASONAL_THEMING.md and ui-seasonal-theming-preview.html are the source of truth.
+ */
+[data-theme='offseason'] {
+  --background: #f1f3f5;
+  --card: #ffffff;
+  --card-foreground: #212529;
+  --primary: #d2fe00;
+  --primary-foreground: #212529;
+  --border: #ced4da;
+  --ring: #ced4da;
+  --accent: #495057;
+  --muted-foreground: #495057;
+}
+
+[data-theme='christmas'] {
+  --background: #f8faf9;
+  --card: #e2ece9;
+  --card-foreground: #0f2e22;
+  --primary: #d92b34;
+  --primary-foreground: #ffffff;
+  --border: #d4af37;
+  --ring: #d4af37;
+  --accent: #d4af37;
+  --muted-foreground: #1c4837;
+}
+
+[data-theme='ao'] {
+  --background: #f0f6fa;
+  --card: #ffffff;
+  --card-foreground: #0a1d37;
+  --primary: #ccff00;
+  --primary-foreground: #0a1d37;
+  --border: #0080c8;
+  --ring: #0080c8;
+  --accent: #0080c8;
+  --muted-foreground: #4a5568;
+}
+
+[data-theme='clay'] {
+  --background: #fdf6f0;
+  --card: #ffffff;
+  --card-foreground: #2b1a12;
+  --primary: #c1522d;
+  --primary-foreground: #ffffff;
+  --border: #c1522d;
+  --ring: #c1522d;
+  --accent: #c1522d;
+  --muted-foreground: #614e43;
+}
+
+[data-theme='grass'] {
+  --background: #f4f9f5;
+  --card: #ffffff;
+  --card-foreground: #1b3b2b;
+  --primary: #452263;
+  --primary-foreground: #ffffff;
+  --border: #00703c;
+  --ring: #00703c;
+  --accent: #00703c;
+  --muted-foreground: #4a5d50;
+}
+
+/* US Open is the dark theme — mirror the `.dark` neutrals for anything not court-specific. */
+[data-theme='uso'] {
+  --background: #121824;
+  --foreground: #ffffff;
+  --card: #1e293b;
+  --card-foreground: #ffffff;
+  --popover: #1e293b;
+  --popover-foreground: #ffffff;
+  --primary: #005daa;
+  --primary-foreground: #ffffff;
+  --secondary: #1e293b;
+  --secondary-foreground: #ffffff;
+  --muted: #1e293b;
+  --muted-foreground: #94a3b8;
+  --accent: #63b233;
+  --accent-foreground: #ffffff;
+  --border: #63b233;
+  --ring: #63b233;
+  --input: #334155;
+}
+
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
