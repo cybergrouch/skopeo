@@ -66,16 +66,25 @@
   --muted-foreground: #495057;
 }
 
+/* Christmas is a dark theme — crimson canvas, deep-pine cards, white text/borders, gold button. */
 [data-theme='christmas'] {
-  --background: #f8faf9;
-  --card: #e2ece9;
-  --card-foreground: #0f2e22;
-  --primary: #d92b34;
-  --primary-foreground: #ffffff;
-  --border: #d4af37;
-  --ring: #d4af37;
-  --accent: #d4af37;
-  --muted-foreground: #1c4837;
+  --background: #a6192e;
+  --foreground: #ffffff;
+  --card: #164a35;
+  --card-foreground: #ffffff;
+  --popover: #164a35;
+  --popover-foreground: #ffffff;
+  --primary: #e5b842;
+  --primary-foreground: #112a1f;
+  --secondary: #164a35;
+  --secondary-foreground: #ffffff;
+  --muted: #164a35;
+  --muted-foreground: #e2ece9;
+  --accent: #e5b842;
+  --accent-foreground: #112a1f;
+  --border: #ffffff;
+  --ring: #ffffff;
+  --input: #164a35;
 }
 
 [data-theme='ao'] {
