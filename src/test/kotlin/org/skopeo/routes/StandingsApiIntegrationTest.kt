@@ -26,6 +26,8 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.dto.rating.SetRatingRequest
+import org.skopeo.dto.standings.StandingsLocateResponse
+import org.skopeo.dto.standings.StandingsPageResponse
 import org.skopeo.dto.user.CreateUserRequest
 import org.skopeo.dto.user.UserResponse
 import org.skopeo.model.AuthProvider
@@ -39,7 +41,7 @@ import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
 import org.skopeo.testsupport.TestFirebaseAuth
 
-/** End-to-end check of the per-band standings (#113): any player can read them, and no exact rating leaks. */
+/** End-to-end check of the paged standings serving layer (#220): paged reads, jump-to-me, and privacy. */
 class StandingsApiIntegrationTest {
     companion object {
         @BeforeAll
@@ -75,50 +77,126 @@ class StandingsApiIntegrationTest {
         return TestFirebaseAuth.mintToken(uid = "admin")
     }
 
+    private suspend fun signUp(
+        client: HttpClient,
+        uid: String,
+        name: String,
+    ): Pair<UserResponse, String> {
+        val token = TestFirebaseAuth.mintToken(uid = uid)
+        val user: UserResponse =
+            client.post(urlString = "/api/v1/users") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $token")
+                contentType(type = ContentType.Application.Json)
+                setBody(body = CreateUserRequest(proposedRating = "4.0", displayName = name, dateOfBirth = "2000-01-01", sex = "Male"))
+            }.body()
+        return user to token
+    }
+
+    private suspend fun setRating(
+        client: HttpClient,
+        admin: String,
+        userId: String,
+        value: String,
+    ) {
+        client.put(urlString = "/api/v1/users/$userId/ratings") {
+            header(key = HttpHeaders.Authorization, value = "Bearer $admin")
+            contentType(type = ContentType.Application.Json)
+            setBody(body = SetRatingRequest(value = value))
+        }.status shouldBe HttpStatusCode.OK
+    }
+
     @Test
-    fun `a plain player reads the per-band standings without seeing exact ratings`() =
+    fun `setting a rating publishes a snapshot the paged read serves, without leaking exact ratings`() =
         withApp { client ->
             val admin = adminToken()
-            val playerToken = TestFirebaseAuth.mintToken(uid = "p1")
-            val player: UserResponse =
-                client.post(urlString = "/api/v1/users") {
-                    header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
-                    contentType(type = ContentType.Application.Json)
-                    setBody(
-                        body =
-                            CreateUserRequest(
-                                proposedRating = "4.0",
-                                displayName = "Player One",
-                                dateOfBirth = "2000-01-01",
-                                sex = "Male",
-                            ),
-                    )
-                }.body()
-            client.put(urlString = "/api/v1/users/${player.id}/ratings") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $admin")
-                contentType(type = ContentType.Application.Json)
-                setBody(body = SetRatingRequest(value = "4.2"))
-            }.status shouldBe HttpStatusCode.OK
+            val (player, playerToken) = signUp(client = client, uid = "p1", name = "Player One")
+            // Setting the rating triggers a standings rebuild → a PUBLISHED snapshot exists.
+            setRating(client = client, admin = admin, userId = player.id, value = "4.2")
 
             val response =
-                client.get(urlString = "/api/v1/standings") {
+                client.get(urlString = "/api/v1/standings?band=4.0&sex=Male") {
                     header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
                 }
             response.status shouldBe HttpStatusCode.OK
+            val page: StandingsPageResponse = response.body()
+            page.band shouldBe "4.0"
+            page.label shouldContain "NTRP 4.0 Band Race"
+            page.limit shouldBe 25
+            page.total shouldBe 1
+            page.entries.single().userId shouldBe player.id
+            // The exact rating never leaks to a plain player (privacy).
+            response.bodyAsText() shouldNotContain "4.200000"
 
-            // The 4.0–4.5 band (headed "NTRP 4.0 Band Race", #346) lists the player; the exact rating
-            // (4.200000) never appears (privacy).
-            val raw = response.bodyAsText()
-            raw shouldContain "NTRP 4.0 Band Race"
-            raw shouldContain player.id
-            raw shouldNotContain "4.200000"
-
-            // ...but an ADMINISTRATOR (or RATER) does see the precise rating (#186).
-            val asAdmin =
-                client.get(urlString = "/api/v1/standings") {
+            // An ADMINISTRATOR (or RATER) does see the precise rating (#186).
+            val asAdmin: StandingsPageResponse =
+                client.get(urlString = "/api/v1/standings?band=4.0&sex=Male") {
                     header(key = HttpHeaders.Authorization, value = "Bearer $admin")
+                }.body()
+            asAdmin.entries.single().currentRating shouldBe "4.200000"
+        }
+
+    @Test
+    fun `standings-me locates the caller and points at the containing page`() =
+        withApp { client ->
+            val admin = adminToken()
+            val (player, playerToken) = signUp(client = client, uid = "p1", name = "Player One")
+            setRating(client = client, admin = admin, userId = player.id, value = "4.2")
+
+            val response =
+                client.get(urlString = "/api/v1/standings/me") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
                 }
-            asAdmin.status shouldBe HttpStatusCode.OK
-            asAdmin.bodyAsText() shouldContain "4.200000"
+            response.status shouldBe HttpStatusCode.OK
+            val located: StandingsLocateResponse = response.body()
+            located.band shouldBe "4.0"
+            located.sex shouldBe "Male"
+            located.rank shouldBe 1
+            located.offset shouldBe 0
+        }
+
+    @Test
+    fun `standings-me is 404 when the caller is not in the current standings`() =
+        withApp { client ->
+            val admin = adminToken()
+            // A rated player exists (so a snapshot is published), but the caller is unrated.
+            val (rated, _) = signUp(client = client, uid = "rated", name = "Rated")
+            setRating(client = client, admin = admin, userId = rated.id, value = "4.2")
+            val (_, unratedToken) = signUp(client = client, uid = "unrated", name = "Unrated")
+
+            client.get(urlString = "/api/v1/standings/me") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $unratedToken")
+            }.status shouldBe HttpStatusCode.NotFound
+        }
+
+    @Test
+    fun `a rating change is reflected in a fresh page read (rebuild on change)`() =
+        withApp { client ->
+            val admin = adminToken()
+            val (player, playerToken) = signUp(client = client, uid = "p1", name = "Player One")
+            setRating(client = client, admin = admin, userId = player.id, value = "4.2") // FROM_4_0
+
+            // A promotion into the 4.5 band; the read now serves the player there, not in 4.0.
+            setRating(client = client, admin = admin, userId = player.id, value = "4.7") // FROM_4_5
+
+            val old: StandingsPageResponse =
+                client.get(urlString = "/api/v1/standings?band=4.0&sex=Male") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
+                }.body()
+            old.total shouldBe 0
+
+            val current: StandingsPageResponse =
+                client.get(urlString = "/api/v1/standings?band=4.5&sex=Male") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
+                }.body()
+            current.entries.single().userId shouldBe player.id
+        }
+
+    @Test
+    fun `an unknown band code is a 400`() =
+        withApp { client ->
+            val playerToken = TestFirebaseAuth.mintToken(uid = "p1")
+            client.get(urlString = "/api/v1/standings?band=nope") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
+            }.status shouldBe HttpStatusCode.BadRequest
         }
 }

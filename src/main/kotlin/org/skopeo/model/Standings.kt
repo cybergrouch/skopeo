@@ -4,6 +4,7 @@
 package org.skopeo.model
 
 import java.math.BigDecimal
+import java.time.LocalDateTime
 import java.util.UUID
 
 /**
@@ -14,15 +15,18 @@ import java.util.UUID
  */
 enum class StandingsBand(
     val label: String,
+    // A short, stable code persisted in standings_entries.band (VARCHAR(8), #220) and accepted as the
+    // `band` query parameter — the enum name (e.g. UNDER_3_0) is too long and the label is a UI header.
+    val code: String,
 ) {
-    UNDER_3_0(label = "NTRP Under 3.0 Band Race"),
-    FROM_3_0(label = "NTRP 3.0 Band Race"),
-    FROM_3_5(label = "NTRP 3.5 Band Race"),
-    FROM_4_0(label = "NTRP 4.0 Band Race"),
-    FROM_4_5(label = "NTRP 4.5 Band Race"),
-    FROM_5_0(label = "NTRP 5.0 Band Race"),
-    FROM_5_5(label = "NTRP 5.5 Band Race"),
-    SIX_PLUS(label = "NTRP 6.0+ Band Race"),
+    UNDER_3_0(label = "NTRP Under 3.0 Band Race", code = "<3.0"),
+    FROM_3_0(label = "NTRP 3.0 Band Race", code = "3.0"),
+    FROM_3_5(label = "NTRP 3.5 Band Race", code = "3.5"),
+    FROM_4_0(label = "NTRP 4.0 Band Race", code = "4.0"),
+    FROM_4_5(label = "NTRP 4.5 Band Race", code = "4.5"),
+    FROM_5_0(label = "NTRP 5.0 Band Race", code = "5.0"),
+    FROM_5_5(label = "NTRP 5.5 Band Race", code = "5.5"),
+    SIX_PLUS(label = "NTRP 6.0+ Band Race", code = "6.0+"),
     ;
 
     companion object {
@@ -37,6 +41,17 @@ enum class StandingsBand(
                 rating < BigDecimal("6.0") -> FROM_5_5
                 else -> SIX_PLUS
             }
+
+        /** The band whose persisted [code] equals [code], or null when [code] isn't a known band. */
+        fun ofCode(code: String): StandingsBand? = entries.firstOrNull { it.code == code }
+
+        /**
+         * The band whose persisted [code] equals [code], for a [code] the caller knows is valid — it was
+         * written by the snapshot builder, so it is always one of the enum's own codes (#220). Throws on
+         * the impossible unknown-code case rather than swallowing it behind a nullable, so the read path
+         * carries no unreachable null branch.
+         */
+        fun requireCode(code: String): StandingsBand = ofCode(code = code) ?: error(message = "unknown standings band code: $code")
     }
 }
 
@@ -56,12 +71,44 @@ data class StandingEntry(
 )
 
 /**
- * A single (band, sex) leaderboard (#212): players are ranked separately per sex within a band.
- * [sex] is the group's sex ("Male"/"Female"), or null for the "Unspecified" group (rare — sex is
- * required at sign-up). Ranks restart at 1 within each group.
+ * The persisted standings-snapshot lifecycle status (#220). Only PUBLISHED exists today; reads serve
+ * the latest PUBLISHED snapshot. DRAFT is reserved for #146's recompute→review→publish flow.
  */
-data class BandStandings(
+enum class SnapshotStatus { PUBLISHED, DRAFT }
+
+/**
+ * A row about to be written into a standings snapshot (#220), source-agnostic: [orderingValue] is
+ * whatever the ranking sorts by (rating today, ranking points once #146 lands). [tiebreakRating] and
+ * [achievedAt] carry the D8 tie-break inputs so reads never recompute them.
+ */
+data class StandingsEntryWrite(
     val band: StandingsBand,
     val sex: String?,
-    val entries: List<StandingEntry>,
+    val rank: Int,
+    val userId: UUID,
+    val orderingValue: BigDecimal,
+    val tiebreakRating: BigDecimal?,
+    val achievedAt: LocalDateTime?,
+)
+
+/** A stored snapshot entry as read back for a page (#220) — the persisted rank plus its user id. */
+data class StandingsSnapshotEntry(
+    val band: StandingsBand,
+    val sex: String?,
+    val rank: Int,
+    val userId: UUID,
+    val orderingValue: BigDecimal,
+)
+
+/** One page of a (band, sex) group from the latest published snapshot (#220). */
+data class StandingsPage(
+    val entries: List<StandingsSnapshotEntry>,
+    val total: Int,
+)
+
+/** Where a user sits in the latest published snapshot (#220): their (band, sex, rank), for jump-to-me. */
+data class StandingsLocation(
+    val band: StandingsBand,
+    val sex: String?,
+    val rank: Int,
 )

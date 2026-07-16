@@ -33,6 +33,11 @@ class OpenAPIIntegrationTest {
             body shouldContain "Skopeo API"
             body shouldContain "/api/v1/calculate-ranking"
             body shouldContain "/api/v1/theme"
+            // The paged standings serving layer (#220): the page endpoint, the jump-to-me endpoint,
+            // and the response schemas are all documented.
+            body shouldContain "/api/v1/standings/me"
+            body shouldContain "StandingsPageResponse"
+            body shouldContain "StandingsLocateResponse"
         }
 
     @Test

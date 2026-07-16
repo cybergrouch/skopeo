@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, within, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { StandingsTab } from './StandingsTab'
@@ -13,118 +13,125 @@ function renderTab() {
   )
 }
 
-const { useGetApiV1Standings, useGetApiV1UsersMe } = vi.hoisted(() => ({
+const { useGetApiV1Standings, getApiV1StandingsMe, useGetApiV1UsersMe } = vi.hoisted(() => ({
   useGetApiV1Standings: vi.fn(),
+  getApiV1StandingsMe: vi.fn(),
   useGetApiV1UsersMe: vi.fn(),
 }))
 
-vi.mock('@/api/generated/standings/standings', () => ({ useGetApiV1Standings }))
+vi.mock('@/api/generated/standings/standings', () => ({
+  useGetApiV1Standings,
+  getApiV1StandingsMe,
+}))
 vi.mock('@/api/generated/users/users', () => ({ useGetApiV1UsersMe }))
 
-// One (band, sex) row each: Men in two bands, Women in one, plus an Unspecified group.
-const bands = [
-  {
-    band: 'NTRP 4.0 Band Race',
-    sex: 'Male',
-    entries: [
-      { rank: 1, userId: 'm1', displayName: 'Bob Cruz', publicCode: 'BBB222', sex: 'Male', age: 40 },
-      // No display name → falls back to the public code; no age → meta omitted.
-      { rank: 2, userId: 'm2', displayName: null, publicCode: 'CCC333', sex: 'Male', age: null },
-    ],
-  },
-  {
-    band: 'NTRP 4.0 Band Race',
-    sex: 'Female',
-    entries: [{ rank: 1, userId: 'f1', displayName: 'Ana Cruz', publicCode: 'AAA111', sex: 'Female', age: 34 }],
-  },
-  {
-    band: 'NTRP 3.5 Band Race',
-    sex: 'Male',
-    entries: [{ rank: 1, userId: 'm3', displayName: 'Cy Young', publicCode: 'DDD444', sex: 'Male', age: 28 }],
-  },
-  {
-    band: 'NTRP 4.0 Band Race',
-    sex: null,
-    entries: [{ rank: 1, userId: 'u1', displayName: 'No Sex', publicCode: 'EEE555', sex: null, age: null }],
-  },
+const groups = [
+  { band: '4.0', label: 'NTRP 4.0 Band Race', sex: 'Male' },
+  { band: '4.0', label: 'NTRP 4.0 Band Race', sex: 'Female' },
+  { band: '3.5', label: 'NTRP 3.5 Band Race', sex: 'Male' },
 ]
+
+/** The default page the hook returns for the seeded band+sex (Men, 4.0). */
+const defaultPage = {
+  band: '4.0',
+  label: 'NTRP 4.0 Band Race',
+  sex: 'Male',
+  limit: 25,
+  offset: 0,
+  total: 2,
+  entries: [
+    { rank: 1, userId: 'm1', displayName: 'Bob Cruz', publicCode: 'BBB222', sex: 'Male', age: 40 },
+    // No display name → falls back to the public code; no age → meta omitted.
+    { rank: 2, userId: 'm2', displayName: null, publicCode: 'CCC333', sex: 'Male', age: null },
+  ],
+  groups,
+}
 
 describe('StandingsTab', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     useGetApiV1UsersMe.mockReturnValue({ data: { id: 'm1' } })
+    useGetApiV1Standings.mockReturnValue({ data: defaultPage, isLoading: false })
   })
 
-  it('shows a loading state while standings resolve', () => {
+  it('shows a loading state while the first page resolves', () => {
     useGetApiV1Standings.mockReturnValue({ data: undefined, isLoading: true })
     renderTab()
     expect(screen.getByText('Loading standings…')).toBeInTheDocument()
   })
 
   it('renders an interim, sex-split description', () => {
-    useGetApiV1Standings.mockReturnValue({ data: [], isLoading: false })
     renderTab()
     expect(screen.getByText(/Interim standings/i)).toBeInTheDocument()
     expect(screen.getByText(/Men's and Women's standings/i)).toBeInTheDocument()
   })
 
-  it('shows a "No standings yet." message when there are no players', () => {
-    useGetApiV1Standings.mockReturnValue({ data: [], isLoading: false })
+  it('shows a "No standings yet." message when the snapshot is empty', () => {
+    useGetApiV1Standings.mockReturnValue({
+      data: { band: null, label: null, sex: null, limit: 25, offset: 0, total: 0, entries: [], groups: [] },
+      isLoading: false,
+    })
     renderTab()
     expect(screen.getByText('No standings yet.')).toBeInTheDocument()
   })
 
-  it('defaults to Men: shows only Male bands, ranks, name/code fallback, and age (#212)', () => {
-    useGetApiV1Standings.mockReturnValue({ data: bands, isLoading: false })
+  it('renders the served band selector, sex toggle, and the ranked, name/code-fallback rows (#212)', () => {
     renderTab()
 
-    // The toggle offers Men, Women, and Unspecified (since a null-sex player exists).
-    expect(screen.getByRole('button', { name: 'Men' })).toHaveAttribute('aria-pressed', 'true')
+    // The band dropdown lists the distinct bands; the served group's sex toggles show.
+    expect(screen.getByRole('option', { name: 'NTRP 4.0 Band Race' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'NTRP 3.5 Band Race' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Men' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Women' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Unspecified' })).toBeInTheDocument()
 
-    // Both Men's bands show; Ana (Female) does not.
-    expect(screen.getByText('NTRP 4.0 Band Race')).toBeInTheDocument()
-    expect(screen.getByText('NTRP 3.5 Band Race')).toBeInTheDocument()
+    // "NTRP 4.0 Band Race" appears both as an <option> and the served card heading.
+    expect(screen.getAllByText('NTRP 4.0 Band Race').length).toBeGreaterThan(0)
     expect(screen.getByText('Bob Cruz')).toBeInTheDocument()
     expect(screen.getByText('40')).toBeInTheDocument() // age-only meta
     expect(screen.getByText('CCC333')).toBeInTheDocument() // name fallback to code
-    expect(screen.queryByText('Ana Cruz')).not.toBeInTheDocument()
   })
 
-  it('switches to Women when toggled, showing only Female bands (#212)', async () => {
-    useGetApiV1Standings.mockReturnValue({ data: bands, isLoading: false })
+  it('re-queries with the chosen band and sex when "View" is clicked', async () => {
     const user = userEvent.setup()
     renderTab()
 
-    await user.click(screen.getByRole('button', { name: 'Women' }))
-    expect(screen.getByText('Ana Cruz')).toBeInTheDocument()
-    expect(screen.queryByText('Bob Cruz')).not.toBeInTheDocument()
-    expect(screen.queryByText('NTRP 3.5 Band Race')).not.toBeInTheDocument() // no Women in that band
+    await user.selectOptions(screen.getByLabelText('Band'), '3.5')
+    await user.click(screen.getByRole('button', { name: 'View' }))
+
+    // The last query reflects the selected band and reset offset.
+    await waitFor(() => {
+      const lastCall = useGetApiV1Standings.mock.calls.at(-1)?.[0]
+      expect(lastCall).toMatchObject({ band: '3.5', sex: 'Male', limit: 25, offset: 0 })
+    })
   })
 
-  it('switches to the Unspecified group when toggled (#212)', async () => {
-    useGetApiV1Standings.mockReturnValue({ data: bands, isLoading: false })
+  it('paginates the served group via the pager (offset changes by page size)', async () => {
+    useGetApiV1Standings.mockReturnValue({ data: { ...defaultPage, total: 60 }, isLoading: false })
     const user = userEvent.setup()
     renderTab()
 
-    await user.click(screen.getByRole('button', { name: 'Unspecified' }))
-    expect(screen.getByText('No Sex')).toBeInTheDocument()
-    expect(screen.queryByText('Bob Cruz')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await waitFor(() => {
+      const lastCall = useGetApiV1Standings.mock.calls.at(-1)?.[0]
+      expect(lastCall).toMatchObject({ offset: 25 })
+    })
   })
 
-  it('hides the toggle when only one sex group is present', () => {
-    useGetApiV1Standings.mockReturnValue({ data: [bands[0]], isLoading: false }) // Men only
+  it('"Find me" loads the caller\'s page and jumps to their band/sex/offset', async () => {
+    getApiV1StandingsMe.mockResolvedValue({ band: '3.5', label: 'NTRP 3.5 Band Race', sex: 'Male', rank: 30, limit: 25, offset: 25 })
+    const user = userEvent.setup()
     renderTab()
-    expect(screen.queryByRole('button', { name: 'Men' })).not.toBeInTheDocument()
-    expect(screen.getByText('Bob Cruz')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Find me' }))
+    expect(getApiV1StandingsMe).toHaveBeenCalledWith({ limit: 25 })
+    await waitFor(() => {
+      const lastCall = useGetApiV1Standings.mock.calls.at(-1)?.[0]
+      expect(lastCall).toMatchObject({ band: '3.5', sex: 'Male', offset: 25 })
+    })
   })
 
   it('highlights only the current user’s own row', () => {
-    useGetApiV1Standings.mockReturnValue({ data: bands, isLoading: false })
     renderTab()
-
-    // me.id is m1 → its row carries the marker (Men is the default tab).
     const myRow = screen.getByLabelText('Your standing')
     expect(within(myRow).getByText('Bob Cruz')).toBeInTheDocument()
     expect(within(myRow).getByText('You')).toBeInTheDocument()
@@ -133,13 +140,11 @@ describe('StandingsTab', () => {
 
   it('highlights no row when the current user is unknown', () => {
     useGetApiV1UsersMe.mockReturnValue({ data: undefined })
-    useGetApiV1Standings.mockReturnValue({ data: bands, isLoading: false })
     renderTab()
     expect(screen.queryByLabelText('Your standing')).not.toBeInTheDocument()
   })
 
   it('shows no rating value when the payload omits it (non-privileged viewer)', () => {
-    useGetApiV1Standings.mockReturnValue({ data: bands, isLoading: false })
     const { container } = renderTab()
     container.querySelectorAll('li').forEach((row) => {
       expect(row.textContent ?? '').not.toMatch(/\d\.\d/)
@@ -147,24 +152,76 @@ describe('StandingsTab', () => {
   })
 
   it('links each player card to their public profile (#186)', () => {
-    useGetApiV1Standings.mockReturnValue({ data: bands, isLoading: false })
     renderTab()
     expect(screen.getByRole('link', { name: 'Bob Cruz' })).toHaveAttribute('href', '/players/BBB222')
-    // The name falls back to the code and still links to the profile.
     expect(screen.getByRole('link', { name: 'CCC333' })).toHaveAttribute('href', '/players/CCC333')
+  })
+
+  it('switches the served sex when a sex toggle is clicked then "View"ed', async () => {
+    const user = userEvent.setup()
+    renderTab()
+
+    await user.click(screen.getByRole('button', { name: 'Women' }))
+    // The pressed state follows the pending selection before "View".
+    expect(screen.getByRole('button', { name: 'Women' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Men' })).toHaveAttribute('aria-pressed', 'false')
+
+    await user.click(screen.getByRole('button', { name: 'View' }))
+    await waitFor(() => {
+      const lastCall = useGetApiV1Standings.mock.calls.at(-1)?.[0]
+      expect(lastCall).toMatchObject({ band: '4.0', sex: 'Female', offset: 0 })
+    })
+  })
+
+  it('queries with no sex for the Unspecified group (sex omitted)', async () => {
+    useGetApiV1Standings.mockReturnValue({
+      data: {
+        ...defaultPage,
+        groups: [{ band: '4.0', label: 'NTRP 4.0 Band Race', sex: null }],
+      },
+      isLoading: false,
+    })
+    const user = userEvent.setup()
+    renderTab()
+
+    await user.click(screen.getByRole('button', { name: 'Unspecified' }))
+    await user.click(screen.getByRole('button', { name: 'View' }))
+    await waitFor(() => {
+      const lastCall = useGetApiV1Standings.mock.calls.at(-1)?.[0]
+      expect(lastCall).toMatchObject({ band: '4.0', sex: undefined, offset: 0 })
+    })
+  })
+
+  it('renders an empty-group page (band/label/total absent) with a placeholder heading', async () => {
+    // A requested (band, sex) group with no members: groups still list the band, but this page is empty.
+    useGetApiV1Standings.mockReturnValue({
+      data: { band: null, label: null, sex: null, limit: 25, offset: 0, entries: [], groups },
+      isLoading: false,
+    })
+    const user = userEvent.setup()
+    renderTab()
+
+    // The served card heading falls back to "Standings" (no page label) — appearing alongside the tab's
+    // own top card title of the same name — and the body reports the empty group.
+    expect(screen.getByText('No players in this group.')).toBeInTheDocument()
+    expect(screen.getAllByText('Standings').length).toBeGreaterThan(1)
+
+    // "View" is enabled (bands exist) and, with no served band, queries with band undefined.
+    await user.click(screen.getByRole('button', { name: 'View' }))
+    await waitFor(() => {
+      const lastCall = useGetApiV1Standings.mock.calls.at(-1)?.[0]
+      expect(lastCall).toMatchObject({ band: undefined, offset: 0 })
+    })
   })
 
   it('shows the precise rating when the payload includes it (raters/admins, #186)', () => {
     useGetApiV1Standings.mockReturnValue({
-      data: [
-        {
-          band: 'NTRP 4.0 Band Race',
-          sex: 'Male',
-          entries: [
-            { rank: 1, userId: 'm1', displayName: 'Bob Cruz', publicCode: 'BBB222', sex: 'Male', age: 40, currentRating: '4.230000' },
-          ],
-        },
-      ],
+      data: {
+        ...defaultPage,
+        entries: [
+          { rank: 1, userId: 'm1', displayName: 'Bob Cruz', publicCode: 'BBB222', sex: 'Male', age: 40, currentRating: '4.230000' },
+        ],
+      },
       isLoading: false,
     })
     renderTab()
