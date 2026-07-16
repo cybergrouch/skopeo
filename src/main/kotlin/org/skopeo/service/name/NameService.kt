@@ -132,9 +132,11 @@ class NameService(
         token: VerifiedFirebaseToken,
         userId: UUID,
     ): Either<ServiceError, UUID> {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
-        val isSelf = caller?.id == userId
-        val isAdmin = caller?.capabilities?.contains(element = Capability.ADMINISTRATOR) == true
-        return if (caller == null || (!isSelf && !isAdmin)) ServiceError.Forbidden().left() else caller.id.right()
+        // capabilities is non-null, so an explicit null check (vs a ?. chain) avoids a dead
+        // "present caller but null capabilities" branch that could never be covered.
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid) ?: return ServiceError.Forbidden().left()
+        val isSelf = caller.id == userId
+        val isAdmin = caller.capabilities.contains(element = Capability.ADMINISTRATOR)
+        return if (!isSelf && !isAdmin) ServiceError.Forbidden().left() else caller.id.right()
     }
 }
