@@ -1186,4 +1186,42 @@ class MatchServiceTest {
         h2h.team1Wins shouldBe 1
         h2h.team2Wins shouldBe 0
     }
+
+    @Test
+    fun `head-to-head excludes a meeting where the two were doubles partners on the second team (#285)`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val p3 = provisionUser(uid = "p3", rated = true)
+        val p4 = provisionUser(uid = "p4", rated = true)
+
+        // As above, but the pair are partners on team2 (not team1). This is the mirror orientation — p1 is
+        // absent from team1 yet present on team2 while p2 is absent from team1 — so it exercises the second
+        // side's "not opponents" arm of wereOpponents that the team1 partner case leaves untested (#285).
+        val partners =
+            service
+                .createFixture(
+                    token = token(uid = "host"),
+                    request =
+                        FixtureInput(
+                            matchFormat = TeamType.DOUBLES,
+                            matchType = MatchType.OPEN_PLAY,
+                            matchDate = LocalDate.parse("2026-01-15"),
+                            team1 = listOf(p3.id, p4.id),
+                            team2 = listOf(p1.id, p2.id),
+                        ),
+                ).shouldBeRight()
+        service.uploadResult(token = token(uid = "host"), matchId = partners.id, request = straightSets()).shouldBeRight()
+
+        val current =
+            create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p2.id, date = LocalDate.parse("2026-03-01")))
+        service.uploadResult(token = token(uid = "host"), matchId = current.id, request = straightSets()).shouldBeRight()
+
+        val h2h = service.publicByCode(token = token(uid = "host"), code = current.publicCode).shouldBeRight().headToHead.shouldNotBeNull()
+
+        // The partner meeting is excluded; only the current singles match tallies (p1 won it).
+        h2h.meetings shouldBe emptyList()
+        h2h.team1Wins shouldBe 1
+        h2h.team2Wins shouldBe 0
+    }
 }
