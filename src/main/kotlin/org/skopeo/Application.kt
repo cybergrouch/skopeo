@@ -168,6 +168,9 @@ fun Application.configureCORS() {
         allowMethod(method = HttpMethod.Get)
         allowMethod(method = HttpMethod.Post)
         allowMethod(method = HttpMethod.Put)
+        // PATCH backs every rename/partial-update route (club/event rename, set-club, audit comment,
+        // profile edits, …). Without it the CORS plugin 403s those cross-origin requests before routing.
+        allowMethod(method = HttpMethod.Patch)
         allowMethod(method = HttpMethod.Delete)
         allowMethod(method = HttpMethod.Options)
 
