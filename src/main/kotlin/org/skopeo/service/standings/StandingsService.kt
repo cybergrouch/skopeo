@@ -174,18 +174,19 @@ class StandingsService(
         // the snapshot's ordering_value carries a coarser scale and is source-agnostic (points later, #146).
         val ratingsById = if (revealRates) ratings.findCurrentRatings(userIds = shownIds) else emptyMap()
         val entries =
-            result.entries.mapNotNull { entry ->
-                byId[entry.userId]?.let { user ->
-                    StandingEntry(
-                        rank = entry.rank,
-                        userId = user.id,
-                        displayName = user.displayName(),
-                        publicCode = user.publicCode,
-                        sex = user.sex,
-                        age = user.dateOfBirth?.let { ageInYears(dateOfBirth = it, asOf = today) },
-                        currentRating = ratingsById[user.id]?.currentRating?.toPlainString(),
-                    )
-                }
+            result.entries.map { entry ->
+                // The snapshot's user_id FK is ON DELETE CASCADE, so every ranked entry has a live user.
+                val user = byId.getValue(key = entry.userId)
+                StandingEntry(
+                    rank = entry.rank,
+                    userId = user.id,
+                    displayName = user.displayName(),
+                    publicCode = user.publicCode,
+                    sex = user.sex,
+                    age = user.dateOfBirth?.let { ageInYears(dateOfBirth = it, asOf = today) },
+                    // currentRating is a non-null BigDecimal, so only the map-miss arm is meaningful.
+                    currentRating = ratingsById[user.id]?.let { it.currentRating.toPlainString() },
+                )
             }
         return StandingsView(
             band = chosen.band,

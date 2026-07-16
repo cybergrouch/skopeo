@@ -114,6 +114,20 @@ class StandingsServiceTest {
     }
 
     @Test
+    fun `page after a rebuild with no rated players returns an empty view from a published snapshot (#220)`() {
+        // rebuild() always publishes a snapshot; with nobody rated it carries no groups, so a bare page
+        // (no band requested) resolves to no group — the published-but-empty (snapshotId != null, chosen null) arm.
+        provision(uid = "unrated", sex = "Male")
+        service.rebuild()
+
+        val view = page(band = null, sex = null)
+        view.band.shouldBeNull()
+        view.entries shouldHaveSize 0
+        view.total shouldBe 0
+        view.groups shouldHaveSize 0
+    }
+
+    @Test
     fun `rebuild ranks each (band, sex) group from 1 and page serves it (#220)`() {
         val m1 = provision(uid = "m1", sex = "Male").also { rate(user = it, value = "4.3") }
         val m2 = provision(uid = "m2", sex = "Male").also { rate(user = it, value = "4.1") }
