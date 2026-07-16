@@ -38,6 +38,9 @@ class OpenAPIIntegrationTest {
             body shouldContain "/api/v1/standings/me"
             body shouldContain "StandingsPageResponse"
             body shouldContain "StandingsLocateResponse"
+            // The points-based recompute trigger (#146 phase 2).
+            body shouldContain "/api/v1/standings/calculations"
+            body shouldContain "StandingsCalculationResponse"
             body shouldContain "/ranking-points"
         }
 

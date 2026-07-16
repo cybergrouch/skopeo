@@ -10,6 +10,7 @@ import org.jetbrains.exposed.sql.batchInsert
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.skopeo.model.SnapshotSource
 import org.skopeo.model.SnapshotStatus
 import org.skopeo.model.StandingsBand
 import org.skopeo.model.StandingsEntryWrite
@@ -41,6 +42,9 @@ class StandingsSnapshotRepository {
         asOf: LocalDate,
         status: SnapshotStatus,
         entries: List<StandingsEntryWrite>,
+        // The source tag (#146). Defaults to RATING so the phase-1 rebuild keeps tagging rating-derived;
+        // the points recompute passes POINTS, which reads then prefer.
+        source: SnapshotSource = SnapshotSource.RATING,
     ): UUID =
         transaction {
             val snapshotId =
@@ -48,6 +52,7 @@ class StandingsSnapshotRepository {
                     it[StandingsSnapshotsTable.computedAt] = computedAt
                     it[StandingsSnapshotsTable.asOf] = asOf
                     it[StandingsSnapshotsTable.status] = status.name
+                    it[StandingsSnapshotsTable.sourceCol] = source.name
                 }[StandingsSnapshotsTable.id].value
             StandingsEntriesTable.batchInsert(data = entries) { entry ->
                 this[StandingsEntriesTable.snapshotId] = snapshotId
@@ -70,6 +75,27 @@ class StandingsSnapshotRepository {
                 .where { StandingsSnapshotsTable.status eq SnapshotStatus.PUBLISHED.name }
                 .orderBy(StandingsSnapshotsTable.seq to SortOrder.DESC)
                 .limit(n = 1)
+                .map { it[StandingsSnapshotsTable.id].value }
+                .firstOrNull()
+        }
+
+    /**
+     * The generation reads should serve once points exist (#146): the latest PUBLISHED `source=POINTS`
+     * snapshot when any has been committed, else the latest PUBLISHED `source=RATING` one. This is the
+     * non-disruptive flip — the moment an admin commits a points calculation, standings switch to points,
+     * and until then the phase-1 rating-derived snapshot serves. Null when nothing is published at all.
+     */
+    fun latestPublishedPreferringPoints(): UUID? =
+        transaction {
+            // Prefer POINTS over RATING via source ASC ("POINTS" sorts before "RATING"), then newest by seq.
+            // The flip is sticky, not time-based: any committed POINTS generation wins over a newer RATING one.
+            StandingsSnapshotsTable
+                .selectAll()
+                .where { StandingsSnapshotsTable.status eq SnapshotStatus.PUBLISHED.name }
+                .orderBy(
+                    StandingsSnapshotsTable.sourceCol to SortOrder.ASC,
+                    StandingsSnapshotsTable.seq to SortOrder.DESC,
+                ).limit(n = 1)
                 .map { it[StandingsSnapshotsTable.id].value }
                 .firstOrNull()
         }
@@ -135,14 +161,14 @@ class StandingsSnapshotRepository {
 
     /** Strongest band first (enum ordinal descending), then Men → Women → Unspecified — mirrors the read UI. */
     private fun groupComparator(): Comparator<Pair<StandingsBand, String?>> =
-        compareByDescending<Pair<StandingsBand, String?>> { it.first.ordinal }.thenBy { sexOrder(sex = it.second) }
-
-    private fun sexOrder(sex: String?): Int =
-        when (sex) {
-            "Male" -> 0
-            "Female" -> 1
-            else -> 2
-        }
+        compareByDescending<Pair<StandingsBand, String?>> { it.first.ordinal }
+            .thenBy {
+                when (it.second) {
+                    "Male" -> 0
+                    "Female" -> 1
+                    else -> 2
+                }
+            }
 
     private fun ResultRow.sexValue(): String? = this[StandingsEntriesTable.sex].let { if (it == UNSPECIFIED_SEX) null else it }
 

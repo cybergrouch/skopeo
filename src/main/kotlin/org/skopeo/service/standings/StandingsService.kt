@@ -4,6 +4,7 @@
 package org.skopeo.service.standings
 
 import org.skopeo.model.Capability
+import org.skopeo.model.SnapshotSource
 import org.skopeo.model.SnapshotStatus
 import org.skopeo.model.StandingEntry
 import org.skopeo.model.StandingsBand
@@ -90,6 +91,8 @@ class StandingsService(
             asOf = LocalDate.now(),
             status = SnapshotStatus.PUBLISHED,
             entries = writes,
+            // Tag this generation RATING (#146); reads prefer a committed POINTS snapshot over it.
+            source = SnapshotSource.RATING,
         )
     }
 
@@ -129,7 +132,8 @@ class StandingsService(
         offset: Int?,
     ): StandingsView {
         val revealRates = callerCanSeeRates(token = token)
-        val snapshotId = snapshots.latestPublished()
+        // Prefer a committed POINTS snapshot (#146); until one exists, the phase-1 RATING snapshot serves.
+        val snapshotId = snapshots.latestPublishedPreferringPoints()
         val groups =
             snapshotId?.let { id -> snapshots.groups(snapshotId = id).map { GroupRef(band = it.first, sex = it.second) } }.orEmpty()
         val requested = band?.let { GroupRef(band = it, sex = sex) }
@@ -210,7 +214,10 @@ class StandingsService(
         limit: Int?,
     ): LocateView? {
         val caller = users.findByFirebaseUid(firebaseUid = token.uid)
-        val location = caller?.let { snapshots.latestPublished()?.let { id -> snapshots.locate(snapshotId = id, userId = caller.id) } }
+        val location =
+            caller?.let {
+                snapshots.latestPublishedPreferringPoints()?.let { id -> snapshots.locate(snapshotId = id, userId = caller.id) }
+            }
         return location?.let {
             val pageSize = (limit ?: DEFAULT_PAGE_SIZE).coerceIn(minimumValue = 1, maximumValue = MAX_PAGE_SIZE)
             // rank is 1-based; the containing page starts at floor((rank - 1) / pageSize) * pageSize.

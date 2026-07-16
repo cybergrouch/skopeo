@@ -2995,6 +2995,37 @@ paths:
         '404':
           description: The caller is not in the current standings
 
+  /api/v1/standings/calculations:
+    post:
+      summary: Recompute the points-based standings (ADMINISTRATOR only, #146 phase 2)
+      description: >-
+        Rebuilds the standings snapshot from the ranking-points ledger (not ratings). It sums each
+        active player's counting awards (ACTIVE and in their validity window as of now) per (band, sex)
+        using the award's own band + sex tags (band-tagged, decision D2) and ranks each group by points
+        descending, tie-broken by higher current rating then name. dryRun defaults to true (an empty
+        body is a dry run) and previews with no writes; an explicit false publishes a POINTS snapshot,
+        after which reads automatically prefer points over rating-derived standings. Scheduling is #389
+        and tournament auto-awards are #390 — both out of scope here (this is the manual trigger).
+      tags:
+        - Standings
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StandingsCalculationRequest'
+      responses:
+        '200':
+          description: The recompute outcome (preview or committed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandingsCalculationResponse'
+        '403':
+          description: Caller is not an ADMINISTRATOR
+
   /api/v1/users/{userId}/ranking-points:
     post:
       summary: Grant a ranking-point award (#146)
@@ -5734,6 +5765,77 @@ components:
           type: integer
         offset:
           type: integer
+
+    StandingsCalculationRequest:
+      type: object
+      description: >-
+        Body for the points-based standings recompute (#146 phase 2). dryRun defaults to true (preview
+        only); set it explicitly to false to publish a POINTS snapshot.
+      properties:
+        dryRun:
+          type: boolean
+          default: true
+
+    StandingsCalculationEntryResponse:
+      type: object
+      description: One ranked player in a recomputed (band, sex) group — points total + tie-break rating (#146).
+      required:
+        - rank
+        - userId
+        - publicCode
+        - points
+      properties:
+        rank:
+          type: integer
+        userId:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+          nullable: true
+        publicCode:
+          type: string
+        points:
+          type: string
+          description: The player's summed counting points for this (band, sex) as a decimal string.
+        currentRating:
+          type: string
+          nullable: true
+          description: The player's current rating (the D8 tie-break input); null when unrated.
+
+    StandingsCalculationGroupResponse:
+      type: object
+      description: One recomputed (band, sex) race, ranked by points descending (#146).
+      required:
+        - band
+        - entries
+      properties:
+        band:
+          type: string
+        sex:
+          type: string
+          nullable: true
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/StandingsCalculationEntryResponse'
+
+    StandingsCalculationResponse:
+      type: object
+      description: The points-based recompute outcome (#146) — whether it was a dry run, plus the ranked groups.
+      required:
+        - dryRun
+        - groupsComputed
+        - groups
+      properties:
+        dryRun:
+          type: boolean
+        groupsComputed:
+          type: integer
+        groups:
+          type: array
+          items:
+            $ref: '#/components/schemas/StandingsCalculationGroupResponse'
 
     GrantRankingPointsRequest:
       type: object

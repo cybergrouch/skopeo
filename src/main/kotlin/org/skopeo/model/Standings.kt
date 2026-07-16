@@ -77,6 +77,14 @@ data class StandingEntry(
 enum class SnapshotStatus { PUBLISHED, DRAFT }
 
 /**
+ * What produced a standings snapshot (#146, phase 2). [RATING] is the phase-1 rating-derived source
+ * ([org.skopeo.service.standings.StandingsService.rebuild]); [POINTS] is the ranking-points-ledger
+ * recompute. Reads prefer the latest PUBLISHED [POINTS] snapshot when one exists, else fall back to
+ * [RATING], so the two coexist and standings flip to points automatically once a points run is committed.
+ */
+enum class SnapshotSource { RATING, POINTS }
+
+/**
  * A row about to be written into a standings snapshot (#220), source-agnostic: [orderingValue] is
  * whatever the ranking sorts by (rating today, ranking points once #146 lands). [tiebreakRating] and
  * [achievedAt] carry the D8 tie-break inputs so reads never recompute them.

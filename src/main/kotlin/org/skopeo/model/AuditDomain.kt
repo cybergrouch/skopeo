@@ -46,6 +46,8 @@ enum class AuditAction {
     SETTINGS_THEME_CHANGED,
     RANKING_POINTS_AWARDED,
     RANKING_POINTS_REVOKED,
+    STANDINGS_RECALCULATED,
+    STANDINGS_PUBLISHED,
 }
 
 /** The kind of entity an [AuditAction] concerns. */
@@ -60,6 +62,7 @@ enum class AuditEntityType {
     CALCULATION,
     SETTING,
     RANKING_POINT,
+    STANDINGS,
 }
 
 /**
@@ -81,6 +84,7 @@ enum class AuditCategory {
     EVENT_MANAGEMENT,
     SETTINGS_MANAGEMENT,
     RANKING_POINTS,
+    STANDINGS,
 }
 
 /** The category an action rolls up into. */
@@ -124,6 +128,9 @@ val AuditAction.category: AuditCategory
             AuditAction.RANKING_POINTS_AWARDED,
             AuditAction.RANKING_POINTS_REVOKED,
             -> AuditCategory.RANKING_POINTS
+            AuditAction.STANDINGS_RECALCULATED,
+            AuditAction.STANDINGS_PUBLISHED,
+            -> AuditCategory.STANDINGS
         }
 
 /** The actions that roll up into a category (empty for categories whose events aren't wired yet). */
