@@ -28,7 +28,7 @@
   <div class="canvas theme-offseason">
     <div class="card">
       <h3>Off-Season</h3>
-      <p>Sleek, structural training focus.</p>
+      <p>Sleek, structural training focus. <a href="#">Public page (QR)</a></p>
       <button class="btn">View Stats</button>
     </div>
   </div>
@@ -38,7 +38,7 @@
     <div class="card">
       <span class="badge">Holiday Special</span>
       <h3>Festive Season</h3>
-      <p>Enjoy a rich, joyful layout featuring vibrant holiday colors.</p>
+      <p>Enjoy a rich, joyful layout featuring vibrant holiday colors. <a href="#">Public page (QR)</a></p>
       <button class="btn">View Gift Guide</button>
     </div>
   </div>
@@ -47,7 +47,7 @@
   <div class="canvas theme-ao">
     <div class="card">
       <h3>Melbourne Park</h3>
-      <p>Electric, cool oceanic summer.</p>
+      <p>Electric, cool oceanic summer. <a href="#">Public page (QR)</a></p>
       <button class="btn">Live Scores</button>
     </div>
   </div>
@@ -56,7 +56,7 @@
   <div class="canvas theme-clay">
     <div class="card">
       <h3>Roland Garros</h3>
-      <p>Warm, organic earthy tones.</p>
+      <p>Warm, organic earthy tones. <a href="#">Public page (QR)</a></p>
       <button class="btn">Match Center</button>
     </div>
   </div>
@@ -65,7 +65,7 @@
   <div class="canvas theme-grass">
     <div class="card">
       <h3>Wimbledon</h3>
-      <p>Classic, prestigious lawn green.</p>
+      <p>Classic, prestigious lawn green. <a href="#">Public page (QR)</a></p>
       <button class="btn">Order of Play</button>
     </div>
   </div>
@@ -74,7 +74,7 @@
   <div class="canvas theme-uso">
     <div class="card">
       <h3>Flushing Meadows</h3>
-      <p>High-octane night session energy.</p>
+      <p>High-octane night session energy. <a href="#">Public page (QR)</a></p>
       <button class="btn">Buy Tickets</button>
     </div>
   </div>
@@ -108,6 +108,15 @@
   }
   .card h3 { margin: 0 0 8px 0; font-size: 1.25rem; font-weight: 700; }
   .card p { margin: 0 0 20px 0; font-size: 0.9rem; line-height: 1.4; }
+  /* Content/public-page link base treatment (#394) — always bold + underlined; per-theme color below. */
+  .card p a {
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-thickness: 1px;
+    transition: text-decoration-thickness 0.2s ease, color 0.2s ease, text-decoration-color 0.2s ease;
+  }
+  .card p a:hover { text-decoration-thickness: 2px; }
   .btn {
     border: none;
     padding: 10px 16px;
@@ -124,12 +133,16 @@
   .theme-offseason { background-color: #F1F3F5; border: 1px solid #E2E8F0; }
   .theme-offseason .card { background-color: #FFFFFF; border: 1px solid #CED4DA; color: #212529; }
   .theme-offseason .card p { color: #495057; }
+  .theme-offseason .card p a { color: #212529; text-decoration-color: #495057; }
+  .theme-offseason .card p a:hover { color: #000000; text-decoration-color: #000000; }
   .theme-offseason .btn { background-color: #D2FE00; color: #212529; border: 1px solid #495057; }
 
   /* --- 2. CHRISTMAS THEME (Red Canvas, Pine Card, White Typography/Borders, Gold Button) --- */
   .theme-christmas { background-color: #A6192E; }
   .theme-christmas .card { background-color: #164A35; border: 2px solid #FFFFFF; color: #FFFFFF; }
   .theme-christmas .card p { color: #E2ECE9; }
+  .theme-christmas .card p a { color: #FFFFFF; text-decoration-color: #E5B842; }
+  .theme-christmas .card p a:hover { color: #E5B842; text-decoration-color: #E5B842; }
   .theme-christmas .btn { background-color: #E5B842; color: #112A1F; }
   .theme-christmas .badge {
     display: inline-block;
@@ -148,24 +161,32 @@
   .theme-ao { background-color: #F0F6FA; border: 1px solid #E2E8F0; }
   .theme-ao .card { background-color: #FFFFFF; border: 1px solid #0080C8; color: #0A1D37; }
   .theme-ao .card p { color: #4A5568; }
+  .theme-ao .card p a { color: #0080C8; text-decoration-color: #0080C8; }
+  .theme-ao .card p a:hover { color: #0A1D37; text-decoration-color: #0A1D37; }
   .theme-ao .btn { background-color: #CCFF00; color: #0A1D37; border: 1px solid #0080C8; }
 
   /* --- 4. CLAY SEASON THEME (Warm Sand, Terracotta Accent) --- */
   .theme-clay { background-color: #FDF6F0; border: 1px solid #E2E8F0; }
   .theme-clay .card { background-color: #FFFFFF; border: 1px solid #C1522D; color: #2B1A12; }
   .theme-clay .card p { color: #614E43; }
+  .theme-clay .card p a { color: #C1522D; text-decoration-color: #C1522D; }
+  .theme-clay .card p a:hover { color: #2B1A12; text-decoration-color: #2B1A12; }
   .theme-clay .btn { background-color: #C1522D; color: #FFFFFF; }
 
   /* --- 5. GRASS SEASON THEME (Mint, Purple/Green Accent) --- */
   .theme-grass { background-color: #F4F9F5; border: 1px solid #E2E8F0; }
   .theme-grass .card { background-color: #FFFFFF; border: 1px solid #00703C; color: #1B3B2B; }
   .theme-grass .card p { color: #4A5D50; }
+  .theme-grass .card p a { color: #452263; text-decoration-color: #452263; }
+  .theme-grass .card p a:hover { color: #00703C; text-decoration-color: #00703C; }
   .theme-grass .btn { background-color: #452263; color: #FFFFFF; }
 
   /* --- 6. US OPEN THEME (Dark Midnight, Blue/Green Accent) --- */
   .theme-uso { background-color: #121824; }
   .theme-uso .card { background-color: #1E293B; border: 1px solid #63B233; color: #FFFFFF; }
   .theme-uso .card p { color: #94A3B8; }
+  .theme-uso .card p a { color: #63B233; text-decoration-color: #63B233; }
+  .theme-uso .card p a:hover { color: #FFFFFF; text-decoration-color: #FFFFFF; }
   .theme-uso .btn { background-color: #005DAA; color: #FFFFFF; }
 </style>
 

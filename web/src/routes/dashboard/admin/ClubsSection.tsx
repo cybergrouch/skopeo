@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
+import { PublicPageLink } from "@/components/PublicPageLink";
 import {
   Card,
   CardContent,
@@ -194,12 +194,12 @@ function ClubRow({
           <>
             <p className="font-medium">{club.name}</p>
             <div className="flex items-center gap-1">
-              <Link
+              <PublicPageLink
                 to={`/clubs/${club.publicCode}`}
-                className="text-xs text-primary hover:underline"
+                className="text-xs"
               >
                 Public page (QR)
-              </Link>
+              </PublicPageLink>
               <Button
                 type="button"
                 variant="ghost"

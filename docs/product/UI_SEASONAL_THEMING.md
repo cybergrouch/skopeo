@@ -132,6 +132,21 @@ A rich, joyful holiday look: a bold crimson canvas with a deep-pine card anchor,
 | **Grass** | `#F4F9F5` Mint Cream | `#FFFFFF` White | `#452263` & `#00703C` (Purple / Green) | Classic, elegant, prestigious |
 | **US Open** *(dark)* | `#121824` Midnight | `#1E293B` Slate | `#005DAA` & `#63B233` (Blue / Green) | High-octane, modern, night session |
 
+### 5.1 Content-link colors (#394)
+
+Public-page / share links (the "Public page (QR)" anchors and similar) get an explicit **per-theme link color + underline**, not the generic primary color — that color was hard to read on the AO and Off-Season card surfaces. The shared `.public-page-link` treatment (used by the `PublicPageLink` component) is always **bold + underlined** and pulls color from the `--link` / `--link-underline` / `--link-hover` tokens below. Colors are read against each theme's **card surface** (`#FFFFFF` for the light themes; Pine `#164A35` for Christmas; Slate `#1E293B` for US Open).
+
+| Theme | `--link` (default) | `--link-underline` | `--link-hover` (color + underline) | Contrast vs card |
+|---|---|---|---|---|
+| **Off-Season** | `#212529` Dark Slate | `#495057` Steel | `#000000` Black | 15.4:1 — AA ✅ |
+| **Christmas** *(dark)* | `#FFFFFF` White | `#E5B842` Gold | `#E5B842` Gold (color shifts to gold; underline already gold) | 10.2:1 — AA ✅ |
+| **Australian Open** | `#0080C8` AO Blue | `#0080C8` AO Blue | `#0A1D37` Midnight | 4.27:1 — AA-large ✅ / AA-normal ⚠️ (see note) |
+| **Clay** | `#C1522D` Clay Orange | `#C1522D` Clay Orange | `#2B1A12` Dark Chocolate | 4.65:1 — AA ✅ |
+| **Grass** | `#452263` Wimbledon Purple | `#452263` Purple | `#00703C` Lawn Green | 12.6:1 — AA ✅ |
+| **US Open** *(dark)* | `#63B233` Apple Green | `#63B233` Apple Green | `#FFFFFF` White | 5.5:1 — AA ✅ |
+
+> **AO note:** AO Blue `#0080C8` on white is 4.27:1 — it clears WCAG AA for *large* text (≥3:1) but is just under the 4.5:1 bar for *normal-size* text. It is a large improvement over the previous generic treatment and is the brand's on-court blue; kept per the #394 palette. If a stricter AA-normal pass is required, darken toward `#006BA6` (≈5.1:1).
+
 ---
 
 ## 6. AUTO season resolver

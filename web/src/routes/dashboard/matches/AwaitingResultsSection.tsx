@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
+import { PublicPageLink } from "@/components/PublicPageLink";
 import {
   DndContext,
   KeyboardSensor,
@@ -221,12 +221,12 @@ function MatchResultRow({
         ) : (
           <Badge variant={badge.variant}>{badge.label}</Badge>
         )}
-        <Link
+        <PublicPageLink
           to={`/matches/${match.publicCode}`}
-          className="ml-auto text-xs text-primary hover:underline"
+          className="ml-auto text-xs"
         >
           Public page (QR)
-        </Link>
+        </PublicPageLink>
       </div>
       {showForm ? (
         <>

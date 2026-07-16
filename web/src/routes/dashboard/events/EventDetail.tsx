@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
+import { PublicPageLink } from "@/components/PublicPageLink";
 import {
   Card,
   CardContent,
@@ -391,12 +391,9 @@ export function EventDetail({
                   {event.publicCode}
                 </code>
                 {" · "}
-                <Link
-                  to={`/events/${event.publicCode}`}
-                  className="text-primary hover:underline"
-                >
+                <PublicPageLink to={`/events/${event.publicCode}`}>
                   Public page
-                </Link>
+                </PublicPageLink>
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">

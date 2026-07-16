@@ -1,4 +1,5 @@
 import { Link, useParams } from 'react-router-dom'
+import { PublicPageLink } from '@/components/PublicPageLink'
 import {
   Card,
   CardContent,
@@ -166,12 +167,12 @@ function HeadToHeadCard({ match }: { match: MatchPublicResponse }) {
                     {score ? ` · ${score}` : ''}
                     {won ? ` · ${won} won` : ''}
                   </div>
-                  <Link
+                  <PublicPageLink
                     to={`/matches/${meeting.publicCode}`}
-                    className="mt-1 inline-block text-xs text-primary hover:underline"
+                    className="mt-1 inline-block text-xs"
                   >
                     Public page (QR)
-                  </Link>
+                  </PublicPageLink>
                 </li>
               )
             })}

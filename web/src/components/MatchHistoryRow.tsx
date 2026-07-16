@@ -1,5 +1,5 @@
-import { Link } from 'react-router-dom'
 import type { PlayerMatchHistoryEntry } from '@/api/generated/model'
+import { PublicPageLink } from '@/components/PublicPageLink'
 import { Badge } from '@/components/ui/badge'
 import { formatConfidence } from '@/lib/confidence'
 
@@ -74,12 +74,12 @@ export function MatchHistoryRow({ match }: { match: PlayerMatchHistoryEntry }) {
               {bands(match.opponents)} (at the time)
             </div>
           ) : null}
-          <Link
+          <PublicPageLink
             to={`/matches/${match.publicCode}`}
-            className="mt-1 inline-block text-xs text-primary hover:underline"
+            className="mt-1 inline-block text-xs"
           >
             Public page (QR)
-          </Link>
+          </PublicPageLink>
         </div>
       </div>
     </li>

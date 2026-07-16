@@ -23,6 +23,10 @@
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
+  /* Content/public-page link colours (#394): default neutral treatment; each theme overrides below. */
+  --link: oklch(0.205 0 0);
+  --link-underline: oklch(0.556 0 0);
+  --link-hover: oklch(0.145 0 0);
 }
 
 .dark {
@@ -64,6 +68,9 @@
   --ring: #ced4da;
   --accent: #495057;
   --muted-foreground: #495057;
+  --link: #212529;
+  --link-underline: #495057;
+  --link-hover: #000000;
 }
 
 /* Christmas is a dark theme — crimson canvas, deep-pine cards, white text/borders, gold button. */
@@ -85,6 +92,9 @@
   --border: #ffffff;
   --ring: #ffffff;
   --input: #164a35;
+  --link: #ffffff;
+  --link-underline: #e5b842;
+  --link-hover: #e5b842;
 }
 
 [data-theme='ao'] {
@@ -97,6 +107,9 @@
   --ring: #0080c8;
   --accent: #0080c8;
   --muted-foreground: #4a5568;
+  --link: #0080c8;
+  --link-underline: #0080c8;
+  --link-hover: #0a1d37;
 }
 
 [data-theme='clay'] {
@@ -109,6 +122,9 @@
   --ring: #c1522d;
   --accent: #c1522d;
   --muted-foreground: #614e43;
+  --link: #c1522d;
+  --link-underline: #c1522d;
+  --link-hover: #2b1a12;
 }
 
 [data-theme='grass'] {
@@ -121,6 +137,9 @@
   --ring: #00703c;
   --accent: #00703c;
   --muted-foreground: #4a5d50;
+  --link: #452263;
+  --link-underline: #452263;
+  --link-hover: #00703c;
 }
 
 /* US Open is the dark theme — mirror the `.dark` neutrals for anything not court-specific. */
@@ -142,6 +161,9 @@
   --border: #63b233;
   --ring: #63b233;
   --input: #334155;
+  --link: #63b233;
+  --link-underline: #63b233;
+  --link-hover: #ffffff;
 }
 
 @theme inline {
@@ -181,5 +203,30 @@
     margin: 0;
     font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
+  }
+
+  /*
+   * Content/public-page link style (#394). Scoped to `.public-page-link` (worn by the shared
+   * PublicPageLink component) rather than a blanket `a {}` so it never touches nav links or shadcn
+   * buttons rendered as anchors. Colour comes from the per-theme --link/--link-underline/--link-hover
+   * tokens, so the "Public page (QR)" links stay readable in the AO and Off-Season themes where the
+   * generic primary colour was failing WCAG AA against the white card surface.
+   */
+  .public-page-link {
+    color: var(--link);
+    font-weight: 600;
+    text-decoration: underline;
+    text-decoration-color: var(--link-underline);
+    text-underline-offset: 3px;
+    text-decoration-thickness: 1px;
+    transition:
+      text-decoration-thickness 0.2s ease,
+      color 0.2s ease,
+      text-decoration-color 0.2s ease;
+  }
+  .public-page-link:hover {
+    color: var(--link-hover);
+    text-decoration-color: var(--link-hover);
+    text-decoration-thickness: 2px;
   }
 }
