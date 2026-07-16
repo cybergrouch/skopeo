@@ -3,6 +3,9 @@
 
 package org.skopeo
 
+import io.kotest.assertions.throwables.shouldNotThrowAny
+import io.kotest.matchers.maps.shouldContainKey
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.ktor.client.request.get
@@ -11,6 +14,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.server.testing.testApplication
+import org.yaml.snakeyaml.Yaml
 import kotlin.test.Test
 
 class OpenAPIIntegrationTest {
@@ -42,6 +46,49 @@ class OpenAPIIntegrationTest {
             body shouldContain "/api/v1/standings/calculations"
             body shouldContain "StandingsCalculationResponse"
             body shouldContain "/ranking-points"
+        }
+
+    @Test
+    fun testOpenAPISpecParsesAsValidYaml() {
+        // Substring checks alone let a malformed documentation.yaml through the backend gate and
+        // only break later in the web orval step (this happened in #400: a description with an
+        // unquoted ": " mid-string made the YAML invalid). Parse it here so the backend gate fails
+        // on malformed specs. Read the classpath resource directly — no server needed.
+        val specStream =
+            javaClass.classLoader.getResourceAsStream("openapi/documentation.yaml")
+        val specText =
+            requireNotNull(value = specStream).bufferedReader().use { reader -> reader.readText() }
+
+        var parsed: Map<String, Any>? = null
+        shouldNotThrowAny {
+            @Suppress("UNCHECKED_CAST")
+            parsed = Yaml().load<Any>(specText) as Map<String, Any>
+        }
+
+        // A structurally-broken spec (valid YAML but missing the OpenAPI skeleton) should also fail.
+        val document = parsed.shouldNotBeNull()
+        document.shouldContainKey(key = "openapi")
+        document.shouldContainKey(key = "paths")
+
+        @Suppress("UNCHECKED_CAST")
+        val components = document["components"] as? Map<String, Any>
+        components.shouldNotBeNull()
+        components.shouldContainKey(key = "schemas")
+    }
+
+    @Test
+    fun testServedOpenAPISpecParsesAsValidYaml() =
+        testApplication {
+            application {
+                module(initDatabase = false)
+            }
+
+            val body = client.get(urlString = "/openapi.yaml").bodyAsText()
+
+            // The body actually served over HTTP must also be parseable, not just the resource file.
+            shouldNotThrowAny {
+                Yaml().load<Any>(body)
+            }
         }
 
     @Test
