@@ -189,12 +189,18 @@ coverage for these.**
 | `service/rating/RatingCalculationService.kt` (`CalculationBreakdown`) | Data-class default-arg synthetics (`sets` default) | Same as `AuditEntry` — synthetic default-argument path, no logic to test. |
 | `repository/ClubsTables.kt`, `repository/MatchTables.kt` | Exposed column declarations with `.default(...)` | Table-DSL declaration noise (mirrors the `dto/`/`model/` exclusion rationale). Not executable branch logic. |
 | `service/club/ClubService.kt` (`publicByCode` → `sortedByDescending { it.endDate }`, attributed to a phantom `Comparisons.kt`) | Stdlib synthetic comparator | JaCoCo attributes the inlined stdlib nullable-key comparator (its null-handling arm) to a synthetic `Comparisons.kt`. Library code, not app logic. |
+| `repository/MatchRepository.kt` (`winLossByUsers`, ~line 375) | `checkNotNull(row[winnerTeamId]).value` — the null/throw arm | The `WHERE winnerTeamId IS NOT NULL` clause already guarantees the value is present, so the throw arm can never fire. Kotlin has no branch-free way to read a nullable column as non-null — `checkNotNull`, `?:`, and `!!` all emit an unreachable arm — so this is inherent, not a missing test. `checkNotNull(...)` is kept because it documents the SQL invariant at the read site. |
 
-For contrast, the previously-flagged unreachable Elvis in
-`repository/MatchRepository.kt#winLossByUsers` was **removed** rather than
-accepted: the surrounding query already filters `winnerTeamId.isNotNull()`, so
-the phantom `?: return@flatMap emptyList()` arm was replaced with a documented
-`checkNotNull(...)` non-null read.
+The `winLossByUsers` read above deserves a note, since an earlier pass tried to
+*eliminate* it rather than accept it. The original `?: return@flatMap emptyList()`
+Elvis was rewritten to `checkNotNull(...)` on the theory that the phantom was
+gone — but that only **relocated** the unreachable arm (now `checkNotNull`'s
+throw path). Because the query filters `winnerTeamId.isNotNull()`, the null arm
+is unreachable by construction in *any* form. Making it genuinely coverable would
+mean dropping the SQL filter and skipping null-winner rows in memory — trading a
+real (if small) query-efficiency cost for a coverage metric. We deliberately keep
+the efficient query and accept the phantom instead. **Do not contort the query to
+chase this line.**
 
 ---
 
