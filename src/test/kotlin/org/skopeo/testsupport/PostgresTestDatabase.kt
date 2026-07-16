@@ -42,6 +42,12 @@ object PostgresTestDatabase {
 
     /** Wipe the user cluster between tests (FK cascade clears children). */
     fun truncate() {
-        transaction { exec("TRUNCATE users CASCADE") }
+        transaction {
+            exec("TRUNCATE users CASCADE")
+            // app_settings isn't a child of users (updated_by is SET NULL), so reset the global
+            // settings back to their V11 seed so theme state doesn't leak across tests (#378).
+            exec(stmt = "TRUNCATE app_settings")
+            exec(stmt = "INSERT INTO app_settings (key, value, updated_at) VALUES ('ui_theme', 'AUTO', now())")
+        }
     }
 }
