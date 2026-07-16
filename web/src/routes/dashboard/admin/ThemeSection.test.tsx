@@ -66,6 +66,14 @@ describe('ThemeSection', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Saved')
   })
 
+  it('defaults to AUTO and disables the select while the setting is loading', () => {
+    useGetApiV1Theme.mockReturnValue({ data: undefined, isLoading: true })
+    renderSection()
+    const select = screen.getByLabelText('Theme') as HTMLSelectElement
+    expect(select.value).toBe('AUTO')
+    expect(select.disabled).toBe(true)
+  })
+
   it('shows an error when the save fails', async () => {
     usePutApiV1Theme.mockImplementation((options: MutationOpts) => ({
       isPending: false,
