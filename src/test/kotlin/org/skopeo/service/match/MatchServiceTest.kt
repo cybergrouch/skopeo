@@ -1095,4 +1095,95 @@ class MatchServiceTest {
         service.reorder(token = token(uid = "host"), matchIds = listOf(element = match.id))
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Conflict>()
     }
+
+    @Test
+    fun `reorder refuses a disabled match (#332)`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val date = LocalDate.parse("2026-02-01")
+        val active = create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p2.id, date = date))
+        val disabled = create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p2.id, date = date))
+        service.setActive(token = token(uid = "host"), matchId = disabled.id, active = false).shouldBeRight()
+
+        service.reorder(token = token(uid = "host"), matchIds = listOf(disabled.id, active.id))
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `head-to-head counts a reversed-side doubles meeting where the two swapped teams (#285)`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val p3 = provisionUser(uid = "p3", rated = true)
+        val p4 = provisionUser(uid = "p4", rated = true)
+
+        // A prior DOUBLES meeting with the sides swapped versus the current singles match: p2 is on team1
+        // and p1 is on team2 (the reversed orientation). They were still opponents, so it counts (#285).
+        val reversed =
+            service
+                .createFixture(
+                    token = token(uid = "host"),
+                    request =
+                        FixtureInput(
+                            matchFormat = TeamType.DOUBLES,
+                            matchType = MatchType.OPEN_PLAY,
+                            matchDate = LocalDate.parse("2026-01-15"),
+                            team1 = listOf(p2.id, p3.id),
+                            team2 = listOf(p1.id, p4.id),
+                        ),
+                ).shouldBeRight()
+        service.uploadResult(token = token(uid = "host"), matchId = reversed.id, request = straightSets()).shouldBeRight()
+
+        // The current singles match p1 (team1) vs p2 (team2), so the current view's team1Id = p1, team2Id = p2.
+        val current =
+            create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p2.id, date = LocalDate.parse("2026-03-01")))
+        service.uploadResult(token = token(uid = "host"), matchId = current.id, request = straightSets()).shouldBeRight()
+
+        val h2h = service.publicByCode(token = token(uid = "host"), code = current.publicCode).shouldBeRight().headToHead.shouldNotBeNull()
+
+        // The reversed-orientation doubles meeting is included, and p2's side won it there.
+        h2h.meetings shouldHaveSize 1
+        h2h.meetings.single().matchFormat shouldBe "DOUBLES"
+        h2h.meetings.single().winnerPublicCode shouldBe p2.publicCode
+        h2h.team1Wins shouldBe 1 // p1 won the current March match
+        h2h.team2Wins shouldBe 1 // p2's side won the prior reversed doubles meeting
+    }
+
+    @Test
+    fun `head-to-head excludes a meeting where the two were doubles partners on the same team (#285)`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val p3 = provisionUser(uid = "p3", rated = true)
+        val p4 = provisionUser(uid = "p4", rated = true)
+
+        // A prior DOUBLES meeting where p1 & p2 were PARTNERS on the same team — not opponents, so it must
+        // be dropped from their head-to-head even though listBetweenUsers surfaces it (#285).
+        val partners =
+            service
+                .createFixture(
+                    token = token(uid = "host"),
+                    request =
+                        FixtureInput(
+                            matchFormat = TeamType.DOUBLES,
+                            matchType = MatchType.OPEN_PLAY,
+                            matchDate = LocalDate.parse("2026-01-15"),
+                            team1 = listOf(p1.id, p2.id),
+                            team2 = listOf(p3.id, p4.id),
+                        ),
+                ).shouldBeRight()
+        service.uploadResult(token = token(uid = "host"), matchId = partners.id, request = straightSets()).shouldBeRight()
+
+        val current =
+            create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p2.id, date = LocalDate.parse("2026-03-01")))
+        service.uploadResult(token = token(uid = "host"), matchId = current.id, request = straightSets()).shouldBeRight()
+
+        val h2h = service.publicByCode(token = token(uid = "host"), code = current.publicCode).shouldBeRight().headToHead.shouldNotBeNull()
+
+        // The partner meeting is excluded; only the current singles match tallies (p1 won it).
+        h2h.meetings shouldBe emptyList()
+        h2h.team1Wins shouldBe 1
+        h2h.team2Wins shouldBe 0
+    }
 }
