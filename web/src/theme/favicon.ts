@@ -13,13 +13,15 @@
 import type { ThemeName } from "@/lib/season";
 
 /**
- * Per-theme favicon tint (#386). Picked from each theme's accent (see
- * docs/product/UI_SEASONAL_THEMING.md) for legibility on a typical tab strip:
+ * Per-theme favicon tint (#386, reconciled with the all-dark palette in #399). Picked from each
+ * theme's accent (see docs/product/UI_SEASONAL_THEMING.md) for legibility on a typical tab strip —
+ * some of the vibrant neons wash out at 16px, so we keep pragmatic, legible tints rather than the
+ * raw pop accent:
  * - offseason: dark slate (the neon `#D2FE00` washes out on light tabs).
- * - christmas: ribbon red.
- * - ao: AO blue.
+ * - christmas: ribbon red (deeper/steadier on a tab than the champagne-gold accent).
+ * - ao: AO blue (the volt `#CCFF00` accent washes out; the blue rim reads cleanly).
  * - clay: clay orange.
- * - grass: Wimbledon green (reads better than the deep purple at 16px).
+ * - grass: bright lavender `#9362C4` (grass is no longer green under #399; lavender reads at 16px).
  * - uso: apple green.
  */
 const THEME_ACCENT: Record<ThemeName, string> = {
@@ -27,7 +29,7 @@ const THEME_ACCENT: Record<ThemeName, string> = {
   christmas: "#D92B34",
   ao: "#0080C8",
   clay: "#C1522D",
-  grass: "#00703C",
+  grass: "#9362C4",
   uso: "#63B233",
 };
 

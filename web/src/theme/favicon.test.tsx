@@ -19,7 +19,7 @@ const EXPECTED: Record<ThemeName, string> = {
   christmas: "#D92B34",
   ao: "#0080C8",
   clay: "#C1522D",
-  grass: "#00703C",
+  grass: "#9362C4",
   uso: "#63B233",
 };
 
@@ -70,6 +70,6 @@ describe("favicon helper", () => {
     const links = document.head.querySelectorAll("link[data-theme-favicon]");
     expect(links.length).toBe(1);
     const href = decodeURIComponent(links[0].getAttribute("href") ?? "");
-    expect(href).toContain("#00703C"); // last applied (grass) wins
+    expect(href).toContain("#9362C4"); // last applied (grass) wins
   });
 });

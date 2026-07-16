@@ -11,8 +11,8 @@ interface BrandMarkProps {
  * (#a6192e/#164a35) backgrounds.
  *
  * Drawn with `fill`/`stroke="currentColor"` so callers control the color via a text-color token.
- * The header renders it as `text-foreground`, which is dark on the light themes and white on the
- * dark ones — so the mark stays legible on every seasonal theme.
+ * The header renders it as `text-foreground`; since the all-dark inversion (#399) every seasonal
+ * theme has a light `--foreground`, so the mark renders near-white and stays legible everywhere.
  *
  * The artwork mirrors the purpose-built favicon vector (#386/#396) — a rounded tile with a tennis
  * ball and its seam — so the browser-tab favicon and the in-app header mark read as the same icon.

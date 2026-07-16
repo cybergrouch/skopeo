@@ -52,100 +52,138 @@
 }
 
 /*
- * Seasonal UI themes (#378). Each `[data-theme="…"]` block retints the palette tokens; a small
- * ThemeProvider sets `document.documentElement.dataset.theme` from the global setting (or the AUTO
- * season resolver), so switching is a live token swap with no reload. `:root` stays the neutral
- * default/fallback (used when no theme is applied). Hex values come from docs/product —
- * UI_SEASONAL_THEMING.md and ui-seasonal-theming-preview.html are the source of truth.
+ * Seasonal UI themes (#378, inverted to all-dark in #399). Every `[data-theme="…"]` block is now a
+ * full dark token set — a deep season-tinted canvas (60%), a rich dark card (30%) carrying light
+ * text, and a vibrant accent (10%) for buttons/rims/links. A small ThemeProvider sets
+ * `document.documentElement.dataset.theme` from the global setting (or the AUTO season resolver),
+ * so switching is a live token swap with no reload. `:root` stays the neutral default/fallback
+ * (used when no theme is applied). Hex values come from docs/product — UI_SEASONAL_THEMING.md and
+ * ui-seasonal-theming-preview.html are the source of truth. Link colors supersede #395.
  */
+
+/* Off-Season — ink-gray canvas, steel-slate card, neon-yellow accent. */
 [data-theme='offseason'] {
-  --background: #f1f3f5;
-  --card: #ffffff;
-  --card-foreground: #212529;
+  --background: #1a1d20;
+  --foreground: #f8f9fa;
+  --card: #2b3035;
+  --card-foreground: #f8f9fa;
+  --popover: #2b3035;
+  --popover-foreground: #f8f9fa;
   --primary: #d2fe00;
   --primary-foreground: #212529;
-  --border: #ced4da;
-  --ring: #ced4da;
-  --accent: #495057;
-  --muted-foreground: #495057;
-  --link: #212529;
-  --link-underline: #495057;
-  --link-hover: #000000;
+  --secondary: #212529;
+  --secondary-foreground: #f8f9fa;
+  --muted: #212529;
+  --muted-foreground: #ced4da;
+  --accent: #d2fe00;
+  --accent-foreground: #212529;
+  --border: #495057;
+  --ring: #495057;
+  --input: #212529;
+  --link: #d2fe00;
+  --link-underline: #d2fe00;
+  --link-hover: #ffffff;
 }
 
-/* Christmas is a dark theme — crimson canvas, deep-pine cards, white text/borders, gold button. */
+/* Christmas — velvet-wine canvas, deep-spruce card (#399 chose #1A2E26 over the sample's #164A35), gold accent. */
 [data-theme='christmas'] {
-  --background: #a6192e;
+  --background: #2b050b;
   --foreground: #ffffff;
-  --card: #164a35;
+  --card: #1a2e26;
   --card-foreground: #ffffff;
-  --popover: #164a35;
+  --popover: #1a2e26;
   --popover-foreground: #ffffff;
   --primary: #e5b842;
   --primary-foreground: #112a1f;
-  --secondary: #164a35;
+  --secondary: #112a1f;
   --secondary-foreground: #ffffff;
-  --muted: #164a35;
+  --muted: #112a1f;
   --muted-foreground: #e2ece9;
   --accent: #e5b842;
   --accent-foreground: #112a1f;
-  --border: #ffffff;
-  --ring: #ffffff;
-  --input: #164a35;
-  --link: #ffffff;
+  --border: #e5b842;
+  --ring: #e5b842;
+  --input: #112a1f;
+  --link: #e5b842;
   --link-underline: #e5b842;
-  --link-hover: #e5b842;
+  --link-hover: #ffffff;
 }
 
+/* Australian Open — deep-abyss canvas, oceanic-slate card, volt-yellow accent, AO-blue rim. */
 [data-theme='ao'] {
-  --background: #f0f6fa;
-  --card: #ffffff;
-  --card-foreground: #0a1d37;
+  --background: #081626;
+  --foreground: #f0f6fa;
+  --card: #12253a;
+  --card-foreground: #f0f6fa;
+  --popover: #12253a;
+  --popover-foreground: #f0f6fa;
   --primary: #ccff00;
   --primary-foreground: #0a1d37;
+  --secondary: #0a1d37;
+  --secondary-foreground: #f0f6fa;
+  --muted: #0a1d37;
+  --muted-foreground: #e2e8f0;
+  --accent: #ccff00;
+  --accent-foreground: #0a1d37;
   --border: #0080c8;
   --ring: #0080c8;
-  --accent: #0080c8;
-  --muted-foreground: #4a5568;
-  /* Link is a slightly deeper blue than the #0080c8 accent so it clears WCAG AA-normal (#394). */
-  --link: #006ba6;
-  --link-underline: #006ba6;
-  --link-hover: #0a1d37;
+  --input: #0a1d37;
+  --link: #ccff00;
+  --link-underline: #ccff00;
+  --link-hover: #ffffff;
 }
 
+/* Clay — burnt-umber canvas, warm-espresso card, clay-orange accent, terracotta link. */
 [data-theme='clay'] {
-  --background: #fdf6f0;
-  --card: #ffffff;
-  --card-foreground: #2b1a12;
+  --background: #2b140c;
+  --foreground: #fdf6f0;
+  --card: #3d2015;
+  --card-foreground: #fdf6f0;
+  --popover: #3d2015;
+  --popover-foreground: #fdf6f0;
   --primary: #c1522d;
   --primary-foreground: #ffffff;
+  --secondary: #2b140c;
+  --secondary-foreground: #fdf6f0;
+  --muted: #2b140c;
+  --muted-foreground: #fdf6f0;
+  --accent: #c1522d;
+  --accent-foreground: #ffffff;
   --border: #c1522d;
   --ring: #c1522d;
-  --accent: #c1522d;
-  --muted-foreground: #614e43;
-  --link: #c1522d;
-  --link-underline: #c1522d;
-  --link-hover: #2b1a12;
+  --input: #2b140c;
+  --link: #e07a5f;
+  --link-underline: #e07a5f;
+  --link-hover: #ffffff;
 }
 
+/* Grass — midnight-lawn canvas, English-ivy card, bright-lavender accent, Wimbledon-purple rim. */
 [data-theme='grass'] {
-  --background: #f4f9f5;
-  --card: #ffffff;
-  --card-foreground: #1b3b2b;
-  --primary: #452263;
+  --background: #0b1f13;
+  --foreground: #f4f9f5;
+  --card: #183624;
+  --card-foreground: #f4f9f5;
+  --popover: #183624;
+  --popover-foreground: #f4f9f5;
+  --primary: #9362c4;
   --primary-foreground: #ffffff;
-  --border: #00703c;
-  --ring: #00703c;
-  --accent: #00703c;
-  --muted-foreground: #4a5d50;
-  --link: #452263;
-  --link-underline: #452263;
-  --link-hover: #00703c;
+  --secondary: #0b1f13;
+  --secondary-foreground: #f4f9f5;
+  --muted: #0b1f13;
+  --muted-foreground: #f4f9f5;
+  --accent: #9362c4;
+  --accent-foreground: #ffffff;
+  --border: #452263;
+  --ring: #452263;
+  --input: #0b1f13;
+  --link: #c5a3e8;
+  --link-underline: #c5a3e8;
+  --link-hover: #ffffff;
 }
 
-/* US Open is the dark theme — mirror the `.dark` neutrals for anything not court-specific. */
+/* US Open — midnight canvas, slate-navy card, blue primary + apple-green accent/rim/link. */
 [data-theme='uso'] {
-  --background: #121824;
+  --background: #0b0f19;
   --foreground: #ffffff;
   --card: #1e293b;
   --card-foreground: #ffffff;
