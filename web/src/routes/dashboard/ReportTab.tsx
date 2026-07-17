@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { ContentLink } from '@/components/ContentLink'
 import {
   Card,
   CardContent,
@@ -27,9 +27,7 @@ function playerName(user: BandHopUserRow): string {
 function UserRow({ user }: { user: BandHopUserRow }) {
   return (
     <li className="flex items-center justify-between gap-2 py-1 text-sm">
-      <Link to={`/players/${user.publicCode}`} className="text-primary hover:underline">
-        {playerName(user)}
-      </Link>
+      <ContentLink to={`/players/${user.publicCode}`}>{playerName(user)}</ContentLink>
       <span className="font-mono text-xs text-muted-foreground">
         {user.fromBand} → {user.toBand}
       </span>
