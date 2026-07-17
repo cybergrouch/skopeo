@@ -230,9 +230,6 @@ class StandingsService(
         val today = LocalDate.now()
         val shownIds = result.entries.map { it.userId }
         val byId = users.findAllByIds(ids = shownIds).associateBy { it.id }
-        // For privileged viewers, reveal the precise current rating (full 6-dp scale, #186) read live —
-        // the snapshot's ordering_value carries a coarser scale and is source-agnostic (points here, #146).
-        val ratingsById = if (request.revealRates) ratings.findCurrentRatings(userIds = shownIds) else emptyMap()
         val entries =
             result.entries.map { entry ->
                 // The snapshot's user_id FK is ON DELETE CASCADE, so every ranked entry has a live user.
@@ -244,8 +241,9 @@ class StandingsService(
                     publicCode = user.publicCode,
                     sex = user.sex,
                     age = user.dateOfBirth?.let { ageInYears(dateOfBirth = it, asOf = today) },
-                    // currentRating is a non-null BigDecimal, so only the map-miss arm is meaningful.
-                    currentRating = ratingsById[user.id]?.let { it.currentRating.toPlainString() },
+                    // The POINTS metric shown is the snapshot's ordering value (points), public per #64/#114
+                    // (#457). The rating is NOT the served metric here, so it stays null — never leaked.
+                    points = entry.orderingValue.toPlainString(),
                 )
             }
         return StandingsView(
@@ -300,11 +298,13 @@ class StandingsService(
 
     /**
      * A single player's competitive standing (#448) for their profile: their (band, sex, rank) plus the
-     * points backing it, under the **active** `standings_source` (read fresh per request). RATING is
-     * computed live from current ratings (points = the current rating); POINTS reads the latest published
-     * POINTS snapshot (points = the snapshot's ordering value). Null when the player isn't in the current
-     * standings — unrated for RATING, or absent / no POINTS snapshot for POINTS — so the UI shows
-     * "unranked". Order + points are public (#64/#114), so this carries no per-viewer privacy.
+     * source-appropriate metric (#457), under the **active** `standings_source` (read fresh per request).
+     * RATING is computed live from current ratings ([PlayerStanding.rating] = the current rating); POINTS
+     * reads the latest published POINTS snapshot ([PlayerStanding.points] = the snapshot's ordering value).
+     * Only one metric is set per source. Null when the player isn't in the current standings — unrated for
+     * RATING, or absent / no POINTS snapshot for POINTS — so the UI shows "unranked". This read is
+     * viewer-agnostic; the caller-aware reveal of the RATING value (#186) is applied one layer up by the
+     * profile service, where the optional caller is known.
      */
     fun locatePlayer(userId: UUID): PlayerStanding? =
         if (settings.standingsSource() == SnapshotSource.POINTS) {
@@ -315,20 +315,22 @@ class StandingsService(
                         band = entry.band,
                         sex = entry.sex,
                         rank = entry.rank,
+                        // POINTS metric is public (#64/#114); no rating here (#457).
                         points = entry.orderingValue,
                         source = SnapshotSource.POINTS,
                     )
                 }
             }
         } else {
-            // Live: find the player in the rating-derived leaderboard; points = their current rating.
+            // Live: find the player in the rating-derived leaderboard; the RATING metric is the current
+            // rating, revealed by the caller-aware read (#186/#457) — the model carries the raw value.
             rankLeaderboard().firstNotNullOfOrNull { (group, ranked) ->
                 ranked.firstOrNull { it.user.id == userId }?.let {
                     PlayerStanding(
                         band = group.first,
                         sex = group.second,
                         rank = it.rank,
-                        points = it.rating.currentRating,
+                        rating = it.rating.currentRating,
                         source = SnapshotSource.RATING,
                     )
                 }

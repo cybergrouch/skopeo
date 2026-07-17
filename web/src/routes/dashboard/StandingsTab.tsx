@@ -250,8 +250,17 @@ export function StandingsTab() {
                           <div className="text-muted-foreground">{meta}</div>
                         ) : null}
                       </div>
-                      {/* Precise rating: present only for RATER/ADMINISTRATOR viewers (#186). */}
-                      {entry.currentRating ? (
+                      {/*
+                        Source-aware metric (#457): under POINTS show the public points total; under
+                        RATING show the precise rating, present only for RATER/ADMINISTRATOR viewers (#186).
+                      */}
+                      {page?.source === 'POINTS' ? (
+                        entry.points ? (
+                          <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                            {entry.points} pts
+                          </span>
+                        ) : null
+                      ) : entry.currentRating ? (
                         <span className="shrink-0 font-mono text-xs text-muted-foreground">
                           {entry.currentRating}
                         </span>

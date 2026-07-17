@@ -16,7 +16,7 @@ describe('PlayerStandingCard', () => {
     expect(screen.getByText('Loading…')).toBeInTheDocument()
   })
 
-  it('renders the rank, points and band+sex group (#448)', () => {
+  it('shows points (not a rating) under the POINTS source (#457)', () => {
     useGetApiV1PlayersCodeStanding.mockReturnValue({
       data: { band: '4.0', bandLabel: 'NTRP 4.0 Band Race', sex: 'Male', rank: 4, points: '240', source: 'POINTS' },
       isLoading: false,
@@ -26,13 +26,35 @@ describe('PlayerStandingCard', () => {
     expect(screen.getByText(/240 pts · 4.0 Men/)).toBeInTheDocument()
   })
 
-  it('drops the sex label for an Unspecified group', () => {
+  it('shows the rating (labeled NTRP) under the RATING source when it is revealed (#457, #186)', () => {
     useGetApiV1PlayersCodeStanding.mockReturnValue({
-      data: { band: '4.0', bandLabel: 'NTRP 4.0 Band Race', sex: null, rank: 1, points: '4.200000', source: 'RATING' },
+      data: { band: '4.0', bandLabel: 'NTRP 4.0 Band Race', sex: 'Male', rank: 1, rating: '4.200000', source: 'RATING' },
       isLoading: false,
     })
     render(<PlayerStandingCard code="ABC123" />)
-    expect(screen.getByText(/4.200000 pts · 4.0/)).toBeInTheDocument()
+    expect(screen.getByText(/NTRP 4.200000 · 4.0 Men/)).toBeInTheDocument()
+  })
+
+  it('shows rank + band only under RATING when the rating is not revealed (#457, #186)', () => {
+    useGetApiV1PlayersCodeStanding.mockReturnValue({
+      data: { band: '4.0', bandLabel: 'NTRP 4.0 Band Race', sex: 'Male', rank: 1, source: 'RATING' },
+      isLoading: false,
+    })
+    render(<PlayerStandingCard code="ABC123" />)
+    expect(screen.getByText('#1')).toBeInTheDocument()
+    expect(screen.getByText(/· 4.0 Men/)).toBeInTheDocument()
+    // No rating value is rendered — the response omitted it, so nothing leaks.
+    expect(screen.queryByText(/NTRP 4/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/pts/)).not.toBeInTheDocument()
+  })
+
+  it('drops the sex label for an Unspecified group', () => {
+    useGetApiV1PlayersCodeStanding.mockReturnValue({
+      data: { band: '4.0', bandLabel: 'NTRP 4.0 Band Race', sex: null, rank: 4, points: '240', source: 'POINTS' },
+      isLoading: false,
+    })
+    render(<PlayerStandingCard code="ABC123" />)
+    expect(screen.getByText(/240 pts · 4.0/)).toBeInTheDocument()
     expect(screen.queryByText(/Men|Women/)).not.toBeInTheDocument()
   })
 

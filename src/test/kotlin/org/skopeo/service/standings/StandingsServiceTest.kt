@@ -8,9 +8,6 @@ import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.deleteWhere
-import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -29,7 +26,6 @@ import org.skopeo.model.UserName
 import org.skopeo.repository.AppSettingsRepository
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.StandingsSnapshotRepository
-import org.skopeo.repository.UserRatingsTable
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.testsupport.PostgresTestDatabase
@@ -409,11 +405,11 @@ class StandingsServiceTest {
     }
 
     @Test
-    fun `precise rating is null for an entry whose current rating is absent under POINTS (#186)`() {
-        provision(uid = "rater", capabilities = setOf(Capability.PLAYER, Capability.RATER))
-        val kept = provision(uid = "kept", sex = "Male").also { rate(user = it, value = "4.3") }
-        val gone = provision(uid = "gone", sex = "Male").also { rate(user = it, value = "4.1") }
-        // Both players in ONE published POINTS snapshot (the read serves the single latest snapshot).
+    fun `under POINTS a page exposes the points metric to every viewer and never the rating (#457, #186)`() {
+        // A non-privileged viewer (plain player) still sees the public points total, but no rating leaks.
+        provision(uid = "viewer", capabilities = setOf(element = Capability.PLAYER))
+        val top = provision(uid = "top", sex = "Male").also { rate(user = it, value = "4.3") }
+        val low = provision(uid = "low", sex = "Male").also { rate(user = it, value = "4.1") }
         snapshots.create(
             computedAt = LocalDateTime.now(),
             asOf = LocalDate.now(),
@@ -424,8 +420,8 @@ class StandingsServiceTest {
                         band = StandingsBand.FROM_4_0,
                         sex = "Male",
                         rank = 1,
-                        userId = kept.id,
-                        orderingValue = BigDecimal("4.3"),
+                        userId = top.id,
+                        orderingValue = BigDecimal("240"),
                         tiebreakRating = BigDecimal("4.3"),
                         achievedAt = null,
                     ),
@@ -433,8 +429,8 @@ class StandingsServiceTest {
                         band = StandingsBand.FROM_4_0,
                         sex = "Male",
                         rank = 2,
-                        userId = gone.id,
-                        orderingValue = BigDecimal("4.1"),
+                        userId = low.id,
+                        orderingValue = BigDecimal("180"),
                         tiebreakRating = BigDecimal("4.1"),
                         achievedAt = null,
                     ),
@@ -442,14 +438,46 @@ class StandingsServiceTest {
             source = SnapshotSource.POINTS,
         )
         setSource(value = "POINTS")
-        // The snapshot ranks both, but the current-rating row for one is removed before the read — the
-        // privileged reveal then has no live rating to show for that entry (the map-miss arm).
-        transaction { UserRatingsTable.deleteWhere { UserRatingsTable.userId eq gone.id } }
 
         val entries =
-            page(band = StandingsBand.FROM_4_0, sex = "Male", token = token(uid = "rater")).entries.associateBy { it.userId }
-        entries.getValue(key = kept.id).currentRating shouldBe "4.300000"
-        entries.getValue(key = gone.id).currentRating.shouldBeNull()
+            page(band = StandingsBand.FROM_4_0, sex = "Male", token = token(uid = "viewer")).entries.associateBy { it.userId }
+        // Points are the served metric and public (persisted at the snapshot's NUMERIC scale); the precise
+        // rating is never on a POINTS row.
+        entries.getValue(key = top.id).points shouldBe "240.0000"
+        entries.getValue(key = top.id).currentRating.shouldBeNull()
+        entries.getValue(key = low.id).points shouldBe "180.0000"
+        entries.getValue(key = low.id).currentRating.shouldBeNull()
+    }
+
+    @Test
+    fun `under POINTS the rating is not exposed even to a rater on a page row (#457, #186)`() {
+        provision(uid = "rater", capabilities = setOf(Capability.PLAYER, Capability.RATER))
+        val player = provision(uid = "p", sex = "Male").also { rate(user = it, value = "4.3") }
+        snapshots.create(
+            computedAt = LocalDateTime.now(),
+            asOf = LocalDate.now(),
+            status = SnapshotStatus.PUBLISHED,
+            entries =
+                listOf(
+                    element =
+                        StandingsEntryWrite(
+                            band = StandingsBand.FROM_4_0,
+                            sex = "Male",
+                            rank = 1,
+                            userId = player.id,
+                            orderingValue = BigDecimal("240"),
+                            tiebreakRating = BigDecimal("4.3"),
+                            achievedAt = null,
+                        ),
+                ),
+            source = SnapshotSource.POINTS,
+        )
+        setSource(value = "POINTS")
+
+        val row = page(band = StandingsBand.FROM_4_0, sex = "Male", token = token(uid = "rater")).entries.single()
+        row.points shouldBe "240.0000"
+        // Under POINTS the metric is points; the rating is not the served value, so it is never shown.
+        row.currentRating.shouldBeNull()
     }
 
     @Test
@@ -471,7 +499,7 @@ class StandingsServiceTest {
     }
 
     @Test
-    fun `locatePlayer returns the live band, sex, rank and current rating as points (#448)`() {
+    fun `locatePlayer returns the live band, sex, rank and the current rating as the RATING metric (#457)`() {
         val top = provision(uid = "top", sex = "Male").also { rate(user = it, value = "4.3") }
         val lower = provision(uid = "lower", sex = "Male").also { rate(user = it, value = "4.1") }
 
@@ -479,7 +507,9 @@ class StandingsServiceTest {
         topStanding.band shouldBe StandingsBand.FROM_4_0
         topStanding.sex shouldBe "Male"
         topStanding.rank shouldBe 1
-        topStanding.points shouldBe BigDecimal("4.300000")
+        // Under RATING the metric is the current rating; the points field is not populated (#457).
+        topStanding.rating shouldBe BigDecimal("4.300000")
+        topStanding.points.shouldBeNull()
         topStanding.source shouldBe SnapshotSource.RATING
 
         service.locatePlayer(userId = lower.id).shouldNotBeNull().rank shouldBe 2
@@ -518,7 +548,9 @@ class StandingsServiceTest {
         val standing = service.locatePlayer(userId = player.id).shouldNotBeNull()
         standing.band shouldBe StandingsBand.FROM_4_0
         standing.rank shouldBe 3
+        // Under POINTS the metric is the snapshot points; the rating field is not populated (#457).
         standing.points shouldBe BigDecimal("240.0000")
+        standing.rating.shouldBeNull()
         standing.source shouldBe SnapshotSource.POINTS
     }
 

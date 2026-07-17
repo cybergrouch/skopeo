@@ -591,24 +591,51 @@ class PlayerServiceTest {
     )
 
     @Test
-    fun `standing returns the player's live band, sex, rank and points (#448)`() {
+    fun `standing under RATING reveals the rating to the owner viewing their own profile (#457)`() {
         // Sex drives the (band, sex) group, so provision the player as Male, then give them a rating.
         val player = newUser(uid = "p", names = display(name = "Ana"), sex = "Male")
         ratings.setRating(userId = player.id, rating = BigDecimal("4.2"), level = "4.0")
 
-        val standing = service.standing(code = player.publicCode.lowercase()).shouldBeRight().shouldNotBeNull()
+        val standing =
+            service.standing(token = token(uid = "p"), code = player.publicCode.lowercase()).shouldBeRight().shouldNotBeNull()
         standing.band shouldBe "4.0"
         standing.bandLabel shouldBe "NTRP 4.0 Band Race"
         standing.sex shouldBe "Male"
         standing.rank shouldBe 1
-        standing.points shouldBe "4.200000"
         standing.source shouldBe "RATING"
+        // Owner sees their own precise rating; the public points metric is not the served one under RATING.
+        standing.rating shouldBe "4.200000"
+        standing.points.shouldBeNull()
+    }
+
+    @Test
+    fun `standing under RATING reveals the rating to a RATER but hides it from anonymous and other viewers (#457, #186)`() {
+        val player = newUser(uid = "p", names = display(name = "Ana"), sex = "Male")
+        ratings.setRating(userId = player.id, rating = BigDecimal("4.2"), level = "4.0")
+        users.provision(
+            command =
+                ProvisionUserCommand(
+                    firebaseUid = "rater",
+                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "rater", isPrimary = true),
+                    names = display(name = "Rater"),
+                    capabilities = setOf(Capability.PLAYER, Capability.RATER),
+                ),
+        )
+        newUser(uid = "other", names = display(name = "Other"))
+
+        // RATER may see the precise rating.
+        service.standing(token = token(uid = "rater"), code = player.publicCode)
+            .shouldBeRight().shouldNotBeNull().rating shouldBe "4.200000"
+        // Anonymous (no token) and another plain player see rank + band only — no rating leaked.
+        service.standing(token = null, code = player.publicCode).shouldBeRight().shouldNotBeNull().rating.shouldBeNull()
+        service.standing(token = token(uid = "other"), code = player.publicCode)
+            .shouldBeRight().shouldNotBeNull().rating.shouldBeNull()
     }
 
     @Test
     fun `standing is a right-null for an unranked (unrated) player (#448)`() {
         val player = newUser(uid = "p", names = display(name = "Ana"))
-        service.standing(code = player.publicCode).shouldBeRight().shouldBeNull()
+        service.standing(token = null, code = player.publicCode).shouldBeRight().shouldBeNull()
     }
 
     @Test
