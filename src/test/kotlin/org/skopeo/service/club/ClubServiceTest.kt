@@ -8,14 +8,18 @@ import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.dto.club.toResponse
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.CreateEventCommand
 import org.skopeo.model.CreateFixtureCommand
+import org.skopeo.model.EventType
 import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
@@ -341,6 +345,136 @@ class ClubServiceTest {
         view.past shouldHaveSize 0
 
         service.publicByCode(code = "ZZZZZZ").shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    /** A points-carrying event under [clubId], dated in the past when [past] else upcoming. */
+    private fun pointsEvent(
+        clubId: UUID,
+        createdBy: UUID,
+        name: String,
+        type: EventType,
+        past: Boolean,
+    ): org.skopeo.model.Event {
+        val today = LocalDate.now()
+        val start = if (past) today.minusDays(7) else today.plusDays(1)
+        val end = if (past) today.minusDays(1) else today.plusDays(2)
+        return events.create(
+            command =
+                CreateEventCommand(
+                    name = name,
+                    startDate = start,
+                    endDate = end,
+                    participantIds = listOf(element = createdBy),
+                    createdBy = createdBy,
+                    clubId = clubId,
+                    type = type,
+                    minPointsPerMatch = 5,
+                    maxPointsPerMatch = 50,
+                    pointValidityStart = start,
+                    pointValidityEnd = end.plusDays(30),
+                ),
+        )
+    }
+
+    private fun designatedFixture(
+        eventId: UUID,
+        createdBy: UUID,
+        p1: UUID,
+        p2: UUID,
+        designated: Int,
+    ) = matchRepo.createFixture(
+        command =
+            CreateFixtureCommand(
+                matchFormat = TeamType.SINGLES,
+                matchType = MatchType.OPEN_PLAY,
+                matchDate = LocalDate.now(),
+                team1UserIds = listOf(element = p1),
+                team2UserIds = listOf(element = p2),
+                team1Name = "t1",
+                team2Name = "t2",
+                createdBy = createdBy,
+                eventId = eventId,
+                designatedPoints = designated,
+            ),
+    )
+
+    private fun awardLinked(
+        userId: UUID,
+        eventId: UUID,
+        grantedBy: UUID,
+        points: String,
+    ) = org.skopeo.repository.RankingPointRepository().award(
+        write =
+            org.skopeo.model.RankingPointAwardWrite(
+                userId = userId,
+                points = java.math.BigDecimal(points),
+                pointClass = org.skopeo.model.PointClass.SEASONAL_TOURNAMENT_1M,
+                sourceType = org.skopeo.model.PointSourceType.INTERNAL,
+                sourceId = eventId.toString(),
+                band = "4.0",
+                sex = "Male",
+                reason = null,
+                validFrom = java.time.LocalDateTime.now().minusDays(1),
+                validUntil = java.time.LocalDateTime.now().plusDays(30),
+                status = org.skopeo.model.AwardStatus.ACTIVE,
+                revokesAwardId = null,
+                grantedBy = grantedBy,
+                awardedAt = java.time.LocalDateTime.now(),
+                eventId = eventId,
+            ),
+    )
+
+    @Test
+    fun `publicByCode carries eventType and per-event designated and awarded points (#403)`() {
+        val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        val club = service.create(token = token(uid = "admin"), name = "Downtown TC").shouldBeRight()
+
+        // A non-finalized upcoming LEAGUE event with a designated fixture → shows designated, awarded 0.
+        val upcoming =
+            pointsEvent(clubId = club.id, createdBy = admin.id, name = "Upcoming League", type = EventType.LEAGUE, past = false)
+        designatedFixture(eventId = upcoming.id, createdBy = admin.id, p1 = p1.id, p2 = p2.id, designated = 30)
+
+        // A finalized past TOURNAMENT event with an active award linked → carries awarded points.
+        val past =
+            pointsEvent(clubId = club.id, createdBy = admin.id, name = "Past Cup", type = EventType.TOURNAMENT, past = true)
+        events.finalize(id = past.id, finalizedAt = java.time.LocalDateTime.now(), finalizedBy = admin.id)
+        awardLinked(userId = p1.id, eventId = past.id, grantedBy = admin.id, points = "40")
+
+        val view = service.publicByCode(code = club.publicCode).shouldBeRight()
+        val up = view.upcoming.single { it.name == "Upcoming League" }
+        up.eventType shouldBe EventType.LEAGUE
+        up.designatedPoints shouldBe 30
+        up.awardedPoints shouldBe 0
+        val pastEvent = view.past.single { it.name == "Past Cup" }
+        pastEvent.eventType shouldBe EventType.TOURNAMENT
+        pastEvent.awardedPoints shouldBe 40
+    }
+
+    @Test
+    fun `the public club response never surfaces club utilization, only per-event points (#403)`() {
+        val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        val club = service.create(token = token(uid = "admin"), name = "Downtown TC").shouldBeRight()
+        val event =
+            pointsEvent(clubId = club.id, createdBy = admin.id, name = "League", type = EventType.LEAGUE, past = false)
+        designatedFixture(eventId = event.id, createdBy = admin.id, p1 = p1.id, p2 = p2.id, designated = 30)
+
+        val view = service.publicByCode(code = club.publicCode).shouldBeRight()
+        val json =
+            kotlinx.serialization.json.Json.encodeToString(
+                serializer = org.skopeo.dto.club.ClubPublicResponse.serializer(),
+                value = view.toResponse(),
+            )
+        // Utilization figures must not leak onto the anonymous public surface.
+        json shouldNotContain "budgeted"
+        json shouldNotContain "allocated"
+        json shouldNotContain "free"
+        json shouldNotContain "utilization"
+        // But the per-event points are present.
+        json shouldContain "designatedPoints"
     }
 
     @Test

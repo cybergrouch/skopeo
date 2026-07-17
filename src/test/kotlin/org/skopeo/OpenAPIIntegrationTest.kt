@@ -65,6 +65,11 @@ class OpenAPIIntegrationTest {
             body shouldContain "/api/v1/events/{id}/points-config"
             body shouldContain "SetPointsConfigRequest"
             body shouldContain "designatedPoints"
+            // Club-owner + public per-event points visibility (#403 Phase E): the gated summary path
+            // and its schema, plus the public per-event points schema.
+            body shouldContain "/api/v1/clubs/{clubId}/points-summary"
+            body shouldContain "ClubPointsSummaryResponse"
+            body shouldContain "ClubEventPointsResponse"
         }
 
     @Test

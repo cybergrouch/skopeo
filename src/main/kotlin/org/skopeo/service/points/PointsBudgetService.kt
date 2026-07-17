@@ -14,10 +14,13 @@ import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
 import org.skopeo.model.Capability
 import org.skopeo.model.ClubBudgetView
+import org.skopeo.model.ClubEventPointsView
+import org.skopeo.model.ClubPointsSummaryView
 import org.skopeo.model.EventType
 import org.skopeo.model.PointsPolicy
 import org.skopeo.model.ServiceError
 import org.skopeo.repository.ClubRepository
+import org.skopeo.repository.EventRepository
 import org.skopeo.repository.PointsBudgetRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService
@@ -37,6 +40,7 @@ class PointsBudgetService(
     private val budgets: PointsBudgetRepository = PointsBudgetRepository(),
     private val clubs: ClubRepository = ClubRepository(),
     private val users: UserRepository = UserRepository(),
+    private val events: EventRepository = EventRepository(),
     private val audit: AuditService = AuditService(),
 ) {
     /** The global per-type policies. Readable by staff (points managers / administrators). */
@@ -100,17 +104,59 @@ class PointsBudgetService(
                 } else {
                     clubs.list().map { it.id }
                 }
-            val budgeted =
-                (if (clubId != null) budgets.listBudgetsForClub(clubId = clubId) else budgets.listBudgets())
-                    .associateBy { it.clubId to it.eventType }
-            clubIds.flatMap { id ->
-                EventType.entries.map { type ->
-                    val amount = budgeted[id to type]?.budgetedPoints ?: 0
-                    val allocated = allocatedFor(clubId = id, eventType = type)
-                    ClubBudgetView(clubId = id, eventType = type, budgeted = amount, allocated = allocated, free = amount - allocated)
+            utilizationFor(clubIds = clubIds, scoped = clubId != null)
+        }
+
+    /**
+     * A CLUB_OWNER's (or points-manager's) points summary for one club (#403 Phase E): the club's
+     * per-type utilization (the same Budgeted/Allocated/Free rows the Points Management tab shows) plus
+     * a per-event breakdown (designated/awarded, and whether the event is finalized). Gated to that
+     * club's owners or ADMINISTRATOR/POINTS_MANAGER ([requireClubOwnerOrPointsManager]); utilization is
+     * deliberately kept off the anonymous public club page.
+     */
+    fun clubPointsSummary(
+        token: VerifiedFirebaseToken,
+        clubId: UUID,
+    ): Either<ServiceError, ClubPointsSummaryView> =
+        either {
+            val club =
+                ensureNotNull(value = clubs.findById(id = clubId)) { ServiceError.NotFound(message = "Club $clubId not found") }
+            requireClubOwnerOrPointsManager(token = token, clubOwnerIds = club.ownerIds).bind()
+            val utilization = utilizationFor(clubIds = listOf(element = clubId), scoped = true)
+            val eventViews =
+                events.listByClub(clubId = clubId).map { event ->
+                    ClubEventPointsView(
+                        eventPublicCode = event.publicCode,
+                        name = event.name,
+                        eventType = event.type,
+                        finalized = event.isFinalized,
+                        designated = budgets.sumDesignatedPointsForEvent(eventId = event.id),
+                        awarded = budgets.sumAwardedPointsForEvent(eventId = event.id),
+                    )
                 }
+            ClubPointsSummaryView(clubId = clubId, utilization = utilization, events = eventViews)
+        }
+
+    /**
+     * The per club × event-type accounting rows for [clubIds]. When [scoped] the budget lookup is
+     * scoped to the single club; otherwise it reads every club's budgets. Every event type is surfaced
+     * for each club, even those with no budget row (0). No authz — callers gate first.
+     */
+    private fun utilizationFor(
+        clubIds: List<UUID>,
+        scoped: Boolean,
+    ): List<ClubBudgetView> {
+        val budgeted =
+            (if (scoped) budgets.listBudgetsForClub(clubId = clubIds.single()) else budgets.listBudgets())
+                .associateBy { it.clubId to it.eventType }
+        return clubIds.flatMap { id ->
+            EventType.entries.map { type ->
+                val amount = budgeted[id to type]?.budgetedPoints ?: 0
+                val allocated = allocatedFor(clubId = id, eventType = type)
+                ClubBudgetView(clubId = id, eventType = type, budgeted = amount, allocated = allocated, free = amount - allocated)
             }
         }
+    }
 
     /** Set a club's budget for one event type (points-manager). Validates points ≥ 0 and the club exists. */
     fun setClubBudget(
@@ -176,5 +222,22 @@ class PointsBudgetService(
             caller != null &&
                 caller.capabilities.any { it == Capability.ADMINISTRATOR || it == Capability.POINTS_MANAGER }
         return if (caller == null || !allowed) ServiceError.Forbidden().left() else caller.id.right()
+    }
+
+    /**
+     * Points-summary access (#403 Phase E): the caller must be an ADMINISTRATOR / POINTS_MANAGER, OR
+     * an owner of *this* club (their id is in [clubOwnerIds]). A plain player, or an owner of a
+     * different club, is [ServiceError.Forbidden]. Returns the caller's id.
+     */
+    private fun requireClubOwnerOrPointsManager(
+        token: VerifiedFirebaseToken,
+        clubOwnerIds: List<UUID>,
+    ): Either<ServiceError, UUID> {
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+        val isManager =
+            caller != null &&
+                caller.capabilities.any { it == Capability.ADMINISTRATOR || it == Capability.POINTS_MANAGER }
+        val isOwner = caller != null && clubOwnerIds.contains(element = caller.id)
+        return if (caller == null || !(isManager || isOwner)) ServiceError.Forbidden().left() else caller.id.right()
     }
 }

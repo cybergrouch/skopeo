@@ -329,4 +329,76 @@ class PointsBudgetServiceTest {
         awardLinked(userId = p1.id, eventId = event, grantedBy = admin.id, points = "40")
         leagueAllocated(clubId = club) shouldBe 40
     }
+
+    // --- Club points summary (#403 Phase E): CLUB_OWNER / points-manager gated. ---
+
+    @Test
+    fun `clubPointsSummary returns utilization and a per-event breakdown for an owner (#403)`() {
+        val owner = provision(uid = "owner", roles = setOf(Capability.PLAYER, Capability.CLUB_OWNER))
+        val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        val club = newClub(ownerId = admin.id)
+        clubs.addOwner(clubId = club, userId = owner.id)
+        service.setClubBudget(token = token(uid = "admin"), clubId = club, eventType = EventType.LEAGUE, points = 100)
+            .shouldBeRight()
+        val event = leagueEventUnder(clubId = club, createdBy = admin.id, participants = listOf(p1.id, p2.id))
+        designatedFixture(eventId = event, createdBy = admin.id, p1 = p1.id, p2 = p2.id, designated = 30)
+
+        val summary = service.clubPointsSummary(token = token(uid = "owner"), clubId = club).shouldBeRight()
+        summary.clubId shouldBe club
+        summary.utilization shouldHaveSize EventType.entries.size
+        val league = summary.utilization.single { it.eventType == EventType.LEAGUE }
+        league.budgeted shouldBe 100
+        league.allocated shouldBe 30
+        league.free shouldBe 70
+        summary.events shouldHaveSize 1
+        val row = summary.events.single()
+        row.eventType shouldBe EventType.LEAGUE
+        row.finalized shouldBe false
+        row.designated shouldBe 30
+        row.awarded shouldBe 0
+    }
+
+    @Test
+    fun `clubPointsSummary is readable by an administrator and a points manager (#403)`() {
+        val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        provision(uid = "pm", roles = setOf(Capability.PLAYER, Capability.POINTS_MANAGER))
+        val club = newClub(ownerId = admin.id)
+
+        service.clubPointsSummary(token = token(uid = "admin"), clubId = club).shouldBeRight()
+        service.clubPointsSummary(token = token(uid = "pm"), clubId = club).shouldBeRight()
+    }
+
+    @Test
+    fun `clubPointsSummary is forbidden for a plain player and an owner of a different club (#403)`() {
+        provision(uid = "player")
+        val otherOwner = provision(uid = "other", roles = setOf(Capability.PLAYER, Capability.CLUB_OWNER))
+        val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val club = newClub(ownerId = admin.id)
+        val otherClub = newClub(ownerId = admin.id)
+        clubs.addOwner(clubId = otherClub, userId = otherOwner.id)
+
+        service.clubPointsSummary(token = token(uid = "player"), clubId = club)
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        // An owner of a *different* club cannot read this club's summary.
+        service.clubPointsSummary(token = token(uid = "other"), clubId = club)
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
+    @Test
+    fun `clubPointsSummary is not-found for an unknown club (#403)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        service.clubPointsSummary(token = token(uid = "admin"), clubId = UUID.randomUUID())
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
+    fun `clubPointsSummary is forbidden for an unprovisioned caller (#403)`() {
+        val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val club = newClub(ownerId = admin.id)
+        // A token whose uid resolves to no user hits the null-caller arm of the owner/manager gate.
+        service.clubPointsSummary(token = token(uid = "ghost"), clubId = club)
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
 }

@@ -42,3 +42,30 @@ data class ClubBudgetView(
     val allocated: Int,
     val free: Int,
 )
+
+/**
+ * One event's points figures in a club owner's points summary (#403 Phase E): the same per-event
+ * points that are public ([designated] planned, [awarded] finalized), plus [finalized] so the owner
+ * view can label which figure is live. This is the per-event breakdown that accompanies (but is
+ * distinct from) the club's per-type utilization.
+ */
+data class ClubEventPointsView(
+    val eventPublicCode: String,
+    val name: String,
+    val eventType: EventType,
+    val finalized: Boolean,
+    val designated: Int,
+    val awarded: Int,
+)
+
+/**
+ * The CLUB_OWNER / points-manager points summary for a club (#403 Phase E), served only to that
+ * club's owners (or ADMINISTRATOR/POINTS_MANAGER): the club's per-type utilization ([utilization],
+ * the same Budgeted/Allocated/Free rows the Points Management tab shows) plus a per-event breakdown
+ * ([events]). Utilization is deliberately kept OFF the anonymous public club response.
+ */
+data class ClubPointsSummaryView(
+    val clubId: UUID,
+    val utilization: List<ClubBudgetView>,
+    val events: List<ClubEventPointsView>,
+)

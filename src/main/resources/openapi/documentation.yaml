@@ -3370,6 +3370,38 @@ paths:
         '404':
           description: No such club
 
+  /api/v1/clubs/{clubId}/points-summary:
+    get:
+      summary: A club's points summary for its owner (#403 Phase E)
+      description: >-
+        Returns the club's per-type utilization (Budgeted/Allocated/Free) plus a per-event breakdown
+        (designated/awarded and whether the event is finalized). Gated to the club's CLUB_OWNER(s) or
+        an ADMINISTRATOR/POINTS_MANAGER. Utilization is never exposed on the anonymous public club page.
+      tags:
+        - Points Budget
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: clubId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The club's utilization and per-event points breakdown
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClubPointsSummaryResponse'
+        '401':
+          description: Missing or invalid Firebase token
+        '403':
+          description: Caller is neither an owner of this club nor a points manager
+        '404':
+          description: No such club
+
 components:
   securitySchemes:
     firebaseAuth:
@@ -5677,12 +5709,19 @@ components:
 
     ClubPublicEventResponse:
       type: object
-      description: One of a club's events on its public page (#327) — code, name, and date range.
+      description: >-
+        One of a club's events on its public page (#327) — code, name, date range, plus the public
+        per-event points (#403 Phase E). eventType, and both designatedPoints (planned) and
+        awardedPoints (finalized); the UI shows awarded once the event is finalized, else designated.
+        Club utilization is NOT here — it is served only by the gated points-summary.
       required:
         - publicCode
         - name
         - startDate
         - endDate
+        - eventType
+        - designatedPoints
+        - awardedPoints
       properties:
         publicCode:
           type: string
@@ -5694,6 +5733,62 @@ components:
         endDate:
           type: string
           format: date
+        eventType:
+          type: string
+          enum: [OPEN_PLAY, LEAGUE, TOURNAMENT]
+        designatedPoints:
+          type: integer
+          description: The event's planned (designated) points total, times team size (#403 Phase E).
+        awardedPoints:
+          type: integer
+          description: The event's awarded points total from active in-window awards (#403 Phase E).
+
+    ClubEventPointsResponse:
+      type: object
+      description: One event's points figures in the club points summary (#403 Phase E).
+      required:
+        - eventPublicCode
+        - name
+        - eventType
+        - finalized
+        - designated
+        - awarded
+      properties:
+        eventPublicCode:
+          type: string
+        name:
+          type: string
+        eventType:
+          type: string
+          enum: [OPEN_PLAY, LEAGUE, TOURNAMENT]
+        finalized:
+          type: boolean
+        designated:
+          type: integer
+        awarded:
+          type: integer
+
+    ClubPointsSummaryResponse:
+      type: object
+      description: >-
+        A club's points summary for its owner (#403 Phase E) — per-type utilization plus a per-event
+        breakdown. CLUB_OWNER / points-manager only; never exposed anonymously.
+      required:
+        - clubId
+        - utilization
+        - events
+      properties:
+        clubId:
+          type: string
+          format: uuid
+        utilization:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClubBudgetResponse'
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClubEventPointsResponse'
 
     CreateInviteRequest:
       type: object

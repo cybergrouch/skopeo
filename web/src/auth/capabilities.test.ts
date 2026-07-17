@@ -5,8 +5,10 @@ import {
   canManageMatches,
   canManagePointsBudget,
   canRate,
+  canViewClubPointsSummary,
   hasCapability,
   isAdministrator,
+  isClubOwner,
   isResearcher,
 } from './capabilities'
 
@@ -62,5 +64,25 @@ describe('capabilities', () => {
     expect(isResearcher([Capability.PLAYER])).toBe(false)
     expect(isResearcher([Capability.HOST])).toBe(false)
     expect(isResearcher(undefined)).toBe(false)
+  })
+
+  it('isClubOwner checks the CLUB_OWNER capability (#403)', () => {
+    expect(isClubOwner([Capability.CLUB_OWNER])).toBe(true)
+    expect(isClubOwner([Capability.PLAYER])).toBe(false)
+    expect(isClubOwner(undefined)).toBe(false)
+  })
+
+  it('canViewClubPointsSummary allows admins/points-managers and this-club owners only (#403)', () => {
+    // Admin / points-manager pass regardless of ownership.
+    expect(canViewClubPointsSummary([Capability.ADMINISTRATOR], [], 'u1')).toBe(true)
+    expect(canViewClubPointsSummary([Capability.POINTS_MANAGER], [], 'u1')).toBe(true)
+    // A CLUB_OWNER of this club (their id is among the owners) passes.
+    expect(canViewClubPointsSummary([Capability.CLUB_OWNER], ['u1'], 'u1')).toBe(true)
+    // A CLUB_OWNER of a different club (not among the owners) is denied.
+    expect(canViewClubPointsSummary([Capability.CLUB_OWNER], ['u2'], 'u1')).toBe(false)
+    // Missing user id, or a plain player, is denied.
+    expect(canViewClubPointsSummary([Capability.CLUB_OWNER], ['u1'], undefined)).toBe(false)
+    expect(canViewClubPointsSummary([Capability.PLAYER], ['u1'], 'u1')).toBe(false)
+    expect(canViewClubPointsSummary(undefined, [], undefined)).toBe(false)
   })
 })

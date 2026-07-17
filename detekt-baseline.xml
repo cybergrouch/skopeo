@@ -143,6 +143,7 @@
     <ID>TooManyFunctions:EventService.kt$EventService</ID>
     <ID>TooManyFunctions:MatchRepository.kt$MatchRepository</ID>
     <ID>TooManyFunctions:MatchService.kt$MatchService</ID>
+    <ID>TooManyFunctions:PointsBudgetRepository.kt$PointsBudgetRepository</ID>
     <ID>TooManyFunctions:RatingRepository.kt$RatingRepository</ID>
     <ID>TooManyFunctions:UserRepository.kt$UserRepository</ID>
     <ID>TooManyFunctions:UserService.kt$UserService</ID>
