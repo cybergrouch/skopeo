@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PointsManagementSection } from "./PointsManagementSection";
+import { Capability } from "@/auth/capabilities";
 
 const {
   useGetApiV1PointsPolicies,
@@ -47,10 +48,17 @@ vi.mock("@/api/generated/clubs/clubs", () => ({
   useGetApiV1Clubs,
 }));
 
+// The embedded standings-calculation trigger (#447) is unit-tested in its own file; here we just
+// stub its hook so PointsManagementSection renders.
+vi.mock("@/api/generated/standings/standings", () => ({
+  usePostApiV1StandingsCalculations: () => ({ isPending: false, mutate: vi.fn() }),
+  getGetApiV1StandingsQueryKey: () => ["standings"],
+}));
+
 function renderSection() {
   return render(
     <QueryClientProvider client={new QueryClient()}>
-      <PointsManagementSection />
+      <PointsManagementSection capabilities={[Capability.ADMINISTRATOR]} />
     </QueryClientProvider>,
   );
 }

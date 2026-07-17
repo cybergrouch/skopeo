@@ -25,18 +25,28 @@ import type {
   PointsPolicyResponse,
   PointsPolicyResponseEventType,
 } from "@/api/generated/model";
+import type { Capability } from "@/auth/capabilities";
+import { StandingsCalculationSection } from "./StandingsCalculationSection";
 
 /**
  * Points Management (#403 Phase B, §5.2): the global master policy per event type (editable
  * min/max/validity) and a per club × event-type budget table (Budgeted editable; Allocated + Free
  * shown, Allocated = 0 until reservations/awards land in Phase C/D). Points-manager gated
  * (ADMINISTRATOR is implicitly a points manager); the API enforces it.
+ *
+ * It also hosts the admin standings-calculation trigger (#447) — self-gated to ADMINISTRATOR
+ * inside {@link StandingsCalculationSection} since the tab itself is visible to POINTS_MANAGER too.
  */
-export function PointsManagementSection() {
+export function PointsManagementSection({
+  capabilities,
+}: {
+  capabilities: readonly Capability[];
+}) {
   return (
     <div className="grid gap-4">
       <PoliciesCard />
       <BudgetsCard />
+      <StandingsCalculationSection capabilities={capabilities} />
     </div>
   );
 }
