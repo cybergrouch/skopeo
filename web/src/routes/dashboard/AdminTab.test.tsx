@@ -23,12 +23,16 @@ vi.mock("./admin/ClubsSection", () => ({
 vi.mock("./admin/ThemeSection", () => ({
   ThemeSection: () => <div>theme section</div>,
 }));
+vi.mock("./admin/PointsManagementSection", () => ({
+  PointsManagementSection: () => <div>points management section</div>,
+}));
 
 describe("AdminTab", () => {
   it("renders the admin sections (invites #135 and activity log #134 now live in their own tabs)", () => {
     render(<AdminTab />);
     expect(screen.getByText("manage player section")).toBeInTheDocument();
     expect(screen.getByText("clubs section")).toBeInTheDocument();
+    expect(screen.getByText("points management section")).toBeInTheDocument();
     expect(screen.getByText("duplicates section")).toBeInTheDocument();
     expect(
       screen.getByText("duplicate candidates section"),

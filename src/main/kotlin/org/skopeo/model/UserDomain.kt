@@ -14,7 +14,7 @@ import java.util.UUID
  * RATER may set initial ratings and triage rating work (#106); RESEARCHER gates the player-research
  * feature (#107); ADMINISTRATOR implicitly has both.
  */
-enum class Capability { PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER }
+enum class Capability { PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER }
 
 /**
  * An append-only grant of a [Capability] to a user. A grant is active until revoked; the

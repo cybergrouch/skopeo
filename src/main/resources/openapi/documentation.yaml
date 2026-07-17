@@ -33,6 +33,8 @@ tags:
     description: Append-only ranking-points ledger; admins grant/revoke awards (manual & ad-hoc)
   - name: Settings
     description: Global app settings; the UI theme is publicly readable and administrator-writable
+  - name: Points Budget
+    description: Global points policy and per-club budgets; points-manager (or administrator) managed
 
 paths:
   /api/v1/calculate-ranking:
@@ -200,7 +202,7 @@ paths:
           required: false
           schema:
             type: string
-            enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER]
+            enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER]
           description: Restrict to users holding this capability (#317), e.g. CLUB_OWNER.
         - name: limit
           in: query
@@ -297,7 +299,7 @@ paths:
           required: false
           schema:
             type: string
-            enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER]
+            enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER]
           description: Restrict to users holding this capability (#317), e.g. CLUB_OWNER.
         - name: ids
           in: query
@@ -1158,7 +1160,7 @@ paths:
         required: true
         schema:
           type: string
-          enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER]
+          enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER]
     delete:
       summary: Revoke a capability (ADMINISTRATOR only)
       description: |
@@ -3154,6 +3156,136 @@ paths:
         '404':
           description: No active award with that id
 
+  /api/v1/points/policies:
+    get:
+      summary: List the global points policies (#403 Phase B)
+      description: >-
+        The global master points policy, one entry per event type. Readable by points managers
+        (ADMINISTRATOR is implicitly a points manager).
+      tags:
+        - Points Budget
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The per-type policies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PointsPolicyResponse'
+        '401':
+          description: Missing or invalid Firebase token
+        '403':
+          description: Caller is not a points manager
+
+  /api/v1/points/policies/{eventType}:
+    put:
+      summary: Set a global points policy (#403 Phase B)
+      description: >-
+        Points-manager only. Sets the per-match reward bounds and max validity days for one event
+        type. Values are whole integers; min must not exceed max and all must be positive.
+      tags:
+        - Points Budget
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: eventType
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [OPEN_PLAY, LEAGUE, TOURNAMENT]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetPointsPolicyRequest'
+      responses:
+        '200':
+          description: The updated policy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PointsPolicyResponse'
+        '400':
+          description: Invalid event type or policy values
+        '401':
+          description: Missing or invalid Firebase token
+        '403':
+          description: Caller is not a points manager
+
+  /api/v1/points/budgets:
+    get:
+      summary: List every club's per-type points budgets (#403 Phase B)
+      description: >-
+        Points-manager only. For each club and event type, the accounting view — budgeted (real),
+        allocated (0 until reservations/awards land in Phase C/D), and free (budgeted minus allocated).
+      tags:
+        - Points Budget
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The per club and per-type budget accounting
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ClubBudgetResponse'
+        '401':
+          description: Missing or invalid Firebase token
+        '403':
+          description: Caller is not a points manager
+
+  /api/v1/clubs/{clubId}/point-budgets/{eventType}:
+    put:
+      summary: Set a club's per-type points budget (#403 Phase B)
+      description: >-
+        Points-manager only. Sets the club's budgeted points for one event type. The value must be a
+        non-negative whole integer and the club must exist.
+      tags:
+        - Points Budget
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: clubId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: eventType
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [OPEN_PLAY, LEAGUE, TOURNAMENT]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetClubBudgetRequest'
+      responses:
+        '200':
+          description: The updated budget accounting for that club and type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClubBudgetResponse'
+        '400':
+          description: Invalid event type or a negative budget
+        '401':
+          description: Missing or invalid Firebase token
+        '403':
+          description: Caller is not a points manager
+        '404':
+          description: No such club
+
 components:
   securitySchemes:
     firebaseAuth:
@@ -3771,7 +3903,7 @@ components:
           type: array
           items:
             type: string
-            enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER]
+            enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER]
         record:
           nullable: true
           type: object
@@ -3860,7 +3992,7 @@ components:
           type: array
           items:
             type: string
-            enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER]
+            enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER]
 
     ContactCreateRequest:
       type: object
@@ -4004,7 +4136,7 @@ components:
       properties:
         capability:
           type: string
-          enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER]
+          enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER]
 
     CapabilityResponse:
       type: object
@@ -4014,7 +4146,7 @@ components:
       properties:
         capability:
           type: string
-          enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER]
+          enum: [PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER]
         isActive:
           type: boolean
         grantedBy:
@@ -5200,6 +5332,75 @@ components:
           type: string
           enum: [AUTO, GRASS, CLAY, AO, US_OPEN, OFF_SEASON, CHRISTMAS]
           description: The UI theme to set (#378).
+
+    PointsPolicyResponse:
+      type: object
+      required:
+        - eventType
+        - minPoints
+        - maxPoints
+        - maxValidityDays
+      properties:
+        eventType:
+          type: string
+          enum: [OPEN_PLAY, LEAGUE, TOURNAMENT]
+        minPoints:
+          type: integer
+          description: Minimum per-match reward for the type (#403 Phase B).
+        maxPoints:
+          type: integer
+          description: Maximum per-match reward for the type (#403 Phase B).
+        maxValidityDays:
+          type: integer
+          description: Max days an awarded point may stay valid for the type (#403 Phase B).
+
+    SetPointsPolicyRequest:
+      type: object
+      required:
+        - minPoints
+        - maxPoints
+        - maxValidityDays
+      properties:
+        minPoints:
+          type: integer
+        maxPoints:
+          type: integer
+        maxValidityDays:
+          type: integer
+
+    ClubBudgetResponse:
+      type: object
+      required:
+        - clubId
+        - eventType
+        - budgeted
+        - allocated
+        - free
+      properties:
+        clubId:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+          enum: [OPEN_PLAY, LEAGUE, TOURNAMENT]
+        budgeted:
+          type: integer
+          description: The club's real budget allocation for the type (#403 Phase B).
+        allocated:
+          type: integer
+          description: Points currently in use; 0 until reservations/awards land in Phase C/D (#403).
+        free:
+          type: integer
+          description: Remaining allocable — budgeted minus allocated (#403 Phase B).
+
+    SetClubBudgetRequest:
+      type: object
+      required:
+        - budgetedPoints
+      properties:
+        budgetedPoints:
+          type: integer
+          description: The non-negative whole-number budget to set for the club and type (#403 Phase B).
 
     CreateClubRequest:
       type: object
