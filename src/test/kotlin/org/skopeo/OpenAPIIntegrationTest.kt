@@ -54,6 +54,11 @@ class OpenAPIIntegrationTest {
             body shouldContain "/api/v1/clubs/{clubId}/point-budgets/{eventType}"
             body shouldContain "PointsPolicyResponse"
             body shouldContain "ClubBudgetResponse"
+            // Fixture designation + event points config (#403 Phase C): the config path, its request
+            // schema, and the designatedPoints fixture field are all documented.
+            body shouldContain "/api/v1/events/{id}/points-config"
+            body shouldContain "SetPointsConfigRequest"
+            body shouldContain "designatedPoints"
         }
 
     @Test

@@ -12,13 +12,19 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.CreateClubCommand
+import org.skopeo.model.CreateEventCommand
+import org.skopeo.model.CreateFixtureCommand
 import org.skopeo.model.EventType
+import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
 import org.skopeo.model.PointsPolicy
 import org.skopeo.model.ProvisionUserCommand
+import org.skopeo.model.TeamType
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.testsupport.PostgresTestDatabase
+import java.time.LocalDate
+import java.time.LocalDateTime
 import java.util.UUID
 
 class PointsBudgetRepositoryTest {
@@ -32,6 +38,8 @@ class PointsBudgetRepositoryTest {
 
     private val users = UserRepository()
     private val clubs = ClubRepository()
+    private val events = EventRepository()
+    private val matches = MatchRepository()
     private val repo = PointsBudgetRepository()
 
     @BeforeEach
@@ -131,6 +139,131 @@ class PointsBudgetRepositoryTest {
             exec(stmt = "DELETE FROM points_policies WHERE event_type = 'TOURNAMENT'")
         }
         repo.findPolicy(eventType = EventType.TOURNAMENT).shouldBeNull()
+    }
+
+    // --- Emergent reservation (#403 Phase C): sumReservedPoints, no reservation table. ---
+
+    private fun leagueEvent(
+        clubId: UUID?,
+        createdBy: UUID,
+        participants: List<UUID>,
+        finalized: Boolean = false,
+    ): UUID {
+        val id =
+            events.create(
+                command =
+                    CreateEventCommand(
+                        name = "League",
+                        startDate = LocalDate.now(),
+                        endDate = LocalDate.now().plusDays(7),
+                        participantIds = participants,
+                        createdBy = createdBy,
+                        clubId = clubId,
+                        type = EventType.LEAGUE,
+                        minPointsPerMatch = 5,
+                        maxPointsPerMatch = 50,
+                        pointValidityStart = LocalDate.now(),
+                        pointValidityEnd = LocalDate.now().plusDays(30),
+                    ),
+            ).id
+        if (finalized) events.finalize(id = id, finalizedAt = LocalDateTime.now(), finalizedBy = createdBy)
+        return id
+    }
+
+    private fun fixture(
+        eventId: UUID,
+        createdBy: UUID,
+        players: List<UUID>,
+        designated: Int?,
+        format: TeamType = TeamType.SINGLES,
+    ) = matches.createFixture(
+        command =
+            CreateFixtureCommand(
+                matchFormat = format,
+                matchType = MatchType.OPEN_PLAY,
+                matchDate = LocalDate.now(),
+                team1UserIds = listOf(element = players[0]),
+                team2UserIds = listOf(element = players[1]),
+                team1Name = "t1",
+                team2Name = "t2",
+                createdBy = createdBy,
+                eventId = eventId,
+                designatedPoints = designated,
+            ),
+    )
+
+    @Test
+    fun `sumReservedPoints sums active non-finalized designations times team size (#403)`() {
+        val admin = newUser(uid = "admin")
+        val p1 = newUser(uid = "p1")
+        val p2 = newUser(uid = "p2")
+        val club = clubs.create(command = CreateClubCommand(name = "Club", createdBy = admin)).id
+        val event = leagueEvent(clubId = club, createdBy = admin, participants = listOf(p1, p2))
+
+        repo.sumReservedPoints(clubId = club, eventType = EventType.LEAGUE) shouldBe 0
+
+        // Two singles designations of 30 and 10; team size 1 → 40 total.
+        fixture(eventId = event, createdBy = admin, players = listOf(p1, p2), designated = 30)
+        fixture(eventId = event, createdBy = admin, players = listOf(p1, p2), designated = 10)
+        // A fixture with no designation contributes nothing.
+        fixture(eventId = event, createdBy = admin, players = listOf(p1, p2), designated = null)
+        repo.sumReservedPoints(clubId = club, eventType = EventType.LEAGUE) shouldBe 40
+    }
+
+    @Test
+    fun `sumReservedPoints counts a doubles fixture at designation times two (#403)`() {
+        val admin = newUser(uid = "admin")
+        val a = newUser(uid = "a")
+        val b = newUser(uid = "b")
+        val club = clubs.create(command = CreateClubCommand(name = "Club", createdBy = admin)).id
+        val event = leagueEvent(clubId = club, createdBy = admin, participants = listOf(a, b))
+
+        matches.createFixture(
+            command =
+                CreateFixtureCommand(
+                    matchFormat = TeamType.DOUBLES,
+                    matchType = MatchType.OPEN_PLAY,
+                    matchDate = LocalDate.now(),
+                    team1UserIds = listOf(a, b),
+                    team2UserIds = listOf(a, b),
+                    team1Name = "t1",
+                    team2Name = "t2",
+                    createdBy = admin,
+                    eventId = event,
+                    designatedPoints = 20,
+                ),
+        )
+        // team size = 2 → 20 × 2 = 40.
+        repo.sumReservedPoints(clubId = club, eventType = EventType.LEAGUE) shouldBe 40
+    }
+
+    @Test
+    fun `sumReservedPoints excludes finalized events and voided fixtures (#403)`() {
+        val admin = newUser(uid = "admin")
+        val p1 = newUser(uid = "p1")
+        val p2 = newUser(uid = "p2")
+        val club = clubs.create(command = CreateClubCommand(name = "Club", createdBy = admin)).id
+
+        // A finalized event's fixtures fall out (they become ActiveAwarded in Phase D).
+        val finalized = leagueEvent(clubId = club, createdBy = admin, participants = listOf(p1, p2), finalized = true)
+        fixture(eventId = finalized, createdBy = admin, players = listOf(p1, p2), designated = 30)
+        repo.sumReservedPoints(clubId = club, eventType = EventType.LEAGUE) shouldBe 0
+
+        // An open event: a designated fixture reserves, then voiding it releases the reservation.
+        val open = leagueEvent(clubId = club, createdBy = admin, participants = listOf(p1, p2))
+        val match = fixture(eventId = open, createdBy = admin, players = listOf(p1, p2), designated = 25)
+        repo.sumReservedPoints(clubId = club, eventType = EventType.LEAGUE) shouldBe 25
+        matches.setActive(matchId = match.id, active = false, disabledAt = LocalDateTime.now())
+        repo.sumReservedPoints(clubId = club, eventType = EventType.LEAGUE) shouldBe 0
+    }
+
+    @Test
+    fun `findBudget returns the budgeted points or zero when no row exists (#403)`() {
+        val admin = newUser(uid = "admin")
+        val club = clubs.create(command = CreateClubCommand(name = "Club", createdBy = admin)).id
+        repo.findBudget(clubId = club, eventType = EventType.LEAGUE) shouldBe 0
+        repo.upsertBudget(clubId = club, eventType = EventType.LEAGUE, budgetedPoints = 120, updatedBy = admin)
+        repo.findBudget(clubId = club, eventType = EventType.LEAGUE) shouldBe 120
     }
 
     @Test

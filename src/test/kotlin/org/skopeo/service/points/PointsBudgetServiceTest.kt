@@ -14,19 +14,26 @@ import org.junit.jupiter.api.Test
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.CreateClubCommand
+import org.skopeo.model.CreateEventCommand
+import org.skopeo.model.CreateFixtureCommand
 import org.skopeo.model.EventType
+import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
 import org.skopeo.model.PointsPolicy
 import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.ServiceError
+import org.skopeo.model.TeamType
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.repository.ClubRepository
+import org.skopeo.repository.EventRepository
+import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.PointsBudgetRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.testsupport.PostgresTestDatabase
+import java.time.LocalDate
 import java.util.UUID
 
 class PointsBudgetServiceTest {
@@ -173,5 +180,58 @@ class PointsBudgetServiceTest {
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
         service.setClubBudget(token = token(uid = "player"), clubId = club, eventType = EventType.OPEN_PLAY, points = 1)
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
+    @Test
+    fun `clubBudgets reflects real reserved allocated and free once fixtures designate (#403)`() {
+        val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        val club = newClub(ownerId = admin.id)
+        service.setClubBudget(token = token(uid = "admin"), clubId = club, eventType = EventType.LEAGUE, points = 100)
+            .shouldBeRight()
+
+        // A LEAGUE event under the club with two singles fixtures designating 30 + 20 = 50 reserved.
+        val event =
+            EventRepository().create(
+                command =
+                    CreateEventCommand(
+                        name = "League",
+                        startDate = LocalDate.now(),
+                        endDate = LocalDate.now().plusDays(7),
+                        participantIds = listOf(p1.id, p2.id),
+                        createdBy = admin.id,
+                        clubId = club,
+                        type = EventType.LEAGUE,
+                        minPointsPerMatch = 5,
+                        maxPointsPerMatch = 50,
+                        pointValidityStart = LocalDate.now(),
+                        pointValidityEnd = LocalDate.now().plusDays(30),
+                    ),
+            ).id
+        val matches = MatchRepository()
+        listOf(30, 20).forEach { points ->
+            matches.createFixture(
+                command =
+                    CreateFixtureCommand(
+                        matchFormat = TeamType.SINGLES,
+                        matchType = MatchType.OPEN_PLAY,
+                        matchDate = LocalDate.now(),
+                        team1UserIds = listOf(element = p1.id),
+                        team2UserIds = listOf(element = p2.id),
+                        team1Name = "t1",
+                        team2Name = "t2",
+                        createdBy = admin.id,
+                        eventId = event,
+                        designatedPoints = points,
+                    ),
+            )
+        }
+
+        val views = service.clubBudgets(token = token(uid = "admin"), clubId = club).shouldBeRight()
+        val league = views.single { it.eventType == EventType.LEAGUE }
+        league.budgeted shouldBe 100
+        league.allocated shouldBe 50
+        league.free shouldBe 50
     }
 }

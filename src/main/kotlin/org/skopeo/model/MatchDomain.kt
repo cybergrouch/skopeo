@@ -64,6 +64,9 @@ data class Match(
     val eventId: UUID? = null,
     // Manual same-date ordering tiebreaker for the rating calculation (#331/#332); null = default.
     val calcSequence: Int? = null,
+    // Points designated for the winner (#403 Phase C); null for OPEN_PLAY / event-less fixtures. Each
+    // winning-team member gets the full amount, so the budget cost is designatedPoints × team size.
+    val designatedPoints: Int? = null,
 )
 
 /** Everything needed to create a fixture (the result is uploaded separately). */
@@ -79,6 +82,8 @@ data class CreateFixtureCommand(
     val venue: String? = null,
     val tournamentName: String? = null,
     val eventId: UUID? = null,
+    // Points designated for the winner (#403 Phase C); null for OPEN_PLAY / event-less fixtures.
+    val designatedPoints: Int? = null,
 )
 
 /** A set's raw score as submitted with results; winners are derived server-side. */

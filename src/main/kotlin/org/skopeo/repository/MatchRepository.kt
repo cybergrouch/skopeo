@@ -56,6 +56,7 @@ class MatchRepository {
                     it[tournamentName] = command.tournamentName
                     it[createdBy] = command.createdBy
                     it[eventId] = command.eventId
+                    it[designatedPoints] = command.designatedPoints
                 }.value
             loadMatchOrThrow(id = matchId)
         }
@@ -493,6 +494,7 @@ private fun buildMatch(
         recordedBy = row[MatchesTable.recordedBy]?.value,
         eventId = row[MatchesTable.eventId]?.value,
         calcSequence = row[MatchesTable.calcSequence],
+        designatedPoints = row[MatchesTable.designatedPoints],
     )
 
 private fun sideOf(teamId: UUID): MatchSide =

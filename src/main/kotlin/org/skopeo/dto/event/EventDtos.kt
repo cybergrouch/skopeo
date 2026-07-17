@@ -21,6 +21,24 @@ data class CreateEventRequest(
     val clubId: String? = null,
     // The event's class (#403): OPEN_PLAY | LEAGUE | TOURNAMENT; omit for the OPEN_PLAY default.
     val type: String? = null,
+    // Points config (#403 Phase C): required for a TOURNAMENT/LEAGUE event, omitted for OPEN_PLAY. The
+    // validity dates are ISO-8601 (yyyy-MM-dd).
+    val minPointsPerMatch: Int? = null,
+    val maxPointsPerMatch: Int? = null,
+    val pointValidityStart: String? = null,
+    val pointValidityEnd: String? = null,
+)
+
+/**
+ * Body for `PUT /api/v1/events/{id}/points-config` — set a budgeted event's per-match reward window
+ * and point validity window (#403 Phase C). Validity dates are ISO-8601 (yyyy-MM-dd).
+ */
+@Serializable
+data class SetPointsConfigRequest(
+    val minPointsPerMatch: Int,
+    val maxPointsPerMatch: Int,
+    val pointValidityStart: String,
+    val pointValidityEnd: String,
 )
 
 /**
@@ -110,6 +128,11 @@ data class EventResponse(
     val finalizedAt: String? = null,
     // True once the event has been finalized (#403) — closed to changes; its matches queue for rating.
     val isFinalized: Boolean = false,
+    // Points config (#403 Phase C): the per-match reward window and validity dates; null for OPEN_PLAY.
+    val minPointsPerMatch: Int? = null,
+    val maxPointsPerMatch: Int? = null,
+    val pointValidityStart: String? = null,
+    val pointValidityEnd: String? = null,
 )
 
 fun MyEvent.toResponse(): MyEventResponse =
@@ -138,6 +161,10 @@ fun EventView.toResponse(): EventResponse =
         type = event.type.name,
         finalizedAt = event.finalizedAt?.toString(),
         isFinalized = event.isFinalized,
+        minPointsPerMatch = event.minPointsPerMatch,
+        maxPointsPerMatch = event.maxPointsPerMatch,
+        pointValidityStart = event.pointValidityStart?.toString(),
+        pointValidityEnd = event.pointValidityEnd?.toString(),
     )
 
 internal fun EventParticipantRef.toResponse(): EventParticipantResponse =
