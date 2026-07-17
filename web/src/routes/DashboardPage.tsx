@@ -53,10 +53,9 @@ export function DashboardPage() {
   const showActivity = isAdministrator(capabilities);
   const showReport = isAdministrator(capabilities);
   const showAdmin = isAdministrator(capabilities);
-  // Points managers who aren't administrators get a standalone Points Management tab; admins reach
-  // the same section inside the Admin tab (so it isn't shown twice for them).
-  const showPointsManagement =
-    canManagePointsBudget(capabilities) && !showAdmin;
+  // Points Management is always a standalone tab for anyone who can manage points budgets
+  // (POINTS_MANAGER or ADMINISTRATOR); it's no longer embedded in the Admin tab.
+  const showPointsManagement = canManagePointsBudget(capabilities);
 
   // The selected section lives in the URL (?tab=…, #323) so it survives leaving and returning to the
   // dashboard — e.g. Back from a public page lands on the tab the user was on, not a reset to Profile.

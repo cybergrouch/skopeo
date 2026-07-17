@@ -112,28 +112,37 @@
   --link-hover: #ffffff;
 }
 
-/* Australian Open (vibrant) — Vivid Stadium Blue canvas, Melbourne Twilight card, white rim, Volt button. */
+/*
+ * Australian Open — "Coastal Summer Monochromatic": AO True Blue canvas (#0056B3), bright
+ * AO Velocity Blue card (#00A3E0), crisp white rim, electric Volt-yellow button (#CCFF00).
+ * Deviation from the #442 "white card font" spec: the bright cyan card can't carry white body
+ * text (white on #00A3E0 is only 2.87:1 — fails AA). So card/popover/secondary/muted text and
+ * inline links use the deep Melbourne-Twilight navy #0a1d37 (5.88:1 on the cyan card — AA-normal);
+ * the card BORDER stays white per spec. Likewise the volt link #CCFF00 fails on the cyan card
+ * (2.44:1), so links use the dark navy (#0a1d37, 5.88:1) with a slightly deeper hover (#002b5c,
+ * 4.88:1). The volt stays as the action button, where dark navy text reads at 5.99:1 (AA-normal).
+ */
 [data-theme='ao'] {
-  --background: #0080c8;
+  --background: #0056b3;
   --foreground: #ffffff;
-  --card: #0a1d37;
-  --card-foreground: #ffffff;
-  --popover: #0a1d37;
-  --popover-foreground: #ffffff;
+  --card: #00a3e0;
+  --card-foreground: #0a1d37;
+  --popover: #00a3e0;
+  --popover-foreground: #0a1d37;
   --primary: #ccff00;
-  --primary-foreground: #0a1d37;
-  --secondary: #0a1d37;
-  --secondary-foreground: #ffffff;
-  --muted: #0a1d37;
-  --muted-foreground: #e2e8f0;
+  --primary-foreground: #0056b3;
+  --secondary: #00a3e0;
+  --secondary-foreground: #0a1d37;
+  --muted: #00a3e0;
+  --muted-foreground: #0a1d37;
   --accent: #ccff00;
-  --accent-foreground: #0a1d37;
+  --accent-foreground: #0056b3;
   --border: #ffffff;
   --ring: #ffffff;
-  --input: #0a1d37;
-  --link: #ccff00;
-  --link-underline: #ccff00;
-  --link-hover: #ffffff;
+  --input: #00a3e0;
+  --link: #0a1d37;
+  --link-underline: #0a1d37;
+  --link-hover: #002b5c;
 }
 
 /*
@@ -194,27 +203,35 @@
   --link-hover: #ffffff;
 }
 
-/* US Open — midnight canvas, slate-navy card, blue primary + apple-green accent/rim/link. */
+/*
+ * US Open — "Corporate Night Session Split": deep royal-navy canvas (#1A365D), dark forest-green
+ * card (#355E3B), crisp white rim + white card font (white on #355E3B is 7.46:1 — passes AA),
+ * optic yellow-green ball-accent button (#63B233). Per the #442 10% spec the button/primary is now
+ * the green (was blue #005daa); its text uses the dark navy #1A365D (4.59:1 on #63B233 — AA-normal;
+ * white on the green fails). Deviation for inline links: the green #63B233 fails on the forest card
+ * (2.82:1), so links use a lighter optic green #c8f08c (5.79:1 on #355E3B — AA-normal) with a white
+ * hover (7.46:1), keeping the ball-green identity while staying legible on the card.
+ */
 [data-theme='uso'] {
-  --background: #0b0f19;
+  --background: #1a365d;
   --foreground: #ffffff;
-  --card: #1e293b;
+  --card: #355e3b;
   --card-foreground: #ffffff;
-  --popover: #1e293b;
+  --popover: #355e3b;
   --popover-foreground: #ffffff;
-  --primary: #005daa;
-  --primary-foreground: #ffffff;
-  --secondary: #1e293b;
+  --primary: #63b233;
+  --primary-foreground: #1a365d;
+  --secondary: #355e3b;
   --secondary-foreground: #ffffff;
-  --muted: #1e293b;
-  --muted-foreground: #94a3b8;
+  --muted: #355e3b;
+  --muted-foreground: #ffffff;
   --accent: #63b233;
-  --accent-foreground: #ffffff;
-  --border: #63b233;
-  --ring: #63b233;
-  --input: #334155;
-  --link: #63b233;
-  --link-underline: #63b233;
+  --accent-foreground: #1a365d;
+  --border: #ffffff;
+  --ring: #ffffff;
+  --input: #355e3b;
+  --link: #c8f08c;
+  --link-underline: #c8f08c;
   --link-hover: #ffffff;
 }
 

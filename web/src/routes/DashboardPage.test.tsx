@@ -100,6 +100,7 @@ describe('DashboardPage', () => {
     expect(screen.queryByRole('button', { name: 'Invites' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Activity Log' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Reports' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Points Management' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Admin' })).not.toBeInTheDocument()
   })
 
@@ -178,6 +179,8 @@ describe('DashboardPage', () => {
     expect(screen.getByRole('button', { name: 'Invites' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Activity Log' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Reports' })).toBeInTheDocument()
+    // Points Management is now a standalone tab administrators see too (#444).
+    expect(screen.getByRole('button', { name: 'Points Management' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Admin' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Event Organizer' }))
@@ -185,8 +188,27 @@ describe('DashboardPage', () => {
 
     // The menu closes on select, so re-open it to navigate again.
     await openMenu(user)
+    await user.click(screen.getByRole('button', { name: 'Points Management' }))
+    expect(screen.getByText('points management content')).toBeInTheDocument()
+
+    await openMenu(user)
     await user.click(screen.getByRole('button', { name: 'Admin' }))
     expect(screen.getByText('admin content')).toBeInTheDocument()
+  })
+
+  it('shows a standalone Points Management tab for a non-admin points manager (#444)', async () => {
+    useGetApiV1UsersMe.mockReturnValue({
+      data: { id: 'u1', capabilities: ['PLAYER', 'POINTS_MANAGER'] },
+      isLoading: false,
+    })
+    const user = userEvent.setup()
+    renderDashboard()
+    await openMenu(user)
+    expect(screen.getByRole('button', { name: 'Points Management' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Admin' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Points Management' }))
+    expect(screen.getByText('points management content')).toBeInTheDocument()
   })
 
   it('reflects the selected section as the page header, closing the menu on select (#187)', async () => {

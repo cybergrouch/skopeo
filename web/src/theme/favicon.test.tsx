@@ -17,7 +17,7 @@ function currentFaviconLink(): HTMLLinkElement | null {
 const EXPECTED: Record<ThemeName, string> = {
   offseason: "#212529",
   christmas: "#CE2029",
-  ao: "#0080C8",
+  ao: "#0056B3",
   clay: "#C1522D",
   grass: "#00703C",
   uso: "#63B233",
@@ -31,10 +31,10 @@ describe("favicon helper", () => {
   });
 
   it("embeds the accent color in the generated SVG + data URI", () => {
-    expect(faviconSvg("#0080C8")).toContain("#0080C8");
+    expect(faviconSvg("#0056B3")).toContain("#0056B3");
     // Colors are URI-encoded (# → %23) so they don't truncate the data URI.
-    expect(faviconDataUri("#0080C8")).toContain(encodeURIComponent("#0080C8"));
-    expect(faviconDataUri("#0080C8").startsWith("data:image/svg+xml,")).toBe(
+    expect(faviconDataUri("#0056B3")).toContain(encodeURIComponent("#0056B3"));
+    expect(faviconDataUri("#0056B3").startsWith("data:image/svg+xml,")).toBe(
       true,
     );
   });
