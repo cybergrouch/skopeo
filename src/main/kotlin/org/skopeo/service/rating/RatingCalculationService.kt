@@ -35,7 +35,6 @@ import org.skopeo.service.audit.AuditService
 import org.skopeo.service.calculator.AuditEntry
 import org.skopeo.service.calculator.RankingCalculator
 import org.skopeo.service.calculator.impl.v2.PerformanceBasedRankingCalculatorImpl
-import org.skopeo.service.standings.StandingsService
 import org.skopeo.service.user.VerifiedFirebaseToken
 import java.math.BigDecimal
 import java.time.LocalDate
@@ -57,7 +56,6 @@ class RatingCalculationService(
     private val users: UserRepository = UserRepository(),
     private val calculator: RankingCalculator = PerformanceBasedRankingCalculatorImpl(),
     private val audit: AuditService = AuditService(),
-    private val standings: StandingsService = StandingsService(),
 ) {
     /**
      * The internal calculator derivatives behind one player's change (issue #89), as precise strings.
@@ -180,8 +178,8 @@ class RatingCalculationService(
             }
         }
         if (processed.isNotEmpty()) {
-            // The committed ratings moved the leaderboard, so republish the standings snapshot (#220).
-            standings.rebuild()
+            // The RATING standings are computed live from current ratings (#146), so a committed calculation
+            // needs no snapshot rebuild — the moved leaderboard is reflected on the next read.
             recordCommitTrace(processed = processed, ratedBy = ratedBy)
         }
     }

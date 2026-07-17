@@ -293,8 +293,7 @@ class StandingsCalculationServiceTest {
         grant(userId = ratingLeader.id, points = "10")
         grant(userId = pointsLeader.id, points = "500")
 
-        // Rating-derived rebuild serves — ordered by rating.
-        standings.rebuild()
+        // Rating-derived source serves live off the current ratings — ordered by rating.
         val ratingView = standings.page(token = token(uid = "admin"), band = StandingsBand.FROM_4_0, sex = "Male", limit = 25, offset = 0)
         ratingView.entries.first().userId shouldBe ratingLeader.id
 

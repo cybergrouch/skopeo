@@ -110,7 +110,7 @@ class StandingsApiIntegrationTest {
         withApp { client ->
             val admin = adminToken()
             val (player, playerToken) = signUp(client = client, uid = "p1", name = "Player One")
-            // Setting the rating triggers a standings rebuild → a PUBLISHED snapshot exists.
+            // The rating set is served live by the RATING source — no snapshot needed.
             setRating(client = client, admin = admin, userId = player.id, value = "4.2")
 
             val response =
@@ -169,7 +169,7 @@ class StandingsApiIntegrationTest {
         }
 
     @Test
-    fun `a rating change is reflected in a fresh page read (rebuild on change)`() =
+    fun `a rating change is reflected in a fresh page read (live calculation)`() =
         withApp { client ->
             val admin = adminToken()
             val (player, playerToken) = signUp(client = client, uid = "p1", name = "Player One")

@@ -77,10 +77,11 @@ data class StandingEntry(
 enum class SnapshotStatus { PUBLISHED, DRAFT }
 
 /**
- * What produced a standings snapshot (#146, phase 2). [RATING] is the phase-1 rating-derived source
- * ([org.skopeo.service.standings.StandingsService.rebuild]); [POINTS] is the ranking-points-ledger
- * recompute. Reads prefer the latest PUBLISHED [POINTS] snapshot when one exists, else fall back to
- * [RATING], so the two coexist and standings flip to points automatically once a points run is committed.
+ * What produced a standings snapshot (#146, phase 2). Snapshots are a **POINTS-only** concept: [POINTS]
+ * is the ranking-points-ledger recompute persisted by [org.skopeo.service.standings.StandingsCalculationService].
+ * The [RATING] source is served by **live** calculation from current ratings (no snapshot is maintained),
+ * so any historical [RATING] snapshot rows are harmless dead data. The `standings_source` app-setting
+ * selects which source the Standings tab serves (RATING = live, POINTS = snapshot).
  */
 enum class SnapshotSource { RATING, POINTS }
 
