@@ -68,4 +68,17 @@ describe('PointsAuditCard', () => {
     renderCard(true)
     expect(screen.getByText('No active ranking points.')).toBeInTheDocument()
   })
+
+  it('shows a loading state while the audit is fetching (#448)', () => {
+    useGetApiV1PlayersCodePoints.mockReturnValue({ data: undefined, isLoading: true })
+    renderCard(true)
+    expect(screen.getByText('Loading…')).toBeInTheDocument()
+  })
+
+  it('shows "Manual grant" for an award with neither a match nor an event (#448)', () => {
+    const manualAward = { ...eventAward, id: 'a3', matchCode: null, eventCode: null }
+    useGetApiV1PlayersCodePoints.mockReturnValue({ data: [manualAward], isLoading: false })
+    renderCard(true)
+    expect(screen.getByText('Manual grant')).toBeInTheDocument()
+  })
 })
