@@ -1006,29 +1006,48 @@ class EventServiceTest {
     }
 
     @Test
-    fun `a budgeted event create requires all four config fields (#403)`() {
-        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+    fun `a budgeted event create requires all four config fields when a club is set (#403)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val club = clubs.create(command = CreateClubCommand(name = "Downtown TC", createdBy = host.id))
         val start = LocalDate.now()
         val end = start.plusDays(10)
 
-        // Each field missing on its own is rejected (all four are required for a budgeted-type event).
-        service.create(token = token(uid = "host"), input = input(type = EventType.TOURNAMENT))
+        // With a club the config is required in full; each field missing on its own is rejected.
+        service.create(token = token(uid = "host"), input = input(type = EventType.TOURNAMENT, clubId = club.id))
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
         service.create(
             token = token(uid = "host"),
-            input = input(type = EventType.TOURNAMENT, maxPoints = 100, validityStart = start, validityEnd = end),
+            input = input(type = EventType.TOURNAMENT, clubId = club.id, maxPoints = 100, validityStart = start, validityEnd = end),
         ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
         service.create(
             token = token(uid = "host"),
-            input = input(type = EventType.TOURNAMENT, minPoints = 10, validityStart = start, validityEnd = end),
+            input = input(type = EventType.TOURNAMENT, clubId = club.id, minPoints = 10, validityStart = start, validityEnd = end),
         ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
         service.create(
             token = token(uid = "host"),
-            input = input(type = EventType.TOURNAMENT, minPoints = 10, maxPoints = 100, validityEnd = end),
+            input = input(type = EventType.TOURNAMENT, clubId = club.id, minPoints = 10, maxPoints = 100, validityEnd = end),
         ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
         service.create(
             token = token(uid = "host"),
-            input = input(type = EventType.TOURNAMENT, minPoints = 10, maxPoints = 100, validityStart = start),
+            input = input(type = EventType.TOURNAMENT, clubId = club.id, minPoints = 10, maxPoints = 100, validityStart = start),
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `a clubless budgeted event create may defer its points config, but a partial config is rejected (#429)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+
+        // No club and no config fields → allowed; the config is deferred (settable later once a club is set).
+        val deferred =
+            service.create(token = token(uid = "host"), input = input(type = EventType.TOURNAMENT)).shouldBeRight()
+        deferred.event.type shouldBe EventType.TOURNAMENT
+        deferred.event.minPointsPerMatch.shouldBeNull()
+        deferred.event.pointValidityStart.shouldBeNull()
+
+        // No club but a partial config supplied → still rejected (a partial config is never silently dropped).
+        service.create(
+            token = token(uid = "host"),
+            input = input(type = EventType.TOURNAMENT, minPoints = 10),
         ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
     }
 

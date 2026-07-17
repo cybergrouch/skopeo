@@ -608,27 +608,43 @@ class EventService(
         }
 
     /**
-     * Resolve the points config for a create request (#403 Phase C). A budgeted-type event (TOURNAMENT/
-     * LEAGUE) must supply all four fields, validated against the global policy; an OPEN_PLAY event
-     * carries none (returns null even if fields were sent — they're ignored per the applicability rule).
+     * Resolve the points config for a create request (#403 Phase C, reconciled in #429). An OPEN_PLAY
+     * event carries none (returns null even if fields were sent — ignored per the applicability rule).
+     * A budgeted-type event (TOURNAMENT/LEAGUE) carries a config only when it is tied to a **club** —
+     * the budget source — mirroring the fixture rule "no club → no points". So:
+     *  - budgeted **with** a club → all four fields are required and validated against the global policy;
+     *  - budgeted **without** a club → the config is optional. If none of the fields are supplied it is
+     *    deferred (settable later via the points-config editor once a club is assigned); if any field is
+     *    supplied all four are required and validated, so a partial config is never silently dropped.
      */
     private fun resolveCreatePointsConfig(input: CreateEventInput): Either<ServiceError, ValidatedPointsConfig?> =
         either {
             if (input.type !in BUDGETED_TYPES) {
                 null
             } else {
-                val min = ensureNotNull(value = input.minPointsPerMatch) { pointsConfigRequired() }
-                val max = ensureNotNull(value = input.maxPointsPerMatch) { pointsConfigRequired() }
-                val start = ensureNotNull(value = input.pointValidityStart) { pointsConfigRequired() }
-                val end = ensureNotNull(value = input.pointValidityEnd) { pointsConfigRequired() }
-                validatePointsWindow(
-                    eventType = input.type,
-                    minPoints = min,
-                    maxPoints = max,
-                    validityStart = start,
-                    validityEnd = end,
-                ).bind()
-                ValidatedPointsConfig(minPoints = min, maxPoints = max, validityStart = start, validityEnd = end)
+                val anyFieldSupplied =
+                    input.minPointsPerMatch != null ||
+                        input.maxPointsPerMatch != null ||
+                        input.pointValidityStart != null ||
+                        input.pointValidityEnd != null
+                // A clubless budgeted event may defer its config; with a club (or any field sent) it's required.
+                val required = input.clubId != null || anyFieldSupplied
+                if (!required) {
+                    null
+                } else {
+                    val min = ensureNotNull(value = input.minPointsPerMatch) { pointsConfigRequired() }
+                    val max = ensureNotNull(value = input.maxPointsPerMatch) { pointsConfigRequired() }
+                    val start = ensureNotNull(value = input.pointValidityStart) { pointsConfigRequired() }
+                    val end = ensureNotNull(value = input.pointValidityEnd) { pointsConfigRequired() }
+                    validatePointsWindow(
+                        eventType = input.type,
+                        minPoints = min,
+                        maxPoints = max,
+                        validityStart = start,
+                        validityEnd = end,
+                    ).bind()
+                    ValidatedPointsConfig(minPoints = min, maxPoints = max, validityStart = start, validityEnd = end)
+                }
             }
         }
 

@@ -16,6 +16,7 @@ import {
   usePostApiV1Events,
 } from "@/api/generated/events/events";
 import { useGetApiV1Clubs } from "@/api/generated/clubs/clubs";
+import { useGetApiV1PointsPolicies } from "@/api/generated/points-budget/points-budget";
 import { useGetApiV1UsersMe } from "@/api/generated/users/users";
 import type {
   ClubResponse,
@@ -36,6 +37,9 @@ const EVENT_TYPE_OPTIONS: ReadonlyArray<{ value: EventType; label: string }> = [
   { value: "LEAGUE", label: "League" },
   { value: "TOURNAMENT", label: "Tournament" },
 ];
+
+/** Event types that carry a points budget/config (#403 Phase C): TOURNAMENT and LEAGUE. */
+const BUDGETED_EVENT_TYPES: ReadonlyArray<EventType> = ["TOURNAMENT", "LEAGUE"];
 
 /**
  * The single club a CLUB_OWNER should default the create-event Club selector to (#364), or "" when
@@ -69,11 +73,20 @@ function NewEventForm() {
   // The event's class (#403); OPEN_PLAY is the default and the backward-compatible choice.
   const [type, setType] = useState<EventType>("OPEN_PLAY");
   const [error, setError] = useState<string | null>(null);
+  // Points config (#429): a budgeted event (TOURNAMENT/LEAGUE) with a club captures its per-match
+  // reward window + validity window up front. Kept as strings so the inputs can be cleared while typing.
+  const [minPoints, setMinPoints] = useState("");
+  const [maxPoints, setMaxPoints] = useState("");
+  const [validityStart, setValidityStart] = useState("");
+  const [validityEnd, setValidityEnd] = useState("");
 
   // Clubs to optionally file the event under (#313). Readable by staff; empty when none exist.
   const clubsData = useGetApiV1Clubs().data;
   const clubs = clubsData ?? [];
   const me = useGetApiV1UsersMe().data;
+  // Global per-type policy bounds (#403 Phase C), for the client-side hints + validation. A
+  // non-manager caller simply gets nothing (retry off keeps a 403 quiet); the fields still render.
+  const policies = useGetApiV1PointsPolicies({ query: { retry: false } }).data;
 
   // Default the selector to a CLUB_OWNER's own club (#364), but only while the field is untouched;
   // once the user selects anything (including "Open") their choice wins.
@@ -92,6 +105,10 @@ function NewEventForm() {
         setClubIdChoice(undefined);
         setRoster([]);
         setType("OPEN_PLAY");
+        setMinPoints("");
+        setMaxPoints("");
+        setValidityStart("");
+        setValidityEnd("");
         void queryClient.invalidateQueries({
           queryKey: getGetApiV1EventsQueryKey(),
         });
@@ -99,9 +116,62 @@ function NewEventForm() {
     },
   });
 
+  // Points config applies only to a budgeted event (TOURNAMENT/LEAGUE) filed under a club — the budget
+  // source — mirroring the fixture rule "no club → no points" (#429). OPEN_PLAY or clubless hides it;
+  // a clubless budgeted event can still capture its config later via the event's points-config editor.
+  const isBudgeted = BUDGETED_EVENT_TYPES.includes(type);
+  const showPointsConfig = isBudgeted && clubId !== "";
+  const globalPolicy = policies?.find((p) => p.eventType === type);
+
+  // Client-side validation of the points window against the global policy (#429), mirroring the
+  // EventDetail editor. Returns an error message, or null when the window is valid (or not required).
+  const pointsError = useMemo<string | null>(() => {
+    if (!showPointsConfig) return null;
+    if (
+      minPoints === "" ||
+      maxPoints === "" ||
+      validityStart === "" ||
+      validityEnd === ""
+    ) {
+      return "Min/max points and a validity window are required.";
+    }
+    const min = Number(minPoints);
+    const max = Number(maxPoints);
+    if (
+      !Number.isInteger(min) ||
+      !Number.isInteger(max) ||
+      min <= 0 ||
+      max <= 0
+    ) {
+      return "Min and max points must be positive whole numbers.";
+    }
+    if (min > max) return "Min points cannot exceed max points.";
+    if (globalPolicy && min < globalPolicy.minPoints) {
+      return `Min points must be at least the global minimum of ${globalPolicy.minPoints}.`;
+    }
+    if (globalPolicy && max > globalPolicy.maxPoints) {
+      return `Max points must not exceed the global maximum of ${globalPolicy.maxPoints}.`;
+    }
+    if (validityEnd < validityStart) {
+      return "Validity end cannot be before the start.";
+    }
+    return null;
+  }, [
+    showPointsConfig,
+    minPoints,
+    maxPoints,
+    validityStart,
+    validityEnd,
+    globalPolicy,
+  ]);
+
   function submit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    if (pointsError) {
+      setError(pointsError);
+      return;
+    }
     create.mutate(
       {
         data: {
@@ -111,6 +181,15 @@ function NewEventForm() {
           type,
           participantIds: roster.map((u) => u.id),
           ...(clubId ? { clubId } : {}),
+          // Only send a points config for a budgeted event with a club (#429); otherwise it's deferred.
+          ...(showPointsConfig
+            ? {
+                minPointsPerMatch: Number(minPoints),
+                maxPointsPerMatch: Number(maxPoints),
+                pointValidityStart: validityStart,
+                pointValidityEnd: validityEnd,
+              }
+            : {}),
         },
       },
       {
@@ -120,7 +199,11 @@ function NewEventForm() {
     );
   }
 
-  const canCreate = name.trim() !== "" && startDate !== "" && endDate !== "";
+  const canCreate =
+    name.trim() !== "" &&
+    startDate !== "" &&
+    endDate !== "" &&
+    pointsError === null;
 
   return (
     <Card>
@@ -202,6 +285,76 @@ function NewEventForm() {
                   </option>
                 ))}
               </select>
+            </div>
+          ) : null}
+          {/* Points config (#429): budgeted event (TOURNAMENT/LEAGUE) filed under a club. Hidden for
+              OPEN_PLAY or a clubless event, where no budget applies (settable later once a club is set). */}
+          {showPointsConfig ? (
+            <div className="grid gap-3 rounded-md border border-input p-3">
+              <p className="text-xs font-medium uppercase text-muted-foreground">
+                Points config
+              </p>
+              {globalPolicy ? (
+                <p className="text-xs text-muted-foreground">
+                  The global {type === "TOURNAMENT" ? "Tournament" : "League"}{" "}
+                  policy allows {globalPolicy.minPoints}–{globalPolicy.maxPoints}{" "}
+                  points and up to {globalPolicy.maxValidityDays} validity days.
+                </p>
+              ) : null}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label htmlFor="event-min-points" className="text-xs">
+                    Min points
+                  </Label>
+                  <Input
+                    id="event-min-points"
+                    type="number"
+                    value={minPoints}
+                    placeholder={
+                      globalPolicy ? String(globalPolicy.minPoints) : ""
+                    }
+                    onChange={(e) => setMinPoints(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="event-max-points" className="text-xs">
+                    Max points
+                  </Label>
+                  <Input
+                    id="event-max-points"
+                    type="number"
+                    value={maxPoints}
+                    placeholder={
+                      globalPolicy ? String(globalPolicy.maxPoints) : ""
+                    }
+                    onChange={(e) => setMaxPoints(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label htmlFor="event-validity-start" className="text-xs">
+                    Validity start
+                  </Label>
+                  <Input
+                    id="event-validity-start"
+                    type="date"
+                    value={validityStart}
+                    onChange={(e) => setValidityStart(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="event-validity-end" className="text-xs">
+                    Validity end
+                  </Label>
+                  <Input
+                    id="event-validity-end"
+                    type="date"
+                    value={validityEnd}
+                    onChange={(e) => setValidityEnd(e.target.value)}
+                  />
+                </div>
+              </div>
             </div>
           ) : null}
           <div className="space-y-1">

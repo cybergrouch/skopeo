@@ -4761,21 +4761,25 @@ components:
         minPointsPerMatch:
           type: integer
           nullable: true
-          description: Min per-match reward (#403 Phase C); required for a TOURNAMENT or LEAGUE event, omitted for OPEN_PLAY.
+          description: >-
+            Min per-match reward (#403 Phase C). Required (with all four points fields) for a TOURNAMENT or LEAGUE
+            event that has a club; a clubless budgeted event may omit them and set the config later (#429). Omitted for OPEN_PLAY.
         maxPointsPerMatch:
           type: integer
           nullable: true
-          description: Max per-match reward (#403 Phase C); required for a TOURNAMENT or LEAGUE event, omitted for OPEN_PLAY.
+          description: >-
+            Max per-match reward (#403 Phase C). Required (with all four points fields) for a TOURNAMENT or LEAGUE
+            event that has a club; a clubless budgeted event may omit them and set the config later (#429). Omitted for OPEN_PLAY.
         pointValidityStart:
           type: string
           format: date
           nullable: true
-          description: First day an awarded point is valid (#403 Phase C); required for a budgeted-type event.
+          description: First day an awarded point is valid (#403 Phase C); required for a budgeted-type event that has a club (#429).
         pointValidityEnd:
           type: string
           format: date
           nullable: true
-          description: Last day an awarded point is valid (#403 Phase C); required for a budgeted-type event.
+          description: Last day an awarded point is valid (#403 Phase C); required for a budgeted-type event that has a club (#429).
 
     SetPointsConfigRequest:
       type: object
