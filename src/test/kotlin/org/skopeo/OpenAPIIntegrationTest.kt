@@ -48,6 +48,12 @@ class OpenAPIIntegrationTest {
             body shouldContain "/ranking-points"
             // Event types + finalize state (#403 Phase A): the finalize path is documented.
             body shouldContain "/api/v1/events/{id}/finalize"
+            // Points budget foundation (#403 Phase B): the policy + budget paths and schemas.
+            body shouldContain "/api/v1/points/policies"
+            body shouldContain "/api/v1/points/budgets"
+            body shouldContain "/api/v1/clubs/{clubId}/point-budgets/{eventType}"
+            body shouldContain "PointsPolicyResponse"
+            body shouldContain "ClubBudgetResponse"
         }
 
     @Test

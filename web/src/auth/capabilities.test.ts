@@ -3,6 +3,7 @@ import {
   Capability,
   canEditEndedEvents,
   canManageMatches,
+  canManagePointsBudget,
   canRate,
   hasCapability,
   isAdministrator,
@@ -45,6 +46,14 @@ describe('capabilities', () => {
     expect(canEditEndedEvents([Capability.HOST])).toBe(false)
     expect(canEditEndedEvents([Capability.PLAYER])).toBe(false)
     expect(canEditEndedEvents(undefined)).toBe(false)
+  })
+
+  it('canManagePointsBudget is true for points managers and administrators (#403)', () => {
+    expect(canManagePointsBudget([Capability.POINTS_MANAGER])).toBe(true)
+    expect(canManagePointsBudget([Capability.ADMINISTRATOR])).toBe(true)
+    expect(canManagePointsBudget([Capability.PLAYER])).toBe(false)
+    expect(canManagePointsBudget([Capability.HOST])).toBe(false)
+    expect(canManagePointsBudget(undefined)).toBe(false)
   })
 
   it('isResearcher is true for researchers and administrators (#107)', () => {

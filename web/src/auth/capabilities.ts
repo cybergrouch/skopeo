@@ -60,6 +60,19 @@ export function canRate(
 }
 
 /**
+ * The Points Management tab is for points managers (#403 §5.1): the staff role over the points
+ * economy (global policy + club budgets). ADMINISTRATOR is implicitly a points manager.
+ */
+export function canManagePointsBudget(
+  capabilities: readonly Capability[] | undefined,
+): boolean {
+  return (
+    hasCapability(capabilities, Capability.POINTS_MANAGER) ||
+    hasCapability(capabilities, Capability.ADMINISTRATOR)
+  );
+}
+
+/**
  * The Research tab is for researchers (#107) — gated so it can later be monetized. Every sign-up
  * gets RESEARCHER for now, so behaviour is unchanged. ADMINISTRATOR implicitly has RESEARCHER.
  */

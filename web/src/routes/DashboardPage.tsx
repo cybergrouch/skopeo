@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/auth/useAuth";
 import {
   canManageMatches,
+  canManagePointsBudget,
   canRate,
   isAdministrator,
   isResearcher,
@@ -21,6 +22,7 @@ import {
 import { useGetApiV1UsersMe } from "@/api/generated/users/users";
 import { ProfileTab } from "./dashboard/ProfileTab";
 import { AdminTab } from "./dashboard/AdminTab";
+import { PointsManagementSection } from "./dashboard/admin/PointsManagementSection";
 import { EventOrganizerTab } from "./dashboard/EventOrganizerTab";
 import { SeedingTab } from "./dashboard/SeedingTab";
 import { RatingsTab } from "./dashboard/RatingsTab";
@@ -51,6 +53,10 @@ export function DashboardPage() {
   const showActivity = isAdministrator(capabilities);
   const showReport = isAdministrator(capabilities);
   const showAdmin = isAdministrator(capabilities);
+  // Points managers who aren't administrators get a standalone Points Management tab; admins reach
+  // the same section inside the Admin tab (so it isn't shown twice for them).
+  const showPointsManagement =
+    canManagePointsBudget(capabilities) && !showAdmin;
 
   // The selected section lives in the URL (?tab=…, #323) so it survives leaving and returning to the
   // dashboard — e.g. Back from a public page lands on the tab the user was on, not a reset to Profile.
@@ -102,6 +108,15 @@ export function DashboardPage() {
       : []),
     ...(showReport
       ? [{ value: "reports", label: "Reports", element: <ReportTab /> }]
+      : []),
+    ...(showPointsManagement
+      ? [
+          {
+            value: "points",
+            label: "Points Management",
+            element: <PointsManagementSection />,
+          },
+        ]
       : []),
     ...(showAdmin
       ? [{ value: "admin", label: "Admin", element: <AdminTab /> }]

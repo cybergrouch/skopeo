@@ -52,6 +52,16 @@ object PostgresTestDatabase {
             // settings back to their V11 seed so theme state doesn't leak across tests (#378).
             exec(stmt = "TRUNCATE app_settings")
             exec(stmt = "INSERT INTO app_settings (key, value, updated_at) VALUES ('ui_theme', 'AUTO', now())")
+            // clubs aren't a child of users, so club_point_budgets (which cascades from clubs, not
+            // users) survives the cascade above; wipe it explicitly so budgets don't leak across tests.
+            // points_policies has no FK at all — reset it to the V16 seed so policy edits don't leak (#403).
+            exec(stmt = "TRUNCATE club_point_budgets")
+            exec(stmt = "TRUNCATE points_policies")
+            exec(
+                stmt =
+                    "INSERT INTO points_policies (event_type, min_points, max_points, max_validity_days) VALUES " +
+                        "('OPEN_PLAY', 1, 10, 30), ('LEAGUE', 5, 50, 90), ('TOURNAMENT', 10, 500, 365)",
+            )
         }
     }
 }

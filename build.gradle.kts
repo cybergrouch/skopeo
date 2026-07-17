@@ -11,7 +11,7 @@ plugins {
 }
 
 group = "org.skopeo"
-version = "1.1.1-SNAPSHOT"
+version = "1.2.0-SNAPSHOT"
 description = "Skopeo - Performance-based tennis rating system"
 
 application {
@@ -290,6 +290,7 @@ tasks.jacocoTestReport {
                         "**/routes/MatchRoutes*.*",
                         "**/routes/EventRoutes*.*",
                         "**/routes/ClubRoutes*.*",
+                        "**/routes/PointsBudgetRoutes*.*",
                         "**/routes/InviteRoutes*.*",
                         "**/routes/AuditRoutes*.*",
                         "**/routes/DuplicateCandidateRoutes*.*",
@@ -360,6 +361,7 @@ tasks.jacocoTestCoverageVerification {
                         "**/routes/MatchRoutes*.*",
                         "**/routes/EventRoutes*.*",
                         "**/routes/ClubRoutes*.*",
+                        "**/routes/PointsBudgetRoutes*.*",
                         "**/routes/InviteRoutes*.*",
                         "**/routes/AuditRoutes*.*",
                         "**/routes/DuplicateCandidateRoutes*.*",
