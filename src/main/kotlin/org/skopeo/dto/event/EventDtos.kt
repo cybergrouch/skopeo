@@ -21,8 +21,8 @@ data class CreateEventRequest(
     val clubId: String? = null,
     // The event's class (#403): OPEN_PLAY | LEAGUE | TOURNAMENT; omit for the OPEN_PLAY default.
     val type: String? = null,
-    // Points config (#403 Phase C): required for a TOURNAMENT/LEAGUE event, omitted for OPEN_PLAY. The
-    // validity dates are ISO-8601 (yyyy-MM-dd).
+    // Points config (#403 Phase C): required for a club event of any type (OPEN_PLAY unified), optional
+    // when clubless. The validity dates are ISO-8601 (yyyy-MM-dd).
     val minPointsPerMatch: Int? = null,
     val maxPointsPerMatch: Int? = null,
     val pointValidityStart: String? = null,

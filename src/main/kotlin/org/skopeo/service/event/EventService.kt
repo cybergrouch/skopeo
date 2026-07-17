@@ -48,9 +48,10 @@ import java.util.UUID
 
 private val STAFF_ROLES = setOf(Capability.HOST, Capability.CLUB_OWNER, Capability.ADMINISTRATOR)
 
-// The event types that carry a points budget (#403 Phase C): TOURNAMENT and LEAGUE. OPEN_PLAY carries
-// no points config or designation. Kept as a set so the applicability checks read declaratively.
-private val BUDGETED_TYPES = setOf(EventType.TOURNAMENT, EventType.LEAGUE)
+// The event types that carry a points budget. Every event class carries a points config now that
+// OPEN_PLAY was unified with TOURNAMENT/LEAGUE (#403 Phase C; unified in feat/open-play-points-unify);
+// config applies whenever the event has a club. Kept as a set so applicability checks read declaratively.
+private val BUDGETED_TYPES = setOf(EventType.TOURNAMENT, EventType.LEAGUE, EventType.OPEN_PLAY)
 
 // Roles that may still enter data on an event after it has ended (#310): administrators and club
 // owners are exempt from the expiry gate, unlike a plain host.
@@ -65,7 +66,7 @@ data class CreateEventInput(
     val clubId: UUID? = null,
     // The event's class (#403); defaults to OPEN_PLAY for backward compatibility.
     val type: EventType = EventType.OPEN_PLAY,
-    // Points config (#403 Phase C): required for TOURNAMENT/LEAGUE, ignored (null) for OPEN_PLAY.
+    // Points config (#403 Phase C): required for a club event of any type; optional/deferred when clubless.
     val minPointsPerMatch: Int? = null,
     val maxPointsPerMatch: Int? = null,
     val pointValidityStart: LocalDate? = null,
@@ -110,8 +111,8 @@ class EventService(
             input.clubId?.let { clubId ->
                 ensureNotNull(value = clubs.findById(id = clubId)) { ServiceError.Validation(message = "Club $clubId not found") }
             }
-            // Points config (#403 Phase C): a budgeted-type event must carry a valid per-match reward +
-            // validity window, validated against the global policy; OPEN_PLAY carries none.
+            // Points config (#403 Phase C): a club event of any type must carry a valid per-match reward +
+            // validity window, validated against the global policy; a clubless event may defer it.
             val config = resolveCreatePointsConfig(input = input).bind()
             val event =
                 events.create(
@@ -280,10 +281,9 @@ class EventService(
     /**
      * Set an event's points config (#403 Phase C): the per-match reward window (min/max) and the point
      * validity window. Staff-only (a HOST owns / an ADMINISTRATOR-CLUB_OWNER any), not on a finalized
-     * event. Only budgeted-type events (TOURNAMENT/LEAGUE) carry a config — a config on an OPEN_PLAY
-     * event is a [ServiceError.Validation]. Re-validated against the global policy, AND rejected if any
-     * existing active fixture's designation would fall outside the new [min, max]. Audited as
-     * EVENT_POINTS_CONFIG_SET.
+     * event. Every event class now carries a config (OPEN_PLAY unified with TOURNAMENT/LEAGUE), validated
+     * against the global policy for its type, AND rejected if any existing active fixture's designation
+     * would fall outside the new [min, max]. Audited as EVENT_POINTS_CONFIG_SET.
      */
     fun setPointsConfig(
         token: VerifiedFirebaseToken,
@@ -297,7 +297,7 @@ class EventService(
             ensure(condition = isAdminOrOwner || event.createdBy == caller.id) { ServiceError.Forbidden() }
             ensureNotFinalized(event = event).bind()
             ensure(condition = event.type in BUDGETED_TYPES) {
-                ServiceError.Validation(message = "Points config applies only to TOURNAMENT and LEAGUE events")
+                ServiceError.Validation(message = "Points config does not apply to event type ${event.type}")
             }
             validatePointsWindow(
                 eventType = event.type,
@@ -608,12 +608,11 @@ class EventService(
         }
 
     /**
-     * Resolve the points config for a create request (#403 Phase C, reconciled in #429). An OPEN_PLAY
-     * event carries none (returns null even if fields were sent — ignored per the applicability rule).
-     * A budgeted-type event (TOURNAMENT/LEAGUE) carries a config only when it is tied to a **club** —
-     * the budget source — mirroring the fixture rule "no club → no points". So:
-     *  - budgeted **with** a club → all four fields are required and validated against the global policy;
-     *  - budgeted **without** a club → the config is optional. If none of the fields are supplied it is
+     * Resolve the points config for a create request (#403 Phase C, reconciled in #429; OPEN_PLAY
+     * unified in feat/open-play-points-unify). Every event class carries a config only when it is tied
+     * to a **club** — the budget source — mirroring the fixture rule "no club → no points". So:
+     *  - **with** a club → all four fields are required and validated against the global policy;
+     *  - **without** a club → the config is optional. If none of the fields are supplied it is
      *    deferred (settable later via the points-config editor once a club is assigned); if any field is
      *    supplied all four are required and validated, so a partial config is never silently dropped.
      */

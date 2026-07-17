@@ -57,9 +57,10 @@ private val STAFF_ROLES = setOf(Capability.HOST, Capability.CLUB_OWNER, Capabili
 // still create fixtures / record results after an event has ended; a plain host may not.
 private val EXPIRY_EXEMPT_ROLES = setOf(Capability.CLUB_OWNER, Capability.ADMINISTRATOR)
 
-// Event types that carry a points budget/designation (#403 Phase C): TOURNAMENT and LEAGUE. A fixture
-// on an OPEN_PLAY or event-less occasion designates no points.
-private val BUDGETED_TYPES = setOf(EventType.TOURNAMENT, EventType.LEAGUE)
+// Event types that carry a points budget/designation. Every event class rewards points now that
+// OPEN_PLAY was unified with TOURNAMENT/LEAGUE (#403 Phase C; unified in feat/open-play-points-unify);
+// designation applies whenever the event has a club. Only an event-less fixture designates no points.
+private val BUDGETED_TYPES = setOf(EventType.TOURNAMENT, EventType.LEAGUE, EventType.OPEN_PLAY)
 
 /**
  * Fixture-creation input resolved at the route boundary (#116): the match format/type enums are
@@ -79,9 +80,9 @@ data class FixtureInput(
     /** When set, the fixture belongs to this event and both sides must be event participants (#138). */
     val eventId: UUID? = null,
     /**
-     * Points designated for the winner (#403 Phase C). Applies only to a budgeted-type event
-     * (TOURNAMENT/LEAGUE); when omitted there, it defaults to round(avg(event.min, event.max)). Ignored
-     * (kept null) for an OPEN_PLAY / event-less fixture.
+     * Points designated for the winner (#403 Phase C). Applies to a fixture on an event that carries a
+     * points config (any type with a club; OPEN_PLAY unified); when omitted there, it defaults to
+     * round(avg(event.min, event.max)). Kept null for a config-less or event-less fixture.
      */
     val designatedPoints: Int? = null,
 )
@@ -195,12 +196,14 @@ class MatchService(
     }
 
     /**
-     * Resolve the point designation for a new fixture (#403 Phase C). For a budgeted-type event
-     * (TOURNAMENT/LEAGUE) the amount defaults to round(avg(event.min, event.max)) when omitted, is
+     * Resolve the point designation for a new fixture (#403 Phase C; OPEN_PLAY unified in
+     * feat/open-play-points-unify). Points are carried only by an event that has a **config** (a points
+     * window) — which, by the create rules, means an event with a club (the "no club ⇒ no points" rule).
+     * For such a fixture the amount defaults to round(avg(event.min, event.max)) when omitted, is
      * validated to be an integer within [event.min, event.max], and — when the event has a club — is
      * checked cumulatively against the club's free budget: currentReserved + amount × team size must not
-     * exceed the club's budgeted allocation for the type. A clubless budgeted event records the
-     * designation but skips the budget check (there's no budget source). OPEN_PLAY / event-less → null.
+     * exceed the club's budgeted allocation for the type. An event-less fixture, or a fixture on a
+     * config-less event (clubless / deferred config), designates nothing → null.
      */
     private fun resolveDesignation(
         event: Event?,
@@ -210,12 +213,9 @@ class MatchService(
             if (event == null || event.type !in BUDGETED_TYPES) {
                 return@either null
             }
-            // A budgeted event is created with both bounds set (config is written atomically); the window
-            // is present iff min is — guard defensively for a config-less event (e.g. seeded via the repo).
-            val window =
-                ensureNotNull(value = event.pointsWindow()) {
-                    ServiceError.Validation(message = "Event has no points config; set min/max points before designating")
-                }
+            // A config is written atomically (all four fields or none). No config → no points window →
+            // no designation: this covers a clubless event and one whose config is still deferred.
+            val window = event.pointsWindow() ?: return@either null
             val (min, max) = window
             val amount = request.designatedPoints ?: Math.round((min + max) / 2.0).toInt()
             ensure(condition = amount in min..max) {

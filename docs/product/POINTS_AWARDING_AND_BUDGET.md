@@ -44,13 +44,14 @@ The single most important framing: **assigning points and counting them in the r
 
 ### 2.3 Events (typed + budgeted)
 - Every event is **OPEN_PLAY**, **LEAGUE** (multi-day / season-long, team-format, has an intended winner), or **TOURNAMENT** (1–2 days).
+- **Unified points model (all three types):** OPEN_PLAY now rewards points using the **same** model as LEAGUE/TOURNAMENT — event-level min/max/validity config (validated vs the global OPEN_PLAY policy), per-fixture manual designation (default `round(avg(min, max))`), budget reservation against the club, and finalize-time awards. This supersedes the earlier "open-play formula / non-budgeted open play" design. The **"no club ⇒ no points"** rule still applies to all types: a clubless event carries no config/designation/awards.
 - **Event creation** captures:
   - **Min & max points per match fixture** — validated against the global per-type min/max (`event.min ≥ global.min`, `event.max ≤ global.max`).
   - **Point validity start & end** — validated against the global per-type **max validity days**.
   - A **points policy** by which the event draws from the club's allocated budget.
 
 ### 2.4 Match fixtures (where points are designated)
-- Fixture creation asks **how many points** to award; convenience default = **round(avg(min, max))**.
+- Fixture creation asks **how many points** to award; convenience default = **round(avg(min, max))**. This applies to **every event type with a club**, OPEN_PLAY included (unified — no separate open-play formula).
 - On **saving the fixture**, the backend **verifies/reserves** against the club budget (see §3 for reserve-vs-check).
 - The fixture is the point where points are **designated** for the eventual winner.
 
@@ -103,7 +104,7 @@ Every step — global-policy set, club allocation, event points-policy, fixture 
 3. **Finalize / rating-queue** — finalize is **terminal** (no un-finalize; audited). Rating **queues on finalize**. Event-less/ad-hoc matches aren't a supported flow and **carry no points** (no budget source); the `event_id IS NULL → queue immediately` branch is a defensive fallback only (rated, never awarded).
 4. **League (team) award** — **each winning-team member gets the full designated points** (not split). Budget cost per fixture = `designated × team_size` (deterministic — both sides same size). Fixture validation is **cumulative per event**: `Σ(event fixtures' designated × team_size) ≤ the event/club allocation for the type`; editing a fixture re-checks.
 5. **Manual/ad-hoc grants (#392)** — event awards are **budgeted**; `EXTERNAL`/ad-hoc grants are a **non-budgeted** class (outside the club budget).
-6. **Units** — `BigDecimal` stored type, **integer values only** (reject any fractional part at every entry point; the Phase 5 open-play formula rounds to an integer). Supersedes the earlier "fractional open-play points" note.
+6. **Units** — `BigDecimal` stored type, **integer values only** (reject any fractional part at every entry point; the `round(avg(min, max))` designation default is an integer). Supersedes the earlier "fractional open-play points" note. (There is no separate open-play formula: OPEN_PLAY uses the same designation/award model as LEAGUE/TOURNAMENT — see §2.3.)
 7. **Budget seeding** — ADMINISTRATOR / POINTS_MANAGER sets the master policy + total and provisions/adjusts club allocations (Points Management tab, §5.2); monetization later.
 
 ---
@@ -116,6 +117,8 @@ Every step — global-policy set, club allocation, event points-policy, fixture 
 - **E.** ✅ **Club-owner public visibility** of per-event points (public per-event points; CLUB_OWNER/admin-gated utilization via `/clubs/{clubId}/points-summary`). Completes the #403 arc.
 
 Each slice is independently useful; A–C establish the controls, D wires the awards into the standings, E adds transparency.
+
+- **Unify (post-E).** OPEN_PLAY joined the budgeted model: it now carries event config, per-fixture designation, budget reservation, and finalize awards exactly like LEAGUE/TOURNAMENT (the "budgeted types" set is now all three; still gated by club presence). Supersedes Phase C/D's exclusion of OPEN_PLAY.
 
 ---
 

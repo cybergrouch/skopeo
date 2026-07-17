@@ -79,8 +79,11 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
   TOURNAMENT: "Tournament",
 };
 
-/** Event types that carry a points budget/designation (#403 Phase C): TOURNAMENT and LEAGUE. */
-const BUDGETED_EVENT_TYPES = ["TOURNAMENT", "LEAGUE"];
+/**
+ * Event types that carry a points budget/designation. Every event class now rewards points (OPEN_PLAY
+ * was unified with TOURNAMENT/LEAGUE); designation applies whenever the event has a club (#403 Phase C).
+ */
+const BUDGETED_EVENT_TYPES = ["TOURNAMENT", "LEAGUE", "OPEN_PLAY"];
 
 const MATCH_FORMATS = ["SINGLES", "DOUBLES", "MIXED_DOUBLES"] as const;
 const MATCH_FORMAT_LABELS: Record<(typeof MATCH_FORMATS)[number], string> = {
@@ -358,8 +361,8 @@ export function EventDetail({
     ? [team1a, team1b, team2a, team2b]
     : [team1a, team2a];
 
-  // Points designation (#403 Phase C) applies only to a budgeted-type event (TOURNAMENT/LEAGUE) with a
-  // configured reward window. The global policy bounds back the config's helper text.
+  // Points designation (#403 Phase C) applies to any event class with a club and a configured reward
+  // window (OPEN_PLAY unified with TOURNAMENT/LEAGUE). The global policy bounds back the helper text.
   const isBudgetedType = !!event && BUDGETED_EVENT_TYPES.includes(event.type);
   // The points-config editor is shown only for a budgeted event that has a club — the budget source
   // (#429), mirroring "no club → no points". Assigning a club later reveals the editor.

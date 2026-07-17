@@ -102,9 +102,10 @@ describe("EventOrganizerTab", () => {
     state.fail = false;
     useGetApiV1Events.mockReturnValue({ data: [], isLoading: false });
     useGetApiV1Clubs.mockReturnValue({ data: [], isLoading: false });
-    // Default global policies (#429): LEAGUE 5..50/90d, TOURNAMENT 10..500/365d, mirroring V16 seeds.
+    // Default global policies: OPEN_PLAY 1..10/30d, LEAGUE 5..50/90d, TOURNAMENT 10..500/365d (V16 seeds).
     useGetApiV1PointsPolicies.mockReturnValue({
       data: [
+        { eventType: "OPEN_PLAY", minPoints: 1, maxPoints: 10, maxValidityDays: 30 },
         { eventType: "LEAGUE", minPoints: 5, maxPoints: 50, maxValidityDays: 90 },
         {
           eventType: "TOURNAMENT",
@@ -382,6 +383,11 @@ describe("EventOrganizerTab", () => {
     await user.type(screen.getByLabelText("Start date"), "2026-06-01");
     await user.type(screen.getByLabelText("End date"), "2026-06-02");
     await user.selectOptions(screen.getByLabelText("Club"), "c1");
+    // A club event of any type now requires a points config (OPEN_PLAY unified); fill a valid window.
+    await user.type(screen.getByLabelText("Min points"), "2");
+    await user.type(screen.getByLabelText("Max points"), "8");
+    await user.type(screen.getByLabelText("Validity start"), "2026-06-01");
+    await user.type(screen.getByLabelText("Validity end"), "2026-06-20");
     await user.click(screen.getByRole("button", { name: "Create event" }));
 
     expect(createMutate).toHaveBeenCalledWith({
@@ -392,6 +398,10 @@ describe("EventOrganizerTab", () => {
         type: "OPEN_PLAY",
         participantIds: [],
         clubId: "c1",
+        minPointsPerMatch: 2,
+        maxPointsPerMatch: 8,
+        pointValidityStart: "2026-06-01",
+        pointValidityEnd: "2026-06-20",
       },
     });
   });
@@ -569,7 +579,7 @@ describe("EventOrganizerTab", () => {
     });
   });
 
-  it("hides points config for OPEN_PLAY or a clubless budgeted event, creating without it (#429)", async () => {
+  it("shows and requires points config for an OPEN_PLAY event with a club, and sends it (unify)", async () => {
     useGetApiV1Clubs.mockReturnValue({
       data: [{ id: "c1", name: "Downtown TC", isActive: true, owners: [] }],
       isLoading: false,
@@ -580,13 +590,55 @@ describe("EventOrganizerTab", () => {
     await user.type(screen.getByLabelText("Start date"), "2026-06-01");
     await user.type(screen.getByLabelText("End date"), "2026-06-02");
 
-    // OPEN_PLAY (the default) with a club → no points fields.
+    // OPEN_PLAY (the default) with a club now shows the points fields (unified with LEAGUE/TOURNAMENT).
     await user.selectOptions(screen.getByLabelText("Club"), "c1");
+    expect(screen.getByLabelText("Min points")).toBeInTheDocument();
+    expect(
+      screen.getByText(/global Open play policy allows 1–10 points/),
+    ).toBeInTheDocument();
+    // Required until filled: the submit stays disabled with the fields blank.
+    expect(
+      screen.getByRole("button", { name: "Create event" }),
+    ).toBeDisabled();
+
+    await user.type(screen.getByLabelText("Min points"), "2");
+    await user.type(screen.getByLabelText("Max points"), "8");
+    await user.type(screen.getByLabelText("Validity start"), "2026-06-01");
+    await user.type(screen.getByLabelText("Validity end"), "2026-06-20");
+    await user.click(screen.getByRole("button", { name: "Create event" }));
+
+    expect(createMutate).toHaveBeenCalledWith({
+      data: {
+        name: "Casual Meetup",
+        startDate: "2026-06-01",
+        endDate: "2026-06-02",
+        type: "OPEN_PLAY",
+        participantIds: [],
+        clubId: "c1",
+        minPointsPerMatch: 2,
+        maxPointsPerMatch: 8,
+        pointValidityStart: "2026-06-01",
+        pointValidityEnd: "2026-06-20",
+      },
+    });
+  });
+
+  it("hides points config for a clubless event of any type, creating without it (#429)", async () => {
+    useGetApiV1Clubs.mockReturnValue({
+      data: [{ id: "c1", name: "Downtown TC", isActive: true, owners: [] }],
+      isLoading: false,
+    });
+    const user = userEvent.setup();
+    renderTab();
+    await user.type(screen.getByLabelText("Name"), "Casual Meetup");
+    await user.type(screen.getByLabelText("Start date"), "2026-06-01");
+    await user.type(screen.getByLabelText("End date"), "2026-06-02");
+
+    // OPEN_PLAY (the default) with NO club → no points fields (deferred; settable later).
     expect(screen.queryByLabelText("Min points")).not.toBeInTheDocument();
 
     // A budgeted type WITHOUT a club → still no points fields (deferred; settable later).
     await user.selectOptions(screen.getByLabelText("Type"), "TOURNAMENT");
-    await user.selectOptions(screen.getByLabelText("Club"), "");
     expect(screen.queryByLabelText("Min points")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Create event" }));

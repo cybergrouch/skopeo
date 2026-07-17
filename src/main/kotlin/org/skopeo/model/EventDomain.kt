@@ -53,7 +53,8 @@ data class Event(
     // The user who finalized the event (#403); null while open.
     val finalizedBy: UUID? = null,
     // Points config (#403 Phase C): the per-match reward window a fixture may designate within, and the
-    // validity window an awarded point stays valid for. Required for TOURNAMENT/LEAGUE, null otherwise.
+    // validity window an awarded point stays valid for. Set for a club event of any type (OPEN_PLAY
+    // unified), null for a clubless event.
     val minPointsPerMatch: Int? = null,
     val maxPointsPerMatch: Int? = null,
     val pointValidityStart: LocalDate? = null,
@@ -90,7 +91,7 @@ data class CreateEventCommand(
     val clubId: UUID? = null,
     // The event's class (#403); defaults to OPEN_PLAY for backward compatibility.
     val type: EventType = EventType.OPEN_PLAY,
-    // Points config (#403 Phase C): required for TOURNAMENT/LEAGUE, null (ignored) for OPEN_PLAY.
+    // Points config (#403 Phase C): set for a club event of any type (OPEN_PLAY unified), null when clubless.
     val minPointsPerMatch: Int? = null,
     val maxPointsPerMatch: Int? = null,
     val pointValidityStart: LocalDate? = null,

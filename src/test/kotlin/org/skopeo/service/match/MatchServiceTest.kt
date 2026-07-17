@@ -1305,6 +1305,41 @@ class MatchServiceTest {
         )
     }
 
+    /**
+     * An OPEN_PLAY event with a config window and, optionally, a club + budget. Global OPEN_PLAY policy
+     * (V16) is 1..10 / 30 days, so a window inside [1, 10] sits within it.
+     */
+    private fun openPlayEvent(
+        host: User,
+        participants: List<UUID>,
+        min: Int,
+        max: Int,
+        clubBudget: Int? = null,
+    ): Event {
+        val clubId =
+            clubBudget?.let {
+                val id = clubs.create(command = CreateClubCommand(name = "OpenClub", createdBy = host.id)).id
+                budgets.upsertBudget(clubId = id, eventType = EventType.OPEN_PLAY, budgetedPoints = it, updatedBy = host.id)
+                id
+            }
+        return EventRepository().create(
+            command =
+                CreateEventCommand(
+                    name = "Open play",
+                    startDate = LocalDate.now(),
+                    endDate = LocalDate.now().plusDays(7),
+                    participantIds = participants,
+                    createdBy = host.id,
+                    clubId = clubId,
+                    type = EventType.OPEN_PLAY,
+                    minPointsPerMatch = min,
+                    maxPointsPerMatch = max,
+                    pointValidityStart = LocalDate.now(),
+                    pointValidityEnd = LocalDate.now().plusDays(30),
+                ),
+        )
+    }
+
     @Test
     fun `a budgeted fixture defaults its designation to round of the average (#403)`() {
         val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
@@ -1344,7 +1379,7 @@ class MatchServiceTest {
     }
 
     @Test
-    fun `an OPEN_PLAY or event-less fixture designates no points and skips the check (#403)`() {
+    fun `an event-less fixture designates no points and skips the check (#403)`() {
         val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val p1 = provisionUser(uid = "p1", rated = true)
         val p2 = provisionUser(uid = "p2", rated = true)
@@ -1352,26 +1387,52 @@ class MatchServiceTest {
         val eventless =
             service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
         eventless.designatedPoints.shouldBeNull()
+    }
 
-        val openEvent =
-            EventRepository().create(
-                command =
-                    CreateEventCommand(
-                        name = "Open",
-                        startDate = LocalDate.now(),
-                        endDate = LocalDate.now().plusDays(7),
-                        participantIds = listOf(p1.id, p2.id),
-                        createdBy = host.id,
-                        type = EventType.OPEN_PLAY,
-                    ),
-            )
-        val openFixture =
+    @Test
+    fun `an OPEN_PLAY fixture designates points like the other types (unify)`() {
+        val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        // OPEN_PLAY now carries a config (global 1..10); min 2, max 8 → round(avg) = round(5.0) = 5.
+        val openEvent = openPlayEvent(host = host, participants = listOf(p1.id, p2.id), min = 2, max = 8)
+
+        val defaulted =
             service
                 .createFixture(
                     token = token(uid = "host"),
                     request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = openEvent.id),
                 ).shouldBeRight()
-        openFixture.designatedPoints.shouldBeNull()
+        defaulted.designatedPoints shouldBe 5
+
+        // A designation outside the [2, 8] window is rejected.
+        service
+            .createFixture(
+                token = token(uid = "host"),
+                request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = openEvent.id, designatedPoints = 10),
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `an OPEN_PLAY fixture reserves against the club budget (unify)`() {
+        val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        // Budget 12 for OPEN_PLAY; two singles fixtures of 8 each cost 8 + 8 = 16 > 12 → the second overflows.
+        val event = openPlayEvent(host = host, participants = listOf(p1.id, p2.id), min = 1, max = 10, clubBudget = 12)
+
+        service
+            .createFixture(
+                token = token(uid = "host"),
+                request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id, designatedPoints = 8),
+            ).shouldBeRight()
+        service
+            .createFixture(
+                token = token(uid = "host"),
+                request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id, designatedPoints = 8),
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
     }
 
     @Test
@@ -1451,11 +1512,11 @@ class MatchServiceTest {
     }
 
     @Test
-    fun `a budgeted event with no points config rejects a fixture designation (#403)`() {
+    fun `a budgeted event with no points config designates nothing (#403)`() {
         val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val p1 = provisionUser(uid = "p1", rated = true)
         val p2 = provisionUser(uid = "p2", rated = true)
-        // A LEAGUE event seeded via the repo WITHOUT a points config (defensive path).
+        // A LEAGUE event seeded via the repo WITHOUT a points config (a clubless / deferred-config event).
         val event =
             EventRepository().create(
                 command =
@@ -1468,12 +1529,13 @@ class MatchServiceTest {
                         type = EventType.LEAGUE,
                     ),
             )
+        // No config → no points window → the fixture is created but designates nothing ("no club ⇒ no points").
         service
             .createFixture(
                 token = token(uid = "host"),
                 request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id),
-            ).shouldBeLeft()
-            .shouldBeInstanceOf<ServiceError.Validation>()
+            ).shouldBeRight()
+            .designatedPoints.shouldBeNull()
     }
 
     @Test

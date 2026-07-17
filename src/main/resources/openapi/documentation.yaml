@@ -1882,12 +1882,12 @@ paths:
           type: string
           format: uuid
     put:
-      summary: Set a budgeted event's points config (HOST owns / CLUB_OWNER / ADMINISTRATOR)
+      summary: Set an event's points config (HOST owns / CLUB_OWNER / ADMINISTRATOR)
       description: >-
-        Set a TOURNAMENT or LEAGUE event's per-match reward window (min/max points) and point validity
-        window (#403 Phase C). Staff-only and not allowed on a finalized event. The window is validated
-        against the global per-type policy, and a tightened range is rejected if it would exclude an
-        existing active fixture's designation. OPEN_PLAY events carry no config and are rejected.
+        Set an event's per-match reward window (min/max points) and point validity window (#403 Phase C).
+        Every event class carries a config (OPEN_PLAY unified with TOURNAMENT/LEAGUE). Staff-only and not
+        allowed on a finalized event. The window is validated against the global per-type policy, and a
+        tightened range is rejected if it would exclude an existing active fixture's designation.
       tags:
         - Events
       security:
@@ -1906,7 +1906,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/EventResponse'
         '400':
-          description: Malformed body, an OPEN_PLAY event, a window outside the global policy, or a fixture out of range
+          description: Malformed body, a window outside the global policy, or a fixture designation out of range
         '403':
           description: Caller is not staff, or a HOST editing another's event
         '404':
@@ -4555,9 +4555,9 @@ components:
           type: integer
           nullable: true
           description: >-
-            Points designated for the winner (#403 Phase C), for a fixture on a budgeted-type event.
-            Omit on such an event to default to round(avg(event min, event max)); ignored for an
-            OPEN_PLAY or event-less fixture.
+            Points designated for the winner (#403 Phase C), for a fixture on an event that has a points
+            config (any type with a club; OPEN_PLAY unified). Omit on such an event to default to
+            round(avg(event min, event max)); ignored for a config-less or event-less fixture.
 
     SetScoreRequest:
       type: object
@@ -4726,7 +4726,7 @@ components:
         designatedPoints:
           type: integer
           nullable: true
-          description: Points designated for the winner (#403 Phase C); null for OPEN_PLAY or event-less fixtures.
+          description: Points designated for the winner (#403 Phase C); null for a config-less or event-less fixture.
 
     CreateEventRequest:
       type: object
@@ -4762,14 +4762,14 @@ components:
           type: integer
           nullable: true
           description: >-
-            Min per-match reward (#403 Phase C). Required (with all four points fields) for a TOURNAMENT or LEAGUE
-            event that has a club; a clubless budgeted event may omit them and set the config later (#429). Omitted for OPEN_PLAY.
+            Min per-match reward (#403 Phase C). Required (with all four points fields) for an event of any type
+            that has a club (OPEN_PLAY unified); a clubless event may omit them and set the config later (#429).
         maxPointsPerMatch:
           type: integer
           nullable: true
           description: >-
-            Max per-match reward (#403 Phase C). Required (with all four points fields) for a TOURNAMENT or LEAGUE
-            event that has a club; a clubless budgeted event may omit them and set the config later (#429). Omitted for OPEN_PLAY.
+            Max per-match reward (#403 Phase C). Required (with all four points fields) for an event of any type
+            that has a club (OPEN_PLAY unified); a clubless event may omit them and set the config later (#429).
         pointValidityStart:
           type: string
           format: date
@@ -4986,21 +4986,21 @@ components:
         minPointsPerMatch:
           type: integer
           nullable: true
-          description: Min per-match reward (#403 Phase C); null for an OPEN_PLAY event.
+          description: Min per-match reward (#403 Phase C); null for a config-less (clubless) event.
         maxPointsPerMatch:
           type: integer
           nullable: true
-          description: Max per-match reward (#403 Phase C); null for an OPEN_PLAY event.
+          description: Max per-match reward (#403 Phase C); null for a config-less (clubless) event.
         pointValidityStart:
           type: string
           format: date
           nullable: true
-          description: First day an awarded point is valid (#403 Phase C); null for an OPEN_PLAY event.
+          description: First day an awarded point is valid (#403 Phase C); null for a config-less (clubless) event.
         pointValidityEnd:
           type: string
           format: date
           nullable: true
-          description: Last day an awarded point is valid (#403 Phase C); null for an OPEN_PLAY event.
+          description: Last day an awarded point is valid (#403 Phase C); null for a config-less (clubless) event.
 
     EventPublicResponse:
       type: object
