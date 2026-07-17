@@ -28,9 +28,12 @@ data class ClubPointBudget(
 )
 
 /**
- * The per club × event-type accounting view (#403 Phase B, §2.2): [budgeted] is the club's real
- * allocation, [allocated] the points currently in use (reservations = Phase C, awards = Phase D — so
- * 0 for now), and [free] = [budgeted] − [allocated] the remaining allocable amount.
+ * The per club × event-type accounting view (#403, §2.2): [budgeted] is the club's real allocation,
+ * [allocated] the points currently in use, and [free] = [budgeted] − [allocated] the remaining
+ * allocable amount. As of Phase C, [allocated] includes the EMERGENT reservations — the sum of the
+ * club's active, non-finalized fixtures' designations × team size — so it now reflects real
+ * utilization (active awards are added in Phase D; still 0 until then). The field keeps the name
+ * `allocated` to avoid churn, but it means "reserved + active awarded".
  */
 data class ClubBudgetView(
     val clubId: UUID,

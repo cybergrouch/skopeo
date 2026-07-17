@@ -9,6 +9,8 @@ const {
   useGetApiV1EventsId,
   useGetApiV1Clubs,
   useGetApiV1UsersMe,
+  useGetApiV1PointsPolicies,
+  useGetApiV1PointsBudgets,
   addMutate,
   removeMutate,
   decideMutate,
@@ -17,12 +19,15 @@ const {
   renameMutate,
   clubMutate,
   finalizeMutate,
+  pointsConfigMutate,
   state,
 } =
   vi.hoisted(() => ({
     useGetApiV1EventsId: vi.fn(),
     useGetApiV1Clubs: vi.fn(),
     useGetApiV1UsersMe: vi.fn(),
+    useGetApiV1PointsPolicies: vi.fn(),
+    useGetApiV1PointsBudgets: vi.fn(),
     addMutate: vi.fn(),
     removeMutate: vi.fn(),
     decideMutate: vi.fn(),
@@ -31,6 +36,7 @@ const {
     renameMutate: vi.fn(),
     clubMutate: vi.fn(),
     finalizeMutate: vi.fn(),
+    pointsConfigMutate: vi.fn(),
     state: {
       addFail: false,
       fixtureFail: false,
@@ -43,6 +49,8 @@ const {
       finalizeFail: false,
       finalizePending: false,
       finalizeErrorMessage: null as string | null,
+      pointsConfigFail: false,
+      pointsConfigErrorMessage: null as string | null,
     },
   }))
 
@@ -109,8 +117,24 @@ vi.mock('@/api/generated/events/events', () => ({
       opts?.mutation?.onSuccess?.()
     },
   }),
+  usePutApiV1EventsIdPointsConfig: (opts?: { mutation?: { onSuccess?: () => void } }) => ({
+    isPending: false,
+    mutateAsync: async (vars: unknown) => {
+      pointsConfigMutate(vars)
+      if (state.pointsConfigFail) {
+        throw state.pointsConfigErrorMessage
+          ? { response: { data: { message: state.pointsConfigErrorMessage } } }
+          : new Error('boom')
+      }
+      opts?.mutation?.onSuccess?.()
+    },
+  }),
 }))
 vi.mock('@/api/generated/clubs/clubs', () => ({ useGetApiV1Clubs }))
+vi.mock('@/api/generated/points-budget/points-budget', () => ({
+  useGetApiV1PointsPolicies,
+  useGetApiV1PointsBudgets,
+}))
 vi.mock('@/api/generated/matches/matches', () => ({
   getGetApiV1MatchesQueryKey: () => ['matches'],
   usePostApiV1Matches: (opts?: { mutation?: { onSuccess?: () => void } }) => ({
@@ -201,8 +225,12 @@ describe('EventDetail', () => {
     state.finalizeFail = false
     state.finalizePending = false
     state.finalizeErrorMessage = null
+    state.pointsConfigFail = false
+    state.pointsConfigErrorMessage = null
     useGetApiV1EventsId.mockReturnValue({ data: event, isLoading: false })
     useGetApiV1Clubs.mockReturnValue({ data: [], isLoading: false })
+    useGetApiV1PointsPolicies.mockReturnValue({ data: [], isLoading: false })
+    useGetApiV1PointsBudgets.mockReturnValue({ data: [], isLoading: false })
     // Default to an administrator so data-entry controls stay available on the (past-dated) fixture;
     // the #310 tests below override this to a plain HOST.
     useGetApiV1UsersMe.mockReturnValue({ data: { capabilities: ['ADMINISTRATOR'] } })
@@ -777,5 +805,147 @@ describe('EventDetail', () => {
     await user.click(screen.getByRole('button', { name: 'Confirm finalize' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Event is already finalized')
+  })
+
+  // ---- Points config + fixture designation (#403 Phase C) ----
+
+  const tournamentEvent = {
+    ...event,
+    type: 'TOURNAMENT',
+    clubId: 'c1',
+    endDate: '2999-01-01',
+    minPointsPerMatch: 10,
+    maxPointsPerMatch: 20,
+    pointValidityStart: '2026-03-01',
+    pointValidityEnd: '2026-06-01',
+  }
+
+  it('hides the points config section for an OPEN_PLAY event (#403 Phase C)', () => {
+    // The default event is OPEN_PLAY.
+    renderDetail()
+    expect(screen.queryByText('Points config')).not.toBeInTheDocument()
+    // …and no designated-points input in the fixture form.
+    expect(screen.queryByLabelText(/Designated points/)).not.toBeInTheDocument()
+  })
+
+  it('shows the points config with global bounds and current values, and saves an edit (#403 Phase C)', async () => {
+    useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
+    useGetApiV1PointsPolicies.mockReturnValue({
+      data: [{ eventType: 'TOURNAMENT', minPoints: 5, maxPoints: 100, maxValidityDays: 365 }],
+      isLoading: false,
+    })
+    const user = userEvent.setup()
+    renderDetail()
+
+    expect(screen.getByText('Points config')).toBeInTheDocument()
+    // Global bounds render as helper text.
+    expect(screen.getByText(/allows 5–100 points and up to 365 validity days/)).toBeInTheDocument()
+    // Current config summary.
+    expect(screen.getByTestId('points-config-summary')).toHaveTextContent('Currently 10–20 points')
+
+    await user.type(screen.getByLabelText('Min points'), '8')
+    await user.type(screen.getByLabelText('Max points'), '30')
+    await user.type(screen.getByLabelText('Validity start'), '2026-04-01')
+    await user.type(screen.getByLabelText('Validity end'), '2026-07-01')
+    await user.click(screen.getByRole('button', { name: 'Save points config' }))
+
+    expect(pointsConfigMutate).toHaveBeenCalledWith({
+      id: 'e1',
+      data: {
+        minPointsPerMatch: 8,
+        maxPointsPerMatch: 30,
+        pointValidityStart: '2026-04-01',
+        pointValidityEnd: '2026-07-01',
+      },
+    })
+    expect(await screen.findByRole('status')).toHaveTextContent('Saved')
+  })
+
+  it('rejects a min greater than max in the points config without calling the API (#403 Phase C)', async () => {
+    useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.type(screen.getByLabelText('Min points'), '30')
+    await user.type(screen.getByLabelText('Max points'), '10')
+    await user.type(screen.getByLabelText('Validity start'), '2026-04-01')
+    await user.type(screen.getByLabelText('Validity end'), '2026-07-01')
+    await user.click(screen.getByRole('button', { name: 'Save points config' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Min points cannot exceed max points')
+    expect(pointsConfigMutate).not.toHaveBeenCalled()
+  })
+
+  it('surfaces a server error when the points config save fails (#403 Phase C)', async () => {
+    useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
+    state.pointsConfigFail = true
+    state.pointsConfigErrorMessage = "An existing fixture's designated points fall outside the new range"
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.type(screen.getByLabelText('Min points'), '15')
+    await user.type(screen.getByLabelText('Max points'), '25')
+    await user.type(screen.getByLabelText('Validity start'), '2026-04-01')
+    await user.type(screen.getByLabelText('Validity end'), '2026-07-01')
+    await user.click(screen.getByRole('button', { name: 'Save points config' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('fall outside the new range')
+  })
+
+  it('defaults the fixture designation to round(avg) and sends it when changed (#403 Phase C)', async () => {
+    useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
+    useGetApiV1PointsBudgets.mockReturnValue({
+      data: [{ clubId: 'c1', eventType: 'TOURNAMENT', budgeted: 500, allocated: 100, free: 400 }],
+      isLoading: false,
+    })
+    const user = userEvent.setup()
+    renderDetail()
+
+    const designated = screen.getByLabelText(/Designated points/)
+    // Default = round(avg(10, 20)) = 15, shown as the placeholder.
+    expect(designated).toHaveAttribute('placeholder', '15')
+    // The free-budget hint reflects the club×type budget.
+    expect(screen.getByText(/400 points free/)).toBeInTheDocument()
+
+    await user.selectOptions(screen.getByLabelText('Player 1'), 'u1')
+    await user.selectOptions(screen.getByLabelText('Player 2'), 'u2')
+    await user.type(screen.getByLabelText('Date'), '2026-03-02')
+    await user.type(designated, '18')
+    await user.click(screen.getByRole('button', { name: 'Schedule fixture' }))
+
+    expect(createFixtureMutate.mock.calls[0][0].data.designatedPoints).toBe(18)
+  })
+
+  it('blocks scheduling when the designation is out of the [min,max] range (#403 Phase C)', async () => {
+    useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.selectOptions(screen.getByLabelText('Player 1'), 'u1')
+    await user.selectOptions(screen.getByLabelText('Player 2'), 'u2')
+    await user.type(screen.getByLabelText('Date'), '2026-03-02')
+    await user.type(screen.getByLabelText(/Designated points/), '99')
+
+    expect(screen.getByText('Designated points must be between 10 and 20.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Schedule fixture' })).toBeDisabled()
+  })
+
+  it('blocks scheduling when the designation exceeds the club free budget (#403 Phase C)', async () => {
+    useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
+    useGetApiV1PointsBudgets.mockReturnValue({
+      data: [{ clubId: 'c1', eventType: 'TOURNAMENT', budgeted: 20, allocated: 8, free: 12 }],
+      isLoading: false,
+    })
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.selectOptions(screen.getByLabelText('Player 1'), 'u1')
+    await user.selectOptions(screen.getByLabelText('Player 2'), 'u2')
+    await user.type(screen.getByLabelText('Date'), '2026-03-02')
+    // 20 × 1 = 20 > 12 free → over budget.
+    await user.type(screen.getByLabelText(/Designated points/), '20')
+
+    expect(screen.getByText(/exceeds the club's remaining free budget/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Schedule fixture' })).toBeDisabled()
   })
 })

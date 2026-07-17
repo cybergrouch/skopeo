@@ -23,12 +23,14 @@ import org.skopeo.dto.event.CreateEventRequest
 import org.skopeo.dto.event.DecideParticipantRequest
 import org.skopeo.dto.event.SetCalcPriorityRequest
 import org.skopeo.dto.event.SetEventClubRequest
+import org.skopeo.dto.event.SetPointsConfigRequest
 import org.skopeo.dto.event.UpdateEventRequest
 import org.skopeo.dto.event.toResponse
 import org.skopeo.model.EventParticipantStatus
 import org.skopeo.model.EventType
 import org.skopeo.service.event.CreateEventInput
 import org.skopeo.service.event.EventService
+import org.skopeo.service.event.PointsConfigInput
 import java.time.LocalDate
 import java.time.format.DateTimeParseException
 import java.util.UUID
@@ -145,6 +147,29 @@ private fun Route.renameEvent(service: EventService) {
             ) { event -> call.respond(status = HttpStatusCode.OK, message = event.toResponse()) }
         }
     }
+    // Set a budgeted event's points config (#403 Phase C): per-match reward window + validity window.
+    put(path = "/{id}/points-config") {
+        respondMappingErrors {
+            val body = call.receive<SetPointsConfigRequest>()
+            require(value = body.minPointsPerMatch > 0 && body.maxPointsPerMatch > 0) {
+                "minPointsPerMatch and maxPointsPerMatch must be positive integers"
+            }
+            respondEither(
+                result =
+                    service.setPointsConfig(
+                        token = verifiedToken(),
+                        id = uuidParam(name = "id"),
+                        config =
+                            PointsConfigInput(
+                                minPoints = body.minPointsPerMatch,
+                                maxPoints = body.maxPointsPerMatch,
+                                validityStart = parseEventDate(value = body.pointValidityStart, field = "pointValidityStart"),
+                                validityEnd = parseEventDate(value = body.pointValidityEnd, field = "pointValidityEnd"),
+                            ),
+                    ),
+            ) { event -> call.respond(status = HttpStatusCode.OK, message = event.toResponse()) }
+        }
+    }
     // Finalize an event (#403): terminal, closes it to changes and queues its matches for rating.
     post(path = "/{id}/finalize") {
         respondMappingErrors {
@@ -180,13 +205,18 @@ private fun Route.byIdAndParticipants(service: EventService) {
     post(path = "/{id}/participants/{userId}/decision") {
         respondMappingErrors {
             val request = call.receive<DecideParticipantRequest>()
+            // Parse the decision at the boundary (#201): APPROVED or HOLD, else a 400.
+            val status =
+                requireNotNull(value = EventParticipantStatus.entries.firstOrNull { it.name == request.status }) {
+                    "Invalid decision '${request.status}'; expected APPROVED or HOLD"
+                }
             respondEither(
                 result =
                     service.decideParticipant(
                         token = verifiedToken(),
                         eventId = uuidParam(name = "id"),
                         userId = uuidParam(name = "userId"),
-                        status = parseParticipantStatus(value = request.status),
+                        status = status,
                     ),
             ) { event -> call.respond(status = HttpStatusCode.OK, message = event.toResponse()) }
         }
@@ -213,12 +243,6 @@ private fun Route.byIdAndParticipants(service: EventService) {
     }
 }
 
-/** Parse a participant decision (#201) at the boundary: APPROVED or HOLD, else a 400. */
-private fun parseParticipantStatus(value: String): EventParticipantStatus =
-    requireNotNull(value = EventParticipantStatus.entries.firstOrNull { it.name == value }) {
-        "Invalid decision '$value'; expected APPROVED or HOLD"
-    }
-
 /** Parse + validate the create-event request shape at the boundary (#116): dates and participant ids. */
 private fun toCreateEventInput(request: CreateEventRequest): CreateEventInput {
     fun parseDate(
@@ -240,6 +264,10 @@ private fun toCreateEventInput(request: CreateEventRequest): CreateEventInput {
                 "Invalid event type '$value'; expected OPEN_PLAY, LEAGUE, or TOURNAMENT"
             }
         }
+    // Designated-points config (#403 Phase C) — whole positive integers (decision #6); the service
+    // validates the window against the global policy and requires all four for a budgeted-type event.
+    request.minPointsPerMatch?.let { require(value = it > 0) { "minPointsPerMatch must be a positive integer" } }
+    request.maxPointsPerMatch?.let { require(value = it > 0) { "maxPointsPerMatch must be a positive integer" } }
     return CreateEventInput(
         name = request.name,
         startDate = parseDate(value = request.startDate, field = "startDate"),
@@ -247,8 +275,23 @@ private fun toCreateEventInput(request: CreateEventRequest): CreateEventInput {
         participantIds = request.participantIds.map { parseEventUuid(value = it) },
         clubId = request.clubId?.let { parseEventUuid(value = it, field = "club id") },
         type = parseType(value = request.type),
+        minPointsPerMatch = request.minPointsPerMatch,
+        maxPointsPerMatch = request.maxPointsPerMatch,
+        pointValidityStart = request.pointValidityStart?.let { parseDate(value = it, field = "pointValidityStart") },
+        pointValidityEnd = request.pointValidityEnd?.let { parseDate(value = it, field = "pointValidityEnd") },
     )
 }
+
+/** Parse an ISO-8601 date at the boundary (#403 Phase C), a 400 for a malformed value. */
+private fun parseEventDate(
+    value: String,
+    field: String,
+): LocalDate =
+    try {
+        LocalDate.parse(value)
+    } catch (e: DateTimeParseException) {
+        throw IllegalArgumentException("Invalid $field '$value'; expected ISO-8601 (yyyy-MM-dd)", e)
+    }
 
 private fun parseEventUuid(
     value: String,

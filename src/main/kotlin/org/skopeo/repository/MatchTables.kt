@@ -48,6 +48,10 @@ internal object MatchesTable : UUIDTable(name = "matches") {
 
     // Manual same-date ordering tiebreaker for the rating calculation (#331/#332); null = default.
     val calcSequence = integer(name = "calc_sequence").nullable()
+
+    // Points designated for the winner (#403 Phase C); null for OPEN_PLAY / event-less fixtures. The
+    // club reservation is emergent — summed over active non-finalized fixtures, no reservation table.
+    val designatedPoints = integer(name = "designated_points").nullable()
 }
 
 internal object MatchSetsTable : UUIDTable(name = "match_sets") {

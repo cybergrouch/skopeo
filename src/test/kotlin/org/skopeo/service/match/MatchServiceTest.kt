@@ -21,7 +21,10 @@ import org.skopeo.dto.match.SetScoreRequest
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
+import org.skopeo.model.CreateClubCommand
 import org.skopeo.model.CreateEventCommand
+import org.skopeo.model.Event
+import org.skopeo.model.EventType
 import org.skopeo.model.Match
 import org.skopeo.model.MatchQuery
 import org.skopeo.model.MatchStatus
@@ -34,9 +37,11 @@ import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.repository.AuditRepository
+import org.skopeo.repository.ClubRepository
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.MatchesTable
+import org.skopeo.repository.PointsBudgetRepository
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.rating.RatingCalculationService
@@ -1258,5 +1263,231 @@ class MatchServiceTest {
         h2h.meetings shouldBe emptyList()
         h2h.team1Wins shouldBe 1
         h2h.team2Wins shouldBe 0
+    }
+
+    // --- Fixture point designation + emergent reservation (#403 Phase C). ---
+
+    private val clubs = ClubRepository()
+    private val budgets = PointsBudgetRepository()
+
+    /**
+     * A budgeted (LEAGUE) event with a config window and, optionally, a club + budget. Global LEAGUE
+     * policy (V16) is 5..50 / 90 days, so a 5..40 window sits inside it.
+     */
+    private fun budgetedEvent(
+        host: User,
+        participants: List<UUID>,
+        clubBudget: Int? = null,
+        min: Int = 5,
+        max: Int = 40,
+    ): Event {
+        val clubId =
+            clubBudget?.let {
+                val id = clubs.create(command = CreateClubCommand(name = "Club", createdBy = host.id)).id
+                budgets.upsertBudget(clubId = id, eventType = EventType.LEAGUE, budgetedPoints = it, updatedBy = host.id)
+                id
+            }
+        return EventRepository().create(
+            command =
+                CreateEventCommand(
+                    name = "League",
+                    startDate = LocalDate.now(),
+                    endDate = LocalDate.now().plusDays(7),
+                    participantIds = participants,
+                    createdBy = host.id,
+                    clubId = clubId,
+                    type = EventType.LEAGUE,
+                    minPointsPerMatch = min,
+                    maxPointsPerMatch = max,
+                    pointValidityStart = LocalDate.now(),
+                    pointValidityEnd = LocalDate.now().plusDays(30),
+                ),
+        )
+    }
+
+    @Test
+    fun `a budgeted fixture defaults its designation to round of the average (#403)`() {
+        val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        // min 5, max 40 → round(avg) = round(22.5) = 23.
+        val event = budgetedEvent(host = host, participants = listOf(p1.id, p2.id))
+
+        val match =
+            service
+                .createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id))
+                .shouldBeRight()
+        match.designatedPoints shouldBe 23
+    }
+
+    @Test
+    fun `a designation outside the event window is a validation error (#403)`() {
+        val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val event = budgetedEvent(host = host, participants = listOf(p1.id, p2.id))
+
+        // Above the window (100 > 40).
+        service
+            .createFixture(
+                token = token(uid = "host"),
+                request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id, designatedPoints = 100),
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+        // Below the window (1 < 5).
+        service
+            .createFixture(
+                token = token(uid = "host"),
+                request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id, designatedPoints = 1),
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `an OPEN_PLAY or event-less fixture designates no points and skips the check (#403)`() {
+        val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+
+        val eventless =
+            service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
+        eventless.designatedPoints.shouldBeNull()
+
+        val openEvent =
+            EventRepository().create(
+                command =
+                    CreateEventCommand(
+                        name = "Open",
+                        startDate = LocalDate.now(),
+                        endDate = LocalDate.now().plusDays(7),
+                        participantIds = listOf(p1.id, p2.id),
+                        createdBy = host.id,
+                        type = EventType.OPEN_PLAY,
+                    ),
+            )
+        val openFixture =
+            service
+                .createFixture(
+                    token = token(uid = "host"),
+                    request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = openEvent.id),
+                ).shouldBeRight()
+        openFixture.designatedPoints.shouldBeNull()
+    }
+
+    @Test
+    fun `the cumulative reserve check admits a fixture within budget and rejects one that overflows it (#403)`() {
+        val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        // Budget 50; two singles fixtures of 30 each cost 30 + 30 = 60 > 50 → the second overflows.
+        val event = budgetedEvent(host = host, participants = listOf(p1.id, p2.id), clubBudget = 50)
+
+        service
+            .createFixture(
+                token = token(uid = "host"),
+                request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id, designatedPoints = 30),
+            ).shouldBeRight()
+        service
+            .createFixture(
+                token = token(uid = "host"),
+                request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id, designatedPoints = 30),
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `a doubles fixture costs designation times two against the budget (#403)`() {
+        val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val a1 = provisionUser(uid = "a1", rated = true)
+        val a2 = provisionUser(uid = "a2", rated = true)
+        val b1 = provisionUser(uid = "b1", rated = true)
+        val b2 = provisionUser(uid = "b2", rated = true)
+        // Budget 50; a doubles fixture of 30 costs 30 × 2 = 60 > 50 → rejected.
+        val event = budgetedEvent(host = host, participants = listOf(a1.id, a2.id, b1.id, b2.id), clubBudget = 50)
+        val doublesRequest =
+            FixtureInput(
+                matchFormat = TeamType.DOUBLES,
+                matchType = MatchType.OPEN_PLAY,
+                matchDate = LocalDate.parse("2026-01-01"),
+                team1 = listOf(a1.id, a2.id),
+                team2 = listOf(b1.id, b2.id),
+                eventId = event.id,
+                designatedPoints = 30,
+            )
+        service.createFixture(token = token(uid = "host"), request = doublesRequest)
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+
+        // A doubles fixture of 20 costs 40 ≤ 50 → admitted.
+        service.createFixture(token = token(uid = "host"), request = doublesRequest.copy(designatedPoints = 20))
+            .shouldBeRight().designatedPoints shouldBe 20
+    }
+
+    @Test
+    fun `a voided fixture drops out of the reservation, freeing budget for a new one (#403)`() {
+        val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val event = budgetedEvent(host = host, participants = listOf(p1.id, p2.id), clubBudget = 50)
+        val clubId = event.clubId.shouldNotBeNull()
+
+        val first =
+            service
+                .createFixture(
+                    token = token(uid = "host"),
+                    request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id, designatedPoints = 40),
+                ).shouldBeRight()
+        budgets.sumReservedPoints(clubId = clubId, eventType = EventType.LEAGUE) shouldBe 40
+
+        // Void it — the emergent reservation drops it, releasing the budget.
+        service.setActive(token = token(uid = "host"), matchId = first.id, active = false).shouldBeRight()
+        budgets.sumReservedPoints(clubId = clubId, eventType = EventType.LEAGUE) shouldBe 0
+
+        // A new 40-point fixture now fits again.
+        service
+            .createFixture(
+                token = token(uid = "host"),
+                request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id, designatedPoints = 40),
+            ).shouldBeRight()
+    }
+
+    @Test
+    fun `a budgeted event with no points config rejects a fixture designation (#403)`() {
+        val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        // A LEAGUE event seeded via the repo WITHOUT a points config (defensive path).
+        val event =
+            EventRepository().create(
+                command =
+                    CreateEventCommand(
+                        name = "League",
+                        startDate = LocalDate.now(),
+                        endDate = LocalDate.now().plusDays(7),
+                        participantIds = listOf(p1.id, p2.id),
+                        createdBy = host.id,
+                        type = EventType.LEAGUE,
+                    ),
+            )
+        service
+            .createFixture(
+                token = token(uid = "host"),
+                request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id),
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `a clubless budgeted event records the designation but skips the budget check (#403)`() {
+        val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        // No club → clubBudget null; even a large designation within the window is recorded, no check.
+        val event = budgetedEvent(host = host, participants = listOf(p1.id, p2.id))
+        service
+            .createFixture(
+                token = token(uid = "host"),
+                request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id, designatedPoints = 40),
+            ).shouldBeRight()
+            .designatedPoints shouldBe 40
     }
 }

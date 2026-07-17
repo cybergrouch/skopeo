@@ -35,15 +35,21 @@ import org.skopeo.model.isExpired
 import org.skopeo.repository.ClubRepository
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
+import org.skopeo.repository.PointsBudgetRepository
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService
 import org.skopeo.service.user.VerifiedFirebaseToken
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.temporal.ChronoUnit
 import java.util.UUID
 
 private val STAFF_ROLES = setOf(Capability.HOST, Capability.CLUB_OWNER, Capability.ADMINISTRATOR)
+
+// The event types that carry a points budget (#403 Phase C): TOURNAMENT and LEAGUE. OPEN_PLAY carries
+// no points config or designation. Kept as a set so the applicability checks read declaratively.
+private val BUDGETED_TYPES = setOf(EventType.TOURNAMENT, EventType.LEAGUE)
 
 // Roles that may still enter data on an event after it has ended (#310): administrators and club
 // owners are exempt from the expiry gate, unlike a plain host.
@@ -58,6 +64,19 @@ data class CreateEventInput(
     val clubId: UUID? = null,
     // The event's class (#403); defaults to OPEN_PLAY for backward compatibility.
     val type: EventType = EventType.OPEN_PLAY,
+    // Points config (#403 Phase C): required for TOURNAMENT/LEAGUE, ignored (null) for OPEN_PLAY.
+    val minPointsPerMatch: Int? = null,
+    val maxPointsPerMatch: Int? = null,
+    val pointValidityStart: LocalDate? = null,
+    val pointValidityEnd: LocalDate? = null,
+)
+
+/** A budgeted event's points config (#403 Phase C): the per-match reward window + point validity window. */
+data class PointsConfigInput(
+    val minPoints: Int,
+    val maxPoints: Int,
+    val validityStart: LocalDate,
+    val validityEnd: LocalDate,
 )
 
 /**
@@ -71,6 +90,7 @@ class EventService(
     private val matches: MatchRepository = MatchRepository(),
     private val ratings: RatingRepository = RatingRepository(),
     private val clubs: ClubRepository = ClubRepository(),
+    private val budgets: PointsBudgetRepository = PointsBudgetRepository(),
     private val audit: AuditService = AuditService(),
 ) {
     fun create(
@@ -88,6 +108,9 @@ class EventService(
             input.clubId?.let { clubId ->
                 ensureNotNull(value = clubs.findById(id = clubId)) { ServiceError.Validation(message = "Club $clubId not found") }
             }
+            // Points config (#403 Phase C): a budgeted-type event must carry a valid per-match reward +
+            // validity window, validated against the global policy; OPEN_PLAY carries none.
+            val config = resolveCreatePointsConfig(input = input).bind()
             val event =
                 events.create(
                     command =
@@ -99,6 +122,10 @@ class EventService(
                             createdBy = createdBy,
                             clubId = input.clubId,
                             type = input.type,
+                            minPointsPerMatch = config?.minPoints,
+                            maxPointsPerMatch = config?.maxPoints,
+                            pointValidityStart = config?.validityStart,
+                            pointValidityEnd = config?.validityEnd,
                         ),
                 )
             // Activity Log entry for the creation (#334); rename/set-club/delete are follow-ups.
@@ -246,6 +273,79 @@ class EventService(
             val event = ensureNotNull(value = events.findById(id = id)) { ServiceError.NotFound(message = "Event $id not found") }
             events.setCalcPriority(id = id, priority = priority)
             toView(event = event.copy(calcPriority = priority))
+        }
+
+    /**
+     * Set an event's points config (#403 Phase C): the per-match reward window (min/max) and the point
+     * validity window. Staff-only (a HOST owns / an ADMINISTRATOR-CLUB_OWNER any), not on a finalized
+     * event. Only budgeted-type events (TOURNAMENT/LEAGUE) carry a config — a config on an OPEN_PLAY
+     * event is a [ServiceError.Validation]. Re-validated against the global policy, AND rejected if any
+     * existing active fixture's designation would fall outside the new [min, max]. Audited as
+     * EVENT_POINTS_CONFIG_SET.
+     */
+    fun setPointsConfig(
+        token: VerifiedFirebaseToken,
+        id: UUID,
+        config: PointsConfigInput,
+    ): Either<ServiceError, EventView> =
+        either {
+            val caller = staffCaller(users = users, token = token).bind()
+            val event = ensureNotNull(value = events.findById(id = id)) { ServiceError.NotFound(message = "Event $id not found") }
+            val isAdminOrOwner = caller.capabilities.any { it == Capability.ADMINISTRATOR || it == Capability.CLUB_OWNER }
+            ensure(condition = isAdminOrOwner || event.createdBy == caller.id) { ServiceError.Forbidden() }
+            ensureNotFinalized(event = event).bind()
+            ensure(condition = event.type in BUDGETED_TYPES) {
+                ServiceError.Validation(message = "Points config applies only to TOURNAMENT and LEAGUE events")
+            }
+            validatePointsWindow(
+                eventType = event.type,
+                minPoints = config.minPoints,
+                maxPoints = config.maxPoints,
+                validityStart = config.validityStart,
+                validityEnd = config.validityEnd,
+            ).bind()
+            // A tightened window must still contain every existing active fixture's designation.
+            val designations = matches.listByEvent(eventId = id).mapNotNull { it.designatedPoints }
+            ensure(condition = designations.all { it in config.minPoints..config.maxPoints }) {
+                ServiceError.Validation(
+                    message = "An existing fixture's designated points fall outside the new ${config.minPoints}-${config.maxPoints} range",
+                )
+            }
+            events.setPointsConfig(
+                id = id,
+                minPoints = config.minPoints,
+                maxPoints = config.maxPoints,
+                validityStart = config.validityStart,
+                validityEnd = config.validityEnd,
+            )
+            audit.record(
+                write =
+                    AuditWrite(
+                        actorUserId = caller.id,
+                        action = AuditAction.EVENT_POINTS_CONFIG_SET,
+                        entityType = AuditEntityType.EVENT,
+                        entityId = event.id,
+                        summary = "Set event ${event.name} points config to ${config.minPoints}-${config.maxPoints}",
+                        details =
+                            mapOf(
+                                "publicCode" to event.publicCode,
+                                "type" to event.type.name,
+                                "minPoints" to config.minPoints.toString(),
+                                "maxPoints" to config.maxPoints.toString(),
+                                "validityStart" to config.validityStart.toString(),
+                                "validityEnd" to config.validityEnd.toString(),
+                            ),
+                    ),
+            )
+            toView(
+                event =
+                    event.copy(
+                        minPointsPerMatch = config.minPoints,
+                        maxPointsPerMatch = config.maxPoints,
+                        pointValidityStart = config.validityStart,
+                        pointValidityEnd = config.validityEnd,
+                    ),
+            )
         }
 
     /**
@@ -475,6 +575,71 @@ class EventService(
         }
 
     /**
+     * Resolve the points config for a create request (#403 Phase C). A budgeted-type event (TOURNAMENT/
+     * LEAGUE) must supply all four fields, validated against the global policy; an OPEN_PLAY event
+     * carries none (returns null even if fields were sent — they're ignored per the applicability rule).
+     */
+    private fun resolveCreatePointsConfig(input: CreateEventInput): Either<ServiceError, ValidatedPointsConfig?> =
+        either {
+            if (input.type !in BUDGETED_TYPES) {
+                null
+            } else {
+                val min = ensureNotNull(value = input.minPointsPerMatch) { pointsConfigRequired() }
+                val max = ensureNotNull(value = input.maxPointsPerMatch) { pointsConfigRequired() }
+                val start = ensureNotNull(value = input.pointValidityStart) { pointsConfigRequired() }
+                val end = ensureNotNull(value = input.pointValidityEnd) { pointsConfigRequired() }
+                validatePointsWindow(
+                    eventType = input.type,
+                    minPoints = min,
+                    maxPoints = max,
+                    validityStart = start,
+                    validityEnd = end,
+                ).bind()
+                ValidatedPointsConfig(minPoints = min, maxPoints = max, validityStart = start, validityEnd = end)
+            }
+        }
+
+    /**
+     * Validate a points window against the global per-type policy (#403 Phase C): integers > 0, the
+     * event's [min, max] within the global bounds, min ≤ max, end ≥ start, and the validity span within
+     * the global max validity days. A missing global policy for the type is a [ServiceError.Validation].
+     */
+    private fun validatePointsWindow(
+        eventType: EventType,
+        minPoints: Int,
+        maxPoints: Int,
+        validityStart: LocalDate,
+        validityEnd: LocalDate,
+    ): Either<ServiceError, Unit> =
+        either {
+            val policy =
+                ensureNotNull(value = budgets.findPolicy(eventType = eventType)) {
+                    ServiceError.Validation(message = "No global points policy is configured for $eventType")
+                }
+            ensure(condition = minPoints > 0 && maxPoints > 0) {
+                ServiceError.Validation(message = "Points per match must be greater than zero")
+            }
+            ensure(condition = minPoints <= maxPoints) {
+                ServiceError.Validation(message = "Min points must not exceed max points")
+            }
+            ensure(condition = minPoints >= policy.minPoints) {
+                ServiceError.Validation(message = "Min points must be at least the global minimum of ${policy.minPoints}")
+            }
+            ensure(condition = maxPoints <= policy.maxPoints) {
+                ServiceError.Validation(message = "Max points must not exceed the global maximum of ${policy.maxPoints}")
+            }
+            ensure(condition = !validityEnd.isBefore(validityStart)) {
+                ServiceError.Validation(message = "Point validity end cannot be before the start")
+            }
+            val spanDays = ChronoUnit.DAYS.between(validityStart, validityEnd)
+            ensure(condition = spanDays <= policy.maxValidityDays) {
+                ServiceError.Validation(
+                    message = "Point validity window of $spanDays days exceeds the global maximum of ${policy.maxValidityDays}",
+                )
+            }
+        }
+
+    /**
      * Resolve ALL of an event's participants — APPROVED roster members and PENDING/HOLD requests
      * (#201) — to names/codes + facets (sex/age/rating) and their status, for the organizer view.
      */
@@ -511,6 +676,18 @@ class EventService(
         return EventView(event = event, participants = participants, creator = creator, club = club)
     }
 }
+
+/** A create request's points config after validation against the global policy (#403 Phase C). */
+private data class ValidatedPointsConfig(
+    val minPoints: Int,
+    val maxPoints: Int,
+    val validityStart: LocalDate,
+    val validityEnd: LocalDate,
+)
+
+/** The uniform "a budgeted event needs a full points config" error (#403 Phase C). */
+private fun pointsConfigRequired(): ServiceError.Validation =
+    ServiceError.Validation(message = "A TOURNAMENT or LEAGUE event requires min/max points and a validity window")
 
 /** Resolve the caller and require HOST/ADMINISTRATOR, else [ServiceError.Forbidden]. */
 private fun staffCaller(

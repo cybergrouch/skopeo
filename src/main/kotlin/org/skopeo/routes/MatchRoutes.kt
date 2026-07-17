@@ -101,6 +101,8 @@ private fun toFixtureInput(request: CreateFixtureRequest): FixtureInput {
     val team1 = request.team1.map { parseUuid(value = it) }
     val team2 = request.team2.map { parseUuid(value = it) }
     validateComposition(type = matchFormat, team1 = team1, team2 = team2)
+    // Designated points (#403 Phase C) are whole and non-negative (decision #6) — reject at the boundary.
+    request.designatedPoints?.let { require(value = it > 0) { "designatedPoints must be a positive integer" } }
     return FixtureInput(
         matchFormat = matchFormat,
         matchType = parseEnumParam<MatchType>(value = request.matchType, field = "matchType"),
@@ -110,6 +112,7 @@ private fun toFixtureInput(request: CreateFixtureRequest): FixtureInput {
         venue = request.venue,
         tournamentName = request.tournamentName,
         eventId = request.eventId?.let { parseUuid(value = it, field = "event id") },
+        designatedPoints = request.designatedPoints,
     )
 }
 

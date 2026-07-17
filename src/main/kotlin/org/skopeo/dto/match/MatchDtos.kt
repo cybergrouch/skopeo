@@ -25,6 +25,12 @@ data class CreateFixtureRequest(
     val tournamentName: String? = null,
     /** When set, the fixture belongs to this event and both sides must be participants (#138). */
     val eventId: String? = null,
+    /**
+     * Points designated for the winner (#403 Phase C), for a fixture on a budgeted-type event. When
+     * omitted on such an event the backend defaults to round(avg(event.min, event.max)); ignored for an
+     * OPEN_PLAY / event-less fixture.
+     */
+    val designatedPoints: Int? = null,
 )
 
 @Serializable
@@ -110,6 +116,8 @@ data class MatchResponse(
     val createdBy: String? = null,
     val recordedBy: String? = null,
     val eventId: String? = null,
+    // Points designated for the winner (#403 Phase C); null for OPEN_PLAY / event-less fixtures.
+    val designatedPoints: Int? = null,
 )
 
 fun Match.toResponse(): MatchResponse =
@@ -142,6 +150,7 @@ fun Match.toResponse(): MatchResponse =
         createdBy = createdBy?.toString(),
         recordedBy = recordedBy?.toString(),
         eventId = eventId?.toString(),
+        designatedPoints = designatedPoints,
     )
 
 /** One player on the public match page (#136): just a display name + shareable code, no ids/contacts. */

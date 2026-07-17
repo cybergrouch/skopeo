@@ -25,6 +25,7 @@ import org.skopeo.model.AuditWrite
 import org.skopeo.model.Capability
 import org.skopeo.model.CreateFixtureCommand
 import org.skopeo.model.Event
+import org.skopeo.model.EventType
 import org.skopeo.model.Match
 import org.skopeo.model.MatchCalculationDetail
 import org.skopeo.model.MatchPlayerCalculation
@@ -38,8 +39,10 @@ import org.skopeo.model.TeamType
 import org.skopeo.model.User
 import org.skopeo.model.displayName
 import org.skopeo.model.isExpired
+import org.skopeo.model.pointsWindow
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
+import org.skopeo.repository.PointsBudgetRepository
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService
@@ -53,6 +56,10 @@ private val STAFF_ROLES = setOf(Capability.HOST, Capability.CLUB_OWNER, Capabili
 // Roles exempt from the expired-event data-entry gate (#310): administrators and club owners may
 // still create fixtures / record results after an event has ended; a plain host may not.
 private val EXPIRY_EXEMPT_ROLES = setOf(Capability.CLUB_OWNER, Capability.ADMINISTRATOR)
+
+// Event types that carry a points budget/designation (#403 Phase C): TOURNAMENT and LEAGUE. A fixture
+// on an OPEN_PLAY or event-less occasion designates no points.
+private val BUDGETED_TYPES = setOf(EventType.TOURNAMENT, EventType.LEAGUE)
 
 /**
  * Fixture-creation input resolved at the route boundary (#116): the match format/type enums are
@@ -71,6 +78,12 @@ data class FixtureInput(
     val tournamentName: String? = null,
     /** When set, the fixture belongs to this event and both sides must be event participants (#138). */
     val eventId: UUID? = null,
+    /**
+     * Points designated for the winner (#403 Phase C). Applies only to a budgeted-type event
+     * (TOURNAMENT/LEAGUE); when omitted there, it defaults to round(avg(event.min, event.max)). Ignored
+     * (kept null) for an OPEN_PLAY / event-less fixture.
+     */
+    val designatedPoints: Int? = null,
 )
 
 /**
@@ -87,6 +100,7 @@ class MatchService(
     private val ratings: RatingRepository = RatingRepository(),
     private val users: UserRepository = UserRepository(),
     private val events: EventRepository = EventRepository(),
+    private val budgets: PointsBudgetRepository = PointsBudgetRepository(),
     private val audit: AuditService = AuditService(),
 ) {
     /** [request] is parsed, range-checked, and composition-validated at the route boundary (#116). */
@@ -99,14 +113,20 @@ class MatchService(
             val createdBy = caller.id
             ensureEventParticipants(request = request).bind()
             // A HOST cannot add fixtures to an event that has ended; an ADMINISTRATOR still can (#310).
-            request.eventId?.let { eventId ->
-                val event =
-                    ensureNotNull(value = events.findById(id = eventId)) { ServiceError.Validation(message = "Event $eventId not found") }
-                ensureHostMayEnter(event = event, caller = caller).bind()
-                ensureEventNotFinalized(event = event).bind()
-            }
+            val event =
+                request.eventId?.let { eventId ->
+                    val loaded =
+                        ensureNotNull(value = events.findById(id = eventId)) {
+                            ServiceError.Validation(message = "Event $eventId not found")
+                        }
+                    ensureHostMayEnter(event = loaded, caller = caller).bind()
+                    ensureEventNotFinalized(event = loaded).bind()
+                    loaded
+                }
             val team1Users = resolveRatedParticipants(ids = request.team1).bind()
             val team2Users = resolveRatedParticipants(ids = request.team2).bind()
+            // Resolve + budget-check the point designation (#403 Phase C). Null for OPEN_PLAY / eventless.
+            val designated = resolveDesignation(event = event, request = request).bind()
 
             val match =
                 matches.createFixture(
@@ -123,6 +143,7 @@ class MatchService(
                             venue = request.venue,
                             tournamentName = request.tournamentName,
                             eventId = request.eventId,
+                            designatedPoints = designated,
                         ),
                 )
             audit.record(
@@ -141,7 +162,75 @@ class MatchService(
                             ),
                     ),
             )
+            // A designated fixture logs its own designation entry (#403 Phase C): amount, team size, cost.
+            designated?.let { points ->
+                auditDesignation(actorId = createdBy, matchId = match.id, points = points, teamSize = request.team1.size)
+            }
             match
+        }
+
+    /** Record the FIXTURE_POINTS_DESIGNATED audit entry (#403 Phase C): amount, team size, and cost. */
+    private fun auditDesignation(
+        actorId: UUID,
+        matchId: UUID,
+        points: Int,
+        teamSize: Int,
+    ) {
+        audit.record(
+            write =
+                AuditWrite(
+                    actorUserId = actorId,
+                    action = AuditAction.FIXTURE_POINTS_DESIGNATED,
+                    entityType = AuditEntityType.MATCH,
+                    entityId = matchId,
+                    summary = "Designated $points points for the winner",
+                    details =
+                        mapOf(
+                            "designatedPoints" to points.toString(),
+                            "teamSize" to teamSize.toString(),
+                            "cost" to (points * teamSize).toString(),
+                        ),
+                ),
+        )
+    }
+
+    /**
+     * Resolve the point designation for a new fixture (#403 Phase C). For a budgeted-type event
+     * (TOURNAMENT/LEAGUE) the amount defaults to round(avg(event.min, event.max)) when omitted, is
+     * validated to be an integer within [event.min, event.max], and — when the event has a club — is
+     * checked cumulatively against the club's free budget: currentReserved + amount × team size must not
+     * exceed the club's budgeted allocation for the type. A clubless budgeted event records the
+     * designation but skips the budget check (there's no budget source). OPEN_PLAY / event-less → null.
+     */
+    private fun resolveDesignation(
+        event: Event?,
+        request: FixtureInput,
+    ): Either<ServiceError, Int?> =
+        either {
+            if (event == null || event.type !in BUDGETED_TYPES) {
+                return@either null
+            }
+            // A budgeted event is created with both bounds set (config is written atomically); the window
+            // is present iff min is — guard defensively for a config-less event (e.g. seeded via the repo).
+            val window =
+                ensureNotNull(value = event.pointsWindow()) {
+                    ServiceError.Validation(message = "Event has no points config; set min/max points before designating")
+                }
+            val (min, max) = window
+            val amount = request.designatedPoints ?: Math.round((min + max) / 2.0).toInt()
+            ensure(condition = amount in min..max) {
+                ServiceError.Validation(message = "Designated points must be an integer between $min and $max")
+            }
+            // The cumulative reservation budget check engages only when the event has a club (#403 Phase C).
+            event.clubId?.let { clubId ->
+                val teamSize = request.team1.size
+                val reserved = budgets.sumReservedPoints(clubId = clubId, eventType = event.type)
+                val budgeted = budgets.findBudget(clubId = clubId, eventType = event.type)
+                ensure(condition = reserved + amount * teamSize <= budgeted) {
+                    ServiceError.Validation(message = "Designation exceeds club budget for ${event.type}")
+                }
+            }
+            amount
         }
 
     fun uploadResult(

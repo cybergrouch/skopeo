@@ -20,6 +20,7 @@ import org.skopeo.model.EventParticipantEntry
 import org.skopeo.model.EventParticipantStatus
 import org.skopeo.model.EventType
 import org.skopeo.model.MyEvent
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -36,6 +37,10 @@ class EventRepository {
                     it[createdBy] = command.createdBy
                     it[clubId] = command.clubId
                     it[type] = command.type.name
+                    it[minPointsPerMatch] = command.minPointsPerMatch
+                    it[maxPointsPerMatch] = command.maxPointsPerMatch
+                    it[pointValidityStart] = command.pointValidityStart
+                    it[pointValidityEnd] = command.pointValidityEnd
                 }.value
             // Host-listed participants join APPROVED outright, attributed to the creator.
             command.participantIds.distinct().forEach { uid ->
@@ -115,6 +120,28 @@ class EventRepository {
     ): Unit =
         transaction {
             EventsTable.update(where = { EventsTable.id eq id }) { it[calcPriority] = priority }
+            Unit
+        }
+
+    /**
+     * Set an event's points config (#403 Phase C): the per-match reward window + validity window. The
+     * caller (EventService.setPointsConfig) has already confirmed the event exists, so an update against
+     * a missing id is a harmless no-op.
+     */
+    fun setPointsConfig(
+        id: UUID,
+        minPoints: Int,
+        maxPoints: Int,
+        validityStart: LocalDate,
+        validityEnd: LocalDate,
+    ): Unit =
+        transaction {
+            EventsTable.update(where = { EventsTable.id eq id }) {
+                it[minPointsPerMatch] = minPoints
+                it[maxPointsPerMatch] = maxPoints
+                it[pointValidityStart] = validityStart
+                it[pointValidityEnd] = validityEnd
+            }
             Unit
         }
 
@@ -331,6 +358,10 @@ class EventRepository {
             type = EventType.valueOf(value = row[EventsTable.type]),
             finalizedAt = row[EventsTable.finalizedAt],
             finalizedBy = row[EventsTable.finalizedBy]?.value,
+            minPointsPerMatch = row[EventsTable.minPointsPerMatch],
+            maxPointsPerMatch = row[EventsTable.maxPointsPerMatch],
+            pointValidityStart = row[EventsTable.pointValidityStart],
+            pointValidityEnd = row[EventsTable.pointValidityEnd],
         )
     }
 

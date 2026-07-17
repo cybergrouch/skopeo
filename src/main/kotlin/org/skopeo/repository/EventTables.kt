@@ -35,6 +35,13 @@ internal object EventsTable : UUIDTable(name = "events") {
     // Finalize state (#403): an event is finalized iff finalized_at is non-null, stamped with the actor.
     val finalizedAt = datetime(name = "finalized_at").nullable()
     val finalizedBy = reference(name = "finalized_by", foreign = UsersTable, onDelete = ReferenceOption.SET_NULL).nullable()
+
+    // Points config (#403 Phase C): the per-match reward window and the point validity window. Required
+    // for TOURNAMENT/LEAGUE (enforced in the service), null for OPEN_PLAY / clubless events.
+    val minPointsPerMatch = integer(name = "min_points_per_match").nullable()
+    val maxPointsPerMatch = integer(name = "max_points_per_match").nullable()
+    val pointValidityStart = date(name = "point_validity_start").nullable()
+    val pointValidityEnd = date(name = "point_validity_end").nullable()
 }
 
 internal object EventParticipantsTable : UUIDTable(name = "event_participants") {

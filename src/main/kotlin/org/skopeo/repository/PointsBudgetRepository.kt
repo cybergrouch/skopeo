@@ -9,12 +9,14 @@ import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.SqlExpressionBuilder
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.sql.innerJoin
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.model.ClubPointBudget
 import org.skopeo.model.EventType
+import org.skopeo.model.MatchStatus
 import org.skopeo.model.PointsPolicy
 import java.time.LocalDateTime
 import java.util.UUID
@@ -75,6 +77,19 @@ class PointsBudgetRepository {
             ClubPointBudgetsTable.selectAll().where { ClubPointBudgetsTable.clubId eq clubId }.map { it.toBudget() }
         }
 
+    /** A club's budgeted points for one event type (#403 Phase C), or 0 when no budget row exists. */
+    fun findBudget(
+        clubId: UUID,
+        eventType: EventType,
+    ): Int =
+        transaction {
+            ClubPointBudgetsTable
+                .selectAll()
+                .where { (ClubPointBudgetsTable.clubId eq clubId) and (ClubPointBudgetsTable.eventType eq eventType.name) }
+                .singleOrNull()
+                ?.get(expression = ClubPointBudgetsTable.budgetedPoints) ?: 0
+        }
+
     /** Insert-or-update a club's budget for one event type; returns the stored row. */
     fun upsertBudget(
         clubId: UUID,
@@ -104,6 +119,37 @@ class PointsBudgetRepository {
                 }
             }
             ClubPointBudgetsTable.selectAll().where(predicate = match).single().toBudget()
+        }
+
+    /**
+     * The club's currently-reserved points for [eventType] (#403 Phase C) — the EMERGENT reservation,
+     * with no reservation table. Sums, over each active, non-cancelled, not-yet-finalized fixture that
+     * belongs to an event of this club and type and carries a designation, `designated_points × team
+     * size` (team size = the count of the fixture's team1 players; both sides are equal). A voided /
+     * cancelled fixture drops out of the sum automatically — that is the "release". Finalized events'
+     * fixtures fall out here (they become ActiveAwarded in Phase D).
+     */
+    fun sumReservedPoints(
+        clubId: UUID,
+        eventType: EventType,
+    ): Int =
+        transaction {
+            (MatchesTable innerJoin EventsTable)
+                .selectAll()
+                .where {
+                    (EventsTable.clubId eq clubId) and
+                        (EventsTable.type eq eventType.name) and
+                        EventsTable.finalizedAt.isNull() and
+                        MatchesTable.isActive and
+                        (MatchesTable.status neq MatchStatus.CANCELLED.name) and
+                        MatchesTable.designatedPoints.isNotNull()
+                }.sumOf { row ->
+                    val designated = row[MatchesTable.designatedPoints] ?: 0
+                    // Team size (both sides equal): the count of the fixture's team1 players; cost = points × size.
+                    val teamSize =
+                        TeamUsersTable.selectAll().where { TeamUsersTable.teamId eq row[MatchesTable.team1Id].value }.count().toInt()
+                    designated * teamSize
+                }
         }
 
     private fun ResultRow.toPolicy(): PointsPolicy =

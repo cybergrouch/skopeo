@@ -25,10 +25,11 @@ import org.skopeo.service.user.VerifiedFirebaseToken
 import java.util.UUID
 
 /**
- * Points-budget management (#403 Phase B): the global master policy and per-club per-type budgets.
- * Writes are points-manager-gated ([requirePointsManager]) — ADMINISTRATOR is implicitly a points
- * manager (§5.1). Nothing consumes budget yet (reservations = Phase C, awards = Phase D), so the
- * accounting exposes Allocated = 0 via [allocatedFor] and Free = Budgeted − Allocated (= Budgeted).
+ * Points-budget management (#403): the global master policy and per-club per-type budgets. Writes are
+ * points-manager-gated ([requirePointsManager]) — ADMINISTRATOR is implicitly a points manager (§5.1).
+ * As of Phase C the accounting reflects real utilization: [allocatedFor] returns the EMERGENT
+ * reservation (summed fixture designations, no reservation table) plus active awards (0 until Phase D),
+ * and Free = Budgeted − Allocated.
  *
  * Expected failures are returned as an [Either] left ([ServiceError], issue #115) rather than thrown.
  */
@@ -151,15 +152,18 @@ class PointsBudgetService(
 
     /**
      * Points a club currently has in use for [eventType] = reservations (Phase C) + active awards
-     * (Phase D). Neither exists yet, so this is 0. This is the single extension point where the
-     * accounting hooks into the reservation/award ledger once those phases land — so it deliberately
-     * keeps the (clubId, eventType) seam and returns a constant (hence the two suppressions).
+     * (Phase D). Reservations are EMERGENT — [PointsBudgetRepository.sumReservedPoints] sums the
+     * designations (× team size) of the club's active, non-finalized fixtures of this type, with no
+     * reservation table; voiding a fixture drops it from the sum. Active awards are still 0 (Phase D),
+     * so this is currently `reserved + 0`. This is the single extension point where the accounting
+     * hooks into the award ledger once Phase D lands.
      */
-    @Suppress("UnusedParameter", "FunctionOnlyReturningConstant")
     private fun allocatedFor(
         clubId: UUID,
         eventType: EventType,
-    ): Int = 0 // TODO(#403 Phase C/D): sum reservations + active awards for (clubId, eventType).
+    ): Int =
+        budgets.sumReservedPoints(clubId = clubId, eventType = eventType) +
+            0 // TODO(#403 Phase D): + sum of active (valid, non-expired) awards for (clubId, eventType).
 
     /**
      * Points-manager access (§5.1): ADMINISTRATOR is implicitly a points manager, so the caller

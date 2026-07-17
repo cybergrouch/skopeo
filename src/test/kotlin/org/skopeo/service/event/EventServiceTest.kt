@@ -93,6 +93,10 @@ class EventServiceTest {
         participants: List<UUID> = emptyList(),
         clubId: UUID? = null,
         type: EventType = EventType.OPEN_PLAY,
+        minPoints: Int? = null,
+        maxPoints: Int? = null,
+        validityStart: LocalDate? = null,
+        validityEnd: LocalDate? = null,
     ) = CreateEventInput(
         name = name,
         startDate = LocalDate.parse(start),
@@ -100,7 +104,18 @@ class EventServiceTest {
         participantIds = participants,
         clubId = clubId,
         type = type,
+        minPointsPerMatch = minPoints,
+        maxPointsPerMatch = maxPoints,
+        pointValidityStart = validityStart,
+        pointValidityEnd = validityEnd,
     )
+
+    private fun config(
+        min: Int,
+        max: Int,
+        start: LocalDate = LocalDate.now(),
+        end: LocalDate = LocalDate.now().plusDays(30),
+    ) = PointsConfigInput(minPoints = min, maxPoints = max, validityStart = start, validityEnd = end)
 
     @Test
     fun `a host creates an event with a resolved participant roster`() {
@@ -587,10 +602,32 @@ class EventServiceTest {
 
         service.create(token = token(uid = "host"), input = input(name = "Default")).shouldBeRight()
             .event.type shouldBe EventType.OPEN_PLAY
-        service.create(token = token(uid = "host"), input = input(name = "League", type = EventType.LEAGUE)).shouldBeRight()
-            .event.type shouldBe EventType.LEAGUE
+        // A budgeted-type event (#403 Phase C) requires a points config; supply one within the global policy.
+        service.create(
+            token = token(uid = "host"),
+            input =
+                input(
+                    name = "League",
+                    type = EventType.LEAGUE,
+                    minPoints = 5,
+                    maxPoints = 40,
+                    validityStart = LocalDate.now(),
+                    validityEnd = LocalDate.now().plusDays(30),
+                ),
+        ).shouldBeRight().event.type shouldBe EventType.LEAGUE
         val tourney =
-            service.create(token = token(uid = "host"), input = input(name = "Tourney", type = EventType.TOURNAMENT)).shouldBeRight()
+            service.create(
+                token = token(uid = "host"),
+                input =
+                    input(
+                        name = "Tourney",
+                        type = EventType.TOURNAMENT,
+                        minPoints = 10,
+                        maxPoints = 100,
+                        validityStart = LocalDate.now(),
+                        validityEnd = LocalDate.now().plusDays(60),
+                    ),
+            ).shouldBeRight()
         tourney.event.type shouldBe EventType.TOURNAMENT
         // The type round-trips through persistence.
         events.findById(id = tourney.event.id)!!.type shouldBe EventType.TOURNAMENT
@@ -897,5 +934,319 @@ class EventServiceTest {
 
         // An unprovisioned caller simply has no events.
         service.myEvents(token = token(uid = "ghost")).shouldBeRight() shouldBe emptyList()
+    }
+
+    // --- Points config (#403 Phase C). Global policy seeded by V16: LEAGUE 5..50/90, TOURNAMENT 10..500/365. ---
+
+    @Test
+    fun `an OPEN_PLAY event needs no points config and stores none (#403)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val view = service.create(token = token(uid = "host"), input = input(type = EventType.OPEN_PLAY)).shouldBeRight()
+        view.event.minPointsPerMatch.shouldBeNull()
+        view.event.pointValidityStart.shouldBeNull()
+    }
+
+    @Test
+    fun `a budgeted event create validates the points config against the global policy (#403)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val start = LocalDate.now()
+        val end = start.plusDays(30)
+
+        // Happy path: within LEAGUE's global 5..50 window and 90-day validity.
+        val ok =
+            service.create(
+                token = token(uid = "host"),
+                input =
+                    input(
+                        type = EventType.LEAGUE,
+                        minPoints = 5,
+                        maxPoints = 40,
+                        validityStart = start,
+                        validityEnd = end,
+                    ),
+            ).shouldBeRight()
+        ok.event.minPointsPerMatch shouldBe 5
+        ok.event.maxPointsPerMatch shouldBe 40
+        ok.event.pointValidityEnd shouldBe end
+    }
+
+    @Test
+    fun `a budgeted event create rejects min below the global minimum (#403)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        service.create(
+            token = token(uid = "host"),
+            // minPoints 1 is below LEAGUE's global min of 5.
+            input =
+                input(
+                    type = EventType.LEAGUE,
+                    minPoints = 1,
+                    maxPoints = 40,
+                    validityStart = LocalDate.now(),
+                    validityEnd = LocalDate.now().plusDays(10),
+                ),
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `a budgeted event create rejects a validity window over the global maximum (#403)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        service.create(
+            token = token(uid = "host"),
+            // A 200-day validity window exceeds LEAGUE's 90-day max.
+            input =
+                input(
+                    type = EventType.LEAGUE,
+                    minPoints = 5,
+                    maxPoints = 40,
+                    validityStart = LocalDate.now(),
+                    validityEnd = LocalDate.now().plusDays(200),
+                ),
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `a budgeted event create requires all four config fields (#403)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val start = LocalDate.now()
+        val end = start.plusDays(10)
+
+        // Each field missing on its own is rejected (all four are required for a budgeted-type event).
+        service.create(token = token(uid = "host"), input = input(type = EventType.TOURNAMENT))
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        service.create(
+            token = token(uid = "host"),
+            input = input(type = EventType.TOURNAMENT, maxPoints = 100, validityStart = start, validityEnd = end),
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        service.create(
+            token = token(uid = "host"),
+            input = input(type = EventType.TOURNAMENT, minPoints = 10, validityStart = start, validityEnd = end),
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        service.create(
+            token = token(uid = "host"),
+            input = input(type = EventType.TOURNAMENT, minPoints = 10, maxPoints = 100, validityEnd = end),
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        service.create(
+            token = token(uid = "host"),
+            input = input(type = EventType.TOURNAMENT, minPoints = 10, maxPoints = 100, validityStart = start),
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `a budgeted event create rejects each further config breach (#403)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val start = LocalDate.now()
+
+        fun attempt(
+            min: Int,
+            max: Int,
+            end: LocalDate,
+        ) = service.create(
+            token = token(uid = "host"),
+            input =
+                input(
+                    type = EventType.LEAGUE,
+                    minPoints = min,
+                    maxPoints = max,
+                    validityStart = start,
+                    validityEnd = end,
+                ),
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+
+        // Non-positive points (bypasses the route's boundary check when the service is called directly).
+        attempt(min = 0, max = 40, end = start.plusDays(10))
+        attempt(min = 5, max = 0, end = start.plusDays(10))
+        // Min greater than max.
+        attempt(min = 40, max = 10, end = start.plusDays(10))
+        // Max above LEAGUE's global maximum of 50.
+        attempt(min = 5, max = 60, end = start.plusDays(10))
+        // Validity end before start.
+        attempt(min = 5, max = 40, end = start.minusDays(1))
+    }
+
+    @Test
+    fun `a budgeted event create is rejected when the type has no global policy (#403)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        // Remove the LEAGUE global policy so validatePointsWindow hits the missing-policy path.
+        transaction { exec(stmt = "DELETE FROM points_policies WHERE event_type = 'LEAGUE'") }
+        service.create(
+            token = token(uid = "host"),
+            input =
+                input(
+                    type = EventType.LEAGUE,
+                    minPoints = 5,
+                    maxPoints = 40,
+                    validityStart = LocalDate.now(),
+                    validityEnd = LocalDate.now().plusDays(10),
+                ),
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `setPointsConfig updates a budgeted event and writes an Activity Log entry (#403)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        val event =
+            service.create(
+                token = token(uid = "host"),
+                input =
+                    input(
+                        type = EventType.LEAGUE,
+                        participants = listOf(p1.id, p2.id),
+                        minPoints = 5,
+                        maxPoints = 40,
+                        validityStart = LocalDate.now(),
+                        validityEnd = LocalDate.now().plusDays(30),
+                    ),
+            ).shouldBeRight().event
+        // An existing in-range fixture (20 ∈ [10,30]) exercises the "all designations still fit" path.
+        matchRepo.createFixture(
+            command =
+                CreateFixtureCommand(
+                    matchFormat = TeamType.SINGLES,
+                    matchType = MatchType.OPEN_PLAY,
+                    matchDate = LocalDate.parse("2026-03-02"),
+                    team1UserIds = listOf(element = p1.id),
+                    team2UserIds = listOf(element = p2.id),
+                    team1Name = "p1",
+                    team2Name = "p2",
+                    createdBy = host.id,
+                    eventId = event.id,
+                    designatedPoints = 20,
+                ),
+        )
+
+        val updated =
+            service.setPointsConfig(
+                token = token(uid = "host"),
+                id = event.id,
+                config = config(min = 10, max = 30, end = LocalDate.now().plusDays(60)),
+            ).shouldBeRight()
+        updated.event.minPointsPerMatch shouldBe 10
+        updated.event.maxPointsPerMatch shouldBe 30
+
+        AuditRepository()
+            .list(actions = listOf(element = AuditAction.EVENT_POINTS_CONFIG_SET), limit = 10, offset = 0)
+            .first
+            .single()
+            .action shouldBe AuditAction.EVENT_POINTS_CONFIG_SET
+    }
+
+    @Test
+    fun `setPointsConfig is rejected for an OPEN_PLAY event (#403)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val event = service.create(token = token(uid = "host"), input = input(type = EventType.OPEN_PLAY)).shouldBeRight().event
+        service.setPointsConfig(
+            token = token(uid = "host"),
+            id = event.id,
+            config = config(min = 2, max = 5, end = LocalDate.now().plusDays(10)),
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `setPointsConfig rejects a window that excludes an existing fixture's designation (#403)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        val event =
+            service.create(
+                token = token(uid = "host"),
+                input =
+                    input(
+                        type = EventType.LEAGUE,
+                        participants = listOf(p1.id, p2.id),
+                        minPoints = 5,
+                        maxPoints = 40,
+                        validityStart = LocalDate.now(),
+                        validityEnd = LocalDate.now().plusDays(30),
+                    ),
+            ).shouldBeRight().event
+        // A fixture designating 40 points (at the top of the window).
+        matchRepo.createFixture(
+            command =
+                CreateFixtureCommand(
+                    matchFormat = TeamType.SINGLES,
+                    matchType = MatchType.OPEN_PLAY,
+                    matchDate = LocalDate.parse("2026-03-02"),
+                    team1UserIds = listOf(element = p1.id),
+                    team2UserIds = listOf(element = p2.id),
+                    team1Name = "p1",
+                    team2Name = "p2",
+                    createdBy = host.id,
+                    eventId = event.id,
+                    designatedPoints = 40,
+                ),
+        )
+        // Tightening the max to 30 would exclude the existing 40-point designation (above the new max).
+        service.setPointsConfig(
+            token = token(uid = "host"),
+            id = event.id,
+            config = config(min = 5, max = 30),
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        // Raising the min to 45 also excludes it (now below the new min).
+        service.setPointsConfig(
+            token = token(uid = "host"),
+            id = event.id,
+            config = config(min = 45, max = 50),
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `setPointsConfig is not-found for a missing event and forbidden across host ownership (#403)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        provision(uid = "other", roles = setOf(Capability.PLAYER, Capability.HOST))
+        // A CLUB_OWNER and an ADMINISTRATOR (neither the creator) may still edit — both authz arms.
+        provision(uid = "owner", roles = setOf(Capability.PLAYER, Capability.CLUB_OWNER))
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+
+        service.setPointsConfig(token = token(uid = "host"), id = UUID.randomUUID(), config = config(min = 5, max = 40))
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+
+        val event =
+            service.create(
+                token = token(uid = "host"),
+                input =
+                    input(
+                        type = EventType.LEAGUE,
+                        minPoints = 5,
+                        maxPoints = 40,
+                        validityStart = LocalDate.now(),
+                        validityEnd = LocalDate.now().plusDays(30),
+                    ),
+            ).shouldBeRight().event
+
+        // Another plain host cannot edit; a club owner and an administrator can (isAdminOrOwner path).
+        service.setPointsConfig(token = token(uid = "other"), id = event.id, config = config(min = 6, max = 30))
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service.setPointsConfig(token = token(uid = "owner"), id = event.id, config = config(min = 6, max = 30))
+            .shouldBeRight()
+        service.setPointsConfig(token = token(uid = "admin"), id = event.id, config = config(min = 7, max = 30))
+            .shouldBeRight()
+    }
+
+    @Test
+    fun `setPointsConfig rejects a window outside the global policy and a finalized event (#403)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val event =
+            service.create(
+                token = token(uid = "host"),
+                input =
+                    input(
+                        type = EventType.LEAGUE,
+                        minPoints = 5,
+                        maxPoints = 40,
+                        validityStart = LocalDate.now(),
+                        validityEnd = LocalDate.now().plusDays(30),
+                    ),
+            ).shouldBeRight().event
+
+        // A window above LEAGUE's global max of 50 is rejected via validatePointsWindow.
+        service.setPointsConfig(token = token(uid = "host"), id = event.id, config = config(min = 5, max = 60))
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+
+        // Once finalized, the config is frozen.
+        service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+        service.setPointsConfig(token = token(uid = "host"), id = event.id, config = config(min = 6, max = 30))
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
     }
 }
