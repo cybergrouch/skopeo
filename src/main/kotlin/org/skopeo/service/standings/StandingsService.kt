@@ -4,6 +4,7 @@
 package org.skopeo.service.standings
 
 import org.skopeo.model.Capability
+import org.skopeo.model.PlayerStanding
 import org.skopeo.model.SnapshotSource
 import org.skopeo.model.StandingEntry
 import org.skopeo.model.StandingsBand
@@ -276,7 +277,11 @@ class StandingsService(
         val location =
             if (settings.standingsSource() == SnapshotSource.POINTS) {
                 // POINTS: locate only in the latest published POINTS snapshot; no snapshot → null (#428).
-                snapshots.latestPublished(source = SnapshotSource.POINTS)?.let { snapshots.locate(snapshotId = it, userId = caller.id) }
+                snapshots.latestPublished(source = SnapshotSource.POINTS)?.let { snapshotId ->
+                    snapshots.locateEntry(snapshotId = snapshotId, userId = caller.id)?.let {
+                        StandingsLocation(band = it.band, sex = it.sex, rank = it.rank)
+                    }
+                }
             } else {
                 // Live: find the caller's (band, sex, rank) in the rating-derived leaderboard.
                 rankLeaderboard().firstNotNullOfOrNull { (group, ranked) ->
@@ -293,6 +298,43 @@ class StandingsService(
         }
     }
 
+    /**
+     * A single player's competitive standing (#448) for their profile: their (band, sex, rank) plus the
+     * points backing it, under the **active** `standings_source` (read fresh per request). RATING is
+     * computed live from current ratings (points = the current rating); POINTS reads the latest published
+     * POINTS snapshot (points = the snapshot's ordering value). Null when the player isn't in the current
+     * standings — unrated for RATING, or absent / no POINTS snapshot for POINTS — so the UI shows
+     * "unranked". Order + points are public (#64/#114), so this carries no per-viewer privacy.
+     */
+    fun locatePlayer(userId: UUID): PlayerStanding? =
+        if (settings.standingsSource() == SnapshotSource.POINTS) {
+            // POINTS: only the latest published POINTS snapshot; no snapshot → null (never live, #428).
+            snapshots.latestPublished(source = SnapshotSource.POINTS)?.let { snapshotId ->
+                snapshots.locateEntry(snapshotId = snapshotId, userId = userId)?.let { entry ->
+                    PlayerStanding(
+                        band = entry.band,
+                        sex = entry.sex,
+                        rank = entry.rank,
+                        points = entry.orderingValue,
+                        source = SnapshotSource.POINTS,
+                    )
+                }
+            }
+        } else {
+            // Live: find the player in the rating-derived leaderboard; points = their current rating.
+            rankLeaderboard().firstNotNullOfOrNull { (group, ranked) ->
+                ranked.firstOrNull { it.user.id == userId }?.let {
+                    PlayerStanding(
+                        band = group.first,
+                        sex = group.second,
+                        rank = it.rank,
+                        points = it.rating.currentRating,
+                        source = SnapshotSource.RATING,
+                    )
+                }
+            }
+        }
+
     /** Whether the viewer may see precise ratings (RATER or ADMINISTRATOR), mirroring the match page (#136/#186). */
     private fun callerCanSeeRates(token: VerifiedFirebaseToken): Boolean {
         val caller = users.findByFirebaseUid(firebaseUid = token.uid) ?: return false
@@ -301,6 +343,8 @@ class StandingsService(
 
     private fun standingsComparator(current: Map<UUID, UserRating>): Comparator<User> =
         Comparator { left, right ->
+            // Final tie-break on a stable display label (display name, else public code).
+            fun standingName(user: User): String = user.displayName() ?: user.publicCode
             val leftRating = current.getValue(key = left.id)
             val rightRating = current.getValue(key = right.id)
             var order = rightRating.currentRating.compareTo(other = leftRating.currentRating)
@@ -320,6 +364,4 @@ class StandingsService(
                     else -> 2
                 }
             }
-
-    private fun standingName(user: User): String = user.displayName() ?: user.publicCode
 }

@@ -1428,6 +1428,27 @@ class EventServiceTest {
     }
 
     @Test
+    fun `finalize records the granting match id on each award, for the profile points audit (#448)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        rate(userId = p1.id, level = "4.0")
+        rate(userId = p2.id, level = "4.0")
+        val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id))
+        val match = seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2, designated = 30)
+
+        service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+
+        // The winner's award is tagged with the exact fixture that granted it (#448) — the audit links
+        // straight to that match — while still carrying the event link for the fallback.
+        val award = awardRepo.listByUser(userId = p1.id).single()
+        award.matchId shouldBe match.id
+        award.eventId shouldBe event.id
+        // And the active-awards read surfaces it.
+        awardRepo.listActiveByUser(userId = p1.id, asOf = LocalDateTime.now()).single().matchId shouldBe match.id
+    }
+
+    @Test
     fun `finalizing an OPEN_PLAY event awards each winner the designated points (unify)`() {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val p1 = provision(uid = "p1")

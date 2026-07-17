@@ -40,4 +40,7 @@ internal object RankingPointAwardsTable : UUIDTable(name = "ranking_point_awards
 
     // The event that produced this award on finalize (#403 Phase D, V18); null for manual/external grants.
     val eventId = reference(name = "event_id", foreign = EventsTable, onDelete = ReferenceOption.SET_NULL).nullable()
+
+    // The specific match (fixture) that granted this award on finalize (#448, V19); null for manual grants.
+    val matchId = reference(name = "match_id", foreign = MatchesTable, onDelete = ReferenceOption.SET_NULL).nullable()
 }

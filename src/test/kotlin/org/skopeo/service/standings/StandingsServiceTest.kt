@@ -469,4 +469,64 @@ class StandingsServiceTest {
         view.groups shouldHaveSize 0
         view.allBands shouldContainExactly StandingsBand.entries.reversed()
     }
+
+    @Test
+    fun `locatePlayer returns the live band, sex, rank and current rating as points (#448)`() {
+        val top = provision(uid = "top", sex = "Male").also { rate(user = it, value = "4.3") }
+        val lower = provision(uid = "lower", sex = "Male").also { rate(user = it, value = "4.1") }
+
+        val topStanding = service.locatePlayer(userId = top.id).shouldNotBeNull()
+        topStanding.band shouldBe StandingsBand.FROM_4_0
+        topStanding.sex shouldBe "Male"
+        topStanding.rank shouldBe 1
+        topStanding.points shouldBe BigDecimal("4.300000")
+        topStanding.source shouldBe SnapshotSource.RATING
+
+        service.locatePlayer(userId = lower.id).shouldNotBeNull().rank shouldBe 2
+    }
+
+    @Test
+    fun `locatePlayer is null for an unrated player under the RATING source (#448)`() {
+        val unrated = provision(uid = "unrated", sex = "Male")
+        service.locatePlayer(userId = unrated.id).shouldBeNull()
+    }
+
+    @Test
+    fun `locatePlayer reads the POINTS snapshot rank and points under the POINTS source (#448)`() {
+        val player = provision(uid = "p", sex = "Male").also { rate(user = it, value = "4.2") }
+        snapshots.create(
+            computedAt = LocalDateTime.now(),
+            asOf = LocalDate.now(),
+            status = SnapshotStatus.PUBLISHED,
+            entries =
+                listOf(
+                    element =
+                        StandingsEntryWrite(
+                            band = StandingsBand.FROM_4_0,
+                            sex = "Male",
+                            rank = 3,
+                            userId = player.id,
+                            orderingValue = BigDecimal("240"),
+                            tiebreakRating = BigDecimal("4.2"),
+                            achievedAt = null,
+                        ),
+                ),
+            source = SnapshotSource.POINTS,
+        )
+        setSource(value = "POINTS")
+
+        val standing = service.locatePlayer(userId = player.id).shouldNotBeNull()
+        standing.band shouldBe StandingsBand.FROM_4_0
+        standing.rank shouldBe 3
+        standing.points shouldBe BigDecimal("240.0000")
+        standing.source shouldBe SnapshotSource.POINTS
+    }
+
+    @Test
+    fun `locatePlayer is null under POINTS when the player is absent from the snapshot (#448)`() {
+        val absent = provision(uid = "absent", sex = "Male").also { rate(user = it, value = "4.2") }
+        setSource(value = "POINTS")
+        // No POINTS snapshot exists at all → null (never falls back to the live rating leaderboard, #428).
+        service.locatePlayer(userId = absent.id).shouldBeNull()
+    }
 }

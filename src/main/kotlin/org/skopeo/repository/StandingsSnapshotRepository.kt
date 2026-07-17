@@ -14,7 +14,6 @@ import org.skopeo.model.SnapshotSource
 import org.skopeo.model.SnapshotStatus
 import org.skopeo.model.StandingsBand
 import org.skopeo.model.StandingsEntryWrite
-import org.skopeo.model.StandingsLocation
 import org.skopeo.model.StandingsPage
 import org.skopeo.model.StandingsSnapshotEntry
 import java.time.LocalDate
@@ -149,19 +148,28 @@ class StandingsSnapshotRepository {
             StandingsPage(entries = entries, total = total.toInt())
         }
 
-    /** Where [userId] sits in [snapshotId] — their (band, sex, rank) — or null if absent (e.g. unrated). */
-    fun locate(
+    /**
+     * [userId]'s full standing entry in [snapshotId] — their (band, sex, rank) plus the ordering_value
+     * (points for a POINTS snapshot) — or null if absent (e.g. unrated). Backs both jump-to-me (#220,
+     * which needs the location) and the per-player profile read (#448, which also needs the points).
+     */
+    fun locateEntry(
         snapshotId: UUID,
         userId: UUID,
-    ): StandingsLocation? =
+    ): StandingsSnapshotEntry? =
         transaction {
             StandingsEntriesTable
                 .selectAll()
                 .where { (StandingsEntriesTable.snapshotId eq snapshotId) and (StandingsEntriesTable.userId eq userId) }
                 .firstOrNull()
                 ?.let { row ->
-                    val band = StandingsBand.requireCode(code = row[StandingsEntriesTable.band])
-                    StandingsLocation(band = band, sex = row.sexValue(), rank = row[StandingsEntriesTable.rank])
+                    StandingsSnapshotEntry(
+                        band = StandingsBand.requireCode(code = row[StandingsEntriesTable.band]),
+                        sex = row.sexValue(),
+                        rank = row[StandingsEntriesTable.rank],
+                        userId = row[StandingsEntriesTable.userId].value,
+                        orderingValue = row[StandingsEntriesTable.orderingValue],
+                    )
                 }
         }
 

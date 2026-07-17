@@ -96,6 +96,7 @@ class EventFinalizeAwarder(
                     write =
                         awardWrite(
                             event = event,
+                            matchId = win.matchId,
                             userId = userId,
                             designated = win.designated,
                             band = band,
@@ -116,8 +117,9 @@ class EventFinalizeAwarder(
         return AwardSummary(matchCount = matchCount, awardCount = awardCount, totalPoints = total)
     }
 
-    /** One qualifying fixture reduced to what awarding needs: its designation and its winning members. */
+    /** One qualifying fixture reduced to what awarding needs: its id, designation, and winning members. */
     private data class QualifyingWin(
+        val matchId: UUID,
         val designated: Int,
         val winnerIds: List<UUID>,
     )
@@ -134,12 +136,13 @@ class EventFinalizeAwarder(
             .mapNotNull { match ->
                 val designated = match.designatedPoints ?: return@mapNotNull null
                 val winnerIds = winningUserIds(match = match).ifEmpty { return@mapNotNull null }
-                QualifyingWin(designated = designated, winnerIds = winnerIds)
+                QualifyingWin(matchId = match.id, designated = designated, winnerIds = winnerIds)
             }
 
     @Suppress("LongParameterList")
     private fun awardWrite(
         event: Event,
+        matchId: UUID,
         userId: UUID,
         designated: Int,
         band: String,
@@ -166,6 +169,7 @@ class EventFinalizeAwarder(
             grantedBy = grantedBy,
             awardedAt = now,
             eventId = event.id,
+            matchId = matchId,
         )
 
     private fun winningUserIds(match: Match): List<UUID> =

@@ -107,3 +107,37 @@ data class ResultsBucket(
     val wins: Int,
     val losses: Int,
 )
+
+/**
+ * A player's current competitive standing (#448) — their rank within their (band, sex) group and the
+ * points backing it — under the **active** `standings_source`. Public (order + points are, #64/#114),
+ * so it renders on the anonymous public profile too. [points] is a decimal string (the current rating
+ * for the RATING source, the snapshot points for POINTS). [source] tells the UI which race this is.
+ */
+@Serializable
+data class PlayerStandingResponse(
+    // The band's persisted code (e.g. "4.0") and its UI header label (e.g. "NTRP 4.0 Band Race").
+    val band: String,
+    val bandLabel: String,
+    val sex: String?,
+    val rank: Int,
+    val points: String,
+    val source: String,
+)
+
+/**
+ * One ACTIVE ranking-point award on a player's own (or an admin's) points audit (#448): the [points],
+ * their [band], and the [validUntil] expiry, plus a link to the fixture that granted them. [matchCode]
+ * is the granting match's shareable code (→ `/matches/:code`); when an award predates the match link
+ * (or is a manual grant) it is null and [eventCode] carries the event fallback (→ `/events/:code`).
+ */
+@Serializable
+data class ActivePointsAwardResponse(
+    val id: String,
+    val points: String,
+    val band: String,
+    val pointClass: String,
+    val validUntil: String,
+    val matchCode: String? = null,
+    val eventCode: String? = null,
+)

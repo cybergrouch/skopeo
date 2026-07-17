@@ -24,6 +24,16 @@ vi.mock('@/api/generated/users/users', () => ({
 vi.mock('@/components/WinLossCard', () => ({
   WinLossCard: ({ code }: { code: string }) => <div>win-loss:{code}</div>,
 }))
+// The standing headline has its own API hook + tests (#448); stub it here.
+vi.mock('@/components/PlayerStandingCard', () => ({
+  PlayerStandingCard: ({ code }: { code: string }) => <div>standing:{code}</div>,
+}))
+// The points audit has its own API hook + tests (#448); stub it, echoing the enabled gate so the page
+// test can assert who sees it (owner / admin) vs who doesn't (other / anonymous).
+vi.mock('@/components/PointsAuditCard', () => ({
+  PointsAuditCard: ({ code, enabled }: { code: string; enabled: boolean }) =>
+    enabled ? <div>points-audit:{code}</div> : null,
+}))
 // RatingHistoryCard pulls in the matches API (axios → firebase); mock it so the real Firebase
 // client never initializes in tests.
 vi.mock('@/api/generated/matches/matches', () => ({
@@ -193,6 +203,41 @@ describe('PlayerProfilePage', () => {
     renderAt()
     expect(screen.getByText('Full rating history (admin view).')).toBeInTheDocument()
     expect(screen.getByText('Loading…')).toBeInTheDocument()
+  })
+
+  it('shows the public rank + points headline to any viewer (#448)', () => {
+    useGetApiV1PlayersCode.mockReturnValue(loadedPlayer)
+    renderAt()
+    expect(screen.getByText('standing:ABC234')).toBeInTheDocument()
+  })
+
+  it('shows the active-points audit to the profile owner (#448)', () => {
+    useGetApiV1PlayersCode.mockReturnValue(loadedPlayer)
+    // The viewer's own public code matches the profile → owner.
+    useGetApiV1UsersMe.mockReturnValue({ data: { publicCode: 'ABC234', capabilities: ['PLAYER'] } })
+    renderAt()
+    expect(screen.getByText('points-audit:ABC234')).toBeInTheDocument()
+  })
+
+  it('shows the active-points audit to an ADMINISTRATOR viewing another profile (#448)', () => {
+    useGetApiV1PlayersCode.mockReturnValue(loadedPlayer)
+    useGetApiV1UsersMe.mockReturnValue({ data: { publicCode: 'ZZZ999', capabilities: ['PLAYER', 'ADMINISTRATOR'] } })
+    renderAt()
+    expect(screen.getByText('points-audit:ABC234')).toBeInTheDocument()
+  })
+
+  it('hides the active-points audit from a non-owner non-admin viewer (#448)', () => {
+    useGetApiV1PlayersCode.mockReturnValue(loadedPlayer)
+    useGetApiV1UsersMe.mockReturnValue({ data: { publicCode: 'ZZZ999', capabilities: ['PLAYER'] } })
+    renderAt()
+    expect(screen.queryByText('points-audit:ABC234')).not.toBeInTheDocument()
+  })
+
+  it('hides the active-points audit from an anonymous viewer (#448)', () => {
+    useGetApiV1PlayersCode.mockReturnValue(loadedPlayer)
+    useGetApiV1UsersMe.mockReturnValue({ data: undefined })
+    renderAt()
+    expect(screen.queryByText('points-audit:ABC234')).not.toBeInTheDocument()
   })
 
   it('renders a merged notice linking to the canonical for a disabled duplicate (#124)', () => {

@@ -110,6 +110,27 @@ class RankingPointRepository {
                 }.map { it.toRankingPointAward() }
         }
 
+    /**
+     * One user's awards that count as of [asOf] (#448): ACTIVE and with [asOf] inside
+     * [valid_from, valid_until), soonest-to-expire first so the profile audit shows the most urgent
+     * points at the top. The REVOKED markers (and revoked originals) drop out.
+     */
+    fun listActiveByUser(
+        userId: UUID,
+        asOf: LocalDateTime,
+    ): List<RankingPointAward> =
+        transaction {
+            RankingPointAwardsTable
+                .selectAll()
+                .where {
+                    (RankingPointAwardsTable.userId eq userId) and
+                        (RankingPointAwardsTable.status eq AwardStatus.ACTIVE.name) and
+                        (RankingPointAwardsTable.validFrom lessEq asOf) and
+                        (RankingPointAwardsTable.validUntil greater asOf)
+                }.orderBy(RankingPointAwardsTable.validUntil to SortOrder.ASC)
+                .map { it.toRankingPointAward() }
+        }
+
     private fun insertRow(write: RankingPointAwardWrite): UUID =
         RankingPointAwardsTable.insertAndGetId {
             it[userId] = write.userId
@@ -127,6 +148,7 @@ class RankingPointRepository {
             it[grantedBy] = write.grantedBy
             it[awardedAt] = write.awardedAt
             it[eventId] = write.eventId
+            it[matchId] = write.matchId
         }.value
 }
 
@@ -148,4 +170,5 @@ internal fun ResultRow.toRankingPointAward(): RankingPointAward =
         grantedBy = this[RankingPointAwardsTable.grantedBy]?.value,
         awardedAt = this[RankingPointAwardsTable.awardedAt],
         eventId = this[RankingPointAwardsTable.eventId]?.value,
+        matchId = this[RankingPointAwardsTable.matchId]?.value,
     )

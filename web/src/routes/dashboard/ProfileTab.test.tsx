@@ -44,6 +44,15 @@ vi.mock("@/components/ReRateRequestCard", () => ({
 vi.mock("@/components/WinLossCard", () => ({
   WinLossCard: ({ code }: { code: string }) => <div>win-loss:{code}</div>,
 }));
+// The standing headline + points audit have their own API hooks + tests (#448); stub them here so this
+// test stays focused on the Profile shell (and no real users API hook is invoked).
+vi.mock("@/components/PlayerStandingCard", () => ({
+  PlayerStandingCard: ({ code }: { code: string }) => <div>standing:{code}</div>,
+}));
+vi.mock("@/components/PointsAuditCard", () => ({
+  PointsAuditCard: ({ code, enabled }: { code: string; enabled: boolean }) =>
+    enabled ? <div>points-audit:{code}</div> : null,
+}));
 // The editable name/demographics form has its own tests (#196/#199); stub it here so this test
 // stays focused on the Profile shell.
 vi.mock("@/components/ProfileFieldsForm", () => ({
@@ -123,6 +132,19 @@ describe("ProfileTab", () => {
   it("shows the shareable player code when provided", () => {
     renderProfile([Capability.PLAYER], "K7Q2MX");
     expect(screen.getByText("K7Q2MX")).toBeInTheDocument();
+  });
+
+  it("shows the standing headline and the owner's active-points audit when a public code is present (#448)", () => {
+    renderProfile([Capability.PLAYER], "K7Q2MX");
+    expect(screen.getByText("standing:K7Q2MX")).toBeInTheDocument();
+    // On the owner's own Profile tab the audit is always enabled (they are viewing themselves).
+    expect(screen.getByText("points-audit:K7Q2MX")).toBeInTheDocument();
+  });
+
+  it("omits the standing headline and audit when there is no public code (#448)", () => {
+    renderProfile([Capability.PLAYER]);
+    expect(screen.queryByText(/^standing:/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^points-audit:/)).not.toBeInTheDocument();
   });
 
   it("shows a QR code and a copy-link button when a public code is present", () => {

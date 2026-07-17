@@ -9,6 +9,7 @@ import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
@@ -16,6 +17,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.dto.user.ResultsBucket
 import org.skopeo.model.AuthProvider
+import org.skopeo.model.AwardStatus
 import org.skopeo.model.Capability
 import org.skopeo.model.CreateFixtureCommand
 import org.skopeo.model.Match
@@ -23,7 +25,10 @@ import org.skopeo.model.MatchRatingWrite
 import org.skopeo.model.MatchSetResult
 import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
+import org.skopeo.model.PointClass
+import org.skopeo.model.PointSourceType
 import org.skopeo.model.ProvisionUserCommand
+import org.skopeo.model.RankingPointAwardWrite
 import org.skopeo.model.RatingHistoryWrite
 import org.skopeo.model.ServiceError
 import org.skopeo.model.TeamType
@@ -31,6 +36,7 @@ import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.repository.MatchRepository
+import org.skopeo.repository.RankingPointRepository
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
@@ -61,6 +67,7 @@ class PlayerServiceTest {
     private fun newUser(
         uid: String,
         names: List<UserName>,
+        sex: String? = null,
     ): User =
         users.provision(
             command =
@@ -68,6 +75,7 @@ class PlayerServiceTest {
                     firebaseUid = uid,
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                     names = names,
+                    sex = sex,
                 ),
         )
 
@@ -548,4 +556,136 @@ class PlayerServiceTest {
         // Admin, but the code resolves to nobody.
         service.ratingHistory(token = token(uid = "admin"), code = "ZZZZZZ").shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
     }
+
+    private val awardRepo = RankingPointRepository()
+
+    /** Insert an ACTIVE award for [userId], optionally linked to [matchId] / [eventId] (#448). */
+    private fun grant(
+        userId: UUID,
+        points: String,
+        matchId: UUID? = null,
+        eventId: UUID? = null,
+        validFrom: LocalDateTime = LocalDateTime.now().minusDays(1),
+        validUntil: LocalDateTime = LocalDateTime.now().plusMonths(6),
+        status: AwardStatus = AwardStatus.ACTIVE,
+    ) = awardRepo.award(
+        write =
+            RankingPointAwardWrite(
+                userId = userId,
+                points = BigDecimal(points),
+                pointClass = PointClass.SEASONAL_TOURNAMENT_6M,
+                sourceType = PointSourceType.INTERNAL,
+                sourceId = eventId?.toString(),
+                band = "4.0",
+                sex = "Male",
+                reason = null,
+                validFrom = validFrom,
+                validUntil = validUntil,
+                status = status,
+                revokesAwardId = null,
+                grantedBy = null,
+                awardedAt = LocalDateTime.now(),
+                eventId = eventId,
+                matchId = matchId,
+            ),
+    )
+
+    @Test
+    fun `standing returns the player's live band, sex, rank and points (#448)`() {
+        // Sex drives the (band, sex) group, so provision the player as Male, then give them a rating.
+        val player = newUser(uid = "p", names = display(name = "Ana"), sex = "Male")
+        ratings.setRating(userId = player.id, rating = BigDecimal("4.2"), level = "4.0")
+
+        val standing = service.standing(code = player.publicCode.lowercase()).shouldBeRight().shouldNotBeNull()
+        standing.band shouldBe "4.0"
+        standing.bandLabel shouldBe "NTRP 4.0 Band Race"
+        standing.sex shouldBe "Male"
+        standing.rank shouldBe 1
+        standing.points shouldBe "4.200000"
+        standing.source shouldBe "RATING"
+    }
+
+    @Test
+    fun `standing is a right-null for an unranked (unrated) player (#448)`() {
+        val player = newUser(uid = "p", names = display(name = "Ana"))
+        service.standing(code = player.publicCode).shouldBeRight().shouldBeNull()
+    }
+
+    @Test
+    fun `active points audit lists only ACTIVE in-window awards, linked to the granting match (#448)`() {
+        val owner = newUser(uid = "owner", names = display(name = "Owner"))
+        val opp = newUser(uid = "opp", names = display(name = "Opp"))
+        val match = fixture(u1 = owner.id, u2 = opp.id, date = LocalDate.now())
+
+        val active = grant(userId = owner.id, points = "30", matchId = match.id)
+        // Expired, future, and revoked awards all drop out of the audit.
+        grant(
+            userId = owner.id,
+            points = "10",
+            validFrom = LocalDateTime.now().minusMonths(6),
+            validUntil = LocalDateTime.now().minusDays(1),
+        )
+        grant(userId = owner.id, points = "20", validFrom = LocalDateTime.now().plusDays(1), validUntil = LocalDateTime.now().plusMonths(6))
+        grant(userId = owner.id, points = "40", status = AwardStatus.REVOKED)
+
+        val rows = service.activePoints(token = token(uid = "owner"), code = owner.publicCode.lowercase()).shouldBeRight()
+        rows shouldHaveSize 1
+        rows.single().let {
+            it.id shouldBe active.id.toString()
+            // Points serialize from the NUMERIC(10,4) column, so the plain string carries the scale.
+            it.points shouldBe "30.0000"
+            it.band shouldBe "4.0"
+            it.matchCode shouldBe match.publicCode
+            it.eventCode.shouldBeNull()
+        }
+    }
+
+    @Test
+    fun `active points audit falls back to the event link when an award has no match (#448)`() {
+        val owner = newUser(uid = "owner", names = display(name = "Owner"))
+        // Simulate an event id via a real event so the code lookup resolves. Use EventRepository through
+        // the service's default dependency by inserting an event and referencing its id on the award.
+        val event = org.skopeo.repository.EventRepository().create(command = eventCommand(createdBy = owner.id))
+        grant(userId = owner.id, points = "15", matchId = null, eventId = event.id)
+
+        val row = service.activePoints(token = token(uid = "owner"), code = owner.publicCode).shouldBeRight().single()
+        row.matchCode.shouldBeNull()
+        row.eventCode shouldBe event.publicCode
+    }
+
+    @Test
+    fun `an administrator may read any player's active points audit (#448)`() {
+        newAdmin(uid = "admin")
+        val owner = newUser(uid = "owner", names = display(name = "Owner"))
+        grant(userId = owner.id, points = "30")
+
+        service.activePoints(token = token(uid = "admin"), code = owner.publicCode).shouldBeRight() shouldHaveSize 1
+    }
+
+    @Test
+    fun `a non-owner non-admin cannot read a player's active points audit (#448)`() {
+        val owner = newUser(uid = "owner", names = display(name = "Owner"))
+        grant(userId = owner.id, points = "30")
+        newUser(uid = "nosy", names = display(name = "Nosy"))
+
+        // Another logged-in user is forbidden.
+        service.activePoints(
+            token = token(uid = "nosy"),
+            code = owner.publicCode,
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        // An unknown / anonymous caller is forbidden too.
+        service.activePoints(
+            token = token(uid = "ghost"),
+            code = owner.publicCode,
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
+    private fun eventCommand(createdBy: UUID) =
+        org.skopeo.model.CreateEventCommand(
+            name = "Points Cup",
+            startDate = LocalDate.now(),
+            endDate = LocalDate.now().plusDays(7),
+            participantIds = emptyList(),
+            createdBy = createdBy,
+        )
 }
