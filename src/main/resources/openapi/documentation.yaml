@@ -1871,6 +1871,39 @@ paths:
         '404':
           description: No such event
 
+  /api/v1/events/{id}/finalize:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      summary: Finalize an event (HOST owns / CLUB_OWNER / ADMINISTRATOR)
+      description: >-
+        Finalize an event (#403) — terminal: it closes the event to further changes and queues the
+        event's matches for rating (moving the rating-queue trigger from result-upload time to finalize
+        time; event-less matches keep queuing immediately). A HOST may finalize only their own event; an
+        ADMINISTRATOR or CLUB_OWNER any. There is no un-finalize in Phase A.
+      tags:
+        - Events
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The finalized event
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventResponse'
+        '400':
+          description: Event is already finalized, or a deleted event
+        '403':
+          description: Caller is not staff, or a HOST finalizing another's event
+        '404':
+          description: No such event
+
   /api/v1/events/{id}/participants:
     parameters:
       - name: id
@@ -4461,6 +4494,11 @@ components:
           format: uuid
           nullable: true
           description: Optional club to file the event under (#313); omit for a clubless ("Open") event.
+        type:
+          type: string
+          nullable: true
+          enum: [OPEN_PLAY, LEAGUE, TOURNAMENT]
+          description: Event class (#403); omit for the OPEN_PLAY default.
 
     UpdateEventRequest:
       type: object
@@ -4587,6 +4625,7 @@ components:
         - endDate
         - isActive
         - participants
+        - type
       properties:
         id:
           type: string
@@ -4629,6 +4668,18 @@ components:
           format: double
           nullable: true
           description: Admin override for calculation processing order (#335); null = order by end date.
+        type:
+          type: string
+          enum: [OPEN_PLAY, LEAGUE, TOURNAMENT]
+          description: The event's class (#403).
+        finalizedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the event was finalized (#403); null while open.
+        isFinalized:
+          type: boolean
+          description: True once the event is finalized (#403) — closed to changes; its matches queue for rating.
 
     EventPublicResponse:
       type: object

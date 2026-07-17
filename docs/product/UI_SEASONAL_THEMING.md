@@ -1,6 +1,8 @@
 # UI Seasonal Theming — Design Discussion
 
-**Status:** Built · **Tracking issues:** [#378](https://github.com/cybergrouch/skopeo/issues/378) (original palettes) · [#399](https://github.com/cybergrouch/skopeo/issues/399) (all-dark inversion)
+**Status:** Built · **Tracking issues:** [#378](https://github.com/cybergrouch/skopeo/issues/378) (original palettes) · [#399](https://github.com/cybergrouch/skopeo/issues/399) (all-dark inversion) · [#409](https://github.com/cybergrouch/skopeo/issues/409) (vibrant-depth revision — pending)
+
+> **Note:** the palette tables below reflect the shipped **all-dark** version (#399/#402). The **Color-scheme decision log** at the end records where the palette is heading next (the **vibrant-depth** revision, #409) and *why*; those tables get updated when #409 is implemented.
 
 Admin-controlled, tennis-season / court-surface **color themes** for the web UI, propagated live to all connected clients. This document captures the discussion, decisions, palettes (with visual swatches), and an implementation plan.
 
@@ -233,3 +235,35 @@ Under the all-dark inversion (#399) **every** theme is light-on-dark, so the che
 - `web/src/index.css` (theme tokens / dark-mode block), Tailwind config, shadcn UI under `web/src/components/ui/`.
 - Admin tab: `web/src/routes/dashboard/AdminTab.tsx`.
 - Web UI architecture: `docs/engineering/architecture/WEB_UI_ARCHITECTURE.md`.
+
+---
+
+## Color-scheme decision log & rationale
+
+How the seasonal palette evolved, and **why** — so the reasoning isn't lost across revisions.
+
+### 1. Light canvas + white cards — *initial* (#378)
+Ultra-muted **pastel canvas** (60%), **white cards** (30%), vibrant court-color **accents** (10%) — the "Muted Base" 60-30-10. Clean and legible, but it read as *light mode with color accents*; the ask was for a **darker, more dramatic** feel.
+
+### 2. All-dark inversion (#399 / #402, shipped)
+Flipped to **immersive dark mode**: deep, desaturated **shadow canvases**, dark neutral cards, light text, vibrant accents. It delivered the drama — **but the deep/desaturated canvases muted the very court colors that give each season its identity.** In practice:
+- **Christmas** read *royal / luxury* (deep wine), **not festive**.
+- **Wimbledon** lush green, **Roland-Garros** terracotta, and **Melbourne (AO)** blue all came out **muted**.
+- **US Open** read correctly — the dark night-session mood is *intended* there.
+
+### 3. Vibrant Depth — *current target* (#409)
+Keep the dark, dramatic base **only for US Open** (night session) and **Off-Season** (neutral training/rest). For the other seasons, apply a **Vibrant Depth** twist on the inverted 60-30-10:
+- **60% canvas** → a **saturated, lighter court tone** (the real surface color) so the season's identity pops.
+- **30% card** → a **deep version of the same hue** (depth) with **white text** and a **crisp 2px white border** that breaks cleanly off the saturated canvas.
+- **10% accent** → stays vibrant (buttons/links).
+
+**Per-theme rationale (target values live in #409):**
+- **Christmas** — deep wine → **Santa Crimson** canvas (`#CE2029`) + **Holiday Evergreen** card (`#0B6623`) + **Snowflake White** text/border + **Elfie Gold** button (`#FFD700`, dark-green text). Reads as unmistakable holiday cheer, not "royal."
+- **Australian Open** — ink-black → **Vivid Stadium Blue** canvas (`#0080C8`) + Melbourne-twilight card; neon-yellow buttons cut through.
+- **Clay (Roland-Garros)** — dark espresso → **Brick Terracotta** canvas (`#C1522D`) + earth-chocolate card; the clay red becomes the hero.
+- **Grass (Wimbledon)** — black-green → **Lush Lawn Green** canvas (`#00703C`) + forest-green card + tournament-purple button.
+- **US Open** — *unchanged* (`#0B0F19` night canvas); the dark mood is the point.
+- **Off-Season** — *unchanged*; the neutral dark suits the training/rest vibe.
+
+**Principle carried forward:** the 60% canvas should carry the *season's mood at full saturation*; darkness for its own sake (step 2) traded identity for drama. Vibrant Depth keeps the drama (deep cards, white-on-dark text) while restoring the court-color identity.
+

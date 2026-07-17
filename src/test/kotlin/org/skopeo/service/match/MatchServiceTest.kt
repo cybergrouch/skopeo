@@ -873,6 +873,41 @@ class MatchServiceTest {
     }
 
     @Test
+    fun `a finalized event rejects fixture creation and result upload as Validation (#403)`() {
+        val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val eventRepo = EventRepository()
+        val event =
+            eventRepo.create(
+                command =
+                    CreateEventCommand(
+                        name = "E",
+                        startDate = LocalDate.now(),
+                        endDate = LocalDate.now().plusDays(7),
+                        participantIds = listOf(p1.id, p2.id),
+                        createdBy = host.id,
+                    ),
+            )
+        // A fixture recorded while the event is open; then the event is finalized.
+        val match =
+            service
+                .createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id))
+                .shouldBeRight()
+        eventRepo.finalize(id = event.id, finalizedAt = LocalDateTime.now(), finalizedBy = host.id)
+
+        // No new fixture may be created on the finalized event.
+        service
+            .createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+        // Nor may a result be recorded on its fixture.
+        service.uploadResult(token = token(uid = "host"), matchId = match.id, request = straightSets())
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
     fun `a host cannot create a fixture or record a result on an expired event, an admin or club owner can (#310)`() {
         val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         provisionUser(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))

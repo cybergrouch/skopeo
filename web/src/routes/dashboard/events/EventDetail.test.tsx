@@ -16,6 +16,7 @@ const {
   deleteMutate,
   renameMutate,
   clubMutate,
+  finalizeMutate,
   state,
 } =
   vi.hoisted(() => ({
@@ -29,6 +30,7 @@ const {
     deleteMutate: vi.fn(),
     renameMutate: vi.fn(),
     clubMutate: vi.fn(),
+    finalizeMutate: vi.fn(),
     state: {
       addFail: false,
       fixtureFail: false,
@@ -38,6 +40,9 @@ const {
       renameFail: false,
       renamePending: false,
       renameErrorMessage: null as string | null,
+      finalizeFail: false,
+      finalizePending: false,
+      finalizeErrorMessage: null as string | null,
     },
   }))
 
@@ -91,6 +96,16 @@ vi.mock('@/api/generated/events/events', () => ({
     isPending: false,
     mutateAsync: async (vars: unknown) => {
       clubMutate(vars)
+      opts?.mutation?.onSuccess?.()
+    },
+  }),
+  usePostApiV1EventsIdFinalize: (opts?: { mutation?: { onSuccess?: () => void } }) => ({
+    isPending: state.finalizePending,
+    mutateAsync: async (vars: unknown) => {
+      finalizeMutate(vars)
+      if (state.finalizeFail) {
+        throw state.finalizeErrorMessage ? { response: { data: { message: state.finalizeErrorMessage } } } : new Error('boom')
+      }
       opts?.mutation?.onSuccess?.()
     },
   }),
@@ -183,6 +198,9 @@ describe('EventDetail', () => {
     state.renameFail = false
     state.renamePending = false
     state.renameErrorMessage = null
+    state.finalizeFail = false
+    state.finalizePending = false
+    state.finalizeErrorMessage = null
     useGetApiV1EventsId.mockReturnValue({ data: event, isLoading: false })
     useGetApiV1Clubs.mockReturnValue({ data: [], isLoading: false })
     // Default to an administrator so data-entry controls stay available on the (past-dated) fixture;
@@ -676,5 +694,88 @@ describe('EventDetail', () => {
     expect(screen.queryByText(/this event has ended/i)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Search players…' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Schedule fixture' })).toBeInTheDocument()
+  })
+
+  it('finalizes the event after a confirm step and calls the mutation (#403)', async () => {
+    // A currently-running event so the ended-event gate doesn't also hide controls.
+    useGetApiV1EventsId.mockReturnValue({
+      data: { ...event, type: 'TOURNAMENT', endDate: '2999-01-01', isFinalized: false },
+      isLoading: false,
+    })
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.click(screen.getByRole('button', { name: 'Finalize event' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm finalize' }))
+
+    expect(finalizeMutate).toHaveBeenCalledWith({ id: 'e1' })
+  })
+
+  it('cancels a pending finalize without calling the API (#403)', async () => {
+    useGetApiV1EventsId.mockReturnValue({
+      data: { ...event, type: 'TOURNAMENT', endDate: '2999-01-01', isFinalized: false },
+      isLoading: false,
+    })
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.click(screen.getByRole('button', { name: 'Finalize event' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    // The confirmation is dismissed and the mutation was never called.
+    expect(screen.queryByRole('button', { name: 'Confirm finalize' })).not.toBeInTheDocument()
+    expect(finalizeMutate).not.toHaveBeenCalled()
+  })
+
+  it('shows a pending label and disables the confirm while finalizing (#403)', async () => {
+    state.finalizePending = true
+    useGetApiV1EventsId.mockReturnValue({
+      data: { ...event, type: 'TOURNAMENT', endDate: '2999-01-01', isFinalized: false },
+      isLoading: false,
+    })
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.click(screen.getByRole('button', { name: 'Finalize event' }))
+    const confirm = screen.getByRole('button', { name: 'Finalizing…' })
+    expect(confirm).toBeDisabled()
+  })
+
+  it('shows the type and a Finalized badge, and locks controls when finalized (#403)', () => {
+    useGetApiV1EventsId.mockReturnValue({
+      data: { ...event, type: 'LEAGUE', endDate: '2999-01-01', isFinalized: true },
+      isLoading: false,
+    })
+    renderDetail()
+
+    // The type is shown in the header and the finalized badge is present.
+    expect(screen.getByText(/League/)).toBeInTheDocument()
+    expect(screen.getByTestId('finalized-badge')).toBeInTheDocument()
+    // A finalized banner explains the terminal state.
+    expect(screen.getByText(/this event is finalized/i)).toBeInTheDocument()
+    // Edit / add / schedule controls are gone; no Finalize button (already finalized).
+    expect(screen.queryByRole('button', { name: 'Rename' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Search players…' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Schedule fixture' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Finalize event' })).not.toBeInTheDocument()
+    // The match sections are told to render read-only.
+    expect(screen.getByText('awaiting:e1:true')).toBeInTheDocument()
+    expect(screen.getByText('recorded:e1:true')).toBeInTheDocument()
+  })
+
+  it('surfaces a server error when finalize fails (#403)', async () => {
+    useGetApiV1EventsId.mockReturnValue({
+      data: { ...event, type: 'OPEN_PLAY', endDate: '2999-01-01', isFinalized: false },
+      isLoading: false,
+    })
+    state.finalizeFail = true
+    state.finalizeErrorMessage = 'Event is already finalized'
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.click(screen.getByRole('button', { name: 'Finalize event' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm finalize' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Event is already finalized')
   })
 })

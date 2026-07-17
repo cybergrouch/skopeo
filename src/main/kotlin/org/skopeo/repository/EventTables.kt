@@ -10,6 +10,7 @@ import org.jetbrains.exposed.sql.javatime.datetime
 
 private const val EVENT_NAME_MAX = 255
 private const val EVENT_CODE_MAX = 6
+private const val EVENT_TYPE_MAX = 16
 private const val PARTICIPANT_STATUS_MAX = 20
 
 /** Events/meets that contain matches (issue #138): a name, a date range, and a shareable code. */
@@ -27,6 +28,13 @@ internal object EventsTable : UUIDTable(name = "events") {
 
     // Admin override for calculation processing order (#335); null = order by end_date.
     val calcPriority = double(name = "calc_priority").nullable()
+
+    // The event's class (#403): OPEN_PLAY | LEAGUE | TOURNAMENT; backfilled to OPEN_PLAY.
+    val type = varchar(name = "type", length = EVENT_TYPE_MAX).default(defaultValue = "OPEN_PLAY")
+
+    // Finalize state (#403): an event is finalized iff finalized_at is non-null, stamped with the actor.
+    val finalizedAt = datetime(name = "finalized_at").nullable()
+    val finalizedBy = reference(name = "finalized_by", foreign = UsersTable, onDelete = ReferenceOption.SET_NULL).nullable()
 }
 
 internal object EventParticipantsTable : UUIDTable(name = "event_participants") {

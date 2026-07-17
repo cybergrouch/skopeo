@@ -264,7 +264,29 @@ describe("EventOrganizerTab", () => {
         name: "Summer Open",
         startDate: "2026-06-01",
         endDate: "2026-06-02",
+        type: "OPEN_PLAY",
         participantIds: ["u1"],
+      },
+    });
+  });
+
+  it("includes the chosen event type in the create payload (#403)", async () => {
+    const user = userEvent.setup();
+    renderTab();
+    await user.type(screen.getByLabelText("Name"), "League Night");
+    await user.type(screen.getByLabelText("Start date"), "2026-06-01");
+    await user.type(screen.getByLabelText("End date"), "2026-06-02");
+    // The type selector defaults to Open play; switch it to League.
+    await user.selectOptions(screen.getByLabelText("Type"), "LEAGUE");
+    await user.click(screen.getByRole("button", { name: "Create event" }));
+
+    expect(createMutate).toHaveBeenCalledWith({
+      data: {
+        name: "League Night",
+        startDate: "2026-06-01",
+        endDate: "2026-06-02",
+        type: "LEAGUE",
+        participantIds: [],
       },
     });
   });
@@ -350,6 +372,7 @@ describe("EventOrganizerTab", () => {
         name: "Club Cup",
         startDate: "2026-06-01",
         endDate: "2026-06-02",
+        type: "OPEN_PLAY",
         participantIds: [],
         clubId: "c1",
       },

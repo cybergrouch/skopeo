@@ -18,6 +18,7 @@ import org.skopeo.model.CreateEventCommand
 import org.skopeo.model.Event
 import org.skopeo.model.EventParticipantEntry
 import org.skopeo.model.EventParticipantStatus
+import org.skopeo.model.EventType
 import org.skopeo.model.MyEvent
 import java.time.LocalDateTime
 import java.util.UUID
@@ -34,6 +35,7 @@ class EventRepository {
                     it[endDate] = command.endDate
                     it[createdBy] = command.createdBy
                     it[clubId] = command.clubId
+                    it[type] = command.type.name
                 }.value
             // Host-listed participants join APPROVED outright, attributed to the creator.
             command.participantIds.distinct().forEach { uid ->
@@ -113,6 +115,24 @@ class EventRepository {
     ): Unit =
         transaction {
             EventsTable.update(where = { EventsTable.id eq id }) { it[calcPriority] = priority }
+            Unit
+        }
+
+    /**
+     * Finalize an event (#403): stamp finalized_at/finalized_by. The caller (EventService.finalize)
+     * has already confirmed the event exists and is not yet finalized, so an update against a missing
+     * id is a harmless no-op.
+     */
+    fun finalize(
+        id: UUID,
+        finalizedAt: LocalDateTime,
+        finalizedBy: UUID,
+    ): Unit =
+        transaction {
+            EventsTable.update(where = { EventsTable.id eq id }) {
+                it[EventsTable.finalizedAt] = finalizedAt
+                it[EventsTable.finalizedBy] = finalizedBy
+            }
             Unit
         }
 
@@ -308,6 +328,9 @@ class EventRepository {
             createdBy = row[EventsTable.createdBy]?.value,
             clubId = row[EventsTable.clubId]?.value,
             calcPriority = row[EventsTable.calcPriority],
+            type = EventType.valueOf(value = row[EventsTable.type]),
+            finalizedAt = row[EventsTable.finalizedAt],
+            finalizedBy = row[EventsTable.finalizedBy]?.value,
         )
     }
 

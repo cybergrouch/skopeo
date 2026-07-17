@@ -30,6 +30,7 @@ enum class AuditAction {
     EVENT_RENAMED,
     EVENT_CLUB_CHANGED,
     EVENT_DELETED,
+    EVENT_FINALIZED,
     RATING_CALCULATION_PREVIEWED,
     RATING_CALCULATION_MATCH_RATED,
     RATING_CALCULATION_COMMITTED,
@@ -107,6 +108,7 @@ val AuditAction.category: AuditCategory
             AuditAction.EVENT_RENAMED,
             AuditAction.EVENT_CLUB_CHANGED,
             AuditAction.EVENT_DELETED,
+            AuditAction.EVENT_FINALIZED,
             -> AuditCategory.EVENT_MANAGEMENT
             AuditAction.RATING_CALCULATION_PREVIEWED,
             AuditAction.RATING_CALCULATION_MATCH_RATED,

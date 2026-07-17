@@ -4,7 +4,15 @@
 package org.skopeo.model
 
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.util.UUID
+
+/**
+ * The class of an event (#403), distinct from the match-level [MatchType] rating factors (#108):
+ * OPEN_PLAY (casual), LEAGUE (multi-day / season-long, team format), or TOURNAMENT (1–2 day). It
+ * later drives the per-type points budget (Phase B); Phase A only records it.
+ */
+enum class EventType { OPEN_PLAY, LEAGUE, TOURNAMENT }
 
 /**
  * A participant's standing in an event (#201). APPROVED is a full roster member (eligible for
@@ -38,7 +46,16 @@ data class Event(
     val clubId: UUID? = null,
     // Admin override for calculation processing order (#335); null = order by end date.
     val calcPriority: Double? = null,
-)
+    // The event's class (#403): OPEN_PLAY | LEAGUE | TOURNAMENT.
+    val type: EventType = EventType.OPEN_PLAY,
+    // When the event was finalized (#403); null while open. Finalize is terminal and queues rating.
+    val finalizedAt: LocalDateTime? = null,
+    // The user who finalized the event (#403); null while open.
+    val finalizedBy: UUID? = null,
+) {
+    /** True once the event has been finalized (#403) — closed to changes; its matches queue for rating. */
+    val isFinalized: Boolean get() = finalizedAt != null
+}
 
 /**
  * True once the event is over — [asOf] is past its [Event.endDate]. Used to gate host data entry
@@ -55,6 +72,8 @@ data class CreateEventCommand(
     val participantIds: List<UUID>,
     val createdBy: UUID,
     val clubId: UUID? = null,
+    // The event's class (#403); defaults to OPEN_PLAY for backward compatibility.
+    val type: EventType = EventType.OPEN_PLAY,
 )
 
 /**
