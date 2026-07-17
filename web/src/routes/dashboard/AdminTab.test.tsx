@@ -26,16 +26,12 @@ vi.mock("./admin/ThemeSection", () => ({
 vi.mock("./admin/StandingsSourceSection", () => ({
   StandingsSourceSection: () => <div>standings source section</div>,
 }));
-vi.mock("./admin/PointsManagementSection", () => ({
-  PointsManagementSection: () => <div>points management section</div>,
-}));
 
 describe("AdminTab", () => {
   it("renders the admin sections (invites #135 and activity log #134 now live in their own tabs)", () => {
     render(<AdminTab />);
     expect(screen.getByText("manage player section")).toBeInTheDocument();
     expect(screen.getByText("clubs section")).toBeInTheDocument();
-    expect(screen.getByText("points management section")).toBeInTheDocument();
     expect(screen.getByText("duplicates section")).toBeInTheDocument();
     expect(
       screen.getByText("duplicate candidates section"),
@@ -46,5 +42,9 @@ describe("AdminTab", () => {
     expect(screen.getByText("build info section")).toBeInTheDocument();
     expect(screen.queryByText("invites section")).not.toBeInTheDocument();
     expect(screen.queryByText("activity log section")).not.toBeInTheDocument();
+    // Points Management moved to its own top-level dashboard tab (#444), so it's no longer here.
+    expect(
+      screen.queryByText("points management section"),
+    ).not.toBeInTheDocument();
   });
 });
