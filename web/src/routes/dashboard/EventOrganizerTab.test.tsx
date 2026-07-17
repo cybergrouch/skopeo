@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { EventOrganizerTab } from "./EventOrganizerTab";
@@ -682,5 +682,189 @@ describe("EventOrganizerTab", () => {
     await user.type(screen.getByLabelText("Min points"), "10");
     await user.click(screen.getByRole("button", { name: "Create event" }));
     expect(createMutate).toHaveBeenCalledTimes(1);
+  });
+
+  // Fill name + dates + club + type so the points-config panel is shown and required (#434).
+  async function openBudgetedForm(
+    user: ReturnType<typeof userEvent.setup>,
+    type: "LEAGUE" | "TOURNAMENT" | "OPEN_PLAY" = "OPEN_PLAY",
+  ) {
+    await user.type(screen.getByLabelText("Name"), "Club Cup");
+    await user.type(screen.getByLabelText("Start date"), "2026-06-01");
+    await user.type(screen.getByLabelText("End date"), "2026-06-02");
+    if (type !== "OPEN_PLAY") {
+      await user.selectOptions(screen.getByLabelText("Type"), type);
+    }
+    await user.selectOptions(screen.getByLabelText("Club"), "c1");
+  }
+
+  // Submit the <form> directly: an invalid points config disables the Create button, so a click
+  // wouldn't fire; this exercises submit()'s pointsError guard (setError; return) and the error render.
+  function submitForm() {
+    const form = screen
+      .getByRole("button", { name: "Create event" })
+      .closest("form") as HTMLFormElement;
+    fireEvent.submit(form);
+  }
+
+  it("rejects a non-integer or non-positive min/max (#434)", async () => {
+    useGetApiV1Clubs.mockReturnValue({
+      data: [{ id: "c1", name: "Downtown TC", isActive: true, owners: [] }],
+      isLoading: false,
+    });
+    const user = userEvent.setup();
+    renderTab();
+    // OPEN_PLAY policy is 1..10, so 1.5 / 5 is within bounds yet not a whole number.
+    await openBudgetedForm(user);
+    await user.type(screen.getByLabelText("Min points"), "1.5");
+    await user.type(screen.getByLabelText("Max points"), "5");
+    await user.type(screen.getByLabelText("Validity start"), "2026-06-01");
+    await user.type(screen.getByLabelText("Validity end"), "2026-06-20");
+
+    // Submitting surfaces the "positive whole numbers" error and blocks the create.
+    submitForm();
+    expect(
+      screen.getByText("Min and max points must be positive whole numbers."),
+    ).toBeInTheDocument();
+    expect(createMutate).not.toHaveBeenCalled();
+  });
+
+  it("rejects a min greater than the max (#434)", async () => {
+    useGetApiV1Clubs.mockReturnValue({
+      data: [{ id: "c1", name: "Downtown TC", isActive: true, owners: [] }],
+      isLoading: false,
+    });
+    const user = userEvent.setup();
+    renderTab();
+    // Both within OPEN_PLAY's 1..10 bounds, but min > max.
+    await openBudgetedForm(user);
+    await user.type(screen.getByLabelText("Min points"), "8");
+    await user.type(screen.getByLabelText("Max points"), "3");
+    await user.type(screen.getByLabelText("Validity start"), "2026-06-01");
+    await user.type(screen.getByLabelText("Validity end"), "2026-06-20");
+
+    submitForm();
+    expect(
+      screen.getByText("Min points cannot exceed max points."),
+    ).toBeInTheDocument();
+    expect(createMutate).not.toHaveBeenCalled();
+  });
+
+  it("rejects a max above the global maximum (#434)", async () => {
+    useGetApiV1Clubs.mockReturnValue({
+      data: [{ id: "c1", name: "Downtown TC", isActive: true, owners: [] }],
+      isLoading: false,
+    });
+    const user = userEvent.setup();
+    renderTab();
+    // OPEN_PLAY global max is 10; 11 exceeds it.
+    await openBudgetedForm(user);
+    await user.type(screen.getByLabelText("Min points"), "2");
+    await user.type(screen.getByLabelText("Max points"), "11");
+    await user.type(screen.getByLabelText("Validity start"), "2026-06-01");
+    await user.type(screen.getByLabelText("Validity end"), "2026-06-20");
+
+    submitForm();
+    expect(
+      screen.getByText(
+        "Max points must not exceed the global maximum of 10.",
+      ),
+    ).toBeInTheDocument();
+    expect(createMutate).not.toHaveBeenCalled();
+  });
+
+  it("rejects a validity end before its start (#434)", async () => {
+    useGetApiV1Clubs.mockReturnValue({
+      data: [{ id: "c1", name: "Downtown TC", isActive: true, owners: [] }],
+      isLoading: false,
+    });
+    const user = userEvent.setup();
+    renderTab();
+    await openBudgetedForm(user);
+    await user.type(screen.getByLabelText("Min points"), "2");
+    await user.type(screen.getByLabelText("Max points"), "8");
+    // End before start.
+    await user.type(screen.getByLabelText("Validity start"), "2026-06-20");
+    await user.type(screen.getByLabelText("Validity end"), "2026-06-01");
+
+    submitForm();
+    expect(
+      screen.getByText("Validity end cannot be before the start."),
+    ).toBeInTheDocument();
+    expect(createMutate).not.toHaveBeenCalled();
+  });
+
+  it("blocks submit and surfaces the error when the points config is invalid (#434)", async () => {
+    useGetApiV1Clubs.mockReturnValue({
+      data: [{ id: "c1", name: "Downtown TC", isActive: true, owners: [] }],
+      isLoading: false,
+    });
+    const user = userEvent.setup();
+    renderTab();
+    await openBudgetedForm(user);
+    // Max of 0 makes the window invalid (pointsError set), disabling the Create button.
+    await user.type(screen.getByLabelText("Min points"), "2");
+    await user.type(screen.getByLabelText("Max points"), "0");
+    await user.type(screen.getByLabelText("Validity start"), "2026-06-01");
+    await user.type(screen.getByLabelText("Validity end"), "2026-06-20");
+
+    // Submitting exercises submit()'s pointsError guard: it sets the error and returns without create.
+    submitForm();
+
+    expect(
+      screen.getByText("Min and max points must be positive whole numbers."),
+    ).toBeInTheDocument();
+    expect(createMutate).not.toHaveBeenCalled();
+  });
+
+  it("renders the global-policy hint and bound placeholders when a policy is present (#434)", async () => {
+    useGetApiV1Clubs.mockReturnValue({
+      data: [{ id: "c1", name: "Downtown TC", isActive: true, owners: [] }],
+      isLoading: false,
+    });
+    const user = userEvent.setup();
+    renderTab();
+    await openBudgetedForm(user);
+
+    // The hint reflects the OPEN_PLAY policy (1..10, 30 validity days).
+    expect(
+      screen.getByText(
+        /global Open play policy allows 1–10 points and up to 30 validity days/,
+      ),
+    ).toBeInTheDocument();
+    // Placeholders reflect the global bounds.
+    expect(screen.getByLabelText("Min points")).toHaveAttribute(
+      "placeholder",
+      "1",
+    );
+    expect(screen.getByLabelText("Max points")).toHaveAttribute(
+      "placeholder",
+      "10",
+    );
+  });
+
+  it("omits the hint and leaves placeholders empty when no policy is present (#434)", async () => {
+    useGetApiV1Clubs.mockReturnValue({
+      data: [{ id: "c1", name: "Downtown TC", isActive: true, owners: [] }],
+      isLoading: false,
+    });
+    // No global policies at all → globalPolicy is undefined for the chosen type.
+    useGetApiV1PointsPolicies.mockReturnValue({ data: [] });
+    const user = userEvent.setup();
+    renderTab();
+    await openBudgetedForm(user);
+
+    // The points panel still renders (budgeted + club), but with no global hint…
+    expect(screen.getByLabelText("Min points")).toBeInTheDocument();
+    expect(screen.queryByText(/policy allows/)).not.toBeInTheDocument();
+    // …and empty placeholders.
+    expect(screen.getByLabelText("Min points")).toHaveAttribute(
+      "placeholder",
+      "",
+    );
+    expect(screen.getByLabelText("Max points")).toHaveAttribute(
+      "placeholder",
+      "",
+    );
   });
 });

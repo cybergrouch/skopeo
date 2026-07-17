@@ -48,11 +48,6 @@ import java.util.UUID
 
 private val STAFF_ROLES = setOf(Capability.HOST, Capability.CLUB_OWNER, Capability.ADMINISTRATOR)
 
-// The event types that carry a points budget. Every event class carries a points config now that
-// OPEN_PLAY was unified with TOURNAMENT/LEAGUE (#403 Phase C; unified in feat/open-play-points-unify);
-// config applies whenever the event has a club. Kept as a set so applicability checks read declaratively.
-private val BUDGETED_TYPES = setOf(EventType.TOURNAMENT, EventType.LEAGUE, EventType.OPEN_PLAY)
-
 // Roles that may still enter data on an event after it has ended (#310): administrators and club
 // owners are exempt from the expiry gate, unlike a plain host.
 private val EXPIRY_EXEMPT_ROLES = setOf(Capability.CLUB_OWNER, Capability.ADMINISTRATOR)
@@ -296,9 +291,6 @@ class EventService(
             val isAdminOrOwner = caller.capabilities.any { it == Capability.ADMINISTRATOR || it == Capability.CLUB_OWNER }
             ensure(condition = isAdminOrOwner || event.createdBy == caller.id) { ServiceError.Forbidden() }
             ensureNotFinalized(event = event).bind()
-            ensure(condition = event.type in BUDGETED_TYPES) {
-                ServiceError.Validation(message = "Points config does not apply to event type ${event.type}")
-            }
             validatePointsWindow(
                 eventType = event.type,
                 minPoints = config.minPoints,
@@ -618,32 +610,28 @@ class EventService(
      */
     private fun resolveCreatePointsConfig(input: CreateEventInput): Either<ServiceError, ValidatedPointsConfig?> =
         either {
-            if (input.type !in BUDGETED_TYPES) {
+            val anyFieldSupplied =
+                input.minPointsPerMatch != null ||
+                    input.maxPointsPerMatch != null ||
+                    input.pointValidityStart != null ||
+                    input.pointValidityEnd != null
+            // A clubless event may defer its config; with a club (or any field sent) it's required.
+            val required = input.clubId != null || anyFieldSupplied
+            if (!required) {
                 null
             } else {
-                val anyFieldSupplied =
-                    input.minPointsPerMatch != null ||
-                        input.maxPointsPerMatch != null ||
-                        input.pointValidityStart != null ||
-                        input.pointValidityEnd != null
-                // A clubless budgeted event may defer its config; with a club (or any field sent) it's required.
-                val required = input.clubId != null || anyFieldSupplied
-                if (!required) {
-                    null
-                } else {
-                    val min = ensureNotNull(value = input.minPointsPerMatch) { pointsConfigRequired() }
-                    val max = ensureNotNull(value = input.maxPointsPerMatch) { pointsConfigRequired() }
-                    val start = ensureNotNull(value = input.pointValidityStart) { pointsConfigRequired() }
-                    val end = ensureNotNull(value = input.pointValidityEnd) { pointsConfigRequired() }
-                    validatePointsWindow(
-                        eventType = input.type,
-                        minPoints = min,
-                        maxPoints = max,
-                        validityStart = start,
-                        validityEnd = end,
-                    ).bind()
-                    ValidatedPointsConfig(minPoints = min, maxPoints = max, validityStart = start, validityEnd = end)
-                }
+                val min = ensureNotNull(value = input.minPointsPerMatch) { pointsConfigRequired() }
+                val max = ensureNotNull(value = input.maxPointsPerMatch) { pointsConfigRequired() }
+                val start = ensureNotNull(value = input.pointValidityStart) { pointsConfigRequired() }
+                val end = ensureNotNull(value = input.pointValidityEnd) { pointsConfigRequired() }
+                validatePointsWindow(
+                    eventType = input.type,
+                    minPoints = min,
+                    maxPoints = max,
+                    validityStart = start,
+                    validityEnd = end,
+                ).bind()
+                ValidatedPointsConfig(minPoints = min, maxPoints = max, validityStart = start, validityEnd = end)
             }
         }
 
