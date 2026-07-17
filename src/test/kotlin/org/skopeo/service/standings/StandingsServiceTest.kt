@@ -407,7 +407,7 @@ class StandingsServiceTest {
     @Test
     fun `under POINTS a page exposes the points metric to every viewer and never the rating (#457, #186)`() {
         // A non-privileged viewer (plain player) still sees the public points total, but no rating leaks.
-        provision(uid = "viewer", capabilities = setOf(Capability.PLAYER))
+        provision(uid = "viewer", capabilities = setOf(element = Capability.PLAYER))
         val top = provision(uid = "top", sex = "Male").also { rate(user = it, value = "4.3") }
         val low = provision(uid = "low", sex = "Male").also { rate(user = it, value = "4.1") }
         snapshots.create(
