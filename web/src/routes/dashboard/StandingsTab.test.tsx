@@ -276,6 +276,23 @@ describe('StandingsTab', () => {
     expect(screen.getByText('240 pts')).toBeInTheDocument()
   })
 
+  it('renders no metric under POINTS when an entry omits its points value (#457)', () => {
+    useGetApiV1Standings.mockReturnValue({
+      data: {
+        ...defaultPage,
+        source: 'POINTS',
+        entries: [
+          // A POINTS row with no points value → no "pts" is shown (and no rating leaks).
+          { rank: 1, userId: 'm1', displayName: 'Bob Cruz', publicCode: 'BBB222', sex: 'Male', age: 40 },
+        ],
+      },
+      isLoading: false,
+    })
+    renderTab()
+    // No "pts" metric is rendered for a POINTS row that carries no points value (the falsy arm).
+    expect(screen.queryByText(/pts/)).not.toBeInTheDocument()
+  })
+
   it('links each player card to their public profile (#186)', () => {
     renderTab()
     expect(screen.getByRole('link', { name: 'Bob Cruz' })).toHaveAttribute('href', '/players/BBB222')
