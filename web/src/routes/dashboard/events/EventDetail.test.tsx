@@ -711,6 +711,36 @@ describe('EventDetail', () => {
     expect(finalizeMutate).toHaveBeenCalledWith({ id: 'e1' })
   })
 
+  it('cancels a pending finalize without calling the API (#403)', async () => {
+    useGetApiV1EventsId.mockReturnValue({
+      data: { ...event, type: 'TOURNAMENT', endDate: '2999-01-01', isFinalized: false },
+      isLoading: false,
+    })
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.click(screen.getByRole('button', { name: 'Finalize event' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    // The confirmation is dismissed and the mutation was never called.
+    expect(screen.queryByRole('button', { name: 'Confirm finalize' })).not.toBeInTheDocument()
+    expect(finalizeMutate).not.toHaveBeenCalled()
+  })
+
+  it('shows a pending label and disables the confirm while finalizing (#403)', async () => {
+    state.finalizePending = true
+    useGetApiV1EventsId.mockReturnValue({
+      data: { ...event, type: 'TOURNAMENT', endDate: '2999-01-01', isFinalized: false },
+      isLoading: false,
+    })
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.click(screen.getByRole('button', { name: 'Finalize event' }))
+    const confirm = screen.getByRole('button', { name: 'Finalizing…' })
+    expect(confirm).toBeDisabled()
+  })
+
   it('shows the type and a Finalized badge, and locks controls when finalized (#403)', () => {
     useGetApiV1EventsId.mockReturnValue({
       data: { ...event, type: 'LEAGUE', endDate: '2999-01-01', isFinalized: true },
