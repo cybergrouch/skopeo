@@ -68,6 +68,8 @@ data class RankingPointAwardResponse(
     val revokesAwardId: String? = null,
     val grantedBy: String? = null,
     val awardedAt: String,
+    // The event that produced this award on finalize (#403 Phase D); null for manual / external grants.
+    val eventId: String? = null,
 )
 
 fun RankingPointAward.toResponse(): RankingPointAwardResponse =
@@ -87,4 +89,5 @@ fun RankingPointAward.toResponse(): RankingPointAwardResponse =
         revokesAwardId = revokesAwardId?.toString(),
         grantedBy = grantedBy?.toString(),
         awardedAt = awardedAt.toString(),
+        eventId = eventId?.toString(),
     )

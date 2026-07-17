@@ -257,6 +257,85 @@ class PointsBudgetRepositoryTest {
         repo.sumReservedPoints(clubId = club, eventType = EventType.LEAGUE) shouldBe 0
     }
 
+    // --- Active-award accounting (#403 Phase D): sumActiveAwards, the awarded side of reserve→award. ---
+
+    private fun awardFor(
+        userId: UUID,
+        eventId: UUID?,
+        points: String,
+        status: org.skopeo.model.AwardStatus = org.skopeo.model.AwardStatus.ACTIVE,
+        validFrom: LocalDateTime = LocalDateTime.now().minusDays(1),
+        validUntil: LocalDateTime = LocalDateTime.now().plusDays(30),
+    ) = RankingPointRepository().award(
+        write =
+            org.skopeo.model.RankingPointAwardWrite(
+                userId = userId,
+                points = java.math.BigDecimal(points),
+                pointClass = org.skopeo.model.PointClass.SEASONAL_TOURNAMENT_1M,
+                sourceType = org.skopeo.model.PointSourceType.INTERNAL,
+                sourceId = eventId?.toString(),
+                band = "4.0",
+                sex = "Male",
+                reason = null,
+                validFrom = validFrom,
+                validUntil = validUntil,
+                status = status,
+                revokesAwardId = null,
+                grantedBy = null,
+                awardedAt = LocalDateTime.now(),
+                eventId = eventId,
+            ),
+    )
+
+    @Test
+    fun `sumActiveAwards sums active in-window awards for the club and type, excluding expired revoked and unlinked (#403)`() {
+        val admin = newUser(uid = "admin")
+        val p1 = newUser(uid = "p1")
+        val club = clubs.create(command = CreateClubCommand(name = "Club", createdBy = admin)).id
+        val event = leagueEvent(clubId = club, createdBy = admin, participants = listOf(element = p1), finalized = true)
+
+        repo.sumActiveAwards(clubId = club, eventType = EventType.LEAGUE) shouldBe 0
+
+        awardFor(userId = p1, eventId = event, points = "30")
+        awardFor(userId = p1, eventId = event, points = "20")
+        // Expired (window ended yesterday) → excluded.
+        awardFor(
+            userId = p1,
+            eventId = event,
+            points = "999",
+            validFrom = LocalDateTime.now().minusDays(10),
+            validUntil = LocalDateTime.now().minusDays(1),
+        )
+        // Revoked → excluded.
+        awardFor(userId = p1, eventId = event, points = "999", status = org.skopeo.model.AwardStatus.REVOKED)
+        // Unlinked (manual grant, no event) → excluded (not joined to any event).
+        awardFor(userId = p1, eventId = null, points = "999")
+
+        repo.sumActiveAwards(clubId = club, eventType = EventType.LEAGUE) shouldBe 50
+        // A different type sees none of the LEAGUE awards.
+        repo.sumActiveAwards(clubId = club, eventType = EventType.TOURNAMENT) shouldBe 0
+    }
+
+    @Test
+    fun `reserved and awarded are mutually exclusive across finalize, keeping the sum continuous (#403)`() {
+        val admin = newUser(uid = "admin")
+        val p1 = newUser(uid = "p1")
+        val p2 = newUser(uid = "p2")
+        val club = clubs.create(command = CreateClubCommand(name = "Club", createdBy = admin)).id
+        // An OPEN (non-finalized) LEAGUE event with a 40-point singles fixture: shows as reserved, not awarded.
+        val event = leagueEvent(clubId = club, createdBy = admin, participants = listOf(p1, p2))
+        fixture(eventId = event, createdBy = admin, players = listOf(p1, p2), designated = 40)
+        repo.sumReservedPoints(clubId = club, eventType = EventType.LEAGUE) shouldBe 40
+        repo.sumActiveAwards(clubId = club, eventType = EventType.LEAGUE) shouldBe 0
+
+        // Finalize the event and record the award (what EventFinalizeAwarder does): the fixture leaves
+        // Reserved (finalized_at set) and the same points reappear as an active award → total unchanged.
+        events.finalize(id = event, finalizedAt = LocalDateTime.now(), finalizedBy = admin)
+        awardFor(userId = p1, eventId = event, points = "40")
+        repo.sumReservedPoints(clubId = club, eventType = EventType.LEAGUE) shouldBe 0
+        repo.sumActiveAwards(clubId = club, eventType = EventType.LEAGUE) shouldBe 40
+    }
+
     @Test
     fun `findBudget returns the budgeted points or zero when no row exists (#403)`() {
         val admin = newUser(uid = "admin")

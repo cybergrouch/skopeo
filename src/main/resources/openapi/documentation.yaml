@@ -6313,3 +6313,8 @@ components:
         awardedAt:
           type: string
           format: date-time
+        eventId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Event that produced this award on finalize (#403 Phase D); null for manual or external grants.

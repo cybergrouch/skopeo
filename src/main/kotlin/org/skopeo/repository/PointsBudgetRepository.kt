@@ -14,6 +14,7 @@ import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
+import org.skopeo.model.AwardStatus
 import org.skopeo.model.ClubPointBudget
 import org.skopeo.model.EventType
 import org.skopeo.model.MatchStatus
@@ -152,18 +153,44 @@ class PointsBudgetRepository {
                 }
         }
 
-    private fun ResultRow.toPolicy(): PointsPolicy =
-        PointsPolicy(
-            eventType = EventType.valueOf(value = this[PointsPoliciesTable.eventType]),
-            minPoints = this[PointsPoliciesTable.minPoints],
-            maxPoints = this[PointsPoliciesTable.maxPoints],
-            maxValidityDays = this[PointsPoliciesTable.maxValidityDays],
-        )
-
-    private fun ResultRow.toBudget(): ClubPointBudget =
-        ClubPointBudget(
-            clubId = this[ClubPointBudgetsTable.clubId].value,
-            eventType = EventType.valueOf(value = this[ClubPointBudgetsTable.eventType]),
-            budgetedPoints = this[ClubPointBudgetsTable.budgetedPoints],
-        )
+    /**
+     * The club's currently-active awarded points for [eventType] (#403 Phase D) — the awarded side of
+     * the reserve→award transition (§3). Sums `points` over every ACTIVE ranking-point award linked
+     * (event_id) to an event of this club and type whose validity window contains [asOf], as an integer
+     * (values are whole per decision #6). A finalized event's fixtures leave [sumReservedPoints]
+     * (finalized_at is set) and reappear here, keeping the club's Allocated continuous across finalize;
+     * expired / revoked awards drop out automatically, returning their points to Free.
+     */
+    fun sumActiveAwards(
+        clubId: UUID,
+        eventType: EventType,
+        asOf: LocalDateTime = LocalDateTime.now(),
+    ): Int =
+        transaction {
+            (RankingPointAwardsTable innerJoin EventsTable)
+                .selectAll()
+                .where {
+                    (EventsTable.clubId eq clubId) and
+                        (EventsTable.type eq eventType.name) and
+                        (RankingPointAwardsTable.status eq AwardStatus.ACTIVE.name) and
+                        (RankingPointAwardsTable.validFrom lessEq asOf) and
+                        (RankingPointAwardsTable.validUntil greater asOf)
+                }.sumOf { row -> row[RankingPointAwardsTable.points] }
+                .toInt()
+        }
 }
+
+private fun ResultRow.toPolicy(): PointsPolicy =
+    PointsPolicy(
+        eventType = EventType.valueOf(value = this[PointsPoliciesTable.eventType]),
+        minPoints = this[PointsPoliciesTable.minPoints],
+        maxPoints = this[PointsPoliciesTable.maxPoints],
+        maxValidityDays = this[PointsPoliciesTable.maxValidityDays],
+    )
+
+private fun ResultRow.toBudget(): ClubPointBudget =
+    ClubPointBudget(
+        clubId = this[ClubPointBudgetsTable.clubId].value,
+        eventType = EventType.valueOf(value = this[ClubPointBudgetsTable.eventType]),
+        budgetedPoints = this[ClubPointBudgetsTable.budgetedPoints],
+    )

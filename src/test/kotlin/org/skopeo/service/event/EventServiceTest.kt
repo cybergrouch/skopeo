@@ -40,6 +40,7 @@ import org.skopeo.repository.ClubRepository
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.EventsTable
 import org.skopeo.repository.MatchRepository
+import org.skopeo.repository.RankingPointRepository
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.user.VerifiedFirebaseToken
@@ -1248,5 +1249,268 @@ class EventServiceTest {
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
         service.setPointsConfig(token = token(uid = "host"), id = event.id, config = config(min = 6, max = 30))
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    // --- Finalize-time awarding (#403 Phase D). ---
+
+    private val awardRepo = RankingPointRepository()
+
+    private fun budgetedEvent(
+        hostUid: String,
+        participants: List<UUID>,
+        type: EventType = EventType.LEAGUE,
+        validityDays: Long = 30,
+    ) = service.create(
+        token = token(uid = hostUid),
+        input =
+            input(
+                type = type,
+                participants = participants,
+                // 10..50 satisfies both LEAGUE (5..50) and TOURNAMENT (10..500) global policies.
+                minPoints = 10,
+                maxPoints = 50,
+                validityStart = LocalDate.now(),
+                validityEnd = LocalDate.now().plusDays(validityDays),
+            ),
+    ).shouldBeRight().event
+
+    /** Seed a COMPLETED singles fixture designating [designated], won by team1 (p1). */
+    private fun seedCompletedFixture(
+        eventId: UUID,
+        host: User,
+        p1: User,
+        p2: User,
+        designated: Int?,
+        format: TeamType = TeamType.SINGLES,
+        team1UserIds: List<UUID> = listOf(element = p1.id),
+        team2UserIds: List<UUID> = listOf(element = p2.id),
+    ): Match {
+        val match =
+            matchRepo.createFixture(
+                command =
+                    CreateFixtureCommand(
+                        matchFormat = format,
+                        matchType = MatchType.OPEN_PLAY,
+                        matchDate = LocalDate.now(),
+                        team1UserIds = team1UserIds,
+                        team2UserIds = team2UserIds,
+                        team1Name = "t1",
+                        team2Name = "t2",
+                        createdBy = host.id,
+                        eventId = eventId,
+                        designatedPoints = designated,
+                    ),
+            )
+        recordResult(match = match)
+        return matchRepo.findById(matchId = match.id).shouldBeRight()
+    }
+
+    private fun rate(
+        userId: UUID,
+        level: String,
+    ) = RatingRepository().setRating(userId = userId, rating = BigDecimal(level), level = level)
+
+    @Test
+    fun `finalizing a LEAGUE event awards each winner the full designated points with the event window (#403)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        rate(userId = p1.id, level = "4.0")
+        rate(userId = p2.id, level = "4.0")
+        val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id))
+        seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2, designated = 30)
+
+        service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+
+        // SINGLES → exactly one award row (the winner p1), the full 30 points.
+        awardRepo.listByUser(userId = p2.id) shouldHaveSize 0
+        val award = awardRepo.listByUser(userId = p1.id).single()
+        award.points shouldBe BigDecimal("30.0000")
+        award.band shouldBe "4.0"
+        award.eventId shouldBe event.id
+        award.sourceId shouldBe event.id.toString()
+        award.pointClass shouldBe org.skopeo.model.PointClass.SEASONAL_TOURNAMENT_1M
+        // Validity from the event window: start-of-day start, exclusive next-day after the end.
+        award.validFrom shouldBe LocalDate.now().atStartOfDay()
+        award.validUntil shouldBe LocalDate.now().plusDays(31).atStartOfDay()
+        // The award is audited.
+        AuditRepository().list(actions = listOf(element = AuditAction.EVENT_POINTS_AWARDED), limit = 10, offset = 0)
+            .first.single().details["totalPoints"] shouldBe "30"
+    }
+
+    @Test
+    fun `finalizing a doubles fixture writes one full-amount row per winning-team member (#403)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val a = provision(uid = "a")
+        val b = provision(uid = "b")
+        val c = provision(uid = "c")
+        val d = provision(uid = "d")
+        listOf(a, b, c, d).forEach { rate(userId = it.id, level = "3.5") }
+        val event = budgetedEvent(hostUid = "host", participants = listOf(a.id, b.id, c.id, d.id), type = EventType.TOURNAMENT)
+        seedCompletedFixture(
+            eventId = event.id,
+            host = host,
+            p1 = a,
+            p2 = c,
+            designated = 40,
+            format = TeamType.DOUBLES,
+            team1UserIds = listOf(a.id, b.id),
+            team2UserIds = listOf(c.id, d.id),
+        )
+
+        service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+
+        // Both winning-team members get the FULL 40 (two rows of 40, not a split).
+        awardRepo.listByUser(userId = a.id).single().points shouldBe BigDecimal("40.0000")
+        awardRepo.listByUser(userId = b.id).single().points shouldBe BigDecimal("40.0000")
+        // Losers get nothing.
+        awardRepo.listByUser(userId = c.id) shouldHaveSize 0
+        awardRepo.listByUser(userId = d.id) shouldHaveSize 0
+    }
+
+    @Test
+    fun `finalizing an OPEN_PLAY event or one with no designated or no-winner fixtures awards nothing (#403)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        rate(userId = p1.id, level = "4.0")
+        // OPEN_PLAY carries no budget → its completed fixture awards nothing.
+        val open = service.create(token = token(uid = "host"), input = input(participants = listOf(p1.id, p2.id))).shouldBeRight().event
+        seedCompletedFixture(eventId = open.id, host = host, p1 = p1, p2 = p2, designated = null)
+        service.finalize(token = token(uid = "host"), id = open.id).shouldBeRight()
+        awardRepo.listByUser(userId = p1.id) shouldHaveSize 0
+
+        // A budgeted event whose only fixture is still SCHEDULED (no winner) → nothing awarded.
+        val league = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id))
+        matchRepo.createFixture(
+            command =
+                CreateFixtureCommand(
+                    matchFormat = TeamType.SINGLES,
+                    matchType = MatchType.OPEN_PLAY,
+                    matchDate = LocalDate.now(),
+                    team1UserIds = listOf(element = p1.id),
+                    team2UserIds = listOf(element = p2.id),
+                    team1Name = "t1",
+                    team2Name = "t2",
+                    createdBy = host.id,
+                    eventId = league.id,
+                    designatedPoints = 30,
+                ),
+        )
+        service.finalize(token = token(uid = "host"), id = league.id).shouldBeRight()
+        awardRepo.listByUser(userId = p1.id) shouldHaveSize 0
+    }
+
+    @Test
+    fun `a winner with no rating is skipped and not awarded (#403)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        // p1 wins but has no rating → no band to tag → the award is skipped.
+        val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id))
+        seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2, designated = 30)
+
+        service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+        awardRepo.listByUser(userId = p1.id) shouldHaveSize 0
+    }
+
+    @Test
+    fun `a budgeted event missing its validity window awards nothing (defensive, #403)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        rate(userId = p1.id, level = "4.0")
+        val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id))
+        seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2, designated = 30)
+        // Null out the point-validity window (a legacy / pre-config budgeted event) → the awarder's
+        // defensive null-window guard returns without awarding.
+        transaction {
+            EventsTable.update(where = { EventsTable.id eq event.id }) {
+                it[pointValidityStart] = null
+                it[pointValidityEnd] = null
+            }
+        }
+
+        service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+        awardRepo.listByUser(userId = p1.id) shouldHaveSize 0
+    }
+
+    @Test
+    fun `a completed fixture with no designation in a budgeted event awards nothing (#403)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        rate(userId = p1.id, level = "4.0")
+        // A budgeted event whose completed, won fixture carries NO designation → the designation filter
+        // drops it (exercises the null-designation arm without an early type/config return).
+        val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id))
+        seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2, designated = null)
+
+        service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+        awardRepo.listByUser(userId = p1.id) shouldHaveSize 0
+    }
+
+    @Test
+    fun `the award's point class maps the event window length to the nearest class (#403)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+
+        fun finalizeWithWindow(
+            days: Long,
+            p1uid: String,
+            p2uid: String,
+        ): org.skopeo.model.PointClass {
+            val p1 = provision(uid = p1uid)
+            val p2 = provision(uid = p2uid)
+            rate(userId = p1.id, level = "4.0")
+            val event =
+                budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id), type = EventType.TOURNAMENT, validityDays = days)
+            seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2, designated = 20)
+            service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+            return awardRepo.listByUser(userId = p1.id).single().pointClass
+        }
+
+        // ≤31d → 1M, ≤92d → 3M, ≤184d → 6M, else ANNUAL — all four when-arms.
+        finalizeWithWindow(days = 20, p1uid = "a1", p2uid = "a2") shouldBe org.skopeo.model.PointClass.SEASONAL_TOURNAMENT_1M
+        finalizeWithWindow(days = 60, p1uid = "b1", p2uid = "b2") shouldBe org.skopeo.model.PointClass.SEASONAL_TOURNAMENT_3M
+        finalizeWithWindow(days = 120, p1uid = "c1", p2uid = "c2") shouldBe org.skopeo.model.PointClass.SEASONAL_TOURNAMENT_6M
+        finalizeWithWindow(days = 300, p1uid = "d1", p2uid = "d2") shouldBe org.skopeo.model.PointClass.ANNUAL_TOURNAMENT
+    }
+
+    @Test
+    fun `the second team's win path is awarded when team2 is the winner (#403)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        rate(userId = p1.id, level = "4.0")
+        rate(userId = p2.id, level = "4.0")
+        val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id))
+        val match =
+            matchRepo.createFixture(
+                command =
+                    CreateFixtureCommand(
+                        matchFormat = TeamType.SINGLES,
+                        matchType = MatchType.OPEN_PLAY,
+                        matchDate = LocalDate.now(),
+                        team1UserIds = listOf(element = p1.id),
+                        team2UserIds = listOf(element = p2.id),
+                        team1Name = "t1",
+                        team2Name = "t2",
+                        createdBy = host.id,
+                        eventId = event.id,
+                        designatedPoints = 30,
+                    ),
+            )
+        // team2 (p2) wins → the winningUserIds team2 arm is exercised.
+        matchRepo.addResult(
+            matchId = match.id,
+            sets = listOf(element = MatchSetResult(setNumber = 1, team1Games = 4, team2Games = 6, winnerTeamId = match.team2.teamId)),
+            winnerTeamId = match.team2.teamId,
+            recordedBy = host.id,
+            completedAt = LocalDateTime.now(),
+        )
+
+        service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+        awardRepo.listByUser(userId = p2.id).single().points shouldBe BigDecimal("30.0000")
+        awardRepo.listByUser(userId = p1.id) shouldHaveSize 0
     }
 }

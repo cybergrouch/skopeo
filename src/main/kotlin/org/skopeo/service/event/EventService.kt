@@ -9,6 +9,7 @@ import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
+import org.jetbrains.exposed.sql.transactions.transaction
 import org.skopeo.dto.event.EventParticipantResponse
 import org.skopeo.dto.event.EventPublicResponse
 import org.skopeo.dto.match.MatchPublicPlayer
@@ -91,6 +92,7 @@ class EventService(
     private val ratings: RatingRepository = RatingRepository(),
     private val clubs: ClubRepository = ClubRepository(),
     private val budgets: PointsBudgetRepository = PointsBudgetRepository(),
+    private val awarder: EventFinalizeAwarder = EventFinalizeAwarder(),
     private val audit: AuditService = AuditService(),
 ) {
     fun create(
@@ -353,7 +355,13 @@ class EventService(
      * event's matches into the rating queue (finalize-time queuing, replacing result-upload-time
      * queuing for evented matches). Staff-only: a HOST may finalize only their own event, an
      * ADMINISTRATOR/CLUB_OWNER any. Idempotency guard: an already-finalized event is a
-     * [ServiceError.Validation] (there is no un-finalize in Phase A). Audited as EVENT_FINALIZED.
+     * [ServiceError.Validation] (there is no un-finalize). Audited as EVENT_FINALIZED.
+     *
+     * Phase D: after finalize, each qualifying fixture's designation is converted to ledger awards
+     * ([EventFinalizeAwarder], §2.5/§3) — one full-designation row per winning-team member (decision
+     * #4). The finalize state change and all awards share one DB transaction for atomicity; a
+     * summary is audited as EVENT_POINTS_AWARDED. The idempotency guard (finalize is terminal) means
+     * awarding runs exactly once per event, so there is no double-award path.
      */
     fun finalize(
         token: VerifiedFirebaseToken,
@@ -367,7 +375,12 @@ class EventService(
             ensure(condition = event.isActive) { ServiceError.Validation(message = "A deleted event cannot be finalized") }
             ensure(condition = !event.isFinalized) { ServiceError.Validation(message = "Event is already finalized") }
             val now = LocalDateTime.now()
-            events.finalize(id = id, finalizedAt = now, finalizedBy = caller.id)
+            // Finalize + all awards in one transaction: an award failure rolls back the finalize too.
+            val summary =
+                transaction {
+                    events.finalize(id = id, finalizedAt = now, finalizedBy = caller.id)
+                    awarder.awardForFinalizedEvent(event = event, grantedBy = caller.id, now = now)
+                }
             audit.record(
                 write =
                     AuditWrite(
@@ -380,6 +393,26 @@ class EventService(
                             mapOf(
                                 "publicCode" to event.publicCode,
                                 "type" to event.type.name,
+                            ),
+                    ),
+            )
+            audit.record(
+                write =
+                    AuditWrite(
+                        actorUserId = caller.id,
+                        action = AuditAction.EVENT_POINTS_AWARDED,
+                        entityType = AuditEntityType.EVENT,
+                        entityId = event.id,
+                        summary =
+                            "Awarded ${summary.totalPoints.toPlainString()} points across " +
+                                "${summary.matchCount} matches for event ${event.name}",
+                        details =
+                            mapOf(
+                                "publicCode" to event.publicCode,
+                                "type" to event.type.name,
+                                "matches" to summary.matchCount.toString(),
+                                "awards" to summary.awardCount.toString(),
+                                "totalPoints" to summary.totalPoints.toPlainString(),
                             ),
                     ),
             )

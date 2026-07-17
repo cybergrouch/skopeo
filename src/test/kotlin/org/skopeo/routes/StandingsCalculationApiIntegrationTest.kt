@@ -108,6 +108,8 @@ class StandingsCalculationApiIntegrationTest {
             seedUser(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
             seedUser(uid = "player-user", roles = setOf(element = Capability.PLAYER))
             val player = seedUser(uid = "player", roles = setOf(element = Capability.PLAYER))
+            // Park the player in the award's band so band-scoped counting (#403 Phase D) counts it.
+            org.skopeo.repository.RatingRepository().setRating(userId = player.id, rating = BigDecimal("4.0"), level = "4.0")
             seedAward(userId = player.id)
             val adminToken = TestFirebaseAuth.mintToken(uid = "admin")
             val playerToken = TestFirebaseAuth.mintToken(uid = "player-user")

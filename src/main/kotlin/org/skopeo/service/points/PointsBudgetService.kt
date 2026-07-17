@@ -27,9 +27,9 @@ import java.util.UUID
 /**
  * Points-budget management (#403): the global master policy and per-club per-type budgets. Writes are
  * points-manager-gated ([requirePointsManager]) — ADMINISTRATOR is implicitly a points manager (§5.1).
- * As of Phase C the accounting reflects real utilization: [allocatedFor] returns the EMERGENT
- * reservation (summed fixture designations, no reservation table) plus active awards (0 until Phase D),
- * and Free = Budgeted − Allocated.
+ * As of Phase D the accounting reflects real utilization: [allocatedFor] returns the EMERGENT
+ * reservation (summed fixture designations of non-finalized events) PLUS the active awards of the
+ * club's finalized events (the reserve→award transition), and Free = Budgeted − Allocated.
  *
  * Expected failures are returned as an [Either] left ([ServiceError], issue #115) rather than thrown.
  */
@@ -153,17 +153,18 @@ class PointsBudgetService(
     /**
      * Points a club currently has in use for [eventType] = reservations (Phase C) + active awards
      * (Phase D). Reservations are EMERGENT — [PointsBudgetRepository.sumReservedPoints] sums the
-     * designations (× team size) of the club's active, non-finalized fixtures of this type, with no
-     * reservation table; voiding a fixture drops it from the sum. Active awards are still 0 (Phase D),
-     * so this is currently `reserved + 0`. This is the single extension point where the accounting
-     * hooks into the award ledger once Phase D lands.
+     * designations (× team size) of the club's active, NON-finalized fixtures of this type; voiding a
+     * fixture drops it from the sum. [PointsBudgetRepository.sumActiveAwards] sums the ACTIVE, in-window
+     * awards linked to this club's FINALIZED events of this type. The two are mutually exclusive on
+     * finalize (a fixture leaves Reserved as its event finalizes and reappears as an Awarded ledger
+     * row), so Allocated stays continuous across finalize — no double counting, no gap.
      */
     private fun allocatedFor(
         clubId: UUID,
         eventType: EventType,
     ): Int =
         budgets.sumReservedPoints(clubId = clubId, eventType = eventType) +
-            0 // TODO(#403 Phase D): + sum of active (valid, non-expired) awards for (clubId, eventType).
+            budgets.sumActiveAwards(clubId = clubId, eventType = eventType)
 
     /**
      * Points-manager access (§5.1): ADMINISTRATOR is implicitly a points manager, so the caller

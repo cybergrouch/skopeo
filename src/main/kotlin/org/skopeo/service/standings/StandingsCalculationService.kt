@@ -108,21 +108,29 @@ class StandingsCalculationService(
      * Recompute the ranked (band, sex) groups from the ledger as of [asOf]: sum each active player's
      * counting awards per (band, sex) using the award's own band/sex tags (band-tagged, D2), then rank
      * each group by points descending with the D8 tie-break.
+     *
+     * Phase D (#403, decision #2 / §4 band-scoped counting): an award only counts while its band tag
+     * equals the player's CURRENT band. An award for a player who has since changed bands is skipped
+     * from the sum (it stays owned in the ledger, just uncounted, and resumes counting if the player
+     * returns to that band). A player with no current rating counts none of their awards.
      */
     private fun recompute(asOf: LocalDateTime): List<GroupStanding> {
         val counting = awards.activeAsOf(asOf = asOf)
         val activeById = users.findAllByIds(ids = counting.map { it.userId }.distinct()).filter { it.isActive }.associateBy { it.id }
         val countingForActive = counting.filter { activeById.containsKey(key = it.userId) }
 
-        // Σ points per (band, sex, userId) — the award carries its own band + sex (fixed at award time).
+        val ratingsById = ratings.findCurrentRatings(userIds = countingForActive.map { it.userId }.distinct())
+
+        // Σ points per (band, sex, userId) — the award carries its own band + sex (fixed at award time),
+        // but Phase D only counts it while that band matches the player's CURRENT band (band-scoped, #2).
         val totals = mutableMapOf<GroupKey, MutableMap<UUID, BigDecimal>>()
         countingForActive.forEach { award ->
+            if (award.band != ratingsById[award.userId]?.currentLevel) return@forEach
             val key = GroupKey(band = StandingsBand.requireCode(code = award.band), sex = normalizeSex(sex = award.sex))
             val byUser = totals.getOrPut(key = key) { mutableMapOf() }
             byUser[award.userId] = byUser.getOrElse(key = award.userId) { BigDecimal.ZERO }.add(award.points)
         }
 
-        val ratingsById = ratings.findCurrentRatings(userIds = countingForActive.map { it.userId }.distinct())
         return totals
             .map { (key, byUser) -> rankGroup(key = key, byUser = byUser, usersById = activeById, ratingsById = ratingsById) }
             .sortedWith(comparator = groupOrder())
