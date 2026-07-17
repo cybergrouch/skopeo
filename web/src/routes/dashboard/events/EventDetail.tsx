@@ -170,6 +170,32 @@ export function EventDetail({
   // Designated points for a new fixture (#403 Phase C); blank means "use the server default".
   const [designatedDraft, setDesignatedDraft] = useState("");
 
+  // Seed the editor drafts from the event's persisted config (#440). Without this the inputs stay
+  // empty and only *show* the current values as placeholders, so saving an edit that keeps a field
+  // untouched submits "" — Number("") === 0 — and fails validation ("must be positive whole numbers")
+  // even though the field looks filled. We reset the drafts during render (React's "adjust state on a
+  // changed value" pattern) whenever the persisted config changes — on first load and after a save's
+  // refresh. Because it fires only on a *change* of the persisted values, it never clobbers an
+  // in-progress edit (which leaves the persisted values, and thus the signature, unchanged).
+  const configSignature = [
+    event?.minPointsPerMatch ?? "",
+    event?.maxPointsPerMatch ?? "",
+    event?.pointValidityStart ?? "",
+    event?.pointValidityEnd ?? "",
+  ].join("|");
+  const [seededSignature, setSeededSignature] = useState<string | null>(null);
+  if (event != null && configSignature !== seededSignature) {
+    setSeededSignature(configSignature);
+    setMinDraft(
+      event.minPointsPerMatch != null ? String(event.minPointsPerMatch) : "",
+    );
+    setMaxDraft(
+      event.maxPointsPerMatch != null ? String(event.maxPointsPerMatch) : "",
+    );
+    setValidityStartDraft(event.pointValidityStart ?? "");
+    setValidityEndDraft(event.pointValidityEnd ?? "");
+  }
+
   // Clubs to (re)assign the event to (#319); staff-readable, empty when none exist.
   const clubs = useGetApiV1Clubs().data ?? [];
 
