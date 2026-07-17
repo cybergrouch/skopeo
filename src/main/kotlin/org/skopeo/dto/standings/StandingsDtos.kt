@@ -8,8 +8,10 @@ import org.skopeo.model.StandingEntry
 import org.skopeo.service.standings.StandingsService
 
 /**
- * One ranked player in a band's standings (#113). Order is what's revealed; [currentRating] (the
- * precise NUMERIC(10,6) value as a string) is present only for RATER/ADMINISTRATOR viewers (#186).
+ * One ranked player in a band's standings (#113). Order is what's revealed. The competitive metric is
+ * source-aware (#457): under POINTS [points] carries the row's points total and is present for every
+ * viewer (public, #64/#114); under RATING [currentRating] (the precise NUMERIC(10,6) value as a string)
+ * is present only for RATER/ADMINISTRATOR viewers (#186). Only one of the two is set per served source.
  */
 @Serializable
 data class StandingEntryResponse(
@@ -20,6 +22,7 @@ data class StandingEntryResponse(
     val sex: String? = null,
     val age: Int? = null,
     val currentRating: String? = null,
+    val points: String? = null,
 )
 
 /** A selectable (band, sex) group present in the current snapshot (#220): the band code + label + sex. */
@@ -107,4 +110,5 @@ fun StandingEntry.toResponse(): StandingEntryResponse =
         sex = sex,
         age = age,
         currentRating = currentRating,
+        points = points,
     )

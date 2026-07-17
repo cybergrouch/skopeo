@@ -4026,12 +4026,14 @@ components:
 
     PlayerStandingResponse:
       type: object
-      description: A player's current band+sex rank and points under the active standings source (#448).
+      description: >-
+        A player's current band+sex rank and the source-aware competitive metric under the active
+        standings source (#448, #457). Under POINTS the public points total is returned; under RATING
+        the precise rating is returned only to RATER/ADMINISTRATOR or the owner (#186), else omitted.
       required:
         - band
         - bandLabel
         - rank
-        - points
         - source
       properties:
         band:
@@ -4047,12 +4049,20 @@ components:
         rank:
           type: integer
           description: 1-based rank within the (band, sex) group.
-        points:
-          type: string
-          description: Points backing the rank as a decimal string (the current rating for RATING, snapshot points for POINTS).
         source:
           type: string
-          description: Which race this rank is for (#424); RATING or POINTS.
+          description: Which race this rank is for (#424); RATING or POINTS. Tells the client which metric to show.
+        points:
+          type: string
+          nullable: true
+          description: >-
+            The snapshot points backing the rank as a decimal string, present (public) only when source=POINTS (#457).
+        rating:
+          type: string
+          nullable: true
+          description: >-
+            The precise current rating as a decimal string, present only when source=RATING and the caller may see
+            rates (RATER/ADMINISTRATOR or the owner, #186); omitted for anonymous / other viewers.
 
     ActivePointsAwardResponse:
       type: object
@@ -6346,8 +6356,14 @@ components:
           type: string
           nullable: true
           description: >-
-            Precise NTRP rating (6 fractional digits); present only for RATER/ADMINISTRATOR viewers
-            (#186), null for everyone else.
+            Precise NTRP rating (6 fractional digits); the RATING-source metric, present only for
+            RATER/ADMINISTRATOR viewers (#186), null for everyone else and under the POINTS source.
+        points:
+          type: string
+          nullable: true
+          description: >-
+            The row's points total (snapshot ordering value); the POINTS-source metric, present
+            (public, #64/#114/#457) for every viewer when source=POINTS, null under RATING.
 
     StandingsGroupResponse:
       type: object

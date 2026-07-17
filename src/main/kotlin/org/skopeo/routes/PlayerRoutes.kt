@@ -76,7 +76,7 @@ private fun Route.publicPlayerReads(service: PlayerService) {
     get(path = "/{code}/standing") {
         respondMappingErrors {
             val code = call.parameters["code"].orEmpty()
-            respondEither(result = service.standing(code = code)) { standing ->
+            respondEither(result = service.standing(token = optionalVerifiedToken(), code = code)) { standing ->
                 if (standing == null) {
                     call.respond(status = HttpStatusCode.NoContent, message = "")
                 } else {

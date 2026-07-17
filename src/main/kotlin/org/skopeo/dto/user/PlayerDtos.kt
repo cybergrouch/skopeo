@@ -110,9 +110,12 @@ data class ResultsBucket(
 
 /**
  * A player's current competitive standing (#448) — their rank within their (band, sex) group and the
- * points backing it — under the **active** `standings_source`. Public (order + points are, #64/#114),
- * so it renders on the anonymous public profile too. [points] is a decimal string (the current rating
- * for the RATING source, the snapshot points for POINTS). [source] tells the UI which race this is.
+ * source-appropriate metric backing it (#457) — under the **active** `standings_source`. Rank + band
+ * are public (#64/#114), so this renders on the anonymous public profile too. [source] tells the UI
+ * which race this is and which metric to show: under POINTS [points] (a decimal string) is the snapshot
+ * points total, present for every viewer; under RATING [rating] is the precise current rating, present
+ * only for RATER/ADMINISTRATOR or the owner (#186) — omitted (null) for anonymous / other viewers, who
+ * then see rank + band only. Only one of [points]/[rating] is set for a given source.
  */
 @Serializable
 data class PlayerStandingResponse(
@@ -121,8 +124,9 @@ data class PlayerStandingResponse(
     val bandLabel: String,
     val sex: String?,
     val rank: Int,
-    val points: String,
     val source: String,
+    val points: String? = null,
+    val rating: String? = null,
 )
 
 /**

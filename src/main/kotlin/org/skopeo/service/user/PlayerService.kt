@@ -244,21 +244,39 @@ class PlayerService(
 
     /**
      * A player's current competitive standing (#448) by code — their rank within their (band, sex)
-     * group and the points backing it, under the active `standings_source`. Public (order + points
-     * are, #64/#114), so it needs no token and renders on the anonymous public profile. A right-null
-     * means the player is unranked (unrated / no points in the current standings); the UI shows so.
+     * group and the source-appropriate metric (#457), under the active `standings_source`. Rank + band
+     * are public (#64/#114), so this needs no token and renders on the anonymous public profile; the
+     * route is `authenticate(optional = true)` and threads the optional caller for the reveal check.
+     *
+     * Privacy (#186): under POINTS the points total is public (shown to every viewer). Under RATING the
+     * precise rating is revealed only to a RATER/ADMINISTRATOR or the owner viewing their own profile —
+     * omitted for anonymous / other viewers, who then see rank + band only (no numeric value leaked). A
+     * right-null means the player is unranked (unrated / no points in the current standings).
      */
-    fun standing(code: String): Either<ServiceError, PlayerStandingResponse?> =
+    fun standing(
+        token: VerifiedFirebaseToken?,
+        code: String,
+    ): Either<ServiceError, PlayerStandingResponse?> =
         either {
             val user = resolve(code = code).bind()
-            standings.locatePlayer(userId = user.id)?.let {
+            standings.locatePlayer(userId = user.id)?.let { standing ->
+                // Reveal the precise rating only to a rate-privileged caller or the profile owner (#186).
+                val caller = token?.let { users.findByFirebaseUid(firebaseUid = it.uid) }
+                val canSeeRating =
+                    caller != null &&
+                        (
+                            caller.id == user.id ||
+                                caller.capabilities.any { it == Capability.RATER || it == Capability.ADMINISTRATOR }
+                        )
                 PlayerStandingResponse(
-                    band = it.band.code,
-                    bandLabel = it.band.label,
-                    sex = it.sex,
-                    rank = it.rank,
-                    points = it.points.toPlainString(),
-                    source = it.source.name,
+                    band = standing.band.code,
+                    bandLabel = standing.band.label,
+                    sex = standing.sex,
+                    rank = standing.rank,
+                    source = standing.source.name,
+                    // POINTS metric is public; RATING metric is reveal-gated.
+                    points = standing.points?.toPlainString(),
+                    rating = if (canSeeRating) standing.rating?.toPlainString() else null,
                 )
             }
         }

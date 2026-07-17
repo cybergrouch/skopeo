@@ -57,8 +57,11 @@ enum class StandingsBand(
 
 /**
  * One row of a band's standings (#113): the player's [rank] within the band. Order is what the
- * standings reveal (#64/#114); [currentRating] (the precise NUMERIC(10,6) value) is populated only
- * for RATER/ADMINISTRATOR viewers (#186) and null for everyone else.
+ * standings reveal (#64/#114). The competitive metric shown is **source-aware** (#457): under the
+ * POINTS source [points] carries the row's points total (the snapshot ordering value) and is public;
+ * under the RATING source [currentRating] (the precise NUMERIC(10,6) value) is populated only for
+ * RATER/ADMINISTRATOR viewers (#186) and null for everyone else. Only one of the two is ever set for
+ * a given served source.
  */
 data class StandingEntry(
     val rank: Int,
@@ -68,6 +71,7 @@ data class StandingEntry(
     val sex: String?,
     val age: Int?,
     val currentRating: String? = null,
+    val points: String? = null,
 )
 
 /**
@@ -124,15 +128,19 @@ data class StandingsLocation(
 
 /**
  * A single player's competitive standing (#448) shown on their profile: their [rank] within their
- * (band, sex) group and the [points] backing it — the ordering value under the **active**
- * `standings_source` (the live rating for RATING, the snapshot points for POINTS). Null (absent) when
- * the player isn't in the current standings (unrated / no points), so the UI shows "unranked".
+ * (band, sex) group and the source-appropriate metric backing it (#457). Under the POINTS source
+ * [points] carries the snapshot points total (public per #64/#114); under the RATING source [rating]
+ * carries the live current rating, revealed only to RATER/ADMINISTRATOR or the owner (#186) — the
+ * service gates it, the model just carries the raw value. Only one of the two is set for the active
+ * source. Null (absent) when the player isn't in the current standings (unrated / no points), so the
+ * UI shows "unranked".
  */
 data class PlayerStanding(
     val band: StandingsBand,
     val sex: String?,
     val rank: Int,
-    val points: BigDecimal,
+    val points: BigDecimal? = null,
+    val rating: BigDecimal? = null,
     // Which race this rank is for (#424): RATING = live rating, POINTS = the points snapshot.
     val source: SnapshotSource,
 )
