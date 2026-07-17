@@ -32,6 +32,7 @@ enum class AuditAction {
     EVENT_DELETED,
     EVENT_FINALIZED,
     EVENT_POINTS_CONFIG_SET,
+    EVENT_POINTS_AWARDED,
     FIXTURE_POINTS_DESIGNATED,
     RATING_CALCULATION_PREVIEWED,
     RATING_CALCULATION_MATCH_RATED,
@@ -116,6 +117,7 @@ val AuditAction.category: AuditCategory
             AuditAction.EVENT_DELETED,
             AuditAction.EVENT_FINALIZED,
             AuditAction.EVENT_POINTS_CONFIG_SET,
+            AuditAction.EVENT_POINTS_AWARDED,
             -> AuditCategory.EVENT_MANAGEMENT
             AuditAction.RATING_CALCULATION_PREVIEWED,
             AuditAction.RATING_CALCULATION_MATCH_RATED,

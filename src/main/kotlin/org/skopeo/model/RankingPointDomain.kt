@@ -76,6 +76,8 @@ data class RankingPointAward(
     val revokesAwardId: UUID?,
     val grantedBy: UUID?,
     val awardedAt: LocalDateTime,
+    // The event that produced this award on finalize (#403 Phase D); null for manual / external grants.
+    val eventId: UUID? = null,
 ) {
     /** Whether this award is active and its validity window contains [asOf] — i.e. it counts then. */
     fun countsAsOf(asOf: LocalDateTime): Boolean = status == AwardStatus.ACTIVE && !asOf.isBefore(validFrom) && asOf.isBefore(validUntil)
@@ -114,4 +116,6 @@ data class RankingPointAwardWrite(
     val revokesAwardId: UUID?,
     val grantedBy: UUID?,
     val awardedAt: LocalDateTime,
+    // The event that produced this award on finalize (#403 Phase D); null for manual / external grants.
+    val eventId: UUID? = null,
 )

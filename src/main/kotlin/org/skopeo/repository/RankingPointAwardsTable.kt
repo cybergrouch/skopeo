@@ -37,4 +37,7 @@ internal object RankingPointAwardsTable : UUIDTable(name = "ranking_point_awards
     val revokesAwardId = uuid(name = "revokes_award_id").nullable()
     val grantedBy = reference(name = "granted_by", foreign = UsersTable, onDelete = ReferenceOption.SET_NULL).nullable()
     val awardedAt = datetime(name = "awarded_at")
+
+    // The event that produced this award on finalize (#403 Phase D, V18); null for manual/external grants.
+    val eventId = reference(name = "event_id", foreign = EventsTable, onDelete = ReferenceOption.SET_NULL).nullable()
 }

@@ -126,6 +126,7 @@ class RankingPointRepository {
             it[revokesAwardId] = write.revokesAwardId
             it[grantedBy] = write.grantedBy
             it[awardedAt] = write.awardedAt
+            it[eventId] = write.eventId
         }.value
 }
 
@@ -146,4 +147,5 @@ internal fun ResultRow.toRankingPointAward(): RankingPointAward =
         revokesAwardId = this[RankingPointAwardsTable.revokesAwardId],
         grantedBy = this[RankingPointAwardsTable.grantedBy]?.value,
         awardedAt = this[RankingPointAwardsTable.awardedAt],
+        eventId = this[RankingPointAwardsTable.eventId]?.value,
     )

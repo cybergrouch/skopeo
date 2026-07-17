@@ -88,6 +88,12 @@ class StandingsCalculationServiceTest {
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
+    /**
+     * Grant an award. Phase D (#403 #2) only counts an award while its band matches the player's
+     * CURRENT band, so by default this also parks the player in [band] (unless they already carry a
+     * rating a test set explicitly) — keeping the pre-D "band-tagged sum" cases meaningful. Tests that
+     * exercise the band-scoped filter pass [setBand] = false (or a mismatching rating) deliberately.
+     */
     private fun grant(
         userId: UUID,
         points: String,
@@ -96,25 +102,31 @@ class StandingsCalculationServiceTest {
         status: AwardStatus = AwardStatus.ACTIVE,
         validFrom: LocalDateTime = LocalDateTime.now().minusDays(1),
         validUntil: LocalDateTime = LocalDateTime.now().plusMonths(6),
-    ) = awards.award(
-        write =
-            RankingPointAwardWrite(
-                userId = userId,
-                points = BigDecimal(points),
-                pointClass = PointClass.ANNUAL_TOURNAMENT,
-                sourceType = PointSourceType.INTERNAL,
-                sourceId = null,
-                band = band,
-                sex = sex,
-                reason = null,
-                validFrom = validFrom,
-                validUntil = validUntil,
-                status = status,
-                revokesAwardId = null,
-                grantedBy = null,
-                awardedAt = LocalDateTime.now(),
-            ),
-    )
+        setBand: Boolean = true,
+    ): org.skopeo.model.RankingPointAward {
+        if (setBand && ratings.findCurrentRating(userId = userId) == null) {
+            ratings.setRating(userId = userId, rating = BigDecimal(band), level = band)
+        }
+        return awards.award(
+            write =
+                RankingPointAwardWrite(
+                    userId = userId,
+                    points = BigDecimal(points),
+                    pointClass = PointClass.ANNUAL_TOURNAMENT,
+                    sourceType = PointSourceType.INTERNAL,
+                    sourceId = null,
+                    band = band,
+                    sex = sex,
+                    reason = null,
+                    validFrom = validFrom,
+                    validUntil = validUntil,
+                    status = status,
+                    revokesAwardId = null,
+                    grantedBy = null,
+                    awardedAt = LocalDateTime.now(),
+                ),
+        )
+    }
 
     @Test
     fun `a dry run returns a preview and persists no snapshot`() {
@@ -150,12 +162,15 @@ class StandingsCalculationServiceTest {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val leader = provision(uid = "leader")
         val runnerUp = provision(uid = "runner")
-        // Leader: two 4.0 awards summing to 150; runner-up: one 4.0 award of 120.
+        // A distinct 5.0-band player (Phase D counts an award only in the player's current band, so a
+        // single player can't hold both a counted 4.0 and a counted 5.0 award).
+        val fiver = provision(uid = "fiver")
+        // Leader: two 4.0 awards summing to 150; runner-up: one 4.0 award of 120 — all parked in 4.0.
         grant(userId = leader.id, points = "100", band = "4.0")
         grant(userId = leader.id, points = "50", band = "4.0")
         grant(userId = runnerUp.id, points = "120", band = "4.0")
-        // A 5.0 award for the leader is its own race — it must not spill into the 4.0 group (band-tagged).
-        grant(userId = leader.id, points = "999", band = "5.0")
+        // The 5.0 award is its own race — it must not spill into the 4.0 group (band-tagged).
+        grant(userId = fiver.id, points = "999", band = "5.0")
 
         val outcome = service.calculate(token = token(uid = "admin"), dryRun = true).shouldBeRight()
         val fourOh = outcome.groups.single { it.band == StandingsBand.FROM_4_0 && it.sex == "Male" }
@@ -302,5 +317,38 @@ class StandingsCalculationServiceTest {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         service.calculate(token = token(uid = "admin"), dryRun = true).shouldBeRight().groups shouldHaveSize 0
         snapshots.latestPublishedPreferringPoints().shouldBeNull()
+    }
+
+    // --- Band-scoped counting (#403 Phase D, decision #2 / §4). ---
+
+    @Test
+    fun `an award whose band differs from the player's current band is excluded (#403)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val mover = provision(uid = "mover")
+        // The award is tagged 4.0 but the player has since moved to 4.5 — under band-scoped counting the
+        // award stays owned in the ledger yet is NOT summed into any group.
+        grant(userId = mover.id, points = "100", band = "4.0", setBand = false)
+        ratings.setRating(userId = mover.id, rating = BigDecimal("4.5"), level = "4.5")
+
+        val outcome = service.calculate(token = token(uid = "admin"), dryRun = true).shouldBeRight()
+        outcome.groups shouldHaveSize 0
+        // The award is still on the ledger (owned, just uncounted).
+        awards.listByUser(userId = mover.id) shouldHaveSize 1
+    }
+
+    @Test
+    fun `an award counts once the player is back in its band, and a player with no rating counts none (#403)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val returner = provision(uid = "returner")
+        val unrated = provision(uid = "unrated")
+        // returner is currently in 4.0 (matching the award band) → counts.
+        grant(userId = returner.id, points = "100", band = "4.0")
+        // unrated has an award but no rating → currentLevel is null, so nothing matches → counts none.
+        grant(userId = unrated.id, points = "500", band = "4.0", setBand = false)
+
+        val outcome = service.calculate(token = token(uid = "admin"), dryRun = true).shouldBeRight()
+        val group = outcome.groups.single()
+        group.entries.map { it.userId } shouldContainExactly listOf(element = returner.id)
+        group.entries.single().points shouldBe BigDecimal("100.0000")
     }
 }

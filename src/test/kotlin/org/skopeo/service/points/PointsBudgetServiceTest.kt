@@ -30,6 +30,7 @@ import org.skopeo.repository.ClubRepository
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.PointsBudgetRepository
+import org.skopeo.repository.RankingPointRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.testsupport.PostgresTestDatabase
@@ -233,5 +234,99 @@ class PointsBudgetServiceTest {
         league.budgeted shouldBe 100
         league.allocated shouldBe 50
         league.free shouldBe 50
+    }
+
+    private fun leagueEventUnder(
+        clubId: UUID,
+        createdBy: UUID,
+        participants: List<UUID>,
+    ): UUID =
+        EventRepository().create(
+            command =
+                CreateEventCommand(
+                    name = "League",
+                    startDate = LocalDate.now(),
+                    endDate = LocalDate.now().plusDays(7),
+                    participantIds = participants,
+                    createdBy = createdBy,
+                    clubId = clubId,
+                    type = EventType.LEAGUE,
+                    minPointsPerMatch = 5,
+                    maxPointsPerMatch = 50,
+                    pointValidityStart = LocalDate.now(),
+                    pointValidityEnd = LocalDate.now().plusDays(30),
+                ),
+        ).id
+
+    private fun designatedFixture(
+        eventId: UUID,
+        createdBy: UUID,
+        p1: UUID,
+        p2: UUID,
+        designated: Int,
+    ) = MatchRepository().createFixture(
+        command =
+            CreateFixtureCommand(
+                matchFormat = TeamType.SINGLES,
+                matchType = MatchType.OPEN_PLAY,
+                matchDate = LocalDate.now(),
+                team1UserIds = listOf(element = p1),
+                team2UserIds = listOf(element = p2),
+                team1Name = "t1",
+                team2Name = "t2",
+                createdBy = createdBy,
+                eventId = eventId,
+                designatedPoints = designated,
+            ),
+    )
+
+    private fun awardLinked(
+        userId: UUID,
+        eventId: UUID,
+        grantedBy: UUID,
+        points: String,
+    ) = RankingPointRepository().award(
+        write =
+            org.skopeo.model.RankingPointAwardWrite(
+                userId = userId,
+                points = java.math.BigDecimal(points),
+                pointClass = org.skopeo.model.PointClass.SEASONAL_TOURNAMENT_1M,
+                sourceType = org.skopeo.model.PointSourceType.INTERNAL,
+                sourceId = eventId.toString(),
+                band = "4.0",
+                sex = "Male",
+                reason = null,
+                validFrom = java.time.LocalDateTime.now().minusDays(1),
+                validUntil = java.time.LocalDateTime.now().plusDays(30),
+                status = org.skopeo.model.AwardStatus.ACTIVE,
+                revokesAwardId = null,
+                grantedBy = grantedBy,
+                awardedAt = java.time.LocalDateTime.now(),
+                eventId = eventId,
+            ),
+    )
+
+    private fun leagueAllocated(clubId: UUID): Int =
+        service.clubBudgets(token = token(uid = "admin"), clubId = clubId).shouldBeRight()
+            .single { it.eventType == EventType.LEAGUE }.allocated
+
+    @Test
+    fun `Allocated stays continuous across finalize as reserved points become awarded (#403)`() {
+        val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        val club = newClub(ownerId = admin.id)
+        service.setClubBudget(token = token(uid = "admin"), clubId = club, eventType = EventType.LEAGUE, points = 100)
+            .shouldBeRight()
+        val event = leagueEventUnder(clubId = club, createdBy = admin.id, participants = listOf(p1.id, p2.id))
+        designatedFixture(eventId = event, createdBy = admin.id, p1 = p1.id, p2 = p2.id, designated = 40)
+
+        // Before finalize: the 40 points show as reserved.
+        leagueAllocated(clubId = club) shouldBe 40
+
+        // Finalize + record the equivalent award (as EventFinalizeAwarder does): Allocated is unchanged.
+        EventRepository().finalize(id = event, finalizedAt = java.time.LocalDateTime.now(), finalizedBy = admin.id)
+        awardLinked(userId = p1.id, eventId = event, grantedBy = admin.id, points = "40")
+        leagueAllocated(clubId = club) shouldBe 40
     }
 }
