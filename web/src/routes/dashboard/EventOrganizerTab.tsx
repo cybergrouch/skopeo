@@ -38,8 +38,15 @@ const EVENT_TYPE_OPTIONS: ReadonlyArray<{ value: EventType; label: string }> = [
   { value: "TOURNAMENT", label: "Tournament" },
 ];
 
-/** Event types that carry a points budget/config (#403 Phase C): TOURNAMENT and LEAGUE. */
-const BUDGETED_EVENT_TYPES: ReadonlyArray<EventType> = ["TOURNAMENT", "LEAGUE"];
+/**
+ * Event types that carry a points budget/config. Every event class now rewards points (OPEN_PLAY was
+ * unified with TOURNAMENT/LEAGUE); config applies whenever the event has a club (#403 Phase C).
+ */
+const BUDGETED_EVENT_TYPES: ReadonlyArray<EventType> = [
+  "TOURNAMENT",
+  "LEAGUE",
+  "OPEN_PLAY",
+];
 
 /**
  * The single club a CLUB_OWNER should default the create-event Club selector to (#364), or "" when
@@ -296,7 +303,9 @@ function NewEventForm() {
               </p>
               {globalPolicy ? (
                 <p className="text-xs text-muted-foreground">
-                  The global {type === "TOURNAMENT" ? "Tournament" : "League"}{" "}
+                  The global{" "}
+                  {EVENT_TYPE_OPTIONS.find((o) => o.value === type)?.label ??
+                    type}{" "}
                   policy allows {globalPolicy.minPoints}–{globalPolicy.maxPoints}{" "}
                   points and up to {globalPolicy.maxValidityDays} validity days.
                 </p>

@@ -118,6 +118,20 @@ class EventServiceTest {
         end: LocalDate = LocalDate.now().plusDays(30),
     ) = PointsConfigInput(minPoints = min, maxPoints = max, validityStart = start, validityEnd = end)
 
+    // A create input for an event under a club: a club event of any type now requires a points config
+    // (OPEN_PLAY unified with LEAGUE/TOURNAMENT), so a 2..8 window fits every global policy (min ≥ 1).
+    private fun clubInput(
+        clubId: UUID,
+        type: EventType = EventType.OPEN_PLAY,
+    ) = input(
+        clubId = clubId,
+        type = type,
+        minPoints = 2,
+        maxPoints = 8,
+        validityStart = LocalDate.now(),
+        validityEnd = LocalDate.now().plusDays(10),
+    )
+
     @Test
     fun `a host creates an event with a resolved participant roster`() {
         provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
@@ -151,13 +165,14 @@ class EventServiceTest {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val club = clubs.create(command = CreateClubCommand(name = "Downtown TC", createdBy = host.id))
 
-        val view = service.create(token = token(uid = "host"), input = input(clubId = club.id)).shouldBeRight()
+        // A club event of any type now requires a points config (OPEN_PLAY unified); supply a valid window.
+        val view = service.create(token = token(uid = "host"), input = clubInput(clubId = club.id)).shouldBeRight()
         view.club?.id shouldBe club.id
         view.club?.name shouldBe "Downtown TC"
         view.event.clubId shouldBe club.id
 
         // An unknown club is rejected at create.
-        service.create(token = token(uid = "host"), input = input(clubId = UUID.randomUUID()))
+        service.create(token = token(uid = "host"), input = clubInput(clubId = UUID.randomUUID()))
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Validation>()
     }
@@ -435,7 +450,7 @@ class EventServiceTest {
     fun `publicByCode surfaces the organizing club's name, and null when clubless (#313)`() {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val club = clubs.create(command = CreateClubCommand(name = "Downtown TC", createdBy = host.id))
-        val underClub = service.create(token = token(uid = "host"), input = input(clubId = club.id)).shouldBeRight()
+        val underClub = service.create(token = token(uid = "host"), input = clubInput(clubId = club.id)).shouldBeRight()
         val clubless = service.create(token = token(uid = "host"), input = input()).shouldBeRight()
 
         service.publicByCode(token = null, code = underClub.event.publicCode).shouldBeRight().clubName shouldBe "Downtown TC"
@@ -937,7 +952,8 @@ class EventServiceTest {
         service.myEvents(token = token(uid = "ghost")).shouldBeRight() shouldBe emptyList()
     }
 
-    // --- Points config (#403 Phase C). Global policy seeded by V16: LEAGUE 5..50/90, TOURNAMENT 10..500/365. ---
+    // --- Points config (#403 Phase C). Global policy seeded by V16: OPEN_PLAY 1..10/30, LEAGUE 5..50/90,
+    // TOURNAMENT 10..500/365. ---
 
     @Test
     fun `an OPEN_PLAY event needs no points config and stores none (#403)`() {
@@ -1052,6 +1068,50 @@ class EventServiceTest {
     }
 
     @Test
+    fun `an OPEN_PLAY event with a club requires and validates its points config (unify)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val club = clubs.create(command = CreateClubCommand(name = "Downtown TC", createdBy = host.id))
+        val start = LocalDate.now()
+        val end = start.plusDays(10)
+
+        // With a club the config is required in full for OPEN_PLAY too — a missing config is rejected.
+        service.create(token = token(uid = "host"), input = input(type = EventType.OPEN_PLAY, clubId = club.id))
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+
+        // A window beyond the global OPEN_PLAY max (10) is rejected.
+        service.create(
+            token = token(uid = "host"),
+            input =
+                input(
+                    type = EventType.OPEN_PLAY,
+                    clubId = club.id,
+                    minPoints = 2,
+                    maxPoints = 20,
+                    validityStart = start,
+                    validityEnd = end,
+                ),
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+
+        // A valid window within the global 1..10 policy is stored.
+        val ok =
+            service.create(
+                token = token(uid = "host"),
+                input =
+                    input(
+                        type = EventType.OPEN_PLAY,
+                        clubId = club.id,
+                        minPoints = 2,
+                        maxPoints = 8,
+                        validityStart = start,
+                        validityEnd = end,
+                    ),
+            ).shouldBeRight()
+        ok.event.type shouldBe EventType.OPEN_PLAY
+        ok.event.minPointsPerMatch shouldBe 2
+        ok.event.maxPointsPerMatch shouldBe 8
+    }
+
+    @Test
     fun `a budgeted event create rejects each further config breach (#403)`() {
         provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val start = LocalDate.now()
@@ -1153,13 +1213,23 @@ class EventServiceTest {
     }
 
     @Test
-    fun `setPointsConfig is rejected for an OPEN_PLAY event (#403)`() {
+    fun `setPointsConfig accepts an OPEN_PLAY event within the global policy, but rejects out-of-range (#403)`() {
         provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val event = service.create(token = token(uid = "host"), input = input(type = EventType.OPEN_PLAY)).shouldBeRight().event
+        // OPEN_PLAY now carries a config like the other types; 2..5 is within the global 1..10 window.
+        val view =
+            service.setPointsConfig(
+                token = token(uid = "host"),
+                id = event.id,
+                config = config(min = 2, max = 5, end = LocalDate.now().plusDays(10)),
+            ).shouldBeRight()
+        view.event.minPointsPerMatch shouldBe 2
+        view.event.maxPointsPerMatch shouldBe 5
+        // A window beyond the global OPEN_PLAY max (10) is still rejected.
         service.setPointsConfig(
             token = token(uid = "host"),
             id = event.id,
-            config = config(min = 2, max = 5, end = LocalDate.now().plusDays(10)),
+            config = config(min = 2, max = 20, end = LocalDate.now().plusDays(10)),
         ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
     }
 
@@ -1358,6 +1428,39 @@ class EventServiceTest {
     }
 
     @Test
+    fun `finalizing an OPEN_PLAY event awards each winner the designated points (unify)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        rate(userId = p1.id, level = "4.0")
+        rate(userId = p2.id, level = "4.0")
+        // OPEN_PLAY now carries a config (global 1..10) and awards on finalize like the other types.
+        val event =
+            service.create(
+                token = token(uid = "host"),
+                input =
+                    input(
+                        type = EventType.OPEN_PLAY,
+                        participants = listOf(p1.id, p2.id),
+                        minPoints = 1,
+                        maxPoints = 10,
+                        validityStart = LocalDate.now(),
+                        validityEnd = LocalDate.now().plusDays(30),
+                    ),
+            ).shouldBeRight().event
+        seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2, designated = 8)
+
+        service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+
+        // SINGLES → one award row (winner p1), the full 8 designated points; the loser gets nothing.
+        awardRepo.listByUser(userId = p2.id) shouldHaveSize 0
+        val award = awardRepo.listByUser(userId = p1.id).single()
+        award.points shouldBe BigDecimal("8.0000")
+        award.band shouldBe "4.0"
+        award.eventId shouldBe event.id
+    }
+
+    @Test
     fun `finalizing a doubles fixture writes one full-amount row per winning-team member (#403)`() {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val a = provision(uid = "a")
@@ -1388,12 +1491,12 @@ class EventServiceTest {
     }
 
     @Test
-    fun `finalizing an OPEN_PLAY event or one with no designated or no-winner fixtures awards nothing (#403)`() {
+    fun `finalizing an event whose fixtures have no designated or no winner awards nothing (#403)`() {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val p1 = provision(uid = "p1")
         val p2 = provision(uid = "p2")
         rate(userId = p1.id, level = "4.0")
-        // OPEN_PLAY carries no budget → its completed fixture awards nothing.
+        // A completed fixture with no designation → nothing awarded (clubless events skip designation here).
         val open = service.create(token = token(uid = "host"), input = input(participants = listOf(p1.id, p2.id))).shouldBeRight().event
         seedCompletedFixture(eventId = open.id, host = host, p1 = p1, p2 = p2, designated = null)
         service.finalize(token = token(uid = "host"), id = open.id).shouldBeRight()

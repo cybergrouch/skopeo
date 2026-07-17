@@ -820,12 +820,36 @@ describe('EventDetail', () => {
     pointValidityEnd: '2026-06-01',
   }
 
-  it('hides the points config section for an OPEN_PLAY event (#403 Phase C)', () => {
-    // The default event is OPEN_PLAY.
+  it('hides the points config section for a clubless event (#403 Phase C)', () => {
+    // The default event has no club, so it carries no points config regardless of type.
     renderDetail()
     expect(screen.queryByText('Points config')).not.toBeInTheDocument()
     // …and no designated-points input in the fixture form.
     expect(screen.queryByLabelText(/Designated points/)).not.toBeInTheDocument()
+  })
+
+  it('shows the points config editor and designation input for an OPEN_PLAY event with a club (unify)', () => {
+    // OPEN_PLAY now carries points like the other types; with a club the editor + designation appear.
+    useGetApiV1EventsId.mockReturnValue({
+      data: {
+        ...event,
+        type: 'OPEN_PLAY',
+        clubId: 'c1',
+        endDate: '2999-01-01',
+        minPointsPerMatch: 2,
+        maxPointsPerMatch: 8,
+        pointValidityStart: '2026-03-01',
+        pointValidityEnd: '2026-03-20',
+      },
+      isLoading: false,
+    })
+    useGetApiV1PointsPolicies.mockReturnValue({
+      data: [{ eventType: 'OPEN_PLAY', minPoints: 1, maxPoints: 10, maxValidityDays: 30 }],
+      isLoading: false,
+    })
+    renderDetail()
+    expect(screen.getByText('Points config')).toBeInTheDocument()
+    expect(screen.getByLabelText(/Designated points/)).toBeInTheDocument()
   })
 
   it('hides the points config for a budgeted event with no club, and shows it once a club is set (#429)', () => {

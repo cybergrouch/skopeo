@@ -21,9 +21,10 @@ import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
 import java.util.UUID
 
-// The event types that carry a points budget and therefore award on finalize (#403): TOURNAMENT and
-// LEAGUE. OPEN_PLAY carries no designation, so its fixtures never award.
-private val AWARDING_TYPES = setOf(EventType.TOURNAMENT, EventType.LEAGUE)
+// The event types that carry a points budget and therefore award on finalize (#403). Every event
+// class awards now that OPEN_PLAY was unified with TOURNAMENT/LEAGUE (feat/open-play-points-unify);
+// a fixture pays out only if it carries a designation, which in turn requires the event to have a club.
+private val AWARDING_TYPES = setOf(EventType.TOURNAMENT, EventType.LEAGUE, EventType.OPEN_PLAY)
 
 // Validity-window thresholds (in days) that map an event's point window to the nearest existing
 // PointClass (§7 + Interpretation B). ≤ 31d → 1M, ≤ 92d → 3M, ≤ 184d → 6M, else ANNUAL.
@@ -39,8 +40,9 @@ private const val UNSPECIFIED_SEX = "Unspecified"
  * bloating EventService. On finalize of a budgeted-type event it converts each qualifying fixture's
  * designation into ledger awards — one row per winning-team member, each carrying the FULL designated
  * points (decision #4), so a team of N produces N rows of `designated` (total `designated × N`,
- * matching the Phase C reservation). Non-awarding paths (OPEN_PLAY / no winner / cancelled / no
- * designation / winner unrated) simply produce nothing (the "release").
+ * matching the Phase C reservation). Every event class awards (OPEN_PLAY unified with
+ * TOURNAMENT/LEAGUE). Non-awarding paths (no winner / cancelled / no designation / winner unrated)
+ * simply produce nothing (the "release").
  */
 class EventFinalizeAwarder(
     private val matches: MatchRepository = MatchRepository(),
