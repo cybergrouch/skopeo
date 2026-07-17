@@ -178,6 +178,52 @@ class PointsBudgetRepository {
                 }.sumOf { row -> row[RankingPointAwardsTable.points] }
                 .toInt()
         }
+
+    /**
+     * One event's designated (planned) points total (#403 Phase E) — Σ `designated_points × team size`
+     * over the event's active, non-cancelled fixtures that carry a designation. The per-event mirror of
+     * [sumReservedPoints], scoped to [eventId] with NO finalized filter: designation is the planned
+     * total, whether or not the event has finalized. Backs the public per-event figure for a
+     * non-finalized event and the owner breakdown.
+     */
+    fun sumDesignatedPointsForEvent(eventId: UUID): Int =
+        transaction {
+            MatchesTable
+                .selectAll()
+                .where {
+                    (MatchesTable.eventId eq eventId) and
+                        MatchesTable.isActive and
+                        (MatchesTable.status neq MatchStatus.CANCELLED.name) and
+                        MatchesTable.designatedPoints.isNotNull()
+                }.sumOf { row ->
+                    val designated = row[MatchesTable.designatedPoints] ?: 0
+                    val teamSize =
+                        TeamUsersTable.selectAll().where { TeamUsersTable.teamId eq row[MatchesTable.team1Id].value }.count().toInt()
+                    designated * teamSize
+                }
+        }
+
+    /**
+     * One event's awarded points total (#403 Phase E) — Σ `points` over the ACTIVE awards linked
+     * (event_id) to [eventId] whose validity window contains [asOf], as an integer (values are whole
+     * per decision #6). The per-event mirror of [sumActiveAwards], scoped to one event. Backs the
+     * public per-event figure for a finalized event and the owner breakdown.
+     */
+    fun sumAwardedPointsForEvent(
+        eventId: UUID,
+        asOf: LocalDateTime = LocalDateTime.now(),
+    ): Int =
+        transaction {
+            RankingPointAwardsTable
+                .selectAll()
+                .where {
+                    (RankingPointAwardsTable.eventId eq eventId) and
+                        (RankingPointAwardsTable.status eq AwardStatus.ACTIVE.name) and
+                        (RankingPointAwardsTable.validFrom lessEq asOf) and
+                        (RankingPointAwardsTable.validUntil greater asOf)
+                }.sumOf { row -> row[RankingPointAwardsTable.points] }
+                .toInt()
+        }
 }
 
 private fun ResultRow.toPolicy(): PointsPolicy =

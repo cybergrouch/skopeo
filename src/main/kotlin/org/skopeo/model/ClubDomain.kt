@@ -46,12 +46,20 @@ data class ClubView(
 /**
  * One of a club's events on its public page (#327), reduced to the non-sensitive fields the page
  * links on: the shareable code, name, and date range. No roster/owner PII is surfaced here.
+ *
+ * Per-event points are public (#403 Phase E): [eventType] plus both [designatedPoints] (the planned
+ * total) and [awardedPoints] (the finalized/awarded total). The UI shows awarded once the event is
+ * finalized, else designated. Club utilization (Budgeted/Allocated/Free) is NOT public — it lives on
+ * the gated points-summary, never here.
  */
 data class ClubPublicEvent(
     val publicCode: String,
     val name: String,
     val startDate: LocalDate,
     val endDate: LocalDate,
+    val eventType: EventType,
+    val designatedPoints: Int,
+    val awardedPoints: Int,
 )
 
 /**

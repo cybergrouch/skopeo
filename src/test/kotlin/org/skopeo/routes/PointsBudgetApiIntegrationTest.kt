@@ -23,6 +23,7 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.dto.points.ClubBudgetResponse
+import org.skopeo.dto.points.ClubPointsSummaryResponse
 import org.skopeo.dto.points.PointsPolicyResponse
 import org.skopeo.dto.points.SetClubBudgetRequest
 import org.skopeo.dto.points.SetPointsPolicyRequest
@@ -172,5 +173,29 @@ class PointsBudgetApiIntegrationTest {
     fun `the points-budget API requires a token (#403)`() =
         withApp { client ->
             client.get(urlString = "/api/v1/points/policies").status shouldBe HttpStatusCode.Unauthorized
+        }
+
+    @Test
+    fun `points-summary is 200 for an owner and an admin, 403 otherwise, 401 anonymous (#403)`() =
+        withApp { client ->
+            val admin = seedUser(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+            val owner = seedUser(uid = "owner", roles = setOf(Capability.PLAYER, Capability.CLUB_OWNER))
+            seedUser(uid = "player", roles = setOf(element = Capability.PLAYER))
+            val club = seedClub(ownerId = admin.id)
+            ClubRepository().addOwner(clubId = club, userId = owner.id)
+
+            suspend fun summary(uid: String) =
+                client.get(urlString = "/api/v1/clubs/$club/points-summary") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer ${TestFirebaseAuth.mintToken(uid = uid)}")
+                }
+
+            summary(uid = "owner").let {
+                it.status shouldBe HttpStatusCode.OK
+                it.body<ClubPointsSummaryResponse>().utilization shouldHaveSize 3
+            }
+            summary(uid = "admin").status shouldBe HttpStatusCode.OK
+            summary(uid = "player").status shouldBe HttpStatusCode.Forbidden
+            // Anonymous (no token) is unauthorized — utilization never reaches the public surface.
+            client.get(urlString = "/api/v1/clubs/$club/points-summary").status shouldBe HttpStatusCode.Unauthorized
         }
 }

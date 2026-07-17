@@ -72,6 +72,31 @@ export function canManagePointsBudget(
   );
 }
 
+/** True when the user holds the CLUB_OWNER capability (#403 Phase E). */
+export function isClubOwner(
+  capabilities: readonly Capability[] | undefined,
+): boolean {
+  return hasCapability(capabilities, Capability.CLUB_OWNER);
+}
+
+/**
+ * Who may view a club's gated points summary (#403 Phase E): an ADMINISTRATOR / POINTS_MANAGER, or a
+ * CLUB_OWNER who owns *this* club (their {@link userId} is among {@link clubOwnerIds}). Utilization is
+ * never on the anonymous public club page — this gates the extra owner-only section (and its fetch).
+ */
+export function canViewClubPointsSummary(
+  capabilities: readonly Capability[] | undefined,
+  clubOwnerIds: readonly string[],
+  userId: string | undefined,
+): boolean {
+  if (canManagePointsBudget(capabilities)) return true;
+  return (
+    isClubOwner(capabilities) &&
+    userId !== undefined &&
+    clubOwnerIds.includes(userId)
+  );
+}
+
 /**
  * The Research tab is for researchers (#107) — gated so it can later be monetized. Every sign-up
  * gets RESEARCHER for now, so behaviour is unchanged. ADMINISTRATOR implicitly has RESEARCHER.

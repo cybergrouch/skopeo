@@ -35,6 +35,7 @@ fun Application.configurePointsBudgetRoutes(service: PointsBudgetService = Point
                 pointsBudgetReadRoutes(service = service)
             }
             clubBudgetWriteRoute(service = service)
+            clubPointsSummaryRoute(service = service)
         }
     }
 }
@@ -73,6 +74,21 @@ private fun Route.pointsBudgetReadRoutes(service: PointsBudgetService) {
             respondEither(result = service.clubBudgets(token = verifiedToken(), clubId = null)) { views ->
                 call.respond(status = HttpStatusCode.OK, message = views.map { it.toResponse() })
             }
+        }
+    }
+}
+
+/**
+ * A club's points summary (#403 Phase E): per-type utilization + per-event breakdown. Gated to that
+ * club's CLUB_OWNER(s) or ADMINISTRATOR/POINTS_MANAGER in [PointsBudgetService]. Utilization is never
+ * on the anonymous public club page — this separate gated endpoint keeps it from leaking.
+ */
+private fun Route.clubPointsSummaryRoute(service: PointsBudgetService) {
+    get(path = "/api/v1/clubs/{clubId}/points-summary") {
+        respondMappingErrors {
+            respondEither(
+                result = service.clubPointsSummary(token = verifiedToken(), clubId = uuidParam(name = "clubId")),
+            ) { summary -> call.respond(status = HttpStatusCode.OK, message = summary.toResponse()) }
         }
     }
 }

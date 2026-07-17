@@ -86,8 +86,9 @@ The single most important framing: **assigning points and counting them in the r
 ### 5.2 Admin "Points Management" tab (ADMINISTRATOR / POINTS_MANAGER)
 - Per **club × event type**, show **Budgeted / Allocated / Free**; manage club allocations and monitor utilization. New read API for the accounting.
 
-### 5.3 Club-owner visibility (public/external club page)
-- CLUB_OWNERs (and the public club page) surface points **per event** — designated/awarded amounts + club utilization — for transparency into their allocation. Extends `ClubService.publicByCode` / `ClubPage`.
+### 5.3 Club-owner visibility (public/external club page) — Phase E ✅
+- **Per-event points are public.** The anonymous club page (`ClubService.publicByCode` / `ClubPage`) surfaces, per event, the **event type** and a **points** figure — the **awarded** total for a finalized event, else the **designated** total. No login required.
+- **Club utilization is NOT public.** Budgeted / Allocated / Free per event type is visible only to that club's **CLUB_OWNER** (and ADMINISTRATOR / POINTS_MANAGER), served by a **separate gated endpoint** `GET /api/v1/clubs/{clubId}/points-summary` (utilization + a per-event breakdown). Kept as its own endpoint — never a conditional field on the public response — so nothing can leak. The web club page fetches it only when the authenticated viewer owns that club (or is an admin/points-manager).
 
 ---
 
@@ -112,7 +113,7 @@ Every step — global-policy set, club allocation, event points-policy, fixture 
 - **B.** Global master policy + club budgets + **POINTS_MANAGER** + **Points Management** tab.
 - **C.** Fixture **point designation** (default = round(avg)) + **budget verify/reserve** on save.
 - **D.** **Finalize-time award** to the ledger + **band-scoped counting** in the recompute (extends #400).
-- **E.** **Club-owner public visibility** of per-event points.
+- **E.** ✅ **Club-owner public visibility** of per-event points (public per-event points; CLUB_OWNER/admin-gated utilization via `/clubs/{clubId}/points-summary`). Completes the #403 arc.
 
 Each slice is independently useful; A–C establish the controls, D wires the awards into the standings, E adds transparency.
 
