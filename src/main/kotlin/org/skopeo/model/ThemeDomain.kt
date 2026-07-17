@@ -29,3 +29,14 @@ data class ThemeSettingValue(
     val updatedBy: UUID?,
     val updatedAt: LocalDateTime?,
 )
+
+/**
+ * The resolved standings serving source (#146) plus its provenance: who last set it ([updatedBy]) and
+ * when ([updatedAt]). Both are null when the source has never been explicitly set (default is
+ * [SnapshotSource.RATING]).
+ */
+data class StandingsSourceValue(
+    val source: SnapshotSource,
+    val updatedBy: UUID?,
+    val updatedAt: LocalDateTime?,
+)

@@ -37,11 +37,17 @@ class OpenAPIIntegrationTest {
             body shouldContain "Skopeo API"
             body shouldContain "/api/v1/calculate-ranking"
             body shouldContain "/api/v1/theme"
+            // The standings serving-source toggle (#146): its read/write path and schemas.
+            body shouldContain "/api/v1/settings/standings-source"
+            body shouldContain "StandingsSourceResponse"
+            body shouldContain "SetStandingsSourceRequest"
             // The paged standings serving layer (#220): the page endpoint, the jump-to-me endpoint,
             // and the response schemas are all documented.
             body shouldContain "/api/v1/standings/me"
             body shouldContain "StandingsPageResponse"
             body shouldContain "StandingsLocateResponse"
+            // Every NTRP band is advertised for the dropdown (#113).
+            body shouldContain "StandingsBandResponse"
             // The points-based recompute trigger (#146 phase 2).
             body shouldContain "/api/v1/standings/calculations"
             body shouldContain "StandingsCalculationResponse"

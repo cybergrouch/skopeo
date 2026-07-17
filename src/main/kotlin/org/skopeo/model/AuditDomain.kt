@@ -48,6 +48,7 @@ enum class AuditAction {
     CLUB_OWNER_ASSIGNED,
     CLUB_OWNER_REMOVED,
     SETTINGS_THEME_CHANGED,
+    SETTINGS_STANDINGS_SOURCE_CHANGED,
     RANKING_POINTS_AWARDED,
     RANKING_POINTS_REVOKED,
     STANDINGS_RECALCULATED,
@@ -135,7 +136,9 @@ val AuditAction.category: AuditCategory
             AuditAction.CLUB_OWNER_ASSIGNED,
             AuditAction.CLUB_OWNER_REMOVED,
             -> AuditCategory.CLUB_MANAGEMENT
-            AuditAction.SETTINGS_THEME_CHANGED -> AuditCategory.SETTINGS_MANAGEMENT
+            AuditAction.SETTINGS_THEME_CHANGED,
+            AuditAction.SETTINGS_STANDINGS_SOURCE_CHANGED,
+            -> AuditCategory.SETTINGS_MANAGEMENT
             AuditAction.RANKING_POINTS_AWARDED,
             AuditAction.RANKING_POINTS_REVOKED,
             -> AuditCategory.RANKING_POINTS

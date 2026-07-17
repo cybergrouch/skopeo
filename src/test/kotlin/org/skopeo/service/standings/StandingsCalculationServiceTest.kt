@@ -25,6 +25,7 @@ import org.skopeo.model.RankingPointAwardWrite
 import org.skopeo.model.ServiceError
 import org.skopeo.model.StandingsBand
 import org.skopeo.model.User
+import org.skopeo.repository.AppSettingsRepository
 import org.skopeo.repository.RankingPointRepository
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.StandingsSnapshotRepository
@@ -282,8 +283,8 @@ class StandingsCalculationServiceTest {
     }
 
     @Test
-    fun `after a commit the read path serves the points snapshot while before it serves rating-derived`() {
-        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+    fun `the read path serves rating by default and flips to points only when standings_source says so (#146)`() {
+        val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val ratingLeader = provision(uid = "rating-leader")
         val pointsLeader = provision(uid = "points-leader")
         ratings.setRating(userId = ratingLeader.id, rating = BigDecimal("4.4"), level = "4.0")
@@ -292,14 +293,22 @@ class StandingsCalculationServiceTest {
         grant(userId = ratingLeader.id, points = "10")
         grant(userId = pointsLeader.id, points = "500")
 
-        // Before any points commit, the rating-derived rebuild serves — ordered by rating.
+        // Rating-derived rebuild serves — ordered by rating.
         standings.rebuild()
         val ratingView = standings.page(token = token(uid = "admin"), band = StandingsBand.FROM_4_0, sex = "Male", limit = 25, offset = 0)
         ratingView.entries.first().userId shouldBe ratingLeader.id
 
-        // Commit the points calculation → reads flip to points, inverting the top spot.
+        // Committing the points calculation NO LONGER auto-flips reads (#146): the source is config-gated,
+        // so with standings_source unset (default RATING) reads still serve the rating-derived snapshot.
         service.calculate(token = token(uid = "admin"), dryRun = false).shouldBeRight()
-        val pointsView = standings.page(token = token(uid = "admin"), band = StandingsBand.FROM_4_0, sex = "Male", limit = 25, offset = 0)
+        val stillRating =
+            standings.page(token = token(uid = "admin"), band = StandingsBand.FROM_4_0, sex = "Male", limit = 25, offset = 0)
+        stillRating.entries.first().userId shouldBe ratingLeader.id
+
+        // Flip the app-setting to POINTS → reads now serve the committed points snapshot, inverting the top spot.
+        AppSettingsRepository().upsert(key = "standings_source", value = "POINTS", updatedBy = admin.id)
+        val pointsView =
+            standings.page(token = token(uid = "admin"), band = StandingsBand.FROM_4_0, sex = "Male", limit = 25, offset = 0)
         pointsView.entries.first().userId shouldBe pointsLeader.id
     }
 

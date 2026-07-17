@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
 import {
   Card,
   CardContent,
@@ -8,16 +7,14 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { ContentLink } from '@/components/ContentLink'
 import { NumberedPager } from '@/components/NumberedPager'
 import {
   useGetApiV1Standings,
   getApiV1StandingsMe,
 } from '@/api/generated/standings/standings'
 import { useGetApiV1UsersMe } from '@/api/generated/users/users'
-import type {
-  StandingEntryResponse,
-  StandingsGroupResponse,
-} from '@/api/generated/model'
+import type { StandingEntryResponse } from '@/api/generated/model'
 
 const PAGE_SIZE = 25
 
@@ -45,25 +42,14 @@ function metaLine(entry: StandingEntryResponse): string {
   return entry.age != null ? String(entry.age) : ''
 }
 
-/** Distinct band codes present in the snapshot's groups, keeping the server's strongest-first order. */
-function distinctBands(groups: StandingsGroupResponse[]): { band: string; label: string }[] {
-  const seen = new Set<string>()
-  const out: { band: string; label: string }[] = []
-  for (const g of groups) {
-    if (!seen.has(g.band)) {
-      seen.add(g.band)
-      out.push({ band: g.band, label: g.label })
-    }
-  }
-  return out
-}
-
 /**
  * The Standings tab (#113; snapshot serving layer #220): a persisted, paged per-NTRP-band "Ranking
  * Race" (sex split #212). The player picks a band + sex and clicks "View" to load one 25/page group
  * (nothing loads a whole band automatically); a pager walks the pages. "Find me" loads the page that
- * contains the current user and highlights their row. Bands/sex selectors come from the snapshot's
- * available groups. The precise rating is shown only when the payload includes it (RATER/ADMIN, #186).
+ * contains the current user and highlights their row. The band dropdown lists EVERY NTRP band (from the
+ * response `bands` list), including empty ones (#113); the sex toggles always offer Men + Women so an
+ * empty band is still queryable. The precise rating shows only when the payload includes it (RATER/ADMIN,
+ * #186). Player name links wear the themed ContentLink style so they stay readable in every theme (#417).
  */
 export function StandingsTab() {
   const meQuery = useGetApiV1UsersMe()
@@ -87,15 +73,17 @@ export function StandingsTab() {
   })
   const page = pageQuery.data
   const groups = page?.groups ?? []
-  const bands = distinctBands(groups)
+  // Every NTRP band, empty ones included (#113) — the dropdown is no longer limited to populated groups.
+  const bands = page?.bands ?? []
 
   // The controls fall back to the served group until the user picks something (avoids syncing effect state).
   const shownBand = pendingBand ?? page?.band ?? ''
   const shownSex: SexKey = pendingSex ?? sexKey(page?.sex)
 
-  // The sex groups available for the shown band selection (drives which toggles show).
-  const availableSexTabs = SEX_TABS.filter((tab) =>
-    groups.some((g) => g.band === shownBand && sexKey(g.sex) === tab.key),
+  // Always offer the standard Men + Women toggles so an empty band is still queryable; only show the
+  // rare Unspecified toggle when the served snapshot actually has such a group.
+  const availableSexTabs = SEX_TABS.filter(
+    (tab) => tab.key !== 'none' || groups.some((g) => sexKey(g.sex) === 'none'),
   )
 
   function view() {
@@ -141,9 +129,9 @@ export function StandingsTab() {
               }}
               className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
             >
-              {bands.length === 0 ? <option value="">No bands yet</option> : null}
+              {bands.length === 0 ? <option value="">Loading…</option> : null}
               {bands.map((b) => (
-                <option key={b.band} value={b.band}>
+                <option key={b.code} value={b.code}>
                   {b.label}
                 </option>
               ))}
@@ -171,7 +159,7 @@ export function StandingsTab() {
             </div>
           ) : null}
 
-          <Button type="button" size="sm" onClick={view} disabled={bands.length === 0}>
+          <Button type="button" size="sm" onClick={view} disabled={!shownBand}>
             View
           </Button>
           <Button
@@ -188,8 +176,6 @@ export function StandingsTab() {
 
       {pageQuery.isLoading ? (
         <p className="text-sm text-muted-foreground">Loading standings…</p>
-      ) : bands.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No standings yet.</p>
       ) : (
         <Card>
           <CardHeader>
@@ -218,12 +204,9 @@ export function StandingsTab() {
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="font-medium">
-                          <Link
-                            to={`/players/${entry.publicCode}`}
-                            className="text-primary hover:underline"
-                          >
+                          <ContentLink to={`/players/${entry.publicCode}`}>
                             {entry.displayName ?? entry.publicCode}
-                          </Link>
+                          </ContentLink>
                           {isMe ? (
                             <span className="ml-2 text-xs font-normal text-muted-foreground">
                               You

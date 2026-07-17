@@ -23,6 +23,9 @@ vi.mock("./admin/ClubsSection", () => ({
 vi.mock("./admin/ThemeSection", () => ({
   ThemeSection: () => <div>theme section</div>,
 }));
+vi.mock("./admin/StandingsSourceSection", () => ({
+  StandingsSourceSection: () => <div>standings source section</div>,
+}));
 vi.mock("./admin/PointsManagementSection", () => ({
   PointsManagementSection: () => <div>points management section</div>,
 }));
@@ -39,6 +42,7 @@ describe("AdminTab", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("pending calculation section")).toBeInTheDocument();
     expect(screen.getByText("theme section")).toBeInTheDocument();
+    expect(screen.getByText("standings source section")).toBeInTheDocument();
     expect(screen.getByText("build info section")).toBeInTheDocument();
     expect(screen.queryByText("invites section")).not.toBeInTheDocument();
     expect(screen.queryByText("activity log section")).not.toBeInTheDocument();

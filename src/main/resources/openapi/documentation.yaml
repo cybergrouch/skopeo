@@ -2451,6 +2451,51 @@ paths:
         '403':
           description: Caller is not an ADMINISTRATOR
 
+  /api/v1/settings/standings-source:
+    get:
+      summary: Get the standings serving source (#146)
+      description: >-
+        Which snapshot source the Standings tab serves (RATING or POINTS). Readable so the Admin tab can
+        show the current value; defaults to RATING when unset.
+      tags:
+        - Settings
+      security:
+        - firebaseAuth: []
+        - {}
+      responses:
+        '200':
+          description: The current standings serving source
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandingsSourceResponse'
+    put:
+      summary: Set the standings serving source (#146)
+      description: ADMINISTRATOR only. Flips the served source between RATING and POINTS; the write is audit-logged.
+      tags:
+        - Settings
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetStandingsSourceRequest'
+      responses:
+        '200':
+          description: The updated standings serving source
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandingsSourceResponse'
+        '400':
+          description: Unknown standings source value
+        '401':
+          description: Missing or invalid Firebase token
+        '403':
+          description: Caller is not an ADMINISTRATOR
+
   /api/v1/invites:
     post:
       summary: Invite an email to onboard (ADMINISTRATOR only)
@@ -5441,6 +5486,35 @@ components:
           enum: [AUTO, GRASS, CLAY, AO, US_OPEN, OFF_SEASON, CHRISTMAS]
           description: The UI theme to set (#378).
 
+    StandingsSourceResponse:
+      type: object
+      required:
+        - source
+      properties:
+        source:
+          type: string
+          enum: [RATING, POINTS]
+          description: The snapshot source the Standings tab serves (#146); RATING when unset.
+        updatedAt:
+          type: string
+          nullable: true
+          description: ISO timestamp of the last source change; null when never set.
+        updatedBy:
+          type: string
+          format: uuid
+          nullable: true
+          description: The administrator who last set the source; null when never set.
+
+    SetStandingsSourceRequest:
+      type: object
+      required:
+        - source
+      properties:
+        source:
+          type: string
+          enum: [RATING, POINTS]
+          description: The standings serving source to set (#146).
+
     PointsPolicyResponse:
       type: object
       required:
@@ -6062,17 +6136,33 @@ components:
           nullable: true
           description: The group's sex ("Male"/"Female"), or null for the Unspecified group.
 
+    StandingsBandResponse:
+      type: object
+      description: One NTRP band selector (#113), listed whether or not it currently has ranked players.
+      required:
+        - code
+        - label
+      properties:
+        code:
+          type: string
+          description: The band code (e.g. "4.0") to pass as the `band` query parameter.
+        label:
+          type: string
+          description: The human-readable band header (e.g. "NTRP 4.0 Band Race").
+
     StandingsPageResponse:
       type: object
       description: >-
         One page of a (band, sex) leaderboard from the latest published snapshot (#220), plus the
-        group's total and the (band, sex) selectors on offer. Ranks restart at 1 within each group.
+        group's total, the (band, sex) selectors with data, and every NTRP band for the dropdown.
+        Ranks restart at 1 within each group.
       required:
         - limit
         - offset
         - total
         - entries
         - groups
+        - bands
       properties:
         band:
           type: string
@@ -6099,8 +6189,14 @@ components:
             $ref: '#/components/schemas/StandingEntryResponse'
         groups:
           type: array
+          description: The (band, sex) selectors that actually have ranked players in this snapshot.
           items:
             $ref: '#/components/schemas/StandingsGroupResponse'
+        bands:
+          type: array
+          description: Every NTRP band (strongest-first) for the dropdown, including bands with no data.
+          items:
+            $ref: '#/components/schemas/StandingsBandResponse'
 
     StandingsLocateResponse:
       type: object

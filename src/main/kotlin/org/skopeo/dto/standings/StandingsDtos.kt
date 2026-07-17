@@ -30,11 +30,19 @@ data class StandingsGroupResponse(
     val sex: String? = null,
 )
 
+/** One NTRP band selector (#113): its persisted [code] and UI [label], listed whether or not it has data. */
+@Serializable
+data class StandingsBandResponse(
+    val code: String,
+    val label: String,
+)
+
 /**
  * One page of a (band, sex) leaderboard from the latest published snapshot (#220). [band]/[sex] is the
  * group actually served (defaulted when the request omitted a valid selector); [total] is the group's
- * full size (for paging); [groups] lists the (band, sex) selectors on offer. [band] is null only for an
- * empty snapshot (no players rated yet).
+ * full size (for paging); [groups] lists the (band, sex) selectors that actually have data, while [bands]
+ * lists EVERY NTRP band (strongest-first) so the UI dropdown can offer empty bands too (#113). [band] is
+ * null only for an empty snapshot (no players rated yet).
  */
 @Serializable
 data class StandingsPageResponse(
@@ -46,6 +54,7 @@ data class StandingsPageResponse(
     val total: Int,
     val entries: List<StandingEntryResponse>,
     val groups: List<StandingsGroupResponse>,
+    val bands: List<StandingsBandResponse>,
 )
 
 /**
@@ -72,6 +81,7 @@ fun StandingsService.StandingsView.toResponse(): StandingsPageResponse =
         total = total,
         entries = entries.map { it.toResponse() },
         groups = groups.map { StandingsGroupResponse(band = it.band.code, label = it.band.label, sex = it.sex) },
+        bands = allBands.map { StandingsBandResponse(code = it.code, label = it.label) },
     )
 
 fun StandingsService.LocateView.toResponse(): StandingsLocateResponse =
