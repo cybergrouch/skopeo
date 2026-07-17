@@ -113,9 +113,9 @@ Unmistakable holiday cheer: a bold **Santa Crimson** canvas with a **Holiday Eve
 |---|---|---|
 | Background (60%) | ![bg](https://placehold.co/90x24/00703C/00703C.png) | `#00703C` Lush Lawn Green |
 | Card (30%) | ![card](https://placehold.co/90x24/1B3B2B/FFFFFF.png?text=card) | `#1B3B2B` Forest Green · font `#FFFFFF` Pure White · muted `#F4F9F5` |
-| Accent (10%) | ![purple](https://placehold.co/44x24/452263/452263.png) ![lavender](https://placehold.co/44x24/C5A3E8/C5A3E8.png) ![white](https://placehold.co/44x24/FFFFFF/FFFFFF.png) | `#452263` Wimbledon Purple (button) + `#C5A3E8` lavender link + `#FFFFFF` white 2px card rim |
+| Accent (10%) | ![purple](https://placehold.co/44x24/452263/452263.png) ![neon](https://placehold.co/44x24/CCFF00/CCFF00.png) ![white](https://placehold.co/44x24/FFFFFF/FFFFFF.png) | `#452263` Wimbledon Purple (button) + `#CCFF00` Optic Tennis Yellow link (#417) + `#FFFFFF` white 2px card rim |
 
-**Border strategy:** a 2px white rim off the lush-lawn-green canvas; deep Wimbledon Purple `#452263` on the button (white label 12.64:1), and a lighter lavender `#C5A3E8` link (5.73:1) for AA on the forest-green card.
+**Border strategy:** a 2px white rim off the lush-lawn-green canvas; deep Wimbledon Purple `#452263` on the button (white label 12.64:1), and **Optic Tennis Yellow `#CCFF00`** for inline links (10.47:1) — the "Balanced Wimbledon" accent (#417), a brighter jump off the forest-green card than the earlier lavender `#C5A3E8` (5.73:1).
 
 ### 🌃 US Open — *High-octane, modern, night session*
 | Role | Swatch | Color |
@@ -138,12 +138,12 @@ The four court seasons are Vibrant Depth (#409); Off-Season + US Open stay all-d
 | **Christmas** *(vibrant)* | `#CE2029` Santa Crimson | `#0B6623` Holiday Evergreen · `#FFFFFF` | `#FFD700` Elfie Gold | `#FFFFFF` White (2px) | Festive, cozy, premium |
 | **Australian Open** *(vibrant)* | `#0080C8` Vivid Stadium Blue | `#0A1D37` Melbourne Twilight · `#FFFFFF` | `#CCFF00` Volt Yellow | `#FFFFFF` White (2px) | Electric, cool, summer night |
 | **Clay** *(vibrant)* | `#C1522D` Brick Terracotta | `#2B1A12` Earth Chocolate · `#FFFFFF` | `#E07A5F` Terracotta | `#FFFFFF` White (2px) | Warm, organic, earthy |
-| **Grass** *(vibrant)* | `#00703C` Lush Lawn Green | `#1B3B2B` Forest Green · `#FFFFFF` | `#452263` Wimbledon Purple (+ `#C5A3E8` link) | `#FFFFFF` White (2px) | Classic, elegant, prestigious |
+| **Grass** *(vibrant)* | `#00703C` Lush Lawn Green | `#1B3B2B` Forest Green · `#FFFFFF` | `#452263` Wimbledon Purple (+ `#CCFF00` Optic Tennis Yellow link) | `#FFFFFF` White (2px) | Classic, elegant, prestigious |
 | **US Open** *(dark)* | `#0B0F19` Midnight | `#1E293B` Slate Navy · `#FFFFFF` | `#63B233` Apple Green (+ `#005DAA` blue button) | `#63B233` Green (1px) | High-octane, modern, night session |
 
 ### 5.1 Content-link colors (#399, supersedes #394/#395)
 
-Public-page / share links (the "Public page (QR)" anchors and similar) get an explicit **per-theme link color + underline**, not the generic primary color. The shared `.public-page-link` treatment (used by the `PublicPageLink` component) is always **bold + underlined**, pulls color from the `--link` / `--link-underline` / `--link-hover` tokens below, and brightens toward white on hover. Colors are read against each theme's **card surface** (the card fill above). All clear **WCAG AA-normal (≥4.5:1)** (measured, sRGB relative-luminance).
+Public-page / share links (the "Public page (QR)" anchors and similar) get an explicit **per-theme link color + underline**, not the generic primary color. The shared `.public-page-link` treatment (used by the `PublicPageLink` component) is always **bold + underlined**, pulls color from the `--link` / `--link-underline` / `--link-hover` tokens below, and brightens toward white on hover. **Widened in #417:** the same token-based `.content-link` treatment (shared `ContentLink` component) now also styles **inline in-app anchors** — Activity Log Who/Target cells, Reports player rows, Profile "view all matches" — so they no longer fall back to the generic primary color (which failed AA on some cards). Colors are read against each theme's **card surface** (the card fill above). All clear **WCAG AA-normal (≥4.5:1)** (measured, sRGB relative-luminance).
 
 | Theme | `--link` (+ underline) | `--link-hover` | Contrast vs card |
 |---|---|---|---|
@@ -151,10 +151,10 @@ Public-page / share links (the "Public page (QR)" anchors and similar) get an ex
 | **Christmas** | `#FFD700` Elfie Gold | `#FFFFFF` White | 5.09:1 — AA ✅ (on `#0B6623`) |
 | **Australian Open** | `#CCFF00` Volt Yellow | `#FFFFFF` White | 14.37:1 — AA ✅ (on `#0A1D37`) |
 | **Clay** | `#E07A5F` Terracotta | `#FFFFFF` White | 5.65:1 — AA ✅ (on `#2B1A12`) |
-| **Grass** | `#C5A3E8` Bright Lavender | `#FFFFFF` White | 5.73:1 — AA ✅ (on `#1B3B2B`) |
+| **Grass** | `#CCFF00` Optic Tennis Yellow | `#FFFFFF` White | 10.47:1 — AA ✅ (on `#1B3B2B`) |
 | **US Open** | `#63B233` Apple Green | `#FFFFFF` White | 5.5:1 — AA ✅ |
 
-> **Clay/Grass link note:** the darker accents — clay `#E07A5F` still doubles as the button, and Wimbledon purple `#452263` is the grass button — but the *link* on grass uses the lighter **lavender `#C5A3E8`** (5.73:1) since `#452263` is far too dark against the forest-green card. Clay reuses `#E07A5F` for both the link and the button fill (the button *label* is the dark `#2B1A12`, see §5/§7).
+> **Clay/Grass link note:** clay `#E07A5F` still doubles as the button, and Wimbledon purple `#452263` is the grass button — too dark to double as a link on the deep card. Clay reuses `#E07A5F` for both the link and the button fill (the button *label* is the dark `#2B1A12`, see §5/§7). Grass's link is the "Balanced Wimbledon" **Optic Tennis Yellow `#CCFF00`** (#417) — it jumps off the forest-green card at 10.47:1 and stays distinct from the purple action button (it replaced the earlier lavender `#C5A3E8`, which passed AA at 5.73:1 but read faint).
 
 ---
 
@@ -183,7 +183,7 @@ Under Vibrant Depth (#409) the four court cards carry **white** text; Off-Season
 
 - **No low-contrast text on card:** white `--card-foreground` + the vibrant `--link`/`--muted-foreground` all clear AA-normal on each card. Button *labels* stay dark where the button fill is light (neon `#212529`, gold `#063B14`, volt `#0A1D37`, clay `#2B1A12`).
 - **White 2px card rim (court seasons):** the crisp white rim breaks the deep card off the saturated canvas (a scoped 2px `border-width` on `.bg-card` under christmas/ao/clay/grass; `--border` is already white). Off-Season/US Open keep their 1px accent rims.
-- **Clay button-label deviation:** the matrix gives clay's button `#E07A5F` / `#FFFFFF`, but white on `#E07A5F` is 2.95:1 (fails AA, below AA-large too), so the label uses the dark earth `#2B1A12` (5.65:1). Grass links stay `#C5A3E8` (the `#452263` button color is too dark for a link on the card).
+- **Clay button-label deviation:** the matrix gives clay's button `#E07A5F` / `#FFFFFF`, but white on `#E07A5F` is 2.95:1 (fails AA, below AA-large too), so the label uses the dark earth `#2B1A12` (5.65:1). Grass links use **Optic Tennis Yellow `#CCFF00`** (10.47:1, #417) — the `#452263` button color is too dark for a link on the card.
 - **Measured WCAG AA (sRGB relative-luminance) — all pass AA-normal (≥4.5:1):**
 
   | Theme | Font vs card | Link vs card | Muted vs card | Button label vs button |
@@ -192,7 +192,7 @@ Under Vibrant Depth (#409) the four court cards carry **white** text; Off-Season
   | Christmas | 7.15:1 ✅ | 5.09:1 ✅ | ~6.0:1 ✅ (white @0.9) | 9.11:1 ✅ |
   | Australian Open | 16.88:1 ✅ | 14.37:1 ✅ | 13.70:1 ✅ | 14.37:1 ✅ |
   | Clay | 16.68:1 ✅ | 5.65:1 ✅ | 15.58:1 ✅ | 5.65:1 ✅ (`#2B1A12` label) |
-  | Grass | 12.30:1 ✅ | 5.73:1 ✅ | 11.55:1 ✅ | 12.64:1 ✅ |
+  | Grass | 12.30:1 ✅ | 10.47:1 ✅ (`#CCFF00` link, #417) | 11.55:1 ✅ | 12.64:1 ✅ |
   | US Open | 14.6:1 ✅ | 5.5:1 ✅ | 5.7:1 ✅ | 6.7:1 ✅ |
 
   > **All pairs clear AA-normal.** The clay button meets AA only because its label is the dark `#2B1A12` (not `#FFFFFF`); white on `#E07A5F` would be 2.95:1.
@@ -264,4 +264,7 @@ Keep the dark, dramatic base **only for US Open** (night session) and **Off-Seas
 - **Off-Season** — *unchanged*; the neutral dark suits the training/rest vibe.
 
 **Principle carried forward:** the 60% canvas should carry the *season's mood at full saturation*; darkness for its own sake (step 2) traded identity for drama. Vibrant Depth keeps the drama (deep cards, white-on-dark text) while restoring the court-color identity.
+
+### 4. Inline-link tokens widened; grass link → Optic Tennis Yellow (#417)
+The per-theme `--link` tokens (#394) were only consumed by `.public-page-link` (the shared `PublicPageLink`). **Inline in-app anchors** — Activity Log Who/Target cells, Reports player rows, the Profile "view all matches" link — used a plain `text-primary` treatment, so on the grass card `#1b3b2b` they fell back to the Wimbledon-purple `--primary` `#452263`, which is nearly invisible (fails WCAG AA). Fix: those anchors now use a shared `.content-link` / `ContentLink` component that pulls the same `--link` / `--link-underline` / `--link-hover` tokens, so they're theme-aware everywhere (not a blanket `a {}` — nav links and shadcn button-anchors are untouched). For grass the "Balanced Wimbledon" decision switched `--link` from the lavender `#C5A3E8` (5.73:1, read faint) to **Optic Tennis Yellow `#CCFF00`** (10.47:1 on `#1b3b2b`) — a brighter jump that stays distinct from the purple action button (button + 2px white rim unchanged). Every theme's `--link` was re-checked against its card and all still clear AA-normal, so no other theme's link token changed.
 

@@ -184,8 +184,13 @@
   --border: #ffffff;
   --ring: #ffffff;
   --input: #1b3b2b;
-  --link: #c5a3e8;
-  --link-underline: #c5a3e8;
+  /*
+   * Inline/content links use Optic Tennis Yellow (#417). The lavender #c5a3e8 passed AA (5.73:1) but
+   * the "Balanced Wimbledon" decision picks #CCFF00 — it jumps off the Deep English Ivy card
+   * (#1b3b2b) at 10.47:1 and stays distinct from the Wimbledon-purple action button.
+   */
+  --link: #ccff00;
+  --link-underline: #ccff00;
   --link-hover: #ffffff;
 }
 
@@ -267,13 +272,17 @@
   }
 
   /*
-   * Content/public-page link style (#394). Scoped to `.public-page-link` (worn by the shared
-   * PublicPageLink component) rather than a blanket `a {}` so it never touches nav links or shadcn
-   * buttons rendered as anchors. Colour comes from the per-theme --link/--link-underline/--link-hover
-   * tokens, so the "Public page (QR)" links stay readable in the AO and Off-Season themes where the
-   * generic primary colour was failing WCAG AA against the white card surface.
+   * Content link style (#394, widened in #417). Worn by the shared PublicPageLink component
+   * (`.public-page-link`, the "Public page (QR)" anchors) and by the shared ContentLink component
+   * (`.content-link`, inline anchors in Activity Log / Reports / Profile). Both are scoped classes
+   * rather than a blanket `a {}` so the treatment never touches nav links or shadcn buttons rendered
+   * as anchors. Colour comes from the per-theme --link/--link-underline/--link-hover tokens, so these
+   * links stay WCAG-AA readable in every seasonal theme — e.g. inline links were falling back to the
+   * generic primary purple #452263 on the grass card #1b3b2b (fails AA); they now use the grass
+   * --link Optic Tennis Yellow #ccff00 (10.47:1).
    */
-  .public-page-link {
+  .public-page-link,
+  .content-link {
     color: var(--link);
     font-weight: 600;
     text-decoration: underline;
@@ -285,7 +294,8 @@
       color 0.2s ease,
       text-decoration-color 0.2s ease;
   }
-  .public-page-link:hover {
+  .public-page-link:hover,
+  .content-link:hover {
     color: var(--link-hover);
     text-decoration-color: var(--link-hover);
     text-decoration-thickness: 2px;

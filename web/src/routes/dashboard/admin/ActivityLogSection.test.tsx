@@ -86,16 +86,16 @@ describe('ActivityLogSection', () => {
     ).toBeInTheDocument()
   })
 
-  it('links the actor and user target to their public profiles (#136)', () => {
+  it('links the actor and user target to their public profiles wearing the themed content-link style (#136, #417)', () => {
     renderSection()
-    expect(screen.getByRole('link', { name: 'Admin (ADM123)' })).toHaveAttribute(
-      'href',
-      '/players/ADM123',
-    )
-    expect(screen.getByRole('link', { name: 'Bob (BOB456)' })).toHaveAttribute(
-      'href',
-      '/players/BOB456',
-    )
+    const actor = screen.getByRole('link', { name: 'Admin (ADM123)' })
+    const target = screen.getByRole('link', { name: 'Bob (BOB456)' })
+    expect(actor).toHaveAttribute('href', '/players/ADM123')
+    expect(target).toHaveAttribute('href', '/players/BOB456')
+    // Who/Target links use the theme-aware --link token (not the primary purple), so they stay
+    // WCAG-AA legible on the grass card #1b3b2b (#417).
+    expect(actor).toHaveClass('content-link')
+    expect(target).toHaveClass('content-link')
   })
 
   it('links a match-targeted entry to its public match page (#136)', () => {
@@ -114,10 +114,9 @@ describe('ActivityLogSection', () => {
       ]),
     )
     renderSection()
-    expect(screen.getByRole('link', { name: 'Match MTCH01' })).toHaveAttribute(
-      'href',
-      '/matches/MTCH01',
-    )
+    const link = screen.getByRole('link', { name: 'Match MTCH01' })
+    expect(link).toHaveAttribute('href', '/matches/MTCH01')
+    expect(link).toHaveClass('content-link')
   })
 
   it('shows System for a null actor, an id fallback without a name, and a dash for no target', () => {

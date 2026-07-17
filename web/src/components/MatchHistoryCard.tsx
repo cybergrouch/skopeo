@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { ContentLink } from '@/components/ContentLink'
 import { useGetApiV1PlayersCodeMatchHistory } from '@/api/generated/users/users'
 import {
   Card,
@@ -51,9 +51,12 @@ export function MatchHistoryCard({ code }: MatchHistoryCardProps) {
               ))}
             </ul>
             {total > items.length ? (
-              <Link to={`/players/${code}/matches`} className="inline-block text-sm text-primary hover:underline">
+              <ContentLink
+                to={`/players/${code}/matches`}
+                className="inline-block text-sm"
+              >
                 View all {total} matches
-              </Link>
+              </ContentLink>
             ) : null}
           </>
         ) : (

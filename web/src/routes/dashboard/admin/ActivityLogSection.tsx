@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
+import { ContentLink } from '@/components/ContentLink'
 import {
   Card,
   CardContent,
@@ -53,9 +53,7 @@ function PersonCell({ p }: { p: AuditPersonResponse | null | undefined }) {
   if (!p) return <>System</>
   if (!p.publicCode) return <>{person(p)}</>
   return (
-    <Link to={`/players/${p.publicCode}`} className="text-primary hover:underline">
-      {person(p)}
-    </Link>
+    <ContentLink to={`/players/${p.publicCode}`}>{person(p)}</ContentLink>
   )
 }
 
@@ -63,12 +61,9 @@ function PersonCell({ p }: { p: AuditPersonResponse | null | undefined }) {
 function TargetCell({ entry }: { entry: AuditEntryResponse }) {
   if (entry.matchTarget) {
     return (
-      <Link
-        to={`/matches/${entry.matchTarget.publicCode}`}
-        className="text-primary hover:underline"
-      >
+      <ContentLink to={`/matches/${entry.matchTarget.publicCode}`}>
         Match {entry.matchTarget.publicCode}
-      </Link>
+      </ContentLink>
     )
   }
   if (entry.target) return <PersonCell p={entry.target} />
