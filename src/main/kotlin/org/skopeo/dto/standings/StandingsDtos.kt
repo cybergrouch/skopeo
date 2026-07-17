@@ -42,7 +42,9 @@ data class StandingsBandResponse(
  * group actually served (defaulted when the request omitted a valid selector); [total] is the group's
  * full size (for paging); [groups] lists the (band, sex) selectors that actually have data, while [bands]
  * lists EVERY NTRP band (strongest-first) so the UI dropdown can offer empty bands too (#113). [band] is
- * null only for an empty snapshot (no players rated yet).
+ * null only for an empty snapshot (no players rated yet). [source] is the effective serving source
+ * ("RATING"/"POINTS", #428) so the client can distinguish "POINTS with no snapshot yet" (empty entries)
+ * from the rating leaderboard rather than silently falling back to ratings.
  */
 @Serializable
 data class StandingsPageResponse(
@@ -55,6 +57,7 @@ data class StandingsPageResponse(
     val entries: List<StandingEntryResponse>,
     val groups: List<StandingsGroupResponse>,
     val bands: List<StandingsBandResponse>,
+    val source: String,
 )
 
 /**
@@ -82,6 +85,7 @@ fun StandingsService.StandingsView.toResponse(): StandingsPageResponse =
         entries = entries.map { it.toResponse() },
         groups = groups.map { StandingsGroupResponse(band = it.band.code, label = it.band.label, sex = it.sex) },
         bands = allBands.map { StandingsBandResponse(code = it.code, label = it.label) },
+        source = source.name,
     )
 
 fun StandingsService.LocateView.toResponse(): StandingsLocateResponse =

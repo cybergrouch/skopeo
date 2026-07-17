@@ -6258,6 +6258,7 @@ components:
         - entries
         - groups
         - bands
+        - source
       properties:
         band:
           type: string
@@ -6292,6 +6293,15 @@ components:
           description: Every NTRP band (strongest-first) for the dropdown, including bands with no data.
           items:
             $ref: '#/components/schemas/StandingsBandResponse'
+        source:
+          type: string
+          enum:
+            - RATING
+            - POINTS
+          description: >-
+            The effective serving source. RATING is computed live from current ratings; POINTS is served
+            from the latest published points snapshot. When source is POINTS and no snapshot exists the
+            entries are empty (an explicit points empty state), never a silent fallback to ratings.
 
     StandingsLocateResponse:
       type: object

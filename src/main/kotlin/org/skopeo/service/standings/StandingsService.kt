@@ -31,9 +31,11 @@ private const val MAX_PAGE_SIZE = 100
  *
  * [page]/[locateMe] resolve the source from the `standings_source` app-setting (RATING by default). For
  * RATING they rank the active rated players in memory (rating → confidence → matches → name) and page
- * one (band, sex) group at a time; for POINTS they page the snapshot, falling back to the live RATING
- * calculation when no POINTS snapshot exists so the tab is never blank. Order is what's exposed
- * (#64/#114); the precise rating is revealed only to RATER/ADMINISTRATOR viewers (#186).
+ * one (band, sex) group at a time; for POINTS they page the latest published POINTS snapshot. POINTS never
+ * silently falls back to the live RATING calculation (#428): when no POINTS snapshot exists the page is an
+ * explicit **empty** view still tagged `source=POINTS`, so the UI shows a distinct "run a points
+ * calculation" state rather than the rating leaderboard. Order is what's exposed (#64/#114); the precise
+ * rating is revealed only to RATER/ADMINISTRATOR viewers (#186).
  */
 class StandingsService(
     private val users: UserRepository = UserRepository(),
@@ -54,6 +56,9 @@ class StandingsService(
         // empty band yields an empty page still queryable by sex. Independent of which groups have data.
         val allBands: List<StandingsBand>,
         val revealRates: Boolean,
+        // The effective serving source (#428): RATING = live calculation, POINTS = the POINTS snapshot (or an
+        // explicit empty view when none exists). Lets the UI distinguish "POINTS, no data yet" from ratings.
+        val source: SnapshotSource,
     )
 
     /** A selectable (band, sex) group present in the leaderboard — powers the UI band dropdown + sex toggle. */
@@ -74,9 +79,10 @@ class StandingsService(
      * group (strongest band, Men first) so a bare call still returns a page. An empty leaderboard yields
      * an empty view. [limit] is clamped to a sane page size (default 25).
      *
-     * The source is resolved from the `standings_source` app-setting (#146): RATING (default) is computed
-     * live from current ratings; POINTS is served from the latest published POINTS snapshot, falling back
-     * to the live RATING calculation when no POINTS snapshot exists.
+     * The source is resolved from the `standings_source` app-setting (#146), read fresh per request: RATING
+     * (default) is computed live from current ratings; POINTS is served from the latest published POINTS
+     * snapshot. POINTS never falls back to the live RATING calculation (#428) — with no POINTS snapshot the
+     * page is an explicit empty view still tagged `source=POINTS`.
      */
     fun page(
         token: VerifiedFirebaseToken,
@@ -89,16 +95,19 @@ class StandingsService(
         val pageSize = (limit ?: DEFAULT_PAGE_SIZE).coerceIn(minimumValue = 1, maximumValue = MAX_PAGE_SIZE)
         val pageOffset = (offset ?: 0).coerceAtLeast(minimumValue = 0)
         val request = PageRequest(band = band, sex = sex, limit = pageSize, offset = pageOffset, revealRates = revealRates)
-        // POINTS serves a snapshot when one exists; RATING (and POINTS with no snapshot) is computed live.
-        val pointsSnapshotId =
-            if (settings.standingsSource() == SnapshotSource.POINTS) {
-                snapshots.latestPublished(
-                    source = SnapshotSource.POINTS,
-                )
+        val source = settings.standingsSource()
+        return if (source == SnapshotSource.POINTS) {
+            // POINTS serves the latest published snapshot only; no snapshot → an explicit empty POINTS view
+            // (never the live rating leaderboard, #428).
+            val pointsSnapshotId = snapshots.latestPublished(source = SnapshotSource.POINTS)
+            if (pointsSnapshotId != null) {
+                servePage(snapshotId = pointsSnapshotId, request = request)
             } else {
-                null
+                emptyView(request = request, groups = emptyList(), source = SnapshotSource.POINTS)
             }
-        return if (pointsSnapshotId != null) servePage(snapshotId = pointsSnapshotId, request = request) else serveLive(request = request)
+        } else {
+            serveLive(request = request)
+        }
     }
 
     /** The resolved page request + privacy flag — bundled so serving stays under the parameter limit. */
@@ -122,7 +131,7 @@ class StandingsService(
         // The requested group is honored verbatim (absent → empty page), else the first available serves.
         val chosen = request.band?.let { GroupRef(band = it, sex = request.sex) } ?: groups.firstOrNull()
         return if (chosen == null) {
-            emptyView(request = request, groups = groups)
+            emptyView(request = request, groups = groups, source = SnapshotSource.RATING)
         } else {
             val ranked = leaderboard[chosen.band to chosen.sex].orEmpty()
             val today = LocalDate.now()
@@ -153,6 +162,7 @@ class StandingsService(
                 groups = groups,
                 allBands = StandingsBand.entries.reversed(),
                 revealRates = request.revealRates,
+                source = SnapshotSource.RATING,
             )
         }
     }
@@ -185,6 +195,7 @@ class StandingsService(
     private fun emptyView(
         request: PageRequest,
         groups: List<GroupRef>,
+        source: SnapshotSource,
     ): StandingsView =
         StandingsView(
             band = null,
@@ -196,6 +207,7 @@ class StandingsService(
             groups = groups,
             allBands = StandingsBand.entries.reversed(),
             revealRates = request.revealRates,
+            source = source,
         )
 
     /**
@@ -210,7 +222,7 @@ class StandingsService(
         val groups = snapshots.groups(snapshotId = snapshotId).map { GroupRef(band = it.first, sex = it.second) }
         // The requested group is honored verbatim (absent → empty page), else the first available serves.
         val chosen = request.band?.let { GroupRef(band = it, sex = request.sex) } ?: groups.firstOrNull()
-        if (chosen == null) return emptyView(request = request, groups = groups)
+        if (chosen == null) return emptyView(request = request, groups = groups, source = SnapshotSource.POINTS)
 
         val result =
             snapshots.page(snapshotId = snapshotId, band = chosen.band, sex = chosen.sex, limit = request.limit, offset = request.offset)
@@ -245,31 +257,26 @@ class StandingsService(
             groups = groups,
             allBands = StandingsBand.entries.reversed(),
             revealRates = request.revealRates,
+            source = SnapshotSource.POINTS,
         )
     }
 
     /**
      * Jump-to-me (#220): the caller's (band, sex, rank) plus the page offset that contains their row (so
      * the client can load exactly that page). Null when the caller has no profile or isn't in the current
-     * standings (e.g. unrated). RATING is located live; POINTS locates in the snapshot (falling back to
-     * the live calculation when no POINTS snapshot exists). [limit] is the page size used for the offset.
+     * standings (e.g. unrated). RATING is located live; POINTS locates in the latest published POINTS
+     * snapshot and is null when no POINTS snapshot exists (never the live calculation, #428). [limit] is the
+     * page size used for the offset.
      */
     fun locateMe(
         token: VerifiedFirebaseToken,
         limit: Int?,
     ): LocateView? {
         val caller = users.findByFirebaseUid(firebaseUid = token.uid) ?: return null
-        val pointsSnapshotId =
-            if (settings.standingsSource() == SnapshotSource.POINTS) {
-                snapshots.latestPublished(
-                    source = SnapshotSource.POINTS,
-                )
-            } else {
-                null
-            }
         val location =
-            if (pointsSnapshotId != null) {
-                snapshots.locate(snapshotId = pointsSnapshotId, userId = caller.id)
+            if (settings.standingsSource() == SnapshotSource.POINTS) {
+                // POINTS: locate only in the latest published POINTS snapshot; no snapshot → null (#428).
+                snapshots.latestPublished(source = SnapshotSource.POINTS)?.let { snapshots.locate(snapshotId = it, userId = caller.id) }
             } else {
                 // Live: find the caller's (band, sex, rank) in the rating-derived leaderboard.
                 rankLeaderboard().firstNotNullOfOrNull { (group, ranked) ->

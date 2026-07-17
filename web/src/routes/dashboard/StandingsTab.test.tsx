@@ -58,6 +58,7 @@ const defaultPage = {
   ],
   groups,
   bands,
+  source: 'RATING',
 }
 
 describe('StandingsTab', () => {
@@ -82,7 +83,7 @@ describe('StandingsTab', () => {
   it('lists every NTRP band and offers sex toggles even when the snapshot has no data (#113)', () => {
     // An empty snapshot still advertises every band and the standard sex toggles, so the tab stays queryable.
     useGetApiV1Standings.mockReturnValue({
-      data: { band: null, label: null, sex: null, limit: 25, offset: 0, total: 0, entries: [], groups: [], bands },
+      data: { band: null, label: null, sex: null, limit: 25, offset: 0, total: 0, entries: [], groups: [], bands, source: 'RATING' },
       isLoading: false,
     })
     renderTab()
@@ -247,7 +248,7 @@ describe('StandingsTab', () => {
   it('renders an empty-group page (band/label/total absent) with a placeholder heading', async () => {
     // A requested (band, sex) group with no members: groups still list the band, but this page is empty.
     useGetApiV1Standings.mockReturnValue({
-      data: { band: null, label: null, sex: null, limit: 25, offset: 0, entries: [], groups, bands },
+      data: { band: null, label: null, sex: null, limit: 25, offset: 0, entries: [], groups, bands, source: 'RATING' },
       isLoading: false,
     })
     const user = userEvent.setup()
@@ -265,6 +266,26 @@ describe('StandingsTab', () => {
       const lastCall = useGetApiV1Standings.mock.calls.at(-1)?.[0]
       expect(lastCall).toMatchObject({ band: undefined, offset: 0 })
     })
+  })
+
+  it('shows an explicit points empty state when source is POINTS with no entries (#428)', () => {
+    // POINTS mode with no committed snapshot: the backend returns source=POINTS and no entries, so the
+    // tab must explain the source is Points with no data yet — NOT the generic empty-band message and NOT
+    // a ratings leaderboard.
+    useGetApiV1Standings.mockReturnValue({
+      data: { band: null, label: null, sex: null, limit: 25, offset: 0, total: 0, entries: [], groups: [], bands, source: 'POINTS' },
+      isLoading: false,
+    })
+    renderTab()
+    expect(screen.getByText(/run a points calculation/i)).toBeInTheDocument()
+    expect(screen.queryByText('No players in this group.')).not.toBeInTheDocument()
+  })
+
+  it('shows the normal leaderboard (not the points empty state) when source is RATING (#428)', () => {
+    // Default fixture is source=RATING with entries; the points empty-state message must never appear.
+    renderTab()
+    expect(screen.getByText('Bob Cruz')).toBeInTheDocument()
+    expect(screen.queryByText(/run a points calculation/i)).not.toBeInTheDocument()
   })
 
   it('shows the precise rating when the payload includes it (raters/admins, #186)', () => {

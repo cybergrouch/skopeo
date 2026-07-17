@@ -103,6 +103,9 @@ export function StandingsTab() {
   }
 
   const entries = page?.entries ?? []
+  // POINTS mode with no computed snapshot (#428): the backend returns source=POINTS with no entries rather
+  // than silently serving ratings, so the tab shows an explicit "run a points calculation" empty state.
+  const isPointsEmptyState = page?.source === 'POINTS' && entries.length === 0
 
   return (
     <div className="grid gap-4">
@@ -182,7 +185,12 @@ export function StandingsTab() {
             <CardTitle>{page?.label ?? 'Standings'}</CardTitle>
           </CardHeader>
           <CardContent>
-            {entries.length === 0 ? (
+            {isPointsEmptyState ? (
+              <p className="text-sm text-muted-foreground">
+                No points standings have been computed yet — an administrator needs
+                to run a points calculation.
+              </p>
+            ) : entries.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 No players in this group.
               </p>

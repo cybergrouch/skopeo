@@ -45,6 +45,8 @@ class OpenAPIIntegrationTest {
             // and the response schemas are all documented.
             body shouldContain "/api/v1/standings/me"
             body shouldContain "StandingsPageResponse"
+            // The effective serving source is documented on the page response (#428).
+            body shouldContain "The effective serving source"
             body shouldContain "StandingsLocateResponse"
             // Every NTRP band is advertised for the dropdown (#113).
             body shouldContain "StandingsBandResponse"

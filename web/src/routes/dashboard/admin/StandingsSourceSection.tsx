@@ -14,6 +14,7 @@ import {
   useGetApiV1SettingsStandingsSource,
   usePutApiV1SettingsStandingsSource,
 } from '@/api/generated/settings/settings'
+import { getGetApiV1StandingsQueryKey } from '@/api/generated/standings/standings'
 import type { SetStandingsSourceRequestSource } from '@/api/generated/model'
 
 // The setting enum + human labels. RATING orders standings by current rating; POINTS by the ranking-points ledger.
@@ -27,9 +28,10 @@ const SOURCE_OPTIONS: ReadonlyArray<{
 
 /**
  * Admin standings-source picker (#146): reads the current serving source and writes a new one. On
- * success the source query is invalidated so the Standings tab picks up the change on its next fetch.
- * The Admin tab is already ADMINISTRATOR-gated, so no extra gating here. Points only takes effect once
- * a points snapshot has been committed; until then the tab safely falls back to the rating snapshot.
+ * success the source query AND the standings page query are invalidated so the Standings tab reflects the
+ * flip without a manual reload (#428). The Admin tab is already ADMINISTRATOR-gated, so no extra gating
+ * here. Selecting POINTS before a points snapshot exists shows an explicit empty state on the Standings
+ * tab (no silent fall-back to ratings, #428).
  */
 export function StandingsSourceSection() {
   const queryClient = useQueryClient()
@@ -54,6 +56,10 @@ export function StandingsSourceSection() {
         queryClient.invalidateQueries({
           queryKey: getGetApiV1SettingsStandingsSourceQueryKey(),
         })
+        // Refresh the Standings tab so the new source is reflected without a manual reload (#428).
+        queryClient.invalidateQueries({
+          queryKey: getGetApiV1StandingsQueryKey(),
+        })
       },
       onError: () => setError('Could not set the standings source. Try again.'),
     },
@@ -71,7 +77,8 @@ export function StandingsSourceSection() {
         <CardTitle>Standings source</CardTitle>
         <CardDescription>
           Choose which ranking the Standings tab serves. Points takes effect only once a
-          points snapshot has been calculated; until then it safely falls back to ratings.
+          points snapshot has been calculated; until then the Standings tab shows an empty
+          points state rather than falling back to ratings.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-wrap items-end gap-2">

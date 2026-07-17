@@ -15,6 +15,9 @@ vi.mock('@/api/generated/settings/settings', () => ({
   usePutApiV1SettingsStandingsSource: usePut,
   getGetApiV1SettingsStandingsSourceQueryKey: () => ['standings-source'],
 }))
+vi.mock('@/api/generated/standings/standings', () => ({
+  getGetApiV1StandingsQueryKey: () => ['standings'],
+}))
 
 type MutationOpts = { mutation: { onSuccess: () => void; onError?: (e: unknown) => void } }
 
