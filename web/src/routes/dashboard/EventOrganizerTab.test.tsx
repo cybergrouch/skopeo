@@ -7,12 +7,14 @@ import { EventOrganizerTab } from "./EventOrganizerTab";
 const {
   useGetApiV1Events,
   useGetApiV1Clubs,
+  useGetApiV1PointsPolicies,
   useGetApiV1UsersMe,
   createMutate,
   state,
 } = vi.hoisted(() => ({
   useGetApiV1Events: vi.fn(),
   useGetApiV1Clubs: vi.fn(),
+  useGetApiV1PointsPolicies: vi.fn(),
   useGetApiV1UsersMe: vi.fn(),
   createMutate: vi.fn(),
   state: { fail: false },
@@ -31,6 +33,9 @@ vi.mock("@/api/generated/events/events", () => ({
   }),
 }));
 vi.mock("@/api/generated/clubs/clubs", () => ({ useGetApiV1Clubs }));
+vi.mock("@/api/generated/points-budget/points-budget", () => ({
+  useGetApiV1PointsPolicies,
+}));
 vi.mock("@/api/generated/users/users", () => ({ useGetApiV1UsersMe }));
 vi.mock("@/components/UserSearchSelect", () => ({
   UserSearchSelect: ({
@@ -97,6 +102,18 @@ describe("EventOrganizerTab", () => {
     state.fail = false;
     useGetApiV1Events.mockReturnValue({ data: [], isLoading: false });
     useGetApiV1Clubs.mockReturnValue({ data: [], isLoading: false });
+    // Default global policies (#429): LEAGUE 5..50/90d, TOURNAMENT 10..500/365d, mirroring V16 seeds.
+    useGetApiV1PointsPolicies.mockReturnValue({
+      data: [
+        { eventType: "LEAGUE", minPoints: 5, maxPoints: 50, maxValidityDays: 90 },
+        {
+          eventType: "TOURNAMENT",
+          minPoints: 10,
+          maxPoints: 500,
+          maxValidityDays: 365,
+        },
+      ],
+    });
     // Default: a plain user with no CLUB_OWNER capability (so the #364 default never fires).
     useGetApiV1UsersMe.mockReturnValue({
       data: { id: "me", capabilities: ["HOST"] },
@@ -503,5 +520,115 @@ describe("EventOrganizerTab", () => {
     await user.click(toggle);
     expect(toggle).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText("Alpha Cup")).toBeInTheDocument();
+  });
+
+  // --- Points config on create (#429) ---
+
+  it("shows and requires points config for a budgeted event with a club, and sends it (#429)", async () => {
+    useGetApiV1Clubs.mockReturnValue({
+      data: [{ id: "c1", name: "Downtown TC", isActive: true, owners: [] }],
+      isLoading: false,
+    });
+    const user = userEvent.setup();
+    renderTab();
+    await user.type(screen.getByLabelText("Name"), "League Night");
+    await user.type(screen.getByLabelText("Start date"), "2026-06-01");
+    await user.type(screen.getByLabelText("End date"), "2026-06-02");
+    await user.selectOptions(screen.getByLabelText("Type"), "LEAGUE");
+    await user.selectOptions(screen.getByLabelText("Club"), "c1");
+
+    // The points-config fields appear (hidden until budgeted type + club); the global hint shows.
+    expect(screen.getByLabelText("Min points")).toBeInTheDocument();
+    expect(
+      screen.getByText(/global League policy allows 5–50 points/),
+    ).toBeInTheDocument();
+    // Required until filled: the submit stays disabled with the fields blank.
+    expect(
+      screen.getByRole("button", { name: "Create event" }),
+    ).toBeDisabled();
+
+    await user.type(screen.getByLabelText("Min points"), "10");
+    await user.type(screen.getByLabelText("Max points"), "40");
+    await user.type(screen.getByLabelText("Validity start"), "2026-06-01");
+    await user.type(screen.getByLabelText("Validity end"), "2026-08-01");
+    await user.click(screen.getByRole("button", { name: "Create event" }));
+
+    expect(createMutate).toHaveBeenCalledWith({
+      data: {
+        name: "League Night",
+        startDate: "2026-06-01",
+        endDate: "2026-06-02",
+        type: "LEAGUE",
+        participantIds: [],
+        clubId: "c1",
+        minPointsPerMatch: 10,
+        maxPointsPerMatch: 40,
+        pointValidityStart: "2026-06-01",
+        pointValidityEnd: "2026-08-01",
+      },
+    });
+  });
+
+  it("hides points config for OPEN_PLAY or a clubless budgeted event, creating without it (#429)", async () => {
+    useGetApiV1Clubs.mockReturnValue({
+      data: [{ id: "c1", name: "Downtown TC", isActive: true, owners: [] }],
+      isLoading: false,
+    });
+    const user = userEvent.setup();
+    renderTab();
+    await user.type(screen.getByLabelText("Name"), "Casual Meetup");
+    await user.type(screen.getByLabelText("Start date"), "2026-06-01");
+    await user.type(screen.getByLabelText("End date"), "2026-06-02");
+
+    // OPEN_PLAY (the default) with a club → no points fields.
+    await user.selectOptions(screen.getByLabelText("Club"), "c1");
+    expect(screen.queryByLabelText("Min points")).not.toBeInTheDocument();
+
+    // A budgeted type WITHOUT a club → still no points fields (deferred; settable later).
+    await user.selectOptions(screen.getByLabelText("Type"), "TOURNAMENT");
+    await user.selectOptions(screen.getByLabelText("Club"), "");
+    expect(screen.queryByLabelText("Min points")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Create event" }));
+    // Created without any points fields.
+    expect(createMutate).toHaveBeenCalledWith({
+      data: {
+        name: "Casual Meetup",
+        startDate: "2026-06-01",
+        endDate: "2026-06-02",
+        type: "TOURNAMENT",
+        participantIds: [],
+      },
+    });
+  });
+
+  it("flags points values outside the global policy bounds (#429)", async () => {
+    useGetApiV1Clubs.mockReturnValue({
+      data: [{ id: "c1", name: "Downtown TC", isActive: true, owners: [] }],
+      isLoading: false,
+    });
+    const user = userEvent.setup();
+    renderTab();
+    await user.type(screen.getByLabelText("Name"), "League Night");
+    await user.type(screen.getByLabelText("Start date"), "2026-06-01");
+    await user.type(screen.getByLabelText("End date"), "2026-06-02");
+    await user.selectOptions(screen.getByLabelText("Type"), "LEAGUE");
+    await user.selectOptions(screen.getByLabelText("Club"), "c1");
+
+    // Min below LEAGUE's global minimum of 5 → the create button stays disabled (invalid window).
+    await user.type(screen.getByLabelText("Min points"), "1");
+    await user.type(screen.getByLabelText("Max points"), "40");
+    await user.type(screen.getByLabelText("Validity start"), "2026-06-01");
+    await user.type(screen.getByLabelText("Validity end"), "2026-08-01");
+    expect(
+      screen.getByRole("button", { name: "Create event" }),
+    ).toBeDisabled();
+    expect(createMutate).not.toHaveBeenCalled();
+
+    // Correcting the min to a within-bounds value re-enables and sends it.
+    await user.clear(screen.getByLabelText("Min points"));
+    await user.type(screen.getByLabelText("Min points"), "10");
+    await user.click(screen.getByRole("button", { name: "Create event" }));
+    expect(createMutate).toHaveBeenCalledTimes(1);
   });
 });

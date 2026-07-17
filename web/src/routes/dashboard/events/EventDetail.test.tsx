@@ -828,6 +828,22 @@ describe('EventDetail', () => {
     expect(screen.queryByLabelText(/Designated points/)).not.toBeInTheDocument()
   })
 
+  it('hides the points config for a budgeted event with no club, and shows it once a club is set (#429)', () => {
+    // A clubless budgeted event → no points editor (no budget source; mirrors "no club → no points").
+    useGetApiV1EventsId.mockReturnValue({
+      data: { ...tournamentEvent, clubId: null },
+      isLoading: false,
+    })
+    const { unmount } = renderDetail()
+    expect(screen.queryByText('Points config')).not.toBeInTheDocument()
+    unmount()
+
+    // Assigning a club later reveals the editor so the organizer can set the config.
+    useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
+    renderDetail()
+    expect(screen.getByText('Points config')).toBeInTheDocument()
+  })
+
   it('shows the points config with global bounds and current values, and saves an edit (#403 Phase C)', async () => {
     useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
     useGetApiV1PointsPolicies.mockReturnValue({

@@ -178,6 +178,7 @@ class StandingsServiceTest {
         val men = page(band = StandingsBand.FROM_4_0, sex = "Male")
         men.band shouldBe StandingsBand.FROM_4_0
         men.sex shouldBe "Male"
+        men.source shouldBe SnapshotSource.RATING
         men.total shouldBe 2
         men.entries.map { it.userId } shouldContainExactly listOf(m1.id, m2.id) // 4.3 ahead of 4.1
         men.entries.map { it.rank } shouldContainExactly listOf(1, 2)
@@ -325,6 +326,7 @@ class StandingsServiceTest {
 
         val view = page(band = null, sex = null)
         view.band shouldBe StandingsBand.FROM_4_0 // the live rating band, not the POINTS snapshot's SIX_PLUS
+        view.source shouldBe SnapshotSource.RATING
     }
 
     @Test
@@ -337,22 +339,30 @@ class StandingsServiceTest {
 
         val view = page(band = null, sex = null)
         view.band shouldBe StandingsBand.SIX_PLUS // the POINTS snapshot's group
+        view.entries.single().userId shouldBe u.id
+        view.source shouldBe SnapshotSource.POINTS
     }
 
     @Test
-    fun `POINTS with no published snapshot falls back to the live RATING calculation (#146)`() {
-        // Configured POINTS, but no POINTS snapshot exists → the tab is never blank; it falls back to live.
+    fun `POINTS with no published snapshot returns an empty POINTS view, not the rating leaderboard (#428)`() {
+        // Configured POINTS but no POINTS snapshot exists → an explicit empty view tagged source=POINTS.
+        // It must NOT silently fall back to the live rating leaderboard (which would show this rated player).
         val u = provision(uid = "u", sex = "Male").also { rate(user = it, value = "4.2") }
         publishSnapshot(
             source = SnapshotSource.RATING,
             user = u,
             band = StandingsBand.SIX_PLUS,
             rating = "6.5",
-        ) // dead RATING snapshot, ignored
+        ) // dead RATING snapshot, ignored — only POINTS snapshots count under POINTS
         setSource(value = "POINTS")
 
         val view = page(band = null, sex = null)
-        view.band shouldBe StandingsBand.FROM_4_0 // the live rating band, not the dead RATING snapshot
+        view.source shouldBe SnapshotSource.POINTS
+        view.band.shouldBeNull() // no rating fallback: no live 4.0 band leaks through
+        view.entries shouldHaveSize 0
+        view.total shouldBe 0
+        view.groups shouldHaveSize 0
+        view.allBands shouldContainExactly StandingsBand.entries.reversed()
     }
 
     @Test
@@ -375,6 +385,16 @@ class StandingsServiceTest {
         view.total shouldBe 0
         view.groups shouldHaveSize 0
         view.allBands shouldContainExactly StandingsBand.entries.reversed()
+        view.source shouldBe SnapshotSource.POINTS
+    }
+
+    @Test
+    fun `locateMe is null under POINTS when no POINTS snapshot exists, no rating fallback (#428)`() {
+        // POINTS configured but no POINTS snapshot: locate must be null, not the caller's live rating row.
+        provision(uid = "me", sex = "Male").also { rate(user = it, value = "4.2") }
+        setSource(value = "POINTS")
+
+        service.locateMe(token = token(uid = "me"), limit = 25).shouldBeNull()
     }
 
     @Test

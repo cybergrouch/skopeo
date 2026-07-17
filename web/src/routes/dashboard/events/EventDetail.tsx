@@ -360,7 +360,10 @@ export function EventDetail({
 
   // Points designation (#403 Phase C) applies only to a budgeted-type event (TOURNAMENT/LEAGUE) with a
   // configured reward window. The global policy bounds back the config's helper text.
-  const isBudgeted = !!event && BUDGETED_EVENT_TYPES.includes(event.type);
+  const isBudgetedType = !!event && BUDGETED_EVENT_TYPES.includes(event.type);
+  // The points-config editor is shown only for a budgeted event that has a club — the budget source
+  // (#429), mirroring "no club → no points". Assigning a club later reveals the editor.
+  const isBudgeted = isBudgetedType && event?.clubId != null;
   const globalPolicy = policies?.find((p) => p.eventType === event?.type);
   const hasPointsConfig =
     isBudgeted &&
