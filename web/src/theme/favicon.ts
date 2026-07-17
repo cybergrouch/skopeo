@@ -21,7 +21,7 @@ import type { ThemeName } from "@/lib/season";
  * - christmas: Santa Crimson `#CE2029` (the canvas). The gold accent `#FFD700` requested in #409 is
  *   only 1.40:1 against the white ball — invisible at 16px — so we tint with the vibrant crimson
  *   canvas instead (5.44:1), which still reads unmistakably festive.
- * - ao: Vivid Stadium Blue `#0080C8` (canvas; 4.27:1). The volt `#CCFF00` accent washes out.
+ * - ao: AO True Blue `#0056B3` (canvas; 7.04:1). The volt `#CCFF00` accent washes out.
  * - clay: Brick Terracotta `#C1522D` (canvas; 4.65:1; deeper/steadier than the `#E07A5F` accent).
  * - grass: Lush Lawn Green `#00703C` (canvas; 6.21:1) — grass is green again under #409.
  * - uso: apple green. [unchanged, #402]
@@ -29,7 +29,7 @@ import type { ThemeName } from "@/lib/season";
 const THEME_ACCENT: Record<ThemeName, string> = {
   offseason: "#212529",
   christmas: "#CE2029",
-  ao: "#0080C8",
+  ao: "#0056B3",
   clay: "#C1522D",
   grass: "#00703C",
   uso: "#63B233",
