@@ -29,8 +29,13 @@ describe('PublicPageNav', () => {
   it('shows a sign-up / log-in CTA for anonymous viewers (#193)', () => {
     renderNav()
     expect(screen.getByText(/Sign up to track your own ratings/i)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Sign up' })).toHaveAttribute('href', '/signup')
-    expect(screen.getByRole('link', { name: 'Log in' })).toHaveAttribute('href', '/login')
+    const signUp = screen.getByRole('link', { name: 'Sign up' })
+    const logIn = screen.getByRole('link', { name: 'Log in' })
+    expect(signUp).toHaveAttribute('href', '/signup')
+    expect(logIn).toHaveAttribute('href', '/login')
+    // The CTA links wear the themed content-link style (#452).
+    expect(signUp).toHaveClass('content-link')
+    expect(logIn).toHaveClass('content-link')
     expect(screen.queryByText('← Back to dashboard')).not.toBeInTheDocument()
   })
 
@@ -38,7 +43,10 @@ describe('PublicPageNav', () => {
     // A single-entry history (pasted link / new tab) → the first entry's key is 'default'.
     state.user = { uid: 'u1' }
     renderNav()
-    expect(screen.getByRole('link', { name: '← Back to dashboard' })).toHaveAttribute('href', '/dashboard')
+    const backToDashboard = screen.getByRole('link', { name: '← Back to dashboard' })
+    expect(backToDashboard).toHaveAttribute('href', '/dashboard')
+    // The Back-to-dashboard link wears the themed content-link style (#452).
+    expect(backToDashboard).toHaveClass('content-link')
     expect(screen.queryByText(/Sign up to track/i)).not.toBeInTheDocument()
   })
 
@@ -56,6 +64,8 @@ describe('PublicPageNav', () => {
     expect(screen.queryByRole('link', { name: '← Back to dashboard' })).not.toBeInTheDocument()
     expect(screen.getByTestId('path')).toHaveTextContent('/players/AAA111')
 
+    // The Back button wears the themed content-link style (#452).
+    expect(screen.getByRole('button', { name: '← Back' })).toHaveClass('content-link')
     await user.click(screen.getByRole('button', { name: '← Back' }))
     expect(screen.getByTestId('path')).toHaveTextContent('/dashboard/standings')
   })

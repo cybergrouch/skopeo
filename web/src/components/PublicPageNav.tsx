@@ -1,4 +1,5 @@
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { ContentLink } from '@/components/ContentLink'
 import { useAuth } from '@/auth/useAuth'
 
 /**
@@ -21,16 +22,16 @@ export function PublicPageNav() {
         <button
           type="button"
           onClick={() => navigate(-1)}
-          className="text-sm text-primary hover:underline"
+          className="content-link text-sm"
         >
           ← Back
         </button>
       )
     }
     return (
-      <Link to="/dashboard" className="text-sm text-primary hover:underline">
+      <ContentLink to="/dashboard" className="text-sm">
         ← Back to dashboard
-      </Link>
+      </ContentLink>
     )
   }
 
@@ -39,17 +40,13 @@ export function PublicPageNav() {
       <span className="text-muted-foreground">
         Sign up to track your own ratings and matches.
       </span>{' '}
-      <Link to="/signup" className="font-medium text-primary hover:underline">
+      <ContentLink to="/signup" className="font-medium">
         Sign up
-      </Link>
+      </ContentLink>
       {' · '}
-      <Link
-        to="/login"
-        state={{ from: location }}
-        className="font-medium text-primary hover:underline"
-      >
+      <ContentLink to="/login" state={{ from: location }} className="font-medium">
         Log in
-      </Link>
+      </ContentLink>
     </div>
   )
 }

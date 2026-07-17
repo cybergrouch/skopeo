@@ -1,4 +1,5 @@
 import { Link, useParams } from 'react-router-dom'
+import { ContentLink } from '@/components/ContentLink'
 import { PublicPageLink } from '@/components/PublicPageLink'
 import {
   Card,
@@ -21,11 +22,7 @@ import { formatConfidence } from '@/lib/confidence'
 function PlayerLink({ player }: { player: MatchPublicPlayer }) {
   const label = player.displayName ?? player.publicCode ?? 'Unknown'
   if (!player.publicCode) return <span>{label}</span>
-  return (
-    <Link to={`/players/${player.publicCode}`} className="text-primary hover:underline">
-      {label}
-    </Link>
-  )
+  return <ContentLink to={`/players/${player.publicCode}`}>{label}</ContentLink>
 }
 
 /** A side's players, comma-separated, marked as the winner when applicable. */
@@ -74,12 +71,7 @@ function RatingChangeRow({ change }: { change: MatchPublicRatingChange }) {
     <div className="flex items-center justify-between gap-2">
       <span>
         {change.publicCode ? (
-          <Link
-            to={`/players/${change.publicCode}`}
-            className="text-primary hover:underline"
-          >
-            {name}
-          </Link>
+          <ContentLink to={`/players/${change.publicCode}`}>{name}</ContentLink>
         ) : (
           name
         )}

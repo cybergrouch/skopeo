@@ -17,6 +17,7 @@ import {
 } from '@/api/generated/events/events'
 import type { EventParticipantResponse, MatchPublicResponse } from '@/api/generated/model'
 import { ShareCard } from '@/components/ShareCard'
+import { ContentLink } from '@/components/ContentLink'
 import { PublicPageNav } from '@/components/PublicPageNav'
 import { useAuth } from '@/auth/useAuth'
 import { playerLabel } from '@/lib/playerLabel'
@@ -84,11 +85,7 @@ function JoinCard({ code, viewerStatus }: { code: string; viewerStatus?: string 
 function ParticipantLink({ p }: { p: EventParticipantResponse }) {
   const label = playerLabel(p.displayName, p.publicCode, p.userId)
   if (!p.publicCode) return <span>{label}</span>
-  return (
-    <Link to={`/players/${p.publicCode}`} className="text-primary hover:underline">
-      {label}
-    </Link>
-  )
+  return <ContentLink to={`/players/${p.publicCode}`}>{label}</ContentLink>
 }
 
 type StatusBadge = { label: string; variant: 'default' | 'secondary' | 'outline' }
