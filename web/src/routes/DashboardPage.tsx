@@ -113,7 +113,7 @@ export function DashboardPage() {
           {
             value: "points",
             label: "Points Management",
-            element: <PointsManagementSection />,
+            element: <PointsManagementSection capabilities={capabilities} />,
           },
         ]
       : []),
