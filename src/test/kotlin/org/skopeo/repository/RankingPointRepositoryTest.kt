@@ -142,4 +142,36 @@ class RankingPointRepositoryTest {
 
         awards.activeAsOf(asOf = now).map { it.id } shouldContainExactly listOf(element = inWindow.id)
     }
+
+    @Test
+    fun `listActiveByUser returns only this user's active in-window awards soonest-expiry-first (#448)`() {
+        val user = newUser(uid = "p1")
+        val other = newUser(uid = "p2")
+        val now = LocalDateTime.of(2026, 6, 1, 0, 0)
+
+        // Two in-window active awards for the user — the one expiring sooner sorts first.
+        val laterExpiry = awards.award(write = write(userId = user, validFrom = now.minusMonths(1), validUntil = now.plusMonths(6)))
+        val soonerExpiry = awards.award(write = write(userId = user, validFrom = now.minusMonths(1), validUntil = now.plusMonths(1)))
+        // Expired and future awards for the user drop out.
+        awards.award(write = write(userId = user, validFrom = now.minusMonths(6), validUntil = now.minusMonths(3)))
+        awards.award(write = write(userId = user, validFrom = now.plusMonths(1), validUntil = now.plusMonths(6)))
+        // A revoked award drops out.
+        val revoked = awards.award(write = write(userId = user, validFrom = now.minusMonths(1), validUntil = now.plusMonths(2)))
+        awards.revoke(awardId = revoked.id, revokedBy = null, reason = null, revokedAt = now)
+        // Another user's in-window award never appears.
+        awards.award(write = write(userId = other, validFrom = now.minusMonths(1), validUntil = now.plusMonths(1)))
+
+        awards.listActiveByUser(userId = user, asOf = now).map { it.id } shouldContainExactly listOf(soonerExpiry.id, laterExpiry.id)
+    }
+
+    @Test
+    fun `a manual award has a null match link that round-trips (#448)`() {
+        // Manual grants carry no match id (the match FK stays null). The finalize path's non-null match
+        // link is exercised end-to-end in EventFinalizeAwarderTest, where a real match row exists to
+        // satisfy the FK. Here we just confirm the null default round-trips through insert and read.
+        val user = newUser(uid = "p1")
+        val award = awards.award(write = write(userId = user))
+        award.matchId.shouldBeNull()
+        awards.findById(id = award.id)!!.matchId.shouldBeNull()
+    }
 }

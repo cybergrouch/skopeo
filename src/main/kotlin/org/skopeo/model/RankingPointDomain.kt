@@ -78,6 +78,9 @@ data class RankingPointAward(
     val awardedAt: LocalDateTime,
     // The event that produced this award on finalize (#403 Phase D); null for manual / external grants.
     val eventId: UUID? = null,
+    // The specific match (fixture) that granted this award on finalize (#448); null for manual grants
+    // and pre-V19 awards — the profile points audit then falls back to linking the [eventId].
+    val matchId: UUID? = null,
 ) {
     /** Whether this award is active and its validity window contains [asOf] — i.e. it counts then. */
     fun countsAsOf(asOf: LocalDateTime): Boolean = status == AwardStatus.ACTIVE && !asOf.isBefore(validFrom) && asOf.isBefore(validUntil)
@@ -118,4 +121,6 @@ data class RankingPointAwardWrite(
     val awardedAt: LocalDateTime,
     // The event that produced this award on finalize (#403 Phase D); null for manual / external grants.
     val eventId: UUID? = null,
+    // The specific match (fixture) that granted this award on finalize (#448); null for manual grants.
+    val matchId: UUID? = null,
 )

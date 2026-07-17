@@ -544,6 +544,74 @@ paths:
         '404':
           description: No active player with that code
 
+  /api/v1/players/{code}/standing:
+    get:
+      summary: A player's band+sex rank and points by code (viewable without login, #448)
+      description: >-
+        The player's rank within their (NTRP band, sex) group and the points backing it, under the
+        active standings source (#424). Order and points are public (#64/#114), so this is viewable
+        without login on the public profile. An unranked player (unrated, or no points in the current
+        standings) yields 204 No Content, which the UI renders as "unranked".
+      tags:
+        - Users
+      security:
+        - firebaseAuth: []
+        - {}
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The player's shareable public code (case-insensitive).
+      responses:
+        '200':
+          description: The player's current band+sex rank and points
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerStandingResponse'
+        '204':
+          description: The player is unranked (unrated, or absent from the current standings)
+        '404':
+          description: No active player with that code
+
+  /api/v1/players/{code}/points:
+    get:
+      summary: A player's active ranking-point awards by code (owner or ADMINISTRATOR only, #448)
+      description: >-
+        The profile points audit — the player's ACTIVE ranking-point awards (status ACTIVE and now
+        within their validity window). Each award carries its points, band, expiry (validUntil), and a
+        link to the granting match (its public code); an award with no match link (a manual grant or a
+        pre-V19 finalize award) falls back to the event code. Visible only to the profile owner and to
+        ADMINISTRATORs; other and anonymous viewers get 403.
+      tags:
+        - Users
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The player's shareable public code (case-insensitive).
+      responses:
+        '200':
+          description: The player's active ranking-point awards
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ActivePointsAwardResponse'
+        '401':
+          description: Missing or invalid Firebase token
+        '403':
+          description: Caller is neither the owner nor an ADMINISTRATOR
+        '404':
+          description: No active player with that code
+
   /api/v1/users/{id}:
     parameters:
       - name: id
@@ -3955,6 +4023,70 @@ components:
           type: integer
         losses:
           type: integer
+
+    PlayerStandingResponse:
+      type: object
+      description: A player's current band+sex rank and points under the active standings source (#448).
+      required:
+        - band
+        - bandLabel
+        - rank
+        - points
+        - source
+      properties:
+        band:
+          type: string
+          description: The band's persisted code (e.g. "4.0").
+        bandLabel:
+          type: string
+          description: The band's UI header label (e.g. "NTRP 4.0 Band Race").
+        sex:
+          type: string
+          nullable: true
+          description: The sex group (Male, Female, or null for Unspecified).
+        rank:
+          type: integer
+          description: 1-based rank within the (band, sex) group.
+        points:
+          type: string
+          description: Points backing the rank as a decimal string (the current rating for RATING, snapshot points for POINTS).
+        source:
+          type: string
+          description: Which race this rank is for (#424); RATING or POINTS.
+
+    ActivePointsAwardResponse:
+      type: object
+      description: One ACTIVE ranking-point award on a player's points audit (#448), linked to its granting match.
+      required:
+        - id
+        - points
+        - band
+        - pointClass
+        - validUntil
+      properties:
+        id:
+          type: string
+          format: uuid
+        points:
+          type: string
+          description: The award's points as a decimal string.
+        band:
+          type: string
+          description: The NTRP band tagged on the award (e.g. "4.0").
+        pointClass:
+          type: string
+          description: The point class (e.g. SEASONAL_TOURNAMENT_3M, ANNUAL_TOURNAMENT).
+        validUntil:
+          type: string
+          description: The award's expiry (exclusive end of its validity window) as an ISO date-time.
+        matchCode:
+          type: string
+          nullable: true
+          description: The granting match's public code; link to /matches/{matchCode}. Null for manual or pre-V19 awards.
+        eventCode:
+          type: string
+          nullable: true
+          description: Fallback event code when there is no match link; link to /events/{eventCode}.
 
     UserSummaryPageResponse:
       type: object

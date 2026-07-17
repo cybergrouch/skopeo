@@ -12,6 +12,8 @@ import { WinLossCard } from "@/components/WinLossCard";
 import { UpcomingMatchesCard } from "@/components/UpcomingMatchesCard";
 import { EventsHistoryCard } from "@/components/EventsHistoryCard";
 import { RatingHistoryCard } from "@/components/RatingHistoryCard";
+import { PlayerStandingCard } from "@/components/PlayerStandingCard";
+import { PointsAuditCard } from "@/components/PointsAuditCard";
 import { RatingBandMeter } from "@/components/RatingBandMeter";
 import { formatConfidence } from "@/lib/confidence";
 import { ShareCard } from "@/components/ShareCard";
@@ -156,6 +158,12 @@ export function ProfileTab({
           </div>
         </CardContent>
       </Card>
+
+      {/* Band+sex rank + points headline (#448) — public, but shown here on the owner's own profile. */}
+      {publicCode ? <PlayerStandingCard code={publicCode} /> : null}
+
+      {/* Active-points audit (#448) — the owner is always viewing their own profile, so it's enabled. */}
+      {publicCode ? <PointsAuditCard code={publicCode} enabled={true} /> : null}
 
       {hasRating ? <ReRateRequestCard /> : null}
 

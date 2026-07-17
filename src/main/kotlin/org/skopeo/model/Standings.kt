@@ -121,3 +121,18 @@ data class StandingsLocation(
     val sex: String?,
     val rank: Int,
 )
+
+/**
+ * A single player's competitive standing (#448) shown on their profile: their [rank] within their
+ * (band, sex) group and the [points] backing it — the ordering value under the **active**
+ * `standings_source` (the live rating for RATING, the snapshot points for POINTS). Null (absent) when
+ * the player isn't in the current standings (unrated / no points), so the UI shows "unranked".
+ */
+data class PlayerStanding(
+    val band: StandingsBand,
+    val sex: String?,
+    val rank: Int,
+    val points: BigDecimal,
+    // Which race this rank is for (#424): RATING = live rating, POINTS = the points snapshot.
+    val source: SnapshotSource,
+)

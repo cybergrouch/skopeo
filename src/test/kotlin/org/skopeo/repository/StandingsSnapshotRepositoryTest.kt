@@ -194,7 +194,7 @@ class StandingsSnapshotRepositoryTest {
     }
 
     @Test
-    fun `locate finds a user's (band, sex, rank), null when absent (#220)`() {
+    fun `locateEntry finds a user's (band, sex, rank) and points, null when absent (#220, #448)`() {
         val present = newUser(uid = "here")
         val absent = newUser(uid = "gone")
         val id =
@@ -208,12 +208,13 @@ class StandingsSnapshotRepositoryTest {
                         write(band = StandingsBand.FROM_4_0, sex = "Male", rank = 2, userId = present, rating = "4.1"),
                     ),
             )
-        val located = repo.locate(snapshotId = id, userId = present).shouldNotBeNull()
+        val located = repo.locateEntry(snapshotId = id, userId = present).shouldNotBeNull()
         located.band shouldBe StandingsBand.FROM_4_0
         located.sex shouldBe "Male"
         located.rank shouldBe 2
+        located.orderingValue shouldBe BigDecimal("4.1000")
 
-        repo.locate(snapshotId = id, userId = absent).shouldBeNull()
+        repo.locateEntry(snapshotId = id, userId = absent).shouldBeNull()
     }
 
     @Test

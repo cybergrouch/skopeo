@@ -54,6 +54,11 @@ class OpenAPIIntegrationTest {
             body shouldContain "/api/v1/standings/calculations"
             body shouldContain "StandingsCalculationResponse"
             body shouldContain "/ranking-points"
+            // Profile band+sex rank + points and the owner-or-admin points audit (#448).
+            body shouldContain "/api/v1/players/{code}/standing"
+            body shouldContain "PlayerStandingResponse"
+            body shouldContain "/api/v1/players/{code}/points"
+            body shouldContain "ActivePointsAwardResponse"
             // Event types + finalize state (#403 Phase A): the finalize path is documented.
             body shouldContain "/api/v1/events/{id}/finalize"
             // Points budget foundation (#403 Phase B): the policy + budget paths and schemas.

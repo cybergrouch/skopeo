@@ -11,6 +11,7 @@ import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.innerJoin
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.insertAndGetId
+import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
@@ -188,6 +189,22 @@ class EventRepository {
                 .where { EventsTable.publicCode eq code }
                 .singleOrNull()
                 ?.let { buildEvent(row = it) }
+        }
+
+    /**
+     * The shareable public code for each of [ids] that exists, keyed by event id (#448) — a light
+     * batch lookup for linking points-audit rows to `/events/:code` without loading full events.
+     */
+    fun publicCodesByIds(ids: List<UUID>): Map<UUID, String> =
+        if (ids.isEmpty()) {
+            emptyMap()
+        } else {
+            transaction {
+                EventsTable
+                    .select(columns = listOf(EventsTable.id, EventsTable.publicCode))
+                    .where { EventsTable.id inList ids }
+                    .associate { it[EventsTable.id].value to it[EventsTable.publicCode] }
+            }
         }
 
     /**

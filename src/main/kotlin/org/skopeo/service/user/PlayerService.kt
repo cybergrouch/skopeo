@@ -6,12 +6,15 @@ package org.skopeo.service.user
 import arrow.core.Either
 import arrow.core.left
 import arrow.core.raise.either
+import arrow.core.raise.ensure
 import arrow.core.right
+import org.skopeo.dto.user.ActivePointsAwardResponse
 import org.skopeo.dto.user.MatchHistoryParticipant
 import org.skopeo.dto.user.OpponentSummary
 import org.skopeo.dto.user.PlayerMatchHistoryEntry
 import org.skopeo.dto.user.PlayerMatchHistoryPage
 import org.skopeo.dto.user.PlayerResultsSummary
+import org.skopeo.dto.user.PlayerStandingResponse
 import org.skopeo.dto.user.PublicPlayerResponse
 import org.skopeo.dto.user.PublicRatingDto
 import org.skopeo.dto.user.ResultsBucket
@@ -22,9 +25,13 @@ import org.skopeo.model.ServiceError
 import org.skopeo.model.TeamType
 import org.skopeo.model.User
 import org.skopeo.model.displayName
+import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
+import org.skopeo.repository.RankingPointRepository
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
+import org.skopeo.service.standings.StandingsService
+import java.time.LocalDateTime
 import java.util.UUID
 
 // Match-history pagination (#284): the default page size and the hard cap, mirroring player search (#232).
@@ -42,10 +49,13 @@ class PlayerService(
     private val users: UserRepository = UserRepository(),
     private val ratings: RatingRepository = RatingRepository(),
     private val matches: MatchRepository = MatchRepository(),
+    private val standings: StandingsService = StandingsService(),
+    private val awards: RankingPointRepository = RankingPointRepository(),
+    private val events: EventRepository = EventRepository(),
 ) {
     fun publicProfile(code: String): Either<ServiceError, PublicPlayerResponse> =
         either {
-            val located = locate(code = code).bind()
+            val located = resolve(code = code, requireActive = false).bind()
             if (!located.isActive) {
                 mergedCard(located = located).bind()
             } else {
@@ -225,35 +235,85 @@ class PlayerService(
         code: String,
     ): Either<ServiceError, List<RatingHistoryEntry>> =
         either {
-            requireAdmin(token = token).bind()
+            // ADMINISTRATOR-only: the owner reads their own history via the user-id endpoint (#73).
+            val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+            ensure(condition = caller != null && Capability.ADMINISTRATOR in caller.capabilities) { ServiceError.Forbidden() }
             val user = resolve(code = code).bind()
             ratings.historyByUser(userId = user.id)
         }
 
-    private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, Unit> {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
-        return if (caller == null || Capability.ADMINISTRATOR !in caller.capabilities) {
-            ServiceError.Forbidden().left()
-        } else {
-            Unit.right()
+    /**
+     * A player's current competitive standing (#448) by code — their rank within their (band, sex)
+     * group and the points backing it, under the active `standings_source`. Public (order + points
+     * are, #64/#114), so it needs no token and renders on the anonymous public profile. A right-null
+     * means the player is unranked (unrated / no points in the current standings); the UI shows so.
+     */
+    fun standing(code: String): Either<ServiceError, PlayerStandingResponse?> =
+        either {
+            val user = resolve(code = code).bind()
+            standings.locatePlayer(userId = user.id)?.let {
+                PlayerStandingResponse(
+                    band = it.band.code,
+                    bandLabel = it.band.label,
+                    sex = it.sex,
+                    rank = it.rank,
+                    points = it.points.toPlainString(),
+                    source = it.source.name,
+                )
+            }
         }
-    }
 
-    private fun resolve(code: String): Either<ServiceError, User> {
+    /**
+     * A player's ACTIVE ranking-point awards (#448) for the profile points audit — owner-or-admin only.
+     * Each award carries its points, band, expiry ([validUntil]), and a link to the granting match (its
+     * public code → `/matches/:code`); an award with no match link (a manual grant or a pre-V19 finalize
+     * award) falls back to the event code (→ `/events/:code`). Not visible to other / anonymous viewers.
+     */
+    fun activePoints(
+        token: VerifiedFirebaseToken,
+        code: String,
+    ): Either<ServiceError, List<ActivePointsAwardResponse>> =
+        either {
+            val user = resolve(code = code).bind()
+            // Owner-or-admin only (#448): the caller is the profile owner, or holds ADMINISTRATOR.
+            val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+            val allowed = caller != null && (caller.id == user.id || Capability.ADMINISTRATOR in caller.capabilities)
+            ensure(condition = allowed) { ServiceError.Forbidden() }
+
+            val active = awards.listActiveByUser(userId = user.id, asOf = LocalDateTime.now())
+            val matchCodes = matches.publicRefsByIds(ids = active.mapNotNull { it.matchId }).mapValues { it.value.publicCode }
+            val eventCodes = events.publicCodesByIds(ids = active.mapNotNull { it.eventId })
+            // Prefer the match link; fall back to the event only when there is no match (manual / pre-V19).
+            active.map { award ->
+                val matchCode = award.matchId?.let { matchCodes[it] }
+                ActivePointsAwardResponse(
+                    id = award.id.toString(),
+                    points = award.points.toPlainString(),
+                    band = award.band,
+                    pointClass = award.pointClass.name,
+                    validUntil = award.validUntil.toString(),
+                    matchCode = matchCode,
+                    eventCode = if (matchCode == null) award.eventId?.let { eventCodes[it] } else null,
+                )
+            }
+        }
+
+    /**
+     * Resolve a player by public code (case-insensitive); 404 when unknown. [requireActive] = true (the
+     * default) also 404s a deactivated account for the normal reads; the public-profile path passes false
+     * so a disabled duplicate still resolves to a viewable "merged" card (#124).
+     */
+    private fun resolve(
+        code: String,
+        requireActive: Boolean = true,
+    ): Either<ServiceError, User> {
         val normalized = code.trim().uppercase()
         val user = users.findByPublicCode(code = normalized)
-        return if (user == null || !user.isActive) {
+        return if (user == null || (requireActive && !user.isActive)) {
             ServiceError.NotFound(message = "No player with code $normalized").left()
         } else {
             user.right()
         }
-    }
-
-    /** Find by code regardless of active status (a disabled duplicate still has a viewable card); 404 if unknown. */
-    private fun locate(code: String): Either<ServiceError, User> {
-        val normalized = code.trim().uppercase()
-        val user = users.findByPublicCode(code = normalized)
-        return if (user == null) ServiceError.NotFound(message = "No player with code $normalized").left() else user.right()
     }
 
     /** The "self" id (canonical or one of its duplicates) that actually played [match]. */

@@ -14,9 +14,11 @@ import {
 import { MatchHistoryCard } from '@/components/MatchHistoryCard'
 import { WinLossCard } from '@/components/WinLossCard'
 import { RatingHistoryCard } from '@/components/RatingHistoryCard'
+import { PlayerStandingCard } from '@/components/PlayerStandingCard'
+import { PointsAuditCard } from '@/components/PointsAuditCard'
 import { ShareCard } from '@/components/ShareCard'
 import { PublicPageNav } from '@/components/PublicPageNav'
-import { isAdministrator } from '@/auth/capabilities'
+import { canViewPointsAudit, isAdministrator } from '@/auth/capabilities'
 import { formatConfidence } from '@/lib/confidence'
 
 /**
@@ -36,6 +38,15 @@ export function PlayerProfilePage() {
   const ratingHistoryQuery = useGetApiV1PlayersCodeRatingHistory(code, {
     query: { enabled: isAdmin },
   })
+
+  // The active-points audit (#448) is owner-or-admin only: the viewer owns this profile when their own
+  // public code matches, else they must be an ADMINISTRATOR. Other/anonymous viewers see only the
+  // public rank + points headline (never the audit) — this also gates the (403) fetch.
+  const isOwner =
+    meQuery.data?.publicCode !== undefined &&
+    player?.publicCode !== undefined &&
+    meQuery.data.publicCode === player.publicCode
+  const canSeeAudit = canViewPointsAudit(meQuery.data?.capabilities, isOwner)
 
   return (
     <div className="flex min-h-svh items-start justify-center bg-muted/40 p-4">
@@ -127,6 +138,14 @@ export function PlayerProfilePage() {
               )}
             </CardContent>
           </Card>
+        ) : null}
+
+        {player && !player.isDisabled ? (
+          <PlayerStandingCard code={player.publicCode} />
+        ) : null}
+
+        {player && !player.isDisabled && canSeeAudit ? (
+          <PointsAuditCard code={player.publicCode} enabled={canSeeAudit} />
         ) : null}
 
         {player && !player.isDisabled ? (

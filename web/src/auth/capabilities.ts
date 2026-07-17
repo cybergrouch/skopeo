@@ -98,6 +98,18 @@ export function canViewClubPointsSummary(
 }
 
 /**
+ * Who may see a player's active-points audit (#448): the profile owner (the viewer is looking at their
+ * own profile — {@link isOwner}) or an ADMINISTRATOR. Other and anonymous viewers get only the public
+ * rank + points headline, never the audit. Mirrors the backend owner-or-admin gate; also gates the fetch.
+ */
+export function canViewPointsAudit(
+  capabilities: readonly Capability[] | undefined,
+  isOwner: boolean,
+): boolean {
+  return isOwner || isAdministrator(capabilities);
+}
+
+/**
  * The Research tab is for researchers (#107) — gated so it can later be monetized. Every sign-up
  * gets RESEARCHER for now, so behaviour is unchanged. ADMINISTRATOR implicitly has RESEARCHER.
  */
