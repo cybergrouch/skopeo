@@ -47,6 +47,7 @@ import org.skopeo.routes.configureRatingRoutes
 import org.skopeo.routes.configureReportRoutes
 import org.skopeo.routes.configureStandingsCalculationRoutes
 import org.skopeo.routes.configureStandingsRoutes
+import org.skopeo.routes.configureStandingsSourceRoutes
 import org.skopeo.routes.configureThemeRoutes
 import org.skopeo.routes.configureUserRoutes
 import org.skopeo.service.capability.CapabilityService
@@ -114,6 +115,7 @@ fun Application.module(
     configureReportRoutes()
     configureOpenGraphRoutes()
     configureThemeRoutes()
+    configureStandingsSourceRoutes()
     logger.info { "Skopeo API started successfully on port 8080" }
 }
 

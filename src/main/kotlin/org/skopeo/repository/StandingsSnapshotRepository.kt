@@ -80,6 +80,24 @@ class StandingsSnapshotRepository {
         }
 
     /**
+     * The id of the newest PUBLISHED snapshot of [source] (by seq), or null when that source has none.
+     * The serving path (#146) resolves the source from the `standings_source` app-setting and asks for
+     * exactly that generation, falling back to the other source itself when this one has no published run.
+     */
+    fun latestPublished(source: SnapshotSource): UUID? =
+        transaction {
+            StandingsSnapshotsTable
+                .selectAll()
+                .where {
+                    (StandingsSnapshotsTable.status eq SnapshotStatus.PUBLISHED.name) and
+                        (StandingsSnapshotsTable.sourceCol eq source.name)
+                }.orderBy(StandingsSnapshotsTable.seq to SortOrder.DESC)
+                .limit(n = 1)
+                .map { it[StandingsSnapshotsTable.id].value }
+                .firstOrNull()
+        }
+
+    /**
      * The generation reads should serve once points exist (#146): the latest PUBLISHED `source=POINTS`
      * snapshot when any has been committed, else the latest PUBLISHED `source=RATING` one. This is the
      * non-disruptive flip — the moment an admin commits a points calculation, standings switch to points,
@@ -170,8 +188,6 @@ class StandingsSnapshotRepository {
                 }
             }
 
-    private fun ResultRow.sexValue(): String? = this[StandingsEntriesTable.sex].let { if (it == UNSPECIFIED_SEX) null else it }
-
     // [band] is the group filtered on, so every row carries it — no need to re-parse the persisted code.
     private fun ResultRow.toSnapshotEntry(band: StandingsBand): StandingsSnapshotEntry =
         StandingsSnapshotEntry(
@@ -182,3 +198,6 @@ class StandingsSnapshotRepository {
             orderingValue = this[StandingsEntriesTable.orderingValue],
         )
 }
+
+/** The persisted sex mapped back to the domain: the [UNSPECIFIED_SEX] sentinel round-trips to null. */
+private fun ResultRow.sexValue(): String? = this[StandingsEntriesTable.sex].let { if (it == UNSPECIFIED_SEX) null else it }

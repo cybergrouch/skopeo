@@ -5,6 +5,7 @@ import { DuplicatesSection } from "./admin/DuplicatesSection";
 import { ManagePlayerSection } from "./admin/ManagePlayerSection";
 import { PendingCalculationSection } from "./admin/PendingCalculationSection";
 import { PointsManagementSection } from "./admin/PointsManagementSection";
+import { StandingsSourceSection } from "./admin/StandingsSourceSection";
 import { ThemeSection } from "./admin/ThemeSection";
 
 export function AdminTab() {
@@ -16,6 +17,7 @@ export function AdminTab() {
       <DuplicatesSection />
       <DuplicateCandidatesSection />
       <PendingCalculationSection />
+      <StandingsSourceSection />
       <ThemeSection />
       <BuildInfoSection />
     </div>

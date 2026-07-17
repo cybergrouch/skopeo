@@ -31,6 +31,18 @@ const groups = [
   { band: '3.5', label: 'NTRP 3.5 Band Race', sex: 'Male' },
 ]
 
+/** Every NTRP band, strongest-first (as the backend now returns), regardless of which groups have data. */
+const bands = [
+  { code: '6.0+', label: 'NTRP 6.0+ Band Race' },
+  { code: '5.5', label: 'NTRP 5.5 Band Race' },
+  { code: '5.0', label: 'NTRP 5.0 Band Race' },
+  { code: '4.5', label: 'NTRP 4.5 Band Race' },
+  { code: '4.0', label: 'NTRP 4.0 Band Race' },
+  { code: '3.5', label: 'NTRP 3.5 Band Race' },
+  { code: '3.0', label: 'NTRP 3.0 Band Race' },
+  { code: '<3.0', label: 'NTRP Under 3.0 Band Race' },
+]
+
 /** The default page the hook returns for the seeded band+sex (Men, 4.0). */
 const defaultPage = {
   band: '4.0',
@@ -45,6 +57,7 @@ const defaultPage = {
     { rank: 2, userId: 'm2', displayName: null, publicCode: 'CCC333', sex: 'Male', age: null },
   ],
   groups,
+  bands,
 }
 
 describe('StandingsTab', () => {
@@ -66,13 +79,18 @@ describe('StandingsTab', () => {
     expect(screen.getByText(/Men's and Women's standings/i)).toBeInTheDocument()
   })
 
-  it('shows a "No standings yet." message when the snapshot is empty', () => {
+  it('lists every NTRP band and offers sex toggles even when the snapshot has no data (#113)', () => {
+    // An empty snapshot still advertises every band and the standard sex toggles, so the tab stays queryable.
     useGetApiV1Standings.mockReturnValue({
-      data: { band: null, label: null, sex: null, limit: 25, offset: 0, total: 0, entries: [], groups: [] },
+      data: { band: null, label: null, sex: null, limit: 25, offset: 0, total: 0, entries: [], groups: [], bands },
       isLoading: false,
     })
     renderTab()
-    expect(screen.getByText('No standings yet.')).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'NTRP 6.0+ Band Race' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'NTRP Under 3.0 Band Race' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Men' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Women' })).toBeInTheDocument()
+    expect(screen.getByText('No players in this group.')).toBeInTheDocument()
   })
 
   it('renders the served band selector, sex toggle, and the ranked, name/code-fallback rows (#212)', () => {
@@ -89,6 +107,39 @@ describe('StandingsTab', () => {
     expect(screen.getByText('Bob Cruz')).toBeInTheDocument()
     expect(screen.getByText('40')).toBeInTheDocument() // age-only meta
     expect(screen.getByText('CCC333')).toBeInTheDocument() // name fallback to code
+  })
+
+  it('lists ALL NTRP bands in the dropdown even though only a subset of groups has data (#113)', () => {
+    renderTab()
+    // groups only covers 4.0 and 3.5, yet the dropdown offers every band, strongest-first.
+    const bandSelect = screen.getByLabelText('Band')
+    const options = within(bandSelect).getAllByRole('option').map((o) => o.textContent)
+    expect(options).toEqual(bands.map((b) => b.label))
+    expect(options[0]).toBe('NTRP 6.0+ Band Race') // strongest first
+  })
+
+  it('lets an empty band be selected + viewed, keeping the sex toggles queryable (#113)', async () => {
+    const user = userEvent.setup()
+    renderTab()
+
+    // 5.0 has no data in `groups`, but it is selectable; picking it + View queries that band.
+    await user.selectOptions(screen.getByLabelText('Band'), '5.0')
+    // The standard sex toggles remain available so the empty band is still queryable.
+    expect(screen.getByRole('button', { name: 'Men' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Women' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'View' }))
+    await waitFor(() => {
+      const lastCall = useGetApiV1Standings.mock.calls.at(-1)?.[0]
+      expect(lastCall).toMatchObject({ band: '5.0', sex: 'Male', offset: 0 })
+    })
+  })
+
+  it('renders player name links with the themed content-link style (#417)', () => {
+    renderTab()
+    // Guards the regression where names used text-primary and vanished on the Grass theme.
+    expect(screen.getByRole('link', { name: 'Bob Cruz' })).toHaveClass('content-link')
+    expect(screen.getByRole('link', { name: 'CCC333' })).toHaveClass('content-link')
   })
 
   it('re-queries with the chosen band and sex when "View" is clicked', async () => {
@@ -178,6 +229,7 @@ describe('StandingsTab', () => {
       data: {
         ...defaultPage,
         groups: [{ band: '4.0', label: 'NTRP 4.0 Band Race', sex: null }],
+        bands,
       },
       isLoading: false,
     })
@@ -195,7 +247,7 @@ describe('StandingsTab', () => {
   it('renders an empty-group page (band/label/total absent) with a placeholder heading', async () => {
     // A requested (band, sex) group with no members: groups still list the band, but this page is empty.
     useGetApiV1Standings.mockReturnValue({
-      data: { band: null, label: null, sex: null, limit: 25, offset: 0, entries: [], groups },
+      data: { band: null, label: null, sex: null, limit: 25, offset: 0, entries: [], groups, bands },
       isLoading: false,
     })
     const user = userEvent.setup()
@@ -206,7 +258,8 @@ describe('StandingsTab', () => {
     expect(screen.getByText('No players in this group.')).toBeInTheDocument()
     expect(screen.getAllByText('Standings').length).toBeGreaterThan(1)
 
-    // "View" is enabled (bands exist) and, with no served band, queries with band undefined.
+    // With no served band, "View" queries with band undefined (the select shows the first band but the
+    // controlled value stays empty until the user picks one).
     await user.click(screen.getByRole('button', { name: 'View' }))
     await waitFor(() => {
       const lastCall = useGetApiV1Standings.mock.calls.at(-1)?.[0]

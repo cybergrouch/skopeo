@@ -17,6 +17,7 @@ import org.skopeo.model.displayName
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.StandingsSnapshotRepository
 import org.skopeo.repository.UserRepository
+import org.skopeo.service.settings.SettingsService
 import org.skopeo.service.user.VerifiedFirebaseToken
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -41,8 +42,9 @@ class StandingsService(
     private val users: UserRepository = UserRepository(),
     private val ratings: RatingRepository = RatingRepository(),
     private val snapshots: StandingsSnapshotRepository = StandingsSnapshotRepository(),
+    private val settings: SettingsService = SettingsService(),
 ) {
-    /** A page of one (band, sex) group plus its selectors: the group's total and the groups on offer. */
+    /** A page of one (band, sex) group plus its selectors: the group's total, the groups on offer, all bands. */
     data class StandingsView(
         val band: StandingsBand?,
         val sex: String?,
@@ -51,6 +53,9 @@ class StandingsService(
         val limit: Int,
         val offset: Int,
         val groups: List<GroupRef>,
+        // Every NTRP band (strongest-first), so the UI dropdown lists empty bands too (#113); picking an
+        // empty band yields an empty page still queryable by sex. Independent of which groups have data.
+        val allBands: List<StandingsBand>,
         val revealRates: Boolean,
     )
 
@@ -132,17 +137,29 @@ class StandingsService(
         offset: Int?,
     ): StandingsView {
         val revealRates = callerCanSeeRates(token = token)
-        // Prefer a committed POINTS snapshot (#146); until one exists, the phase-1 RATING snapshot serves.
-        val snapshotId = snapshots.latestPublishedPreferringPoints()
+        // Serve the source the standings_source app-setting selects (#146): RATING by default, flip-able to
+        // POINTS via a data change (no deploy). The read path is source-agnostic below this line.
+        val snapshotId = configuredSnapshotId()
         val groups =
             snapshotId?.let { id -> snapshots.groups(snapshotId = id).map { GroupRef(band = it.first, sex = it.second) } }.orEmpty()
         val requested = band?.let { GroupRef(band = it, sex = sex) }
         val chosen = snapshotId?.let { chooseGroup(requested = requested, groups = groups) }
         val pageSize = (limit ?: DEFAULT_PAGE_SIZE).coerceIn(minimumValue = 1, maximumValue = MAX_PAGE_SIZE)
         val pageOffset = (offset ?: 0).coerceAtLeast(minimumValue = 0)
-        // Empty snapshot (no id) or no group to serve → an empty view, still carrying the available groups.
+        // Empty snapshot (no id) or no group to serve → an empty view, still carrying the available groups
+        // and (always) every NTRP band so the dropdown stays fully populated (#113).
         return if (snapshotId == null || chosen == null) {
-            emptyView(revealRates = revealRates).copy(groups = groups, limit = pageSize, offset = pageOffset)
+            StandingsView(
+                band = null,
+                sex = null,
+                entries = emptyList(),
+                total = 0,
+                limit = pageSize,
+                offset = pageOffset,
+                groups = groups,
+                allBands = StandingsBand.entries.reversed(),
+                revealRates = revealRates,
+            )
         } else {
             servePage(
                 snapshotId = snapshotId,
@@ -200,6 +217,7 @@ class StandingsService(
             limit = pageSize,
             offset = pageOffset,
             groups = groups,
+            allBands = StandingsBand.entries.reversed(),
             revealRates = revealRates,
         )
     }
@@ -216,7 +234,7 @@ class StandingsService(
         val caller = users.findByFirebaseUid(firebaseUid = token.uid)
         val location =
             caller?.let {
-                snapshots.latestPublishedPreferringPoints()?.let { id -> snapshots.locate(snapshotId = id, userId = caller.id) }
+                configuredSnapshotId()?.let { id -> snapshots.locate(snapshotId = id, userId = caller.id) }
             }
         return location?.let {
             val pageSize = (limit ?: DEFAULT_PAGE_SIZE).coerceIn(minimumValue = 1, maximumValue = MAX_PAGE_SIZE)
@@ -224,6 +242,18 @@ class StandingsService(
             val pageOffset = ((it.rank - 1) / pageSize) * pageSize
             LocateView(location = it, offset = pageOffset, limit = pageSize)
         }
+    }
+
+    /**
+     * The snapshot the reads serve (#146): the latest PUBLISHED generation of the configured
+     * [SettingsService.standingsSource] (RATING by default). Defensive fallback — if that source has no
+     * published generation yet, serve the other source's latest so the tab is never blank when only one
+     * source has ever been built.
+     */
+    private fun configuredSnapshotId(): UUID? {
+        val configured = settings.standingsSource()
+        val other = if (configured == SnapshotSource.RATING) SnapshotSource.POINTS else SnapshotSource.RATING
+        return snapshots.latestPublished(source = configured) ?: snapshots.latestPublished(source = other)
     }
 
     /**
@@ -235,18 +265,6 @@ class StandingsService(
         requested: GroupRef?,
         groups: List<GroupRef>,
     ): GroupRef? = requested ?: groups.firstOrNull()
-
-    private fun emptyView(revealRates: Boolean): StandingsView =
-        StandingsView(
-            band = null,
-            sex = null,
-            entries = emptyList(),
-            total = 0,
-            limit = DEFAULT_PAGE_SIZE,
-            offset = 0,
-            groups = emptyList(),
-            revealRates = revealRates,
-        )
 
     /** Whether the viewer may see precise ratings (RATER or ADMINISTRATOR), mirroring the match page (#136/#186). */
     private fun callerCanSeeRates(token: VerifiedFirebaseToken): Boolean {

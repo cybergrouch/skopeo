@@ -19,11 +19,16 @@ import org.skopeo.model.Capability
 import org.skopeo.model.MatchRatingWrite
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
+import org.skopeo.model.SnapshotSource
+import org.skopeo.model.SnapshotStatus
 import org.skopeo.model.StandingsBand
+import org.skopeo.model.StandingsEntryWrite
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
+import org.skopeo.repository.AppSettingsRepository
 import org.skopeo.repository.RatingRepository
+import org.skopeo.repository.StandingsSnapshotRepository
 import org.skopeo.repository.UserRatingsTable
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.user.VerifiedFirebaseToken
@@ -43,11 +48,48 @@ class StandingsServiceTest {
 
     private val users = UserRepository()
     private val ratings = RatingRepository()
+    private val snapshots = StandingsSnapshotRepository()
+    private val appSettings = AppSettingsRepository()
     private val service = StandingsService()
 
     @BeforeEach
     fun reset() {
         PostgresTestDatabase.truncate()
+    }
+
+    /** Set the standings_source app-setting (the value the served source is read from). */
+    private fun setSource(value: String) {
+        val admin =
+            provision(uid = "source-admin", capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        appSettings.upsert(key = "standings_source", value = value, updatedBy = admin.id)
+    }
+
+    /** Persist a single-entry PUBLISHED snapshot of [source] holding [user] in [band]/Male (for source tests). */
+    private fun publishSnapshot(
+        source: SnapshotSource,
+        user: User,
+        band: StandingsBand,
+        rating: String,
+    ) {
+        snapshots.create(
+            computedAt = LocalDateTime.now(),
+            asOf = LocalDate.now(),
+            status = SnapshotStatus.PUBLISHED,
+            entries =
+                listOf(
+                    element =
+                        StandingsEntryWrite(
+                            band = band,
+                            sex = "Male",
+                            rank = 1,
+                            userId = user.id,
+                            orderingValue = BigDecimal(rating),
+                            tiebreakRating = BigDecimal(rating),
+                            achievedAt = null,
+                        ),
+                ),
+            source = source,
+        )
     }
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
@@ -300,5 +342,57 @@ class StandingsServiceTest {
         entries shouldHaveSize 2
         entries.map { it.userId }.toSet() shouldBe setOf(named.id, unnamed.id)
         entries.single { it.userId == unnamed.id }.displayName.shouldBeNull()
+    }
+
+    @Test
+    fun `with standings_source absent the RATING snapshot is served by default (#146)`() {
+        // Both a RATING and a POINTS generation exist; with no app-setting the RATING one serves.
+        val u = provision(uid = "u", sex = "Male")
+        publishSnapshot(source = SnapshotSource.RATING, user = u, band = StandingsBand.FROM_4_0, rating = "4.2")
+        publishSnapshot(source = SnapshotSource.POINTS, user = u, band = StandingsBand.SIX_PLUS, rating = "6.5")
+
+        val view = page(band = null, sex = null)
+        view.band shouldBe StandingsBand.FROM_4_0 // the RATING generation's group, not the POINTS one
+    }
+
+    @Test
+    fun `when standings_source is POINTS the POINTS snapshot is served (#146)`() {
+        val u = provision(uid = "u", sex = "Male")
+        publishSnapshot(source = SnapshotSource.RATING, user = u, band = StandingsBand.FROM_4_0, rating = "4.2")
+        publishSnapshot(source = SnapshotSource.POINTS, user = u, band = StandingsBand.SIX_PLUS, rating = "6.5")
+        setSource(value = "POINTS")
+
+        val view = page(band = null, sex = null)
+        view.band shouldBe StandingsBand.SIX_PLUS // the POINTS generation's group
+    }
+
+    @Test
+    fun `falls back to the other source when the configured one has no published snapshot (#146)`() {
+        // Configured POINTS, but only a RATING generation exists → the defensive fallback serves RATING.
+        val u = provision(uid = "u", sex = "Male")
+        publishSnapshot(source = SnapshotSource.RATING, user = u, band = StandingsBand.FROM_4_0, rating = "4.2")
+        setSource(value = "POINTS")
+
+        val view = page(band = null, sex = null)
+        view.band shouldBe StandingsBand.FROM_4_0
+    }
+
+    @Test
+    fun `the page response lists every NTRP band strongest-first even when groups are a subset (#113)`() {
+        // Only one Male 4.0 group has data, yet the full band list is advertised for the dropdown.
+        provision(uid = "m", sex = "Male").also { rate(user = it, value = "4.0") }
+        service.rebuild()
+
+        val view = page(band = StandingsBand.FROM_4_0, sex = "Male")
+        view.allBands shouldContainExactly StandingsBand.entries.reversed()
+        view.allBands.first() shouldBe StandingsBand.SIX_PLUS // strongest first
+        view.groups shouldHaveSize 1 // only the populated group carries data
+    }
+
+    @Test
+    fun `an empty snapshot still advertises every NTRP band (#113)`() {
+        val view = page(band = null, sex = null)
+        view.groups shouldHaveSize 0
+        view.allBands shouldContainExactly StandingsBand.entries.reversed()
     }
 }
