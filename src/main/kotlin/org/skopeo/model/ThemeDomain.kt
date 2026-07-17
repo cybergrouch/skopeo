@@ -18,6 +18,11 @@ enum class ThemeSetting {
     US_OPEN,
     OFF_SEASON,
     CHRISTMAS,
+    VALENTINES,
+    SPRING,
+    RAINY,
+    HALLOWEEN,
+    AUTUMN,
 }
 
 /**

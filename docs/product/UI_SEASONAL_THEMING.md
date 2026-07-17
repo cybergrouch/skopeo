@@ -140,6 +140,11 @@ The four court seasons are Vibrant Depth (#409); Off-Season + US Open stay all-d
 | **Clay** *(vibrant)* | `#C1522D` Brick Terracotta | `#2B1A12` Earth Chocolate · `#FFFFFF` | `#E07A5F` Terracotta | `#FFFFFF` White (2px) | Warm, organic, earthy |
 | **Grass** *(vibrant)* | `#00703C` Lush Lawn Green | `#1B3B2B` Forest Green · `#FFFFFF` | `#452263` Wimbledon Purple (+ `#CCFF00` Optic Tennis Yellow link) | `#FFFFFF` White (2px) | Classic, elegant, prestigious |
 | **US Open** *(dark)* | `#0B0F19` Midnight | `#1E293B` Slate Navy · `#FFFFFF` | `#63B233` Apple Green (+ `#005DAA` blue button) | `#63B233` Green (1px) | High-octane, modern, night session |
+| **Valentine's Day** *(vibrant)* | `#5C061D` Rose Wine | `#2E030E` Merlot · `#FFFFFF` | `#FF4081` Hot Pink | `#FFFFFF` White (2px) | Warm, romantic, wine-dark |
+| **Spring** *(vibrant)* | `#1E88E5` Sky Blue | `#1B4D3E` Pine · `#FFFFFF` | `#FF8A80` Coral (+ `#FFA69E` link) | `#FFFFFF` White (2px) | Fresh, blooming, airy |
+| **Rainy** *(vibrant)* | `#37474F` Storm Slate | `#212121` Near-Black · `#ECEFF1` | `#00E5FF` Electric Cyan | `#ECEFF1` Cloud (2px) | Moody, cool, overcast |
+| **Halloween** *(vibrant)* | `#E65100` Pumpkin Orange | `#1A0933` Witching Purple · `#FFFFFF` | `#76FF03` Toxic Green | `#FFFFFF` White (2px) | Spooky, high-contrast, playful |
+| **Autumn** *(vibrant)* | `#BF360C` Burnt Rust | `#3E2723` Cocoa · `#FFF3E0` | `#FFB300` Amber | `#FFF3E0` Linen (2px) | Warm, harvest, earthy |
 
 ### 5.1 Content-link colors (#399, supersedes #394/#395)
 
@@ -153,6 +158,11 @@ Public-page / share links (the "Public page (QR)" anchors and similar) get an ex
 | **Clay** | `#E07A5F` Terracotta | `#FFFFFF` White | 5.65:1 — AA ✅ (on `#2B1A12`) |
 | **Grass** | `#CCFF00` Optic Tennis Yellow | `#FFFFFF` White | 10.47:1 — AA ✅ (on `#1B3B2B`) |
 | **US Open** | `#63B233` Apple Green | `#FFFFFF` White | 5.5:1 — AA ✅ |
+| **Valentine's Day** | `#FF4081` Hot Pink | `#FFFFFF` White | 5.55:1 — AA ✅ (on `#2E030E`) |
+| **Spring** | `#FFA69E` Coral (lightened) | `#FFFFFF` White | 5.14:1 — AA ✅ (on `#1B4D3E`) |
+| **Rainy** | `#00E5FF` Electric Cyan | `#ECEFF1` Cloud | 10.47:1 — AA ✅ (on `#212121`) |
+| **Halloween** | `#76FF03` Toxic Green | `#FFFFFF` White | 14.22:1 — AA ✅ (on `#1A0933`) |
+| **Autumn** | `#FFB300` Amber | `#FFF3E0` Linen | 7.70:1 — AA ✅ (on `#3E2723`) |
 
 > **Clay/Grass link note:** clay `#E07A5F` still doubles as the button, and Wimbledon purple `#452263` is the grass button — too dark to double as a link on the deep card. Clay reuses `#E07A5F` for both the link and the button fill (the button *label* is the dark `#2B1A12`, see §5/§7). Grass's link is the "Balanced Wimbledon" **Optic Tennis Yellow `#CCFF00`** (#417) — it jumps off the forest-green card at 10.47:1 and stays distinct from the purple action button (it replaced the earlier lavender `#C5A3E8`, which passed AA at 5.73:1 but read faint).
 
@@ -160,20 +170,24 @@ Public-page / share links (the "Public page (QR)" anchors and similar) get an ex
 
 ## 6. AUTO season resolver
 
-When the setting is `AUTO`, a small data-driven table maps today's date → theme (single source of truth, tunable). Proposed windows:
+When the setting is `AUTO`, a small data-driven table (`resolveSeasonTheme` in `web/src/lib/season.ts`) maps today's date → theme. Windows are **inclusive** and **first-match-wins** (evaluated top→bottom); anything unmatched falls through to `offseason`. The confirmed 11-row calendar (seasonal-themes-expansion):
 
-| Window (approx) | Theme |
+| Window (inclusive) | Theme |
 |---|---|
-| January | Australian Open |
-| February – March | *off-swing — Off-Season, or carry AO (TBD)* |
-| April – early June | Clay |
-| late June – July | Grass |
-| August – early September | US Open |
-| September – late November | *indoor / Asian swing — Off-Season (TBD)* |
-| late November – December (excl. holidays) | Off-Season |
-| ~Dec 10 – Jan 1 | Christmas |
+| Jan 1 – Jan 31 | Australian Open (`ao`) |
+| Feb 1 – Feb 14 | Valentine's Day (`valentines`) |
+| Feb 15 – Mar 31 | Spring (`spring`) |
+| Apr 1 – Jun 10 | Clay (`clay`) |
+| Jun 11 – Jul 31 | Grass (`grass`) |
+| Aug 1 – Sep 15 | US Open (`uso`) |
+| Sep 16 – Oct 16 | Rainy (`rainy`) |
+| Oct 17 – Oct 24 | Off-Season (`offseason`) |
+| Oct 25 – Nov 2 | Halloween (`halloween`) |
+| Nov 3 – Dec 9 | Autumn (`autumn`) |
+| Dec 10 – Dec 31 | Christmas (`christmas`) |
+| *(anything unmatched)* | Off-Season (`offseason`) default |
 
-*Windows and the Feb–Mar / Sep–Nov "swing" fills are open for tuning; Christmas is a sub-window carved out of the December off-season.*
+The five seasonal themes (valentines, spring, rainy, halloween, autumn) fill the former Feb–Mar and Sep–Nov "swing" gaps; the short Oct 17–24 offseason strip separates the rainy and halloween windows, and Christmas remains a December carve-out.
 
 ---
 
@@ -194,8 +208,13 @@ Under Vibrant Depth (#409) the four court cards carry **white** text; Off-Season
   | Clay | 16.68:1 ✅ | 5.65:1 ✅ | 15.58:1 ✅ | 5.65:1 ✅ (`#2B1A12` label) |
   | Grass | 12.30:1 ✅ | 10.47:1 ✅ (`#CCFF00` link, #417) | 11.55:1 ✅ | 12.64:1 ✅ |
   | US Open | 14.6:1 ✅ | 5.5:1 ✅ | 5.7:1 ✅ | 6.7:1 ✅ |
+  | Valentine's Day | — | 5.55:1 ✅ | 15.29:1 ✅ | 5.55:1 ✅ (`#2E030E` label) |
+  | Spring | — | 5.14:1 ✅ (`#FFA69E` link) | 8.57:1 ✅ | 8.10:1 ✅ |
+  | Rainy | — | 10.47:1 ✅ | 11.12:1 ✅ | 10.47:1 ✅ |
+  | Halloween | — | 14.22:1 ✅ | 15.33:1 ✅ | 14.22:1 ✅ |
+  | Autumn | — | 7.70:1 ✅ | 8.79:1 ✅ | 7.70:1 ✅ |
 
-  > **All pairs clear AA-normal.** The clay button meets AA only because its label is the dark `#2B1A12` (not `#FFFFFF`); white on `#E07A5F` would be 2.95:1.
+  > **All pairs clear AA-normal.** The clay button meets AA only because its label is the dark `#2B1A12` (not `#FFFFFF`); white on `#E07A5F` would be 2.95:1. **Two seasonal-theme deviations:** Valentine's Day's button uses a dark Merlot `#2E030E` label (5.55:1) — white on `#FF4081` is only 3.33:1 (fails AA); and Spring's link uses a lightened coral `#FFA69E` (5.14:1) — the raw button coral `#FF8A80` on the Pine card is only 4.22:1 (fails AA-normal).
 
 ---
 
@@ -267,4 +286,20 @@ Keep the dark, dramatic base **only for US Open** (night session) and **Off-Seas
 
 ### 4. Inline-link tokens widened; grass link → Optic Tennis Yellow (#417)
 The per-theme `--link` tokens (#394) were only consumed by `.public-page-link` (the shared `PublicPageLink`). **Inline in-app anchors** — Activity Log Who/Target cells, Reports player rows, the Profile "view all matches" link — used a plain `text-primary` treatment, so on the grass card `#1b3b2b` they fell back to the Wimbledon-purple `--primary` `#452263`, which is nearly invisible (fails WCAG AA). Fix: those anchors now use a shared `.content-link` / `ContentLink` component that pulls the same `--link` / `--link-underline` / `--link-hover` tokens, so they're theme-aware everywhere (not a blanket `a {}` — nav links and shadcn button-anchors are untouched). For grass the "Balanced Wimbledon" decision switched `--link` from the lavender `#C5A3E8` (5.73:1, read faint) to **Optic Tennis Yellow `#CCFF00`** (10.47:1 on `#1b3b2b`) — a brighter jump that stays distinct from the purple action button (button + 2px white rim unchanged). Every theme's `--link` was re-checked against its card and all still clear AA-normal, so no other theme's link token changed.
+
+### 5. Five seasonal themes + expanded AUTO calendar (seasonal-themes-expansion)
+Added **valentines, spring, rainy, halloween, autumn** to fill the year-round rotation, all following the **Vibrant Saturated Depth 60/30/10** rationale established in #409: a **saturated mood canvas (60%)** + a **deep same-hue / neutral-dark card (30%)** with high-contrast text + a **2px light rim** + a **vibrant accent (10%)** reserved for button/link. They join the picker and the `AUTO` date rotation (see §6 for the confirmed 11-row calendar); no DB migration — the theme is stored as a string in `app_settings` and the `ThemeSetting` enum is validated in-code.
+
+**Per-theme rationale:**
+- **Valentine's Day** — **Rose Wine** canvas (`#5C061D`) + near-black **Merlot** card (`#2E030E`) + **Hot Pink** accent (`#FF4081`). Warm, romantic, wine-dark.
+- **Spring** — bright **Sky Blue** canvas (`#1E88E5`) + deep **Pine** card (`#1B4D3E`) + **Coral** blossom accent (`#FF8A80`). Fresh and blooming.
+- **Rainy** — **Storm Slate** canvas (`#37474F`) + near-black card (`#212121`) + **Electric Cyan** accent (`#00E5FF`), with a light Cloud (`#ECEFF1`) rim/font (this theme's "light" tone, mirroring US Open/Off-Season darks). Moody, overcast.
+- **Halloween** — **Pumpkin Orange** canvas (`#E65100`) + deep **Witching Purple** card (`#1A0933`) + **Toxic Green** accent (`#76FF03`). Spooky, playful, high-contrast.
+- **Autumn** — **Burnt Rust** canvas (`#BF360C`) + deep **Cocoa** card (`#3E2723`) + **Amber** accent (`#FFB300`), warm **Linen** (`#FFF3E0`) rim/font. Harvest warmth.
+
+**WCAG AA adjustments (mandatory, mirroring the clay/AO fixes):** every new theme was verified for card-body-text-on-card, link-on-card, and **button-text-on-button** ≥ 4.5:1. Two pairs failed at the requested colors and were adjusted minimally on-palette (documented inline in `index.css` + the preview HTML):
+- **Valentine's Day button** — white on the pink `#FF4081` is only **3.33:1** (fails AA). The button *label* uses the dark Merlot **`#2E030E`** (**5.55:1**), keeping the vibrant pink fill.
+- **Spring link** — the button coral `#FF8A80` on the Pine card is only **4.22:1** (fails AA-normal). The *link* uses a lightened coral tint **`#FFA69E`** (**5.14:1**); the button keeps `#FF8A80`.
+
+The other three themes (rainy, halloween, autumn) clear AA-normal at their requested colors with no deviation. Measured ratios are in §5.1 and §7.
 

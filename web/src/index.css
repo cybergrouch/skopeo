@@ -204,6 +204,151 @@
 }
 
 /*
+ * Valentine's Day (vibrant) — deep Rose Wine canvas (#5C061D), near-black Merlot card (#2E030E),
+ * white rim + white card font, hot-pink accent (#FF4081).
+ * Deviation from the palette matrix: the button (`--primary #FF4081`) uses dark Merlot text `#2E030E`
+ * (not `#FFFFFF`) — white on `#FF4081` is only 3.33:1 (fails AA), while `#2E030E` on `#FF4081` is
+ * 5.55:1 (AA-normal). Keeps the vibrant pink button on-palette. The `#FF4081` link on the Merlot card
+ * is 5.55:1 (AA-normal).
+ */
+[data-theme='valentines'] {
+  --background: #5c061d;
+  --foreground: #ffffff;
+  --card: #2e030e;
+  --card-foreground: #ffffff;
+  --popover: #2e030e;
+  --popover-foreground: #ffffff;
+  --primary: #ff4081;
+  --primary-foreground: #2e030e;
+  --secondary: #2e030e;
+  --secondary-foreground: #ffffff;
+  --muted: #2e030e;
+  --muted-foreground: #f5e6e8;
+  --accent: #ff4081;
+  --accent-foreground: #2e030e;
+  --border: #ffffff;
+  --ring: #ffffff;
+  --input: #2e030e;
+  --link: #ff4081;
+  --link-underline: #ff4081;
+  --link-hover: #ffffff;
+}
+
+/*
+ * Spring (vibrant) — bright Sky Blue canvas (#1E88E5), deep Pine card (#1B4D3E), white rim + white
+ * card font, coral-blossom accent (#FF8A80, dark Merlot `#2E030E` button text at 8.10:1).
+ * Deviation from the palette matrix: the link uses a lighter coral tint `#FFA69E` (not `#FF8A80`) —
+ * the raw `#FF8A80` link on the Pine card is only 4.22:1 (fails AA-normal), while `#FFA69E` is
+ * 5.14:1 (AA-normal). The button keeps the vibrant `#FF8A80`.
+ */
+[data-theme='spring'] {
+  --background: #1e88e5;
+  --foreground: #ffffff;
+  --card: #1b4d3e;
+  --card-foreground: #ffffff;
+  --popover: #1b4d3e;
+  --popover-foreground: #ffffff;
+  --primary: #ff8a80;
+  --primary-foreground: #2e030e;
+  --secondary: #1b4d3e;
+  --secondary-foreground: #ffffff;
+  --muted: #1b4d3e;
+  --muted-foreground: #e8f5e9;
+  --accent: #ff8a80;
+  --accent-foreground: #2e030e;
+  --border: #ffffff;
+  --ring: #ffffff;
+  --input: #1b4d3e;
+  --link: #ffa69e;
+  --link-underline: #ffa69e;
+  --link-hover: #ffffff;
+}
+
+/*
+ * Rainy (vibrant) — Storm Slate canvas (#37474F), near-black card (#212121), light Cloud rim + font
+ * (#ECEFF1), electric Cyan accent (#00E5FF, dark `#212121` button text at 10.47:1). All pairs clear
+ * AA-normal (muted 11.12:1, link 10.47:1 on the card), so no deviations.
+ */
+[data-theme='rainy'] {
+  --background: #37474f;
+  --foreground: #eceff1;
+  --card: #212121;
+  --card-foreground: #eceff1;
+  --popover: #212121;
+  --popover-foreground: #eceff1;
+  --primary: #00e5ff;
+  --primary-foreground: #212121;
+  --secondary: #212121;
+  --secondary-foreground: #eceff1;
+  --muted: #212121;
+  --muted-foreground: #cfd8dc;
+  --accent: #00e5ff;
+  --accent-foreground: #212121;
+  --border: #eceff1;
+  --ring: #eceff1;
+  --input: #212121;
+  --link: #00e5ff;
+  --link-underline: #00e5ff;
+  --link-hover: #eceff1;
+}
+
+/*
+ * Halloween (vibrant) — Pumpkin Orange canvas (#E65100), deep Witching-Purple card (#1A0933), white
+ * rim + white card font, toxic-Green accent (#76FF03, dark purple `#1A0933` button text at 14.22:1).
+ * All pairs clear AA-normal (muted 15.33:1, link 14.22:1 on the card), so no deviations.
+ */
+[data-theme='halloween'] {
+  --background: #e65100;
+  --foreground: #ffffff;
+  --card: #1a0933;
+  --card-foreground: #ffffff;
+  --popover: #1a0933;
+  --popover-foreground: #ffffff;
+  --primary: #76ff03;
+  --primary-foreground: #1a0933;
+  --secondary: #1a0933;
+  --secondary-foreground: #ffffff;
+  --muted: #1a0933;
+  --muted-foreground: #f3e5f5;
+  --accent: #76ff03;
+  --accent-foreground: #1a0933;
+  --border: #ffffff;
+  --ring: #ffffff;
+  --input: #1a0933;
+  --link: #76ff03;
+  --link-underline: #76ff03;
+  --link-hover: #ffffff;
+}
+
+/*
+ * Autumn (vibrant) — Burnt-Rust canvas (#BF360C), deep Cocoa card (#3E2723), warm Linen rim + font
+ * (#FFF3E0), Amber accent (#FFB300, dark Cocoa `#3E2723` button text at 7.70:1). All pairs clear
+ * AA-normal (muted 8.79:1, link 7.70:1 on the card), so no deviations.
+ */
+[data-theme='autumn'] {
+  --background: #bf360c;
+  --foreground: #fff3e0;
+  --card: #3e2723;
+  --card-foreground: #fff3e0;
+  --popover: #3e2723;
+  --popover-foreground: #fff3e0;
+  --primary: #ffb300;
+  --primary-foreground: #3e2723;
+  --secondary: #3e2723;
+  --secondary-foreground: #fff3e0;
+  --muted: #3e2723;
+  --muted-foreground: #d7ccc8;
+  --accent: #ffb300;
+  --accent-foreground: #3e2723;
+  --border: #fff3e0;
+  --ring: #fff3e0;
+  --input: #3e2723;
+  --link: #ffb300;
+  --link-underline: #ffb300;
+  --link-hover: #fff3e0;
+}
+
+/*
  * US Open — "Corporate Night Session Split": deep royal-navy canvas (#1A365D), dark forest-green
  * card (#355E3B), crisp white rim + white card font (white on #355E3B is 7.46:1 — passes AA),
  * optic yellow-green ball-accent button (#63B233). Per the #442 10% spec the button/primary is now
@@ -277,7 +422,12 @@
   [data-theme='christmas'] .bg-card,
   [data-theme='ao'] .bg-card,
   [data-theme='clay'] .bg-card,
-  [data-theme='grass'] .bg-card {
+  [data-theme='grass'] .bg-card,
+  [data-theme='valentines'] .bg-card,
+  [data-theme='spring'] .bg-card,
+  [data-theme='rainy'] .bg-card,
+  [data-theme='halloween'] .bg-card,
+  [data-theme='autumn'] .bg-card {
     border-width: 2px;
   }
   body {
