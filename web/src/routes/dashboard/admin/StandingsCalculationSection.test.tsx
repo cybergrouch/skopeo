@@ -134,6 +134,43 @@ describe("StandingsCalculationSection", () => {
     );
   });
 
+  it("discards the preview when Discard is clicked", async () => {
+    mockCalc();
+    const user = userEvent.setup();
+    renderSection([Capability.ADMINISTRATOR]);
+
+    await user.click(screen.getByRole("button", { name: "Preview" }));
+    expect(screen.getByTestId("standings-preview")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Discard" }));
+    expect(screen.queryByTestId("standings-preview")).not.toBeInTheDocument();
+  });
+
+  it("shows the preview summary without a group list when no groups are computed", async () => {
+    usePostApiV1StandingsCalculations.mockImplementation(
+      (options: MutationOpts) => ({
+        isPending: false,
+        mutate: (vars: { data?: { dryRun?: boolean } }) => {
+          calcMutate(vars);
+          options.mutation.onSuccess({
+            dryRun: true,
+            groupsComputed: 0,
+            groups: [],
+          });
+        },
+      }),
+    );
+    const user = userEvent.setup();
+    renderSection([Capability.ADMINISTRATOR]);
+
+    await user.click(screen.getByRole("button", { name: "Preview" }));
+
+    expect(screen.getByTestId("standings-preview")).toHaveTextContent(
+      "0 groups, no changes saved yet",
+    );
+    expect(screen.queryByRole("list")).not.toBeInTheDocument();
+  });
+
   it("hides the trigger and shows a hint for a non-admin points manager", () => {
     mockCalc();
     renderSection([Capability.POINTS_MANAGER]);
