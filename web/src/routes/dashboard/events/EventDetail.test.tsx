@@ -882,10 +882,20 @@ describe('EventDetail', () => {
     expect(screen.getByText(/allows 5–100 points and up to 365 validity days/)).toBeInTheDocument()
     // Current config summary.
     expect(screen.getByTestId('points-config-summary')).toHaveTextContent('Currently 10–20 points')
+    // The editor is pre-seeded from the event's persisted config (#440), not just placeholders.
+    expect(screen.getByLabelText('Min points')).toHaveValue(10)
+    expect(screen.getByLabelText('Max points')).toHaveValue(20)
+    expect(screen.getByLabelText('Validity start')).toHaveValue('2026-03-01')
+    expect(screen.getByLabelText('Validity end')).toHaveValue('2026-06-01')
 
+    // Change every field (clearing the seeded value first) and save.
+    await user.clear(screen.getByLabelText('Min points'))
     await user.type(screen.getByLabelText('Min points'), '8')
+    await user.clear(screen.getByLabelText('Max points'))
     await user.type(screen.getByLabelText('Max points'), '30')
+    await user.clear(screen.getByLabelText('Validity start'))
     await user.type(screen.getByLabelText('Validity start'), '2026-04-01')
+    await user.clear(screen.getByLabelText('Validity end'))
     await user.type(screen.getByLabelText('Validity end'), '2026-07-01')
     await user.click(screen.getByRole('button', { name: 'Save points config' }))
 
@@ -901,15 +911,70 @@ describe('EventDetail', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('Saved')
   })
 
+  it('saves an edit that leaves min and max untouched, without a false validation error (#440)', async () => {
+    // Regression for #440: the editor is seeded from the persisted config, so changing only the
+    // validity window must submit the existing min/max — not "" coerced to 0 (which used to trip the
+    // "must be positive whole numbers" guard even though the fields showed valid numbers).
+    useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
+    const user = userEvent.setup()
+    renderDetail()
+
+    // Touch only the validity dates; leave the seeded Min (10) / Max (20) as-is.
+    await user.clear(screen.getByLabelText('Validity start'))
+    await user.type(screen.getByLabelText('Validity start'), '2026-05-01')
+    await user.clear(screen.getByLabelText('Validity end'))
+    await user.type(screen.getByLabelText('Validity end'), '2026-08-01')
+    await user.click(screen.getByRole('button', { name: 'Save points config' }))
+
+    // No false "positive whole numbers" error; the persisted min/max are submitted unchanged.
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(pointsConfigMutate).toHaveBeenCalledWith({
+      id: 'e1',
+      data: {
+        minPointsPerMatch: 10,
+        maxPointsPerMatch: 20,
+        pointValidityStart: '2026-05-01',
+        pointValidityEnd: '2026-08-01',
+      },
+    })
+  })
+
+  it('still rejects an actually-cleared min/max as not positive whole numbers (#440 guard stays live)', async () => {
+    // The seeding fix (#440) pre-fills the fields, but the guard must still fire if the user deliberately
+    // clears one — an empty Min is Number("") === 0, which is not a positive whole number.
+    useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.clear(screen.getByLabelText('Min points'))
+    await user.click(screen.getByRole('button', { name: 'Save points config' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Min and max points must be positive whole numbers')
+    expect(pointsConfigMutate).not.toHaveBeenCalled()
+  })
+
+  it('requires a validity window when a date is cleared (#440 guard stays live)', async () => {
+    useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
+    const user = userEvent.setup()
+    renderDetail()
+
+    // Valid min/max stay seeded; clearing a validity date trips the validity-required guard.
+    await user.clear(screen.getByLabelText('Validity end'))
+    await user.click(screen.getByRole('button', { name: 'Save points config' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('A validity start and end date are required')
+    expect(pointsConfigMutate).not.toHaveBeenCalled()
+  })
+
   it('rejects a min greater than max in the points config without calling the API (#403 Phase C)', async () => {
     useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
     const user = userEvent.setup()
     renderDetail()
 
+    await user.clear(screen.getByLabelText('Min points'))
     await user.type(screen.getByLabelText('Min points'), '30')
+    await user.clear(screen.getByLabelText('Max points'))
     await user.type(screen.getByLabelText('Max points'), '10')
-    await user.type(screen.getByLabelText('Validity start'), '2026-04-01')
-    await user.type(screen.getByLabelText('Validity end'), '2026-07-01')
     await user.click(screen.getByRole('button', { name: 'Save points config' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Min points cannot exceed max points')
@@ -923,10 +988,10 @@ describe('EventDetail', () => {
     const user = userEvent.setup()
     renderDetail()
 
+    await user.clear(screen.getByLabelText('Min points'))
     await user.type(screen.getByLabelText('Min points'), '15')
+    await user.clear(screen.getByLabelText('Max points'))
     await user.type(screen.getByLabelText('Max points'), '25')
-    await user.type(screen.getByLabelText('Validity start'), '2026-04-01')
-    await user.type(screen.getByLabelText('Validity end'), '2026-07-01')
     await user.click(screen.getByRole('button', { name: 'Save points config' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('fall outside the new range')
