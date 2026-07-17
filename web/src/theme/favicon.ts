@@ -13,23 +13,25 @@
 import type { ThemeName } from "@/lib/season";
 
 /**
- * Per-theme favicon tint (#386, reconciled with the all-dark palette in #399). Picked from each
- * theme's accent (see docs/product/UI_SEASONAL_THEMING.md) for legibility on a typical tab strip —
- * some of the vibrant neons wash out at 16px, so we keep pragmatic, legible tints rather than the
- * raw pop accent:
- * - offseason: dark slate (the neon `#D2FE00` washes out on light tabs).
- * - christmas: ribbon red (deeper/steadier on a tab than the champagne-gold accent).
- * - ao: AO blue (the volt `#CCFF00` accent washes out; the blue rim reads cleanly).
- * - clay: clay orange.
- * - grass: bright lavender `#9362C4` (grass is no longer green under #399; lavender reads at 16px).
- * - uso: apple green.
+ * Per-theme favicon tint (#386; reconciled with the vibrant-depth palette in #409). The mark is a
+ * white tennis ball on an accent-tinted tile, so the tint must keep the *white ball* legible at 16px
+ * (WCAG ~3:1+). We take each vibrant theme's court tone, dropping to a still-on-brand color where the
+ * raw accent would wash the ball out:
+ * - offseason: dark slate (the neon `#D2FE00` washes out on light tabs). [unchanged, #402]
+ * - christmas: Santa Crimson `#CE2029` (the canvas). The gold accent `#FFD700` requested in #409 is
+ *   only 1.40:1 against the white ball — invisible at 16px — so we tint with the vibrant crimson
+ *   canvas instead (5.44:1), which still reads unmistakably festive.
+ * - ao: Vivid Stadium Blue `#0080C8` (canvas; 4.27:1). The volt `#CCFF00` accent washes out.
+ * - clay: Brick Terracotta `#C1522D` (canvas; 4.65:1; deeper/steadier than the `#E07A5F` accent).
+ * - grass: Lush Lawn Green `#00703C` (canvas; 6.21:1) — grass is green again under #409.
+ * - uso: apple green. [unchanged, #402]
  */
 const THEME_ACCENT: Record<ThemeName, string> = {
   offseason: "#212529",
-  christmas: "#D92B34",
+  christmas: "#CE2029",
   ao: "#0080C8",
   clay: "#C1522D",
-  grass: "#9362C4",
+  grass: "#00703C",
   uso: "#63B233",
 };
 

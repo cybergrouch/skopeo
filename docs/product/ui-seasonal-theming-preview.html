@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <!--
   UI Seasonal Theming — interactive preview
-  Companion to docs/product/UI_SEASONAL_THEMING.md (issues #378, all-dark inversion #399).
+  Companion to docs/product/UI_SEASONAL_THEMING.md (issues #378, all-dark #399/#402, vibrant-depth #409).
   Open this file directly in a browser, or preview the version on a branch via
   https://htmlpreview.github.io/ . Each panel shows a theme's 60% canvas,
-  30% card, and 10% accent (border + button + link), following the inverted all-dark
-  60-30-10 rule. The grid sits on a global dark backing (#121214) as in the app dashboard.
+  30% card, and 10% accent (border + button + link). The four court seasons (christmas/ao/clay/grass)
+  now use the "Vibrant Depth" scheme — a saturated court-tone canvas + a deep same-hue card with
+  white text and a 2px white rim; off-season + US Open stay all-dark (US Open = night session). The
+  grid sits on a global dark backing (#121214) as in the app dashboard.
 -->
 <html lang="en">
 <head>
@@ -18,7 +20,8 @@
 <header style="font-family:system-ui,-apple-system,sans-serif; padding:24px 24px 0;">
   <h1 style="margin:0 0 4px; font-size:1.4rem; color:#F8F9FA;">Skopeo — Seasonal Theme Preview</h1>
   <p style="margin:0; color:#adb5bd; font-size:0.9rem;">
-    Six admin-selectable themes, all dark (60% canvas · 30% card · 10% accent). See
+    Six admin-selectable themes (60% canvas · 30% card · 10% accent). Vibrant Depth for the four
+    court seasons; off-season + US Open stay dark. See
     <code>docs/product/UI_SEASONAL_THEMING.md</code> for the full spec.
   </p>
 </header>
@@ -140,18 +143,18 @@
   .theme-offseason .card p a:hover { color: #FFFFFF; text-decoration-color: #FFFFFF; }
   .theme-offseason .btn { background-color: #D2FE00; color: #212529; }
 
-  /* --- 2. CHRISTMAS THEME (Velvet-wine canvas, Deep-spruce card, Gold accent) --- */
-  .theme-christmas { background-color: #2B050B; }
-  .theme-christmas .card { background-color: #1A2E26; border: 1px solid #E5B842; color: #FFFFFF; }
-  .theme-christmas .card p { color: #E2ECE9; }
-  .theme-christmas .card p a { color: #E5B842; text-decoration-color: #E5B842; }
+  /* --- 2. CHRISTMAS THEME (Santa Crimson canvas, Holiday Evergreen card, white rim, Elfie Gold button) --- */
+  .theme-christmas { background-color: #CE2029; }
+  .theme-christmas .card { background-color: #0B6623; border: 2px solid #FFFFFF; color: #FFFFFF; }
+  .theme-christmas .card p { color: rgba(255,255,255,0.9); }
+  .theme-christmas .card p a { color: #FFD700; text-decoration-color: #FFD700; }
   .theme-christmas .card p a:hover { color: #FFFFFF; text-decoration-color: #FFFFFF; }
-  .theme-christmas .btn { background-color: #E5B842; color: #112A1F; }
+  .theme-christmas .btn { background-color: #FFD700; color: #063B14; }
   .theme-christmas .badge {
     display: inline-block;
     padding: 2px 6px;
-    background-color: #E5B842;
-    color: #112A1F;
+    background-color: #FFFFFF;
+    color: #0B6623;
     font-size: 0.65rem;
     font-weight: 700;
     text-transform: uppercase;
@@ -160,29 +163,30 @@
     margin-bottom: 8px;
   }
 
-  /* --- 3. AUSTRALIAN OPEN THEME (Deep-abyss canvas, Oceanic-slate card, Volt accent) --- */
-  .theme-ao { background-color: #081626; }
-  .theme-ao .card { background-color: #12253A; border: 1px solid #0080C8; color: #F0F6FA; }
+  /* --- 3. AUSTRALIAN OPEN THEME (Vivid Stadium Blue canvas, Melbourne Twilight card, white rim, Volt button) --- */
+  .theme-ao { background-color: #0080C8; }
+  .theme-ao .card { background-color: #0A1D37; border: 2px solid #FFFFFF; color: #FFFFFF; }
   .theme-ao .card p { color: #E2E8F0; }
   .theme-ao .card p a { color: #CCFF00; text-decoration-color: #CCFF00; }
   .theme-ao .card p a:hover { color: #FFFFFF; text-decoration-color: #FFFFFF; }
   .theme-ao .btn { background-color: #CCFF00; color: #0A1D37; }
 
-  /* --- 4. CLAY SEASON THEME (Burnt-umber canvas, Warm-espresso card, Clay accent) --- */
-  .theme-clay { background-color: #2B140C; }
-  .theme-clay .card { background-color: #3D2015; border: 1px solid #C1522D; color: #FDF6F0; }
+  /* --- 4. CLAY SEASON THEME (Brick Terracotta canvas, Earth Chocolate card, white rim, terracotta button) --- */
+  .theme-clay { background-color: #C1522D; }
+  .theme-clay .card { background-color: #2B1A12; border: 2px solid #FFFFFF; color: #FFFFFF; }
   .theme-clay .card p { color: #FDF6F0; }
   .theme-clay .card p a { color: #E07A5F; text-decoration-color: #E07A5F; }
   .theme-clay .card p a:hover { color: #FFFFFF; text-decoration-color: #FFFFFF; }
-  .theme-clay .btn { background-color: #C1522D; color: #FFFFFF; }
+  /* Button text = dark earth #2B1A12 (not #FFFFFF): white-on-#E07A5F is only 2.95:1 (fails AA). */
+  .theme-clay .btn { background-color: #E07A5F; color: #2B1A12; }
 
-  /* --- 5. GRASS SEASON THEME (Midnight-lawn canvas, English-ivy card, Lavender accent) --- */
-  .theme-grass { background-color: #0B1F13; }
-  .theme-grass .card { background-color: #183624; border: 1px solid #452263; color: #F4F9F5; }
+  /* --- 5. GRASS SEASON THEME (Lush Lawn Green canvas, Forest Green card, white rim, Wimbledon-purple button) --- */
+  .theme-grass { background-color: #00703C; }
+  .theme-grass .card { background-color: #1B3B2B; border: 2px solid #FFFFFF; color: #FFFFFF; }
   .theme-grass .card p { color: #F4F9F5; }
   .theme-grass .card p a { color: #C5A3E8; text-decoration-color: #C5A3E8; }
   .theme-grass .card p a:hover { color: #FFFFFF; text-decoration-color: #FFFFFF; }
-  .theme-grass .btn { background-color: #9362C4; color: #FFFFFF; }
+  .theme-grass .btn { background-color: #452263; color: #FFFFFF; }
 
   /* --- 6. US OPEN THEME (Midnight canvas, Slate-navy card, Blue button / Green accent) --- */
   .theme-uso { background-color: #0B0F19; }

@@ -16,10 +16,10 @@ function currentFaviconLink(): HTMLLinkElement | null {
 /** The accent each theme should tint the favicon with (mirrors the doc/palette choices). */
 const EXPECTED: Record<ThemeName, string> = {
   offseason: "#212529",
-  christmas: "#D92B34",
+  christmas: "#CE2029",
   ao: "#0080C8",
   clay: "#C1522D",
-  grass: "#9362C4",
+  grass: "#00703C",
   uso: "#63B233",
 };
 
@@ -70,6 +70,6 @@ describe("favicon helper", () => {
     const links = document.head.querySelectorAll("link[data-theme-favicon]");
     expect(links.length).toBe(1);
     const href = decodeURIComponent(links[0].getAttribute("href") ?? "");
-    expect(href).toContain("#9362C4"); // last applied (grass) wins
+    expect(href).toContain("#00703C"); // last applied (grass) wins
   });
 });
