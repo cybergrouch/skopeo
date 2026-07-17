@@ -147,7 +147,7 @@ class StandingsServiceTest {
     ) = service.page(token = token, band = band, sex = sex, limit = limit, offset = offset)
 
     @Test
-    fun `page on an empty snapshot returns an empty view with no groups (#220)`() {
+    fun `page with no rated players returns an empty view with no groups (#220)`() {
         val view = page(band = null, sex = null)
         view.band.shouldBeNull()
         view.entries shouldHaveSize 0
@@ -156,11 +156,10 @@ class StandingsServiceTest {
     }
 
     @Test
-    fun `page after a rebuild with no rated players returns an empty view from a published snapshot (#220)`() {
-        // rebuild() always publishes a snapshot; with nobody rated it carries no groups, so a bare page
-        // (no band requested) resolves to no group — the published-but-empty (snapshotId != null, chosen null) arm.
+    fun `page with an unrated user still returns an empty view with no groups (#220)`() {
+        // An active but unrated user contributes no rating, so the live leaderboard carries no groups and
+        // a bare page (no band requested) resolves to no group — the empty (chosen == null) arm.
         provision(uid = "unrated", sex = "Male")
-        service.rebuild()
 
         val view = page(band = null, sex = null)
         view.band.shouldBeNull()
@@ -170,11 +169,11 @@ class StandingsServiceTest {
     }
 
     @Test
-    fun `rebuild ranks each (band, sex) group from 1 and page serves it (#220)`() {
+    fun `the RATING source ranks each (band, sex) group live from 1 and page serves it (#146)`() {
+        // No snapshot at all — RATING serves live off the current ratings.
         val m1 = provision(uid = "m1", sex = "Male").also { rate(user = it, value = "4.3") }
         val m2 = provision(uid = "m2", sex = "Male").also { rate(user = it, value = "4.1") }
         provision(uid = "f1", sex = "Female").also { rate(user = it, value = "4.4") }
-        service.rebuild()
 
         val men = page(band = StandingsBand.FROM_4_0, sex = "Male")
         men.band shouldBe StandingsBand.FROM_4_0
@@ -192,7 +191,6 @@ class StandingsServiceTest {
     fun `page defaults to the strongest available group when no band is requested (#220)`() {
         provision(uid = "lo", sex = "Male").also { rate(user = it, value = "4.0") } // FROM_4_0
         val hi = provision(uid = "hi", sex = "Male").also { rate(user = it, value = "6.5") } // SIX_PLUS
-        service.rebuild()
 
         val view = page(band = null, sex = null)
         view.band shouldBe StandingsBand.SIX_PLUS
@@ -200,9 +198,8 @@ class StandingsServiceTest {
     }
 
     @Test
-    fun `page paginates within a group, honoring limit and offset (#220)`() {
+    fun `page paginates within a group live, honoring limit and offset (#220)`() {
         val ranked = (1..3).map { provision(uid = "p$it", sex = "Male").also { u -> rate(user = u, value = "4.${4 - it}") } }
-        service.rebuild()
 
         val first = page(band = StandingsBand.FROM_4_0, sex = "Male", limit = 2, offset = 0)
         first.total shouldBe 3
@@ -213,14 +210,12 @@ class StandingsServiceTest {
     }
 
     @Test
-    fun `rebuild replaces the served snapshot after a rating changes (#220)`() {
+    fun `a rating change is reflected live on the next page read (#146)`() {
         val player = provision(uid = "p", sex = "Male").also { rate(user = it, value = "4.2") }
-        service.rebuild()
         page(band = StandingsBand.FROM_4_0, sex = "Male").entries.single().userId shouldBe player.id
 
-        // A promotion into a higher band; rebuild moves the player there.
+        // A promotion into a higher band; the live read moves the player there with no rebuild.
         rate(user = player, value = "4.7")
-        service.rebuild()
         page(band = StandingsBand.FROM_4_0, sex = "Male").total shouldBe 0
         page(band = StandingsBand.FROM_4_5, sex = "Male").entries.single().userId shouldBe player.id
     }
@@ -229,7 +224,6 @@ class StandingsServiceTest {
     fun `precise rating is revealed to a rater and hidden from a plain player (#186)`() {
         provision(uid = "rater", capabilities = setOf(Capability.PLAYER, Capability.RATER))
         val player = provision(uid = "p", sex = "Male").also { rate(user = it, value = "4.2") }
-        service.rebuild()
 
         page(band = StandingsBand.FROM_4_0, sex = "Male", token = token(uid = "rater"))
             .entries.single { it.userId == player.id }.currentRating shouldBe "4.200000"
@@ -238,11 +232,10 @@ class StandingsServiceTest {
     }
 
     @Test
-    fun `disabled players are excluded from the rebuilt snapshot (#220)`() {
+    fun `disabled players are excluded from the live leaderboard (#220)`() {
         val active = provision(uid = "active", sex = "Male").also { rate(user = it, value = "4.0") }
         val disabled = provision(uid = "disabled", sex = "Male").also { rate(user = it, value = "4.0") }
         users.deactivate(id = disabled.id)
-        service.rebuild()
 
         page(band = StandingsBand.FROM_4_0, sex = "Male").entries.let {
             it shouldHaveSize 1
@@ -251,13 +244,12 @@ class StandingsServiceTest {
     }
 
     @Test
-    fun `locateMe returns the caller's location and containing page offset (#220)`() {
+    fun `locateMe returns the caller's live location and containing page offset (#220)`() {
         // 30 players all strictly above the caller (4.10–4.19, all in the 4.0 band), so the caller is
         // unambiguously last regardless of tie-break.
         (1..30).forEach { provision(uid = "p$it", sex = "Male").also { u -> rate(user = u, value = "4.1${it % 10}") } }
         // The caller is deliberately weakest so they land at the end (page 2 at 25/page).
         provision(uid = "me", sex = "Male").also { rate(user = it, value = "4.001") }
-        service.rebuild()
 
         val located = service.locateMe(token = token(uid = "me"), limit = 25).shouldNotBeNull()
         located.location.band shouldBe StandingsBand.FROM_4_0
@@ -272,25 +264,23 @@ class StandingsServiceTest {
     fun `locateMe is null when the caller is unrated or unknown (#220)`() {
         provision(uid = "rated", sex = "Male").also { rate(user = it, value = "4.0") }
         val unrated = provision(uid = "unrated", sex = "Male")
-        service.rebuild()
 
         service.locateMe(token = token(uid = "unrated"), limit = 25).shouldBeNull()
         service.locateMe(token = token(uid = "ghost"), limit = 25).shouldBeNull()
-        unrated.isActive shouldBe true // sanity: the user exists but simply isn't in the snapshot
+        unrated.isActive shouldBe true // sanity: the user exists but simply isn't in the standings
     }
 
     @Test
-    fun `locateMe is null when no snapshot has been published (#220)`() {
-        // The caller has a profile but rebuild was never run, so there is no published snapshot to locate in.
-        provision(uid = "me", sex = "Male").also { rate(user = it, value = "4.0") }
+    fun `locateMe is null when no one is rated yet (#220)`() {
+        // The caller has a profile but nobody is rated, so the live leaderboard is empty.
+        provision(uid = "me", sex = "Male")
         service.locateMe(token = token(uid = "me"), limit = 25).shouldBeNull()
     }
 
     @Test
-    fun `page for a band, sex group absent from the snapshot returns an empty view still carrying groups (#220)`() {
+    fun `page for a band, sex group with no players returns an empty view still carrying groups (#220)`() {
         // Only a Male 4.0 group exists; requesting Female for that band yields an empty page, not a fallback.
         provision(uid = "m", sex = "Male").also { rate(user = it, value = "4.0") }
-        service.rebuild()
 
         val view = page(band = StandingsBand.FROM_4_0, sex = "Female")
         view.entries shouldHaveSize 0
@@ -307,7 +297,6 @@ class StandingsServiceTest {
         val noDob =
             provision(uid = "nodob", sex = "Male", dateOfBirth = null)
                 .also { rate(user = it, value = "4.1") }
-        service.rebuild()
 
         val entries = page(band = StandingsBand.FROM_4_0, sex = "Male").entries.associateBy { it.userId }
         entries.getValue(key = withDob.id).age.shouldNotBeNull()
@@ -315,13 +304,126 @@ class StandingsServiceTest {
     }
 
     @Test
-    fun `precise rating is null for an entry whose current rating is absent (#186)`() {
+    fun `tie-break falls back to public code when a tied player has no display name (#220)`() {
+        // Two players tie on rating, confidence and matches, so the tie-break falls to the name comparison;
+        // one has no display name and must sort by its public code rather than blow up.
+        val named = provision(uid = "named", sex = "Male").also { rate(user = it, value = "4.2") }
+        val unnamed = provision(uid = "unnamed", sex = "Male", withName = false).also { rate(user = it, value = "4.2") }
+
+        val entries = page(band = StandingsBand.FROM_4_0, sex = "Male").entries
+        entries shouldHaveSize 2
+        entries.map { it.userId }.toSet() shouldBe setOf(named.id, unnamed.id)
+        entries.single { it.userId == unnamed.id }.displayName.shouldBeNull()
+    }
+
+    @Test
+    fun `with standings_source absent the RATING source is served live by default (#146)`() {
+        // A POINTS snapshot exists but standings_source is unset (default RATING), so the live rating
+        // leaderboard serves — NOT the POINTS snapshot's group.
+        val u = provision(uid = "u", sex = "Male").also { rate(user = it, value = "4.2") } // FROM_4_0
+        publishSnapshot(source = SnapshotSource.POINTS, user = u, band = StandingsBand.SIX_PLUS, rating = "6.5")
+
+        val view = page(band = null, sex = null)
+        view.band shouldBe StandingsBand.FROM_4_0 // the live rating band, not the POINTS snapshot's SIX_PLUS
+    }
+
+    @Test
+    fun `when standings_source is POINTS the POINTS snapshot is served (#146)`() {
+        // The live rating would place the player in 4.0; the POINTS snapshot places them in 6.0+ — with
+        // POINTS configured the snapshot wins.
+        val u = provision(uid = "u", sex = "Male").also { rate(user = it, value = "4.2") }
+        publishSnapshot(source = SnapshotSource.POINTS, user = u, band = StandingsBand.SIX_PLUS, rating = "6.5")
+        setSource(value = "POINTS")
+
+        val view = page(band = null, sex = null)
+        view.band shouldBe StandingsBand.SIX_PLUS // the POINTS snapshot's group
+    }
+
+    @Test
+    fun `POINTS with no published snapshot falls back to the live RATING calculation (#146)`() {
+        // Configured POINTS, but no POINTS snapshot exists → the tab is never blank; it falls back to live.
+        val u = provision(uid = "u", sex = "Male").also { rate(user = it, value = "4.2") }
+        publishSnapshot(
+            source = SnapshotSource.RATING,
+            user = u,
+            band = StandingsBand.SIX_PLUS,
+            rating = "6.5",
+        ) // dead RATING snapshot, ignored
+        setSource(value = "POINTS")
+
+        val view = page(band = null, sex = null)
+        view.band shouldBe StandingsBand.FROM_4_0 // the live rating band, not the dead RATING snapshot
+    }
+
+    @Test
+    fun `POINTS with a published but empty snapshot returns an empty view carrying every band (#146)`() {
+        // A committed points run with no counting awards publishes a header with no entries; the POINTS
+        // path then resolves to no group (the chosen == null arm) and returns an empty view.
+        provision(uid = "admin", capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        snapshots.create(
+            computedAt = LocalDateTime.now(),
+            asOf = LocalDate.now(),
+            status = SnapshotStatus.PUBLISHED,
+            entries = emptyList(),
+            source = SnapshotSource.POINTS,
+        )
+        setSource(value = "POINTS")
+
+        val view = page(band = null, sex = null)
+        view.band.shouldBeNull()
+        view.entries shouldHaveSize 0
+        view.total shouldBe 0
+        view.groups shouldHaveSize 0
+        view.allBands shouldContainExactly StandingsBand.entries.reversed()
+    }
+
+    @Test
+    fun `locateMe locates in the POINTS snapshot when POINTS is configured (#146)`() {
+        val u = provision(uid = "u", sex = "Male").also { rate(user = it, value = "4.2") }
+        publishSnapshot(source = SnapshotSource.POINTS, user = u, band = StandingsBand.SIX_PLUS, rating = "6.5")
+        setSource(value = "POINTS")
+
+        val located = service.locateMe(token = token(uid = "u"), limit = 25).shouldNotBeNull()
+        located.location.band shouldBe StandingsBand.SIX_PLUS // the POINTS snapshot's group, not the live 4.0
+        located.location.rank shouldBe 1
+    }
+
+    @Test
+    fun `precise rating is null for an entry whose current rating is absent under POINTS (#186)`() {
         provision(uid = "rater", capabilities = setOf(Capability.PLAYER, Capability.RATER))
         val kept = provision(uid = "kept", sex = "Male").also { rate(user = it, value = "4.3") }
         val gone = provision(uid = "gone", sex = "Male").also { rate(user = it, value = "4.1") }
-        service.rebuild()
+        // Both players in ONE published POINTS snapshot (the read serves the single latest snapshot).
+        snapshots.create(
+            computedAt = LocalDateTime.now(),
+            asOf = LocalDate.now(),
+            status = SnapshotStatus.PUBLISHED,
+            entries =
+                listOf(
+                    StandingsEntryWrite(
+                        band = StandingsBand.FROM_4_0,
+                        sex = "Male",
+                        rank = 1,
+                        userId = kept.id,
+                        orderingValue = BigDecimal("4.3"),
+                        tiebreakRating = BigDecimal("4.3"),
+                        achievedAt = null,
+                    ),
+                    StandingsEntryWrite(
+                        band = StandingsBand.FROM_4_0,
+                        sex = "Male",
+                        rank = 2,
+                        userId = gone.id,
+                        orderingValue = BigDecimal("4.1"),
+                        tiebreakRating = BigDecimal("4.1"),
+                        achievedAt = null,
+                    ),
+                ),
+            source = SnapshotSource.POINTS,
+        )
+        setSource(value = "POINTS")
         // The snapshot ranks both, but the current-rating row for one is removed before the read — the
-        // privileged reveal then has no live rating to show for that entry.
+        // privileged reveal then has no live rating to show for that entry (the map-miss arm).
         transaction { UserRatingsTable.deleteWhere { UserRatingsTable.userId eq gone.id } }
 
         val entries =
@@ -331,57 +433,9 @@ class StandingsServiceTest {
     }
 
     @Test
-    fun `tie-break falls back to public code when a tied player has no display name (#220)`() {
-        // Two players tie on rating, confidence and matches, so the tie-break falls to the name comparison;
-        // one has no display name and must sort by its public code rather than blow up.
-        val named = provision(uid = "named", sex = "Male").also { rate(user = it, value = "4.2") }
-        val unnamed = provision(uid = "unnamed", sex = "Male", withName = false).also { rate(user = it, value = "4.2") }
-        service.rebuild()
-
-        val entries = page(band = StandingsBand.FROM_4_0, sex = "Male").entries
-        entries shouldHaveSize 2
-        entries.map { it.userId }.toSet() shouldBe setOf(named.id, unnamed.id)
-        entries.single { it.userId == unnamed.id }.displayName.shouldBeNull()
-    }
-
-    @Test
-    fun `with standings_source absent the RATING snapshot is served by default (#146)`() {
-        // Both a RATING and a POINTS generation exist; with no app-setting the RATING one serves.
-        val u = provision(uid = "u", sex = "Male")
-        publishSnapshot(source = SnapshotSource.RATING, user = u, band = StandingsBand.FROM_4_0, rating = "4.2")
-        publishSnapshot(source = SnapshotSource.POINTS, user = u, band = StandingsBand.SIX_PLUS, rating = "6.5")
-
-        val view = page(band = null, sex = null)
-        view.band shouldBe StandingsBand.FROM_4_0 // the RATING generation's group, not the POINTS one
-    }
-
-    @Test
-    fun `when standings_source is POINTS the POINTS snapshot is served (#146)`() {
-        val u = provision(uid = "u", sex = "Male")
-        publishSnapshot(source = SnapshotSource.RATING, user = u, band = StandingsBand.FROM_4_0, rating = "4.2")
-        publishSnapshot(source = SnapshotSource.POINTS, user = u, band = StandingsBand.SIX_PLUS, rating = "6.5")
-        setSource(value = "POINTS")
-
-        val view = page(band = null, sex = null)
-        view.band shouldBe StandingsBand.SIX_PLUS // the POINTS generation's group
-    }
-
-    @Test
-    fun `falls back to the other source when the configured one has no published snapshot (#146)`() {
-        // Configured POINTS, but only a RATING generation exists → the defensive fallback serves RATING.
-        val u = provision(uid = "u", sex = "Male")
-        publishSnapshot(source = SnapshotSource.RATING, user = u, band = StandingsBand.FROM_4_0, rating = "4.2")
-        setSource(value = "POINTS")
-
-        val view = page(band = null, sex = null)
-        view.band shouldBe StandingsBand.FROM_4_0
-    }
-
-    @Test
     fun `the page response lists every NTRP band strongest-first even when groups are a subset (#113)`() {
         // Only one Male 4.0 group has data, yet the full band list is advertised for the dropdown.
         provision(uid = "m", sex = "Male").also { rate(user = it, value = "4.0") }
-        service.rebuild()
 
         val view = page(band = StandingsBand.FROM_4_0, sex = "Male")
         view.allBands shouldContainExactly StandingsBand.entries.reversed()
@@ -390,7 +444,7 @@ class StandingsServiceTest {
     }
 
     @Test
-    fun `an empty snapshot still advertises every NTRP band (#113)`() {
+    fun `an empty leaderboard still advertises every NTRP band (#113)`() {
         val view = page(band = null, sex = null)
         view.groups shouldHaveSize 0
         view.allBands shouldContainExactly StandingsBand.entries.reversed()

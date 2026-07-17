@@ -25,7 +25,6 @@ import org.skopeo.model.displayName
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService
-import org.skopeo.service.standings.StandingsService
 import org.skopeo.service.user.VerifiedFirebaseToken
 import java.math.BigDecimal
 import java.time.LocalDate
@@ -46,7 +45,6 @@ class RatingService(
     private val ratings: RatingRepository = RatingRepository(),
     private val users: UserRepository = UserRepository(),
     private val audit: AuditService = AuditService(),
-    private val standings: StandingsService = StandingsService(),
 ) {
     /**
      * A user's ratings plus whether the caller may see the exact value (#114). Players get the band +
@@ -122,8 +120,8 @@ class RatingService(
                 )
             }
             audit.record(write = ratingAudit(actorId = adminId, userId = userId, previous = previous, updated = updated))
-            // A rating change moves the leaderboard, so republish the standings snapshot (#220).
-            standings.rebuild()
+            // The RATING standings are computed live from current ratings (#146), so a set/override needs
+            // no snapshot rebuild — the change is reflected on the next read.
             updated
         }
 

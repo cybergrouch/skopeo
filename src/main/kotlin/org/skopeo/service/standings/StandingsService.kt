@@ -5,10 +5,8 @@ package org.skopeo.service.standings
 
 import org.skopeo.model.Capability
 import org.skopeo.model.SnapshotSource
-import org.skopeo.model.SnapshotStatus
 import org.skopeo.model.StandingEntry
 import org.skopeo.model.StandingsBand
-import org.skopeo.model.StandingsEntryWrite
 import org.skopeo.model.StandingsLocation
 import org.skopeo.model.User
 import org.skopeo.model.UserRating
@@ -20,23 +18,22 @@ import org.skopeo.repository.UserRepository
 import org.skopeo.service.settings.SettingsService
 import org.skopeo.service.user.VerifiedFirebaseToken
 import java.time.LocalDate
-import java.time.LocalDateTime
 import java.util.UUID
 
 private const val DEFAULT_PAGE_SIZE = 25
 private const val MAX_PAGE_SIZE = 100
 
 /**
- * The per-band "Ranking Race" standings (issue #113), served from a persisted, paged snapshot (#220).
+ * The per-band "Ranking Race" standings (issue #113). The two sources served differ by design (#146):
+ * the **RATING** source is computed **live** from each user's current rating (there is no rating
+ * snapshot — snapshots are a POINTS-only concept), while the **POINTS** source is served from the
+ * latest PUBLISHED `source=POINTS` snapshot produced by [StandingsCalculationService].
  *
- * [rebuild] recomputes the rating-derived leaderboard and persists it as a new PUBLISHED snapshot; it
- * is triggered whenever ratings change (a calculation commit or a manual set). Reads ([page], [locateMe])
- * serve the latest published snapshot, paged one (band, sex) group at a time.
- *
- * The snapshot schema is deliberately **source-agnostic**: the entry's `orderingValue` is whatever the
- * ranking sorts by (the current rating today), so #146 can swap the source rating→points without
- * touching this read path. Order is what's exposed (#64/#114); the precise rating is revealed only to
- * RATER/ADMINISTRATOR viewers (#186), computed on read from the ordering value.
+ * [page]/[locateMe] resolve the source from the `standings_source` app-setting (RATING by default). For
+ * RATING they rank the active rated players in memory (rating → confidence → matches → name) and page
+ * one (band, sex) group at a time; for POINTS they page the snapshot, falling back to the live RATING
+ * calculation when no POINTS snapshot exists so the tab is never blank. Order is what's exposed
+ * (#64/#114); the precise rating is revealed only to RATER/ADMINISTRATOR viewers (#186).
  */
 class StandingsService(
     private val users: UserRepository = UserRepository(),
@@ -59,7 +56,7 @@ class StandingsService(
         val revealRates: Boolean,
     )
 
-    /** A selectable (band, sex) group present in the latest snapshot — powers the UI band dropdown + sex toggle. */
+    /** A selectable (band, sex) group present in the leaderboard — powers the UI band dropdown + sex toggle. */
     data class GroupRef(
         val band: StandingsBand,
         val sex: String?,
@@ -73,61 +70,13 @@ class StandingsService(
     )
 
     /**
-     * Recompute the rating-derived standings and persist them as a new PUBLISHED snapshot (#220). Within
-     * each (band, sex) group, active rated players are ordered by rating (D8: higher rating first, then
-     * the deterministic confidence → matches → name tie-break) and ranked from 1. For the rating-derived
-     * source, `orderingValue` and `tiebreakRating` are the rating; `achievedAt` is left null (deriving the
-     * earliest-at-rating date from history isn't cheap at rebuild scale). Called after any rating change.
-     */
-    fun rebuild() {
-        val current = ratings.allCurrentRatings().associateBy { it.userId }
-        val active = users.findAllByIds(ids = current.keys.toList()).filter { it.isActive }
-        val byBand = active.groupBy { StandingsBand.of(rating = current.getValue(key = it.id).currentRating) }
-
-        val writes =
-            StandingsBand.entries.flatMap { band ->
-                byBand[band]
-                    .orEmpty()
-                    .groupBy { it.sex }
-                    .flatMap { (sex, group) -> rankGroup(band = band, sex = sex, players = group, current = current) }
-            }
-        snapshots.create(
-            computedAt = LocalDateTime.now(),
-            asOf = LocalDate.now(),
-            status = SnapshotStatus.PUBLISHED,
-            entries = writes,
-            // Tag this generation RATING (#146); reads prefer a committed POINTS snapshot over it.
-            source = SnapshotSource.RATING,
-        )
-    }
-
-    /** One (band, sex) group ranked from 1 into persist-ready writes. */
-    private fun rankGroup(
-        band: StandingsBand,
-        sex: String?,
-        players: List<User>,
-        current: Map<UUID, UserRating>,
-    ): List<StandingsEntryWrite> =
-        players
-            .sortedWith(comparator = standingsComparator(current = current))
-            .mapIndexed { index, user ->
-                val rating = current.getValue(key = user.id).currentRating
-                StandingsEntryWrite(
-                    band = band,
-                    sex = sex,
-                    rank = index + 1,
-                    userId = user.id,
-                    // Source-agnostic: the ordering value is the rating today; points (#146) slot in here.
-                    orderingValue = rating,
-                    tiebreakRating = rating,
-                    achievedAt = null,
-                )
-            }
-
-    /**
-     * One page of a (band, sex) group from the latest published snapshot (#220). When no [band] is given,
-     * defaults to the first available group (strongest band, Men first) so a bare call still returns a page.
-     * An empty snapshot yields an empty view. [limit] is clamped to a sane page size (default 25).
+     * One page of a (band, sex) group (#220). When no [band] is given, defaults to the first available
+     * group (strongest band, Men first) so a bare call still returns a page. An empty leaderboard yields
+     * an empty view. [limit] is clamped to a sane page size (default 25).
+     *
+     * The source is resolved from the `standings_source` app-setting (#146): RATING (default) is computed
+     * live from current ratings; POINTS is served from the latest published POINTS snapshot, falling back
+     * to the live RATING calculation when no POINTS snapshot exists.
      */
     fun page(
         token: VerifiedFirebaseToken,
@@ -137,63 +86,140 @@ class StandingsService(
         offset: Int?,
     ): StandingsView {
         val revealRates = callerCanSeeRates(token = token)
-        // Serve the source the standings_source app-setting selects (#146): RATING by default, flip-able to
-        // POINTS via a data change (no deploy). The read path is source-agnostic below this line.
-        val snapshotId = configuredSnapshotId()
-        val groups =
-            snapshotId?.let { id -> snapshots.groups(snapshotId = id).map { GroupRef(band = it.first, sex = it.second) } }.orEmpty()
-        val requested = band?.let { GroupRef(band = it, sex = sex) }
-        val chosen = snapshotId?.let { chooseGroup(requested = requested, groups = groups) }
         val pageSize = (limit ?: DEFAULT_PAGE_SIZE).coerceIn(minimumValue = 1, maximumValue = MAX_PAGE_SIZE)
         val pageOffset = (offset ?: 0).coerceAtLeast(minimumValue = 0)
-        // Empty snapshot (no id) or no group to serve → an empty view, still carrying the available groups
-        // and (always) every NTRP band so the dropdown stays fully populated (#113).
-        return if (snapshotId == null || chosen == null) {
-            StandingsView(
-                band = null,
-                sex = null,
-                entries = emptyList(),
-                total = 0,
-                limit = pageSize,
-                offset = pageOffset,
-                groups = groups,
-                allBands = StandingsBand.entries.reversed(),
-                revealRates = revealRates,
-            )
-        } else {
-            servePage(
-                snapshotId = snapshotId,
-                chosen = chosen,
-                groups = groups,
-                request = PageRequest(limit = pageSize, offset = pageOffset, revealRates = revealRates),
-            )
-        }
+        val request = PageRequest(band = band, sex = sex, limit = pageSize, offset = pageOffset, revealRates = revealRates)
+        // POINTS serves a snapshot when one exists; RATING (and POINTS with no snapshot) is computed live.
+        val pointsSnapshotId =
+            if (settings.standingsSource() == SnapshotSource.POINTS) {
+                snapshots.latestPublished(
+                    source = SnapshotSource.POINTS,
+                )
+            } else {
+                null
+            }
+        return if (pointsSnapshotId != null) servePage(snapshotId = pointsSnapshotId, request = request) else serveLive(request = request)
     }
 
-    /** The resolved page window + privacy flag — bundled so [servePage] stays under the parameter limit. */
+    /** The resolved page request + privacy flag — bundled so serving stays under the parameter limit. */
     private data class PageRequest(
+        val band: StandingsBand?,
+        val sex: String?,
         val limit: Int,
         val offset: Int,
         val revealRates: Boolean,
     )
 
+    /**
+     * Serve a RATING page by live calculation: rank every active rated player into (band, sex) groups
+     * (the single source of truth for the comparator + banding, shared with [locateMe]) and page the
+     * requested group in memory. A requested group is honored verbatim (absent → empty page), else the
+     * first available group serves, else an empty view.
+     */
+    private fun serveLive(request: PageRequest): StandingsView {
+        val leaderboard = rankLeaderboard()
+        val groups = leaderboard.keys.sortedWith(comparator = groupComparator()).map { GroupRef(band = it.first, sex = it.second) }
+        // The requested group is honored verbatim (absent → empty page), else the first available serves.
+        val chosen = request.band?.let { GroupRef(band = it, sex = request.sex) } ?: groups.firstOrNull()
+        return if (chosen == null) {
+            emptyView(request = request, groups = groups)
+        } else {
+            val ranked = leaderboard[chosen.band to chosen.sex].orEmpty()
+            val today = LocalDate.now()
+            val entries =
+                ranked
+                    .drop(n = request.offset)
+                    .take(n = request.limit)
+                    .map { player ->
+                        StandingEntry(
+                            rank = player.rank,
+                            userId = player.user.id,
+                            displayName = player.user.displayName(),
+                            publicCode = player.user.publicCode,
+                            sex = player.user.sex,
+                            age = player.user.dateOfBirth?.let { ageInYears(dateOfBirth = it, asOf = today) },
+                            // Revealed only to privileged viewers (#186); read straight from the live rating,
+                            // so there is no map miss and no dead null-rating branch.
+                            currentRating = if (request.revealRates) player.rating.currentRating.toPlainString() else null,
+                        )
+                    }
+            StandingsView(
+                band = chosen.band,
+                sex = chosen.sex,
+                entries = entries,
+                total = ranked.size,
+                limit = request.limit,
+                offset = request.offset,
+                groups = groups,
+                allBands = StandingsBand.entries.reversed(),
+                revealRates = request.revealRates,
+            )
+        }
+    }
+
+    /** A ranked player in the live leaderboard: the user, their 1-based rank, and their current rating. */
+    private data class RankedPlayer(
+        val user: User,
+        val rank: Int,
+        val rating: UserRating,
+    )
+
+    /**
+     * The live rating-derived leaderboard: every active rated player grouped by (band, sex) and ranked
+     * from 1 within each group by the [standingsComparator] (rating → confidence → matches → name). The
+     * single source of truth for banding + the comparator, shared by [serveLive] and [locateMe].
+     */
+    private fun rankLeaderboard(): Map<Pair<StandingsBand, String?>, List<RankedPlayer>> {
+        val current = ratings.allCurrentRatings().associateBy { it.userId }
+        val active = users.findAllByIds(ids = current.keys.toList()).filter { it.isActive }
+        return active
+            .groupBy { StandingsBand.of(rating = current.getValue(key = it.id).currentRating) to it.sex }
+            .mapValues { (_, group) ->
+                group
+                    .sortedWith(comparator = standingsComparator(current = current))
+                    .mapIndexed { index, user -> RankedPlayer(user = user, rank = index + 1, rating = current.getValue(key = user.id)) }
+            }
+    }
+
+    /** An empty view for a request that resolved to no group — still carries the groups + every NTRP band (#113). */
+    private fun emptyView(
+        request: PageRequest,
+        groups: List<GroupRef>,
+    ): StandingsView =
+        StandingsView(
+            band = null,
+            sex = null,
+            entries = emptyList(),
+            total = 0,
+            limit = request.limit,
+            offset = request.offset,
+            groups = groups,
+            allBands = StandingsBand.entries.reversed(),
+            revealRates = request.revealRates,
+        )
+
+    /**
+     * Serve a POINTS page from [snapshotId] (#146). When no [band] is requested, defaults to the first
+     * available group; a requested group is honored verbatim (absent → empty page). An empty snapshot
+     * yields an empty view still carrying every NTRP band (#113).
+     */
     private fun servePage(
         snapshotId: UUID,
-        chosen: GroupRef,
-        groups: List<GroupRef>,
         request: PageRequest,
     ): StandingsView {
-        val pageSize = request.limit
-        val pageOffset = request.offset
-        val revealRates = request.revealRates
+        val groups = snapshots.groups(snapshotId = snapshotId).map { GroupRef(band = it.first, sex = it.second) }
+        // The requested group is honored verbatim (absent → empty page), else the first available serves.
+        val chosen = request.band?.let { GroupRef(band = it, sex = request.sex) } ?: groups.firstOrNull()
+        if (chosen == null) return emptyView(request = request, groups = groups)
+
         val result =
-            snapshots.page(snapshotId = snapshotId, band = chosen.band, sex = chosen.sex, limit = pageSize, offset = pageOffset)
+            snapshots.page(snapshotId = snapshotId, band = chosen.band, sex = chosen.sex, limit = request.limit, offset = request.offset)
         val today = LocalDate.now()
         val shownIds = result.entries.map { it.userId }
         val byId = users.findAllByIds(ids = shownIds).associateBy { it.id }
         // For privileged viewers, reveal the precise current rating (full 6-dp scale, #186) read live —
-        // the snapshot's ordering_value carries a coarser scale and is source-agnostic (points later, #146).
-        val ratingsById = if (revealRates) ratings.findCurrentRatings(userIds = shownIds) else emptyMap()
+        // the snapshot's ordering_value carries a coarser scale and is source-agnostic (points here, #146).
+        val ratingsById = if (request.revealRates) ratings.findCurrentRatings(userIds = shownIds) else emptyMap()
         val entries =
             result.entries.map { entry ->
                 // The snapshot's user_id FK is ON DELETE CASCADE, so every ranked entry has a live user.
@@ -214,27 +240,43 @@ class StandingsService(
             sex = chosen.sex,
             entries = entries,
             total = result.total,
-            limit = pageSize,
-            offset = pageOffset,
+            limit = request.limit,
+            offset = request.offset,
             groups = groups,
             allBands = StandingsBand.entries.reversed(),
-            revealRates = revealRates,
+            revealRates = request.revealRates,
         )
     }
 
     /**
-     * Jump-to-me (#220): the caller's (band, sex, rank) in the latest published snapshot plus the page
-     * offset that contains their row (so the client can load exactly that page). Null when the caller has
-     * no profile or isn't in the snapshot (e.g. unrated). [limit] is the page size used to compute the offset.
+     * Jump-to-me (#220): the caller's (band, sex, rank) plus the page offset that contains their row (so
+     * the client can load exactly that page). Null when the caller has no profile or isn't in the current
+     * standings (e.g. unrated). RATING is located live; POINTS locates in the snapshot (falling back to
+     * the live calculation when no POINTS snapshot exists). [limit] is the page size used for the offset.
      */
     fun locateMe(
         token: VerifiedFirebaseToken,
         limit: Int?,
     ): LocateView? {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid) ?: return null
+        val pointsSnapshotId =
+            if (settings.standingsSource() == SnapshotSource.POINTS) {
+                snapshots.latestPublished(
+                    source = SnapshotSource.POINTS,
+                )
+            } else {
+                null
+            }
         val location =
-            caller?.let {
-                configuredSnapshotId()?.let { id -> snapshots.locate(snapshotId = id, userId = caller.id) }
+            if (pointsSnapshotId != null) {
+                snapshots.locate(snapshotId = pointsSnapshotId, userId = caller.id)
+            } else {
+                // Live: find the caller's (band, sex, rank) in the rating-derived leaderboard.
+                rankLeaderboard().firstNotNullOfOrNull { (group, ranked) ->
+                    ranked.firstOrNull { it.user.id == caller.id }?.let {
+                        StandingsLocation(band = group.first, sex = group.second, rank = it.rank)
+                    }
+                }
             }
         return location?.let {
             val pageSize = (limit ?: DEFAULT_PAGE_SIZE).coerceIn(minimumValue = 1, maximumValue = MAX_PAGE_SIZE)
@@ -243,28 +285,6 @@ class StandingsService(
             LocateView(location = it, offset = pageOffset, limit = pageSize)
         }
     }
-
-    /**
-     * The snapshot the reads serve (#146): the latest PUBLISHED generation of the configured
-     * [SettingsService.standingsSource] (RATING by default). Defensive fallback — if that source has no
-     * published generation yet, serve the other source's latest so the tab is never blank when only one
-     * source has ever been built.
-     */
-    private fun configuredSnapshotId(): UUID? {
-        val configured = settings.standingsSource()
-        val other = if (configured == SnapshotSource.RATING) SnapshotSource.POINTS else SnapshotSource.RATING
-        return snapshots.latestPublished(source = configured) ?: snapshots.latestPublished(source = other)
-    }
-
-    /**
-     * The group to serve: the explicitly-[requested] one honored verbatim (so an absent requested group
-     * returns an empty page for THAT band, not a silent fallback to another), else the first available
-     * group (strongest band, Men first), else null when the snapshot has no groups at all.
-     */
-    private fun chooseGroup(
-        requested: GroupRef?,
-        groups: List<GroupRef>,
-    ): GroupRef? = requested ?: groups.firstOrNull()
 
     /** Whether the viewer may see precise ratings (RATER or ADMINISTRATOR), mirroring the match page (#136/#186). */
     private fun callerCanSeeRates(token: VerifiedFirebaseToken): Boolean {
@@ -282,6 +302,17 @@ class StandingsService(
             if (order == 0) order = standingName(user = left).compareTo(other = standingName(user = right))
             order
         }
+
+    /** Strongest band first (enum ordinal descending), then Men → Women → Unspecified — mirrors the read UI. */
+    private fun groupComparator(): Comparator<Pair<StandingsBand, String?>> =
+        compareByDescending<Pair<StandingsBand, String?>> { it.first.ordinal }
+            .thenBy {
+                when (it.second) {
+                    "Male" -> 0
+                    "Female" -> 1
+                    else -> 2
+                }
+            }
 
     private fun standingName(user: User): String = user.displayName() ?: user.publicCode
 }
