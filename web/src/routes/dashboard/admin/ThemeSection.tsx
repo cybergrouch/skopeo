@@ -25,6 +25,11 @@ const THEME_OPTIONS: ReadonlyArray<{ value: SetThemeRequestTheme; label: string 
   { value: 'US_OPEN', label: 'US Open' },
   { value: 'OFF_SEASON', label: 'Off-Season' },
   { value: 'CHRISTMAS', label: 'Christmas' },
+  { value: 'VALENTINES', label: "Valentine's Day" },
+  { value: 'SPRING', label: 'Spring' },
+  { value: 'RAINY', label: 'Rainy' },
+  { value: 'HALLOWEEN', label: 'Halloween' },
+  { value: 'AUTUMN', label: 'Autumn' },
 ]
 
 /**

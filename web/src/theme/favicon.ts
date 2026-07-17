@@ -25,6 +25,12 @@ import type { ThemeName } from "@/lib/season";
  * - clay: Brick Terracotta `#C1522D` (canvas; 4.65:1; deeper/steadier than the `#E07A5F` accent).
  * - grass: Lush Lawn Green `#00703C` (canvas; 6.21:1) — grass is green again under #409.
  * - uso: apple green. [unchanged, #402]
+ * - valentines: hot-pink accent `#FF4081` (3.33:1) — the accent reads on-brand and legible.
+ * - spring: Sky Blue canvas `#1E88E5` (3.68:1). The coral accent `#FF8A80` washes out (2.28:1).
+ * - rainy: Storm Slate canvas `#37474F` (9.65:1). The cyan accent `#00E5FF` washes out (1.54:1).
+ * - halloween: Pumpkin Orange canvas `#E65100` (3.79:1). The toxic-green accent `#76FF03` washes
+ *   out (1.31:1) — the orange reads unmistakably spooky.
+ * - autumn: Burnt-Rust canvas `#BF360C` (5.60:1). The amber accent `#FFB300` washes out (1.79:1).
  */
 const THEME_ACCENT: Record<ThemeName, string> = {
   offseason: "#212529",
@@ -33,6 +39,11 @@ const THEME_ACCENT: Record<ThemeName, string> = {
   clay: "#C1522D",
   grass: "#00703C",
   uso: "#63B233",
+  valentines: "#FF4081",
+  spring: "#1E88E5",
+  rainy: "#37474F",
+  halloween: "#E65100",
+  autumn: "#BF360C",
 };
 
 /** Neutral (no `data-theme`) tint — the default dark-slate mark. */

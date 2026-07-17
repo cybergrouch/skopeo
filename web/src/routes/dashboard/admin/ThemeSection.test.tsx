@@ -39,13 +39,35 @@ describe('ThemeSection', () => {
     }))
   })
 
-  it('renders the AUTO + six theme options', () => {
+  it('renders the AUTO + eleven theme options', () => {
     renderSection()
     const select = screen.getByLabelText('Theme') as HTMLSelectElement
-    expect(select.options).toHaveLength(7)
+    expect(select.options).toHaveLength(12)
     expect(screen.getByRole('option', { name: 'Auto (by season)' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: 'US Open' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: 'Grass' })).toBeInTheDocument()
+  })
+
+  it('renders the five new seasonal theme options', () => {
+    renderSection()
+    for (const name of ["Valentine's Day", 'Spring', 'Rainy', 'Halloween', 'Autumn']) {
+      expect(screen.getByRole('option', { name })).toBeInTheDocument()
+    }
+  })
+
+  it.each([
+    ['VALENTINES', "Valentine's Day"],
+    ['SPRING', 'Spring'],
+    ['RAINY', 'Rainy'],
+    ['HALLOWEEN', 'Halloween'],
+    ['AUTUMN', 'Autumn'],
+  ])('selecting %s and saving calls the mutation with that value', async (value, label) => {
+    const user = userEvent.setup()
+    renderSection()
+    await user.selectOptions(screen.getByLabelText('Theme'), label)
+    await user.click(screen.getByRole('button', { name: 'Save theme' }))
+    expect(putMutate).toHaveBeenCalledWith({ data: { theme: value } })
+    expect(screen.getByRole('status')).toHaveTextContent('Saved')
   })
 
   it('initializes the select from the loaded setting', async () => {

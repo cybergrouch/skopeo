@@ -21,6 +21,11 @@ const EXPECTED: Record<ThemeName, string> = {
   clay: "#C1522D",
   grass: "#00703C",
   uso: "#63B233",
+  valentines: "#FF4081",
+  spring: "#1E88E5",
+  rainy: "#37474F",
+  halloween: "#E65100",
+  autumn: "#BF360C",
 };
 
 describe("favicon helper", () => {

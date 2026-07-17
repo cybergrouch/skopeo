@@ -4,8 +4,19 @@
  * See docs/product/UI_SEASONAL_THEMING.md §6.
  */
 
-/** The six concrete theme names, matching the `[data-theme="…"]` blocks in index.css. */
-export type ThemeName = 'offseason' | 'christmas' | 'ao' | 'clay' | 'grass' | 'uso'
+/** The concrete theme names, matching the `[data-theme="…"]` blocks in index.css. */
+export type ThemeName =
+  | 'offseason'
+  | 'christmas'
+  | 'ao'
+  | 'clay'
+  | 'grass'
+  | 'uso'
+  | 'valentines'
+  | 'spring'
+  | 'rainy'
+  | 'halloween'
+  | 'autumn'
 
 /** Month is 1-based here (Jan = 1) to match how the windows read in the design doc. */
 interface DateParts {
@@ -24,17 +35,24 @@ function inWindow(parts: DateParts, start: DateParts, end: DateParts): boolean {
 }
 
 /**
- * Resolve the active theme for `now`. Windows (default `offseason`):
- * Jan → ao; Apr 1–Jun 10 → clay; Jun 11–Jul 31 → grass; Aug 1–Sep 15 → uso;
- * Dec 10–Dec 31 → christmas; everything else → offseason.
+ * Resolve the active theme for `now` (inclusive windows, first-match-wins; default `offseason`):
+ * Jan 1–Jan 31 → ao; Feb 1–Feb 14 → valentines; Feb 15–Mar 31 → spring; Apr 1–Jun 10 → clay;
+ * Jun 11–Jul 31 → grass; Aug 1–Sep 15 → uso; Sep 16–Oct 16 → rainy; Oct 17–Oct 24 → offseason;
+ * Oct 25–Nov 2 → halloween; Nov 3–Dec 9 → autumn; Dec 10–Dec 31 → christmas; else → offseason.
  */
 export function resolveSeasonTheme(now: Date): ThemeName {
   const parts = partsOf(now)
 
-  if (parts.month === 1) return 'ao'
+  if (inWindow(parts, { month: 1, day: 1 }, { month: 1, day: 31 })) return 'ao'
+  if (inWindow(parts, { month: 2, day: 1 }, { month: 2, day: 14 })) return 'valentines'
+  if (inWindow(parts, { month: 2, day: 15 }, { month: 3, day: 31 })) return 'spring'
   if (inWindow(parts, { month: 4, day: 1 }, { month: 6, day: 10 })) return 'clay'
   if (inWindow(parts, { month: 6, day: 11 }, { month: 7, day: 31 })) return 'grass'
   if (inWindow(parts, { month: 8, day: 1 }, { month: 9, day: 15 })) return 'uso'
+  if (inWindow(parts, { month: 9, day: 16 }, { month: 10, day: 16 })) return 'rainy'
+  if (inWindow(parts, { month: 10, day: 17 }, { month: 10, day: 24 })) return 'offseason'
+  if (inWindow(parts, { month: 10, day: 25 }, { month: 11, day: 2 })) return 'halloween'
+  if (inWindow(parts, { month: 11, day: 3 }, { month: 12, day: 9 })) return 'autumn'
   if (inWindow(parts, { month: 12, day: 10 }, { month: 12, day: 31 })) return 'christmas'
   return 'offseason'
 }
@@ -50,6 +68,11 @@ const ENUM_TO_THEME: Record<string, ThemeName> = {
   US_OPEN: 'uso',
   OFF_SEASON: 'offseason',
   CHRISTMAS: 'christmas',
+  VALENTINES: 'valentines',
+  SPRING: 'spring',
+  RAINY: 'rainy',
+  HALLOWEEN: 'halloween',
+  AUTUMN: 'autumn',
 }
 
 /** Resolve the setting value (poss. AUTO / unknown) to the active `data-theme` name for `now`. */

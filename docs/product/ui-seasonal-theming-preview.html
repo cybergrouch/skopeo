@@ -20,8 +20,8 @@
 <header style="font-family:system-ui,-apple-system,sans-serif; padding:24px 24px 0;">
   <h1 style="margin:0 0 4px; font-size:1.4rem; color:#F8F9FA;">Skopeo — Seasonal Theme Preview</h1>
   <p style="margin:0; color:#adb5bd; font-size:0.9rem;">
-    Six admin-selectable themes (60% canvas · 30% card · 10% accent). Vibrant Depth for the four
-    court seasons; off-season + US Open stay dark. See
+    Eleven admin-selectable themes (60% canvas · 30% card · 10% accent). Vibrant Depth for the court
+    + seasonal themes; off-season + US Open stay dark. See
     <code>docs/product/UI_SEASONAL_THEMING.md</code> for the full spec.
   </p>
 </header>
@@ -80,6 +80,51 @@
       <h3>Flushing Meadows</h3>
       <p>High-octane night session energy. <a href="#">Public page (QR)</a></p>
       <button class="btn">Buy Tickets</button>
+    </div>
+  </div>
+
+  <!-- 7. VALENTINE'S DAY THEME -->
+  <div class="canvas theme-valentines">
+    <div class="card">
+      <h3>Valentine's Day</h3>
+      <p>Warm, romantic rose &amp; wine. <a href="#">Public page (QR)</a></p>
+      <button class="btn">Send Love</button>
+    </div>
+  </div>
+
+  <!-- 8. SPRING THEME -->
+  <div class="canvas theme-spring">
+    <div class="card">
+      <h3>Spring</h3>
+      <p>Fresh sky-blue &amp; blossom. <a href="#">Public page (QR)</a></p>
+      <button class="btn">In Bloom</button>
+    </div>
+  </div>
+
+  <!-- 9. RAINY THEME -->
+  <div class="canvas theme-rainy">
+    <div class="card">
+      <h3>Rainy</h3>
+      <p>Moody storm-slate &amp; cyan. <a href="#">Public page (QR)</a></p>
+      <button class="btn">Take Cover</button>
+    </div>
+  </div>
+
+  <!-- 10. HALLOWEEN THEME -->
+  <div class="canvas theme-halloween">
+    <div class="card">
+      <h3>Halloween</h3>
+      <p>Spooky pumpkin &amp; toxic green. <a href="#">Public page (QR)</a></p>
+      <button class="btn">Trick or Treat</button>
+    </div>
+  </div>
+
+  <!-- 11. AUTUMN THEME -->
+  <div class="canvas theme-autumn">
+    <div class="card">
+      <h3>Autumn</h3>
+      <p>Warm burnt-rust &amp; amber. <a href="#">Public page (QR)</a></p>
+      <button class="btn">Fall Colors</button>
     </div>
   </div>
 
@@ -195,6 +240,48 @@
   .theme-uso .card p a { color: #63B233; text-decoration-color: #63B233; }
   .theme-uso .card p a:hover { color: #FFFFFF; text-decoration-color: #FFFFFF; }
   .theme-uso .btn { background-color: #005DAA; color: #FFFFFF; }
+
+  /* --- 7. VALENTINE'S DAY THEME (Rose Wine canvas, Merlot card, white rim, hot-pink button) --- */
+  .theme-valentines { background-color: #5C061D; }
+  .theme-valentines .card { background-color: #2E030E; border: 2px solid #FFFFFF; color: #FFFFFF; }
+  .theme-valentines .card p { color: #F5E6E8; }
+  .theme-valentines .card p a { color: #FF4081; text-decoration-color: #FF4081; }
+  .theme-valentines .card p a:hover { color: #FFFFFF; text-decoration-color: #FFFFFF; }
+  /* Button text = dark Merlot #2E030E (not #FFFFFF): white-on-#FF4081 is only 3.33:1 (fails AA). */
+  .theme-valentines .btn { background-color: #FF4081; color: #2E030E; }
+
+  /* --- 8. SPRING THEME (Sky Blue canvas, Pine card, white rim, coral button) --- */
+  .theme-spring { background-color: #1E88E5; }
+  .theme-spring .card { background-color: #1B4D3E; border: 2px solid #FFFFFF; color: #FFFFFF; }
+  .theme-spring .card p { color: #E8F5E9; }
+  /* Link = lighter coral #FFA69E (not #FF8A80): #FF8A80 on the card is only 4.22:1 (fails AA). */
+  .theme-spring .card p a { color: #FFA69E; text-decoration-color: #FFA69E; }
+  .theme-spring .card p a:hover { color: #FFFFFF; text-decoration-color: #FFFFFF; }
+  .theme-spring .btn { background-color: #FF8A80; color: #2E030E; }
+
+  /* --- 9. RAINY THEME (Storm Slate canvas, near-black card, cloud rim, cyan button) --- */
+  .theme-rainy { background-color: #37474F; }
+  .theme-rainy .card { background-color: #212121; border: 2px solid #ECEFF1; color: #ECEFF1; }
+  .theme-rainy .card p { color: #CFD8DC; }
+  .theme-rainy .card p a { color: #00E5FF; text-decoration-color: #00E5FF; }
+  .theme-rainy .card p a:hover { color: #ECEFF1; text-decoration-color: #ECEFF1; }
+  .theme-rainy .btn { background-color: #00E5FF; color: #212121; }
+
+  /* --- 10. HALLOWEEN THEME (Pumpkin Orange canvas, Witching-Purple card, white rim, toxic-green button) --- */
+  .theme-halloween { background-color: #E65100; }
+  .theme-halloween .card { background-color: #1A0933; border: 2px solid #FFFFFF; color: #FFFFFF; }
+  .theme-halloween .card p { color: #F3E5F5; }
+  .theme-halloween .card p a { color: #76FF03; text-decoration-color: #76FF03; }
+  .theme-halloween .card p a:hover { color: #FFFFFF; text-decoration-color: #FFFFFF; }
+  .theme-halloween .btn { background-color: #76FF03; color: #1A0933; }
+
+  /* --- 11. AUTUMN THEME (Burnt-Rust canvas, Cocoa card, linen rim, amber button) --- */
+  .theme-autumn { background-color: #BF360C; }
+  .theme-autumn .card { background-color: #3E2723; border: 2px solid #FFF3E0; color: #FFF3E0; }
+  .theme-autumn .card p { color: #D7CCC8; }
+  .theme-autumn .card p a { color: #FFB300; text-decoration-color: #FFB300; }
+  .theme-autumn .card p a:hover { color: #FFF3E0; text-decoration-color: #FFF3E0; }
+  .theme-autumn .btn { background-color: #FFB300; color: #3E2723; }
 </style>
 
 </body>

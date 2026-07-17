@@ -78,6 +78,23 @@ class ThemeServiceTest {
     }
 
     @Test
+    fun `setTheme accepts each new seasonal theme value`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val newThemes =
+            listOf(
+                ThemeSetting.VALENTINES,
+                ThemeSetting.SPRING,
+                ThemeSetting.RAINY,
+                ThemeSetting.HALLOWEEN,
+                ThemeSetting.AUTUMN,
+            )
+        newThemes.forEach { theme ->
+            service.setTheme(token = token(uid = "admin"), theme = theme.name).shouldBeRight().theme shouldBe theme
+            service.getTheme().theme shouldBe theme
+        }
+    }
+
+    @Test
     fun `theme parsing is case-insensitive (#378)`() {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         service.setTheme(token = token(uid = "admin"), theme = "clay").shouldBeRight().theme shouldBe ThemeSetting.CLAY
