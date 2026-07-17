@@ -161,6 +161,21 @@ class RankingPointServiceTest {
     }
 
     @Test
+    fun `fractional points are rejected while an integral grant with trailing zeros succeeds`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val player = provision(uid = "player")
+        ratings.setRating(userId = player.id, rating = BigDecimal("4.0"), level = "4.0")
+
+        // A fractional grant (100.5) is rejected per Decision #6 (#403).
+        service.grant(token = token(uid = "admin"), command = grantCommand(userId = player.id, points = "100.5"))
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+
+        // An integral value with trailing zeros (100.0000) is still accepted.
+        service.grant(token = token(uid = "admin"), command = grantCommand(userId = player.id, points = "100.0000"))
+            .shouldBeRight()
+    }
+
+    @Test
     fun `an unrated target with no explicit band is a validation error`() {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val player = provision(uid = "player")

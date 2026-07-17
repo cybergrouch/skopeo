@@ -55,6 +55,11 @@ class RankingPointService(
             ensure(condition = command.points > BigDecimal.ZERO) {
                 ServiceError.Validation(message = "Points must be greater than zero")
             }
+            // Decision #6 (#403): points are stored as BigDecimal but must always be whole integers —
+            // stripTrailingZeros so 100.0000 is accepted while a fractional grant like 100.5 is rejected.
+            ensure(condition = command.points.stripTrailingZeros().scale() <= 0) {
+                ServiceError.Validation(message = "Points must be a whole number")
+            }
             // An external / ad-hoc grant must justify itself (§7 traceability).
             ensure(condition = command.sourceType == PointSourceType.INTERNAL || !command.reason.isNullOrBlank()) {
                 ServiceError.Validation(message = "A reason is required for an external or ad-hoc grant")
