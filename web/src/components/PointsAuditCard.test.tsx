@@ -54,13 +54,19 @@ describe('PointsAuditCard', () => {
     expect(screen.getByText('30 pts')).toBeInTheDocument()
     expect(screen.getByText('4.0')).toBeInTheDocument()
     expect(screen.getByText(/Expires 2026-12-01/)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /View granting match/ })).toHaveAttribute('href', '/matches/MTCH01')
+    const matchLink = screen.getByRole('link', { name: /View granting match/ })
+    expect(matchLink).toHaveAttribute('href', '/matches/MTCH01')
+    // The granting-match link wears the themed content-link style (#453).
+    expect(matchLink).toHaveClass('content-link')
   })
 
   it('falls back to the event link when an award has no match (#448)', () => {
     useGetApiV1PlayersCodePoints.mockReturnValue({ data: [eventAward], isLoading: false })
     renderCard(true)
-    expect(screen.getByRole('link', { name: /View granting event/ })).toHaveAttribute('href', '/events/EVNT01')
+    const eventLink = screen.getByRole('link', { name: /View granting event/ })
+    expect(eventLink).toHaveAttribute('href', '/events/EVNT01')
+    // The granting-event link wears the themed content-link style (#453).
+    expect(eventLink).toHaveClass('content-link')
   })
 
   it('shows the empty state when there are no active points', () => {

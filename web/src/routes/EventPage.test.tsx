@@ -116,7 +116,10 @@ describe('EventPage', () => {
     expect(screen.getByText('Spring Open')).toBeInTheDocument()
     expect(screen.getByText('EVT001')).toBeInTheDocument()
     // Participant with a code links to their profile; the both-null one is plain text.
-    expect(screen.getByRole('link', { name: 'Ana' })).toHaveAttribute('href', '/players/AAA111')
+    const participantLink = screen.getByRole('link', { name: 'Ana' })
+    expect(participantLink).toHaveAttribute('href', '/players/AAA111')
+    // The participant name link wears the themed content-link style (#451).
+    expect(participantLink).toHaveClass('content-link')
     expect(screen.getByText('abcdef12')).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'abcdef12' })).not.toBeInTheDocument()
     // Each match row links to its public match page (ordering is asserted per-section below).

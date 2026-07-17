@@ -1,5 +1,5 @@
-import { Link } from "react-router-dom";
 import { useGetApiV1PlayersCodePoints } from "@/api/generated/users/users";
+import { ContentLink } from "@/components/ContentLink";
 import {
   Card,
   CardContent,
@@ -57,19 +57,13 @@ export function PointsAuditCard({ code, enabled }: PointsAuditCardProps) {
                 </div>
                 <div className="mt-1">
                   {award.matchCode ? (
-                    <Link
-                      to={`/matches/${award.matchCode}`}
-                      className="text-primary hover:underline"
-                    >
+                    <ContentLink to={`/matches/${award.matchCode}`}>
                       View granting match →
-                    </Link>
+                    </ContentLink>
                   ) : award.eventCode ? (
-                    <Link
-                      to={`/events/${award.eventCode}`}
-                      className="text-primary hover:underline"
-                    >
+                    <ContentLink to={`/events/${award.eventCode}`}>
                       View granting event →
-                    </Link>
+                    </ContentLink>
                   ) : (
                     <span className="text-muted-foreground">
                       Manual grant

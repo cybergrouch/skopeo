@@ -56,7 +56,10 @@ describe('MatchPage', () => {
     renderAt()
 
     expect(screen.getByText('MTCH01')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Ana' })).toHaveAttribute('href', '/players/AAA111')
+    const anaLink = screen.getByRole('link', { name: 'Ana' })
+    expect(anaLink).toHaveAttribute('href', '/players/AAA111')
+    // The player name link wears the themed content-link style (#451).
+    expect(anaLink).toHaveClass('content-link')
     expect(screen.getByRole('link', { name: 'Bob' })).toHaveAttribute('href', '/players/BBB222')
     expect(screen.getByText('Winner')).toBeInTheDocument() // exactly one side won
     expect(screen.getByText('6-4 6-2')).toBeInTheDocument()
@@ -242,7 +245,10 @@ describe('MatchPage', () => {
     })
     renderAt()
 
-    expect(screen.getByRole('link', { name: 'DDD444' })).toHaveAttribute('href', '/players/DDD444')
+    const codeLink = screen.getByRole('link', { name: 'DDD444' })
+    expect(codeLink).toHaveAttribute('href', '/players/DDD444')
+    // The rating-change name link wears the themed content-link style (#451).
+    expect(codeLink).toHaveClass('content-link')
     expect(screen.getByText('— → —')).toBeInTheDocument() // both band levels missing
     expect(screen.getByText('Unknown')).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Unknown' })).not.toBeInTheDocument()
