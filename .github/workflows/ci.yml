@@ -9,6 +9,7 @@ on:
 permissions:
   contents: read
   checks: write # dorny/test-reporter publishes the "Test Report" check run
+  pull-requests: write # sticky coverage comments (marocchino/sticky-pull-request-comment)
 
 # Cancel superseded runs on the same ref (e.g. new push to a PR)
 concurrency:
@@ -20,9 +21,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-        # Full history (not the default shallow depth-1) so Codecov can walk the
-        # commit ancestry to the base commit and compute diff coverage. A shallow
-        # clone is what triggers Codecov's "Missing Base Commit" warning on PRs.
+        # Full history (not the default shallow depth-1) so diff-cover can walk the
+        # commit ancestry to origin/main and compute patch (changed-lines) coverage.
         with:
           fetch-depth: 0
 
@@ -44,9 +44,11 @@ jobs:
         run: ./gradlew check
 
       # Quick overall coverage table on the run Summary page (even if the gate failed).
+      # Captured to a file so the same markdown can be reused in the PR comment below.
       - name: Coverage summary
         if: always()
-        run: python3 scripts/coverage-summary.py >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          python3 scripts/coverage-summary.py | tee coverage-summary.md >> "$GITHUB_STEP_SUMMARY"
 
       # Drillable per-test report as a "Test Report" check; failures are expanded with
       # their stack trace and annotated on the source line.
@@ -62,17 +64,50 @@ jobs:
           # Publish as a drillable "Test Report" check run (not just the run summary).
           use-actions-summary: 'false'
 
-      # Upload coverage to Codecov, which annotates uncovered changed lines inline on the
-      # PR diff and reports patch (changed-lines) coverage. Non-blocking — the real gate is
-      # the JaCoCo verification in `./gradlew check`.
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v7
-        if: always()
+      # Patch (changed-lines) coverage against origin/main via diff-cover. JaCoCo package
+      # names + sourcefile names resolve under src/main/kotlin, so diff-cover maps the
+      # changed Kotlin lines to their coverage. Non-blocking: the gate is `./gradlew check`.
+      - name: Backend patch coverage (diff-cover)
+        if: github.event_name == 'pull_request' && always()
+        continue-on-error: true
+        run: |
+          pip install --quiet diff-cover
+          diff-cover build/reports/jacoco/test/jacocoTestReport.xml \
+            --compare-branch=origin/main \
+            --src-roots src/main/kotlin \
+            --format markdown:backend-patch.md || echo "_diff-cover produced no patch report._" > backend-patch.md
+
+      # Sticky PR comment (updated in place across pushes) with overall + patch coverage.
+      # Never fails the build.
+      - name: Assemble backend coverage comment
+        if: github.event_name == 'pull_request' && always()
+        continue-on-error: true
+        run: |
+          {
+            echo "## 🧪 Backend coverage"
+            echo
+            if [ -f coverage-summary.md ]; then
+              cat coverage-summary.md
+            else
+              echo "_No coverage report found._"
+            fi
+            echo
+            echo "### Patch coverage (changed lines vs \`main\`)"
+            echo
+            if [ -f backend-patch.md ]; then
+              cat backend-patch.md
+            else
+              echo "_No patch coverage computed._"
+            fi
+          } > backend-comment.md
+
+      - name: Post backend coverage comment
+        uses: marocchino/sticky-pull-request-comment@v2
+        if: github.event_name == 'pull_request' && always()
+        continue-on-error: true
         with:
-          files: build/reports/jacoco/test/jacocoTestReport.xml
-          flags: backend
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: false
+          header: coverage-backend
+          path: backend-comment.md
 
   # Secret scan: block commits that introduce API keys, tokens, or credentials.
   # gitleaks-action scans the commits in the push / PR (not full history), reads
@@ -100,7 +135,7 @@ jobs:
         working-directory: web
     steps:
       - uses: actions/checkout@v7
-        # Full history so Codecov can diff frontend coverage against the base.
+        # Full history so diff-cover can diff frontend coverage against origin/main.
         with:
           fetch-depth: 0
 
@@ -138,13 +173,68 @@ jobs:
           list-tests: all
           use-actions-summary: 'false'
 
-      # Frontend coverage to Codecov under the `frontend` flag; merged with the
-      # backend upload into one commit report (comment waits for both — see codecov.yml).
-      - name: Upload web coverage to Codecov
-        uses: codecov/codecov-action@v7
-        if: always()
+      # Overall coverage from the vitest v8 lcov, plus patch (changed-lines) coverage
+      # via diff-cover. The lcov's SF paths are relative to web/, so they are prefixed
+      # with web/ to become repo-relative before diff-cover diffs against origin/main.
+      # Non-blocking: the coverage gate stays in `./gradlew check` (backend) / vitest.
+      - name: Web patch coverage (diff-cover)
+        if: github.event_name == 'pull_request' && always()
+        continue-on-error: true
+        working-directory: .
+        run: |
+          pip install --quiet diff-cover
+          # lcov overall (line coverage summed from DA records).
+          python3 - <<'PY' > web-overall.md
+          total = covered = 0
+          try:
+              with open("web/coverage/lcov.info") as f:
+                  for line in f:
+                      if line.startswith("DA:"):
+                          _, hits = line[3:].split(",")
+                          total += 1
+                          if int(hits) > 0:
+                              covered += 1
+          except FileNotFoundError:
+              print("_No coverage report found._")
+          else:
+              pct = f"{100 * covered // total}% ({covered}/{total})" if total else "—"
+              print("| Metric | Coverage |")
+              print("|--------|----------|")
+              print(f"| Lines | {pct} |")
+          PY
+          # Repo-relative lcov paths (web/src/...) so diff-cover matches git diff paths.
+          sed 's|^SF:src/|SF:web/src/|' web/coverage/lcov.info > web/coverage/lcov-rooted.info
+          diff-cover web/coverage/lcov-rooted.info \
+            --compare-branch=origin/main \
+            --format markdown:web-patch.md || echo "_diff-cover produced no patch report._" > web-patch.md
+
+      - name: Assemble web coverage comment
+        if: github.event_name == 'pull_request' && always()
+        continue-on-error: true
+        working-directory: .
+        run: |
+          {
+            echo "## 🧪 Web coverage"
+            echo
+            if [ -f web-overall.md ]; then
+              cat web-overall.md
+            else
+              echo "_No coverage report found._"
+            fi
+            echo
+            echo "### Patch coverage (changed lines vs \`main\`)"
+            echo
+            if [ -f web-patch.md ]; then
+              cat web-patch.md
+            else
+              echo "_No patch coverage computed._"
+            fi
+          } > web-comment.md
+
+      - name: Post web coverage comment
+        uses: marocchino/sticky-pull-request-comment@v2
+        if: github.event_name == 'pull_request' && always()
+        continue-on-error: true
         with:
-          files: web/coverage/lcov.info
-          flags: frontend
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: false
+          header: coverage-web
+          path: web-comment.md

@@ -381,11 +381,16 @@ jobs:
       - name: Verify coverage thresholds
         run: ./gradlew jacocoTestCoverageVerification
 
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v7
-        with:
-          files: ./build/reports/jacoco/test/jacocoTestReport.xml
-          fail_ci_if_error: false
+      # Patch (changed-lines) coverage posted as a sticky PR comment. Non-blocking;
+      # the gate is jacocoTestCoverageVerification above.
+      - name: Patch coverage (diff-cover)
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        run: |
+          pip install --quiet diff-cover
+          diff-cover build/reports/jacoco/test/jacocoTestReport.xml \
+            --compare-branch=origin/main --src-roots src/main/kotlin \
+            --format markdown:patch.md
 ```
 
 ### Jenkins Example
