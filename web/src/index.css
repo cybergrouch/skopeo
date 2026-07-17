@@ -52,13 +52,16 @@
 }
 
 /*
- * Seasonal UI themes (#378, inverted to all-dark in #399). Every `[data-theme="…"]` block is now a
- * full dark token set — a deep season-tinted canvas (60%), a rich dark card (30%) carrying light
- * text, and a vibrant accent (10%) for buttons/rims/links. A small ThemeProvider sets
- * `document.documentElement.dataset.theme` from the global setting (or the AUTO season resolver),
- * so switching is a live token swap with no reload. `:root` stays the neutral default/fallback
- * (used when no theme is applied). Hex values come from docs/product — UI_SEASONAL_THEMING.md and
- * ui-seasonal-theming-preview.html are the source of truth. Link colors supersede #395.
+ * Seasonal UI themes (#378; all-dark in #399/#402; revised to "Vibrant Depth" in #409). Each
+ * `[data-theme="…"]` block is a full token set. The all-dark canvases muted the court identities,
+ * so the four court seasons (christmas/ao/clay/grass) now use a *saturated court-tone canvas* (60%)
+ * + a *deep same-hue card* (30%) with white text and a *white rim* + a *vibrant accent* (10%).
+ * offseason and uso keep their intended dark look (US Open = night session). A small ThemeProvider
+ * sets `document.documentElement.dataset.theme` from the global setting (or the AUTO season
+ * resolver), so switching is a live token swap with no reload. `:root` stays the neutral
+ * default/fallback (used when no theme is applied). Hex values come from docs/product —
+ * UI_SEASONAL_THEMING.md and ui-seasonal-theming-preview.html are the source of truth. Link colors
+ * supersede #395.
  */
 
 /* Off-Season — ink-gray canvas, steel-slate card, neon-yellow accent. */
@@ -85,97 +88,102 @@
   --link-hover: #ffffff;
 }
 
-/* Christmas — velvet-wine canvas, deep-spruce card (#399 chose #1A2E26 over the sample's #164A35), gold accent. */
+/* Christmas (vibrant) — Santa Crimson canvas, Holiday Evergreen card, white rim, Elfie Gold button. */
 [data-theme='christmas'] {
-  --background: #2b050b;
+  --background: #ce2029;
   --foreground: #ffffff;
-  --card: #1a2e26;
+  --card: #0b6623;
   --card-foreground: #ffffff;
-  --popover: #1a2e26;
+  --popover: #0b6623;
   --popover-foreground: #ffffff;
-  --primary: #e5b842;
-  --primary-foreground: #112a1f;
-  --secondary: #112a1f;
+  --primary: #ffd700;
+  --primary-foreground: #063b14;
+  --secondary: #063b14;
   --secondary-foreground: #ffffff;
-  --muted: #112a1f;
-  --muted-foreground: #e2ece9;
-  --accent: #e5b842;
-  --accent-foreground: #112a1f;
-  --border: #e5b842;
-  --ring: #e5b842;
-  --input: #112a1f;
-  --link: #e5b842;
-  --link-underline: #e5b842;
+  --muted: #063b14;
+  --muted-foreground: rgba(255, 255, 255, 0.9);
+  --accent: #ffd700;
+  --accent-foreground: #063b14;
+  --border: #ffffff;
+  --ring: #ffffff;
+  --input: #063b14;
+  --link: #ffd700;
+  --link-underline: #ffd700;
   --link-hover: #ffffff;
 }
 
-/* Australian Open — deep-abyss canvas, oceanic-slate card, volt-yellow accent, AO-blue rim. */
+/* Australian Open (vibrant) — Vivid Stadium Blue canvas, Melbourne Twilight card, white rim, Volt button. */
 [data-theme='ao'] {
-  --background: #081626;
-  --foreground: #f0f6fa;
-  --card: #12253a;
-  --card-foreground: #f0f6fa;
-  --popover: #12253a;
-  --popover-foreground: #f0f6fa;
+  --background: #0080c8;
+  --foreground: #ffffff;
+  --card: #0a1d37;
+  --card-foreground: #ffffff;
+  --popover: #0a1d37;
+  --popover-foreground: #ffffff;
   --primary: #ccff00;
   --primary-foreground: #0a1d37;
   --secondary: #0a1d37;
-  --secondary-foreground: #f0f6fa;
+  --secondary-foreground: #ffffff;
   --muted: #0a1d37;
   --muted-foreground: #e2e8f0;
   --accent: #ccff00;
   --accent-foreground: #0a1d37;
-  --border: #0080c8;
-  --ring: #0080c8;
+  --border: #ffffff;
+  --ring: #ffffff;
   --input: #0a1d37;
   --link: #ccff00;
   --link-underline: #ccff00;
   --link-hover: #ffffff;
 }
 
-/* Clay — burnt-umber canvas, warm-espresso card, clay-orange accent, terracotta link. */
+/*
+ * Clay (vibrant) — Brick Terracotta canvas, Earth Chocolate card, white rim, terracotta accent.
+ * Deviation from the #409 matrix: the button (`--primary #E07A5F`) uses dark earth text `#2B1A12`
+ * (not the matrix's `#FFFFFF`) — white on `#E07A5F` is only 2.95:1 (fails AA, below AA-large too),
+ * while `#2B1A12` on `#E07A5F` is 5.65:1 (AA-normal). Keeps the vibrant terracotta button on-palette.
+ */
 [data-theme='clay'] {
-  --background: #2b140c;
-  --foreground: #fdf6f0;
-  --card: #3d2015;
-  --card-foreground: #fdf6f0;
-  --popover: #3d2015;
-  --popover-foreground: #fdf6f0;
-  --primary: #c1522d;
-  --primary-foreground: #ffffff;
-  --secondary: #2b140c;
-  --secondary-foreground: #fdf6f0;
-  --muted: #2b140c;
+  --background: #c1522d;
+  --foreground: #ffffff;
+  --card: #2b1a12;
+  --card-foreground: #ffffff;
+  --popover: #2b1a12;
+  --popover-foreground: #ffffff;
+  --primary: #e07a5f;
+  --primary-foreground: #2b1a12;
+  --secondary: #2b1a12;
+  --secondary-foreground: #ffffff;
+  --muted: #2b1a12;
   --muted-foreground: #fdf6f0;
-  --accent: #c1522d;
-  --accent-foreground: #ffffff;
-  --border: #c1522d;
-  --ring: #c1522d;
-  --input: #2b140c;
+  --accent: #e07a5f;
+  --accent-foreground: #2b1a12;
+  --border: #ffffff;
+  --ring: #ffffff;
+  --input: #2b1a12;
   --link: #e07a5f;
   --link-underline: #e07a5f;
   --link-hover: #ffffff;
 }
 
-/* Grass — midnight-lawn canvas, English-ivy card, bright-lavender accent, Wimbledon-purple rim. */
+/* Grass (vibrant) — Lush Lawn Green canvas, Forest Green card, white rim, Wimbledon-purple button. */
 [data-theme='grass'] {
-  --background: #0b1f13;
-  --foreground: #f4f9f5;
-  --card: #183624;
-  --card-foreground: #f4f9f5;
-  --popover: #183624;
-  --popover-foreground: #f4f9f5;
-  --primary: #9362c4;
+  --background: #00703c;
+  --foreground: #ffffff;
+  --card: #1b3b2b;
+  --card-foreground: #ffffff;
+  --popover: #1b3b2b;
+  --popover-foreground: #ffffff;
+  --primary: #452263;
   --primary-foreground: #ffffff;
-  --secondary: #0b1f13;
-  --secondary-foreground: #f4f9f5;
-  --muted: #0b1f13;
+  --secondary: #1b3b2b;
+  --secondary-foreground: #ffffff;
+  --muted: #1b3b2b;
   --muted-foreground: #f4f9f5;
-  --accent: #9362c4;
+  --accent: #452263;
   --accent-foreground: #ffffff;
-  --border: #452263;
-  --ring: #452263;
-  --input: #0b1f13;
+  --border: #ffffff;
+  --ring: #ffffff;
+  --input: #1b3b2b;
   --link: #c5a3e8;
   --link-underline: #c5a3e8;
   --link-hover: #ffffff;
@@ -235,6 +243,20 @@
   * {
     border-color: var(--color-border);
     outline-color: var(--color-ring);
+  }
+
+  /*
+   * Vibrant-depth card rim (#409). The four court seasons pair a saturated canvas with a deep
+   * same-hue card, so the card needs a crisp 2px white break off the canvas (the all-dark themes
+   * used a subtler 1px accent rim). Scoped to the shadcn Card surface (`.bg-card`, which carries the
+   * default `border` = 1px) under just these themes; offseason/uso keep their 1px rims. `--border`
+   * is already white for these themes, so this only bumps the width.
+   */
+  [data-theme='christmas'] .bg-card,
+  [data-theme='ao'] .bg-card,
+  [data-theme='clay'] .bg-card,
+  [data-theme='grass'] .bg-card {
+    border-width: 2px;
   }
   body {
     background-color: var(--color-background);

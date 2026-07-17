@@ -76,7 +76,8 @@ jobs:
 > the `web/` SPA — typecheck/build regenerate the orval API client from the
 > backend OpenAPI spec, proving the frontend stays in sync with the contract.
 > Both jobs publish drillable per-test reports via `dorny/test-reporter@v3` and
-> upload coverage to Codecov via `codecov/codecov-action@v7`.
+> post a **sticky PR coverage comment** (overall + patch coverage) via
+> `marocchino/sticky-pull-request-comment@v2`.
 
 `./gradlew check` already chains everything: compile → ktlint → detekt → tests (JUnit 5 + Kotest) → JaCoCo coverage verification (75% line / 70% branch). One command, the full gate.
 
@@ -94,9 +95,7 @@ After `./gradlew check`, three reporting steps surface results in the GitHub UI 
 
 - **Coverage summary** — `scripts/coverage-summary.py` parses the JaCoCo XML and writes an overall line/branch table (with the 75%/70% thresholds) plus a per-package breakdown to the run **Summary** page. Runs `if: always()` so coverage shows even when only the coverage gate fails. (Also runs locally: `python3 scripts/coverage-summary.py`.)
 - **Test report (drillable)** — `dorny/test-reporter` publishes a **Test Report** check run from the JUnit XML: expandable per-suite/per-test results, with failures expanded (stack trace) and annotated on the source line. Needs `checks: write`. _(JUnit XML has no source line for passing tests, so the exhaustive per-test view with captured output is Gradle's HTML report under `build/reports/tests/test/`.)_
-- **Diff coverage on the PR** — `codecov/codecov-action` uploads the JaCoCo XML to **Codecov**, which comments **patch (changed-lines) coverage** on the PR and **annotates uncovered changed lines inline in the “Files changed” tab**, with a hosted per-file drill-down. Codecov statuses are **informational** (see `codecov.yml`); the authoritative gate stays `./gradlew check`.
-
-**One-time setup (Codecov):** sign in at [codecov.io](https://codecov.io) with GitHub and enable `cybergrouch/skopeo` (installs the Codecov GitHub App that posts the PR comment + inline annotations). The repo is public so uploads work tokenless, but adding a `CODECOV_TOKEN` repo secret is recommended for reliability. Until the repo is enabled on Codecov, the upload step still runs (non-blocking) but no comment/annotations appear.
+- **Coverage PR comment (CI-native, sticky)** — each of `build` and `web` posts its own **sticky PR comment** (`marocchino/sticky-pull-request-comment@v2`, headers `coverage-backend` / `coverage-web`) that is **updated in place** on every push (no comment spam). Each comment shows **overall** coverage plus **patch (changed-lines) coverage vs `origin/main`** computed with **`diff-cover`** — the backend against the JaCoCo XML (`--src-roots src/main/kotlin`), the web against the Vitest lcov (SF paths prefixed with `web/` so they resolve). These steps are `continue-on-error` / `if: always()` and **never fail the build**; the authoritative gate stays `./gradlew check` (JaCoCo verification). This replaced the previous Codecov integration (#411), whose PR comments/statuses were intermittently missing.
 
 ### 1b. Branch protection (the actual PR enforcement)
 
@@ -344,7 +343,7 @@ The monorepo holds both the API and the SPA. This phase is now **implemented**:
   type-check (which regenerates the orval API client from the backend OpenAPI
   spec, proving the frontend stays in sync with the contract), the Vitest suite
   (`npm run test:ci`), and `npm run build`. It publishes a "Web Test Report"
-  check and uploads frontend coverage to Codecov under the `frontend` flag.
+  check and posts a sticky `coverage-web` PR comment (overall + patch coverage).
 - **Web CD:** `.github/workflows/deploy-web.yml` deploys to **Firebase Hosting**
   on pushes to `main` that touch `web/**`, the OpenAPI spec, `firebase.json`, or
   the workflow itself (path-filtered). It uses `actions/setup-node@v5` (Node 22)
