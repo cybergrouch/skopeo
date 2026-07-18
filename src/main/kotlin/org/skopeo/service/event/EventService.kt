@@ -89,6 +89,7 @@ class EventService(
     private val clubs: ClubRepository = ClubRepository(),
     private val budgets: PointsBudgetRepository = PointsBudgetRepository(),
     private val awarder: EventFinalizeAwarder = EventFinalizeAwarder(),
+    private val reverser: EventFinalizeReverser = EventFinalizeReverser(),
     private val audit: AuditService = AuditService(),
 ) {
     fun create(
@@ -467,6 +468,38 @@ class EventService(
                     ),
             )
             toView(event = event.copy(finalizedAt = now, finalizedBy = caller.id))
+        }
+
+    /**
+     * Un-finalize an event (#477): the reverse of [finalize], so a Host who spots an erroneous score can
+     * reopen the event, correct it, and re-finalize. Symmetric authz (STAFF caller; event owner or an
+     * ADMINISTRATOR/CLUB_OWNER). Guards: the event must exist and be finalized; and — crucially — NONE of
+     * its matches may already be rated. A rated match means the bad score is already baked into rating
+     * history, which un-finalize cannot reverse; those cases need the heavier rating-history correction
+     * path (a companion issue). Reversal, in one transaction: revoke every ACTIVE award the finalize
+     * produced (via [RankingPointRepository.revoke], leaving the append-only trail intact) then clear the
+     * finalize flag (which implicitly restores the reserved-points budget). Audited as EVENT_UNFINALIZED.
+     */
+    fun unfinalize(
+        token: VerifiedFirebaseToken,
+        id: UUID,
+    ): Either<ServiceError, EventView> =
+        either {
+            val caller = staffCaller(users = users, token = token).bind()
+            val event = ensureNotNull(value = events.findById(id = id)) { ServiceError.NotFound(message = "Event $id not found") }
+            val isAdminOrOwner = caller.capabilities.any { it == Capability.ADMINISTRATOR || it == Capability.CLUB_OWNER }
+            ensure(condition = isAdminOrOwner || event.createdBy == caller.id) { ServiceError.Forbidden() }
+            ensure(condition = event.isFinalized) { ServiceError.Validation(message = "Event is not finalized") }
+            ensure(condition = matches.listByEvent(eventId = id).none { it.ratedAt != null }) {
+                ServiceError.Validation(
+                    message =
+                        "This event has already-rated matches; un-finalize cannot reverse rating history. " +
+                            "Use the rating-calculation correction path instead.",
+                )
+            }
+            // The reverser revokes the event's active awards + clears the flag in one transaction, then audits.
+            reverser.reverse(event = event, revokedBy = caller.id, now = LocalDateTime.now())
+            toView(event = event.copy(finalizedAt = null, finalizedBy = null))
         }
 
     /**

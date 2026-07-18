@@ -19,6 +19,7 @@ const {
   renameMutate,
   clubMutate,
   finalizeMutate,
+  unfinalizeMutate,
   pointsConfigMutate,
   state,
 } =
@@ -36,6 +37,7 @@ const {
     renameMutate: vi.fn(),
     clubMutate: vi.fn(),
     finalizeMutate: vi.fn(),
+    unfinalizeMutate: vi.fn(),
     pointsConfigMutate: vi.fn(),
     state: {
       addFail: false,
@@ -49,6 +51,9 @@ const {
       finalizeFail: false,
       finalizePending: false,
       finalizeErrorMessage: null as string | null,
+      unfinalizeFail: false,
+      unfinalizePending: false,
+      unfinalizeErrorMessage: null as string | null,
       pointsConfigFail: false,
       pointsConfigPending: false,
       pointsConfigErrorMessage: null as string | null,
@@ -114,6 +119,18 @@ vi.mock('@/api/generated/events/events', () => ({
       finalizeMutate(vars)
       if (state.finalizeFail) {
         throw state.finalizeErrorMessage ? { response: { data: { message: state.finalizeErrorMessage } } } : new Error('boom')
+      }
+      opts?.mutation?.onSuccess?.()
+    },
+  }),
+  usePostApiV1EventsIdUnfinalize: (opts?: { mutation?: { onSuccess?: () => void } }) => ({
+    isPending: state.unfinalizePending,
+    mutateAsync: async (vars: unknown) => {
+      unfinalizeMutate(vars)
+      if (state.unfinalizeFail) {
+        throw state.unfinalizeErrorMessage
+          ? { response: { data: { message: state.unfinalizeErrorMessage } } }
+          : new Error('boom')
       }
       opts?.mutation?.onSuccess?.()
     },
@@ -226,6 +243,9 @@ describe('EventDetail', () => {
     state.finalizeFail = false
     state.finalizePending = false
     state.finalizeErrorMessage = null
+    state.unfinalizeFail = false
+    state.unfinalizePending = false
+    state.unfinalizeErrorMessage = null
     state.pointsConfigFail = false
     state.pointsConfigPending = false
     state.pointsConfigErrorMessage = null
@@ -807,6 +827,57 @@ describe('EventDetail', () => {
     await user.click(screen.getByRole('button', { name: 'Confirm finalize' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Event is already finalized')
+  })
+
+  // ---- Un-finalize (#477) ----
+
+  it('un-finalizes a finalized event after a confirm step and calls the mutation (#477)', async () => {
+    useGetApiV1EventsId.mockReturnValue({
+      data: { ...event, type: 'LEAGUE', endDate: '2999-01-01', isFinalized: true },
+      isLoading: false,
+    })
+    const user = userEvent.setup()
+    renderDetail()
+
+    // The Un-finalize card is shown only when finalized; Finalize is not.
+    expect(screen.queryByRole('button', { name: 'Finalize event' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Un-finalize event' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm un-finalize (revokes points)' }))
+
+    expect(unfinalizeMutate).toHaveBeenCalledWith({ id: 'e1' })
+  })
+
+  it('cancels a pending un-finalize without calling the API (#477)', async () => {
+    useGetApiV1EventsId.mockReturnValue({
+      data: { ...event, type: 'LEAGUE', endDate: '2999-01-01', isFinalized: true },
+      isLoading: false,
+    })
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.click(screen.getByRole('button', { name: 'Un-finalize event' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(
+      screen.queryByRole('button', { name: 'Confirm un-finalize (revokes points)' }),
+    ).not.toBeInTheDocument()
+    expect(unfinalizeMutate).not.toHaveBeenCalled()
+  })
+
+  it('surfaces a server error when un-finalize fails, e.g. a rated match (#477)', async () => {
+    useGetApiV1EventsId.mockReturnValue({
+      data: { ...event, type: 'LEAGUE', endDate: '2999-01-01', isFinalized: true },
+      isLoading: false,
+    })
+    state.unfinalizeFail = true
+    state.unfinalizeErrorMessage = 'This event has already-rated matches'
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.click(screen.getByRole('button', { name: 'Un-finalize event' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm un-finalize (revokes points)' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('This event has already-rated matches')
   })
 
   // ---- Points config + fixture designation (#403 Phase C) ----

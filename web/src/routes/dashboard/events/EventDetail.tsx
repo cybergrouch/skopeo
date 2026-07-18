@@ -19,6 +19,7 @@ import {
   useGetApiV1EventsId,
   usePatchApiV1EventsId,
   usePostApiV1EventsIdFinalize,
+  usePostApiV1EventsIdUnfinalize,
   usePostApiV1EventsIdParticipants,
   usePostApiV1EventsIdParticipantsUserIdDecision,
   usePutApiV1EventsIdClub,
@@ -150,6 +151,8 @@ export function EventDetail({
   const [clubError, setClubError] = useState<string | null>(null);
   const [confirmingFinalize, setConfirmingFinalize] = useState(false);
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
+  const [confirmingUnfinalize, setConfirmingUnfinalize] = useState(false);
+  const [unfinalizeError, setUnfinalizeError] = useState<string | null>(null);
 
   // Points config (#403 Phase C): the per-match reward window + validity window, edited inline for a
   // budgeted-type event. Drafts are kept as strings so the number inputs can be cleared while editing.
@@ -391,6 +394,32 @@ export function EventDetail({
     } catch (e) {
       setFinalizeError(eventErrorMessage(e, "Could not finalize this event."));
       setConfirmingFinalize(false);
+    }
+  }
+
+  // Un-finalize the event (#477): reverse finalization to correct an erroneous score, revoking its
+  // awarded points. On success refresh so the badge/controls reopen; the list is invalidated too.
+  const unfinalizeEvent = usePostApiV1EventsIdUnfinalize({
+    mutation: {
+      onSuccess: () => {
+        refreshEvent();
+        void queryClient.invalidateQueries({
+          queryKey: getGetApiV1EventsQueryKey(),
+        });
+        setConfirmingUnfinalize(false);
+      },
+    },
+  });
+
+  async function confirmUnfinalize() {
+    setUnfinalizeError(null);
+    try {
+      await unfinalizeEvent.mutateAsync({ id: eventId });
+    } catch (e) {
+      setUnfinalizeError(
+        eventErrorMessage(e, "Could not un-finalize this event."),
+      );
+      setConfirmingUnfinalize(false);
     }
   }
 
@@ -1216,6 +1245,64 @@ export function EventDetail({
               </CardContent>
             </Card>
           )}
+
+          {finalized ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Un-finalize event</CardTitle>
+                <CardDescription>
+                  Un-finalizing reopens this event so an erroneous score can be
+                  corrected. It revokes the ranking points this event awarded on
+                  finalize. This is refused if any of its matches have already
+                  been rated.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {confirmingUnfinalize ? (
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive"
+                      disabled={unfinalizeEvent.isPending}
+                      onClick={confirmUnfinalize}
+                    >
+                      {unfinalizeEvent.isPending
+                        ? "Un-finalizing…"
+                        : "Confirm un-finalize (revokes points)"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={unfinalizeEvent.isPending}
+                      onClick={() => setConfirmingUnfinalize(false)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setUnfinalizeError(null);
+                      setConfirmingUnfinalize(true);
+                    }}
+                  >
+                    Un-finalize event
+                  </Button>
+                )}
+                {unfinalizeError ? (
+                  <p className="text-sm text-destructive" role="alert">
+                    {unfinalizeError}
+                  </p>
+                ) : null}
+              </CardContent>
+            </Card>
+          ) : null}
 
           <Card>
             <CardHeader>

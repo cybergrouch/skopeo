@@ -105,6 +105,21 @@ class RankingPointRepository {
             rows to total
         }
 
+    /**
+     * The still-ACTIVE award rows produced by [eventId] (#477): finalize's award rows for this event
+     * that have not been revoked. Backs un-finalize's reversal, which revokes each one. REVOKED
+     * originals and REVOKED markers drop out (only ACTIVE rows carry live points).
+     */
+    fun listActiveByEvent(eventId: UUID): List<RankingPointAward> =
+        transaction {
+            RankingPointAwardsTable
+                .selectAll()
+                .where {
+                    (RankingPointAwardsTable.eventId eq eventId) and
+                        (RankingPointAwardsTable.status eq AwardStatus.ACTIVE.name)
+                }.map { it.toRankingPointAward() }
+        }
+
     /** Every ledger row for [userId], newest first (awarded_at). Includes REVOKED markers for the trail. */
     fun listByUser(userId: UUID): List<RankingPointAward> =
         transaction {
