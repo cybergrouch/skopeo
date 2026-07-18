@@ -13,7 +13,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
-import org.skopeo.model.MatchRatingWrite
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.SnapshotSource
@@ -111,27 +110,14 @@ class StandingsServiceTest {
                 ),
         )
 
-    // Confidence is computed (#343): min(1, matches/5) when match-derived and fresh; 0 for a bare override.
+    // A bare override with no in-window matches → confidence 0 (#459); standings order these players by
+    // rating alone, with confidence/matches as the (here equal) tie-breaks.
     private fun rate(
         user: User,
         value: String,
-        matches: Int = 0,
     ) {
         val level = value.toBigDecimal().let { "${it.toInt()}.${if (it.toDouble() % 1.0 >= 0.5) 5 else 0}" }
         ratings.setRating(userId = user.id, rating = BigDecimal(value), level = level)
-        repeat(times = matches) {
-            ratings.applyMatchRating(
-                write =
-                    MatchRatingWrite(
-                        userId = user.id,
-                        newRating = BigDecimal(value),
-                        newLevel = level,
-                        matchDate = LocalDate.now(),
-                        ratedAt = LocalDateTime.now(),
-                        bandJumped = false,
-                    ),
-            )
-        }
     }
 
     private fun page(

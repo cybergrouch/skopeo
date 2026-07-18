@@ -38,12 +38,13 @@ data class UserRating(
     val userId: UUID,
     val currentRating: BigDecimal,
     val currentLevel: String?,
-    // Computed (#343), never stored: log-logistic decay from [matchRatedAt] via `confidenceAt`; 0 when
-    // the current rating is not match-derived (self-rating / admin override, i.e. matchRatedAt is null).
+    // Computed (#459), never stored: sparsity of the player's weight-class match counts over the 30-day
+    // window via `confidenceAt`; 0 when there is no qualifying play in the window.
     val confidence: BigDecimal,
     val matchesPlayed: Int,
     val lastMatchDate: LocalDate? = null,
-    // Timestamp of the match calc that set this rating (#343); null for self-ratings / overrides.
+    // Timestamp of the match calc that set this rating (#343); null for self-ratings / overrides. Now
+    // vestigial for confidence (#459), retained for other bookkeeping.
     val matchRatedAt: LocalDateTime? = null,
 )
 

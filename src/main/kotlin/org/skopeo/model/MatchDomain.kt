@@ -11,6 +11,33 @@ import java.util.UUID
 enum class MatchStatus { SCHEDULED, IN_PROGRESS, COMPLETED, CANCELLED }
 
 /**
+ * A player's COMPLETED matches in a confidence window (#459), split by competitive class — tournament,
+ * league, and open play. These are the raw inputs to the sparsity + match-weight confidence in
+ * [confidenceAt]: a higher-stakes class tells us more about true skill, so it is weighted more heavily
+ * (see [MatchType.weightClass]). All-zero means no qualifying play in the window → confidence 0.
+ */
+data class WeightClassCounts(
+    val tournaments: Int = 0,
+    val leagues: Int = 0,
+    val openPlays: Int = 0,
+)
+
+/** The confidence weight class a [MatchType] maps to (#459) — tournament, league, or open play. */
+enum class WeightClass { TOURNAMENT, LEAGUE, OPEN_PLAY }
+
+/**
+ * Which confidence weight class (#459) a match's [MatchType] counts toward: the tournament rounds are
+ * TOURNAMENT, the league rounds are LEAGUE, and casual play is OPEN_PLAY. Playoffs share their parent
+ * class' weight.
+ */
+fun MatchType.weightClass(): WeightClass =
+    when (this) {
+        MatchType.TOURNAMENT_INITIAL_ROUND, MatchType.TOURNAMENT_PLAYOFFS -> WeightClass.TOURNAMENT
+        MatchType.LEAGUE_PLAY, MatchType.LEAGUE_PLAYOFFS -> WeightClass.LEAGUE
+        MatchType.OPEN_PLAY -> WeightClass.OPEN_PLAY
+    }
+
+/**
  * A player's decided win–loss record (#342), aggregated across singles and doubles. [total] is the
  * count of decided matches (a decided match is always a win or a loss — tennis has no ties).
  */

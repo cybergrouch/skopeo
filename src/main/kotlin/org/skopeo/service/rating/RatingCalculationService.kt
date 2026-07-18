@@ -152,7 +152,7 @@ class RatingCalculationService(
                                 newLevel = change.newLevel,
                                 matchDate = calc.matchDate,
                                 ratedAt = now,
-                                // A band jump resets confidence (#343): it ramps back up over ~5 matches.
+                                // Band-jump bookkeeping (matches-since-reset); now vestigial for confidence (#459).
                                 bandJumped = change.levelChanged,
                             ),
                     )

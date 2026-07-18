@@ -74,7 +74,7 @@ class RatingServiceTest {
 
         rating.currentRating.toPlainString() shouldBe "4.300000" // stored as NUMERIC(10,6)
         rating.currentLevel shouldBe "4.0" // NTRP rounds down to the 0.5 level
-        // An admin override is not match-derived, so confidence is computed as 0 (#343).
+        // The player has no in-window matches, so confidence computes to 0 (#459).
         rating.confidence.toPlainString() shouldBe "0.000000"
     }
 

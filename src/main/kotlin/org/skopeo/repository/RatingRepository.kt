@@ -20,6 +20,7 @@ import org.skopeo.model.RatingHistoryEntry
 import org.skopeo.model.RatingHistoryWrite
 import org.skopeo.model.SetCalculationBreakdown
 import org.skopeo.model.UserRating
+import org.skopeo.model.WeightClassCounts
 import org.skopeo.model.confidenceAt
 import java.math.BigDecimal
 import java.time.LocalDateTime
@@ -29,21 +30,42 @@ import java.util.UUID
  * Persistence for the user's (single, NTRP) current rating and rating history. Initial ratings
  * are admin-set (no auto-seed); [setRating] upserts the row. History is read here and written
  * by the match flow.
+ *
+ * Confidence (#459) is computed on read from each user's windowed weight-class match counts, sourced
+ * from [matches] — so every rating read that surfaces confidence first fetches the counts (batched for
+ * the multi-user reads, one query for the whole page, never N+1).
  */
-class RatingRepository {
+class RatingRepository(
+    private val matches: MatchRepository = MatchRepository(),
+) {
     /** The user's ratings as a list (0 or 1) — the API surfaces a collection. */
     fun findByUser(userId: UUID): List<UserRating> =
         transaction {
+            val counts = matches.weightedMatchCountsInWindow(userId = userId, asOf = LocalDateTime.now())
             UserRatingsTable
                 .selectAll()
                 .where { UserRatingsTable.userId eq userId }
-                .map { it.toUserRating() }
+                .map { it.toUserRating(counts = counts) }
         }
 
-    fun findCurrentRating(userId: UUID): UserRating? = transaction { ratingRow(userId = userId)?.toUserRating() }
+    fun findCurrentRating(userId: UUID): UserRating? =
+        transaction {
+            ratingRow(userId = userId)?.toUserRating(
+                counts = matches.weightedMatchCountsInWindow(userId = userId, asOf = LocalDateTime.now()),
+            )
+        }
 
-    /** Every user's current rating — backs the per-band standings (#113). */
-    fun allCurrentRatings(): List<UserRating> = transaction { UserRatingsTable.selectAll().map { it.toUserRating() } }
+    /** Every user's current rating — backs the per-band standings (#113). Confidence counts are batched. */
+    fun allCurrentRatings(): List<UserRating> =
+        transaction {
+            val rows = UserRatingsTable.selectAll().toList()
+            val countsByUser =
+                matches.weightedMatchCountsInWindow(
+                    userIds = rows.map { it[UserRatingsTable.userId].value },
+                    asOf = LocalDateTime.now(),
+                )
+            rows.map { it.toUserRating(counts = countsByUser[it[UserRatingsTable.userId].value] ?: WeightClassCounts()) }
+        }
 
     /** Current ratings for many users at once, keyed by user id; users without a rating are absent. */
     fun findCurrentRatings(userIds: List<UUID>): Map<UUID, UserRating> =
@@ -51,17 +73,22 @@ class RatingRepository {
             if (userIds.isEmpty()) {
                 emptyMap()
             } else {
+                val countsByUser = matches.weightedMatchCountsInWindow(userIds = userIds, asOf = LocalDateTime.now())
                 UserRatingsTable
                     .selectAll()
                     .where { UserRatingsTable.userId inList userIds }
-                    .associate { row -> row.toUserRating().let { it.userId to it } }
+                    .associate { row ->
+                        val uid = row[UserRatingsTable.userId].value
+                        uid to row.toUserRating(counts = countsByUser[uid] ?: WeightClassCounts())
+                    }
             }
         }
 
     /**
      * Set a rating directly (admin/RATER assessment or override, #343). This is NOT a match-result
-     * calculation, so it clears [UserRatingsTable.matchRatedAt] — the current rating is no longer
-     * match-derived, and its computed confidence is therefore 0.
+     * calculation, so it clears [UserRatingsTable.matchRatedAt]/[UserRatingsTable.matchesSinceReset]
+     * (both now vestigial for confidence, #459 — left in place, no migration). Confidence is computed
+     * from windowed match counts (#459), so a returned override reflects the user's recent play.
      */
     fun setRating(
         userId: UUID,
@@ -86,7 +113,7 @@ class RatingRepository {
                 }
             }
             val row = UserRatingsTable.selectAll().where { UserRatingsTable.userId eq userId }.single()
-            row.toUserRating()
+            row.toUserRating(counts = matches.weightedMatchCountsInWindow(userId = userId, asOf = LocalDateTime.now()))
         }
 
     fun historyByUser(userId: UUID): List<RatingHistoryEntry> =
@@ -155,9 +182,11 @@ class RatingRepository {
 
     /**
      * Apply a match-driven rating update: set the new rating/level, bump matches played + last match
-     * date, and stamp [MatchRatingWrite.ratedAt] as the match-calc time so confidence decays from it
-     * (#343). A band jump ([MatchRatingWrite.bandJumped]) is a confidence reset — matches-since-reset
-     * goes to 0 (confidence ~0, then ramps); otherwise it increments.
+     * date, and stamp [MatchRatingWrite.ratedAt]. The `matchRatedAt` / `matchesSinceReset` columns are
+     * still maintained here but are now **vestigial for confidence** (#459 — confidence keys off windowed
+     * match counts, not these); they remain for the band-hop reset bookkeeping and are left in place (no
+     * migration). The [MatchRatingWrite.bandJumped] reset (matches-since-reset → 0) is likewise retained
+     * but no longer affects confidence.
      */
     fun applyMatchRating(write: MatchRatingWrite) {
         transaction {
@@ -216,25 +245,18 @@ class RatingRepository {
             .singleOrNull()
 }
 
-internal fun ResultRow.toUserRating(): UserRating {
-    val matchRatedAt = this[UserRatingsTable.matchRatedAt]
-    return UserRating(
+internal fun ResultRow.toUserRating(counts: WeightClassCounts): UserRating =
+    UserRating(
         userId = this[UserRatingsTable.userId].value,
         currentRating = this[UserRatingsTable.currentRating],
         currentLevel = this[UserRatingsTable.currentLevel],
-        // Computed on read (#343): time-decays from the last match calc, ramped by matches since the
-        // last reset; 0 when not match-derived.
-        confidence =
-            confidenceAt(
-                matchRatedAt = matchRatedAt,
-                matchesSinceReset = this[UserRatingsTable.matchesSinceReset],
-                now = LocalDateTime.now(),
-            ),
+        // Computed on read (#459): sparsity of the player's weight-class match counts in the 30-day
+        // window; 0 when there is no qualifying play in the window.
+        confidence = confidenceAt(counts = counts),
         matchesPlayed = this[UserRatingsTable.matchesPlayed],
         lastMatchDate = this[UserRatingsTable.lastMatchDate],
-        matchRatedAt = matchRatedAt,
+        matchRatedAt = this[UserRatingsTable.matchRatedAt],
     )
-}
 
 internal fun ResultRow.toRatingHistory(): RatingHistoryEntry =
     RatingHistoryEntry(
