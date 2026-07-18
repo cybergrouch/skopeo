@@ -147,6 +147,22 @@ class EventRepository {
         }
 
     /**
+     * Clear an event's points config (#466): null out the per-match reward window + validity window so
+     * the event awards no points. The caller (EventService.setPointsConfig) has already confirmed the
+     * event exists, so an update against a missing id is a harmless no-op.
+     */
+    fun clearPointsConfig(id: UUID): Unit =
+        transaction {
+            EventsTable.update(where = { EventsTable.id eq id }) {
+                it[minPointsPerMatch] = null
+                it[maxPointsPerMatch] = null
+                it[pointValidityStart] = null
+                it[pointValidityEnd] = null
+            }
+            Unit
+        }
+
+    /**
      * Finalize an event (#403): stamp finalized_at/finalized_by. The caller (EventService.finalize)
      * has already confirmed the event exists and is not yet finalized, so an update against a missing
      * id is a harmless no-op.

@@ -1552,4 +1552,89 @@ class MatchServiceTest {
             ).shouldBeRight()
             .designatedPoints shouldBe 40
     }
+
+    // --- Opt-in "award points for this match" checkbox: fixture designation update (#466). ---
+
+    @Test
+    fun `setDesignation toggles a fixture designation on then off, releasing the reservation (#466)`() {
+        val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val event = budgetedEvent(host = host, participants = listOf(p1.id, p2.id), clubBudget = 50)
+        val clubId = event.clubId.shouldNotBeNull()
+        // Create the fixture with the checkbox OFF (awardPoints = false) — no designation, nothing reserved.
+        val match =
+            service
+                .createFixture(
+                    token = token(uid = "host"),
+                    request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id, awardPoints = false),
+                ).shouldBeRight()
+        match.designatedPoints.shouldBeNull()
+        budgets.sumReservedPoints(clubId = clubId, eventType = EventType.LEAGUE) shouldBe 0
+
+        // Tick ON — designate 30, reserving it.
+        service.setDesignation(token = token(uid = "host"), matchId = match.id, designatedPoints = 30)
+            .shouldBeRight().designatedPoints shouldBe 30
+        budgets.sumReservedPoints(clubId = clubId, eventType = EventType.LEAGUE) shouldBe 30
+
+        // Un-tick OFF — null clears it, releasing the reservation.
+        service.setDesignation(token = token(uid = "host"), matchId = match.id, designatedPoints = null)
+            .shouldBeRight().designatedPoints.shouldBeNull()
+        budgets.sumReservedPoints(clubId = clubId, eventType = EventType.LEAGUE) shouldBe 0
+    }
+
+    @Test
+    fun `creating a fixture with the award-points checkbox off designates nothing under a points event (#466)`() {
+        val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val event = budgetedEvent(host = host, participants = listOf(p1.id, p2.id))
+        // Checkbox off (awardPoints = false) on a points-awarding event → the match opts out, no designation.
+        service
+            .createFixture(
+                token = token(uid = "host"),
+                request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id, awardPoints = false),
+            ).shouldBeRight()
+            .designatedPoints.shouldBeNull()
+    }
+
+    @Test
+    fun `setDesignation rejects an amount outside the event window and is a no-op on the global policy (#466)`() {
+        val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        // Event window 5..40 (well within LEAGUE's global 5..50): a designation is checked ONLY vs the event.
+        val event = budgetedEvent(host = host, participants = listOf(p1.id, p2.id))
+        val match =
+            service
+                .createFixture(
+                    token = token(uid = "host"),
+                    request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id, designatedPoints = 10),
+                ).shouldBeRight()
+
+        // Above the event window (45 > 40) → rejected, even though 45 ≤ the global max of 50.
+        service.setDesignation(token = token(uid = "host"), matchId = match.id, designatedPoints = 45)
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        // Within the event window → accepted.
+        service.setDesignation(token = token(uid = "host"), matchId = match.id, designatedPoints = 40)
+            .shouldBeRight().designatedPoints shouldBe 40
+    }
+
+    @Test
+    fun `setDesignation re-setting the same amount does not self-block against the budget (#466)`() {
+        val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        // Budget exactly 40; a single 40-point fixture fills it.
+        val event = budgetedEvent(host = host, participants = listOf(p1.id, p2.id), clubBudget = 40)
+        val match =
+            service
+                .createFixture(
+                    token = token(uid = "host"),
+                    request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id, designatedPoints = 40),
+                ).shouldBeRight()
+        // Re-setting the same 40 must not double-count its own reservation.
+        service.setDesignation(token = token(uid = "host"), matchId = match.id, designatedPoints = 40)
+            .shouldBeRight().designatedPoints shouldBe 40
+    }
 }

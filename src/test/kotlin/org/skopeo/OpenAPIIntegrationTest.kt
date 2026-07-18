@@ -75,6 +75,9 @@ class OpenAPIIntegrationTest {
             body shouldContain "/api/v1/events/{id}/points-config"
             body shouldContain "SetPointsConfigRequest"
             body shouldContain "designatedPoints"
+            // Opt-in "award points" checkbox (#466): the per-fixture designation set/clear path + schema.
+            body shouldContain "/api/v1/matches/{id}/designation"
+            body shouldContain "SetDesignationRequest"
             // Club-owner + public per-event points visibility (#403 Phase E): the gated summary path
             // and its schema, plus the public per-event points schema.
             body shouldContain "/api/v1/clubs/{clubId}/points-summary"

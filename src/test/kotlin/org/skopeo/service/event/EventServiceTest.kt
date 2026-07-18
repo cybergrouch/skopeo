@@ -7,6 +7,7 @@ import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
@@ -143,7 +144,7 @@ class EventServiceTest {
             service.create(token = token(uid = "host"), input = input(participants = listOf(p1.id, p2.id))).shouldBeRight()
         view.event.name shouldBe "Spring Open"
         view.event.publicCode.length shouldBe 6
-        view.participants.map { it.userId } shouldBe listOf(p1.id, p2.id)
+        view.participants.map { it.userId }.shouldContainExactlyInAnyOrder(p1.id, p2.id)
         view.participants.first().displayName shouldBe "p1"
         view.club.shouldBeNull() // clubless by default
     }
@@ -1023,15 +1024,20 @@ class EventServiceTest {
     }
 
     @Test
-    fun `a budgeted event create requires all four config fields when a club is set (#403)`() {
+    fun `a club event opting in requires all four config fields together, but may award none (#466)`() {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val club = clubs.create(command = CreateClubCommand(name = "Downtown TC", createdBy = host.id))
         val start = LocalDate.now()
         val end = start.plusDays(10)
 
-        // With a club the config is required in full; each field missing on its own is rejected.
-        service.create(token = token(uid = "host"), input = input(type = EventType.TOURNAMENT, clubId = club.id))
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        // Points are opt-in for every event/club (#466): a club event with NO config fields awards no
+        // points and is valid (no config stored).
+        val noPoints =
+            service.create(token = token(uid = "host"), input = input(type = EventType.TOURNAMENT, clubId = club.id)).shouldBeRight()
+        noPoints.event.minPointsPerMatch.shouldBeNull()
+        noPoints.event.pointValidityStart.shouldBeNull()
+
+        // But opting in with a PARTIAL config (some but not all four fields) is still rejected.
         service.create(
             token = token(uid = "host"),
             input = input(type = EventType.TOURNAMENT, clubId = club.id, maxPoints = 100, validityStart = start, validityEnd = end),
@@ -1069,15 +1075,15 @@ class EventServiceTest {
     }
 
     @Test
-    fun `an OPEN_PLAY event with a club requires and validates its points config (unify)`() {
+    fun `an OPEN_PLAY event with a club validates its points config when opting in (unify, #466)`() {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val club = clubs.create(command = CreateClubCommand(name = "Downtown TC", createdBy = host.id))
         val start = LocalDate.now()
         val end = start.plusDays(10)
 
-        // With a club the config is required in full for OPEN_PLAY too — a missing config is rejected.
+        // Points are opt-in for OPEN_PLAY too (#466): a club OPEN_PLAY event with no config awards nothing.
         service.create(token = token(uid = "host"), input = input(type = EventType.OPEN_PLAY, clubId = club.id))
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+            .shouldBeRight().event.minPointsPerMatch.shouldBeNull()
 
         // A window beyond the global OPEN_PLAY max (10) is rejected.
         service.create(
@@ -1339,6 +1345,94 @@ class EventServiceTest {
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
         service.setPointsConfig(token = token(uid = "host"), id = event.id, config = config(min = 6, max = 30))
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    // --- Opt-in "award points" checkbox (#466). ---
+
+    @Test
+    fun `create with the award-points checkbox off stores no config, on validates against the global policy (#466)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+
+        // Checkbox off — no config fields supplied → the event awards no points.
+        val off = service.create(token = token(uid = "host"), input = input(type = EventType.LEAGUE)).shouldBeRight()
+        off.event.minPointsPerMatch.shouldBeNull()
+        off.event.pointValidityStart.shouldBeNull()
+
+        // Checkbox on — a full config within LEAGUE's global 5..50 window is stored.
+        val on =
+            service.create(
+                token = token(uid = "host"),
+                input =
+                    input(
+                        type = EventType.LEAGUE,
+                        minPoints = 5,
+                        maxPoints = 40,
+                        validityStart = LocalDate.now(),
+                        validityEnd = LocalDate.now().plusDays(30),
+                    ),
+            ).shouldBeRight()
+        on.event.minPointsPerMatch shouldBe 5
+
+        // On but out of the global window → rejected. On but partial → rejected.
+        service.create(
+            token = token(uid = "host"),
+            input =
+                input(
+                    type = EventType.LEAGUE,
+                    minPoints = 1,
+                    maxPoints = 40,
+                    validityStart = LocalDate.now(),
+                    validityEnd = LocalDate.now().plusDays(30),
+                ),
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        service.create(token = token(uid = "host"), input = input(type = EventType.LEAGUE, minPoints = 5))
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `setPointsConfig toggles the award-points checkbox on then off, clearing config and cascading to fixtures (#466)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        // Start with the checkbox OFF (no config).
+        val event =
+            service.create(
+                token = token(uid = "host"),
+                input = input(type = EventType.LEAGUE, participants = listOf(p1.id, p2.id)),
+            ).shouldBeRight().event
+        event.minPointsPerMatch.shouldBeNull()
+
+        // Tick ON — sets a valid config.
+        val on =
+            service.setPointsConfig(
+                token = token(uid = "host"),
+                id = event.id,
+                config = config(min = 10, max = 30, end = LocalDate.now().plusDays(30)),
+            ).shouldBeRight()
+        on.event.minPointsPerMatch shouldBe 10
+
+        // Seed a designated fixture so the OFF cascade has something to null out.
+        matchRepo.createFixture(
+            command =
+                CreateFixtureCommand(
+                    matchFormat = TeamType.SINGLES,
+                    matchType = MatchType.OPEN_PLAY,
+                    matchDate = LocalDate.now(),
+                    team1UserIds = listOf(element = p1.id),
+                    team2UserIds = listOf(element = p2.id),
+                    team1Name = "p1",
+                    team2Name = "p2",
+                    createdBy = host.id,
+                    eventId = event.id,
+                    designatedPoints = 20,
+                ),
+        )
+
+        // Un-tick OFF (null config) — clears the config AND cascades to null out the fixture designation.
+        val off = service.setPointsConfig(token = token(uid = "host"), id = event.id, config = null).shouldBeRight()
+        off.event.minPointsPerMatch.shouldBeNull()
+        off.event.pointValidityStart.shouldBeNull()
+        matchRepo.listByEvent(eventId = event.id).forEach { it.designatedPoints.shouldBeNull() }
     }
 
     // --- Finalize-time awarding (#403 Phase D). ---

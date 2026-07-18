@@ -820,16 +820,25 @@ describe('EventDetail', () => {
     pointValidityEnd: '2026-06-01',
   }
 
-  it('hides the points config section for a clubless event (#403 Phase C)', () => {
-    // The default event has no club, so it carries no points config regardless of type.
+  it('shows the points config editor for any event, with the award-points checkbox off when no config (#466)', async () => {
+    // Points are opt-in for every event (#466): the default event has no config → the editor is still
+    // shown, but the "Award ranking points" checkbox is unchecked and the config fields are hidden.
+    const user = userEvent.setup()
     renderDetail()
-    expect(screen.queryByText('Points config')).not.toBeInTheDocument()
-    // …and no designated-points input in the fixture form.
+    expect(screen.getByText('Points config')).toBeInTheDocument()
+    expect(screen.getByText('This event awards no points.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Award ranking points')).not.toBeChecked()
+    // With the box off, neither the config fields nor the fixture designation show.
+    expect(screen.queryByLabelText('Min points')).not.toBeInTheDocument()
     expect(screen.queryByLabelText(/Designated points/)).not.toBeInTheDocument()
+
+    // Ticking it reveals the config fields so the organizer can opt in.
+    await user.click(screen.getByLabelText('Award ranking points'))
+    expect(screen.getByLabelText('Min points')).toBeInTheDocument()
   })
 
-  it('shows the points config editor and designation input for an OPEN_PLAY event with a club (unify)', () => {
-    // OPEN_PLAY now carries points like the other types; with a club the editor + designation appear.
+  it('shows the points config editor and designation input for an event that awards points (#466)', () => {
+    // OPEN_PLAY now carries points like the other types; with a config the editor + designation appear.
     useGetApiV1EventsId.mockReturnValue({
       data: {
         ...event,
@@ -849,23 +858,25 @@ describe('EventDetail', () => {
     })
     renderDetail()
     expect(screen.getByText('Points config')).toBeInTheDocument()
+    // The award-points checkbox is seeded checked (the event carries a config).
+    expect(screen.getByLabelText('Award ranking points')).toBeChecked()
     expect(screen.getByLabelText(/Designated points/)).toBeInTheDocument()
   })
 
-  it('hides the points config for a budgeted event with no club, and shows it once a club is set (#429)', () => {
-    // A clubless budgeted event → no points editor (no budget source; mirrors "no club → no points").
-    useGetApiV1EventsId.mockReturnValue({
-      data: { ...tournamentEvent, clubId: null },
-      isLoading: false,
-    })
-    const { unmount } = renderDetail()
-    expect(screen.queryByText('Points config')).not.toBeInTheDocument()
-    unmount()
-
-    // Assigning a club later reveals the editor so the organizer can set the config.
+  it('un-ticking award-points and saving clears the event config (#466)', async () => {
+    // A budgeted event with a config: the checkbox is seeded checked. Un-ticking + saving sends an empty
+    // body, which the server treats as "clear the config" (cascading to release its fixtures' points).
     useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
+    const user = userEvent.setup()
     renderDetail()
-    expect(screen.getByText('Points config')).toBeInTheDocument()
+
+    expect(screen.getByLabelText('Award ranking points')).toBeChecked()
+    await user.click(screen.getByLabelText('Award ranking points'))
+    // The config fields disappear once un-ticked.
+    expect(screen.queryByLabelText('Min points')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Save points config' }))
+    expect(pointsConfigMutate).toHaveBeenCalledWith({ id: 'e1', data: {} })
   })
 
   it('shows the points config with global bounds and current values, and saves an edit (#403 Phase C)', async () => {
@@ -1052,5 +1063,33 @@ describe('EventDetail', () => {
 
     expect(screen.getByText(/exceeds the club's remaining free budget/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Schedule fixture' })).toBeDisabled()
+  })
+
+  it('shows the per-match award-points checkbox (default checked) on a points event (#466)', () => {
+    useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
+    renderDetail()
+    // The event awards points → the per-fixture checkbox is present and checked by default, so the
+    // designation input shows.
+    expect(screen.getByLabelText('Award points for this match')).toBeChecked()
+    expect(screen.getByLabelText(/Designated points/)).toBeInTheDocument()
+  })
+
+  it('un-ticking the per-match checkbox hides the designation and sends awardPoints:false (#466)', async () => {
+    useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
+    const user = userEvent.setup()
+    renderDetail()
+
+    // Opt this fixture out: the designation input disappears.
+    await user.click(screen.getByLabelText('Award points for this match'))
+    expect(screen.queryByLabelText(/Designated points/)).not.toBeInTheDocument()
+
+    await user.selectOptions(screen.getByLabelText('Player 1'), 'u1')
+    await user.selectOptions(screen.getByLabelText('Player 2'), 'u2')
+    await user.type(screen.getByLabelText('Date'), '2026-03-02')
+    await user.click(screen.getByRole('button', { name: 'Schedule fixture' }))
+
+    // Scheduling sends awardPoints:false (no designation) so the match awards no points.
+    expect(createFixtureMutate.mock.calls[0][0].data.awardPoints).toBe(false)
+    expect(createFixtureMutate.mock.calls[0][0].data.designatedPoints).toBeUndefined()
   })
 })

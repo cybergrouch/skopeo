@@ -85,6 +85,12 @@ data class FixtureInput(
      * round(avg(event.min, event.max)). Kept null for a config-less or event-less fixture.
      */
     val designatedPoints: Int? = null,
+    /**
+     * The "award points for this match" checkbox (#466). Default (null/true) → the fixture awards points
+     * on a points-awarding event (designation defaults as above). Explicit false → the match opts out:
+     * no designation (null), so it awards no points even under a points-awarding event.
+     */
+    val awardPoints: Boolean? = null,
 )
 
 /**
@@ -213,6 +219,11 @@ class MatchService(
             if (event == null || event.type !in BUDGETED_TYPES) {
                 return@either null
             }
+            // The "award points for this match" checkbox unchecked (#466): opt this fixture out even under
+            // a points-awarding event → no designation, no reservation.
+            if (request.awardPoints == false) {
+                return@either null
+            }
             // A config is written atomically (all four fields or none). No config → no points window →
             // no designation: this covers a clubless event and one whose config is still deferred.
             val window = event.pointsWindow() ?: return@either null
@@ -282,6 +293,74 @@ class MatchService(
                     recordedBy = recordedBy,
                     completedAt = LocalDateTime.now(),
                 ).bind()
+        }
+
+    /**
+     * Set (or clear) a fixture's designated points (#466 opt-in "award points for this match" checkbox).
+     * Staff-only, only while the fixture is unrated, and only on an event that awards points (has a
+     * config). A non-null amount is validated against the EVENT's [min, max] (never the global policy —
+     * the event already conforms) plus the cumulative club-budget reserve check (excluding this fixture's
+     * own current reservation). Null clears the designation → the match awards no points (reservation
+     * released). Audited as FIXTURE_POINTS_DESIGNATED.
+     */
+    fun setDesignation(
+        token: VerifiedFirebaseToken,
+        matchId: UUID,
+        designatedPoints: Int?,
+    ): Either<ServiceError, Match> =
+        either {
+            val caller = staffCaller(token = token).bind()
+            val match = matches.findById(matchId = matchId).bind()
+            ensure(condition = match.isActive) { ServiceError.Conflict(message = "Match is disabled") }
+            ensure(condition = match.ratedAt == null) {
+                ServiceError.Conflict(message = "Cannot change points on a match that has already been rated")
+            }
+            val eventId =
+                ensureNotNull(value = match.eventId) {
+                    ServiceError.Validation(message = "Only an evented fixture can designate points")
+                }
+            val event =
+                ensureNotNull(value = events.findById(id = eventId)) { ServiceError.NotFound(message = "Event $eventId not found") }
+            ensureHostMayEnter(event = event, caller = caller).bind()
+            ensureEventNotFinalized(event = event).bind()
+            val resolved = resolveDesignationUpdate(event = event, match = match, amount = designatedPoints).bind()
+            val updated = matches.setDesignatedPoints(matchId = matchId, designatedPoints = resolved).bind()
+            // Log the designation set/clear; a cleared designation is a size-0 cost entry.
+            auditDesignation(actorId = caller.id, matchId = matchId, points = resolved ?: 0, teamSize = match.team1.userIds.size)
+            updated
+        }
+
+    /**
+     * Resolve a fixture designation UPDATE (#466). Null clears (no points). A non-null amount must be an
+     * event that awards points, be within the event's [min, max], and pass the cumulative reserve check —
+     * which excludes this fixture's OWN current reservation so re-setting the same amount never self-blocks.
+     */
+    private fun resolveDesignationUpdate(
+        event: Event,
+        match: Match,
+        amount: Int?,
+    ): Either<ServiceError, Int?> =
+        either {
+            if (amount == null) return@either null
+            val window =
+                ensureNotNull(value = event.pointsWindow()) {
+                    ServiceError.Validation(message = "This event awards no points")
+                }
+            val (min, max) = window
+            ensure(condition = amount in min..max) {
+                ServiceError.Validation(message = "Designated points must be an integer between $min and $max")
+            }
+            event.clubId?.let { clubId ->
+                val teamSize = match.team1.userIds.size
+                // Exclude this fixture's own current reservation, which is already in the emergent sum.
+                val ownReserved = (match.designatedPoints ?: 0) * teamSize
+                val reserved = budgets.sumReservedPoints(clubId = clubId, eventType = event.type) - ownReserved
+                val budgeted = budgets.findBudget(clubId = clubId, eventType = event.type)
+                ensure(condition = reserved + amount * teamSize <= budgeted) {
+                    ServiceError.Validation(message = "Designation exceeds club budget for ${event.type}")
+                }
+            }
+            amount
         }
 
     fun setActive(
