@@ -3,6 +3,9 @@
 
 package org.skopeo.service.event
 
+import org.skopeo.model.AuditAction
+import org.skopeo.model.AuditEntityType
+import org.skopeo.model.AuditWrite
 import org.skopeo.model.AwardStatus
 import org.skopeo.model.Event
 import org.skopeo.model.EventType
@@ -15,6 +18,7 @@ import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RankingPointRepository
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
+import org.skopeo.service.audit.AuditService
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -49,6 +53,7 @@ class EventFinalizeAwarder(
     private val awards: RankingPointRepository = RankingPointRepository(),
     private val ratings: RatingRepository = RatingRepository(),
     private val users: UserRepository = UserRepository(),
+    private val audit: AuditService = AuditService(),
 ) {
     /** Summary of one finalize's awarding, for the audit trail: how many fixtures paid out and the total. */
     data class AwardSummary(
@@ -108,6 +113,21 @@ class EventFinalizeAwarder(
                             now = now,
                         ),
                 )
+                // Per-award audit (#471): one entry targeting the awarded player (USER) so the reward is
+                // individually auditable in the Activity Log with the player as the Target — the actor is
+                // the finalizer (grantedBy). This is in addition to EventService's event-level summary.
+                audit.record(
+                    write =
+                        awardAudit(
+                            event = event,
+                            win = win,
+                            userId = userId,
+                            band = band,
+                            grantedBy = grantedBy,
+                            validFrom = validFrom,
+                            validUntil = validUntil,
+                        ),
+                )
                 awardCount += 1
                 total = total.add(BigDecimal(win.designated))
                 paidThisMatch = true
@@ -117,9 +137,10 @@ class EventFinalizeAwarder(
         return AwardSummary(matchCount = matchCount, awardCount = awardCount, totalPoints = total)
     }
 
-    /** One qualifying fixture reduced to what awarding needs: its id, designation, and winning members. */
+    /** One qualifying fixture reduced to what awarding needs: its id, public code, designation, and winning members. */
     private data class QualifyingWin(
         val matchId: UUID,
+        val matchPublicCode: String,
         val designated: Int,
         val winnerIds: List<UUID>,
     )
@@ -136,7 +157,12 @@ class EventFinalizeAwarder(
             .mapNotNull { match ->
                 val designated = match.designatedPoints ?: return@mapNotNull null
                 val winnerIds = winningUserIds(match = match).ifEmpty { return@mapNotNull null }
-                QualifyingWin(matchId = match.id, designated = designated, winnerIds = winnerIds)
+                QualifyingWin(
+                    matchId = match.id,
+                    matchPublicCode = match.publicCode,
+                    designated = designated,
+                    winnerIds = winnerIds,
+                )
             }
 
     @Suppress("LongParameterList")
@@ -170,6 +196,41 @@ class EventFinalizeAwarder(
             awardedAt = now,
             eventId = event.id,
             matchId = matchId,
+        )
+
+    /**
+     * The per-award provenance record (#471): actor = the finalizer, target = the awarded player (USER)
+     * so the Activity Log's Target column links to the player. Details carry the points, granting match
+     * (id + public code), event, band, and the validity window.
+     */
+    @Suppress("LongParameterList")
+    private fun awardAudit(
+        event: Event,
+        win: QualifyingWin,
+        userId: UUID,
+        band: String,
+        grantedBy: UUID,
+        validFrom: LocalDateTime,
+        validUntil: LocalDateTime,
+    ): AuditWrite =
+        AuditWrite(
+            actorUserId = grantedBy,
+            action = AuditAction.RANKING_POINTS_AWARDED,
+            entityType = AuditEntityType.USER,
+            entityId = userId,
+            summary =
+                "Awarded ${win.designated} points to the player for match ${win.matchPublicCode}",
+            details =
+                mapOf(
+                    "points" to win.designated.toString(),
+                    "matchId" to win.matchId.toString(),
+                    "matchPublicCode" to win.matchPublicCode,
+                    "eventId" to event.id.toString(),
+                    "eventPublicCode" to event.publicCode,
+                    "band" to band,
+                    "validFrom" to validFrom.toString(),
+                    "validUntil" to validUntil.toString(),
+                ),
         )
 
     private fun winningUserIds(match: Match): List<UUID> =
