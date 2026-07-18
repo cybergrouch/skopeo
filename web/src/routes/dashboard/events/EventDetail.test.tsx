@@ -879,6 +879,36 @@ describe('EventDetail', () => {
     expect(pointsConfigMutate).toHaveBeenCalledWith({ id: 'e1', data: {} })
   })
 
+  it('surfaces a server error when clearing the config fails after un-ticking award-points (#466)', async () => {
+    // Un-tick award-points then save, but the clear (empty-body) mutation rejects → the error surfaces
+    // (the catch on the clear path, distinct from the save-a-config path).
+    useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
+    state.pointsConfigFail = true
+    state.pointsConfigErrorMessage = 'A rated fixture still designates points'
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.click(screen.getByLabelText('Award ranking points'))
+    await user.click(screen.getByRole('button', { name: 'Save points config' }))
+
+    expect(pointsConfigMutate).toHaveBeenCalledWith({ id: 'e1', data: {} })
+    expect(await screen.findByRole('alert')).toHaveTextContent('A rated fixture still designates points')
+  })
+
+  it('shows a generic message when clearing the config fails without server guidance (#466)', async () => {
+    // Same clear path, but the error carries no server message → the generic fallback is shown.
+    useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
+    state.pointsConfigFail = true
+    state.pointsConfigErrorMessage = null
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.click(screen.getByLabelText('Award ranking points'))
+    await user.click(screen.getByRole('button', { name: 'Save points config' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not clear the points config.')
+  })
+
   it('shows the points config with global bounds and current values, and saves an edit (#403 Phase C)', async () => {
     useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
     useGetApiV1PointsPolicies.mockReturnValue({
@@ -1063,6 +1093,42 @@ describe('EventDetail', () => {
 
     expect(screen.getByText(/exceeds the club's remaining free budget/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Schedule fixture' })).toBeDisabled()
+  })
+
+  it('renders the doubles designation cost for two players (#466)', async () => {
+    // A points-awarding event with a doubles roster: the cost hint reads "for 2 players", exercising the
+    // doubles arm of the team-size copy.
+    useGetApiV1EventsId.mockReturnValue({
+      data: { ...doublesRoster, ...tournamentEvent, participants: doublesRoster.participants },
+      isLoading: false,
+    })
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.selectOptions(screen.getByLabelText('Format'), 'DOUBLES')
+    // Default designation 15 × 2 players = 30.
+    expect(screen.getByText(/cost = 30 for 2 players/)).toBeInTheDocument()
+  })
+
+  it('notes no budget is reserved when a points event has no club (#466)', () => {
+    // Points-awarding event but clubId absent → the hint states no club/budget is reserved.
+    useGetApiV1EventsId.mockReturnValue({ data: { ...tournamentEvent, clubId: undefined }, isLoading: false })
+    renderDetail()
+
+    expect(screen.getByText(/No club is set, so no budget is reserved/)).toBeInTheDocument()
+    expect(screen.queryByText(/points free/)).not.toBeInTheDocument()
+  })
+
+  it('omits the free-budget hint when the club has no budget row for this event type (#466)', () => {
+    // clubId is set but no matching budget row exists → clubBudget is undefined, so neither the
+    // free-budget hint nor the no-club note shows (the empty middle arm).
+    useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
+    useGetApiV1PointsBudgets.mockReturnValue({ data: [], isLoading: false })
+    renderDetail()
+
+    expect(screen.getByLabelText(/Designated points/)).toBeInTheDocument()
+    expect(screen.queryByText(/points free/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/No club is set/)).not.toBeInTheDocument()
   })
 
   it('shows the per-match award-points checkbox (default checked) on a points event (#466)', () => {

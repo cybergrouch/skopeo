@@ -1637,4 +1637,97 @@ class MatchServiceTest {
         service.setDesignation(token = token(uid = "host"), matchId = match.id, designatedPoints = 40)
             .shouldBeRight().designatedPoints shouldBe 40
     }
+
+    @Test
+    fun `setDesignation is rejected once the match has been rated (#466)`() {
+        val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val event = budgetedEvent(host = host, participants = listOf(p1.id, p2.id), clubBudget = 50)
+        val match =
+            service
+                .createFixture(
+                    token = token(uid = "host"),
+                    request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id, awardPoints = false),
+                ).shouldBeRight()
+        service.uploadResult(token = token(uid = "host"), matchId = match.id, request = straightSets()).shouldBeRight()
+        matchRepo.markRated(matchId = match.id, ratedAt = LocalDateTime.now(), ratedBy = host.id)
+
+        // A rated fixture is frozen — its points can no longer be changed.
+        service.setDesignation(token = token(uid = "host"), matchId = match.id, designatedPoints = 30)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Conflict>()
+    }
+
+    @Test
+    fun `setDesignation is rejected for a non-evented fixture (#466)`() {
+        val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        // A plain fixture with no eventId cannot designate points.
+        val match =
+            service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
+
+        service.setDesignation(token = token(uid = "host"), matchId = match.id, designatedPoints = 20)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `setDesignation is rejected on an event that awards no points (#466)`() {
+        val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        // A LEAGUE event with NO points config → no window → designating a non-null amount is invalid.
+        val event =
+            EventRepository().create(
+                command =
+                    CreateEventCommand(
+                        name = "League",
+                        startDate = LocalDate.now(),
+                        endDate = LocalDate.now().plusDays(7),
+                        participantIds = listOf(p1.id, p2.id),
+                        createdBy = host.id,
+                        type = EventType.LEAGUE,
+                    ),
+            )
+        val match =
+            service
+                .createFixture(
+                    token = token(uid = "host"),
+                    request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id),
+                ).shouldBeRight()
+
+        service.setDesignation(token = token(uid = "host"), matchId = match.id, designatedPoints = 10)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `setDesignation is rejected when it would exceed the club budget (#466)`() {
+        val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val p3 = provisionUser(uid = "p3", rated = true)
+        val p4 = provisionUser(uid = "p4", rated = true)
+        // Budget 50; a first 40-point fixture reserves most of it.
+        val event = budgetedEvent(host = host, participants = listOf(p1.id, p2.id, p3.id, p4.id), clubBudget = 50)
+        service
+            .createFixture(
+                token = token(uid = "host"),
+                request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id, designatedPoints = 40),
+            ).shouldBeRight()
+        // A second fixture with the checkbox off reserves nothing yet.
+        val second =
+            service
+                .createFixture(
+                    token = token(uid = "host"),
+                    request = fixtureRequest(p1 = p3.id, p2 = p4.id).copy(eventId = event.id, awardPoints = false),
+                ).shouldBeRight()
+
+        // Designating 40 on the second would push the reserve to 80 > 50 → rejected.
+        service.setDesignation(token = token(uid = "host"), matchId = second.id, designatedPoints = 40)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+    }
 }
