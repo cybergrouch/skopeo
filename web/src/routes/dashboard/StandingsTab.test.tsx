@@ -267,13 +267,13 @@ describe('StandingsTab', () => {
         source: 'POINTS',
         entries: [
           // A POINTS row carries points (public); no currentRating is served.
-          { rank: 1, userId: 'm1', displayName: 'Bob Cruz', publicCode: 'BBB222', sex: 'Male', age: 40, points: '240' },
+          { rank: 1, userId: 'm1', displayName: 'Bob Cruz', publicCode: 'BBB222', sex: 'Male', age: 40, points: '240.0000' },
         ],
       },
       isLoading: false,
     })
     renderTab()
-    expect(screen.getByText('240 pts')).toBeInTheDocument()
+    expect(screen.getByText('+240 pts')).toBeInTheDocument()
   })
 
   it('renders no metric under POINTS when an entry omits its points value (#457)', () => {

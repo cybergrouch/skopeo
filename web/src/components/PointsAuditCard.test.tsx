@@ -51,7 +51,7 @@ describe('PointsAuditCard', () => {
   it('lists active awards with points, band, expiry and a link to the granting match (#448)', () => {
     useGetApiV1PlayersCodePoints.mockReturnValue({ data: [matchAward], isLoading: false })
     renderCard(true)
-    expect(screen.getByText('30 pts')).toBeInTheDocument()
+    expect(screen.getByText('+30 pts')).toBeInTheDocument()
     expect(screen.getByText('4.0')).toBeInTheDocument()
     expect(screen.getByText(/Expires 2026-12-01/)).toBeInTheDocument()
     const matchLink = screen.getByRole('link', { name: /View granting match/ })

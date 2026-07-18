@@ -18,12 +18,14 @@ describe('PlayerStandingCard', () => {
 
   it('shows points (not a rating) under the POINTS source (#457)', () => {
     useGetApiV1PlayersCodeStanding.mockReturnValue({
-      data: { band: '4.0', bandLabel: 'NTRP 4.0 Band Race', sex: 'Male', rank: 4, points: '240', source: 'POINTS' },
+      // The backend serializes points from a NUMERIC(12,4) BigDecimal, so it carries a .0000 tail;
+      // the card formats it as a signed integer (#467).
+      data: { band: '4.0', bandLabel: 'NTRP 4.0 Band Race', sex: 'Male', rank: 4, points: '240.0000', source: 'POINTS' },
       isLoading: false,
     })
     render(<PlayerStandingCard code="ABC123" />)
     expect(screen.getByText('#4')).toBeInTheDocument()
-    expect(screen.getByText(/240 pts · 4.0 Men/)).toBeInTheDocument()
+    expect(screen.getByText(/\+240 pts · 4.0 Men/)).toBeInTheDocument()
   })
 
   it('shows the rating (labeled NTRP) under the RATING source when it is revealed (#457, #186)', () => {
@@ -54,7 +56,7 @@ describe('PlayerStandingCard', () => {
       isLoading: false,
     })
     render(<PlayerStandingCard code="ABC123" />)
-    expect(screen.getByText(/240 pts · 4.0/)).toBeInTheDocument()
+    expect(screen.getByText(/\+240 pts · 4.0/)).toBeInTheDocument()
     expect(screen.queryByText(/Men|Women/)).not.toBeInTheDocument()
   })
 

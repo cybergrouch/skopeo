@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { formatPoints } from '@/lib/points'
 import { ContentLink } from '@/components/ContentLink'
 import { NumberedPager } from '@/components/NumberedPager'
 import {
@@ -257,7 +258,7 @@ export function StandingsTab() {
                       {page?.source === 'POINTS' ? (
                         entry.points ? (
                           <span className="shrink-0 font-mono text-xs text-muted-foreground">
-                            {entry.points} pts
+                            {formatPoints(entry.points)} pts
                           </span>
                         ) : null
                       ) : entry.currentRating ? (
