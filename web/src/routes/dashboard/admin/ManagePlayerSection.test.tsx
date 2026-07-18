@@ -10,9 +10,11 @@ const {
   useGetApiV1UsersUserIdCapabilities,
   usePostApiV1UsersUserIdCapabilities,
   useDeleteApiV1UsersUserIdCapabilitiesCapability,
+  usePostApiV1UsersUserIdRankingPointsAdjustments,
   putMutate,
   grantMutate,
   revokeMutate,
+  adjustMutate,
   picked,
 } = vi.hoisted(() => ({
   useGetApiV1UsersUserIdRatings: vi.fn(),
@@ -20,9 +22,11 @@ const {
   useGetApiV1UsersUserIdCapabilities: vi.fn(),
   usePostApiV1UsersUserIdCapabilities: vi.fn(),
   useDeleteApiV1UsersUserIdCapabilitiesCapability: vi.fn(),
+  usePostApiV1UsersUserIdRankingPointsAdjustments: vi.fn(),
   putMutate: vi.fn(),
   grantMutate: vi.fn(),
   revokeMutate: vi.fn(),
+  adjustMutate: vi.fn(),
   // The player the stub picker selects — overridable per test.
   picked: {
     current: {
@@ -50,6 +54,9 @@ vi.mock('@/api/generated/capabilities/capabilities', () => ({
   usePostApiV1UsersUserIdCapabilities,
   useDeleteApiV1UsersUserIdCapabilitiesCapability,
   getGetApiV1UsersUserIdCapabilitiesQueryKey: (id: string) => ['capabilities', id],
+}))
+vi.mock('@/api/generated/ranking-points/ranking-points', () => ({
+  usePostApiV1UsersUserIdRankingPointsAdjustments,
 }))
 // Drive selection from a stub so the real picker (axios → firebase) never loads.
 vi.mock('@/components/UserSearchSelect', () => ({
@@ -107,6 +114,13 @@ describe('ManagePlayerSection', () => {
       isPending: false,
       mutate: (vars: unknown) => {
         revokeMutate(vars)
+        options.mutation.onSuccess()
+      },
+    }))
+    usePostApiV1UsersUserIdRankingPointsAdjustments.mockImplementation((options: SuccessOpts) => ({
+      isPending: false,
+      mutateAsync: async (vars: unknown) => {
+        adjustMutate(vars)
         options.mutation.onSuccess()
       },
     }))
@@ -242,5 +256,93 @@ describe('ManagePlayerSection', () => {
     await user.click(screen.getByRole('button', { name: 'Revoke ADMINISTRATOR' }))
     await user.click(screen.getByRole('button', { name: 'Confirm revoke ADMINISTRATOR' }))
     expect(screen.getByRole('alert')).toHaveTextContent('Cannot revoke a bootstrap administrator')
+  })
+
+  it('renders the point-adjustment sub-section with its four fields and the hint (#469)', async () => {
+    await selectAlice()
+    expect(screen.getByText('Point adjustment')).toBeInTheDocument()
+    expect(screen.getByLabelText(/Points/)).toBeInTheDocument()
+    expect(screen.getByLabelText(/Comment/)).toBeInTheDocument()
+    expect(screen.getByLabelText('Validity start')).toBeInTheDocument()
+    expect(screen.getByLabelText('Validity end')).toBeInTheDocument()
+    expect(
+      screen.getByText('Applies to standings on the next points calculation.'),
+    ).toBeInTheDocument()
+  })
+
+  it('submits a signed adjustment with the validity window and reports success (#469)', async () => {
+    const user = await selectAlice()
+    await user.type(screen.getByLabelText(/Points/), '-25')
+    await user.type(screen.getByLabelText(/Comment/), 'penalty')
+    await user.type(screen.getByLabelText('Validity start'), '2026-01-01')
+    await user.type(screen.getByLabelText('Validity end'), '2026-06-01')
+    await user.click(screen.getByRole('button', { name: 'Apply adjustment' }))
+
+    await waitFor(() =>
+      expect(adjustMutate).toHaveBeenCalledWith({
+        userId: 'u1',
+        data: {
+          points: '-25',
+          reason: 'penalty',
+          validFrom: '2026-01-01T00:00:00',
+          validUntil: '2026-06-01T23:59:59',
+        },
+      }),
+    )
+    expect(screen.getByText('Applied')).toBeInTheDocument()
+  })
+
+  it('rejects a zero, fractional, or missing points value before calling the API (#469)', async () => {
+    const user = await selectAlice()
+    // Fill the other required fields so the points check is what fails.
+    await user.type(screen.getByLabelText(/Comment/), 'note')
+    await user.type(screen.getByLabelText('Validity start'), '2026-01-01')
+    await user.type(screen.getByLabelText('Validity end'), '2026-06-01')
+
+    await user.type(screen.getByLabelText(/Points/), '0')
+    await user.click(screen.getByRole('button', { name: 'Apply adjustment' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('non-zero whole number')
+    expect(adjustMutate).not.toHaveBeenCalled()
+
+    await user.clear(screen.getByLabelText(/Points/))
+    await user.type(screen.getByLabelText(/Points/), '10.5')
+    await user.click(screen.getByRole('button', { name: 'Apply adjustment' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('non-zero whole number')
+    expect(adjustMutate).not.toHaveBeenCalled()
+  })
+
+  it('rejects an end date before the start date and a blank reason before calling the API (#469)', async () => {
+    const user = await selectAlice()
+    await user.type(screen.getByLabelText(/Points/), '50')
+
+    // Blank reason first.
+    await user.type(screen.getByLabelText('Validity start'), '2026-06-01')
+    await user.type(screen.getByLabelText('Validity end'), '2026-06-30')
+    await user.click(screen.getByRole('button', { name: 'Apply adjustment' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('A reason is required')
+    expect(adjustMutate).not.toHaveBeenCalled()
+
+    // Now a reason, but the end precedes the start.
+    await user.type(screen.getByLabelText(/Comment/), 'note')
+    await user.clear(screen.getByLabelText('Validity end'))
+    await user.type(screen.getByLabelText('Validity end'), '2026-05-01')
+    await user.click(screen.getByRole('button', { name: 'Apply adjustment' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('on or after the start date')
+    expect(adjustMutate).not.toHaveBeenCalled()
+  })
+
+  it('surfaces the backend error when an adjustment fails (#469)', async () => {
+    usePostApiV1UsersUserIdRankingPointsAdjustments.mockImplementation((options: SuccessOpts) => ({
+      isPending: false,
+      mutateAsync: async () =>
+        options.mutation.onError?.({ response: { data: { message: 'Player has no rating' } } }),
+    }))
+    const user = await selectAlice()
+    await user.type(screen.getByLabelText(/Points/), '50')
+    await user.type(screen.getByLabelText(/Comment/), 'bonus')
+    await user.type(screen.getByLabelText('Validity start'), '2026-01-01')
+    await user.type(screen.getByLabelText('Validity end'), '2026-06-01')
+    await user.click(screen.getByRole('button', { name: 'Apply adjustment' }))
+    expect(await screen.findByText('Player has no rating')).toBeInTheDocument()
   })
 })

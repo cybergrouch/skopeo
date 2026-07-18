@@ -4,6 +4,7 @@
 package org.skopeo.dto.ranking
 
 import kotlinx.serialization.Serializable
+import org.skopeo.model.AdjustRankingPointCommand
 import org.skopeo.model.GrantRankingPointCommand
 import org.skopeo.model.PointClass
 import org.skopeo.model.PointSourceType
@@ -42,6 +43,30 @@ data class GrantRankingPointsRequest(
             reason = reason,
             validFrom = validFrom?.let { LocalDateTime.parse(it) },
             validUntil = validUntil?.let { LocalDateTime.parse(it) },
+        )
+}
+
+/**
+ * Body for `POST /api/v1/users/{userId}/ranking-points/adjustments` — an administrator manually awards
+ * (+) or deducts (−) points for a player (#469). All fields are mandatory: [points] is a **signed**
+ * integer as a decimal string (non-zero, whole; the service enforces the numeric rules), [reason] is the
+ * comment / rationale, and [validFrom]/[validUntil] are the explicit validity window (ISO date-times).
+ */
+@Serializable
+data class AdjustRankingPointsRequest(
+    val points: String,
+    val reason: String,
+    val validFrom: String,
+    val validUntil: String,
+) {
+    /** Parse into the domain command; throws [IllegalArgumentException] (→ 400) on a malformed field. */
+    fun toCommand(userId: UUID): AdjustRankingPointCommand =
+        AdjustRankingPointCommand(
+            userId = userId,
+            points = BigDecimal(points),
+            reason = reason,
+            validFrom = LocalDateTime.parse(validFrom),
+            validUntil = LocalDateTime.parse(validUntil),
         )
 }
 

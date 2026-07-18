@@ -11,6 +11,7 @@ import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.model.AdjustRankingPointCommand
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuthProvider
@@ -413,5 +414,144 @@ class RankingPointServiceTest {
                     reason = "   ",
                 ),
         ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    private fun adjustCommand(
+        userId: UUID,
+        points: String = "50",
+        reason: String = "manual correction",
+        validFrom: LocalDateTime = LocalDateTime.of(2026, 1, 1, 0, 0),
+        validUntil: LocalDateTime = LocalDateTime.of(2026, 6, 1, 0, 0),
+    ) = AdjustRankingPointCommand(
+        userId = userId,
+        points = BigDecimal(points),
+        reason = reason,
+        validFrom = validFrom,
+        validUntil = validUntil,
+    )
+
+    @Test
+    fun `an admin awards positive points as a signed EXTERNAL adjustment with explicit validity (#469)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val player = provision(uid = "player", sex = "Female")
+        ratings.setRating(userId = player.id, rating = BigDecimal("4.3"), level = "4.0")
+        val from = LocalDateTime.of(2026, 2, 1, 0, 0)
+        val until = from.plusDays(30)
+
+        val award =
+            service.adjust(
+                token = token(uid = "admin"),
+                command = adjustCommand(userId = player.id, points = "75", reason = "bonus", validFrom = from, validUntil = until),
+            ).shouldBeRight()
+        award.points shouldBe BigDecimal("75.0000")
+        award.pointClass shouldBe PointClass.EXTERNAL
+        award.sourceType shouldBe PointSourceType.EXTERNAL
+        award.band shouldBe "4.0"
+        award.sex shouldBe "Female"
+        award.reason shouldBe "bonus"
+        award.status shouldBe AwardStatus.ACTIVE
+        award.validFrom shouldBe from
+        award.validUntil shouldBe until
+    }
+
+    @Test
+    fun `an admin deducts negative points as a signed adjustment, trimming the reason (#469)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val player = provision(uid = "player")
+        ratings.setRating(userId = player.id, rating = BigDecimal("4.0"), level = "4.0")
+
+        val award =
+            service.adjust(
+                token = token(uid = "admin"),
+                command = adjustCommand(userId = player.id, points = "-40", reason = "  penalty  "),
+            ).shouldBeRight()
+        award.points shouldBe BigDecimal("-40.0000")
+        award.reason shouldBe "penalty"
+    }
+
+    @Test
+    fun `a manual adjustment audits with the player as the target (#469, #471)`() {
+        val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val player = provision(uid = "player")
+        ratings.setRating(userId = player.id, rating = BigDecimal("4.0"), level = "4.0")
+
+        val award = service.adjust(token = token(uid = "admin"), command = adjustCommand(userId = player.id)).shouldBeRight()
+
+        val entry =
+            AuditRepository()
+                .list(actions = listOf(element = AuditAction.RANKING_POINTS_AWARDED), limit = 10, offset = 0)
+                .first.single()
+        entry.entityType shouldBe AuditEntityType.USER
+        entry.entityId shouldBe player.id
+        entry.actorUserId shouldBe admin.id
+        entry.details["awardId"] shouldBe award.id.toString()
+        entry.details["points"] shouldBe award.points.toPlainString()
+    }
+
+    @Test
+    fun `zero, fractional, and blank-reason adjustments are validation errors (#469)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val player = provision(uid = "player")
+        ratings.setRating(userId = player.id, rating = BigDecimal("4.0"), level = "4.0")
+
+        service.adjust(token = token(uid = "admin"), command = adjustCommand(userId = player.id, points = "0"))
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        service.adjust(token = token(uid = "admin"), command = adjustCommand(userId = player.id, points = "10.5"))
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        service.adjust(token = token(uid = "admin"), command = adjustCommand(userId = player.id, points = "-10.5"))
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        service.adjust(token = token(uid = "admin"), command = adjustCommand(userId = player.id, reason = "   "))
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        // A signed integer with trailing zeros is still whole → accepted.
+        service.adjust(token = token(uid = "admin"), command = adjustCommand(userId = player.id, points = "-50.0000"))
+            .shouldBeRight()
+    }
+
+    @Test
+    fun `an adjustment whose window does not advance is a validation error (#469)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val player = provision(uid = "player")
+        ratings.setRating(userId = player.id, rating = BigDecimal("4.0"), level = "4.0")
+        val from = LocalDateTime.of(2026, 3, 1, 0, 0)
+
+        service.adjust(
+            token = token(uid = "admin"),
+            command = adjustCommand(userId = player.id, validFrom = from, validUntil = from.minusDays(1)),
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `an unrated target cannot be adjusted (#469)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val player = provision(uid = "player")
+
+        service.adjust(token = token(uid = "admin"), command = adjustCommand(userId = player.id))
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `adjusting is administrator-only (#469)`() {
+        provision(uid = "rater", roles = setOf(Capability.PLAYER, Capability.RATER))
+        val player = provision(uid = "player")
+        ratings.setRating(userId = player.id, rating = BigDecimal("4.0"), level = "4.0")
+
+        service.adjust(token = token(uid = "rater"), command = adjustCommand(userId = player.id))
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        // An unprovisioned caller is also forbidden (null-caller arm).
+        service.adjust(token = token(uid = "ghost"), command = adjustCommand(userId = player.id))
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
+    @Test
+    fun `adjusting an unknown or deactivated user is a validation error (#469)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        service.adjust(token = token(uid = "admin"), command = adjustCommand(userId = UUID.randomUUID()))
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+
+        val player = provision(uid = "player")
+        ratings.setRating(userId = player.id, rating = BigDecimal("4.0"), level = "4.0")
+        users.deactivate(id = player.id).shouldBeRight()
+        service.adjust(token = token(uid = "admin"), command = adjustCommand(userId = player.id))
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
     }
 }

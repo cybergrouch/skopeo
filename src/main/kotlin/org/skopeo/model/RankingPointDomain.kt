@@ -103,6 +103,21 @@ data class GrantRankingPointCommand(
     val validUntil: LocalDateTime?,
 )
 
+/**
+ * A manual, signed ranking-point adjustment (#469): an admin awards (+) or deducts (−) points for a
+ * player from the Manage Player section. Unlike [GrantRankingPointCommand] the [points] are **signed**
+ * (positive awards, negative deducts; non-zero, whole), the [reason] is **always required**, and the
+ * validity window [validFrom]/[validUntil] is **explicit** (no point-class default). It is persisted as
+ * a non-budgeted EXTERNAL ledger entry tagged with the player's current band + sex.
+ */
+data class AdjustRankingPointCommand(
+    val userId: UUID,
+    val points: BigDecimal,
+    val reason: String,
+    val validFrom: LocalDateTime,
+    val validUntil: LocalDateTime,
+)
+
 /** The fully-resolved insert an award repository persists (all defaults already applied). */
 data class RankingPointAwardWrite(
     val userId: UUID,

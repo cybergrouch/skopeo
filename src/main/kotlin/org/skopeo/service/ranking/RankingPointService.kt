@@ -9,6 +9,7 @@ import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
+import org.skopeo.model.AdjustRankingPointCommand
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -16,6 +17,7 @@ import org.skopeo.model.AwardStatus
 import org.skopeo.model.Capability
 import org.skopeo.model.GrantRankingPointCommand
 import org.skopeo.model.Level
+import org.skopeo.model.PointClass
 import org.skopeo.model.PointSourceType
 import org.skopeo.model.RankingPointAward
 import org.skopeo.model.RankingPointAwardWrite
@@ -126,6 +128,75 @@ class RankingPointService(
                             reason = command.reason?.ifBlank { null },
                             validFrom = validFrom,
                             validUntil = validUntil,
+                            status = AwardStatus.ACTIVE,
+                            revokesAwardId = null,
+                            grantedBy = adminId,
+                            awardedAt = LocalDateTime.now(),
+                        ),
+                )
+            audit.record(write = grantAudit(actorId = adminId, award = award))
+            award
+        }
+
+    /**
+     * A manual, signed point adjustment (#469): an admin awards (+) or deducts (−) points for a player
+     * from the Manage Player section. It writes a non-budgeted EXTERNAL ledger entry via [award], reusing
+     * the same audit provenance as [grant] (target = the player, #471). Differs from [grant] in three
+     * ways: [points] are **signed** (positive or negative, non-zero, whole), the [reason] is **always
+     * required**, and the validity window is **explicit** (no point-class default). Band = the player's
+     * current band (an unrated player has nothing to tag → Validation); sex from the player. It is queued:
+     * the next [StandingsCalculationService][org.skopeo.service.standings.StandingsCalculationService]
+     * recompute sums it (a normal ACTIVE, in-window award), while the live points audit (#448) shows it now.
+     */
+    fun adjust(
+        token: VerifiedFirebaseToken,
+        command: AdjustRankingPointCommand,
+    ): Either<ServiceError, RankingPointAward> =
+        either {
+            val adminId = requireAdmin(token = token).bind()
+            // Signed: a positive value awards, a negative value deducts — but zero is a no-op → reject it.
+            ensure(condition = command.points.signum() != 0) {
+                ServiceError.Validation(message = "Points must not be zero")
+            }
+            // Decision #6 (#403): points are whole integers — stripTrailingZeros so 100.0000 / -50.0000 pass
+            // while a fractional adjustment (e.g. 100.5) is rejected. signum-independent, so it also covers −.
+            ensure(condition = command.points.stripTrailingZeros().scale() <= 0) {
+                ServiceError.Validation(message = "Points must be a whole number")
+            }
+            // A manual adjustment must always justify itself (the comment / rationale is mandatory, #469).
+            ensure(condition = command.reason.isNotBlank()) {
+                ServiceError.Validation(message = "A reason is required for a manual adjustment")
+            }
+            ensure(condition = command.validUntil.isAfter(command.validFrom)) {
+                ServiceError.Validation(message = "valid_until must be after valid_from")
+            }
+            val target =
+                users.findById(
+                    id = command.userId,
+                ).mapLeft { ServiceError.Validation(message = "Unknown user ${command.userId}") }.bind()
+            ensure(condition = target.isActive) { ServiceError.Validation(message = "User ${command.userId} is not active") }
+
+            // Band tagged from the player's current rating; an unrated player has nothing to tag → Validation.
+            val band =
+                ensureNotNull(value = currentBand(userId = command.userId)) {
+                    ServiceError.Validation(message = "User ${command.userId} has no rating; cannot band-tag the adjustment")
+                }
+
+            val award =
+                awards.award(
+                    write =
+                        RankingPointAwardWrite(
+                            userId = command.userId,
+                            points = command.points,
+                            // Ad-hoc, non-budgeted (decision #5): an EXTERNAL class + EXTERNAL source, no club/budget.
+                            pointClass = PointClass.EXTERNAL,
+                            sourceType = PointSourceType.EXTERNAL,
+                            sourceId = null,
+                            band = band,
+                            sex = target.sex ?: "Unspecified",
+                            reason = command.reason.trim(),
+                            validFrom = command.validFrom,
+                            validUntil = command.validUntil,
                             status = AwardStatus.ACTIVE,
                             revokesAwardId = null,
                             grantedBy = adminId,

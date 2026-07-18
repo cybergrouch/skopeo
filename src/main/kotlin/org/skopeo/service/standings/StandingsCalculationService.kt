@@ -147,7 +147,11 @@ class StandingsCalculationService(
             byUser.entries
                 .map { (userId, points) ->
                     val user = usersById.getValue(key = userId)
-                    Triple(first = user, second = points, third = ratingsById[userId]?.currentRating)
+                    // Floor the counted/displayed total at 0 (#469): a manual deduction can drive the net
+                    // negative, but a rank should never show below-zero points. The ledger stays truthful —
+                    // the signed entries are preserved; only this counted total is clamped.
+                    val counted = points.max(BigDecimal.ZERO)
+                    Triple(first = user, second = counted, third = ratingsById[userId]?.currentRating)
                 }.sortedWith(comparator = entryOrder())
                 .mapIndexed { index, (user, points, rating) ->
                     RankedEntry(

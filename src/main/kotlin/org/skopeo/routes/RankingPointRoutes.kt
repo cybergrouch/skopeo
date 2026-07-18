@@ -15,6 +15,7 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
+import org.skopeo.dto.ranking.AdjustRankingPointsRequest
 import org.skopeo.dto.ranking.GrantRankingPointsRequest
 import org.skopeo.dto.ranking.RevokeRankingPointsRequest
 import org.skopeo.dto.ranking.toResponse
@@ -31,6 +32,7 @@ fun Application.configureRankingPointRoutes(service: RankingPointService = Ranki
         authenticate(FIREBASE_AUTH) {
             route(path = "/api/v1/users/{userId}/ranking-points") {
                 grantAndListRankingPoints(service = service)
+                adjustRankingPoints(service = service)
             }
             route(path = "/api/v1/ranking-points") {
                 listAllRankingPoints(service = service)
@@ -71,6 +73,19 @@ private fun Route.grantAndListRankingPoints(service: RankingPointService) {
         respondMappingErrors {
             respondEither(result = service.listForUser(token = verifiedToken(), userId = uuidParam(name = "userId"))) { awards ->
                 call.respond(status = HttpStatusCode.OK, message = awards.map { it.toResponse() })
+            }
+        }
+    }
+}
+
+/** Manual signed point adjustment (#469): an admin awards (+) or deducts (−) points for a player. */
+private fun Route.adjustRankingPoints(service: RankingPointService) {
+    post(path = "/adjustments") {
+        respondMappingErrors {
+            val userId = uuidParam(name = "userId")
+            val command = call.receive<AdjustRankingPointsRequest>().toCommand(userId = userId)
+            respondEither(result = service.adjust(token = verifiedToken(), command = command)) { award ->
+                call.respond(status = HttpStatusCode.Created, message = award.toResponse())
             }
         }
     }

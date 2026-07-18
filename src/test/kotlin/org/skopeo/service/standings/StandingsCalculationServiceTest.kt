@@ -216,6 +216,18 @@ class StandingsCalculationServiceTest {
     }
 
     @Test
+    fun `a net-negative counted total is floored at 0 (#469)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val player = provision(uid = "player")
+        // A manual deduction outweighs the award → net −50, but the counted total must not go below 0.
+        grant(userId = player.id, points = "50")
+        grant(userId = player.id, points = "-100")
+
+        val entry = service.calculate(token = token(uid = "admin"), dryRun = true).shouldBeRight().groups.single().entries.single()
+        entry.points shouldBe BigDecimal.ZERO
+    }
+
+    @Test
     fun `ties on points are broken by rating then name`() {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val higherRated = provision(uid = "b-higher")
