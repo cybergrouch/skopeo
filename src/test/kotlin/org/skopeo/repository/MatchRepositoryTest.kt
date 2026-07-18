@@ -8,6 +8,7 @@ import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContain
+import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.maps.shouldBeEmpty
 import io.kotest.matchers.nulls.shouldBeNull
@@ -31,8 +32,9 @@ import org.skopeo.model.ServiceError
 import org.skopeo.model.TeamType
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
-import org.skopeo.model.WeightClassCounts
+import org.skopeo.model.WeightClass
 import org.skopeo.model.WinLossRecord
+import org.skopeo.model.WindowMatch
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -556,33 +558,38 @@ class MatchRepositoryTest {
     }
 
     @Test
-    fun `windowed weighted counts tally completed matches per weight class (#459)`() {
+    fun `windowed match rows carry each completed match's date and weight class (#459)`() {
         val asOf = LocalDateTime.of(2026, 6, 1, 12, 0)
         val today = asOf.toLocalDate()
         val player = newUser(uid = "wc-p")
         val opponent = newUser(uid = "wc-o")
 
-        // A mix of classes, all in-window: two tournament playoffs → tournament; a league round → league;
-        // open play → open play. (The enum's TOURNAMENT_INITIAL_ROUND name is unit-tested separately in
-        // RatingConfidenceTest; here it would exceed the pre-existing match_type VARCHAR(20).)
+        // A mix of classes on distinct dates, all in-window: two tournament playoffs → tournament; a
+        // league round → league; open play → open play. (TOURNAMENT_INITIAL_ROUND's name is unit-tested
+        // in RatingConfidenceTest; here it would exceed the pre-existing match_type VARCHAR(20).)
         completedMatch(u1 = player, u2 = opponent, matchDate = today, matchType = MatchType.TOURNAMENT_PLAYOFFS)
-        completedMatch(u1 = player, u2 = opponent, matchDate = today, matchType = MatchType.TOURNAMENT_PLAYOFFS)
-        completedMatch(u1 = player, u2 = opponent, matchDate = today, matchType = MatchType.LEAGUE_PLAY)
-        completedMatch(u1 = player, u2 = opponent, matchDate = today, matchType = MatchType.OPEN_PLAY)
+        completedMatch(u1 = player, u2 = opponent, matchDate = today.minusDays(3), matchType = MatchType.TOURNAMENT_PLAYOFFS)
+        completedMatch(u1 = player, u2 = opponent, matchDate = today.minusDays(7), matchType = MatchType.LEAGUE_PLAY)
+        completedMatch(u1 = player, u2 = opponent, matchDate = today.minusDays(10), matchType = MatchType.OPEN_PLAY)
 
-        matches.weightedMatchCountsInWindow(userId = player, asOf = asOf) shouldBe
-            WeightClassCounts(tournaments = 2, leagues = 1, openPlays = 1)
+        matches.windowedMatchesInWindow(userId = player, asOf = asOf) shouldContainExactlyInAnyOrder
+            listOf(
+                WindowMatch(matchDate = today, weightClass = WeightClass.TOURNAMENT),
+                WindowMatch(matchDate = today.minusDays(3), weightClass = WeightClass.TOURNAMENT),
+                WindowMatch(matchDate = today.minusDays(7), weightClass = WeightClass.LEAGUE),
+                WindowMatch(matchDate = today.minusDays(10), weightClass = WeightClass.OPEN_PLAY),
+            )
     }
 
     @Test
-    fun `windowed weighted counts only count completed, participant matches inside the window (#459)`() {
+    fun `windowed match rows only include completed, participant matches inside the window (#459)`() {
         val asOf = LocalDateTime.of(2026, 6, 1, 12, 0)
         val today = asOf.toLocalDate()
         val player = newUser(uid = "win-p")
         val opponent = newUser(uid = "win-o")
         val other = newUser(uid = "win-x")
 
-        // Just inside the 30-day window (exactly 30 days back) → counts.
+        // Just inside the 30-day window (exactly 30 days back) → included.
         completedMatch(u1 = player, u2 = opponent, matchDate = today.minusDays(30), matchType = MatchType.OPEN_PLAY)
         // Just outside (31 days back) → excluded.
         completedMatch(u1 = player, u2 = opponent, matchDate = today.minusDays(31), matchType = MatchType.OPEN_PLAY)
@@ -593,13 +600,14 @@ class MatchRepositoryTest {
         // A match the player didn't take part in → excluded.
         completedMatch(u1 = opponent, u2 = other, matchDate = today, matchType = MatchType.OPEN_PLAY)
 
-        matches.weightedMatchCountsInWindow(userId = player, asOf = asOf) shouldBe WeightClassCounts(openPlays = 1)
+        matches.windowedMatchesInWindow(userId = player, asOf = asOf) shouldContainExactlyInAnyOrder
+            listOf(element = WindowMatch(matchDate = today.minusDays(30), weightClass = WeightClass.OPEN_PLAY))
         // A player with no qualifying matches is absent from the batched map.
-        matches.weightedMatchCountsInWindow(userIds = listOf(element = newUser(uid = "none")), asOf = asOf).shouldBeEmpty()
+        matches.windowedMatchesInWindow(userIds = listOf(element = newUser(uid = "none")), asOf = asOf).shouldBeEmpty()
     }
 
     @Test
-    fun `windowed weighted counts count a player on either side, batched in one query (#459)`() {
+    fun `windowed match rows include a player on either side, batched in one query (#459)`() {
         val asOf = LocalDateTime.of(2026, 6, 1, 12, 0)
         val today = asOf.toLocalDate()
         val a = newUser(uid = "batch-a")
@@ -607,11 +615,16 @@ class MatchRepositoryTest {
 
         // a as team1, b as team2 (open play); then b as team1, a as team2 (tournament) — both sides count.
         completedMatch(u1 = a, u2 = b, matchDate = today, matchType = MatchType.OPEN_PLAY)
-        completedMatch(u1 = b, u2 = a, matchDate = today, matchType = MatchType.TOURNAMENT_PLAYOFFS)
+        completedMatch(u1 = b, u2 = a, matchDate = today.minusDays(2), matchType = MatchType.TOURNAMENT_PLAYOFFS)
 
-        val counts = matches.weightedMatchCountsInWindow(userIds = listOf(a, b), asOf = asOf)
-        counts[a] shouldBe WeightClassCounts(tournaments = 1, openPlays = 1)
-        counts[b] shouldBe WeightClassCounts(tournaments = 1, openPlays = 1)
+        val rows = matches.windowedMatchesInWindow(userIds = listOf(a, b), asOf = asOf)
+        val expected =
+            listOf(
+                WindowMatch(matchDate = today, weightClass = WeightClass.OPEN_PLAY),
+                WindowMatch(matchDate = today.minusDays(2), weightClass = WeightClass.TOURNAMENT),
+            )
+        rows[a] shouldContainExactlyInAnyOrder expected
+        rows[b] shouldContainExactlyInAnyOrder expected
     }
 
     @Test

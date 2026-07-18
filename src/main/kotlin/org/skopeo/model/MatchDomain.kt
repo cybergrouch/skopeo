@@ -11,15 +11,15 @@ import java.util.UUID
 enum class MatchStatus { SCHEDULED, IN_PROGRESS, COMPLETED, CANCELLED }
 
 /**
- * A player's COMPLETED matches in a confidence window (#459), split by competitive class — tournament,
- * league, and open play. These are the raw inputs to the sparsity + match-weight confidence in
- * [confidenceAt]: a higher-stakes class tells us more about true skill, so it is weighted more heavily
- * (see [MatchType.weightClass]). All-zero means no qualifying play in the window → confidence 0.
+ * One of a player's COMPLETED matches inside a confidence window (#459): the [matchDate] it was played
+ * and the competitive [weightClass] it counts toward. These rows are the raw inputs to the 3-factor
+ * recency × sparsity × spacing confidence in [confidenceAt]: the dates drive recency (freshness of the
+ * latest match) and spacing (the biggest hole *between* matches), while the weight classes drive the
+ * weighted density. An empty list means no qualifying play in the window → confidence 0.
  */
-data class WeightClassCounts(
-    val tournaments: Int = 0,
-    val leagues: Int = 0,
-    val openPlays: Int = 0,
+data class WindowMatch(
+    val matchDate: LocalDate,
+    val weightClass: WeightClass,
 )
 
 /** The confidence weight class a [MatchType] maps to (#459) — tournament, league, or open play. */

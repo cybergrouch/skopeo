@@ -20,7 +20,7 @@ import org.skopeo.model.RatingHistoryEntry
 import org.skopeo.model.RatingHistoryWrite
 import org.skopeo.model.SetCalculationBreakdown
 import org.skopeo.model.UserRating
-import org.skopeo.model.WeightClassCounts
+import org.skopeo.model.WindowMatch
 import org.skopeo.model.confidenceAt
 import java.math.BigDecimal
 import java.time.LocalDateTime
@@ -31,9 +31,9 @@ import java.util.UUID
  * are admin-set (no auto-seed); [setRating] upserts the row. History is read here and written
  * by the match flow.
  *
- * Confidence (#459) is computed on read from each user's windowed weight-class match counts, sourced
- * from [matches] — so every rating read that surfaces confidence first fetches the counts (batched for
- * the multi-user reads, one query for the whole page, never N+1).
+ * Confidence (#459) is computed on read from each user's windowed match rows (date + weight class),
+ * sourced from [matches] — so every rating read that surfaces confidence first fetches those rows
+ * (batched for the multi-user reads, one query for the whole page, never N+1).
  */
 class RatingRepository(
     private val matches: MatchRepository = MatchRepository(),
@@ -41,30 +41,36 @@ class RatingRepository(
     /** The user's ratings as a list (0 or 1) — the API surfaces a collection. */
     fun findByUser(userId: UUID): List<UserRating> =
         transaction {
-            val counts = matches.weightedMatchCountsInWindow(userId = userId, asOf = LocalDateTime.now())
+            val now = LocalDateTime.now()
+            val windowed = matches.windowedMatchesInWindow(userId = userId, asOf = now)
             UserRatingsTable
                 .selectAll()
                 .where { UserRatingsTable.userId eq userId }
-                .map { it.toUserRating(counts = counts) }
+                .map { it.toUserRating(windowed = windowed, now = now) }
         }
 
     fun findCurrentRating(userId: UUID): UserRating? =
         transaction {
+            val now = LocalDateTime.now()
             ratingRow(userId = userId)?.toUserRating(
-                counts = matches.weightedMatchCountsInWindow(userId = userId, asOf = LocalDateTime.now()),
+                windowed = matches.windowedMatchesInWindow(userId = userId, asOf = now),
+                now = now,
             )
         }
 
     /** Every user's current rating — backs the per-band standings (#113). Confidence counts are batched. */
     fun allCurrentRatings(): List<UserRating> =
         transaction {
+            val now = LocalDateTime.now()
             val rows = UserRatingsTable.selectAll().toList()
-            val countsByUser =
-                matches.weightedMatchCountsInWindow(
+            val windowedByUser =
+                matches.windowedMatchesInWindow(
                     userIds = rows.map { it[UserRatingsTable.userId].value },
-                    asOf = LocalDateTime.now(),
+                    asOf = now,
                 )
-            rows.map { it.toUserRating(counts = countsByUser[it[UserRatingsTable.userId].value] ?: WeightClassCounts()) }
+            rows.map {
+                it.toUserRating(windowed = windowedByUser[it[UserRatingsTable.userId].value].orEmpty(), now = now)
+            }
         }
 
     /** Current ratings for many users at once, keyed by user id; users without a rating are absent. */
@@ -73,13 +79,14 @@ class RatingRepository(
             if (userIds.isEmpty()) {
                 emptyMap()
             } else {
-                val countsByUser = matches.weightedMatchCountsInWindow(userIds = userIds, asOf = LocalDateTime.now())
+                val now = LocalDateTime.now()
+                val windowedByUser = matches.windowedMatchesInWindow(userIds = userIds, asOf = now)
                 UserRatingsTable
                     .selectAll()
                     .where { UserRatingsTable.userId inList userIds }
                     .associate { row ->
                         val uid = row[UserRatingsTable.userId].value
-                        uid to row.toUserRating(counts = countsByUser[uid] ?: WeightClassCounts())
+                        uid to row.toUserRating(windowed = windowedByUser[uid].orEmpty(), now = now)
                     }
             }
         }
@@ -112,8 +119,9 @@ class RatingRepository(
                     it[matchesSinceReset] = 0
                 }
             }
+            val now = LocalDateTime.now()
             val row = UserRatingsTable.selectAll().where { UserRatingsTable.userId eq userId }.single()
-            row.toUserRating(counts = matches.weightedMatchCountsInWindow(userId = userId, asOf = LocalDateTime.now()))
+            row.toUserRating(windowed = matches.windowedMatchesInWindow(userId = userId, asOf = now), now = now)
         }
 
     fun historyByUser(userId: UUID): List<RatingHistoryEntry> =
@@ -245,14 +253,17 @@ class RatingRepository(
             .singleOrNull()
 }
 
-internal fun ResultRow.toUserRating(counts: WeightClassCounts): UserRating =
+internal fun ResultRow.toUserRating(
+    windowed: List<WindowMatch>,
+    now: LocalDateTime,
+): UserRating =
     UserRating(
         userId = this[UserRatingsTable.userId].value,
         currentRating = this[UserRatingsTable.currentRating],
         currentLevel = this[UserRatingsTable.currentLevel],
-        // Computed on read (#459): sparsity of the player's weight-class match counts in the 30-day
-        // window; 0 when there is no qualifying play in the window.
-        confidence = confidenceAt(counts = counts),
+        // Computed on read (#459): 3-factor recency × sparsity × spacing over the player's windowed match
+        // rows in the last 30 days; 0 when there is no qualifying play in the window.
+        confidence = confidenceAt(matches = windowed, now = now),
         matchesPlayed = this[UserRatingsTable.matchesPlayed],
         lastMatchDate = this[UserRatingsTable.lastMatchDate],
         matchRatedAt = this[UserRatingsTable.matchRatedAt],
