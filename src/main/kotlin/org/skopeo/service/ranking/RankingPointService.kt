@@ -20,6 +20,9 @@ import org.skopeo.model.PointSourceType
 import org.skopeo.model.RankingPointAward
 import org.skopeo.model.RankingPointAwardWrite
 import org.skopeo.model.ServiceError
+import org.skopeo.model.displayName
+import org.skopeo.repository.EventRepository
+import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RankingPointRepository
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
@@ -28,6 +31,9 @@ import org.skopeo.service.user.VerifiedFirebaseToken
 import java.math.BigDecimal
 import java.time.LocalDateTime
 import java.util.UUID
+
+private const val DEFAULT_PAGE_SIZE = 25
+private const val MAX_PAGE_SIZE = 100
 
 /**
  * Admin-only management of the ranking-points ledger (#146, phase 1): grant, revoke, and list a
@@ -43,8 +49,31 @@ class RankingPointService(
     private val awards: RankingPointRepository = RankingPointRepository(),
     private val users: UserRepository = UserRepository(),
     private val ratings: RatingRepository = RatingRepository(),
+    private val matches: MatchRepository = MatchRepository(),
+    private val events: EventRepository = EventRepository(),
     private val audit: AuditService = AuditService(),
 ) {
+    /**
+     * One ledger row enriched for the Points Management list (#472): the raw [award] plus the player's
+     * display name + public code and the granting source's public code (match, else event; null for a
+     * manual / external grant). Names + codes are resolved once per page (batched), not per row.
+     */
+    data class ResolvedAward(
+        val award: RankingPointAward,
+        val playerDisplayName: String?,
+        val playerPublicCode: String?,
+        val matchPublicCode: String?,
+        val eventPublicCode: String?,
+    )
+
+    /** One page of the whole ledger (#472): the resolved rows plus the full total for the pager. */
+    data class AwardsPage(
+        val rows: List<ResolvedAward>,
+        val total: Int,
+        val limit: Int,
+        val offset: Int,
+    )
+
     /** Grant an award to a user. ADMINISTRATOR-only; band-tagged, sex from the target, policy validity. */
     fun grant(
         token: VerifiedFirebaseToken,
@@ -183,6 +212,40 @@ class RankingPointService(
             awards.listByUser(userId = userId)
         }
 
+    /**
+     * One page of the whole ledger (#472), newest-first, for the Points Management "Points awarded"
+     * list. Gated by [requirePointsManager] (POINTS_MANAGER or ADMINISTRATOR), matching the tab. Each
+     * row is enriched with the player's display name + public code and the granting source's public
+     * code (match, else event; null for a manual / external grant) — all lookups batched to avoid N+1.
+     */
+    fun listAwards(
+        token: VerifiedFirebaseToken,
+        limit: Int?,
+        offset: Int?,
+    ): Either<ServiceError, AwardsPage> =
+        either {
+            requirePointsManager(token = token).bind()
+            val pageSize = (limit ?: DEFAULT_PAGE_SIZE).coerceIn(minimumValue = 1, maximumValue = MAX_PAGE_SIZE)
+            val pageOffset = (offset ?: 0).coerceAtLeast(minimumValue = 0)
+            val (rows, total) = awards.listAwards(limit = pageSize, offset = pageOffset)
+
+            val usersById = users.findAllByIds(ids = rows.map { it.userId }).associateBy { it.id }
+            val matchRefs = matches.publicRefsByIds(ids = rows.mapNotNull { it.matchId })
+            val eventCodes = events.publicCodesByIds(ids = rows.mapNotNull { it.eventId })
+            val resolved =
+                rows.map { award ->
+                    val user = usersById[award.userId]
+                    ResolvedAward(
+                        award = award,
+                        playerDisplayName = user?.displayName(),
+                        playerPublicCode = user?.publicCode,
+                        matchPublicCode = award.matchId?.let { matchRefs[it]?.publicCode },
+                        eventPublicCode = award.eventId?.let { eventCodes[it] },
+                    )
+                }
+            AwardsPage(rows = resolved, total = total.toInt(), limit = pageSize, offset = pageOffset)
+        }
+
     /** The target's current NTRP band label (e.g. "4.0"), or null when they have no rating yet. */
     private fun currentBand(userId: UUID): String? {
         val rating = ratings.findCurrentRating(userId = userId) ?: return null
@@ -197,5 +260,17 @@ class RankingPointService(
         } else {
             caller.id.right()
         }
+    }
+
+    /**
+     * Points-manager access (#472): ADMINISTRATOR is implicitly a points manager, so the caller passes
+     * as an ADMINISTRATOR or a POINTS_MANAGER — matching the Points Management tab. Returns the caller's id.
+     */
+    private fun requirePointsManager(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+        val allowed =
+            caller != null &&
+                caller.capabilities.any { it == Capability.ADMINISTRATOR || it == Capability.POINTS_MANAGER }
+        return if (caller == null || !allowed) ServiceError.Forbidden().left() else caller.id.right()
     }
 }

@@ -3277,6 +3277,41 @@ paths:
         '404':
           description: No such user
 
+  /api/v1/ranking-points:
+    get:
+      summary: List all ranking-point awards, paginated (#472)
+      description: >-
+        The Points Management "Points awarded" list: one page of the whole ledger, newest-first by
+        awarded_at (including REVOKED markers). Gated to POINTS_MANAGER or ADMINISTRATOR (matching the
+        Points Management tab). Each row is enriched with the player's display name + public code and
+        the granting source's public code (match, else event; else "manual"/"EXTERNAL").
+      tags:
+        - Ranking Points
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: Page size (default 25, clamped to 1..100).
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          required: false
+          description: Zero-based row offset (default 0).
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: One page of awarded points
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AwardedPointsPageResponse'
+        '403':
+          description: Not a points manager or administrator
+
   /api/v1/ranking-points/{awardId}/revoke:
     post:
       summary: Revoke a ranking-point award (#146)
@@ -6671,3 +6706,95 @@ components:
           format: uuid
           nullable: true
           description: Event that produced this award on finalize (#403 Phase D); null for manual or external grants.
+
+    AwardedPointRow:
+      type: object
+      description: >-
+        One row of the Points Management "Points awarded" list (#472): the ledger row plus the resolved
+        player identity and the granting source. Points and timestamps are strings.
+      required:
+        - id
+        - userId
+        - points
+        - pointClass
+        - band
+        - sex
+        - sourceType
+        - source
+        - awardedAt
+        - validFrom
+        - validUntil
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        playerDisplayName:
+          type: string
+          nullable: true
+        playerPublicCode:
+          type: string
+          nullable: true
+        points:
+          type: string
+        pointClass:
+          type: string
+        band:
+          type: string
+        sex:
+          type: string
+        sourceType:
+          type: string
+        source:
+          type: string
+          description: The granting match/event public code if present, else "manual" (INTERNAL) or "EXTERNAL".
+        matchPublicCode:
+          type: string
+          nullable: true
+        eventPublicCode:
+          type: string
+          nullable: true
+        reason:
+          type: string
+          nullable: true
+        grantedBy:
+          type: string
+          format: uuid
+          nullable: true
+        awardedAt:
+          type: string
+          format: date-time
+        validFrom:
+          type: string
+          format: date-time
+        validUntil:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum:
+            - ACTIVE
+            - REVOKED
+
+    AwardedPointsPageResponse:
+      type: object
+      description: One page of the ranking-points ledger (#472) — rows plus the total for the pager.
+      required:
+        - rows
+        - total
+        - limit
+        - offset
+      properties:
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/AwardedPointRow'
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer

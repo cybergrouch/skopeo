@@ -54,6 +54,9 @@ class OpenAPIIntegrationTest {
             body shouldContain "/api/v1/standings/calculations"
             body shouldContain "StandingsCalculationResponse"
             body shouldContain "/ranking-points"
+            // The paginated list-all "Points awarded" list (#472): the paged response schema is documented.
+            body shouldContain "AwardedPointsPageResponse"
+            body shouldContain "AwardedPointRow"
             // Profile band+sex rank + points and the owner-or-admin points audit (#448).
             body shouldContain "/api/v1/players/{code}/standing"
             body shouldContain "PlayerStandingResponse"

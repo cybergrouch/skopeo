@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 import { PointsManagementSection } from "./PointsManagementSection";
 import { Capability } from "@/auth/capabilities";
 
@@ -9,12 +10,14 @@ const {
   useGetApiV1PointsPolicies,
   useGetApiV1PointsBudgets,
   useGetApiV1Clubs,
+  useGetApiV1RankingPoints,
   policyMutate,
   budgetMutate,
 } = vi.hoisted(() => ({
   useGetApiV1PointsPolicies: vi.fn(),
   useGetApiV1PointsBudgets: vi.fn(),
   useGetApiV1Clubs: vi.fn(),
+  useGetApiV1RankingPoints: vi.fn(),
   policyMutate: vi.fn(),
   budgetMutate: vi.fn(),
 }));
@@ -48,6 +51,10 @@ vi.mock("@/api/generated/clubs/clubs", () => ({
   useGetApiV1Clubs,
 }));
 
+vi.mock("@/api/generated/ranking-points/ranking-points", () => ({
+  useGetApiV1RankingPoints,
+}));
+
 // The embedded standings-calculation trigger (#447) is unit-tested in its own file; here we just
 // stub its hook so PointsManagementSection renders.
 vi.mock("@/api/generated/standings/standings", () => ({
@@ -57,9 +64,11 @@ vi.mock("@/api/generated/standings/standings", () => ({
 
 function renderSection() {
   return render(
-    <QueryClientProvider client={new QueryClient()}>
-      <PointsManagementSection capabilities={[Capability.ADMINISTRATOR]} />
-    </QueryClientProvider>,
+    <MemoryRouter>
+      <QueryClientProvider client={new QueryClient()}>
+        <PointsManagementSection capabilities={[Capability.ADMINISTRATOR]} />
+      </QueryClientProvider>
+    </MemoryRouter>,
   );
 }
 
@@ -92,7 +101,35 @@ describe("PointsManagementSection", () => {
     useGetApiV1Clubs.mockReturnValue({
       data: [{ id: "club-1", name: "Downtown TC" }],
     });
+    useGetApiV1RankingPoints.mockReturnValue({
+      data: { rows: [], total: 0, limit: 25, offset: 0 },
+      isLoading: false,
+    });
   });
+
+  function awardRow(overrides: Record<string, unknown> = {}) {
+    return {
+      id: "award-1",
+      userId: "user-1",
+      playerDisplayName: "Ada Lovelace",
+      playerPublicCode: "ADA123",
+      points: "240.0000",
+      pointClass: "ANNUAL_TOURNAMENT",
+      band: "4.0",
+      sex: "Female",
+      sourceType: "INTERNAL",
+      source: "manual",
+      matchPublicCode: null,
+      eventPublicCode: null,
+      reason: null,
+      grantedBy: "admin-1",
+      awardedAt: "2026-06-01T10:00:00",
+      validFrom: "2026-06-01T10:00:00",
+      validUntil: "2027-06-01T10:00:00",
+      status: "ACTIVE",
+      ...overrides,
+    };
+  }
 
   it("renders the policy row with editable fields", () => {
     renderSection();
@@ -158,5 +195,50 @@ describe("PointsManagementSection", () => {
     useGetApiV1PointsPolicies.mockReturnValue({ data: undefined, isLoading: true });
     renderSection();
     expect(screen.getAllByText("Loading…").length).toBeGreaterThan(0);
+  });
+
+  it("renders an awarded-points row with a player link, signed points and source", () => {
+    useGetApiV1RankingPoints.mockReturnValue({
+      data: { rows: [awardRow()], total: 1, limit: 25, offset: 0 },
+      isLoading: false,
+    });
+    renderSection();
+
+    expect(screen.getByText("Points awarded")).toBeInTheDocument();
+    const link = screen.getByRole("link", { name: "Ada Lovelace" });
+    expect(link).toHaveAttribute("href", "/players/ADA123");
+    // Points render as a signed integer via formatPoints.
+    expect(screen.getByText("+240")).toBeInTheDocument();
+    // A manual grant shows "manual" as its source.
+    expect(screen.getByText("manual")).toBeInTheDocument();
+    expect(screen.getByText("ACTIVE")).toBeInTheDocument();
+  });
+
+  it("paginates the awarded-points list, requesting the next offset", async () => {
+    const user = userEvent.setup();
+    // 30 total across 2 pages of 25.
+    useGetApiV1RankingPoints.mockReturnValue({
+      data: { rows: [awardRow()], total: 30, limit: 25, offset: 0 },
+      isLoading: false,
+    });
+    renderSection();
+
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    // The hook is re-called with the second page's offset (25).
+    expect(useGetApiV1RankingPoints).toHaveBeenLastCalledWith(
+      { limit: 25, offset: 25 },
+      expect.anything(),
+    );
+  });
+
+  it("hides the awarded-points card when the caller cannot manage points", () => {
+    render(
+      <MemoryRouter>
+        <QueryClientProvider client={new QueryClient()}>
+          <PointsManagementSection capabilities={[Capability.PLAYER]} />
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+    expect(screen.queryByText("Points awarded")).not.toBeInTheDocument();
   });
 });

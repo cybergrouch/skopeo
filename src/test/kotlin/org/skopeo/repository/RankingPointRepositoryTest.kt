@@ -57,6 +57,7 @@ class RankingPointRepositoryTest {
         validFrom: LocalDateTime = LocalDateTime.now(),
         validUntil: LocalDateTime = LocalDateTime.now().plusMonths(12),
         grantedBy: UUID? = null,
+        awardedAt: LocalDateTime = LocalDateTime.now(),
     ) = RankingPointAwardWrite(
         userId = userId,
         points = BigDecimal(points),
@@ -71,7 +72,7 @@ class RankingPointRepositoryTest {
         status = AwardStatus.ACTIVE,
         revokesAwardId = null,
         grantedBy = grantedBy,
-        awardedAt = LocalDateTime.now(),
+        awardedAt = awardedAt,
     )
 
     @Test
@@ -100,6 +101,27 @@ class RankingPointRepositoryTest {
 
         awards.listByUser(userId = user) shouldHaveSize 2
         awards.listByUser(userId = other).single().points shouldBe BigDecimal("99.0000")
+    }
+
+    @Test
+    fun `listAwards returns a newest-first page of all users' rows plus the full total (#472)`() {
+        val user = newUser(uid = "p1")
+        val other = newUser(uid = "p2")
+        val base = LocalDateTime.of(2026, 6, 1, 0, 0)
+
+        // Three rows across two users, awarded at increasing times → newest-first is c, b, a.
+        val a = awards.award(write = write(userId = user, points = "10", awardedAt = base))
+        val b = awards.award(write = write(userId = other, points = "20", awardedAt = base.plusHours(1)))
+        val c = awards.award(write = write(userId = user, points = "30", awardedAt = base.plusHours(2)))
+
+        val (rows, total) = awards.listAwards(limit = 25, offset = 0)
+        total shouldBe 3L
+        rows.map { it.id } shouldContainExactly listOf(c.id, b.id, a.id)
+
+        // The page window (limit/offset) trims to the middle row while total stays the full count.
+        val (windowed, windowTotal) = awards.listAwards(limit = 1, offset = 1)
+        windowTotal shouldBe 3L
+        windowed.map { it.id } shouldContainExactly listOf(element = b.id)
     }
 
     @Test

@@ -85,6 +85,26 @@ class RankingPointRepository {
             RankingPointAwardsTable.selectAll().where { RankingPointAwardsTable.id eq markerId }.single().toRankingPointAward()
         }
 
+    /**
+     * One page of the whole ledger (#472), newest-first by `awarded_at`, plus the total row count.
+     * Backs the Points Management "Points awarded" list; includes REVOKED markers so the full trail
+     * shows. One count query + one windowed select.
+     */
+    fun listAwards(
+        limit: Int,
+        offset: Int,
+    ): Pair<List<RankingPointAward>, Long> =
+        transaction {
+            val total = RankingPointAwardsTable.selectAll().count()
+            val rows =
+                RankingPointAwardsTable
+                    .selectAll()
+                    .orderBy(RankingPointAwardsTable.awardedAt to SortOrder.DESC)
+                    .limit(n = limit, offset = offset.toLong())
+                    .map { it.toRankingPointAward() }
+            rows to total
+        }
+
     /** Every ledger row for [userId], newest first (awarded_at). Includes REVOKED markers for the trail. */
     fun listByUser(userId: UUID): List<RankingPointAward> =
         transaction {
