@@ -147,26 +147,31 @@ private fun Route.renameEvent(service: EventService) {
             ) { event -> call.respond(status = HttpStatusCode.OK, message = event.toResponse()) }
         }
     }
-    // Set a budgeted event's points config (#403 Phase C): per-match reward window + validity window.
+    // Set (all four fields) or clear (all omitted) an event's points config (#466 opt-in checkbox). A
+    // partial body — some but not all fields — is a 400, so a half-filled config is never silently dropped.
     put(path = "/{id}/points-config") {
         respondMappingErrors {
             val body = call.receive<SetPointsConfigRequest>()
-            require(value = body.minPointsPerMatch > 0 && body.maxPointsPerMatch > 0) {
-                "minPointsPerMatch and maxPointsPerMatch must be positive integers"
-            }
+            val supplied =
+                listOfNotNull(body.minPointsPerMatch, body.maxPointsPerMatch, body.pointValidityStart, body.pointValidityEnd)
+            val config =
+                if (supplied.isEmpty()) {
+                    null
+                } else {
+                    val min = requireNotNull(value = body.minPointsPerMatch) { "minPointsPerMatch is required to award points" }
+                    val max = requireNotNull(value = body.maxPointsPerMatch) { "maxPointsPerMatch is required to award points" }
+                    val start = requireNotNull(value = body.pointValidityStart) { "pointValidityStart is required to award points" }
+                    val end = requireNotNull(value = body.pointValidityEnd) { "pointValidityEnd is required to award points" }
+                    require(value = min > 0 && max > 0) { "minPointsPerMatch and maxPointsPerMatch must be positive integers" }
+                    PointsConfigInput(
+                        minPoints = min,
+                        maxPoints = max,
+                        validityStart = parseEventDate(value = start, field = "pointValidityStart"),
+                        validityEnd = parseEventDate(value = end, field = "pointValidityEnd"),
+                    )
+                }
             respondEither(
-                result =
-                    service.setPointsConfig(
-                        token = verifiedToken(),
-                        id = uuidParam(name = "id"),
-                        config =
-                            PointsConfigInput(
-                                minPoints = body.minPointsPerMatch,
-                                maxPoints = body.maxPointsPerMatch,
-                                validityStart = parseEventDate(value = body.pointValidityStart, field = "pointValidityStart"),
-                                validityEnd = parseEventDate(value = body.pointValidityEnd, field = "pointValidityEnd"),
-                            ),
-                    ),
+                result = service.setPointsConfig(token = verifiedToken(), id = uuidParam(name = "id"), config = config),
             ) { event -> call.respond(status = HttpStatusCode.OK, message = event.toResponse()) }
         }
     }

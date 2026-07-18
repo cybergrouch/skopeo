@@ -30,15 +30,17 @@ data class CreateEventRequest(
 )
 
 /**
- * Body for `PUT /api/v1/events/{id}/points-config` — set a budgeted event's per-match reward window
- * and point validity window (#403 Phase C). Validity dates are ISO-8601 (yyyy-MM-dd).
+ * Body for `PUT /api/v1/events/{id}/points-config` — set (or clear) an event's per-match reward
+ * window and point validity window (#466 opt-in "award points" checkbox). All four fields present →
+ * the event awards points; all four omitted/null → the config is cleared (the event awards no points,
+ * cascading to its fixtures). A partial body is rejected. Validity dates are ISO-8601 (yyyy-MM-dd).
  */
 @Serializable
 data class SetPointsConfigRequest(
-    val minPointsPerMatch: Int,
-    val maxPointsPerMatch: Int,
-    val pointValidityStart: String,
-    val pointValidityEnd: String,
+    val minPointsPerMatch: Int? = null,
+    val maxPointsPerMatch: Int? = null,
+    val pointValidityStart: String? = null,
+    val pointValidityEnd: String? = null,
 )
 
 /**

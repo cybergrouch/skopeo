@@ -39,16 +39,6 @@ const EVENT_TYPE_OPTIONS: ReadonlyArray<{ value: EventType; label: string }> = [
 ];
 
 /**
- * Event types that carry a points budget/config. Every event class now rewards points (OPEN_PLAY was
- * unified with TOURNAMENT/LEAGUE); config applies whenever the event has a club (#403 Phase C).
- */
-const BUDGETED_EVENT_TYPES: ReadonlyArray<EventType> = [
-  "TOURNAMENT",
-  "LEAGUE",
-  "OPEN_PLAY",
-];
-
-/**
  * The single club a CLUB_OWNER should default the create-event Club selector to (#364), or "" when
  * there is no unambiguous default: own exactly one club → that club's id; own multiple → "" (don't
  * guess); own zero, or not a CLUB_OWNER → "". Non-owners are unaffected.
@@ -80,8 +70,10 @@ function NewEventForm() {
   // The event's class (#403); OPEN_PLAY is the default and the backward-compatible choice.
   const [type, setType] = useState<EventType>("OPEN_PLAY");
   const [error, setError] = useState<string | null>(null);
-  // Points config (#429): a budgeted event (TOURNAMENT/LEAGUE) with a club captures its per-match
-  // reward window + validity window up front. Kept as strings so the inputs can be cleared while typing.
+  // "Award ranking points" checkbox (#466): opt-in, default UNCHECKED → the event awards no points and
+  // the config fields are hidden. Ticking it reveals + requires the per-match reward + validity window.
+  const [awardPoints, setAwardPoints] = useState(false);
+  // Points config (#466): kept as strings so the inputs can be cleared while typing.
   const [minPoints, setMinPoints] = useState("");
   const [maxPoints, setMaxPoints] = useState("");
   const [validityStart, setValidityStart] = useState("");
@@ -112,6 +104,7 @@ function NewEventForm() {
         setClubIdChoice(undefined);
         setRoster([]);
         setType("OPEN_PLAY");
+        setAwardPoints(false);
         setMinPoints("");
         setMaxPoints("");
         setValidityStart("");
@@ -123,11 +116,9 @@ function NewEventForm() {
     },
   });
 
-  // Points config applies only to a budgeted event (TOURNAMENT/LEAGUE) filed under a club — the budget
-  // source — mirroring the fixture rule "no club → no points" (#429). OPEN_PLAY or clubless hides it;
-  // a clubless budgeted event can still capture its config later via the event's points-config editor.
-  const isBudgeted = BUDGETED_EVENT_TYPES.includes(type);
-  const showPointsConfig = isBudgeted && clubId !== "";
+  // Points are opt-in via the "Award ranking points" checkbox (#466), for any event type/club. When
+  // ticked the config fields appear + are required and validated against the global per-type policy.
+  const showPointsConfig = awardPoints;
   const globalPolicy = policies?.find((p) => p.eventType === type);
 
   // Client-side validation of the points window against the global policy (#429), mirroring the
@@ -188,7 +179,7 @@ function NewEventForm() {
           type,
           participantIds: roster.map((u) => u.id),
           ...(clubId ? { clubId } : {}),
-          // Only send a points config for a budgeted event with a club (#429); otherwise it's deferred.
+          // Only send a points config when "Award ranking points" is ticked (#466); off = no points.
           ...(showPointsConfig
             ? {
                 minPointsPerMatch: Number(minPoints),
@@ -294,8 +285,18 @@ function NewEventForm() {
               </select>
             </div>
           ) : null}
-          {/* Points config (#429): budgeted event (TOURNAMENT/LEAGUE) filed under a club. Hidden for
-              OPEN_PLAY or a clubless event, where no budget applies (settable later once a club is set). */}
+          {/* "Award ranking points" checkbox (#466): opt-in, default off. Ticking reveals + requires
+              the points config below, validated against the global per-type policy. */}
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={awardPoints}
+              onChange={(e) => setAwardPoints(e.target.checked)}
+              aria-label="Award ranking points"
+            />
+            Award ranking points
+          </label>
+          {/* Points config (#466): shown only when the "Award ranking points" checkbox is ticked. */}
           {showPointsConfig ? (
             <div className="grid gap-3 rounded-md border border-input p-3">
               <p className="text-xs font-medium uppercase text-muted-foreground">

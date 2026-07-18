@@ -132,6 +132,35 @@ class MatchRepository {
         }
 
     /**
+     * Set (or clear, when null) a fixture's designated points (#466). The service has already validated
+     * the amount against the event's window + budget; a missing id is a harmless no-op returning absent.
+     */
+    fun setDesignatedPoints(
+        matchId: UUID,
+        designatedPoints: Int?,
+    ): Either<ServiceError, Match> =
+        transaction {
+            val updated =
+                MatchesTable.update(where = { MatchesTable.id eq matchId }) {
+                    it[MatchesTable.designatedPoints] = designatedPoints
+                }
+            if (updated == 0) {
+                ServiceError.NotFound(message = "Match $matchId not found").left()
+            } else {
+                loadMatchOrThrow(id = matchId).right()
+            }
+        }
+
+    /**
+     * Clear the designated points of every fixture in an event (#466), releasing their reservations. Used
+     * when an event's points config is un-ticked so no match awards points. Returns the number updated.
+     */
+    fun clearDesignationsForEvent(eventId: UUID): Int =
+        transaction {
+            MatchesTable.update(where = { MatchesTable.eventId eq eventId }) { it[designatedPoints] = null }
+        }
+
+    /**
      * Set the manual calculation-order tiebreaker (#331/#332): assign calc_sequence = 0,1,2,… to
      * [matchIds] in the given order, in one transaction. The service validates the set first.
      */

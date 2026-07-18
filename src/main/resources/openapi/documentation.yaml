@@ -1672,6 +1672,48 @@ paths:
         '409':
           description: Cannot disable a match that has already been rated
 
+  /api/v1/matches/{id}/designation:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    put:
+      summary: Set or clear a fixture's designated points (HOST/ADMINISTRATOR)
+      description: >-
+        Set (or clear) a fixture's designated points via the opt-in "award points for this match"
+        checkbox (#466). A positive integer within the event's [min, max] awards; a null/omitted value
+        clears the designation so the match awards no points (reservation released). Only allowed on an
+        evented, unrated fixture whose event awards points; validated against the event's window only
+        (never the global policy) plus the cumulative club-budget reserve check.
+      tags:
+        - Matches
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetDesignationRequest'
+      responses:
+        '200':
+          description: Updated match
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchResponse'
+        '400':
+          description: Amount outside the event window, over budget, or the event awards no points
+        '403':
+          description: Caller is not HOST/ADMINISTRATOR
+        '404':
+          description: No such match or event
+        '409':
+          description: The match is disabled or already rated
+
   /api/v1/events:
     get:
       summary: List events (HOST/ADMINISTRATOR)
@@ -4735,6 +4777,12 @@ components:
             Points designated for the winner (#403 Phase C), for a fixture on an event that has a points
             config (any type with a club; OPEN_PLAY unified). Omit on such an event to default to
             round(avg(event min, event max)); ignored for a config-less or event-less fixture.
+        awardPoints:
+          type: boolean
+          nullable: true
+          description: >-
+            The "award points for this match" checkbox (#466). Default (omitted/true) → the fixture awards
+            points on a points-awarding event. Explicit false → the match opts out (no designation, no award).
 
     SetScoreRequest:
       type: object
@@ -4939,46 +4987,61 @@ components:
           type: integer
           nullable: true
           description: >-
-            Min per-match reward (#403 Phase C). Required (with all four points fields) for an event of any type
-            that has a club (OPEN_PLAY unified); a clubless event may omit them and set the config later (#429).
+            Min per-match reward (#466). Points are opt-in for every event type/club: supply all four points
+            fields to award points (validated against the global policy), or omit them all for no points.
         maxPointsPerMatch:
           type: integer
           nullable: true
           description: >-
-            Max per-match reward (#403 Phase C). Required (with all four points fields) for an event of any type
-            that has a club (OPEN_PLAY unified); a clubless event may omit them and set the config later (#429).
+            Max per-match reward (#466). Points are opt-in for every event type/club: supply all four points
+            fields to award points (validated against the global policy), or omit them all for no points.
         pointValidityStart:
           type: string
           format: date
           nullable: true
-          description: First day an awarded point is valid (#403 Phase C); required for a budgeted-type event that has a club (#429).
+          description: First day an awarded point is valid (#466); supplied with all four points fields when awarding points.
         pointValidityEnd:
           type: string
           format: date
           nullable: true
-          description: Last day an awarded point is valid (#403 Phase C); required for a budgeted-type event that has a club (#429).
+          description: Last day an awarded point is valid (#466); supplied with all four points fields when awarding points.
 
     SetPointsConfigRequest:
       type: object
-      description: Set a budgeted event's per-match reward window and point validity window (#403 Phase C).
-      required:
-        - minPointsPerMatch
-        - maxPointsPerMatch
-        - pointValidityStart
-        - pointValidityEnd
+      description: >-
+        Set or clear an event's per-match reward window + point validity window (#466 opt-in "award
+        points" checkbox). All four fields present → the event awards points; all four omitted/null →
+        the config is cleared (the event awards no points, cascading to null out its fixtures'
+        designations). A partial body is rejected.
       properties:
         minPointsPerMatch:
           type: integer
-          description: Min per-match reward; validated against the global per-type policy.
+          nullable: true
+          description: Min per-match reward; validated against the global per-type policy. Omit (with the others) to clear.
         maxPointsPerMatch:
           type: integer
-          description: Max per-match reward; validated against the global per-type policy.
+          nullable: true
+          description: Max per-match reward; validated against the global per-type policy. Omit (with the others) to clear.
         pointValidityStart:
           type: string
           format: date
+          nullable: true
         pointValidityEnd:
           type: string
           format: date
+          nullable: true
+
+    SetDesignationRequest:
+      type: object
+      description: >-
+        Set or clear a fixture's designated points (#466 opt-in "award points for this match"
+        checkbox). A positive integer within the event's [min, max] awards; null/omitted clears the
+        designation so the match awards no points.
+      properties:
+        designatedPoints:
+          type: integer
+          nullable: true
+          description: Points designated for the winner; within the event's [min, max]. Omit/null to clear (no award).
 
     UpdateEventRequest:
       type: object

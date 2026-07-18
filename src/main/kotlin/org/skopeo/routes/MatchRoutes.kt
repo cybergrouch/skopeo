@@ -20,6 +20,7 @@ import org.skopeo.dto.match.CreateFixtureRequest
 import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.dto.match.MatchStateRequest
 import org.skopeo.dto.match.ReorderMatchesRequest
+import org.skopeo.dto.match.SetDesignationRequest
 import org.skopeo.dto.match.toResponse
 import org.skopeo.dto.rating.toResponse
 import org.skopeo.model.MatchQuery
@@ -113,6 +114,7 @@ private fun toFixtureInput(request: CreateFixtureRequest): FixtureInput {
         tournamentName = request.tournamentName,
         eventId = request.eventId?.let { parseUuid(value = it, field = "event id") },
         designatedPoints = request.designatedPoints,
+        awardPoints = request.awardPoints,
     )
 }
 
@@ -187,6 +189,21 @@ private fun Route.byId(service: MatchService) {
             val request = call.receive<MatchStateRequest>()
             respondEither(
                 result = service.setActive(token = verifiedToken(), matchId = uuidParam(name = "id"), active = request.isActive),
+            ) { match -> call.respond(status = HttpStatusCode.OK, message = match.toResponse()) }
+        }
+    }
+    // Set (or clear) a fixture's designated points (#466 opt-in "award points for this match" checkbox).
+    put(path = "/{id}/designation") {
+        respondMappingErrors {
+            val request = call.receive<SetDesignationRequest>()
+            request.designatedPoints?.let { require(value = it > 0) { "designatedPoints must be a positive integer" } }
+            respondEither(
+                result =
+                    service.setDesignation(
+                        token = verifiedToken(),
+                        matchId = uuidParam(name = "id"),
+                        designatedPoints = request.designatedPoints,
+                    ),
             ) { match -> call.respond(status = HttpStatusCode.OK, message = match.toResponse()) }
         }
     }

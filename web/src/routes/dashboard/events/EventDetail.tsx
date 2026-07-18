@@ -79,12 +79,6 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
   TOURNAMENT: "Tournament",
 };
 
-/**
- * Event types that carry a points budget/designation. Every event class now rewards points (OPEN_PLAY
- * was unified with TOURNAMENT/LEAGUE); designation applies whenever the event has a club (#403 Phase C).
- */
-const BUDGETED_EVENT_TYPES = ["TOURNAMENT", "LEAGUE", "OPEN_PLAY"];
-
 const MATCH_FORMATS = ["SINGLES", "DOUBLES", "MIXED_DOUBLES"] as const;
 const MATCH_FORMAT_LABELS: Record<(typeof MATCH_FORMATS)[number], string> = {
   SINGLES: "Singles",
@@ -167,8 +161,13 @@ export function EventDetail({
     null,
   );
   const [pointsConfigSaved, setPointsConfigSaved] = useState(false);
+  // "Award ranking points" checkbox (#466): opt-in, seeded from whether the event already has a config.
+  // Ticked → the config fields show + save; un-ticked → saving clears the config (event awards no points).
+  const [awardPointsDraft, setAwardPointsDraft] = useState(false);
   // Designated points for a new fixture (#403 Phase C); blank means "use the server default".
   const [designatedDraft, setDesignatedDraft] = useState("");
+  // "Award points for this match" checkbox (#466): opt-in per fixture, default CHECKED on a points event.
+  const [awardFixturePoints, setAwardFixturePoints] = useState(true);
 
   // Seed the editor drafts from the event's persisted config (#440). Without this the inputs stay
   // empty and only *show* the current values as placeholders, so saving an edit that keeps a field
@@ -194,6 +193,8 @@ export function EventDetail({
     );
     setValidityStartDraft(event.pointValidityStart ?? "");
     setValidityEndDraft(event.pointValidityEnd ?? "");
+    // Seed the "award points" checkbox from whether the event already carries a config (#466).
+    setAwardPointsDraft(event.minPointsPerMatch != null);
   }
 
   // Clubs to (re)assign the event to (#319); staff-readable, empty when none exist.
@@ -289,6 +290,18 @@ export function EventDetail({
     e.preventDefault();
     setPointsConfigError(null);
     setPointsConfigSaved(false);
+    // "Award ranking points" un-ticked (#466): clear the config (empty body). The server nulls the
+    // config and cascades to release its fixtures' designations.
+    if (!awardPointsDraft) {
+      try {
+        await setPointsConfig.mutateAsync({ id: eventId, data: {} });
+      } catch (err) {
+        setPointsConfigError(
+          eventErrorMessage(err, "Could not clear the points config."),
+        );
+      }
+      return;
+    }
     const min = Number(minDraft);
     const max = Number(maxDraft);
     if (!Number.isInteger(min) || !Number.isInteger(max) || min <= 0 || max <= 0) {
@@ -387,20 +400,14 @@ export function EventDetail({
     ? [team1a, team1b, team2a, team2b]
     : [team1a, team2a];
 
-  // Points designation (#403 Phase C) applies to any event class with a club and a configured reward
-  // window (OPEN_PLAY unified with TOURNAMENT/LEAGUE). The global policy bounds back the helper text.
-  const isBudgetedType = !!event && BUDGETED_EVENT_TYPES.includes(event.type);
-  // The points-config editor is shown only for a budgeted event that has a club — the budget source
-  // (#429), mirroring "no club → no points". Assigning a club later reveals the editor.
-  const isBudgeted = isBudgetedType && event?.clubId != null;
+  // Points are opt-in via the event's "Award ranking points" checkbox (#466), for any event type/club.
+  // The points-config editor is shown for every (non-deleted) event; the global policy bounds the hint.
   const globalPolicy = policies?.find((p) => p.eventType === event?.type);
+  // The event awards points when it carries a config (min/max set). A fixture may then designate points.
   const hasPointsConfig =
-    isBudgeted &&
-    event?.minPointsPerMatch != null &&
-    event?.maxPointsPerMatch != null;
-  // A fixture designates points only for a budgeted event that has a config AND a club (the budget
-  // source). A clubless budgeted event records a designation but skips the budget check server-side; we
-  // still show the input so the organizer can set it.
+    event?.minPointsPerMatch != null && event?.maxPointsPerMatch != null;
+  // A fixture designates points only when the event awards points (has a config); each fixture may still
+  // opt out via its own "Award points for this match" checkbox (#466).
   const showDesignation = hasPointsConfig;
   const min = event?.minPointsPerMatch ?? 0;
   const max = event?.maxPointsPerMatch ?? 0;
@@ -416,10 +423,12 @@ export function EventDetail({
         (b) => b.clubId === event.clubId && b.eventType === event.type,
       )
     : undefined;
+  // The designation input applies only when the event awards points AND this fixture opts in (#466).
+  const showDesignationInput = showDesignation && awardFixturePoints;
   const designationOutOfRange =
-    showDesignation && (designatedValue < min || designatedValue > max);
+    showDesignationInput && (designatedValue < min || designatedValue > max);
   const designationOverBudget =
-    showDesignation &&
+    showDesignationInput &&
     clubBudget != null &&
     designatedValue * teamSize > clubBudget.free;
 
@@ -435,10 +444,13 @@ export function EventDetail({
           team1: isDoubles ? [team1a, team1b] : [team1a],
           team2: isDoubles ? [team2a, team2b] : [team2a],
           eventId,
-          // Only send a designation for a budgeted event; let the server default it when left blank.
-          ...(showDesignation && designatedDraft !== ""
-            ? { designatedPoints: Number(designatedDraft) }
-            : {}),
+          // The "award points for this match" checkbox (#466): opted out → awardPoints:false (no points).
+          // Opted in → send the designation when set, else let the server default it.
+          ...(showDesignation && !awardFixturePoints
+            ? { awardPoints: false }
+            : showDesignationInput && designatedDraft !== ""
+              ? { designatedPoints: Number(designatedDraft) }
+              : {}),
         },
       },
       {
@@ -580,7 +592,7 @@ export function EventDetail({
                 </div>
               )}
               <CardDescription>
-                {EVENT_TYPE_LABELS[event.type] ?? event.type}
+                {EVENT_TYPE_LABELS[event.type]}
                 {" · "}
                 {event.startDate} – {event.endDate} · Event ID:{" "}
                 <code className="font-mono font-medium text-foreground">
@@ -700,143 +712,157 @@ export function EventDetail({
             </CardContent>
           </Card>
 
-          {/* Points config (#403 Phase C): only budgeted-type events (TOURNAMENT/LEAGUE) carry one. */}
-          {isBudgeted ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Points config</CardTitle>
-                <CardDescription>
-                  The per-match reward window a fixture may designate within, and
-                  how long an awarded point stays valid.
-                  {globalPolicy ? (
-                    <>
-                      {" "}
-                      The global {EVENT_TYPE_LABELS[event.type] ??
-                        event.type}{" "}
-                      policy allows {globalPolicy.minPoints}–
-                      {globalPolicy.maxPoints} points and up to{" "}
-                      {globalPolicy.maxValidityDays} validity days.
-                    </>
+          {/* Points config (#466): opt-in "Award ranking points" checkbox on every event. */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Points config</CardTitle>
+              <CardDescription>
+                The per-match reward window a fixture may designate within, and
+                how long an awarded point stays valid.
+                {globalPolicy ? (
+                  <>
+                    {" "}
+                    The global {EVENT_TYPE_LABELS[event.type]} policy allows{" "}
+                    {globalPolicy.minPoints}–
+                    {globalPolicy.maxPoints} points and up to{" "}
+                    {globalPolicy.maxValidityDays} validity days.
+                  </>
+                ) : null}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {hasPointsConfig ? (
+                <p className="text-sm" data-testid="points-config-summary">
+                  Currently {event.minPointsPerMatch}–
+                  {event.maxPointsPerMatch} points, valid{" "}
+                  {event.pointValidityStart} – {event.pointValidityEnd}.
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  This event awards no points.
+                </p>
+              )}
+              {locked ? null : (
+                <form onSubmit={savePointsConfig} className="grid gap-3">
+                  {/* Opt-in checkbox (#466): un-ticking clears the config (and its fixtures' points). */}
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={awardPointsDraft}
+                      onChange={(e) => {
+                        setAwardPointsDraft(e.target.checked);
+                        setPointsConfigSaved(false);
+                      }}
+                      aria-label="Award ranking points"
+                    />
+                    Award ranking points
+                  </label>
+                  {awardPointsDraft ? (
+                  <>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label htmlFor="points-min" className="text-xs">
+                        Min points
+                      </Label>
+                      <Input
+                        id="points-min"
+                        type="number"
+                        value={minDraft}
+                        placeholder={
+                          event.minPointsPerMatch != null
+                            ? String(event.minPointsPerMatch)
+                            : globalPolicy
+                              ? String(globalPolicy.minPoints)
+                              : ""
+                        }
+                        onChange={(e) => {
+                          setMinDraft(e.target.value);
+                          setPointsConfigSaved(false);
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="points-max" className="text-xs">
+                        Max points
+                      </Label>
+                      <Input
+                        id="points-max"
+                        type="number"
+                        value={maxDraft}
+                        placeholder={
+                          event.maxPointsPerMatch != null
+                            ? String(event.maxPointsPerMatch)
+                            : globalPolicy
+                              ? String(globalPolicy.maxPoints)
+                              : ""
+                        }
+                        onChange={(e) => {
+                          setMaxDraft(e.target.value);
+                          setPointsConfigSaved(false);
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label htmlFor="points-valid-from" className="text-xs">
+                        Validity start
+                      </Label>
+                      <Input
+                        id="points-valid-from"
+                        type="date"
+                        value={validityStartDraft}
+                        onChange={(e) => {
+                          setValidityStartDraft(e.target.value);
+                          setPointsConfigSaved(false);
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="points-valid-to" className="text-xs">
+                        Validity end
+                      </Label>
+                      <Input
+                        id="points-valid-to"
+                        type="date"
+                        value={validityEndDraft}
+                        onChange={(e) => {
+                          setValidityEndDraft(e.target.value);
+                          setPointsConfigSaved(false);
+                        }}
+                      />
+                    </div>
+                  </div>
+                  </>
                   ) : null}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {hasPointsConfig ? (
-                  <p className="text-sm" data-testid="points-config-summary">
-                    Currently {event.minPointsPerMatch}–
-                    {event.maxPointsPerMatch} points, valid{" "}
-                    {event.pointValidityStart} – {event.pointValidityEnd}.
-                  </p>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    No points config set yet.
-                  </p>
-                )}
-                {locked ? null : (
-                  <form onSubmit={savePointsConfig} className="grid gap-3">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1">
-                        <Label htmlFor="points-min" className="text-xs">
-                          Min points
-                        </Label>
-                        <Input
-                          id="points-min"
-                          type="number"
-                          value={minDraft}
-                          placeholder={
-                            event.minPointsPerMatch != null
-                              ? String(event.minPointsPerMatch)
-                              : globalPolicy
-                                ? String(globalPolicy.minPoints)
-                                : ""
-                          }
-                          onChange={(e) => {
-                            setMinDraft(e.target.value);
-                            setPointsConfigSaved(false);
-                          }}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="points-max" className="text-xs">
-                          Max points
-                        </Label>
-                        <Input
-                          id="points-max"
-                          type="number"
-                          value={maxDraft}
-                          placeholder={
-                            event.maxPointsPerMatch != null
-                              ? String(event.maxPointsPerMatch)
-                              : globalPolicy
-                                ? String(globalPolicy.maxPoints)
-                                : ""
-                          }
-                          onChange={(e) => {
-                            setMaxDraft(e.target.value);
-                            setPointsConfigSaved(false);
-                          }}
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1">
-                        <Label htmlFor="points-valid-from" className="text-xs">
-                          Validity start
-                        </Label>
-                        <Input
-                          id="points-valid-from"
-                          type="date"
-                          value={validityStartDraft}
-                          onChange={(e) => {
-                            setValidityStartDraft(e.target.value);
-                            setPointsConfigSaved(false);
-                          }}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="points-valid-to" className="text-xs">
-                          Validity end
-                        </Label>
-                        <Input
-                          id="points-valid-to"
-                          type="date"
-                          value={validityEndDraft}
-                          onChange={(e) => {
-                            setValidityEndDraft(e.target.value);
-                            setPointsConfigSaved(false);
-                          }}
-                        />
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        type="submit"
-                        size="sm"
-                        disabled={setPointsConfig.isPending}
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="submit"
+                      size="sm"
+                      disabled={setPointsConfig.isPending}
+                    >
+                      {setPointsConfig.isPending
+                        ? "Saving…"
+                        : "Save points config"}
+                    </Button>
+                    {pointsConfigSaved ? (
+                      <span
+                        className="text-xs text-muted-foreground"
+                        role="status"
                       >
-                        {setPointsConfig.isPending
-                          ? "Saving…"
-                          : "Save points config"}
-                      </Button>
-                      {pointsConfigSaved ? (
-                        <span
-                          className="text-xs text-muted-foreground"
-                          role="status"
-                        >
-                          Saved
-                        </span>
-                      ) : null}
-                    </div>
-                    {pointsConfigError ? (
-                      <p className="text-sm text-destructive" role="alert">
-                        {pointsConfigError}
-                      </p>
+                        Saved
+                      </span>
                     ) : null}
-                  </form>
-                )}
-              </CardContent>
-            </Card>
-          ) : null}
+                  </div>
+                  {pointsConfigError ? (
+                    <p className="text-sm text-destructive" role="alert">
+                      {pointsConfigError}
+                    </p>
+                  ) : null}
+                </form>
+              )}
+            </CardContent>
+          </Card>
 
           {requests.length > 0 ? (
             <Card>
@@ -1054,39 +1080,61 @@ export function EventDetail({
                       />
                     </div>
                   </div>
-                  {/* Designated points (#403 Phase C): budgeted events only; defaults to round(avg). */}
+                  {/* Fixture points (#466): the per-match "Award points for this match" checkbox appears
+                      only when the event awards points; default checked. Un-ticking opts this match out. */}
                   {showDesignation ? (
-                    <div className="space-y-1">
-                      <Label htmlFor="event-designated" className="text-xs">
-                        Designated points ({min}–{max})
-                      </Label>
-                      <Input
-                        id="event-designated"
-                        type="number"
-                        min={min}
-                        max={max}
-                        value={designatedDraft}
-                        placeholder={String(defaultDesignation)}
-                        onChange={(e) => setDesignatedDraft(e.target.value)}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Each winning-team member gets the full amount (cost ={" "}
-                        {designatedValue * teamSize} for {teamSize}
-                        {teamSize === 1 ? " player" : " players"}).
-                        {clubBudget != null
-                          ? ` ${clubBudget.free} points free in this club's ${EVENT_TYPE_LABELS[event.type] ?? event.type} budget.`
-                          : event.clubId
-                            ? ""
-                            : " No club is set, so no budget is reserved."}
-                      </p>
-                      {designationOutOfRange ? (
-                        <p className="text-sm text-destructive" role="alert">
-                          Designated points must be between {min} and {max}.
-                        </p>
-                      ) : designationOverBudget ? (
-                        <p className="text-sm text-destructive" role="alert">
-                          This exceeds the club's remaining free budget.
-                        </p>
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={awardFixturePoints}
+                          onChange={(e) =>
+                            setAwardFixturePoints(e.target.checked)
+                          }
+                          aria-label="Award points for this match"
+                        />
+                        Award points for this match
+                      </label>
+                      {showDesignationInput ? (
+                        <div className="space-y-1">
+                          <Label htmlFor="event-designated" className="text-xs">
+                            Designated points ({min}–{max})
+                          </Label>
+                          <Input
+                            id="event-designated"
+                            type="number"
+                            min={min}
+                            max={max}
+                            value={designatedDraft}
+                            placeholder={String(defaultDesignation)}
+                            onChange={(e) => setDesignatedDraft(e.target.value)}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Each winning-team member gets the full amount (cost ={" "}
+                            {designatedValue * teamSize} for {teamSize}
+                            {teamSize === 1 ? " player" : " players"}).
+                            {clubBudget != null
+                              ? ` ${clubBudget.free} points free in this club's ${EVENT_TYPE_LABELS[event.type]} budget.`
+                              : event.clubId
+                                ? ""
+                                : " No club is set, so no budget is reserved."}
+                          </p>
+                          {designationOutOfRange ? (
+                            <p
+                              className="text-sm text-destructive"
+                              role="alert"
+                            >
+                              Designated points must be between {min} and {max}.
+                            </p>
+                          ) : designationOverBudget ? (
+                            <p
+                              className="text-sm text-destructive"
+                              role="alert"
+                            >
+                              This exceeds the club's remaining free budget.
+                            </p>
+                          ) : null}
+                        </div>
                       ) : null}
                     </div>
                   ) : null}

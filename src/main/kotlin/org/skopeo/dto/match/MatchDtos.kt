@@ -31,6 +31,12 @@ data class CreateFixtureRequest(
      * OPEN_PLAY / event-less fixture.
      */
     val designatedPoints: Int? = null,
+    /**
+     * The "award points for this match" checkbox (#466). Default (null/true) → the fixture awards points
+     * on a points-awarding event (designation defaults as above). Explicit false → the match opts out:
+     * no designation, so it awards no points.
+     */
+    val awardPoints: Boolean? = null,
 )
 
 @Serializable
@@ -69,6 +75,16 @@ data class MatchResultRequest(
 @Serializable
 data class MatchStateRequest(
     val isActive: Boolean,
+)
+
+/**
+ * Body for `PUT /api/v1/matches/{id}/designation` — set (or clear) a fixture's designated points
+ * (#466 opt-in "award points for this match" checkbox). A positive integer within the event's [min,
+ * max] awards; null (or omitted) clears the designation so the match awards no points.
+ */
+@Serializable
+data class SetDesignationRequest(
+    val designatedPoints: Int? = null,
 )
 
 /**

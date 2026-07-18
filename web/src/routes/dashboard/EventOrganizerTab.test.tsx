@@ -383,7 +383,8 @@ describe("EventOrganizerTab", () => {
     await user.type(screen.getByLabelText("Start date"), "2026-06-01");
     await user.type(screen.getByLabelText("End date"), "2026-06-02");
     await user.selectOptions(screen.getByLabelText("Club"), "c1");
-    // A club event of any type now requires a points config (OPEN_PLAY unified); fill a valid window.
+    // Points are opt-in (#466): a clubless-or-clubbed event awards points only when the box is ticked.
+    await user.click(screen.getByLabelText("Award ranking points"));
     await user.type(screen.getByLabelText("Min points"), "2");
     await user.type(screen.getByLabelText("Max points"), "8");
     await user.type(screen.getByLabelText("Validity start"), "2026-06-01");
@@ -532,22 +533,55 @@ describe("EventOrganizerTab", () => {
     expect(screen.getByText("Alpha Cup")).toBeInTheDocument();
   });
 
-  // --- Points config on create (#429) ---
+  // --- "Award ranking points" checkbox on create (#466) ---
 
-  it("shows and requires points config for a budgeted event with a club, and sends it (#429)", async () => {
-    useGetApiV1Clubs.mockReturnValue({
-      data: [{ id: "c1", name: "Downtown TC", isActive: true, owners: [] }],
-      isLoading: false,
+  it("hides the points config until the award-points checkbox is ticked (#466)", async () => {
+    const user = userEvent.setup();
+    renderTab();
+
+    // Default off → the config fields are hidden (no club/type gating; opt-in for any event).
+    expect(screen.getByLabelText("Award ranking points")).not.toBeChecked();
+    expect(screen.queryByLabelText("Min points")).not.toBeInTheDocument();
+
+    // Ticking it reveals the fields + the global-policy hint.
+    await user.click(screen.getByLabelText("Award ranking points"));
+    expect(screen.getByLabelText("Min points")).toBeInTheDocument();
+    expect(
+      screen.getByText(/global Open play policy allows 1–10 points/),
+    ).toBeInTheDocument();
+  });
+
+  it("creates with no points fields when the award-points checkbox is off (#466)", async () => {
+    const user = userEvent.setup();
+    renderTab();
+    await user.type(screen.getByLabelText("Name"), "Casual Meetup");
+    await user.type(screen.getByLabelText("Start date"), "2026-06-01");
+    await user.type(screen.getByLabelText("End date"), "2026-06-02");
+    await user.selectOptions(screen.getByLabelText("Type"), "TOURNAMENT");
+
+    // Checkbox left unchecked → the create payload carries no points fields.
+    await user.click(screen.getByRole("button", { name: "Create event" }));
+    expect(createMutate).toHaveBeenCalledWith({
+      data: {
+        name: "Casual Meetup",
+        startDate: "2026-06-01",
+        endDate: "2026-06-02",
+        type: "TOURNAMENT",
+        participantIds: [],
+      },
     });
+  });
+
+  it("shows and requires points config once the checkbox is ticked, and sends it (#466)", async () => {
     const user = userEvent.setup();
     renderTab();
     await user.type(screen.getByLabelText("Name"), "League Night");
     await user.type(screen.getByLabelText("Start date"), "2026-06-01");
     await user.type(screen.getByLabelText("End date"), "2026-06-02");
     await user.selectOptions(screen.getByLabelText("Type"), "LEAGUE");
-    await user.selectOptions(screen.getByLabelText("Club"), "c1");
+    await user.click(screen.getByLabelText("Award ranking points"));
 
-    // The points-config fields appear (hidden until budgeted type + club); the global hint shows.
+    // The points-config fields appear once ticked; the global hint shows.
     expect(screen.getByLabelText("Min points")).toBeInTheDocument();
     expect(
       screen.getByText(/global League policy allows 5–50 points/),
@@ -570,7 +604,6 @@ describe("EventOrganizerTab", () => {
         endDate: "2026-06-02",
         type: "LEAGUE",
         participantIds: [],
-        clubId: "c1",
         minPointsPerMatch: 10,
         maxPointsPerMatch: 40,
         pointValidityStart: "2026-06-01",
@@ -579,27 +612,19 @@ describe("EventOrganizerTab", () => {
     });
   });
 
-  it("shows and requires points config for an OPEN_PLAY event with a club, and sends it (unify)", async () => {
-    useGetApiV1Clubs.mockReturnValue({
-      data: [{ id: "c1", name: "Downtown TC", isActive: true, owners: [] }],
-      isLoading: false,
-    });
+  it("awards points on an OPEN_PLAY event when the checkbox is ticked (unify, #466)", async () => {
     const user = userEvent.setup();
     renderTab();
     await user.type(screen.getByLabelText("Name"), "Casual Meetup");
     await user.type(screen.getByLabelText("Start date"), "2026-06-01");
     await user.type(screen.getByLabelText("End date"), "2026-06-02");
 
-    // OPEN_PLAY (the default) with a club now shows the points fields (unified with LEAGUE/TOURNAMENT).
-    await user.selectOptions(screen.getByLabelText("Club"), "c1");
+    // OPEN_PLAY (the default) awards points once ticked (unified with LEAGUE/TOURNAMENT).
+    await user.click(screen.getByLabelText("Award ranking points"));
     expect(screen.getByLabelText("Min points")).toBeInTheDocument();
     expect(
       screen.getByText(/global Open play policy allows 1–10 points/),
     ).toBeInTheDocument();
-    // Required until filled: the submit stays disabled with the fields blank.
-    expect(
-      screen.getByRole("button", { name: "Create event" }),
-    ).toBeDisabled();
 
     await user.type(screen.getByLabelText("Min points"), "2");
     await user.type(screen.getByLabelText("Max points"), "8");
@@ -614,7 +639,6 @@ describe("EventOrganizerTab", () => {
         endDate: "2026-06-02",
         type: "OPEN_PLAY",
         participantIds: [],
-        clubId: "c1",
         minPointsPerMatch: 2,
         maxPointsPerMatch: 8,
         pointValidityStart: "2026-06-01",
@@ -623,49 +647,14 @@ describe("EventOrganizerTab", () => {
     });
   });
 
-  it("hides points config for a clubless event of any type, creating without it (#429)", async () => {
-    useGetApiV1Clubs.mockReturnValue({
-      data: [{ id: "c1", name: "Downtown TC", isActive: true, owners: [] }],
-      isLoading: false,
-    });
-    const user = userEvent.setup();
-    renderTab();
-    await user.type(screen.getByLabelText("Name"), "Casual Meetup");
-    await user.type(screen.getByLabelText("Start date"), "2026-06-01");
-    await user.type(screen.getByLabelText("End date"), "2026-06-02");
-
-    // OPEN_PLAY (the default) with NO club → no points fields (deferred; settable later).
-    expect(screen.queryByLabelText("Min points")).not.toBeInTheDocument();
-
-    // A budgeted type WITHOUT a club → still no points fields (deferred; settable later).
-    await user.selectOptions(screen.getByLabelText("Type"), "TOURNAMENT");
-    expect(screen.queryByLabelText("Min points")).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "Create event" }));
-    // Created without any points fields.
-    expect(createMutate).toHaveBeenCalledWith({
-      data: {
-        name: "Casual Meetup",
-        startDate: "2026-06-01",
-        endDate: "2026-06-02",
-        type: "TOURNAMENT",
-        participantIds: [],
-      },
-    });
-  });
-
-  it("flags points values outside the global policy bounds (#429)", async () => {
-    useGetApiV1Clubs.mockReturnValue({
-      data: [{ id: "c1", name: "Downtown TC", isActive: true, owners: [] }],
-      isLoading: false,
-    });
+  it("flags points values outside the global policy bounds (#466)", async () => {
     const user = userEvent.setup();
     renderTab();
     await user.type(screen.getByLabelText("Name"), "League Night");
     await user.type(screen.getByLabelText("Start date"), "2026-06-01");
     await user.type(screen.getByLabelText("End date"), "2026-06-02");
     await user.selectOptions(screen.getByLabelText("Type"), "LEAGUE");
-    await user.selectOptions(screen.getByLabelText("Club"), "c1");
+    await user.click(screen.getByLabelText("Award ranking points"));
 
     // Min below LEAGUE's global minimum of 5 → the create button stays disabled (invalid window).
     await user.type(screen.getByLabelText("Min points"), "1");
@@ -684,7 +673,7 @@ describe("EventOrganizerTab", () => {
     expect(createMutate).toHaveBeenCalledTimes(1);
   });
 
-  // Fill name + dates + club + type so the points-config panel is shown and required (#434).
+  // Fill name + dates + type, then tick "Award ranking points" so the config panel is shown/required (#466).
   async function openBudgetedForm(
     user: ReturnType<typeof userEvent.setup>,
     type: "LEAGUE" | "TOURNAMENT" | "OPEN_PLAY" = "OPEN_PLAY",
@@ -695,7 +684,7 @@ describe("EventOrganizerTab", () => {
     if (type !== "OPEN_PLAY") {
       await user.selectOptions(screen.getByLabelText("Type"), type);
     }
-    await user.selectOptions(screen.getByLabelText("Club"), "c1");
+    await user.click(screen.getByLabelText("Award ranking points"));
   }
 
   // Submit the <form> directly: an invalid points config disables the Create button, so a click
