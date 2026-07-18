@@ -214,7 +214,88 @@ describe("PointsManagementSection", () => {
     expect(screen.getByText("ACTIVE")).toBeInTheDocument();
   });
 
-  it("paginates the awarded-points list, requesting the next offset", async () => {
+  it("shows a loading state while the awarded-points list loads", () => {
+    useGetApiV1RankingPoints.mockReturnValue({ data: undefined, isLoading: true });
+    renderSection();
+    // The card header is always present; its body shows the loading placeholder.
+    expect(screen.getByText("Points awarded")).toBeInTheDocument();
+    expect(screen.getAllByText("Loading…").length).toBeGreaterThan(0);
+  });
+
+  it("shows an empty state when there are no awards", () => {
+    // Default mock already returns total 0; assert the placeholder is rendered.
+    renderSection();
+    expect(screen.getByText("No awards yet.")).toBeInTheDocument();
+  });
+
+  it("renders a player without a public code as plain text, not a link", () => {
+    useGetApiV1RankingPoints.mockReturnValue({
+      data: {
+        rows: [awardRow({ playerPublicCode: null })],
+        total: 1,
+        limit: 25,
+        offset: 0,
+      },
+      isLoading: false,
+    });
+    renderSection();
+
+    // The display name renders as text; there is no player link for it.
+    expect(screen.getByText("Ada Lovelace")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Ada Lovelace" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("falls back to the raw points when they are not a formattable number", () => {
+    useGetApiV1RankingPoints.mockReturnValue({
+      data: {
+        rows: [awardRow({ points: "n/a" })],
+        total: 1,
+        limit: 25,
+        offset: 0,
+      },
+      isLoading: false,
+    });
+    renderSection();
+
+    // formatPoints returns null for unparseable input, so the raw value is shown.
+    expect(screen.getByText("n/a")).toBeInTheDocument();
+  });
+
+  it("links the match public code as the source when present", () => {
+    useGetApiV1RankingPoints.mockReturnValue({
+      data: {
+        rows: [awardRow({ matchPublicCode: "MTCH99", source: "match" })],
+        total: 1,
+        limit: 25,
+        offset: 0,
+      },
+      isLoading: false,
+    });
+    renderSection();
+
+    const link = screen.getByRole("link", { name: "MTCH99" });
+    expect(link).toHaveAttribute("href", "/matches/MTCH99");
+  });
+
+  it("links the event public code as the source when there is no match", () => {
+    useGetApiV1RankingPoints.mockReturnValue({
+      data: {
+        rows: [awardRow({ eventPublicCode: "EVT77", source: "event" })],
+        total: 1,
+        limit: 25,
+        offset: 0,
+      },
+      isLoading: false,
+    });
+    renderSection();
+
+    const link = screen.getByRole("link", { name: "EVT77" });
+    expect(link).toHaveAttribute("href", "/events/EVT77");
+  });
+
+  it("paginates the awarded-points list, requesting the next then the previous offset", async () => {
     const user = userEvent.setup();
     // 30 total across 2 pages of 25.
     useGetApiV1RankingPoints.mockReturnValue({
@@ -227,6 +308,13 @@ describe("PointsManagementSection", () => {
     // The hook is re-called with the second page's offset (25).
     expect(useGetApiV1RankingPoints).toHaveBeenLastCalledWith(
       { limit: 25, offset: 25 },
+      expect.anything(),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Previous" }));
+    // Going back returns to the first page's offset (0).
+    expect(useGetApiV1RankingPoints).toHaveBeenLastCalledWith(
+      { limit: 25, offset: 0 },
       expect.anything(),
     );
   });
