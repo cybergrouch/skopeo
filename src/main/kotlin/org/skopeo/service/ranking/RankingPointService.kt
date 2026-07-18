@@ -107,7 +107,11 @@ class RankingPointService(
             award
         }
 
-    /** The provenance record for a grant (#146, §7): actor + amount + class + band + source + reason. */
+    /**
+     * The provenance record for a grant (#146, §7): actor + amount + class + band + source + reason.
+     * Target = the awarded player (USER, #471) so the Activity Log's Target column links to the player,
+     * consistent with the finalize-time per-award audit; the award row id is kept in details.
+     */
     private fun grantAudit(
         actorId: UUID,
         award: RankingPointAward,
@@ -115,11 +119,12 @@ class RankingPointService(
         AuditWrite(
             actorUserId = actorId,
             action = AuditAction.RANKING_POINTS_AWARDED,
-            entityType = AuditEntityType.RANKING_POINT,
-            entityId = award.id,
+            entityType = AuditEntityType.USER,
+            entityId = award.userId,
             summary = "Awarded ${award.points.toPlainString()} ${award.pointClass.name} points (band ${award.band})",
             details =
                 mapOf(
+                    "awardId" to award.id.toString(),
                     "userId" to award.userId.toString(),
                     "points" to award.points.toPlainString(),
                     "pointClass" to award.pointClass.name,

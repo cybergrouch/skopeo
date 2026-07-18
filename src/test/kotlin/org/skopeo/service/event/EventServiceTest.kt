@@ -18,6 +18,7 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.model.AuditAction
+import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.CreateClubCommand
@@ -1425,6 +1426,52 @@ class EventServiceTest {
         // The award is audited.
         AuditRepository().list(actions = listOf(element = AuditAction.EVENT_POINTS_AWARDED), limit = 10, offset = 0)
             .first.single().details["totalPoints"] shouldBe "30"
+    }
+
+    @Test
+    fun `finalize records one per-player audit entry targeting each awarded winner (#471)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        rate(userId = p1.id, level = "4.0")
+        rate(userId = p2.id, level = "4.0")
+        val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id))
+        // Two SINGLES fixtures, each with a distinct winner (team1 wins), so both players are awarded.
+        val matchA = seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2, designated = 30)
+        val matchB =
+            seedCompletedFixture(
+                eventId = event.id,
+                host = host,
+                p1 = p2,
+                p2 = p1,
+                designated = 20,
+                team1UserIds = listOf(element = p2.id),
+                team2UserIds = listOf(element = p1.id),
+            )
+
+        service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+
+        // One RANKING_POINTS_AWARDED entry per awarded winner, each targeting the player (USER), with the
+        // finalizer as actor and the points/match in the detail (#471).
+        val entries =
+            AuditRepository()
+                .list(actions = listOf(element = AuditAction.RANKING_POINTS_AWARDED), limit = 10, offset = 0)
+                .first
+        entries shouldHaveSize 2
+        entries.forEach { it.entityType shouldBe AuditEntityType.USER }
+        entries.forEach { it.actorUserId shouldBe host.id }
+        entries.map { it.entityId }.toSet() shouldBe setOf(p1.id, p2.id)
+
+        val p1Entry = entries.single { it.entityId == p1.id }
+        p1Entry.details["points"] shouldBe "30"
+        p1Entry.details["matchId"] shouldBe matchA.id.toString()
+        p1Entry.details["matchPublicCode"] shouldBe matchA.publicCode
+        p1Entry.details["eventId"] shouldBe event.id.toString()
+        p1Entry.details["band"] shouldBe "4.0"
+
+        val p2Entry = entries.single { it.entityId == p2.id }
+        p2Entry.details["points"] shouldBe "20"
+        p2Entry.details["matchId"] shouldBe matchB.id.toString()
     }
 
     @Test

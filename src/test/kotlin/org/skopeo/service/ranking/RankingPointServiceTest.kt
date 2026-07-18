@@ -11,6 +11,8 @@ import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.model.AuditAction
+import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.AwardStatus
 import org.skopeo.model.Capability
@@ -23,6 +25,7 @@ import org.skopeo.model.ServiceError
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
+import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.RankingPointRepository
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
@@ -104,6 +107,26 @@ class RankingPointServiceTest {
         award.status shouldBe AwardStatus.ACTIVE
         // Validity from the ANNUAL_TOURNAMENT policy (12 months).
         award.validUntil shouldBe award.validFrom.plusMonths(12)
+    }
+
+    @Test
+    fun `a grant records an audit entry targeting the player (#471)`() {
+        val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val player = provision(uid = "player", sex = "Female")
+        ratings.setRating(userId = player.id, rating = BigDecimal("4.3"), level = "4.0")
+
+        val award = service.grant(token = token(uid = "admin"), command = grantCommand(userId = player.id)).shouldBeRight()
+
+        // Target = the player (USER), not the ledger row, so the Activity Log links to the player (#471).
+        val entry =
+            AuditRepository()
+                .list(actions = listOf(element = AuditAction.RANKING_POINTS_AWARDED), limit = 10, offset = 0)
+                .first.single()
+        entry.entityType shouldBe AuditEntityType.USER
+        entry.entityId shouldBe player.id
+        entry.actorUserId shouldBe admin.id
+        entry.details["awardId"] shouldBe award.id.toString()
+        entry.details["userId"] shouldBe player.id.toString()
     }
 
     @Test
