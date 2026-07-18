@@ -9,61 +9,94 @@ import io.kotest.matchers.doubles.plusOrMinus
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import java.math.BigDecimal
+import java.time.LocalDate
+import java.time.LocalDateTime
+import kotlin.math.pow
 
 /**
- * The sparsity + match-weight confidence (#459). Values are the design doc's worked examples
- * (`docs/product/RATING_CONFIDENCE_SPARSITY.md`), asserted to ~3 dp against the exact formula.
+ * The 3-factor recency × sparsity × spacing confidence (#459). Values are the design doc's worked
+ * examples (`docs/product/RATING_CONFIDENCE_SPARSITY.md`), asserted to ~3 dp against the exact formula
+ * `f(x) = 1 / (1 + (x / 35)^2.5)`. Every case is evaluated as of a fixed [NOW]; the window is 30 days.
  */
 class RatingConfidenceTest {
+    private companion object {
+        // A fixed evaluation instant; "day N" below means the Nth day of the window, and eval is on day 30.
+        val NOW: LocalDateTime = LocalDateTime.of(2026, 6, 30, 12, 0)
+        val DAY_ZERO: LocalDate = LocalDate.of(2026, 5, 31) // day N = DAY_ZERO + N; day 30 == NOW's date.
+    }
+
+    private fun openPlayOn(vararg days: Int): List<WindowMatch> =
+        days.map { WindowMatch(matchDate = DAY_ZERO.plusDays(it.toLong()), weightClass = WeightClass.OPEN_PLAY) }
+
     @Test
-    fun `no qualifying matches in the window yields zero confidence`() {
-        confidenceAt(counts = WeightClassCounts()).toPlainString() shouldBe "0.000000"
+    fun `no matches in the window yields zero confidence`() {
+        confidenceAt(matches = emptyList(), now = NOW).toPlainString() shouldBe "0.000000"
     }
 
     @Test
-    fun `two open-play matches (weighted count one) sit near the fifty-percent cliff`() {
-        // wc = 2 * 0.5 = 1.0, gap = 30 / 1.0 = 30, (30/35)^2.5 ≈ 0.680 → ≈ 0.595.
-        confidenceAt(counts = WeightClassCounts(openPlays = 2)).toDouble() shouldBe (0.595 plusOrMinus 0.001)
+    fun `scenario A two open play on day one and day thirty scores about thirty-seven percent`() {
+        // Recency f(0)=1.0 · Sparsity f(30/1.0=30)=0.595169 · Spacing f(29)=0.615353 → ≈ 0.366289.
+        confidenceAt(matches = openPlayOn(1, 30), now = NOW).toDouble() shouldBe (0.366289 plusOrMinus 0.001)
     }
 
     @Test
-    fun `eight open-play matches (weighted count four) reach near-full confidence`() {
-        // wc = 8 * 0.5 = 4.0, gap = 30 / 4.0 = 7.5 → ≈ 0.979.
-        confidenceAt(counts = WeightClassCounts(openPlays = 8)).toDouble() shouldBe (0.979 plusOrMinus 0.001)
+    fun `six evenly spread open play matches score about ninety-five percent`() {
+        // Recency f(0)=1.0 · Sparsity f(30/3.0=10)=0.958179 · Spacing f(5)=0.992345 → ≈ 0.950848.
+        confidenceAt(matches = openPlayOn(5, 10, 15, 20, 25, 30), now = NOW).toDouble() shouldBe (0.950848 plusOrMinus 0.001)
     }
 
     @Test
-    fun `two tournament matches prove current form with a very tight gap`() {
-        // wc = 2 * 3.0 = 6.0, gap = 30 / 6.0 = 5.0 → ≈ 0.992.
-        confidenceAt(counts = WeightClassCounts(tournaments = 2)).toDouble() shouldBe (0.992 plusOrMinus 0.001)
+    fun `six clustered matches ending today are penalized for the internal hole`() {
+        // Recency f(0)=1.0 · Sparsity f(10)=0.958179 · Spacing f(25)=0.698708 → ≈ 0.669485.
+        confidenceAt(matches = openPlayOn(1, 2, 3, 4, 5, 30), now = NOW).toDouble() shouldBe (0.669485 plusOrMinus 0.001)
     }
 
     @Test
-    fun `for equal match counts a tournament outweighs a league outweighs open play`() {
-        // Same count (one match) across classes; the weight ordering carries through to confidence.
-        val tournament = confidenceAt(counts = WeightClassCounts(tournaments = 1))
-        val league = confidenceAt(counts = WeightClassCounts(leagues = 1))
-        val openPlay = confidenceAt(counts = WeightClassCounts(openPlays = 1))
+    fun `five clustered matches then a quiet stretch are penalized mainly by recency`() {
+        // Recency f(25)=0.698708 · Sparsity f(30/2.5=12)=0.935703 · Spacing f(1)=~0.9999 → ≈ 0.653732.
+        confidenceAt(matches = openPlayOn(1, 2, 3, 4, 5), now = NOW).toDouble() shouldBe (0.653732 plusOrMinus 0.001)
+    }
+
+    @Test
+    fun `a single match has no internal gap so spacing is one`() {
+        // One match: Spacing = 1.0, so confidence = Recency × Sparsity. On day 30: f(0)=1.0 · f(30/0.5=60).
+        val single = openPlayOn(30)
+        val recencyTimesSparsity = 1.0 / (1.0 + (60.0 / 35.0).pow(x = 2.5))
+        confidenceAt(matches = single, now = NOW).toDouble() shouldBe (recencyTimesSparsity plusOrMinus 0.001)
+    }
+
+    @Test
+    fun `for equal counts spacing and recency a tournament outweighs a league outweighs open play`() {
+        // Two matches on the same two dates across classes; only the weighted count (density) differs.
+        fun twoOf(weightClass: WeightClass) =
+            listOf(
+                WindowMatch(matchDate = DAY_ZERO.plusDays(25), weightClass = weightClass),
+                WindowMatch(matchDate = DAY_ZERO.plusDays(30), weightClass = weightClass),
+            )
+        val tournament = confidenceAt(matches = twoOf(weightClass = WeightClass.TOURNAMENT), now = NOW)
+        val league = confidenceAt(matches = twoOf(weightClass = WeightClass.LEAGUE), now = NOW)
+        val openPlay = confidenceAt(matches = twoOf(weightClass = WeightClass.OPEN_PLAY), now = NOW)
         tournament shouldBeGreaterThan league
         league shouldBeGreaterThan openPlay
     }
 
     @Test
-    fun `mixed weight classes sum before the gap is taken`() {
-        // wc = 3.0 + 1.5 + 0.5 = 5.0, gap = 6.0; equals a single class with the same weighted count.
-        val mixed = confidenceAt(counts = WeightClassCounts(tournaments = 1, leagues = 1, openPlays = 1))
-        mixed shouldBeGreaterThan confidenceAt(counts = WeightClassCounts(openPlays = 8))
+    fun `even spacing beats clustered spacing for the same count and recency`() {
+        // Both end on day 30 (recency f(0)) with the same weighted count; only the internal hole differs.
+        val even = confidenceAt(matches = openPlayOn(5, 10, 15, 20, 25, 30), now = NOW)
+        val clustered = confidenceAt(matches = openPlayOn(1, 2, 3, 4, 5, 30), now = NOW)
+        even shouldBeGreaterThan clustered
     }
 
     @Test
-    fun `confidence rises monotonically with more play and always stays within zero and one`() {
-        val one = confidenceAt(counts = WeightClassCounts(openPlays = 1))
-        val four = confidenceAt(counts = WeightClassCounts(openPlays = 4))
-        val twelve = confidenceAt(counts = WeightClassCounts(openPlays = 12))
+    fun `confidence rises with more play and always stays within zero and one`() {
+        val one = confidenceAt(matches = openPlayOn(30), now = NOW)
+        val four = confidenceAt(matches = openPlayOn(10, 20, 25, 30), now = NOW)
+        val many = confidenceAt(matches = openPlayOn(5, 10, 15, 20, 25, 30), now = NOW)
         one shouldBeLessThan four
-        four shouldBeLessThan twelve
+        four shouldBeLessThan many
         one shouldBeGreaterThan BigDecimal.ZERO
-        twelve shouldBeLessThan BigDecimal.ONE
+        many shouldBeLessThan BigDecimal.ONE
     }
 
     @Test
