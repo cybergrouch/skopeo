@@ -11,7 +11,9 @@ import org.jetbrains.exposed.sql.Op
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.greaterEq
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.inSubQuery
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.lessEq
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.insert
@@ -30,9 +32,15 @@ import org.skopeo.model.MatchStatus
 import org.skopeo.model.MatchType
 import org.skopeo.model.ServiceError
 import org.skopeo.model.TeamType
+import org.skopeo.model.WeightClass
+import org.skopeo.model.WeightClassCounts
 import org.skopeo.model.WinLossRecord
+import org.skopeo.model.weightClass
 import java.time.LocalDateTime
 import java.util.UUID
+
+// The confidence evaluation window (#459): completed matches within this many days count toward sparsity.
+private const val CONFIDENCE_WINDOW_DAYS = 30L
 
 /**
  * Persistence for the match aggregate (teams + team_users + matches + match_sets + tiebreaks).
@@ -403,6 +411,78 @@ class MatchRepository {
             outcomes
                 .groupBy(keySelector = { it.first }, valueTransform = { it.second })
                 .mapValues { (_, results) -> WinLossRecord(wins = results.count { it }, losses = results.count { !it }) }
+        }
+
+    /**
+     * A single player's COMPLETED matches in the confidence window (#459), split by weight class —
+     * the input to the sparsity confidence in `confidenceAt`. Counts every match the user took part
+     * in (either team) whose [MatchesTable.matchDate] falls in the last [CONFIDENCE_WINDOW_DAYS] up to
+     * [asOf] (inclusive lower bound: a match exactly 30 days back still counts). A one-user shortcut
+     * over the batched [weightedMatchCountsInWindow] below.
+     */
+    fun weightedMatchCountsInWindow(
+        userId: UUID,
+        asOf: LocalDateTime,
+    ): WeightClassCounts = weightedMatchCountsInWindow(userIds = listOf(element = userId), asOf = asOf)[userId] ?: WeightClassCounts()
+
+    /**
+     * Windowed weight-class counts (#459) for many players at once — the batched form that backs the
+     * list views (standings, seeding, match/history pages) so a page of N players costs **one** query,
+     * never N (no N+1). One grouped scan over completed, in-window matches the queried users played in
+     * (either team), tallied per (user, weight class). Users with no qualifying matches are absent.
+     */
+    fun weightedMatchCountsInWindow(
+        userIds: List<UUID>,
+        asOf: LocalDateTime,
+    ): Map<UUID, WeightClassCounts> =
+        transaction {
+            if (userIds.isEmpty()) {
+                return@transaction emptyMap()
+            }
+            val windowStart = asOf.toLocalDate().minusDays(CONFIDENCE_WINDOW_DAYS)
+            val today = asOf.toLocalDate()
+            // The queried users' team memberships: team id → the queried users on that team (doubles
+            // partners may both be in the query). One scan feeds the single match query below.
+            val usersByTeam =
+                TeamUsersTable
+                    .select(columns = listOf(TeamUsersTable.teamId, TeamUsersTable.userId))
+                    .where { TeamUsersTable.userId inList userIds }
+                    .groupBy(
+                        keySelector = { it[TeamUsersTable.teamId].value },
+                        valueTransform = { it[TeamUsersTable.userId].value },
+                    )
+            if (usersByTeam.isEmpty()) {
+                return@transaction emptyMap()
+            }
+            val teamIds = usersByTeam.keys.toList()
+            // One grouped scan over the completed, in-window matches on any of those teams; fan each
+            // match out to its queried participants and tally per (user, weight class).
+            val counts = mutableMapOf<UUID, MutableMap<WeightClass, Int>>()
+            MatchesTable
+                .select(columns = listOf(MatchesTable.team1Id, MatchesTable.team2Id, MatchesTable.matchType))
+                .where {
+                    ((MatchesTable.team1Id inList teamIds) or (MatchesTable.team2Id inList teamIds)) and
+                        (MatchesTable.status eq MatchStatus.COMPLETED.name) and
+                        (MatchesTable.matchDate greaterEq windowStart) and
+                        (MatchesTable.matchDate lessEq today)
+                }.forEach { row ->
+                    val weightClass = MatchType.valueOf(value = row[MatchesTable.matchType]).weightClass()
+                    val participants =
+                        usersByTeam[row[MatchesTable.team1Id].value].orEmpty() +
+                            usersByTeam[row[MatchesTable.team2Id].value].orEmpty()
+                    // A user sits on exactly one side per match; distinct guards a degenerate self-vs-self row.
+                    participants.distinct().forEach { uid ->
+                        val perUser = counts.getOrPut(key = uid) { mutableMapOf() }
+                        perUser[weightClass] = (perUser[weightClass] ?: 0) + 1
+                    }
+                }
+            counts.mapValues { (_, byClass) ->
+                WeightClassCounts(
+                    tournaments = byClass[WeightClass.TOURNAMENT] ?: 0,
+                    leagues = byClass[WeightClass.LEAGUE] ?: 0,
+                    openPlays = byClass[WeightClass.OPEN_PLAY] ?: 0,
+                )
+            }
         }
 
     /**

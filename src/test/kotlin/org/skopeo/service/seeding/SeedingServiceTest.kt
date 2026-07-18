@@ -13,13 +13,17 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
-import org.skopeo.model.MatchRatingWrite
+import org.skopeo.model.CreateFixtureCommand
+import org.skopeo.model.MatchSetResult
+import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.ServiceError
+import org.skopeo.model.TeamType
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
+import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.user.VerifiedFirebaseToken
@@ -40,6 +44,7 @@ class SeedingServiceTest {
 
     private val users = UserRepository()
     private val ratings = RatingRepository()
+    private val matchRepo = MatchRepository()
     private val lists = PlayerListService()
     private val service = SeedingService()
 
@@ -76,8 +81,11 @@ class SeedingServiceTest {
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
-    // Confidence is computed (#343): min(1, matches/5) when the rating is match-derived and fresh
-    // (matchRatedAt = now ⇒ decay ≈ 1.0). `matches` = 0 leaves it a bare override (confidence 0).
+    // Confidence is computed (#459) from windowed match sparsity: [matches] in-window completed open-play
+    // matches raise a player's confidence (more matches → denser play → higher confidence). `matches` = 0
+    // leaves a bare override with no qualifying play → confidence 0.
+    private var sparringCounter = 0
+
     private fun rate(
         user: User,
         value: String,
@@ -86,16 +94,27 @@ class SeedingServiceTest {
         val level = value.toBigDecimal().let { "${it.toInt()}.${if (it.toDouble() % 1.0 >= 0.5) 5 else 0}" }
         ratings.setRating(userId = user.id, rating = BigDecimal(value), level = level)
         repeat(times = matches) {
-            ratings.applyMatchRating(
-                write =
-                    MatchRatingWrite(
-                        userId = user.id,
-                        newRating = BigDecimal(value),
-                        newLevel = level,
-                        matchDate = LocalDate.now(),
-                        ratedAt = LocalDateTime.now(),
-                        bandJumped = false,
-                    ),
+            val opponent = provision(uid = "spar-${sparringCounter++}")
+            val match =
+                matchRepo.createFixture(
+                    command =
+                        CreateFixtureCommand(
+                            matchFormat = TeamType.SINGLES,
+                            matchType = MatchType.OPEN_PLAY,
+                            matchDate = LocalDate.now(),
+                            team1UserIds = listOf(element = user.id),
+                            team2UserIds = listOf(element = opponent.id),
+                            team1Name = "T1",
+                            team2Name = "T2",
+                            createdBy = user.id,
+                        ),
+                )
+            matchRepo.addResult(
+                matchId = match.id,
+                sets = listOf(element = MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 0, winnerTeamId = match.team1.teamId)),
+                winnerTeamId = match.team1.teamId,
+                recordedBy = user.id,
+                completedAt = LocalDateTime.now(),
             )
         }
     }

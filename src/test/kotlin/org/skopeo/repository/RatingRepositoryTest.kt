@@ -6,6 +6,7 @@ package org.skopeo.repository
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.collections.shouldNotContain
+import io.kotest.matchers.doubles.plusOrMinus
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.BeforeAll
@@ -13,11 +14,14 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.CalculationBreakdownSnapshot
-import org.skopeo.model.MatchRatingWrite
+import org.skopeo.model.CreateFixtureCommand
+import org.skopeo.model.MatchSetResult
+import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.RatingHistoryWrite
 import org.skopeo.model.SetCalculationBreakdown
+import org.skopeo.model.TeamType
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.testsupport.PostgresTestDatabase
@@ -36,6 +40,7 @@ class RatingRepositoryTest {
     }
 
     private val users = UserRepository()
+    private val matches = MatchRepository()
     private val ratings = RatingRepository()
 
     @BeforeEach
@@ -52,6 +57,36 @@ class RatingRepositoryTest {
                     names = listOf(UserName(type = NameType.DISPLAY, value = uid)),
                 ),
         ).id
+
+    /** Create a COMPLETED match on [matchDate] between [u1] and [u2] of the given [matchType]. */
+    private fun completedMatch(
+        u1: UUID,
+        u2: UUID,
+        matchType: MatchType,
+        matchDate: LocalDate,
+    ) {
+        val match =
+            matches.createFixture(
+                command =
+                    CreateFixtureCommand(
+                        matchFormat = TeamType.SINGLES,
+                        matchType = matchType,
+                        matchDate = matchDate,
+                        team1UserIds = listOf(element = u1),
+                        team2UserIds = listOf(element = u2),
+                        team1Name = "T1",
+                        team2Name = "T2",
+                        createdBy = u1,
+                    ),
+            )
+        matches.addResult(
+            matchId = match.id,
+            sets = listOf(element = MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 0, winnerTeamId = match.team1.teamId)),
+            winnerTeamId = match.team1.teamId,
+            recordedBy = u1,
+            completedAt = LocalDateTime.now(),
+        )
+    }
 
     @Test
     fun `setRating inserts then updates, per system`() {
@@ -70,46 +105,22 @@ class RatingRepositoryTest {
     }
 
     @Test
-    fun `confidence is computed (#343) - zero for an override, non-zero once match-derived, reset on a band jump`() {
+    fun `confidence is computed (#459) from windowed match sparsity, not from the current rating source`() {
         val userId = newUser(uid = "conf")
+        val opponent = newUser(uid = "opp")
 
-        // A bare admin override is not match-derived → confidence 0.
+        // No matches yet → confidence 0, whatever the rating source (a bare admin override here).
         ratings.setRating(userId = userId, rating = BigDecimal("4.0"), level = "4.0")
         ratings.findCurrentRating(userId = userId)!!.confidence.compareTo(other = BigDecimal.ZERO) shouldBe 0
 
-        // A fresh match calculation ramps confidence up over matches; two matches ⇒ scale 2/5, decay ≈ 1.
-        val now = LocalDateTime.now()
-        repeat(times = 2) {
-            ratings.applyMatchRating(
-                write =
-                    MatchRatingWrite(
-                        userId = userId,
-                        newRating = BigDecimal("4.0"),
-                        newLevel = "4.0",
-                        matchDate = LocalDate.now(),
-                        ratedAt = now,
-                        bandJumped = false,
-                    ),
-            )
-        }
-        ratings.findCurrentRating(userId = userId)!!.let {
-            (it.confidence > BigDecimal.ZERO) shouldBe true
-            it.confidence.compareTo(other = BigDecimal("0.4")) shouldBe 0
-        }
+        // Two in-window open-play matches ⇒ weighted count 1.0, gap 30 → ≈ 0.595 (worked example A).
+        val today = LocalDate.now()
+        repeat(times = 2) { completedMatch(u1 = userId, u2 = opponent, matchType = MatchType.OPEN_PLAY, matchDate = today) }
+        ratings.findCurrentRating(userId = userId)!!.confidence.toDouble() shouldBe (0.595 plusOrMinus 0.001)
 
-        // An NTRP band jump resets the ramp (matches-since-reset → 0), so confidence drops back to ~0.
-        ratings.applyMatchRating(
-            write =
-                MatchRatingWrite(
-                    userId = userId,
-                    newRating = BigDecimal("4.5"),
-                    newLevel = "4.5",
-                    matchDate = LocalDate.now(),
-                    ratedAt = now,
-                    bandJumped = true,
-                ),
-        )
-        ratings.findCurrentRating(userId = userId)!!.confidence.compareTo(other = BigDecimal.ZERO) shouldBe 0
+        // A match outside the 30-day window does not count — confidence is unchanged.
+        completedMatch(u1 = userId, u2 = opponent, matchType = MatchType.OPEN_PLAY, matchDate = today.minusDays(40))
+        ratings.findCurrentRating(userId = userId)!!.confidence.toDouble() shouldBe (0.595 plusOrMinus 0.001)
     }
 
     @Test

@@ -9,6 +9,7 @@ import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldNotContain
+import io.kotest.matchers.maps.shouldBeEmpty
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -30,6 +31,7 @@ import org.skopeo.model.ServiceError
 import org.skopeo.model.TeamType
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
+import org.skopeo.model.WeightClassCounts
 import org.skopeo.model.WinLossRecord
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.time.LocalDate
@@ -89,13 +91,14 @@ class MatchRepositoryTest {
         matchDate: LocalDate,
         eventId: UUID? = null,
         completedAt: LocalDateTime = LocalDateTime.now(),
+        matchType: MatchType = MatchType.OPEN_PLAY,
     ): UUID {
         val match =
             matches.createFixture(
                 command =
                     CreateFixtureCommand(
                         matchFormat = TeamType.SINGLES,
-                        matchType = MatchType.OPEN_PLAY,
+                        matchType = matchType,
                         matchDate = matchDate,
                         team1UserIds = listOf(element = u1),
                         team2UserIds = listOf(element = u2),
@@ -550,6 +553,65 @@ class MatchRepositoryTest {
         val pending = matches.listPendingCalculation().map { it.id }
         pending shouldContain completed.id
         pending shouldNotContain scheduled.id
+    }
+
+    @Test
+    fun `windowed weighted counts tally completed matches per weight class (#459)`() {
+        val asOf = LocalDateTime.of(2026, 6, 1, 12, 0)
+        val today = asOf.toLocalDate()
+        val player = newUser(uid = "wc-p")
+        val opponent = newUser(uid = "wc-o")
+
+        // A mix of classes, all in-window: two tournament playoffs → tournament; a league round → league;
+        // open play → open play. (The enum's TOURNAMENT_INITIAL_ROUND name is unit-tested separately in
+        // RatingConfidenceTest; here it would exceed the pre-existing match_type VARCHAR(20).)
+        completedMatch(u1 = player, u2 = opponent, matchDate = today, matchType = MatchType.TOURNAMENT_PLAYOFFS)
+        completedMatch(u1 = player, u2 = opponent, matchDate = today, matchType = MatchType.TOURNAMENT_PLAYOFFS)
+        completedMatch(u1 = player, u2 = opponent, matchDate = today, matchType = MatchType.LEAGUE_PLAY)
+        completedMatch(u1 = player, u2 = opponent, matchDate = today, matchType = MatchType.OPEN_PLAY)
+
+        matches.weightedMatchCountsInWindow(userId = player, asOf = asOf) shouldBe
+            WeightClassCounts(tournaments = 2, leagues = 1, openPlays = 1)
+    }
+
+    @Test
+    fun `windowed weighted counts only count completed, participant matches inside the window (#459)`() {
+        val asOf = LocalDateTime.of(2026, 6, 1, 12, 0)
+        val today = asOf.toLocalDate()
+        val player = newUser(uid = "win-p")
+        val opponent = newUser(uid = "win-o")
+        val other = newUser(uid = "win-x")
+
+        // Just inside the 30-day window (exactly 30 days back) → counts.
+        completedMatch(u1 = player, u2 = opponent, matchDate = today.minusDays(30), matchType = MatchType.OPEN_PLAY)
+        // Just outside (31 days back) → excluded.
+        completedMatch(u1 = player, u2 = opponent, matchDate = today.minusDays(31), matchType = MatchType.OPEN_PLAY)
+        // A future-dated match → excluded (after asOf).
+        completedMatch(u1 = player, u2 = opponent, matchDate = today.plusDays(1), matchType = MatchType.OPEN_PLAY)
+        // A scheduled (not completed) fixture → excluded.
+        fixture(u1 = player, u2 = opponent, date = today)
+        // A match the player didn't take part in → excluded.
+        completedMatch(u1 = opponent, u2 = other, matchDate = today, matchType = MatchType.OPEN_PLAY)
+
+        matches.weightedMatchCountsInWindow(userId = player, asOf = asOf) shouldBe WeightClassCounts(openPlays = 1)
+        // A player with no qualifying matches is absent from the batched map.
+        matches.weightedMatchCountsInWindow(userIds = listOf(element = newUser(uid = "none")), asOf = asOf).shouldBeEmpty()
+    }
+
+    @Test
+    fun `windowed weighted counts count a player on either side, batched in one query (#459)`() {
+        val asOf = LocalDateTime.of(2026, 6, 1, 12, 0)
+        val today = asOf.toLocalDate()
+        val a = newUser(uid = "batch-a")
+        val b = newUser(uid = "batch-b")
+
+        // a as team1, b as team2 (open play); then b as team1, a as team2 (tournament) — both sides count.
+        completedMatch(u1 = a, u2 = b, matchDate = today, matchType = MatchType.OPEN_PLAY)
+        completedMatch(u1 = b, u2 = a, matchDate = today, matchType = MatchType.TOURNAMENT_PLAYOFFS)
+
+        val counts = matches.weightedMatchCountsInWindow(userIds = listOf(a, b), asOf = asOf)
+        counts[a] shouldBe WeightClassCounts(tournaments = 1, openPlays = 1)
+        counts[b] shouldBe WeightClassCounts(tournaments = 1, openPlays = 1)
     }
 
     @Test

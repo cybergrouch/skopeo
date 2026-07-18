@@ -805,7 +805,7 @@ class MatchServiceTest {
             change.previousRating.shouldBeNull()
             change.newRating.shouldBeNull()
             change.ratingChange.shouldBeNull()
-            // The current rating confidence (#343) is public — shown to every viewer, unlike the rates.
+            // The current rating confidence (#459) is public — shown to every viewer, unlike the rates.
             change.confidence.shouldNotBeNull()
         }
 
