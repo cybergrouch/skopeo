@@ -16,6 +16,7 @@ import { PlayerStandingCard } from "@/components/PlayerStandingCard";
 import { PointsAuditCard } from "@/components/PointsAuditCard";
 import { RatingBandMeter } from "@/components/RatingBandMeter";
 import { formatConfidence } from "@/lib/confidence";
+import { ConfidenceValue } from "@/components/ConfidenceValue";
 import { ShareCard } from "@/components/ShareCard";
 import { ReRateRequestCard } from "@/components/ReRateRequestCard";
 import { ProfileFieldsForm } from "@/components/ProfileFieldsForm";
@@ -131,9 +132,12 @@ export function ProfileTab({
                       <span className="font-medium">NTRP</span>
                       <span>
                         {rating.level ?? rating.value}
-                        {formatConfidence(rating.confidence)
-                          ? ` · ${formatConfidence(rating.confidence)}`
-                          : ""}
+                        {formatConfidence(rating.confidence) ? (
+                          <>
+                            {" · "}
+                            <ConfidenceValue confidence={rating.confidence} />
+                          </>
+                        ) : null}
                       </span>
                     </div>
                     {rating.bandPosition != null ? (

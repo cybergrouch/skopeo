@@ -210,8 +210,12 @@ describe('MatchPage', () => {
     })
     renderAt()
 
-    expect(screen.getByText(/· 40%/)).toBeInTheDocument()
-    expect(screen.getByText(/· 100%/)).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /rating confidence 40%/i }),
+    ).toHaveTextContent('40%')
+    expect(
+      screen.getByRole('button', { name: /rating confidence 100%/i }),
+    ).toHaveTextContent('100%')
   })
 
   it('falls back to code/"Unknown" names, an em-dash band, and omits an absent delta', () => {
