@@ -3319,6 +3319,45 @@ paths:
         '404':
           description: No such user
 
+  /api/v1/users/{userId}/ranking-points/adjustments:
+    post:
+      summary: Manually award or deduct ranking points (#469)
+      description: >-
+        Admin-only. Append a signed manual adjustment to the user's ledger from the Manage Player
+        section: positive points award, negative points deduct (non-zero, whole). It is a non-budgeted
+        EXTERNAL entry with a mandatory reason and an explicit validity window, band-tagged from the
+        player's current NTRP band and sex-tagged from the player. Queued like a match award: it shows
+        immediately in the player's points audit but only affects the standings on the next points
+        calculation. A net-negative counted total is floored at 0 in the standings (the ledger stays signed).
+      tags:
+        - Ranking Points
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdjustRankingPointsRequest'
+      responses:
+        '201':
+          description: The created adjustment (a ledger row)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RankingPointAwardResponse'
+        '400':
+          description: Validation error (zero or fractional points, blank reason, end before start, unrated player)
+        '403':
+          description: Not an administrator
+
   /api/v1/ranking-points:
     get:
       summary: List all ranking-point awards, paginated (#472)
@@ -6695,6 +6734,32 @@ components:
           format: date-time
           nullable: true
           description: Optional end of the validity window; defaults from the point-class policy.
+
+    AdjustRankingPointsRequest:
+      type: object
+      description: >-
+        Body for a manual signed point adjustment (#469). All fields are mandatory. points is a signed
+        integer as a decimal string (positive awards, negative deducts; non-zero, whole).
+      required:
+        - points
+        - reason
+        - validFrom
+        - validUntil
+      properties:
+        points:
+          type: string
+          description: The signed adjustment as a decimal string (non-zero, whole; positive awards, negative deducts).
+        reason:
+          type: string
+          description: The comment / rationale for the adjustment (required).
+        validFrom:
+          type: string
+          format: date-time
+          description: Start of the validity window.
+        validUntil:
+          type: string
+          format: date-time
+          description: End of the validity window (must be after validFrom).
 
     RevokeRankingPointsRequest:
       type: object

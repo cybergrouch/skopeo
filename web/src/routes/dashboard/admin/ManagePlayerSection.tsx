@@ -24,6 +24,7 @@ import {
   useGetApiV1UsersUserIdCapabilities,
   usePostApiV1UsersUserIdCapabilities,
 } from '@/api/generated/capabilities/capabilities'
+import { usePostApiV1UsersUserIdRankingPointsAdjustments } from '@/api/generated/ranking-points/ranking-points'
 import type { UserSummaryResponse } from '@/api/generated/model'
 
 // Roles an admin can grant/revoke here. ADMINISTRATOR is included (#194) but gated behind a confirm
@@ -218,6 +219,156 @@ function CapabilitiesEditor({ userId }: { userId: string }) {
   )
 }
 
+/**
+ * Manual point adjustment (#469): an admin awards (+) or deducts (−) ranking points for a player,
+ * like a match award — a queued signed EXTERNAL ledger entry with a validity window. All four fields
+ * are mandatory; the points must be a non-zero whole number and the end date must be on/after the
+ * start. The entry shows in the player's points audit immediately but only affects the standings on the
+ * next points calculation.
+ */
+function PointAdjustmentForm({ userId }: { userId: string }) {
+  const [points, setPoints] = useState('')
+  const [reason, setReason] = useState('')
+  const [validFrom, setValidFrom] = useState('')
+  const [validUntil, setValidUntil] = useState('')
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const adjust = usePostApiV1UsersUserIdRankingPointsAdjustments({
+    mutation: {
+      onSuccess: () => {
+        setSaved(true)
+        setPoints('')
+        setReason('')
+        setValidFrom('')
+        setValidUntil('')
+      },
+      onError: (e) => setError(errorMessage(e, 'Could not apply the adjustment.')),
+    },
+  })
+
+  // A non-zero whole integer (positive awards, negative deducts) — rejects blanks, 0, and fractions.
+  function invalidPoints(raw: string): boolean {
+    return !/^-?\d+$/.test(raw.trim()) || Number(raw) === 0
+  }
+
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault()
+    setSaved(false)
+    setError(null)
+    if (invalidPoints(points)) {
+      setError('Points must be a non-zero whole number (e.g. 50 or -25).')
+      return
+    }
+    if (reason.trim() === '') {
+      setError('A reason is required.')
+      return
+    }
+    if (validFrom === '' || validUntil === '') {
+      setError('Both validity dates are required.')
+      return
+    }
+    if (validUntil < validFrom) {
+      setError('The end date must be on or after the start date.')
+      return
+    }
+    // Backend takes ISO date-times: start-of-day for the start, end-of-day for the end so a
+    // same-day window still advances (valid_until must be after valid_from).
+    await adjust.mutateAsync({
+      userId,
+      data: {
+        points: points.trim(),
+        reason: reason.trim(),
+        validFrom: `${validFrom}T00:00:00`,
+        validUntil: `${validUntil}T23:59:59`,
+      },
+    })
+  }
+
+  return (
+    <form onSubmit={onSubmit} className="space-y-2">
+      <div className="space-y-1">
+        <Label htmlFor="adjust-points" className="text-xs">
+          Points (+ award / − deduct)
+        </Label>
+        <Input
+          id="adjust-points"
+          value={points}
+          placeholder="e.g. 50 or -25"
+          onChange={(e) => {
+            setPoints(e.target.value)
+            setSaved(false)
+          }}
+        />
+      </div>
+      <div className="space-y-1">
+        <Label htmlFor="adjust-reason" className="text-xs">
+          Comment / rationale
+        </Label>
+        <textarea
+          id="adjust-reason"
+          value={reason}
+          rows={2}
+          placeholder="Why is this adjustment being made?"
+          onChange={(e) => {
+            setReason(e.target.value)
+            setSaved(false)
+          }}
+          className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm"
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-1">
+          <Label htmlFor="adjust-from" className="text-xs">
+            Validity start
+          </Label>
+          <Input
+            id="adjust-from"
+            type="date"
+            value={validFrom}
+            onChange={(e) => {
+              setValidFrom(e.target.value)
+              setSaved(false)
+            }}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="adjust-until" className="text-xs">
+            Validity end
+          </Label>
+          <Input
+            id="adjust-until"
+            type="date"
+            value={validUntil}
+            onChange={(e) => {
+              setValidUntil(e.target.value)
+              setSaved(false)
+            }}
+          />
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="submit" size="sm" disabled={adjust.isPending}>
+          Apply adjustment
+        </Button>
+        {saved ? (
+          <span className="text-xs text-muted-foreground" role="status">
+            Applied
+          </span>
+        ) : null}
+        {error ? (
+          <span className="text-xs text-destructive" role="alert">
+            {error}
+          </span>
+        ) : null}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Applies to standings on the next points calculation.
+      </p>
+    </form>
+  )
+}
+
 function ManageBlock({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="space-y-2 rounded-lg border p-3">
@@ -229,8 +380,8 @@ function ManageBlock({ title, children }: { title: string; children: React.React
 
 /**
  * Admin player management (#96): find a member, then edit their profile (sex, date of birth),
- * override their NTRP rating, and grant/revoke roles — all in one place. Reached via search, so
- * the public profile page stays read-only.
+ * override their NTRP rating, grant/revoke roles, and make a manual point adjustment (#469) — all in
+ * one place. Reached via search, so the public profile page stays read-only.
  */
 export function ManagePlayerSection() {
   const [user, setUser] = useState<UserSummaryResponse | null>(null)
@@ -240,7 +391,7 @@ export function ManagePlayerSection() {
       <CardHeader>
         <CardTitle>Manage player</CardTitle>
         <CardDescription>
-          Find a member to edit their profile, rating, and roles.
+          Find a member to edit their profile, rating, roles, and ranking points.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -263,6 +414,9 @@ export function ManagePlayerSection() {
             </ManageBlock>
             <ManageBlock title="Roles">
               <CapabilitiesEditor userId={user.id} />
+            </ManageBlock>
+            <ManageBlock title="Point adjustment">
+              <PointAdjustmentForm key={user.id} userId={user.id} />
             </ManageBlock>
           </div>
         ) : (

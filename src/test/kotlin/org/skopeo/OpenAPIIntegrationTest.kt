@@ -57,6 +57,9 @@ class OpenAPIIntegrationTest {
             // The paginated list-all "Points awarded" list (#472): the paged response schema is documented.
             body shouldContain "AwardedPointsPageResponse"
             body shouldContain "AwardedPointRow"
+            // The manual signed point adjustment (#469): the adjustments endpoint + its request schema.
+            body shouldContain "/api/v1/users/{userId}/ranking-points/adjustments"
+            body shouldContain "AdjustRankingPointsRequest"
             // Profile band+sex rank + points and the owner-or-admin points audit (#448).
             body shouldContain "/api/v1/players/{code}/standing"
             body shouldContain "PlayerStandingResponse"
