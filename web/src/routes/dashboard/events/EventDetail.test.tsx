@@ -50,6 +50,7 @@ const {
       finalizePending: false,
       finalizeErrorMessage: null as string | null,
       pointsConfigFail: false,
+      pointsConfigPending: false,
       pointsConfigErrorMessage: null as string | null,
     },
   }))
@@ -118,7 +119,7 @@ vi.mock('@/api/generated/events/events', () => ({
     },
   }),
   usePutApiV1EventsIdPointsConfig: (opts?: { mutation?: { onSuccess?: () => void } }) => ({
-    isPending: false,
+    isPending: state.pointsConfigPending,
     mutateAsync: async (vars: unknown) => {
       pointsConfigMutate(vars)
       if (state.pointsConfigFail) {
@@ -226,6 +227,7 @@ describe('EventDetail', () => {
     state.finalizePending = false
     state.finalizeErrorMessage = null
     state.pointsConfigFail = false
+    state.pointsConfigPending = false
     state.pointsConfigErrorMessage = null
     useGetApiV1EventsId.mockReturnValue({ data: event, isLoading: false })
     useGetApiV1Clubs.mockReturnValue({ data: [], isLoading: false })
@@ -835,6 +837,36 @@ describe('EventDetail', () => {
     // Ticking it reveals the config fields so the organizer can opt in.
     await user.click(screen.getByLabelText('Award ranking points'))
     expect(screen.getByLabelText('Min points')).toBeInTheDocument()
+  })
+
+  it('seeds the min/max placeholders from the global policy when the event has no config (#466)', async () => {
+    // No persisted min/max, but a matching global policy exists: ticking "Award ranking points" shows the
+    // fields with the policy's bounds as placeholders (the `: globalPolicy` arm of each placeholder).
+    useGetApiV1PointsPolicies.mockReturnValue({
+      data: [{ eventType: 'OPEN_PLAY', minPoints: 3, maxPoints: 12, maxValidityDays: 30 }],
+      isLoading: false,
+    })
+    useGetApiV1EventsId.mockReturnValue({
+      data: { ...event, type: 'OPEN_PLAY', endDate: '2999-01-01' },
+      isLoading: false,
+    })
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.click(screen.getByLabelText('Award ranking points'))
+    expect(screen.getByLabelText('Min points')).toHaveAttribute('placeholder', '3')
+    expect(screen.getByLabelText('Max points')).toHaveAttribute('placeholder', '12')
+  })
+
+  it('shows a saving label and disables the button while the points config save is pending (#466)', () => {
+    // A points event so the fields are shown, with the save mutation in flight → the button reads
+    // "Saving…" and is disabled (the `setPointsConfig.isPending` arm).
+    useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
+    state.pointsConfigPending = true
+    renderDetail()
+
+    const saving = screen.getByRole('button', { name: 'Saving…' })
+    expect(saving).toBeDisabled()
   })
 
   it('shows the points config editor and designation input for an event that awards points (#466)', () => {

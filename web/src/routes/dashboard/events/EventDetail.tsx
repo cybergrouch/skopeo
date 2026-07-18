@@ -592,7 +592,7 @@ export function EventDetail({
                 </div>
               )}
               <CardDescription>
-                {EVENT_TYPE_LABELS[event.type] ?? event.type}
+                {EVENT_TYPE_LABELS[event.type]}
                 {" · "}
                 {event.startDate} – {event.endDate} · Event ID:{" "}
                 <code className="font-mono font-medium text-foreground">
@@ -722,9 +722,8 @@ export function EventDetail({
                 {globalPolicy ? (
                   <>
                     {" "}
-                    The global {EVENT_TYPE_LABELS[event.type] ??
-                      event.type}{" "}
-                    policy allows {globalPolicy.minPoints}–
+                    The global {EVENT_TYPE_LABELS[event.type]} policy allows{" "}
+                    {globalPolicy.minPoints}–
                     {globalPolicy.maxPoints} points and up to{" "}
                     {globalPolicy.maxValidityDays} validity days.
                   </>
