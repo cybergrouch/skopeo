@@ -880,6 +880,23 @@ describe('EventDetail', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('This event has already-rated matches')
   })
 
+  it('shows an un-finalizing label while the un-finalize mutation is pending (#477)', async () => {
+    // With the un-finalize mutation in flight, the confirm button reads "Un-finalizing…"
+    // and is disabled (the `unfinalizeEvent.isPending` arm).
+    useGetApiV1EventsId.mockReturnValue({
+      data: { ...event, type: 'LEAGUE', endDate: '2999-01-01', isFinalized: true },
+      isLoading: false,
+    })
+    state.unfinalizePending = true
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.click(screen.getByRole('button', { name: 'Un-finalize event' }))
+
+    const unfinalizing = screen.getByRole('button', { name: 'Un-finalizing…' })
+    expect(unfinalizing).toBeDisabled()
+  })
+
   // ---- Points config + fixture designation (#403 Phase C) ----
 
   const tournamentEvent = {
