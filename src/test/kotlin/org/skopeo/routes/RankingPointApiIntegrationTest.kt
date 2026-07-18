@@ -22,6 +22,7 @@ import io.ktor.server.testing.testApplication
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.dto.ranking.AwardedPointsPageResponse
 import org.skopeo.dto.ranking.GrantRankingPointsRequest
 import org.skopeo.dto.ranking.RankingPointAwardResponse
 import org.skopeo.dto.ranking.RevokeRankingPointsRequest
@@ -125,6 +126,45 @@ class RankingPointApiIntegrationTest {
             client.get(urlString = "/api/v1/users/${player.id}/ranking-points") {
                 header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
             }.body<List<RankingPointAwardResponse>>() shouldHaveSize 2
+        }
+
+    @Test
+    fun `the paged list-all is served to a points manager, paginates, and rejects a plain player (#472)`() =
+        withApp { client ->
+            seedUser(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+            seedUser(uid = "manager", roles = setOf(Capability.PLAYER, Capability.POINTS_MANAGER))
+            seedUser(uid = "plain", roles = setOf(element = Capability.PLAYER))
+            val player = seedUser(uid = "player", roles = setOf(element = Capability.PLAYER))
+            RatingRepository().setRating(userId = player.id, rating = BigDecimal("4.0"), level = "4.0")
+            val adminToken = TestFirebaseAuth.mintToken(uid = "admin")
+            val managerToken = TestFirebaseAuth.mintToken(uid = "manager")
+            val plainToken = TestFirebaseAuth.mintToken(uid = "plain")
+
+            // Two awards so paging is observable.
+            repeat(times = 2) {
+                client.post(urlString = "/api/v1/users/${player.id}/ranking-points") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = GrantRankingPointsRequest(points = "100", pointClass = "ANNUAL_TOURNAMENT"))
+                }.status shouldBe HttpStatusCode.Created
+            }
+
+            // A points manager can read the whole ledger, paginated (total stays the full count).
+            val firstPage =
+                client.get(urlString = "/api/v1/ranking-points?limit=1&offset=0") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $managerToken")
+                }
+            firstPage.status shouldBe HttpStatusCode.OK
+            val page = firstPage.body<AwardedPointsPageResponse>()
+            page.total shouldBe 2
+            page.rows shouldHaveSize 1
+            page.rows.first().source shouldBe "manual"
+            page.rows.first().playerPublicCode shouldBe player.publicCode
+
+            // A plain player is forbidden.
+            client.get(urlString = "/api/v1/ranking-points") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $plainToken")
+            }.status shouldBe HttpStatusCode.Forbidden
         }
 
     @Test

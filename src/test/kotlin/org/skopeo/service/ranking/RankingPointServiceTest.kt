@@ -341,6 +341,63 @@ class RankingPointServiceTest {
     }
 
     @Test
+    fun `listAwards returns a newest-first page resolving the player and manual source (#472)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val alice = provision(uid = "alice", sex = "Female")
+        val bob = provision(uid = "bob")
+        ratings.setRating(userId = alice.id, rating = BigDecimal("4.0"), level = "4.0")
+        ratings.setRating(userId = bob.id, rating = BigDecimal("3.5"), level = "3.5")
+
+        val alicePoints =
+            service.grant(
+                token = token(uid = "admin"),
+                command = grantCommand(userId = alice.id, points = "10"),
+            ).shouldBeRight()
+        val bobPoints = service.grant(token = token(uid = "admin"), command = grantCommand(userId = bob.id, points = "20")).shouldBeRight()
+
+        val page = service.listAwards(token = token(uid = "admin"), limit = 25, offset = 0).shouldBeRight()
+        page.total shouldBe 2
+        // The whole ledger is returned across users (both grants, no strict-time ordering assumed here —
+        // the newest-first order is asserted precisely in the repository test with distinct awarded_at).
+        page.rows.map { it.award.id }.toSet() shouldBe setOf(alicePoints.id, bobPoints.id)
+        // The player identity is resolved (display name + public code); a manual grant's source is "manual".
+        val bobRow = page.rows.single { it.award.userId == bob.id }
+        bobRow.playerDisplayName shouldBe "bob"
+        bobRow.playerPublicCode shouldBe bob.publicCode
+        bobRow.matchPublicCode shouldBe null
+        bobRow.eventPublicCode shouldBe null
+    }
+
+    @Test
+    fun `listAwards honors the page window (#472)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val player = provision(uid = "player")
+        ratings.setRating(userId = player.id, rating = BigDecimal("4.0"), level = "4.0")
+        repeat(times = 3) { service.grant(token = token(uid = "admin"), command = grantCommand(userId = player.id)).shouldBeRight() }
+
+        val windowed = service.listAwards(token = token(uid = "admin"), limit = 1, offset = 1).shouldBeRight()
+        windowed.total shouldBe 3
+        windowed.limit shouldBe 1
+        windowed.offset shouldBe 1
+        windowed.rows shouldHaveSize 1
+    }
+
+    @Test
+    fun `listAwards is allowed for a points manager and for an administrator but forbidden otherwise (#472)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        provision(uid = "manager", roles = setOf(Capability.PLAYER, Capability.POINTS_MANAGER))
+        provision(uid = "plain")
+
+        service.listAwards(token = token(uid = "admin"), limit = 25, offset = 0).shouldBeRight()
+        service.listAwards(token = token(uid = "manager"), limit = 25, offset = 0).shouldBeRight()
+        service.listAwards(token = token(uid = "plain"), limit = 25, offset = 0)
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        // An unprovisioned caller is also forbidden (null-caller arm).
+        service.listAwards(token = token(uid = "ghost"), limit = 25, offset = 0)
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
+    @Test
     fun `an external grant with a blank reason is a validation error`() {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val player = provision(uid = "player")

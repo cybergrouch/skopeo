@@ -21,8 +21,10 @@ import org.skopeo.dto.ranking.toResponse
 import org.skopeo.service.ranking.RankingPointService
 
 /**
- * Ranking-points ledger (#146, phase 1). All routes are ADMINISTRATOR-gated (enforced in
- * [RankingPointService]): grant an award to a user, list a user's awards, and revoke an award.
+ * Ranking-points ledger (#146, phase 1). The per-user grant/list/revoke routes are ADMINISTRATOR-gated
+ * (enforced in [RankingPointService]): grant an award to a user, list a user's awards, revoke an award.
+ * The paged list-all at `GET /api/v1/ranking-points` (#472) is POINTS_MANAGER-or-ADMINISTRATOR-gated,
+ * matching the Points Management tab.
  */
 fun Application.configureRankingPointRoutes(service: RankingPointService = RankingPointService()) {
     routing {
@@ -31,8 +33,26 @@ fun Application.configureRankingPointRoutes(service: RankingPointService = Ranki
                 grantAndListRankingPoints(service = service)
             }
             route(path = "/api/v1/ranking-points") {
+                listAllRankingPoints(service = service)
                 revokeRankingPoints(service = service)
             }
+        }
+    }
+}
+
+/** Paged list-all of the ledger (#472), newest-first, for the Points Management "Points awarded" list. */
+private fun Route.listAllRankingPoints(service: RankingPointService) {
+    get {
+        respondMappingErrors {
+            val params = call.request.queryParameters
+            respondEither(
+                result =
+                    service.listAwards(
+                        token = verifiedToken(),
+                        limit = params["limit"]?.toIntOrNull(),
+                        offset = params["offset"]?.toIntOrNull(),
+                    ),
+            ) { page -> call.respond(status = HttpStatusCode.OK, message = page.toResponse()) }
         }
     }
 }
