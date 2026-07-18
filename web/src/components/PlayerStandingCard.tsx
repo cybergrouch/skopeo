@@ -5,6 +5,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { formatPoints } from "@/lib/points";
 
 /** "Male" → "Men", "Female" → "Women"; anything else (Unspecified/null) is dropped from the label. */
 function groupLabel(band: string, sex: string | null | undefined): string {
@@ -35,7 +36,8 @@ export function PlayerStandingCard({ code }: PlayerStandingCardProps) {
   function metric(): string | null {
     if (!data) return null;
     if (data.source === "POINTS") {
-      return data.points ? `${data.points} pts` : null;
+      const points = formatPoints(data.points);
+      return points ? `${points} pts` : null;
     }
     return data.rating ? `NTRP ${data.rating}` : null;
   }

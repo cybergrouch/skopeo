@@ -8,6 +8,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { formatPoints } from "@/lib/points";
 
 interface PointsAuditCardProps {
   /** The player's shareable public code (#448). */
@@ -49,7 +50,7 @@ export function PointsAuditCard({ code, enabled }: PointsAuditCardProps) {
             {awards.map((award) => (
               <li key={award.id} className="rounded-lg border p-3 text-sm">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium">{award.points} pts</span>
+                  <span className="font-medium">{formatPoints(award.points)} pts</span>
                   <Badge variant="secondary">{award.band}</Badge>
                 </div>
                 <div className="mt-1 text-muted-foreground">
