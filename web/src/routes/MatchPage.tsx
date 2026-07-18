@@ -17,6 +17,7 @@ import type {
 import { ShareCard } from '@/components/ShareCard'
 import { PublicPageNav } from '@/components/PublicPageNav'
 import { formatConfidence } from '@/lib/confidence'
+import { ConfidenceValue } from '@/components/ConfidenceValue'
 
 /** A player's name as a link to their public profile, falling back to the code or "Unknown". */
 function PlayerLink({ player }: { player: MatchPublicPlayer }) {
@@ -84,12 +85,20 @@ function RatingChangeRow({ change }: { change: MatchPublicRatingChange }) {
               ({signed(change.ratingChange)})
             </span>
           ) : null}
-          {pct ? <span className="ml-1 text-muted-foreground">· {pct}</span> : null}
+          {pct ? (
+            <span className="ml-1 text-muted-foreground">
+              · <ConfidenceValue confidence={change.confidence} />
+            </span>
+          ) : null}
         </span>
       ) : (
         <span className="font-medium">
           {change.previousLevel ?? '—'} → {change.newLevel ?? '—'}
-          {pct ? <span className="ml-1 font-normal text-muted-foreground">· {pct}</span> : null}
+          {pct ? (
+            <span className="ml-1 font-normal text-muted-foreground">
+              · <ConfidenceValue confidence={change.confidence} />
+            </span>
+          ) : null}
         </span>
       )}
     </div>

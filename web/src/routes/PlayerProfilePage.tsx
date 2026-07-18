@@ -20,6 +20,7 @@ import { ShareCard } from '@/components/ShareCard'
 import { PublicPageNav } from '@/components/PublicPageNav'
 import { canViewPointsAudit, isAdministrator } from '@/auth/capabilities'
 import { formatConfidence } from '@/lib/confidence'
+import { ConfidenceValue } from '@/components/ConfidenceValue'
 
 /**
  * Public player profile reached via the shareable deep link `/players/:code` (issue #61). Viewable
@@ -129,9 +130,12 @@ export function PlayerProfilePage() {
                 <p className="text-sm">
                   <span className="font-medium">NTRP</span>{' '}
                   {player.rating.level ?? player.rating.value}
-                  {formatConfidence(player.rating.confidence)
-                    ? ` · ${formatConfidence(player.rating.confidence)}`
-                    : ''}
+                  {formatConfidence(player.rating.confidence) ? (
+                    <>
+                      {' · '}
+                      <ConfidenceValue confidence={player.rating.confidence} />
+                    </>
+                  ) : null}
                 </p>
               ) : (
                 <p className="text-sm text-muted-foreground">No rating yet.</p>

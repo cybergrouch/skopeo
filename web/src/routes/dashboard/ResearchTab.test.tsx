@@ -88,7 +88,9 @@ describe('ResearchTab', () => {
     renderTab()
     await user.type(screen.getByLabelText('Name'), 'ali')
     await user.click(screen.getByRole('button', { name: 'Search' }))
-    expect(screen.getByText(/· 87%/)).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /rating confidence 87%/i }),
+    ).toHaveTextContent('87%')
   })
 
   it('shows the win–loss record and total match count when present (#342)', async () => {

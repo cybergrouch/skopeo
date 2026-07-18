@@ -246,13 +246,21 @@ describe("ProfileTab", () => {
     expect(screen.queryByText("Pending assessment")).not.toBeInTheDocument();
   });
 
-  it("appends the computed rating confidence as a percentage (#343)", () => {
+  it("appends the computed rating confidence as an explainable percentage (#343, #463)", () => {
     useGetApiV1UsersUserIdRatings.mockReturnValue({
       data: [{ system: "NTRP", value: "4.000000", level: "4.0", confidence: "0.87" }],
       isLoading: false,
     });
     renderProfile();
-    expect(screen.getByText(/· 87%/)).toBeInTheDocument();
+    // The confidence renders through the shared ConfidenceValue tooltip trigger (#463), so the
+    // percentage is a focusable button carrying an explanatory aria-label. It appears both in the
+    // Rating card and in the Rating-history header, so more than one trigger is expected.
+    const triggers = screen.getAllByRole("button", {
+      name: /rating confidence 87%/i,
+    });
+    expect(triggers.length).toBeGreaterThan(0);
+    expect(triggers[0]).toHaveTextContent("87%");
+    expect(triggers[0]).toHaveAttribute("aria-describedby");
   });
 
   it("renders the band meter when a rating exposes a band position", () => {

@@ -89,9 +89,13 @@ describe("RatingHistoryCard", () => {
     expect(screen.getByText("No rating changes yet.")).toBeInTheDocument();
   });
 
-  it("shows the current rating confidence once in the header when provided (#343)", () => {
+  it("shows the current rating confidence once in the header, explained via a tooltip (#343, #463)", () => {
     render(<RatingHistoryCard entries={[entry()]} confidence="0.87" />);
-    expect(screen.getByText("Current confidence: 87%")).toBeInTheDocument();
+    expect(screen.getByText(/Current confidence:/)).toBeInTheDocument();
+    // The percentage is projected through the shared ConfidenceValue tooltip trigger (#463).
+    expect(
+      screen.getByRole("button", { name: /rating confidence 87%/i }),
+    ).toHaveTextContent("87%");
   });
 
   it("omits the header confidence when none is provided (#343)", () => {

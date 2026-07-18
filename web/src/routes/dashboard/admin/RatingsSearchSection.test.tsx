@@ -71,7 +71,9 @@ describe('RatingsSearchSection', () => {
     useGetApiV1UsersSearch.mockReturnValue(page([{ ...row, rating: { value: '4.000000', level: '4.0', confidence: '0.87' } }]))
     await user.type(screen.getByLabelText('Name'), 'ana')
     await user.click(screen.getByRole('button', { name: 'Search' }))
-    expect(screen.getByText(/· 87%/)).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /rating confidence 87%/i }),
+    ).toHaveTextContent('87%')
   })
 
   it('rates a player from the results, preselected with their current band (#205)', async () => {

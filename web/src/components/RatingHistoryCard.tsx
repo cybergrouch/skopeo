@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { CalculationBreakdownDetail } from "@/components/CalculationBreakdownDetail";
 import { NumberedPager } from "@/components/NumberedPager";
 import { formatConfidence } from "@/lib/confidence";
+import { ConfidenceValue } from "@/components/ConfidenceValue";
 
 /** Rating history is paginated newest-first, 25 rows per page (#301). */
 const PAGE_SIZE = 25;
@@ -123,7 +124,8 @@ export function RatingHistoryCard({
           Rating history
           {confidencePct ? (
             <span className="ml-2 text-sm font-normal text-muted-foreground">
-              Current confidence: {confidencePct}
+              Current confidence:{" "}
+              <ConfidenceValue confidence={confidence} />
             </span>
           ) : null}
         </CardTitle>

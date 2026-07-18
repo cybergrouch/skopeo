@@ -123,7 +123,9 @@ describe('PlayerProfilePage', () => {
       },
     })
     renderAt()
-    expect(screen.getByText(/· 87%/)).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /rating confidence 87%/i }),
+    ).toHaveTextContent('87%')
   })
 
   it('shows a rating without a level', () => {
