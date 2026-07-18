@@ -331,6 +331,18 @@ describe('ManagePlayerSection', () => {
     expect(adjustMutate).not.toHaveBeenCalled()
   })
 
+  it('rejects a missing validity date before calling the API (#469)', async () => {
+    const user = await selectAlice()
+    // Fill points + comment but leave the validity end blank so the dates check is what fails.
+    await user.type(screen.getByLabelText(/Points/), '50')
+    await user.type(screen.getByLabelText(/Comment/), 'note')
+    await user.type(screen.getByLabelText('Validity start'), '2026-01-01')
+
+    await user.click(screen.getByRole('button', { name: 'Apply adjustment' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('Both validity dates are required.')
+    expect(adjustMutate).not.toHaveBeenCalled()
+  })
+
   it('surfaces the backend error when an adjustment fails (#469)', async () => {
     usePostApiV1UsersUserIdRankingPointsAdjustments.mockImplementation((options: SuccessOpts) => ({
       isPending: false,
