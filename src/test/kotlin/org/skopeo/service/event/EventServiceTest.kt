@@ -7,6 +7,7 @@ import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
@@ -142,8 +143,9 @@ class EventServiceTest {
             service.create(token = token(uid = "host"), input = input(participants = listOf(p1.id, p2.id))).shouldBeRight()
         view.event.name shouldBe "Spring Open"
         view.event.publicCode.length shouldBe 6
-        view.participants.map { it.userId } shouldBe listOf(p1.id, p2.id)
-        view.participants.first().displayName shouldBe "p1"
+        // Order-independent: roster order isn't guaranteed and was flaking CI (#466 ancillary).
+        view.participants.map { it.userId } shouldContainExactlyInAnyOrder listOf(p1.id, p2.id)
+        view.participants.map { it.displayName } shouldContainExactlyInAnyOrder listOf("p1", "p2")
         view.club.shouldBeNull() // clubless by default
     }
 
@@ -1144,6 +1146,86 @@ class EventServiceTest {
     }
 
     @Test
+    fun `a budgeted event create accepts a 0-0 no-points config and skips all global validation (#466)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val club = clubs.create(command = CreateClubCommand(name = "Downtown TC", createdBy = host.id))
+        // A club LEAGUE event with 0/0: it opts out of points, so the global 5..50 bound and the
+        // validity-days check do NOT apply — even a wildly-long validity window is accepted.
+        val ok =
+            service.create(
+                token = token(uid = "host"),
+                input =
+                    input(
+                        type = EventType.LEAGUE,
+                        clubId = club.id,
+                        minPoints = 0,
+                        maxPoints = 0,
+                        validityStart = LocalDate.now(),
+                        validityEnd = LocalDate.now().plusDays(9999),
+                    ),
+            ).shouldBeRight()
+        ok.event.minPointsPerMatch shouldBe 0
+        ok.event.maxPointsPerMatch shouldBe 0
+    }
+
+    @Test
+    fun `a budgeted event create rejects a mixed one-zero points config (#466)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        // Exactly one of {min, max} is 0 → it's all-or-nothing, so both directions are rejected.
+        service.create(
+            token = token(uid = "host"),
+            input =
+                input(
+                    type = EventType.LEAGUE,
+                    minPoints = 0,
+                    maxPoints = 5,
+                    validityStart = LocalDate.now(),
+                    validityEnd = LocalDate.now().plusDays(10),
+                ),
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        service.create(
+            token = token(uid = "host"),
+            input =
+                input(
+                    type = EventType.LEAGUE,
+                    minPoints = 5,
+                    maxPoints = 0,
+                    validityStart = LocalDate.now(),
+                    validityEnd = LocalDate.now().plusDays(10),
+                ),
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `setPointsConfig accepts a 0-0 no-points config for a budgeted event (#466)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val event =
+            service.create(
+                token = token(uid = "host"),
+                input =
+                    input(
+                        type = EventType.LEAGUE,
+                        minPoints = 5,
+                        maxPoints = 40,
+                        validityStart = LocalDate.now(),
+                        validityEnd = LocalDate.now().plusDays(30),
+                    ),
+            ).shouldBeRight().event
+        // Switch the event to no-points (0/0): accepted, skips the global-policy check entirely.
+        val updated =
+            service.setPointsConfig(
+                token = token(uid = "host"),
+                id = event.id,
+                config = config(min = 0, max = 0),
+            ).shouldBeRight()
+        updated.event.minPointsPerMatch shouldBe 0
+        updated.event.maxPointsPerMatch shouldBe 0
+        // A mixed 0/5 is still rejected on the edit path.
+        service.setPointsConfig(token = token(uid = "host"), id = event.id, config = config(min = 0, max = 5))
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
     fun `a budgeted event create is rejected when the type has no global policy (#403)`() {
         provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         // Remove the LEAGUE global policy so validatePointsWindow hits the missing-policy path.
@@ -1655,5 +1737,42 @@ class EventServiceTest {
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
         awardRepo.listByUser(userId = p2.id).single().points shouldBe BigDecimal("30.0000")
         awardRepo.listByUser(userId = p1.id) shouldHaveSize 0
+    }
+
+    @Test
+    fun `a 0-0 no-points event designates 0, reserves nothing, and awards nothing on finalize (#466)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        rate(userId = p1.id, level = "4.0")
+        rate(userId = p2.id, level = "4.0")
+        val club = clubs.create(command = CreateClubCommand(name = "No-Points Club", createdBy = host.id))
+        // A club LEAGUE event with a 0/0 (no-points) config: awarding-type, but opts out of points.
+        val event =
+            service.create(
+                token = token(uid = "host"),
+                input =
+                    input(
+                        type = EventType.LEAGUE,
+                        clubId = club.id,
+                        participants = listOf(p1.id, p2.id),
+                        minPoints = 0,
+                        maxPoints = 0,
+                        validityStart = LocalDate.now(),
+                        validityEnd = LocalDate.now().plusDays(30),
+                    ),
+            ).shouldBeRight().event
+        // A 0-point fixture (a 0/0 event designates 0; MatchServiceTest covers the resolve+reserve path).
+        val fixture = seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2, designated = 0)
+        fixture.designatedPoints shouldBe 0
+
+        service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+
+        // The winner is rated normally elsewhere, but no ledger award is written for a 0-point match
+        // (the awarder skips a 0 designation), so nothing lands in the ledger.
+        awardRepo.listByUser(userId = p1.id) shouldHaveSize 0
+        awardRepo.listByUser(userId = p2.id) shouldHaveSize 0
+        AuditRepository().list(actions = listOf(element = AuditAction.EVENT_POINTS_AWARDED), limit = 10, offset = 0)
+            .first.single().details["totalPoints"] shouldBe "0"
     }
 }

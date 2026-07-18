@@ -125,16 +125,19 @@ class EventFinalizeAwarder(
     )
 
     /**
-     * The event's fixtures that pay out (decision #3): COMPLETED, with a winner and a designation.
-     * [Match.designatedPoints] and [Match.winnerTeamId] are resolved here so the caller never re-checks
-     * for null — a fixture that fails any part of the filter simply produces no [QualifyingWin].
+     * The event's fixtures that pay out (decision #3): COMPLETED, with a winner and a POSITIVE
+     * designation. [Match.designatedPoints] and [Match.winnerTeamId] are resolved here so the caller
+     * never re-checks for null — a fixture that fails any part of the filter simply produces no
+     * [QualifyingWin]. A 0-point designation (#466: a 0/0 "no points" event designates 0) is skipped
+     * here so no ledger row / [RankingPointAward] is written for a point-less match; it is still rated
+     * normally.
      */
     private fun qualifyingWins(eventId: UUID): List<QualifyingWin> =
         matches
             .listByEvent(eventId = eventId)
             .filter { it.status == MatchStatus.COMPLETED }
             .mapNotNull { match ->
-                val designated = match.designatedPoints ?: return@mapNotNull null
+                val designated = match.designatedPoints?.takeIf { it > 0 } ?: return@mapNotNull null
                 val winnerIds = winningUserIds(match = match).ifEmpty { return@mapNotNull null }
                 QualifyingWin(matchId = match.id, designated = designated, winnerIds = winnerIds)
             }

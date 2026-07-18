@@ -151,8 +151,10 @@ private fun Route.renameEvent(service: EventService) {
     put(path = "/{id}/points-config") {
         respondMappingErrors {
             val body = call.receive<SetPointsConfigRequest>()
-            require(value = body.minPointsPerMatch > 0 && body.maxPointsPerMatch > 0) {
-                "minPointsPerMatch and maxPointsPerMatch must be positive integers"
+            // #466: 0 is allowed (min = max = 0 opts the event out of points); the service enforces the
+            // 3-case rule (both 0, both > 0, or reject a mixed one-zero combo).
+            require(value = body.minPointsPerMatch >= 0 && body.maxPointsPerMatch >= 0) {
+                "minPointsPerMatch and maxPointsPerMatch must be non-negative integers"
             }
             respondEither(
                 result =
@@ -264,10 +266,10 @@ private fun toCreateEventInput(request: CreateEventRequest): CreateEventInput {
                 "Invalid event type '$value'; expected OPEN_PLAY, LEAGUE, or TOURNAMENT"
             }
         }
-    // Designated-points config (#403 Phase C) — whole positive integers (decision #6); the service
-    // validates the window against the global policy and requires all four for a budgeted-type event.
-    request.minPointsPerMatch?.let { require(value = it > 0) { "minPointsPerMatch must be a positive integer" } }
-    request.maxPointsPerMatch?.let { require(value = it > 0) { "maxPointsPerMatch must be a positive integer" } }
+    // Points config (#403 Phase C; #466) — whole non-negative integers: 0 is allowed (min = max = 0
+    // opts the event out of points). The service validates the window (the 3-case rule + global policy).
+    request.minPointsPerMatch?.let { require(value = it >= 0) { "minPointsPerMatch must be a non-negative integer" } }
+    request.maxPointsPerMatch?.let { require(value = it >= 0) { "maxPointsPerMatch must be a non-negative integer" } }
     return CreateEventInput(
         name = request.name,
         startDate = parseDate(value = request.startDate, field = "startDate"),

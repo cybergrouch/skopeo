@@ -607,6 +607,9 @@ class EventService(
      *  - **without** a club → the config is optional. If none of the fields are supplied it is
      *    deferred (settable later via the points-config editor once a club is assigned); if any field is
      *    supplied all four are required and validated, so a partial config is never silently dropped.
+     *
+     * #466: a supplied config may be the "no points" opt-out `min = max = 0`, which [validatePointsWindow]
+     * accepts while skipping the global-policy bounds/validity checks.
      */
     private fun resolveCreatePointsConfig(input: CreateEventInput): Either<ServiceError, ValidatedPointsConfig?> =
         either {
@@ -636,9 +639,17 @@ class EventService(
         }
 
     /**
-     * Validate a points window against the global per-type policy (#403 Phase C): integers > 0, the
-     * event's [min, max] within the global bounds, min ≤ max, end ≥ start, and the validity span within
-     * the global max validity days. A missing global policy for the type is a [ServiceError.Validation].
+     * Validate a points window against the global per-type policy (#466, refining #403 Phase C). Points
+     * are conditional on intent to award — a binary choice per the issue's locked semantics:
+     *  - **min = max = 0** → the event awards NO points (opt-out): accept and skip ALL global-policy
+     *    validation (bounds AND the validity window). No reservation / no ledger award follows.
+     *  - **min > 0 AND max > 0** → the event intends to award points → the global policy applies:
+     *    integers, the event's [min, max] within the global bounds, min ≤ max, end ≥ start, and the
+     *    validity span within the global max validity days.
+     *  - **exactly one of {min, max} is 0** → reject: it's all-or-nothing, no partial 0-to-N range.
+     *
+     * min ≤ max is always enforced. A missing global policy for the type (only reached in the
+     * awards-points case) is a [ServiceError.Validation].
      */
     private fun validatePointsWindow(
         eventType: EventType,
@@ -648,16 +659,24 @@ class EventService(
         validityEnd: LocalDate,
     ): Either<ServiceError, Unit> =
         either {
-            val policy =
-                ensureNotNull(value = budgets.findPolicy(eventType = eventType)) {
-                    ServiceError.Validation(message = "No global points policy is configured for $eventType")
-                }
-            ensure(condition = minPoints > 0 && maxPoints > 0) {
-                ServiceError.Validation(message = "Points per match must be greater than zero")
+            ensure(condition = minPoints >= 0 && maxPoints >= 0) {
+                ServiceError.Validation(message = "Points per match cannot be negative")
             }
             ensure(condition = minPoints <= maxPoints) {
                 ServiceError.Validation(message = "Min points must not exceed max points")
             }
+            // Binary opt-out: both 0 = no points, both > 0 = awards points, exactly one 0 is invalid.
+            val awardsPoints = minPoints > 0 && maxPoints > 0
+            val noPoints = minPoints == 0 && maxPoints == 0
+            ensure(condition = awardsPoints || noPoints) {
+                ServiceError.Validation(message = "Points must both be 0 (no points) or both greater than 0")
+            }
+            // A no-points event opts out of the global policy entirely — no bounds, no validity check.
+            if (!awardsPoints) return@either
+            val policy =
+                ensureNotNull(value = budgets.findPolicy(eventType = eventType)) {
+                    ServiceError.Validation(message = "No global points policy is configured for $eventType")
+                }
             ensure(condition = minPoints >= policy.minPoints) {
                 ServiceError.Validation(message = "Min points must be at least the global minimum of ${policy.minPoints}")
             }

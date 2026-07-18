@@ -147,17 +147,24 @@ function NewEventForm() {
     if (
       !Number.isInteger(min) ||
       !Number.isInteger(max) ||
-      min <= 0 ||
-      max <= 0
+      min < 0 ||
+      max < 0
     ) {
-      return "Min and max points must be positive whole numbers.";
+      return "Min and max points must be non-negative whole numbers.";
     }
     if (min > max) return "Min points cannot exceed max points.";
-    if (globalPolicy && min < globalPolicy.minPoints) {
-      return `Min points must be at least the global minimum of ${globalPolicy.minPoints}.`;
+    // #466: points are all-or-nothing — both 0 (no points) or both > 0 (awards points).
+    if ((min === 0) !== (max === 0)) {
+      return "Enter 0 for both to award no points, or set both within the global range.";
     }
-    if (globalPolicy && max > globalPolicy.maxPoints) {
-      return `Max points must not exceed the global maximum of ${globalPolicy.maxPoints}.`;
+    // A 0/0 "no points" event opts out of the global policy — skip the global bounds check.
+    if (min > 0 && max > 0) {
+      if (globalPolicy && min < globalPolicy.minPoints) {
+        return `Min points must be at least the global minimum of ${globalPolicy.minPoints}.`;
+      }
+      if (globalPolicy && max > globalPolicy.maxPoints) {
+        return `Max points must not exceed the global maximum of ${globalPolicy.maxPoints}.`;
+      }
     }
     if (validityEnd < validityStart) {
       return "Validity end cannot be before the start.";
@@ -300,6 +307,10 @@ function NewEventForm() {
             <div className="grid gap-3 rounded-md border border-input p-3">
               <p className="text-xs font-medium uppercase text-muted-foreground">
                 Points config
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Enter 0 for both min &amp; max to award no points, or set both
+                min &amp; max within the global range.
               </p>
               {globalPolicy ? (
                 <p className="text-xs text-muted-foreground">

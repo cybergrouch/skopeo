@@ -939,9 +939,9 @@ describe('EventDetail', () => {
     })
   })
 
-  it('still rejects an actually-cleared min/max as not positive whole numbers (#440 guard stays live)', async () => {
-    // The seeding fix (#440) pre-fills the fields, but the guard must still fire if the user deliberately
-    // clears one — an empty Min is Number("") === 0, which is not a positive whole number.
+  it('rejects a mixed one-zero config when only min is cleared (#466)', async () => {
+    // The seeding fix (#440) pre-fills the fields; clearing only Min leaves an empty Min (Number("")===0)
+    // against the seeded Max (20) — a mixed one-zero combo, which the all-or-nothing rule rejects (#466).
     useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
     const user = userEvent.setup()
     renderDetail()
@@ -949,8 +949,32 @@ describe('EventDetail', () => {
     await user.clear(screen.getByLabelText('Min points'))
     await user.click(screen.getByRole('button', { name: 'Save points config' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Min and max points must be positive whole numbers')
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Enter 0 for both to award no points, or set both within the global range.',
+    )
     expect(pointsConfigMutate).not.toHaveBeenCalled()
+  })
+
+  it('accepts a 0/0 no-points config, skipping the global bounds (#466)', async () => {
+    // Switching both Min and Max to 0 opts the event out of points — accepted, skips the global policy.
+    useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.clear(screen.getByLabelText('Min points'))
+    await user.type(screen.getByLabelText('Min points'), '0')
+    await user.clear(screen.getByLabelText('Max points'))
+    await user.type(screen.getByLabelText('Max points'), '0')
+    await user.click(screen.getByRole('button', { name: 'Save points config' }))
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(pointsConfigMutate).toHaveBeenCalledWith({
+      id: 'e1',
+      data: expect.objectContaining({
+        minPointsPerMatch: 0,
+        maxPointsPerMatch: 0,
+      }),
+    })
   })
 
   it('requires a validity window when a date is cleared (#440 guard stays live)', async () => {

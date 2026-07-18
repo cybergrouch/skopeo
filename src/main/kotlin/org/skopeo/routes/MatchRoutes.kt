@@ -101,8 +101,9 @@ private fun toFixtureInput(request: CreateFixtureRequest): FixtureInput {
     val team1 = request.team1.map { parseUuid(value = it) }
     val team2 = request.team2.map { parseUuid(value = it) }
     validateComposition(type = matchFormat, team1 = team1, team2 = team2)
-    // Designated points (#403 Phase C) are whole and non-negative (decision #6) — reject at the boundary.
-    request.designatedPoints?.let { require(value = it > 0) { "designatedPoints must be a positive integer" } }
+    // Designated points (#403 Phase C; #466) are whole and non-negative: 0 is valid (a 0/0 "no points"
+    // event designates 0). The service validates the amount against the event's [min, max] window.
+    request.designatedPoints?.let { require(value = it >= 0) { "designatedPoints must be a non-negative integer" } }
     return FixtureInput(
         matchFormat = matchFormat,
         matchType = parseEnumParam<MatchType>(value = request.matchType, field = "matchType"),

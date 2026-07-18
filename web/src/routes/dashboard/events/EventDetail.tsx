@@ -289,15 +289,40 @@ export function EventDetail({
     e.preventDefault();
     setPointsConfigError(null);
     setPointsConfigSaved(false);
+    const policy = policies?.find((p) => p.eventType === event?.type);
     const min = Number(minDraft);
     const max = Number(maxDraft);
-    if (!Number.isInteger(min) || !Number.isInteger(max) || min <= 0 || max <= 0) {
-      setPointsConfigError("Min and max points must be positive whole numbers.");
+    if (!Number.isInteger(min) || !Number.isInteger(max) || min < 0 || max < 0) {
+      setPointsConfigError(
+        "Min and max points must be non-negative whole numbers.",
+      );
       return;
     }
     if (min > max) {
       setPointsConfigError("Min points cannot exceed max points.");
       return;
+    }
+    // #466: points are all-or-nothing — both 0 (no points) or both > 0 (awards points).
+    if ((min === 0) !== (max === 0)) {
+      setPointsConfigError(
+        "Enter 0 for both to award no points, or set both within the global range.",
+      );
+      return;
+    }
+    // A 0/0 "no points" config opts out of the global policy — skip the global bounds check.
+    if (min > 0 && max > 0) {
+      if (policy && min < policy.minPoints) {
+        setPointsConfigError(
+          `Min points must be at least the global minimum of ${policy.minPoints}.`,
+        );
+        return;
+      }
+      if (policy && max > policy.maxPoints) {
+        setPointsConfigError(
+          `Max points must not exceed the global maximum of ${policy.maxPoints}.`,
+        );
+        return;
+      }
     }
     if (validityStartDraft === "" || validityEndDraft === "") {
       setPointsConfigError("A validity start and end date are required.");
@@ -707,7 +732,9 @@ export function EventDetail({
                 <CardTitle>Points config</CardTitle>
                 <CardDescription>
                   The per-match reward window a fixture may designate within, and
-                  how long an awarded point stays valid.
+                  how long an awarded point stays valid. Enter 0 for both min
+                  &amp; max to award no points, or set both within the global
+                  range.
                   {globalPolicy ? (
                     <>
                       {" "}

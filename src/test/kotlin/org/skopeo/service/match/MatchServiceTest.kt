@@ -1552,4 +1552,34 @@ class MatchServiceTest {
             ).shouldBeRight()
             .designatedPoints shouldBe 40
     }
+
+    @Test
+    fun `a 0-0 no-points event fixture designates 0 and reserves nothing against the budget (#466)`() {
+        val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        // A club LEAGUE event with a 0/0 (no-points) config and a real budget.
+        val event = budgetedEvent(host = host, participants = listOf(p1.id, p2.id), clubBudget = 50, min = 0, max = 0)
+        val clubId = event.clubId.shouldNotBeNull()
+
+        // Default designation round(avg(0,0)) = 0; amount 0 ∈ [0,0]; reserve 0 × team size = 0.
+        service
+            .createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id))
+            .shouldBeRight()
+            .designatedPoints shouldBe 0
+        budgets.sumReservedPoints(clubId = clubId, eventType = EventType.LEAGUE) shouldBe 0
+
+        // An explicit 0 is accepted too; a positive designation is out of the 0..0 window → rejected.
+        service
+            .createFixture(
+                token = token(uid = "host"),
+                request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id, designatedPoints = 0),
+            ).shouldBeRight()
+            .designatedPoints shouldBe 0
+        service
+            .createFixture(
+                token = token(uid = "host"),
+                request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id, designatedPoints = 5),
+            ).shouldBeLeft()
+    }
 }

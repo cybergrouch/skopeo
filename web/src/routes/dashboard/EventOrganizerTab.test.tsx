@@ -721,10 +721,10 @@ describe("EventOrganizerTab", () => {
     await user.type(screen.getByLabelText("Validity start"), "2026-06-01");
     await user.type(screen.getByLabelText("Validity end"), "2026-06-20");
 
-    // Submitting surfaces the "positive whole numbers" error and blocks the create.
+    // Submitting surfaces the "non-negative whole numbers" error and blocks the create.
     submitForm();
     expect(
-      screen.getByText("Min and max points must be positive whole numbers."),
+      screen.getByText("Min and max points must be non-negative whole numbers."),
     ).toBeInTheDocument();
     expect(createMutate).not.toHaveBeenCalled();
   });
@@ -794,7 +794,7 @@ describe("EventOrganizerTab", () => {
     expect(createMutate).not.toHaveBeenCalled();
   });
 
-  it("blocks submit and surfaces the error when the points config is invalid (#434)", async () => {
+  it("rejects a mixed one-zero points config (#466)", async () => {
     useGetApiV1Clubs.mockReturnValue({
       data: [{ id: "c1", name: "Downtown TC", isActive: true, owners: [] }],
       isLoading: false,
@@ -802,9 +802,9 @@ describe("EventOrganizerTab", () => {
     const user = userEvent.setup();
     renderTab();
     await openBudgetedForm(user);
-    // Max of 0 makes the window invalid (pointsError set), disabling the Create button.
-    await user.type(screen.getByLabelText("Min points"), "2");
-    await user.type(screen.getByLabelText("Max points"), "0");
+    // Exactly one of {min, max} is 0 → all-or-nothing, so the mixed combo is rejected (min ≤ max holds).
+    await user.type(screen.getByLabelText("Min points"), "0");
+    await user.type(screen.getByLabelText("Max points"), "5");
     await user.type(screen.getByLabelText("Validity start"), "2026-06-01");
     await user.type(screen.getByLabelText("Validity end"), "2026-06-20");
 
@@ -812,9 +812,37 @@ describe("EventOrganizerTab", () => {
     submitForm();
 
     expect(
-      screen.getByText("Min and max points must be positive whole numbers."),
+      screen.getByText(
+        "Enter 0 for both to award no points, or set both within the global range.",
+      ),
     ).toBeInTheDocument();
     expect(createMutate).not.toHaveBeenCalled();
+  });
+
+  it("accepts a 0/0 no-points config, skipping the global bounds (#466)", async () => {
+    useGetApiV1Clubs.mockReturnValue({
+      data: [{ id: "c1", name: "Downtown TC", isActive: true, owners: [] }],
+      isLoading: false,
+    });
+    const user = userEvent.setup();
+    renderTab();
+    await openBudgetedForm(user, "LEAGUE");
+    // LEAGUE global min is 5, but a 0/0 "no points" event opts out of the global bounds entirely.
+    await user.type(screen.getByLabelText("Min points"), "0");
+    await user.type(screen.getByLabelText("Max points"), "0");
+    await user.type(screen.getByLabelText("Validity start"), "2026-06-01");
+    await user.type(screen.getByLabelText("Validity end"), "2026-06-20");
+
+    submitForm();
+
+    expect(createMutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          minPointsPerMatch: 0,
+          maxPointsPerMatch: 0,
+        }),
+      }),
+    );
   });
 
   it("renders the global-policy hint and bound placeholders when a policy is present (#434)", async () => {

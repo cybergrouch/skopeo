@@ -4906,12 +4906,14 @@ components:
           description: >-
             Min per-match reward (#403 Phase C). Required (with all four points fields) for an event of any type
             that has a club (OPEN_PLAY unified); a clubless event may omit them and set the config later (#429).
+            0 is allowed: min = max = 0 opts the event out of points (#466), skipping the global policy.
         maxPointsPerMatch:
           type: integer
           nullable: true
           description: >-
             Max per-match reward (#403 Phase C). Required (with all four points fields) for an event of any type
             that has a club (OPEN_PLAY unified); a clubless event may omit them and set the config later (#429).
+            0 is allowed: min = max = 0 opts the event out of points (#466), skipping the global policy.
         pointValidityStart:
           type: string
           format: date
