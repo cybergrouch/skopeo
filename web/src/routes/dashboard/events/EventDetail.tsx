@@ -402,7 +402,6 @@ export function EventDetail({
 
   // Points are opt-in via the event's "Award ranking points" checkbox (#466), for any event type/club.
   // The points-config editor is shown for every (non-deleted) event; the global policy bounds the hint.
-  const showPointsConfigEditor = !!event;
   const globalPolicy = policies?.find((p) => p.eventType === event?.type);
   // The event awards points when it carries a config (min/max set). A fixture may then designate points.
   const hasPointsConfig =
@@ -714,159 +713,157 @@ export function EventDetail({
           </Card>
 
           {/* Points config (#466): opt-in "Award ranking points" checkbox on every event. */}
-          {showPointsConfigEditor ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Points config</CardTitle>
-                <CardDescription>
-                  The per-match reward window a fixture may designate within, and
-                  how long an awarded point stays valid.
-                  {globalPolicy ? (
-                    <>
-                      {" "}
-                      The global {EVENT_TYPE_LABELS[event.type] ??
-                        event.type}{" "}
-                      policy allows {globalPolicy.minPoints}–
-                      {globalPolicy.maxPoints} points and up to{" "}
-                      {globalPolicy.maxValidityDays} validity days.
-                    </>
-                  ) : null}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {hasPointsConfig ? (
-                  <p className="text-sm" data-testid="points-config-summary">
-                    Currently {event.minPointsPerMatch}–
-                    {event.maxPointsPerMatch} points, valid{" "}
-                    {event.pointValidityStart} – {event.pointValidityEnd}.
-                  </p>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    This event awards no points.
-                  </p>
-                )}
-                {locked ? null : (
-                  <form onSubmit={savePointsConfig} className="grid gap-3">
-                    {/* Opt-in checkbox (#466): un-ticking clears the config (and its fixtures' points). */}
-                    <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={awardPointsDraft}
+          <Card>
+            <CardHeader>
+              <CardTitle>Points config</CardTitle>
+              <CardDescription>
+                The per-match reward window a fixture may designate within, and
+                how long an awarded point stays valid.
+                {globalPolicy ? (
+                  <>
+                    {" "}
+                    The global {EVENT_TYPE_LABELS[event.type] ??
+                      event.type}{" "}
+                    policy allows {globalPolicy.minPoints}–
+                    {globalPolicy.maxPoints} points and up to{" "}
+                    {globalPolicy.maxValidityDays} validity days.
+                  </>
+                ) : null}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {hasPointsConfig ? (
+                <p className="text-sm" data-testid="points-config-summary">
+                  Currently {event.minPointsPerMatch}–
+                  {event.maxPointsPerMatch} points, valid{" "}
+                  {event.pointValidityStart} – {event.pointValidityEnd}.
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  This event awards no points.
+                </p>
+              )}
+              {locked ? null : (
+                <form onSubmit={savePointsConfig} className="grid gap-3">
+                  {/* Opt-in checkbox (#466): un-ticking clears the config (and its fixtures' points). */}
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={awardPointsDraft}
+                      onChange={(e) => {
+                        setAwardPointsDraft(e.target.checked);
+                        setPointsConfigSaved(false);
+                      }}
+                      aria-label="Award ranking points"
+                    />
+                    Award ranking points
+                  </label>
+                  {awardPointsDraft ? (
+                  <>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label htmlFor="points-min" className="text-xs">
+                        Min points
+                      </Label>
+                      <Input
+                        id="points-min"
+                        type="number"
+                        value={minDraft}
+                        placeholder={
+                          event.minPointsPerMatch != null
+                            ? String(event.minPointsPerMatch)
+                            : globalPolicy
+                              ? String(globalPolicy.minPoints)
+                              : ""
+                        }
                         onChange={(e) => {
-                          setAwardPointsDraft(e.target.checked);
+                          setMinDraft(e.target.value);
                           setPointsConfigSaved(false);
                         }}
-                        aria-label="Award ranking points"
                       />
-                      Award ranking points
-                    </label>
-                    {awardPointsDraft ? (
-                    <>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1">
-                        <Label htmlFor="points-min" className="text-xs">
-                          Min points
-                        </Label>
-                        <Input
-                          id="points-min"
-                          type="number"
-                          value={minDraft}
-                          placeholder={
-                            event.minPointsPerMatch != null
-                              ? String(event.minPointsPerMatch)
-                              : globalPolicy
-                                ? String(globalPolicy.minPoints)
-                                : ""
-                          }
-                          onChange={(e) => {
-                            setMinDraft(e.target.value);
-                            setPointsConfigSaved(false);
-                          }}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="points-max" className="text-xs">
-                          Max points
-                        </Label>
-                        <Input
-                          id="points-max"
-                          type="number"
-                          value={maxDraft}
-                          placeholder={
-                            event.maxPointsPerMatch != null
-                              ? String(event.maxPointsPerMatch)
-                              : globalPolicy
-                                ? String(globalPolicy.maxPoints)
-                                : ""
-                          }
-                          onChange={(e) => {
-                            setMaxDraft(e.target.value);
-                            setPointsConfigSaved(false);
-                          }}
-                        />
-                      </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1">
-                        <Label htmlFor="points-valid-from" className="text-xs">
-                          Validity start
-                        </Label>
-                        <Input
-                          id="points-valid-from"
-                          type="date"
-                          value={validityStartDraft}
-                          onChange={(e) => {
-                            setValidityStartDraft(e.target.value);
-                            setPointsConfigSaved(false);
-                          }}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="points-valid-to" className="text-xs">
-                          Validity end
-                        </Label>
-                        <Input
-                          id="points-valid-to"
-                          type="date"
-                          value={validityEndDraft}
-                          onChange={(e) => {
-                            setValidityEndDraft(e.target.value);
-                            setPointsConfigSaved(false);
-                          }}
-                        />
-                      </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="points-max" className="text-xs">
+                        Max points
+                      </Label>
+                      <Input
+                        id="points-max"
+                        type="number"
+                        value={maxDraft}
+                        placeholder={
+                          event.maxPointsPerMatch != null
+                            ? String(event.maxPointsPerMatch)
+                            : globalPolicy
+                              ? String(globalPolicy.maxPoints)
+                              : ""
+                        }
+                        onChange={(e) => {
+                          setMaxDraft(e.target.value);
+                          setPointsConfigSaved(false);
+                        }}
+                      />
                     </div>
-                    </>
-                    ) : null}
-                    <div className="flex items-center gap-2">
-                      <Button
-                        type="submit"
-                        size="sm"
-                        disabled={setPointsConfig.isPending}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label htmlFor="points-valid-from" className="text-xs">
+                        Validity start
+                      </Label>
+                      <Input
+                        id="points-valid-from"
+                        type="date"
+                        value={validityStartDraft}
+                        onChange={(e) => {
+                          setValidityStartDraft(e.target.value);
+                          setPointsConfigSaved(false);
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="points-valid-to" className="text-xs">
+                        Validity end
+                      </Label>
+                      <Input
+                        id="points-valid-to"
+                        type="date"
+                        value={validityEndDraft}
+                        onChange={(e) => {
+                          setValidityEndDraft(e.target.value);
+                          setPointsConfigSaved(false);
+                        }}
+                      />
+                    </div>
+                  </div>
+                  </>
+                  ) : null}
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="submit"
+                      size="sm"
+                      disabled={setPointsConfig.isPending}
+                    >
+                      {setPointsConfig.isPending
+                        ? "Saving…"
+                        : "Save points config"}
+                    </Button>
+                    {pointsConfigSaved ? (
+                      <span
+                        className="text-xs text-muted-foreground"
+                        role="status"
                       >
-                        {setPointsConfig.isPending
-                          ? "Saving…"
-                          : "Save points config"}
-                      </Button>
-                      {pointsConfigSaved ? (
-                        <span
-                          className="text-xs text-muted-foreground"
-                          role="status"
-                        >
-                          Saved
-                        </span>
-                      ) : null}
-                    </div>
-                    {pointsConfigError ? (
-                      <p className="text-sm text-destructive" role="alert">
-                        {pointsConfigError}
-                      </p>
+                        Saved
+                      </span>
                     ) : null}
-                  </form>
-                )}
-              </CardContent>
-            </Card>
-          ) : null}
+                  </div>
+                  {pointsConfigError ? (
+                    <p className="text-sm text-destructive" role="alert">
+                      {pointsConfigError}
+                    </p>
+                  ) : null}
+                </form>
+              )}
+            </CardContent>
+          </Card>
 
           {requests.length > 0 ? (
             <Card>
@@ -1118,7 +1115,7 @@ export function EventDetail({
                             {designatedValue * teamSize} for {teamSize}
                             {teamSize === 1 ? " player" : " players"}).
                             {clubBudget != null
-                              ? ` ${clubBudget.free} points free in this club's ${EVENT_TYPE_LABELS[event.type] ?? event.type} budget.`
+                              ? ` ${clubBudget.free} points free in this club's ${EVENT_TYPE_LABELS[event.type]} budget.`
                               : event.clubId
                                 ? ""
                                 : " No club is set, so no budget is reserved."}
