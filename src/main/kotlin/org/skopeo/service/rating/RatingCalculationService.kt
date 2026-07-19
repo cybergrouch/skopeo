@@ -6,7 +6,6 @@ package org.skopeo.service.rating
 import arrow.core.Either
 import arrow.core.left
 import arrow.core.raise.either
-import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -169,14 +168,14 @@ class RatingCalculationService(
             // means an earlier pending match would be left unrated while a later one is committed.
             val prefix = pending.take(n = lastSelectedIndex + 1)
             val excluded = prefix.firstOrNull { !isSelected(match = it) }
-            ensure(condition = excluded == null) {
-                val label = excluded!!.eventId?.let { "event $it" } ?: "Open (eventless) match ${excluded.id}"
+            if (excluded != null) {
+                val label = excluded.eventId?.let { "event $it" } ?: "Open (eventless) match ${excluded.id}"
                 ServiceError.Validation(
                     message =
                         "Selection must be a contiguous prefix of the pending timeline: " +
                             "$label (match ${excluded.id}, dated ${excluded.matchDate}) is older than a " +
                             "selected event but was not included.",
-                )
+                ).left().bind()
             }
             prefix
         }
