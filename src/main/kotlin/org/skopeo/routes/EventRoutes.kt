@@ -48,9 +48,9 @@ fun Application.configureEventRoutes(service: EventService = EventService()) {
             }
             authenticate(FIREBASE_AUTH) {
                 listAndCreate(service = service)
-                myEvents(service = service)
                 eventSelfSignup(service = service)
                 renameEvent(service = service)
+                finalizeEvent(service = service)
                 byIdAndParticipants(service = service)
             }
         }
@@ -73,13 +73,8 @@ private fun Route.listAndCreate(service: EventService) {
             }
         }
     }
-}
-
-/**
- * The caller's own events (#202) for the Profile "Events history". The literal `/mine` segment is
- * matched before `/{id}`, so it never collides with the UUID route. Any authenticated user.
- */
-private fun Route.myEvents(service: EventService) {
+    // The caller's own events (#202) for the Profile "Events history". The literal `/mine` segment is
+    // matched before `/{id}`, so it never collides with the UUID route. Any authenticated user.
     get(path = "/mine") {
         respondMappingErrors {
             respondEither(result = service.myEvents(token = verifiedToken())) { events ->
@@ -175,11 +170,26 @@ private fun Route.renameEvent(service: EventService) {
             ) { event -> call.respond(status = HttpStatusCode.OK, message = event.toResponse()) }
         }
     }
-    // Finalize an event (#403): terminal, closes it to changes and queues its matches for rating.
+}
+
+/**
+ * An event's finalize lifecycle: finalize (#403) closes it to changes and queues its matches for
+ * rating; un-finalize (#477) reverses that so an erroneous score can be corrected and re-finalized.
+ * Both are staff-only (HOST owns / ADMINISTRATOR / CLUB_OWNER), enforced in the service.
+ */
+private fun Route.finalizeEvent(service: EventService) {
     post(path = "/{id}/finalize") {
         respondMappingErrors {
             respondEither(
                 result = service.finalize(token = verifiedToken(), id = uuidParam(name = "id")),
+            ) { event -> call.respond(status = HttpStatusCode.OK, message = event.toResponse()) }
+        }
+    }
+    // Rejected if the event is not finalized, or if any of its matches are already rated.
+    post(path = "/{id}/unfinalize") {
+        respondMappingErrors {
+            respondEither(
+                result = service.unfinalize(token = verifiedToken(), id = uuidParam(name = "id")),
             ) { event -> call.respond(status = HttpStatusCode.OK, message = event.toResponse()) }
         }
     }

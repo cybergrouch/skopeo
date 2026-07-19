@@ -31,6 +31,7 @@ enum class AuditAction {
     EVENT_CLUB_CHANGED,
     EVENT_DELETED,
     EVENT_FINALIZED,
+    EVENT_UNFINALIZED,
     EVENT_POINTS_CONFIG_SET,
     EVENT_POINTS_AWARDED,
     FIXTURE_POINTS_DESIGNATED,
@@ -117,6 +118,7 @@ val AuditAction.category: AuditCategory
             AuditAction.EVENT_CLUB_CHANGED,
             AuditAction.EVENT_DELETED,
             AuditAction.EVENT_FINALIZED,
+            AuditAction.EVENT_UNFINALIZED,
             AuditAction.EVENT_POINTS_CONFIG_SET,
             AuditAction.EVENT_POINTS_AWARDED,
             -> AuditCategory.EVENT_MANAGEMENT

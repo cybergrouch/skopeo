@@ -10,6 +10,7 @@ import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.types.shouldBeInstanceOf
@@ -21,6 +22,7 @@ import org.junit.jupiter.api.Test
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuthProvider
+import org.skopeo.model.AwardStatus
 import org.skopeo.model.Capability
 import org.skopeo.model.CreateClubCommand
 import org.skopeo.model.CreateFixtureCommand
@@ -737,6 +739,137 @@ class EventServiceTest {
             userId = player.id,
             status = EventParticipantStatus.APPROVED,
         ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    // --- Un-finalize (#477). ---
+
+    @Test
+    fun `a host un-finalizes their own event, clearing the flag and writing an Activity Log entry (#477)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight().event
+        service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+
+        val reopened = service.unfinalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+
+        reopened.event.isFinalized.shouldBeFalse()
+        reopened.event.finalizedBy.shouldBeNull()
+        val persisted = events.findById(id = event.id)!!
+        persisted.isFinalized.shouldBeFalse()
+        persisted.finalizedBy.shouldBeNull()
+        persisted.finalizedAt.shouldBeNull()
+        AuditRepository().list(actions = listOf(element = AuditAction.EVENT_UNFINALIZED), limit = 10, offset = 0).first.single().let {
+            it.actorUserId shouldBe host.id
+            it.entityId shouldBe event.id
+            it.entityType shouldBe AuditEntityType.EVENT
+            it.summary shouldContain "Un-finalized event Spring Open"
+        }
+    }
+
+    @Test
+    fun `an administrator may un-finalize any event, and a club owner too (#477)`() {
+        provision(uid = "owner", roles = setOf(Capability.PLAYER, Capability.HOST))
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val event = service.create(token = token(uid = "owner"), input = input()).shouldBeRight().event
+        service.finalize(token = token(uid = "owner"), id = event.id).shouldBeRight()
+
+        service.unfinalize(token = token(uid = "admin"), id = event.id).shouldBeRight().event.isFinalized.shouldBeFalse()
+
+        // A club owner may also un-finalize an event they didn't create.
+        provision(uid = "clubowner", roles = setOf(Capability.PLAYER, Capability.CLUB_OWNER))
+        service.finalize(token = token(uid = "owner"), id = event.id).shouldBeRight()
+        service.unfinalize(token = token(uid = "clubowner"), id = event.id).shouldBeRight().event.isFinalized.shouldBeFalse()
+    }
+
+    @Test
+    fun `a non-staff caller cannot un-finalize, and a host cannot un-finalize another host's event (#477)`() {
+        provision(uid = "owner", roles = setOf(Capability.PLAYER, Capability.HOST))
+        provision(uid = "other", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val event = service.create(token = token(uid = "owner"), input = input()).shouldBeRight().event
+        service.finalize(token = token(uid = "owner"), id = event.id).shouldBeRight()
+
+        service.unfinalize(token = token(uid = "ghost"), id = event.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service.unfinalize(token = token(uid = "other"), id = event.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        events.findById(id = event.id)!!.isFinalized.shouldBeTrue()
+    }
+
+    @Test
+    fun `un-finalizing a non-finalized event is Validation, and a non-existent event is NotFound (#477)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight().event
+
+        service.unfinalize(token = token(uid = "host"), id = event.id)
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+            .message shouldContain "not finalized"
+        service.unfinalize(token = token(uid = "host"), id = UUID.randomUUID())
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
+    fun `un-finalize is refused when any of the event's matches are already rated (#477)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        rate(userId = p1.id, level = "4.0")
+        rate(userId = p2.id, level = "4.0")
+        val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id))
+        val match = seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2, designated = 30)
+        service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+        // The Administrator has since run the rating-calculation trigger on this match.
+        matchRepo.markRated(matchId = match.id, ratedAt = LocalDateTime.now(), ratedBy = host.id)
+
+        val error =
+            service.unfinalize(token = token(uid = "host"), id = event.id)
+                .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        error.message shouldContain "already-rated"
+        // The event stays finalized and its award stays live — nothing was reversed.
+        events.findById(id = event.id)!!.isFinalized.shouldBeTrue()
+        awardRepo.listActiveByEvent(eventId = event.id) shouldHaveSize 1
+    }
+
+    @Test
+    fun `un-finalize revokes every active award for the event, appending a revocation marker each (#477)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        rate(userId = p1.id, level = "4.0")
+        rate(userId = p2.id, level = "4.0")
+        val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id))
+        seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2, designated = 30)
+        service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+        awardRepo.listActiveByEvent(eventId = event.id) shouldHaveSize 1
+
+        service.unfinalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+
+        // No active awards remain for the event; the original flips to REVOKED and a marker row is appended.
+        awardRepo.listActiveByEvent(eventId = event.id) shouldHaveSize 0
+        val rows = awardRepo.listByUser(userId = p1.id)
+        rows shouldHaveSize 2
+        rows.count { it.status == AwardStatus.ACTIVE } shouldBe 0
+        val marker = rows.single { it.revokesAwardId != null }
+        marker.status shouldBe AwardStatus.REVOKED
+        marker.points shouldBe BigDecimal("0.0000")
+        marker.reason.shouldNotBeNull() shouldContain "Reversed on un-finalize"
+        // The reversal is audited with the revoked count.
+        AuditRepository().list(actions = listOf(element = AuditAction.EVENT_UNFINALIZED), limit = 10, offset = 0)
+            .first.single().details["awardsRevoked"] shouldBe "1"
+    }
+
+    @Test
+    fun `un-finalize then re-finalize is allowed, letting a corrected event award again (#477)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        rate(userId = p1.id, level = "4.0")
+        rate(userId = p2.id, level = "4.0")
+        val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id))
+        seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2, designated = 30)
+        service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+        service.unfinalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+
+        service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+
+        // A fresh ACTIVE award exists after re-finalize; the earlier one stays revoked.
+        awardRepo.listActiveByEvent(eventId = event.id) shouldHaveSize 1
     }
 
     @Test

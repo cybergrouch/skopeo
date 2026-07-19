@@ -2055,6 +2055,42 @@ paths:
         '404':
           description: No such event
 
+  /api/v1/events/{id}/unfinalize:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      summary: Un-finalize an event (HOST owns / CLUB_OWNER / ADMINISTRATOR)
+      description: >-
+        Un-finalize an event (#477) — the reverse of finalize, so an erroneous score can be corrected and
+        the event re-finalized. Clears the finalize flag, revokes every active ranking-point award the
+        finalize produced (append-only: revocation markers are added, nothing is deleted), and implicitly
+        restores the reserved-points budget. A HOST may un-finalize only their own event; an ADMINISTRATOR
+        or CLUB_OWNER any. Refused if the event is not finalized, or if any of its matches are already
+        rated (the bad score is already in rating history — a heavier correction path is required).
+        Audited as EVENT_UNFINALIZED.
+      tags:
+        - Events
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The un-finalized event
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventResponse'
+        '400':
+          description: Event is not finalized, or has already-rated matches
+        '403':
+          description: Caller is not staff, or a HOST un-finalizing another's event
+        '404':
+          description: No such event
+
   /api/v1/events/{id}/participants:
     parameters:
       - name: id
