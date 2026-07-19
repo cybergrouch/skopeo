@@ -224,10 +224,12 @@ class RatingRepository(
      */
     fun isEventAtRatedTip(eventId: UUID): Boolean =
         transaction {
-            // Every affected user's live history rows as ordering keys, tagged with whether they are in-event.
-            // match_id is a plain uuid column (not an Exposed reference), so join on it explicitly; the inner
-            // join drops match-less rows (initial assessments), which are irrelevant to the tip check.
-            val rows =
+            // Every affected user's live history rows, ordered chronologically in SQL and tagged with whether
+            // the row's match belongs to the event. match_id is a plain uuid column (not an Exposed reference),
+            // so join on it explicitly; the inner join drops match-less rows (initial assessments), which are
+            // irrelevant to the tip check. Order: (calculated_at, completed_at NULLS FIRST, id) — the same key
+            // preEventRatings uses. Ordering in SQL keeps this a pure position check (no in-memory comparator).
+            val inEventByUser =
                 UserRatingHistoryTable
                     .join(
                         otherTable = MatchesTable,
@@ -236,21 +238,18 @@ class RatingRepository(
                         otherColumn = MatchesTable.id,
                     ).selectAll()
                     .where { UserRatingHistoryTable.reversedAt.isNull() }
-                    .map { row ->
-                        HistoryOrderKey(
-                            userId = row[UserRatingHistoryTable.userId].value,
-                            calculatedAt = row[UserRatingHistoryTable.calculatedAt],
-                            completedAt = row[UserRatingHistoryTable.completedAt],
-                            rowId = row[UserRatingHistoryTable.id].value,
-                            inEvent = row[MatchesTable.eventId]?.value == eventId,
-                        )
-                    }
-            val byUser = rows.groupBy { it.userId }
-            // For each user that has an in-event row, their latest in-event key must be the max over ALL
-            // their rows; if any row sorts strictly after it, a later match was rated on top → not the tip.
-            byUser.values.all { userRows ->
-                val latestInEvent = userRows.filter { it.inEvent }.maxWithOrNull(comparator = HISTORY_ORDER) ?: return@all true
-                userRows.none { HISTORY_ORDER.compare(it, latestInEvent) > 0 }
+                    .orderBy(
+                        UserRatingHistoryTable.calculatedAt to SortOrder.ASC,
+                        UserRatingHistoryTable.completedAt to SortOrder.ASC_NULLS_FIRST,
+                        UserRatingHistoryTable.id to SortOrder.ASC,
+                    ).map { row ->
+                        row[UserRatingHistoryTable.userId].value to (row[MatchesTable.eventId]?.value == eventId)
+                    }.groupBy(keySelector = { it.first }, valueTransform = { it.second })
+            // For each user with an in-event row, that row must be their LAST rated row overall; if any row
+            // sorts after it (a later match was rated on top), the event is not at the tip.
+            inEventByUser.values.all { inEventFlags ->
+                val lastInEvent = inEventFlags.indexOfLast { it }
+                lastInEvent < 0 || lastInEvent == inEventFlags.lastIndex
             }
         }
 
@@ -429,25 +428,3 @@ internal fun ResultRow.toRatingHistory(): RatingHistoryEntry =
 /** JSON codec and serializer for the per-set breakdown column (#110). */
 private val RATING_HISTORY_JSON = Json
 private val SET_BREAKDOWN_SERIALIZER = ListSerializer(elementSerializer = serializer<SetCalculationBreakdown>())
-
-/**
- * A live rating-history row reduced to its chronological ordering key for the tip check (#478), tagged
- * with whether its match belongs to the event being reversed. Ordered by [HISTORY_ORDER].
- */
-private data class HistoryOrderKey(
-    val userId: UUID,
-    val calculatedAt: LocalDateTime,
-    val completedAt: LocalDateTime?,
-    val rowId: UUID,
-    val inEvent: Boolean,
-)
-
-/**
- * The rating-history processing order (#478): `(calculated_at, completed_at, id)` — the same key
- * [RatingRepository.preEventRatings] uses. A null `completed_at` (match-less row) sorts first (earliest),
- * mirroring ASC_NULLS_FIRST; the row id is the final stable tiebreak for an equal `completed_at`.
- */
-private val HISTORY_ORDER: Comparator<HistoryOrderKey> =
-    compareBy<HistoryOrderKey> { it.calculatedAt }
-        .thenBy(comparator = nullsFirst(comparator = naturalOrder())) { it.completedAt }
-        .thenBy { it.rowId }
