@@ -35,6 +35,7 @@ enum class AuditAction {
     EVENT_POINTS_CONFIG_SET,
     EVENT_POINTS_AWARDED,
     FIXTURE_POINTS_DESIGNATED,
+    FIXTURE_HANDICAP_SET,
     RATING_CALCULATION_PREVIEWED,
     RATING_CALCULATION_MATCH_RATED,
     RATING_CALCULATION_COMMITTED,
@@ -111,7 +112,10 @@ val AuditAction.category: AuditCategory
             AuditAction.RATING_REQUEST_DENIED,
             -> AuditCategory.RATING_CHANGE
             AuditAction.INVITE_CREATED, AuditAction.INVITE_REVOKED -> AuditCategory.INVITE
-            AuditAction.MATCH_FIXTURE_CREATED, AuditAction.FIXTURE_POINTS_DESIGNATED -> AuditCategory.MATCH_FIXTURE
+            AuditAction.MATCH_FIXTURE_CREATED,
+            AuditAction.FIXTURE_POINTS_DESIGNATED,
+            AuditAction.FIXTURE_HANDICAP_SET,
+            -> AuditCategory.MATCH_FIXTURE
             AuditAction.MATCH_RESULT_RECORDED -> AuditCategory.MATCH_RESULT
             AuditAction.EVENT_CREATED,
             AuditAction.EVENT_RENAMED,

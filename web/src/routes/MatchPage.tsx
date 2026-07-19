@@ -258,6 +258,24 @@ export function MatchPage() {
                 <span className="font-medium">Score:</span>{' '}
                 {score ? score : 'Not yet played'}
               </div>
+              {/* Rating handicap (#486): shown transparently to participants. */}
+              {match.team1Handicap || match.team2Handicap ? (
+                <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+                  <span className="font-medium">Handicap applied:</span>{' '}
+                  {match.team1Handicap
+                    ? `−${match.team1Handicap} to Side 1`
+                    : null}
+                  {match.team1Handicap && match.team2Handicap ? ', ' : null}
+                  {match.team2Handicap
+                    ? `−${match.team2Handicap} to Side 2`
+                    : null}
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    A fairness adjustment deducted from a side's rating for this
+                    match's rating calculation only; it does not change stored
+                    ratings.
+                  </p>
+                </div>
+              ) : null}
               {match.ratingChanges && match.ratingChanges.length > 0 ? (
                 <div className="space-y-1.5 border-t pt-3">
                   <div className="font-medium">Rating changes</div>

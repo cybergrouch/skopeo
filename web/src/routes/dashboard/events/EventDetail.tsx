@@ -37,6 +37,7 @@ import {
 import { useGetApiV1UsersMe } from "@/api/generated/users/users";
 import { canEditEndedEvents } from "@/auth/capabilities";
 import { UserSearchSelect } from "@/components/UserSearchSelect";
+import { HandicapField } from "@/components/HandicapField";
 import { playerLabel } from "@/lib/playerLabel";
 import { formatConfidence } from "@/lib/confidence";
 import type { EventParticipantResponse } from "@/api/generated/model";
@@ -171,6 +172,11 @@ export function EventDetail({
   const [designatedDraft, setDesignatedDraft] = useState("");
   // "Award points for this match" checkbox (#466): opt-in per fixture, default CHECKED on a points event.
   const [awardFixturePoints, setAwardFixturePoints] = useState(true);
+  // Per-side handicap (#486): hidden behind an explicit checkbox (discouraged by design). Un-ticking
+  // clears both drafts. Drafts are strings so the number inputs can be cleared while editing.
+  const [applyHandicap, setApplyHandicap] = useState(false);
+  const [team1HandicapDraft, setTeam1HandicapDraft] = useState("");
+  const [team2HandicapDraft, setTeam2HandicapDraft] = useState("");
 
   // Seed the editor drafts from the event's persisted config (#440). Without this the inputs stay
   // empty and only *show* the current values as placeholders, so saving an edit that keeps a field
@@ -480,6 +486,13 @@ export function EventDetail({
             : showDesignationInput && designatedDraft !== ""
               ? { designatedPoints: Number(designatedDraft) }
               : {}),
+          // Per-side handicap (#486): only sent when the "Apply handicap" box is ticked and non-empty.
+          ...(applyHandicap && team1HandicapDraft !== ""
+            ? { team1Handicap: team1HandicapDraft }
+            : {}),
+          ...(applyHandicap && team2HandicapDraft !== ""
+            ? { team2Handicap: team2HandicapDraft }
+            : {}),
         },
       },
       {
@@ -492,12 +505,23 @@ export function EventDetail({
   }
 
   const filled = chosen.filter((id) => id !== "");
+  // A handicap draft (#486) is invalid if present but not a number in (0, 1.0].
+  const handicapDraftInvalid = (raw: string): boolean => {
+    if (raw === "") return false;
+    const n = Number(raw);
+    return Number.isNaN(n) || n <= 0 || n > 1;
+  };
+  const handicapOutOfRange =
+    applyHandicap &&
+    (handicapDraftInvalid(team1HandicapDraft) ||
+      handicapDraftInvalid(team2HandicapDraft));
   const canSchedule =
     filled.length === chosen.length &&
     new Set(filled).size === chosen.length &&
     date !== "" &&
     !designationOutOfRange &&
-    !designationOverBudget;
+    !designationOverBudget &&
+    !handicapOutOfRange;
 
   // One player dropdown, scoped to the roster and excluding whoever's already picked in the other slots.
   function playerSelect(
@@ -1166,6 +1190,29 @@ export function EventDetail({
                         </div>
                       ) : null}
                     </div>
+                  ) : null}
+                  {/* Per-side rating handicap (#486): hidden behind an explicit checkbox with a prudence
+                      tooltip. Un-ticking clears both drafts. */}
+                  <HandicapField
+                    enabled={applyHandicap}
+                    onToggle={(on) => {
+                      setApplyHandicap(on);
+                      if (!on) {
+                        setTeam1HandicapDraft("");
+                        setTeam2HandicapDraft("");
+                      }
+                    }}
+                    team1Handicap={team1HandicapDraft}
+                    team2Handicap={team2HandicapDraft}
+                    onTeam1Change={setTeam1HandicapDraft}
+                    onTeam2Change={setTeam2HandicapDraft}
+                    team1Label="Side 1"
+                    team2Label="Side 2"
+                  />
+                  {handicapOutOfRange ? (
+                    <p className="text-sm text-destructive" role="alert">
+                      A handicap must be greater than 0 and at most 1.0.
+                    </p>
                   ) : null}
                   <Button
                     type="submit"

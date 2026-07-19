@@ -3,6 +3,7 @@
 
 package org.skopeo.model
 
+import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
@@ -94,6 +95,10 @@ data class Match(
     // Points designated for the winner (#403 Phase C); null for OPEN_PLAY / event-less fixtures. Each
     // winning-team member gets the full amount, so the budget cost is designatedPoints × team size.
     val designatedPoints: Int? = null,
+    // Per-side rating handicap in team-mean NTRP units (#486); null = none. Deducted from the side's
+    // rating for the delta computation only. Range 0 < h <= 1.0, editable while unrated.
+    val team1Handicap: BigDecimal? = null,
+    val team2Handicap: BigDecimal? = null,
 )
 
 /** Everything needed to create a fixture (the result is uploaded separately). */
@@ -111,6 +116,9 @@ data class CreateFixtureCommand(
     val eventId: UUID? = null,
     // Points designated for the winner (#403 Phase C); null for OPEN_PLAY / event-less fixtures.
     val designatedPoints: Int? = null,
+    // Per-side rating handicap in team-mean NTRP units (#486); null = none. Range 0 < h <= 1.0.
+    val team1Handicap: BigDecimal? = null,
+    val team2Handicap: BigDecimal? = null,
 )
 
 /** A set's raw score as submitted with results; winners are derived server-side. */

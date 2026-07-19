@@ -69,6 +69,22 @@ describe('MatchPage', () => {
     expect(screen.getByRole('button', { name: 'Copy link' })).toBeInTheDocument()
   })
 
+  it('shows the applied per-side handicap transparently (#486)', () => {
+    useGetApiV1MatchesCodeCode.mockReturnValue({
+      data: { ...match, team2Handicap: '0.3' },
+      isLoading: false,
+    })
+    renderAt()
+    expect(screen.getByText(/Handicap applied:/i)).toBeInTheDocument()
+    expect(screen.getByText(/−0\.3 to Side 2/)).toBeInTheDocument()
+  })
+
+  it('shows no handicap notice when none is applied (#486)', () => {
+    useGetApiV1MatchesCodeCode.mockReturnValue({ data: match, isLoading: false })
+    renderAt()
+    expect(screen.queryByText(/Handicap applied:/i)).not.toBeInTheDocument()
+  })
+
   it('flags a soft-deleted match but still renders it (#325)', () => {
     useGetApiV1MatchesCodeCode.mockReturnValue({
       data: { ...match, isActive: false },

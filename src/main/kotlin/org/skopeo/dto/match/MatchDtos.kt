@@ -13,6 +13,17 @@ import java.util.UUID
  */
 private const val MIN_GAMES_TO_WIN = 4
 
+/**
+ * Validate a per-side handicap (#486): when present it must parse and lie in `0 < h <= 1.0`
+ * (team-mean NTRP units). Null = no handicap. Throws IllegalArgumentException (mapped to 400).
+ */
+internal fun validateHandicap(raw: String?) {
+    raw?.let {
+        val h = requireNotNull(value = it.toDoubleOrNull()) { "handicap must be a valid number, got '$it'" }
+        require(value = h > 0.0 && h <= 1.0) { "handicap must be in the range 0 < h <= 1.0, got $it" }
+    }
+}
+
 /** Body for `POST /api/v1/matches` — create a fixture (no results yet). */
 @Serializable
 data class CreateFixtureRequest(
@@ -37,7 +48,19 @@ data class CreateFixtureRequest(
      * no designation, so it awards no points.
      */
     val awardPoints: Boolean? = null,
-)
+    /**
+     * Optional per-side rating handicap (#486) in team-mean NTRP units, `0 < h <= 1.0`; null = none.
+     * Deducted from that side's rating for the rating-delta computation only; the delta is applied to the
+     * players' true ratings. See RATING_HANDICAP.md.
+     */
+    val team1Handicap: String? = null,
+    val team2Handicap: String? = null,
+) {
+    init {
+        validateHandicap(raw = team1Handicap)
+        validateHandicap(raw = team2Handicap)
+    }
+}
 
 @Serializable
 data class SetScoreRequest(
@@ -88,6 +111,22 @@ data class SetDesignationRequest(
 )
 
 /**
+ * Body for `PUT /api/v1/matches/{id}/handicaps` — set (or clear) a fixture's per-side handicaps (#486).
+ * Each is a team-mean NTRP-unit value in `0 < h <= 1.0`, or null to clear that side. Only settable while
+ * the match is unrated.
+ */
+@Serializable
+data class SetHandicapsRequest(
+    val team1Handicap: String? = null,
+    val team2Handicap: String? = null,
+) {
+    init {
+        validateHandicap(raw = team1Handicap)
+        validateHandicap(raw = team2Handicap)
+    }
+}
+
+/**
  * Body for `PUT /api/v1/matches/calculation-order` (#331/#332): the desired processing order of a
  * group of same-date matches. Each id is assigned calc_sequence = its index.
  */
@@ -134,6 +173,9 @@ data class MatchResponse(
     val eventId: String? = null,
     // Points designated for the winner (#403 Phase C); null for OPEN_PLAY / event-less fixtures.
     val designatedPoints: Int? = null,
+    // Per-side rating handicap (#486) in team-mean NTRP units; null = none. Shown for transparency.
+    val team1Handicap: String? = null,
+    val team2Handicap: String? = null,
 )
 
 fun Match.toResponse(): MatchResponse =
@@ -167,6 +209,8 @@ fun Match.toResponse(): MatchResponse =
         recordedBy = recordedBy?.toString(),
         eventId = eventId?.toString(),
         designatedPoints = designatedPoints,
+        team1Handicap = team1Handicap?.toPlainString(),
+        team2Handicap = team2Handicap?.toPlainString(),
     )
 
 /** One player on the public match page (#136): just a display name + shareable code, no ids/contacts. */
@@ -233,6 +277,9 @@ data class MatchPublicResponse(
     // The event this match belongs to (#358), resolved to its shareable code + name so the page can
     // link to the event's public page. Null/omitted for eventless (open-play) matches.
     val event: MatchPublicEvent? = null,
+    // Per-side rating handicap (#486), shown transparently to participants; null = none on that side.
+    val team1Handicap: String? = null,
+    val team2Handicap: String? = null,
 )
 
 /**
@@ -332,5 +379,7 @@ fun Match.toPublicResponse(
         ratingChanges = ratingChanges,
         headToHead = headToHead,
         event = event,
+        team1Handicap = team1Handicap?.toPlainString(),
+        team2Handicap = team2Handicap?.toPlainString(),
     )
 }

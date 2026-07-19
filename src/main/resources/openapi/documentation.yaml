@@ -1722,6 +1722,47 @@ paths:
         '409':
           description: The match is disabled or already rated
 
+  /api/v1/matches/{id}/handicaps:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    put:
+      summary: Set or clear a fixture's per-side rating handicaps (HOST/CLUB_OWNER/ADMINISTRATOR)
+      description: >-
+        Set (or clear) a fixture's per-side rating handicaps (#486). Each is a team-mean NTRP-unit value
+        in the range 0 < h <= 1.0, or null to clear that side. A handicap is deducted from the designated
+        side's rating for the rating-delta computation only (the delta is applied to the players' true
+        ratings). Only allowed while the fixture is unrated (a rated match is frozen). See RATING_HANDICAP.md.
+      tags:
+        - Matches
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetHandicapsRequest'
+      responses:
+        '200':
+          description: Updated match
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchResponse'
+        '400':
+          description: A handicap is out of range (must be 0 < h <= 1.0)
+        '403':
+          description: Caller is not HOST/CLUB_OWNER/ADMINISTRATOR
+        '404':
+          description: No such match
+        '409':
+          description: The match is disabled or already rated
+
   /api/v1/events:
     get:
       summary: List events (HOST/ADMINISTRATOR)
@@ -4866,6 +4907,17 @@ components:
           description: >-
             The "award points for this match" checkbox (#466). Default (omitted/true) → the fixture awards
             points on a points-awarding event. Explicit false → the match opts out (no designation, no award).
+        team1Handicap:
+          type: string
+          nullable: true
+          description: >-
+            Optional per-side rating handicap (#486) for team1, in team-mean NTRP units, 0 < h <= 1.0.
+            Deducted from that side's rating for the rating-delta computation only; the delta is applied to
+            the players' true ratings. Null/omitted = no handicap. See RATING_HANDICAP.md.
+        team2Handicap:
+          type: string
+          nullable: true
+          description: Optional per-side rating handicap (#486) for team2, in team-mean NTRP units, 0 < h <= 1.0.
 
     SetScoreRequest:
       type: object
@@ -5035,6 +5087,14 @@ components:
           type: integer
           nullable: true
           description: Points designated for the winner (#403 Phase C); null for a config-less or event-less fixture.
+        team1Handicap:
+          type: string
+          nullable: true
+          description: Per-side rating handicap (#486) for team1, in team-mean NTRP units; null = none. Shown for transparency.
+        team2Handicap:
+          type: string
+          nullable: true
+          description: Per-side rating handicap (#486) for team2, in team-mean NTRP units; null = none.
 
     CreateEventRequest:
       type: object
@@ -5125,6 +5185,21 @@ components:
           type: integer
           nullable: true
           description: Points designated for the winner; within the event's [min, max]. Omit/null to clear (no award).
+
+    SetHandicapsRequest:
+      type: object
+      description: >-
+        Set or clear a fixture's per-side rating handicaps (#486). Each is a team-mean NTRP-unit value in
+        the range 0 < h <= 1.0, or null to clear that side. Only settable while the fixture is unrated.
+      properties:
+        team1Handicap:
+          type: string
+          nullable: true
+          description: Handicap for team1 in team-mean NTRP units, 0 < h <= 1.0; null clears it.
+        team2Handicap:
+          type: string
+          nullable: true
+          description: Handicap for team2 in team-mean NTRP units, 0 < h <= 1.0; null clears it.
 
     UpdateEventRequest:
       type: object
@@ -5508,6 +5583,14 @@ components:
           description: >-
             The event this match belongs to (#358), resolved to its shareable code + name so the
             public page can link to the event. Null/omitted for eventless (open-play) matches.
+        team1Handicap:
+          type: string
+          nullable: true
+          description: Per-side rating handicap (#486) for team1, shown transparently to participants; null = none.
+        team2Handicap:
+          type: string
+          nullable: true
+          description: Per-side rating handicap (#486) for team2, shown transparently to participants; null = none.
 
     MatchPublicEvent:
       type: object

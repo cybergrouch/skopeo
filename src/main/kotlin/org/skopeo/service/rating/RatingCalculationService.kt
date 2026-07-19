@@ -443,8 +443,23 @@ private fun buildRequest(
     val t2 = match.team2.teamId.toString()
     val teams =
         mapOf(
-            t1 to teamOf(teamId = t1, userIds = match.team1.userIds, format = match.matchFormat, ratingsByUser = ratingsByUser),
-            t2 to teamOf(teamId = t2, userIds = match.team2.userIds, format = match.matchFormat, ratingsByUser = ratingsByUser),
+            t1 to
+                teamOf(
+                    teamId = t1,
+                    userIds = match.team1.userIds,
+                    format = match.matchFormat,
+                    ratingsByUser = ratingsByUser,
+                    // Per-side handicap (#486): deducted from this side for the delta calc only.
+                    handicap = match.team1Handicap,
+                ),
+            t2 to
+                teamOf(
+                    teamId = t2,
+                    userIds = match.team2.userIds,
+                    format = match.matchFormat,
+                    ratingsByUser = ratingsByUser,
+                    handicap = match.team2Handicap,
+                ),
         )
     val sets =
         match.sets.map { set ->
@@ -482,6 +497,7 @@ private fun teamOf(
     userIds: List<UUID>,
     format: TeamType,
     ratingsByUser: Map<UUID, BigDecimal>,
+    handicap: BigDecimal? = null,
 ): Team =
     Team(
         teamId = teamId,
@@ -495,4 +511,6 @@ private fun teamOf(
                 )
             },
         teamType = format,
+        // Team-mean NTRP-unit handicap (#486); the calculator deducts it from this side for the delta only.
+        handicap = handicap?.toPlainString(),
     )

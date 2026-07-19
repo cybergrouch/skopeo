@@ -320,6 +320,74 @@ class MatchServiceTest {
     }
 
     @Test
+    fun `a host can set and clear per-side handicaps on an unrated fixture (#486)`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val match =
+            service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
+
+        val set =
+            service
+                .setHandicaps(token = token(uid = "host"), matchId = match.id, team1Handicap = null, team2Handicap = BigDecimal("0.300"))
+                .shouldBeRight()
+        set.team2Handicap?.compareTo(other = BigDecimal("0.300")) shouldBe 0
+        set.team1Handicap shouldBe null
+
+        val cleared =
+            service
+                .setHandicaps(token = token(uid = "host"), matchId = match.id, team1Handicap = null, team2Handicap = null)
+                .shouldBeRight()
+        cleared.team2Handicap shouldBe null
+    }
+
+    @Test
+    fun `a handicap can be set at fixture creation (#486)`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(team1Handicap = BigDecimal("0.500"))
+
+        val match = service.createFixture(token = token(uid = "host"), request = request).shouldBeRight()
+
+        match.team1Handicap?.compareTo(other = BigDecimal("0.500")) shouldBe 0
+    }
+
+    @Test
+    fun `handicaps cannot be changed on a rated match (#486)`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val match =
+            service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
+        service.uploadResult(token = token(uid = "host"), matchId = match.id, request = straightSets()).shouldBeRight()
+        transaction {
+            MatchesTable.update(where = { MatchesTable.id eq match.id }) {
+                it[MatchesTable.ratedAt] = java.time.LocalDateTime.now()
+            }
+        }
+
+        service
+            .setHandicaps(token = token(uid = "host"), matchId = match.id, team1Handicap = BigDecimal("0.200"), team2Handicap = null)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Conflict>()
+    }
+
+    @Test
+    fun `non-staff cannot set a handicap (#486)`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val match =
+            service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
+
+        service
+            .setHandicaps(token = token(uid = "p1"), matchId = match.id, team1Handicap = BigDecimal("0.200"), team2Handicap = null)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
+    @Test
     fun `reading a match is limited to participants and staff`() {
         provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val p1 = provisionUser(uid = "p1", rated = true)

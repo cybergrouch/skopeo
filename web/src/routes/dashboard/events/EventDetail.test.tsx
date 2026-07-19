@@ -365,6 +365,47 @@ describe('EventDetail', () => {
     )
   })
 
+  it('hides the handicap input until the "Apply handicap" box is ticked, and clears it on un-tick (#486)', async () => {
+    const user = userEvent.setup()
+    renderDetail()
+
+    // Hidden by default (discouraged by design); the checkbox + tooltip trigger are present.
+    expect(screen.queryByLabelText('Side 1 handicap')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Apply handicap')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'What is a handicap?' })).toBeInTheDocument()
+
+    // Tick → the two inputs are revealed.
+    await user.click(screen.getByLabelText('Apply handicap'))
+    expect(screen.getByLabelText('Side 1 handicap')).toBeInTheDocument()
+    expect(screen.getByLabelText('Side 2 handicap')).toBeInTheDocument()
+
+    // Enter a value, then un-tick → the inputs are hidden and the draft is cleared.
+    await user.type(screen.getByLabelText('Side 2 handicap'), '0.3')
+    await user.click(screen.getByLabelText('Apply handicap'))
+    expect(screen.queryByLabelText('Side 2 handicap')).not.toBeInTheDocument()
+    await user.click(screen.getByLabelText('Apply handicap'))
+    expect((screen.getByLabelText('Side 2 handicap') as HTMLInputElement).value).toBe('')
+  })
+
+  it('sends the per-side handicap in the create payload when applied (#486)', async () => {
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.selectOptions(screen.getByLabelText('Player 1'), 'u1')
+    await user.selectOptions(screen.getByLabelText('Player 2'), 'u2')
+    await user.type(screen.getByLabelText('Date'), '2026-03-02')
+    await user.click(screen.getByLabelText('Apply handicap'))
+    await user.type(screen.getByLabelText('Side 2 handicap'), '0.3')
+
+    await user.click(screen.getByRole('button', { name: 'Schedule fixture' }))
+    expect(createFixtureMutate).toHaveBeenCalledWith(
+      {
+        data: expect.objectContaining({ team2Handicap: '0.3' }),
+      },
+      expect.anything(),
+    )
+  })
+
   it('excludes the player chosen in one dropdown from the other', async () => {
     const user = userEvent.setup()
     renderDetail()

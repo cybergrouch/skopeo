@@ -299,6 +299,41 @@ class RatingCalculationServiceTest {
     }
 
     @Test
+    fun `a per-side handicap on the loser shrinks their loss, applied to the true rating (#486)`() {
+        provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val a1 = provisionUser(uid = "a1", rated = true)
+        val a2 = provisionUser(uid = "a2", rated = true)
+        val b1 = provisionUser(uid = "b1", rated = true)
+        val b2 = provisionUser(uid = "b2", rated = true)
+        // Two identical equal-4.0 dominant wins; one has a 0.3 handicap on the LOSING side (team2).
+        playedMatch(admin = "root", winner = a1.id, loser = a2.id, matchType = MatchType.OPEN_PLAY)
+        val handicapped =
+            matchService.createFixture(
+                token = token(uid = "root"),
+                request =
+                    FixtureInput(
+                        matchFormat = TeamType.SINGLES,
+                        matchType = MatchType.OPEN_PLAY,
+                        matchDate = LocalDate.parse("2026-01-01"),
+                        team1 = listOf(element = b1.id),
+                        team2 = listOf(element = b2.id),
+                        team2Handicap = BigDecimal("0.300"),
+                    ),
+            ).shouldBeRight()
+        recordResult(admin = "root", matchId = handicapped.id)
+
+        val changes = calc.calculate(token = token(uid = "root"), dryRun = true).shouldBeRight().matches.flatMap { it.changes }
+        val plainLoss = changes.first { it.userId == a2.id }.let { it.newRating - it.previousRating }
+        val handicappedLoss = changes.first { it.userId == b2.id }.let { it.newRating - it.previousRating }
+
+        // Both are losses; the handicapped side loses strictly less (closer to zero).
+        (plainLoss < BigDecimal.ZERO).shouldBeTrue()
+        (handicappedLoss > plainLoss).shouldBeTrue()
+        // The delta is applied to the TRUE 4.0 baseline — previous is the true rating, not 3.7.
+        changes.first { it.userId == b2.id }.previousRating shouldBe BigDecimal("4.000000")
+    }
+
+    @Test
     fun `commit persists ratings, history, and marks matches rated`() {
         provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val p1 = provisionUser(uid = "p1", rated = true)
