@@ -5,6 +5,7 @@ package org.skopeo.service.calculator.impl.v2
 
 import io.kotest.matchers.doubles.plusOrMinus
 import io.kotest.matchers.doubles.shouldBeGreaterThan
+import io.kotest.matchers.doubles.shouldBeLessThan
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import org.skopeo.dto.RankingCalculationRequest
@@ -201,5 +202,182 @@ class PerformanceBasedRankingCalculatorV2Test {
         val v2B = changeFor(result = v2.calculate(request = requestB), playerId = "P1")
 
         (v2A != v2B) shouldBe true
+    }
+
+    // --- Per-side handicap (issue #486) ---
+
+    private fun singlesTeam(
+        id: String,
+        playerId: String,
+        rating: String,
+        handicap: String? = null,
+    ): Team {
+        val player = PlayerProfile(playerId = playerId, name = playerId, rating = Rating.fromValue(value = rating))
+        return Team(teamId = id, name = id, players = listOf(element = player), teamType = TeamType.SINGLES, handicap = handicap)
+    }
+
+    private fun singlesRequestWithHandicap(
+        p1Rating: String,
+        p2Rating: String,
+        sets: List<Pair<Int, Int>>,
+        team1Handicap: String? = null,
+        team2Handicap: String? = null,
+    ): RankingCalculationRequest =
+        RankingCalculationRequest(
+            teams =
+                mapOf(
+                    "T1" to singlesTeam(id = "T1", playerId = "P1", rating = p1Rating, handicap = team1Handicap),
+                    "T2" to singlesTeam(id = "T2", playerId = "P2", rating = p2Rating, handicap = team2Handicap),
+                ),
+            matchScore = MatchScore(sets = sets.map { (a, b) -> SetScore(games = mapOf("T1" to a, "T2" to b)) }),
+        )
+
+    @Test
+    fun `singles handicap on the loser shrinks their loss vs no handicap`() {
+        // Equal 4.0 vs 4.0, a dominant 6-2,6-2 win for P1. With a 0.3 handicap on the losing woman (P2),
+        // the match is computed as 4.0 vs 3.7 — P1 is now expected to win, so P2's loss is smaller.
+        val plain = singlesRequestWithHandicap(p1Rating = "4.0", p2Rating = "4.0", sets = listOf(6 to 2, 6 to 2))
+        val handicapped =
+            singlesRequestWithHandicap(p1Rating = "4.0", p2Rating = "4.0", sets = listOf(6 to 2, 6 to 2), team2Handicap = "0.3")
+
+        val plainLoss = changeFor(result = v2.calculate(request = plain), playerId = "P2").toDouble()
+        val handicappedLoss = changeFor(result = v2.calculate(request = handicapped), playerId = "P2").toDouble()
+
+        // Both are losses (negative); the handicapped one is smaller in magnitude (closer to zero).
+        plainLoss shouldBeLessThan 0.0
+        handicappedLoss shouldBeLessThan 0.0
+        handicappedLoss shouldBeGreaterThan plainLoss
+    }
+
+    @Test
+    fun `singles handicap applies the delta to the true rating, not the adjusted one`() {
+        // The handicapped side's previous/new ratings are the TRUE 4.0-based values, never 3.7.
+        val result =
+            v2.calculate(
+                request =
+                    singlesRequestWithHandicap(
+                        p1Rating = "4.0",
+                        p2Rating = "4.0",
+                        sets = listOf(6 to 2, 6 to 2),
+                        team2Handicap = "0.3",
+                    ),
+            )
+        val p2Change = result.response.ratingChanges.getValue(key = "P2")
+
+        p2Change.previousRating.value.toDouble() shouldBe (4.0 plusOrMinus 1e-9)
+        // new = true 4.0 + (negative delta), so strictly below 4.0 but computed off the true baseline.
+        p2Change.newRating.value.toDouble() shouldBeLessThan 4.0
+        p2Change.newRating.value.toDouble() shouldBe ((4.0 + p2Change.change.toDouble()) plusOrMinus 1e-6)
+    }
+
+    @Test
+    fun `singles a genuine upset still credits the true rating despite a handicap`() {
+        // Same 0.3 handicap on P2, but P2 WINS dominantly (an upset under the widened 4.0-vs-3.7 gap).
+        // The delta is applied to P2's true 4.0, so P2 still gains — the handicap does not cap an upset win.
+        val result =
+            v2.calculate(
+                request =
+                    singlesRequestWithHandicap(
+                        p1Rating = "4.0",
+                        p2Rating = "4.0",
+                        sets = listOf(2 to 6, 2 to 6),
+                        team2Handicap = "0.3",
+                    ),
+            )
+        val p2Change = result.response.ratingChanges.getValue(key = "P2")
+
+        p2Change.previousRating.value.toDouble() shouldBe (4.0 plusOrMinus 1e-9)
+        p2Change.change.toDouble() shouldBeGreaterThan 0.0
+    }
+
+    @Test
+    fun `a near-1_0 handicap pushes the gap past 0_5 so an as-expected win yields zero change`() {
+        // Woman 4.0, man 4.0; handicap 1.0 on the woman → computed 4.0 vs 3.0, gap 1.0 > the 0.5 threshold.
+        // A dominant man win (6-1,6-1) is fully "as expected" → beyond the competitive threshold → Δ 0.
+        val result =
+            v2.calculate(
+                request =
+                    singlesRequestWithHandicap(
+                        p1Rating = "4.0",
+                        p2Rating = "4.0",
+                        sets = listOf(6 to 1, 6 to 1),
+                        team2Handicap = "1.0",
+                    ),
+            )
+
+        changeFor(result = result, playerId = "P1").toDouble() shouldBe (0.0 plusOrMinus 1e-9)
+        changeFor(result = result, playerId = "P2").toDouble() shouldBe (0.0 plusOrMinus 1e-9)
+    }
+
+    @Test
+    fun `doubles side-mean deduction widens the gap and splits by true share onto true ratings`() {
+        // T1 = 5.0 & 3.0 (true mean 4.0) vs T2 = 4.0 & 4.0 (mean 4.0). Handicap 0.4 on T1 → effective
+        // mean 3.6, so T1 is now the underdog; a dominant T1 win (6-1,6-1) becomes an upset and moves more
+        // than the unhandicapped equal-mean case. The team delta still splits 5/4 : 3/4 onto TRUE ratings.
+        val plain = doublesRequest(t1 = "5.0" to "3.0", t2 = "4.0" to "4.0", sets = listOf(6 to 1, 6 to 1))
+        val handicapped =
+            RankingCalculationRequest(
+                teams =
+                    mapOf(
+                        "T1" to
+                            Team(
+                                teamId = "T1",
+                                name = "T1",
+                                players =
+                                    listOf(
+                                        PlayerProfile(playerId = "T1a", name = "T1a", rating = Rating.fromValue(value = "5.0")),
+                                        PlayerProfile(playerId = "T1b", name = "T1b", rating = Rating.fromValue(value = "3.0")),
+                                    ),
+                                teamType = TeamType.DOUBLES,
+                                handicap = "0.4",
+                            ),
+                        "T2" to doublesTeam(id = "T2", ratings = "4.0" to "4.0"),
+                    ),
+                matchScore = MatchScore(sets = listOf(6 to 1, 6 to 1).map { (a, b) -> SetScore(games = mapOf("T1" to a, "T2" to b)) }),
+            )
+
+        val plainA = changeFor(result = v2.calculate(request = plain), playerId = "T1a").toDouble()
+        val handResult = v2.calculate(request = handicapped)
+        val handA = changeFor(result = handResult, playerId = "T1a").toDouble()
+        val handB = changeFor(result = handResult, playerId = "T1b").toDouble()
+
+        // Widened gap (underdog win) → a bigger positive move for the winning handicapped side.
+        handA shouldBeGreaterThan plainA
+        // Split by TRUE share 5/4 : 3/4 → the stronger partner's delta is 5/3 of the weaker's.
+        (handA / handB) shouldBe ((5.0 / 3.0) plusOrMinus 0.01)
+        // Previous ratings are the TRUE 5.0 / 3.0 values.
+        handResult.response.ratingChanges.getValue(key = "T1a").previousRating.value.toDouble() shouldBe (5.0 plusOrMinus 1e-9)
+        handResult.response.ratingChanges.getValue(key = "T1b").previousRating.value.toDouble() shouldBe (3.0 plusOrMinus 1e-9)
+    }
+
+    @Test
+    fun `no handicap leaves the result byte-for-byte identical`() {
+        // A null handicap must be a pure no-op: same request with/without an (absent) handicap → same change.
+        val a = singlesRequestWithHandicap(p1Rating = "4.5", p2Rating = "4.0", sets = listOf(6 to 3, 6 to 4))
+        val b = multiSetRequest(p1Rating = "4.5", p2Rating = "4.0", sets = listOf(6 to 3, 6 to 4))
+
+        val withNull = changeFor(result = v2.calculate(request = a), playerId = "P1")
+        val without = changeFor(result = v2.calculate(request = b), playerId = "P1")
+        withNull shouldBe without
+    }
+
+    @Test
+    fun `the applied handicap is recorded in the audit context`() {
+        val result =
+            v2.calculate(
+                request =
+                    singlesRequestWithHandicap(
+                        p1Rating = "4.0",
+                        p2Rating = "4.0",
+                        sets = listOf(element = 6 to 2),
+                        team2Handicap = "0.3",
+                    ),
+            )
+        val p2Entry = result.audit.single { it.context["playerId"] == "P2" }
+
+        p2Entry.context["appliedHandicap"] shouldBe "0.3"
+        // The opponent has no handicap → the key is absent, not a zero value.
+        val p1Entry = result.audit.single { it.context["playerId"] == "P1" }
+        p1Entry.context.containsKey(key = "appliedHandicap") shouldBe false
     }
 }

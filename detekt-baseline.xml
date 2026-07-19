@@ -14,6 +14,7 @@
     <ID>LargeClass:EventServiceTest.kt$EventServiceTest</ID>
     <ID>LargeClass:MatchServiceTest.kt$MatchServiceTest</ID>
     <ID>LargeClass:RankingCalculationPayloadTest.kt$RankingCalculationPayloadTest</ID>
+    <ID>LargeClass:RatingCalculationServiceTest.kt$RatingCalculationServiceTest</ID>
     <ID>LongMethod:PerformanceBasedRankingCalculatorImpl.kt$PerformanceBasedRankingCalculatorImpl$override fun calculate(request: RankingCalculationRequest): RankingCalculationResult</ID>
     <ID>LongMethod:RankingCalculationPayloadTest.kt$RankingCalculationPayloadTest$@Test fun testNTRP_BasicMatch_ExactPayload()</ID>
     <ID>LongMethod:RankingCalculationPayloadTest.kt$RankingCalculationPayloadTest$@Test fun testNTRP_DominantWin_ExactPayload()</ID>

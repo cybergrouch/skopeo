@@ -66,6 +66,8 @@ class MatchRepository {
                     it[createdBy] = command.createdBy
                     it[eventId] = command.eventId
                     it[designatedPoints] = command.designatedPoints
+                    it[team1Handicap] = command.team1Handicap
+                    it[team2Handicap] = command.team2Handicap
                 }.value
             loadMatchOrThrow(id = matchId)
         }
@@ -144,6 +146,28 @@ class MatchRepository {
             val updated =
                 MatchesTable.update(where = { MatchesTable.id eq matchId }) {
                     it[MatchesTable.designatedPoints] = designatedPoints
+                }
+            if (updated == 0) {
+                ServiceError.NotFound(message = "Match $matchId not found").left()
+            } else {
+                loadMatchOrThrow(id = matchId).right()
+            }
+        }
+
+    /**
+     * Set (or clear, when null) a fixture's per-side handicaps (#486). The service has validated the
+     * range and the unrated guard; a missing id returns NotFound.
+     */
+    fun setHandicaps(
+        matchId: UUID,
+        team1Handicap: java.math.BigDecimal?,
+        team2Handicap: java.math.BigDecimal?,
+    ): Either<ServiceError, Match> =
+        transaction {
+            val updated =
+                MatchesTable.update(where = { MatchesTable.id eq matchId }) {
+                    it[MatchesTable.team1Handicap] = team1Handicap
+                    it[MatchesTable.team2Handicap] = team2Handicap
                 }
             if (updated == 0) {
                 ServiceError.NotFound(message = "Match $matchId not found").left()
@@ -628,6 +652,8 @@ private fun buildMatch(
         eventId = row[MatchesTable.eventId]?.value,
         calcSequence = row[MatchesTable.calcSequence],
         designatedPoints = row[MatchesTable.designatedPoints],
+        team1Handicap = row[MatchesTable.team1Handicap],
+        team2Handicap = row[MatchesTable.team2Handicap],
     )
 
 private fun sideOf(teamId: UUID): MatchSide =

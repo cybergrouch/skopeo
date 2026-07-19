@@ -66,6 +66,12 @@ function epochDay(iso: string): number {
 /** An event's processing key: its calc_priority override if set, else its end date as an epoch day. */
 type EventInfo = { name: string; endDate: string; calcPriority?: number | null }
 
+/** The backend's `{ error, message }` body carries the ordering-guard reason (#479). */
+function errorMessage(err: unknown, fallback: string): string {
+  const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+  return message ?? fallback
+}
+
 // The pending list arrives already in processing order; walk it into display entries: consecutive
 // same-event matches form one event group; each eventless match is its own "Open" entry (#335).
 type Entry =
@@ -166,10 +172,14 @@ function EventGroup({
   entry,
   eventName,
   renderMatch,
+  selected,
+  onToggleSelect,
 }: {
   entry: Extract<Entry, { kind: 'event' }>
   eventName: string
   renderMatch: (match: MatchResponse) => ReactNode
+  selected: boolean
+  onToggleSelect: () => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: entry.id })
   const style = { transform: CSS.Transform.toString(transform), transition }
@@ -185,7 +195,16 @@ function EventGroup({
         >
           <GripVertical className="h-4 w-4" />
         </button>
-        <span className="text-xs font-medium uppercase text-muted-foreground">{eventName}</span>
+        <label className="flex items-center gap-2 text-xs font-medium uppercase text-muted-foreground">
+          <input
+            type="checkbox"
+            className="h-3.5 w-3.5"
+            checked={selected}
+            onChange={onToggleSelect}
+            aria-label={`Include event ${eventName}`}
+          />
+          {eventName}
+        </label>
       </div>
       <ul className="space-y-2 p-2">{entry.matches.map(renderMatch)}</ul>
     </li>
@@ -217,6 +236,8 @@ export function PendingCalculationSection() {
   const [preview, setPreview] = useState<CalculationResponse | null>(null)
   const [committed, setCommitted] = useState<number | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  // Selected events to scope the run to (#479); empty = all pending (unchanged default).
+  const [selected, setSelected] = useState<Set<string>>(new Set())
 
   const matchesQuery = useGetApiV1Matches(PENDING_FILTER)
   const pending = matchesQuery.data ?? []
@@ -260,6 +281,8 @@ export function PendingCalculationSection() {
         } else {
           setPreview(null)
           setCommitted(data.matchesProcessed)
+          // The committed events are gone from the pending list; start fresh.
+          setSelected(new Set())
           queryClient.invalidateQueries({ queryKey: getGetApiV1MatchesQueryKey(PENDING_FILTER) })
         }
       },
@@ -276,6 +299,48 @@ export function PendingCalculationSection() {
   })
 
   const entries = buildEntries(pending)
+
+  // Toggling an event's inclusion invalidates any preview (it no longer reflects the selection).
+  function toggleSelect(eventId: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(eventId)) next.delete(eventId)
+      else next.add(eventId)
+      return next
+    })
+    setPreview(null)
+  }
+
+  // The event ids to send: undefined (all pending) when nothing is picked, else the selection (#479).
+  const scopeEventIds = selected.size > 0 ? [...selected] : undefined
+
+  // Client-side mirror of the backend ordering guard (#479): a selection must form a contiguous
+  // prefix of the pending timeline. Find the last selected event; anything unselected before it
+  // (an earlier event, or any eventless "Open" match — which can't be selected) breaks the prefix.
+  function prefixError(): string | null {
+    if (!scopeEventIds) return null
+    const lastSelected = entries.reduce(
+      (acc, e, i) => (e.kind === 'event' && selected.has(e.eventId) ? i : acc),
+      -1,
+    )
+    if (lastSelected < 0) return null
+    for (let i = 0; i < lastSelected; i++) {
+      const e = entries[i]
+      if (e.kind === 'open') {
+        return `An earlier "Open (no event)" match (${e.match.matchDate}) must be included: selections must be a contiguous prefix, starting from the oldest pending match.`
+      }
+      if (!selected.has(e.eventId)) {
+        const name = eventsById.get(e.eventId)?.name ?? 'an earlier event'
+        return `${name} is older than a selected event and must also be included: selections must be a contiguous prefix, starting from the oldest pending match.`
+      }
+    }
+    return null
+  }
+
+  const scopeError = prefixError()
+  // Surface the backend's guard message too (belt-and-braces if the client check ever diverges).
+  const serverError = calculate.isError ? errorMessage(calculate.error, 'Calculation failed.') : null
+  const guardError = scopeError ?? serverError
 
   // An entry's processing key on the epoch-day scale: an event's calc_priority override or its end
   // date; an eventless entry keys off its match date (so events and Open entries interleave by date).
@@ -331,7 +396,8 @@ export function PendingCalculationSection() {
         <CardDescription>
           Completed matches awaiting a rating calculation, grouped by event and numbered in the exact
           order they’ll be processed — events by end date (drag to reorder), matches within an event
-          by date. Preview before committing.
+          by date. Tick events to scope the run to them (leave all unticked to process everything);
+          a selection must be a contiguous run from the oldest pending match. Preview before committing.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -355,6 +421,8 @@ export function PendingCalculationSection() {
                       entry={entry}
                       eventName={eventsById.get(entry.eventId)?.name ?? 'Event'}
                       renderMatch={renderMatch}
+                      selected={selected.has(entry.eventId)}
+                      onToggleSelect={() => toggleSelect(entry.eventId)}
                     />
                   ) : (
                     <OpenEntry key={entry.id} entry={entry} renderMatch={renderMatch} />
@@ -365,12 +433,35 @@ export function PendingCalculationSection() {
           </DndContext>
         ) : null}
 
+        {scopeEventIds ? (
+          <p className="text-sm text-muted-foreground">
+            Scoped to <span className="font-medium">{scopeEventIds.length}</span> selected event
+            {plural(scopeEventIds.length, 's')}.{' '}
+            <button
+              type="button"
+              className="underline underline-offset-2 hover:text-foreground"
+              onClick={() => {
+                setSelected(new Set())
+                setPreview(null)
+              }}
+            >
+              Clear selection
+            </button>
+          </p>
+        ) : null}
+
+        {guardError ? (
+          <p className="text-sm text-destructive" role="alert" data-testid="calculation-guard-error">
+            {guardError}
+          </p>
+        ) : null}
+
         <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
             size="sm"
-            disabled={pending.length === 0 || calculate.isPending}
-            onClick={() => calculate.mutate({ data: { dryRun: true } })}
+            disabled={pending.length === 0 || calculate.isPending || scopeError !== null}
+            onClick={() => calculate.mutate({ data: { dryRun: true, eventIds: scopeEventIds } })}
           >
             Preview
           </Button>
@@ -378,8 +469,8 @@ export function PendingCalculationSection() {
             <>
               <Button
                 size="sm"
-                disabled={calculate.isPending}
-                onClick={() => calculate.mutate({ data: { dryRun: false } })}
+                disabled={calculate.isPending || scopeError !== null}
+                onClick={() => calculate.mutate({ data: { dryRun: false, eventIds: scopeEventIds } })}
               >
                 Commit
               </Button>

@@ -13,6 +13,10 @@ private const val TYPE_MAX = 20
 private const val ROUND_MAX = 50
 private const val PUBLIC_CODE_MAX = 6
 
+// Per-side handicap (#486): 0 < h <= 1.0 in NTRP points, 3 decimals — NUMERIC(4,3).
+private const val HANDICAP_PRECISION = 4
+private const val HANDICAP_SCALE = 3
+
 internal object TeamsTable : UUIDTable(name = "teams") {
     val name = varchar(name = "name", length = NAME_MAX)
     val teamType = varchar(name = "team_type", length = TYPE_MAX)
@@ -52,6 +56,11 @@ internal object MatchesTable : UUIDTable(name = "matches") {
     // Points designated for the winner (#403 Phase C); null for OPEN_PLAY / event-less fixtures. The
     // club reservation is emergent — summed over active non-finalized fixtures, no reservation table.
     val designatedPoints = integer(name = "designated_points").nullable()
+
+    // Per-side rating handicap (#486) in team-mean NTRP units; null = none. Deducted from the side's
+    // rating for the delta calc only; range 0 < h <= 1.0 (CHECK in V21). Editable while unrated.
+    val team1Handicap = decimal(name = "team1_handicap", precision = HANDICAP_PRECISION, scale = HANDICAP_SCALE).nullable()
+    val team2Handicap = decimal(name = "team2_handicap", precision = HANDICAP_PRECISION, scale = HANDICAP_SCALE).nullable()
 }
 
 internal object MatchSetsTable : UUIDTable(name = "match_sets") {

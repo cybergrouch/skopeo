@@ -58,7 +58,11 @@ fun Application.configureRatingRoutes(
                     // No/unparseable body → a dry run (the safe default; only an explicit
                     // {"dryRun": false} commits).
                     val request = runCatching { call.receiveNullable<CalculationRequest>() }.getOrNull() ?: CalculationRequest()
-                    respondEither(result = calculation.calculate(token = verifiedToken(), dryRun = request.dryRun)) { outcome ->
+                    respondEither(
+                        // eventIds (#479) optionally scopes the run to a prefix of the pending timeline;
+                        // null/empty keeps the all-pending behaviour.
+                        result = calculation.calculate(token = verifiedToken(), dryRun = request.dryRun, eventIds = request.eventIds),
+                    ) { outcome ->
                         call.respond(status = HttpStatusCode.OK, message = outcome.toResponse())
                     }
                 }

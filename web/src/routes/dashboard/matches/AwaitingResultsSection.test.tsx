@@ -197,6 +197,44 @@ describe('AwaitingResultsSection', () => {
     expect(screen.getByText('p1 vs Bob')).toBeInTheDocument()
   })
 
+  it('shows the applied per-side handicap transparently to organizers (#486)', () => {
+    useGetApiV1Matches.mockReturnValue({
+      data: [{ ...match, team1Handicap: '0.4', team2Handicap: '0.2' }],
+      isLoading: false,
+    })
+    renderSection()
+    expect(screen.getByText(/Handicap:/)).toBeInTheDocument()
+    expect(screen.getByText(/−0\.4 to Side 1/)).toBeInTheDocument()
+    expect(screen.getByText(/−0\.2 to Side 2/)).toBeInTheDocument()
+  })
+
+  it('shows only Side 1 in the handicap line when just that side is set (#486)', () => {
+    useGetApiV1Matches.mockReturnValue({
+      data: [{ ...match, team1Handicap: '0.5' }],
+      isLoading: false,
+    })
+    renderSection()
+    expect(screen.getByText(/Handicap:/)).toBeInTheDocument()
+    expect(screen.getByText(/0\.5 to Side 1/)).toBeInTheDocument()
+    expect(screen.queryByText(/to Side 2/)).not.toBeInTheDocument()
+  })
+
+  it('shows only Side 2 in the handicap line when just that side is set (#486)', () => {
+    useGetApiV1Matches.mockReturnValue({
+      data: [{ ...match, team2Handicap: '0.5' }],
+      isLoading: false,
+    })
+    renderSection()
+    expect(screen.getByText(/Handicap:/)).toBeInTheDocument()
+    expect(screen.getByText(/0\.5 to Side 2/)).toBeInTheDocument()
+    expect(screen.queryByText(/to Side 1/)).not.toBeInTheDocument()
+  })
+
+  it('omits the handicap line when no handicap is set (#486)', () => {
+    renderSection()
+    expect(screen.queryByText(/Handicap:/)).not.toBeInTheDocument()
+  })
+
   it('badges an overdue fixture, a fixture today, and an upcoming one', () => {
     const now = new Date()
     const isoToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`

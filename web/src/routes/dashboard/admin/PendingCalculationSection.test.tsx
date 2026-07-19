@@ -11,6 +11,7 @@ const {
   useGetApiV1Users,
   useGetApiV1Events,
   setPriorityMutate,
+  calculateMutate,
   dnd,
 } = vi.hoisted(() => ({
   useGetApiV1Matches: vi.fn(),
@@ -18,6 +19,7 @@ const {
   useGetApiV1Users: vi.fn(),
   useGetApiV1Events: vi.fn(),
   setPriorityMutate: vi.fn(),
+  calculateMutate: vi.fn(),
   dnd: { onDragEnd: undefined as undefined | ((e: unknown) => void) },
 }))
 
@@ -143,14 +145,18 @@ describe('PendingCalculationSection', () => {
       isLoading: false,
     })
     useGetApiV1Events.mockReturnValue({ data: [], isLoading: false })
-    // mutate(vars) drives the component's onSuccess with a crafted response.
+    // mutate(vars) drives the component's onSuccess with a crafted response; calculateMutate records vars.
     usePostApiV1RatingsCalculations.mockImplementation(
       (options: {
         mutation: { onSuccess: (data: typeof PREVIEW | typeof COMMITTED) => void }
       }) => ({
         isPending: false,
-        mutate: (vars: { data: { dryRun: boolean } }) =>
-          options.mutation.onSuccess(vars.data.dryRun ? PREVIEW : COMMITTED),
+        isError: false,
+        error: null,
+        mutate: (vars: { data: { dryRun: boolean; eventIds?: string[] } }) => {
+          calculateMutate(vars)
+          options.mutation.onSuccess(vars.data.dryRun ? PREVIEW : COMMITTED)
+        },
       }),
     )
   })
@@ -372,5 +378,128 @@ describe('PendingCalculationSection', () => {
 
     await user.click(screen.getByRole('button', { name: 'Discard' }))
     expect(screen.queryByTestId('calculation-preview')).not.toBeInTheDocument()
+  })
+
+  it('previews all pending events when nothing is selected (#479)', async () => {
+    const user = userEvent.setup()
+    renderSection()
+    await user.click(screen.getByRole('button', { name: 'Preview' }))
+    // No selection → eventIds is omitted (undefined), the unchanged all-pending behaviour.
+    expect(calculateMutate).toHaveBeenCalledWith({ data: { dryRun: true, eventIds: undefined } })
+  })
+
+  it('scopes the run to a selected event and passes its id (#479)', async () => {
+    const user = userEvent.setup()
+    useGetApiV1Matches.mockReturnValue({
+      data: [match({ id: 'a1', eventId: 'evA' }), match({ id: 'b1', eventId: 'evB' })],
+      isLoading: false,
+    })
+    useGetApiV1Events.mockReturnValue({
+      data: [
+        { id: 'evA', name: 'Alpha Cup', endDate: '2026-01-10', calcPriority: null },
+        { id: 'evB', name: 'Beta Cup', endDate: '2026-01-20', calcPriority: null },
+      ],
+      isLoading: false,
+    })
+    renderSection()
+
+    // Tick the earliest event (Alpha) — a valid prefix — then preview.
+    await user.click(screen.getByRole('checkbox', { name: 'Include event Alpha Cup' }))
+    expect(screen.getByText(/Scoped to/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Preview' }))
+    expect(calculateMutate).toHaveBeenCalledWith({ data: { dryRun: true, eventIds: ['evA'] } })
+  })
+
+  it('blocks a selection that skips an earlier pending event and shows the guard error (#479)', async () => {
+    const user = userEvent.setup()
+    useGetApiV1Matches.mockReturnValue({
+      data: [match({ id: 'a1', eventId: 'evA' }), match({ id: 'b1', eventId: 'evB' })],
+      isLoading: false,
+    })
+    useGetApiV1Events.mockReturnValue({
+      data: [
+        { id: 'evA', name: 'Alpha Cup', endDate: '2026-01-10', calcPriority: null },
+        { id: 'evB', name: 'Beta Cup', endDate: '2026-01-20', calcPriority: null },
+      ],
+      isLoading: false,
+    })
+    renderSection()
+
+    // Tick only the LATER event (Beta), skipping Alpha → prefix broken.
+    await user.click(screen.getByRole('checkbox', { name: 'Include event Beta Cup' }))
+    expect(screen.getByTestId('calculation-guard-error')).toHaveTextContent(/Alpha Cup/)
+    // Preview is blocked while the selection is invalid.
+    expect(screen.getByRole('button', { name: 'Preview' })).toBeDisabled()
+    expect(calculateMutate).not.toHaveBeenCalled()
+  })
+
+  it('blocks a selection that skips an earlier eventless Open match (#479)', async () => {
+    const user = userEvent.setup()
+    // An eventless Open match plays first, then an event — selecting the event skips the Open match,
+    // which can't itself be selected, so the prefix is broken by the earlier "Open (no event)" entry.
+    useGetApiV1Matches.mockReturnValue({
+      data: [match({ id: 'open1', matchDate: '2026-01-05' }), match({ id: 'b1', eventId: 'evB' })],
+      isLoading: false,
+    })
+    useGetApiV1Events.mockReturnValue({
+      data: [{ id: 'evB', name: 'Beta Cup', endDate: '2026-01-20', calcPriority: null }],
+      isLoading: false,
+    })
+    renderSection()
+
+    await user.click(screen.getByRole('checkbox', { name: 'Include event Beta Cup' }))
+    expect(screen.getByTestId('calculation-guard-error')).toHaveTextContent(
+      /earlier "Open \(no event\)" match \(2026-01-05\) must be included/,
+    )
+    expect(screen.getByRole('button', { name: 'Preview' })).toBeDisabled()
+    expect(calculateMutate).not.toHaveBeenCalled()
+  })
+
+  it('clears the selection, dropping the scope and any preview (#479)', async () => {
+    const user = userEvent.setup()
+    useGetApiV1Matches.mockReturnValue({
+      data: [match({ id: 'a1', eventId: 'evA' })],
+      isLoading: false,
+    })
+    useGetApiV1Events.mockReturnValue({
+      data: [{ id: 'evA', name: 'Alpha Cup', endDate: '2026-01-10', calcPriority: null }],
+      isLoading: false,
+    })
+    renderSection()
+
+    // Select the event and preview it, then hit "Clear selection".
+    await user.click(screen.getByRole('checkbox', { name: 'Include event Alpha Cup' }))
+    await user.click(screen.getByRole('button', { name: 'Preview' }))
+    expect(screen.getByTestId('calculation-preview')).toBeInTheDocument()
+    expect(screen.getByText(/Scoped to/)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Clear selection' }))
+    // Scope banner and preview both cleared.
+    expect(screen.queryByText(/Scoped to/)).not.toBeInTheDocument()
+    expect(screen.queryByTestId('calculation-preview')).not.toBeInTheDocument()
+  })
+
+  it('surfaces the backend guard message when a calculation errors (#479)', () => {
+    usePostApiV1RatingsCalculations.mockImplementation(() => ({
+      isPending: false,
+      isError: true,
+      error: { response: { data: { message: 'Older pending events must be included.' } } },
+      mutate: vi.fn(),
+    }))
+    renderSection()
+    expect(screen.getByTestId('calculation-guard-error')).toHaveTextContent(
+      'Older pending events must be included.',
+    )
+  })
+
+  it('falls back to a generic message when a calculation error has no body (#479)', () => {
+    usePostApiV1RatingsCalculations.mockImplementation(() => ({
+      isPending: false,
+      isError: true,
+      error: new Error('network down'), // no response.data.message → the `??` fallback arm.
+      mutate: vi.fn(),
+    }))
+    renderSection()
+    expect(screen.getByTestId('calculation-guard-error')).toHaveTextContent('Calculation failed.')
   })
 })

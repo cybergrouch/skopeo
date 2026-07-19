@@ -228,6 +228,15 @@ function MatchResultRow({
           Public page (QR)
         </PublicPageLink>
       </div>
+      {/* Rating handicap (#486): shown transparently to organizers and participants. */}
+      {match.team1Handicap || match.team2Handicap ? (
+        <div className="mb-2 text-xs text-muted-foreground">
+          Handicap:
+          {match.team1Handicap ? ` −${match.team1Handicap} to Side 1` : ""}
+          {match.team1Handicap && match.team2Handicap ? "," : ""}
+          {match.team2Handicap ? ` −${match.team2Handicap} to Side 2` : ""}
+        </div>
+      ) : null}
       {showForm ? (
         <>
           <div className="space-y-2">

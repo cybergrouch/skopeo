@@ -1256,6 +1256,14 @@ paths:
         Processes matches pending calculation oldest→newest, carrying ratings forward. dryRun
         defaults to true (an empty body is a dry run) and previews with no writes; an explicit
         false commits ratings, history, and rated_at.
+
+        eventIds optionally scopes the run to a selection of finalized events (#479). When omitted or
+        empty, every pending match is processed (unchanged). When provided, only those events' pending
+        matches are previewed/committed — but ratings must carry forward on a consistent timeline, so
+        the selection must form a contiguous prefix of the pending timeline: you may not select an
+        event while an older pending match (an earlier event, or an eventless "Open" match) is left
+        out. A selection that skips an earlier pending match is rejected with 400 (Validation error),
+        naming the earliest excluded match. The same guard applies to both preview and commit.
       tags:
         - Ratings
       security:
@@ -1711,6 +1719,47 @@ paths:
           description: Caller is not HOST/ADMINISTRATOR
         '404':
           description: No such match or event
+        '409':
+          description: The match is disabled or already rated
+
+  /api/v1/matches/{id}/handicaps:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    put:
+      summary: Set or clear a fixture's per-side rating handicaps (HOST/CLUB_OWNER/ADMINISTRATOR)
+      description: >-
+        Set (or clear) a fixture's per-side rating handicaps (#486). Each is a team-mean NTRP-unit value
+        in the range 0 < h <= 1.0, or null to clear that side. A handicap is deducted from the designated
+        side's rating for the rating-delta computation only (the delta is applied to the players' true
+        ratings). Only allowed while the fixture is unrated (a rated match is frozen). See RATING_HANDICAP.md.
+      tags:
+        - Matches
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetHandicapsRequest'
+      responses:
+        '200':
+          description: Updated match
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchResponse'
+        '400':
+          description: A handicap is out of range (must be 0 < h <= 1.0)
+        '403':
+          description: Caller is not HOST/CLUB_OWNER/ADMINISTRATOR
+        '404':
+          description: No such match
         '409':
           description: The match is disabled or already rated
 
@@ -4858,6 +4907,17 @@ components:
           description: >-
             The "award points for this match" checkbox (#466). Default (omitted/true) → the fixture awards
             points on a points-awarding event. Explicit false → the match opts out (no designation, no award).
+        team1Handicap:
+          type: string
+          nullable: true
+          description: >-
+            Optional per-side rating handicap (#486) for team1, in team-mean NTRP units, 0 < h <= 1.0.
+            Deducted from that side's rating for the rating-delta computation only; the delta is applied to
+            the players' true ratings. Null/omitted = no handicap. See RATING_HANDICAP.md.
+        team2Handicap:
+          type: string
+          nullable: true
+          description: Optional per-side rating handicap (#486) for team2, in team-mean NTRP units, 0 < h <= 1.0.
 
     SetScoreRequest:
       type: object
@@ -5027,6 +5087,14 @@ components:
           type: integer
           nullable: true
           description: Points designated for the winner (#403 Phase C); null for a config-less or event-less fixture.
+        team1Handicap:
+          type: string
+          nullable: true
+          description: Per-side rating handicap (#486) for team1, in team-mean NTRP units; null = none. Shown for transparency.
+        team2Handicap:
+          type: string
+          nullable: true
+          description: Per-side rating handicap (#486) for team2, in team-mean NTRP units; null = none.
 
     CreateEventRequest:
       type: object
@@ -5117,6 +5185,21 @@ components:
           type: integer
           nullable: true
           description: Points designated for the winner; within the event's [min, max]. Omit/null to clear (no award).
+
+    SetHandicapsRequest:
+      type: object
+      description: >-
+        Set or clear a fixture's per-side rating handicaps (#486). Each is a team-mean NTRP-unit value in
+        the range 0 < h <= 1.0, or null to clear that side. Only settable while the fixture is unrated.
+      properties:
+        team1Handicap:
+          type: string
+          nullable: true
+          description: Handicap for team1 in team-mean NTRP units, 0 < h <= 1.0; null clears it.
+        team2Handicap:
+          type: string
+          nullable: true
+          description: Handicap for team2 in team-mean NTRP units, 0 < h <= 1.0; null clears it.
 
     UpdateEventRequest:
       type: object
@@ -5500,6 +5583,14 @@ components:
           description: >-
             The event this match belongs to (#358), resolved to its shareable code + name so the
             public page can link to the event. Null/omitted for eventless (open-play) matches.
+        team1Handicap:
+          type: string
+          nullable: true
+          description: Per-side rating handicap (#486) for team1, shown transparently to participants; null = none.
+        team2Handicap:
+          type: string
+          nullable: true
+          description: Per-side rating handicap (#486) for team2, shown transparently to participants; null = none.
 
     MatchPublicEvent:
       type: object
@@ -5610,6 +5701,18 @@ components:
           type: boolean
           default: true
           description: Defaults to true (preview only); set false to commit.
+        eventIds:
+          type: array
+          nullable: true
+          items:
+            type: string
+            format: uuid
+          description: >-
+            Optional selection of finalized events to scope the run to (#479). Omit or leave empty to
+            process all pending matches (unchanged). When provided, the selection must be a contiguous
+            prefix of the pending timeline — you may not select an event while an older pending match
+            is excluded — otherwise the request is rejected with a 400 (Validation error) naming the
+            earliest excluded match. Applies to both preview and commit.
 
     PlayerChangeResponse:
       type: object

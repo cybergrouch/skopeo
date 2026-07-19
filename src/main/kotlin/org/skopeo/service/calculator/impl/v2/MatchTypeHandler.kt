@@ -21,6 +21,14 @@ interface MatchTypeHandler {
     /** The rating a team enters the calculation with (for singles, the single player's rating). */
     fun getTeamPreCalculationRating(teamId: String): Rating
 
+    /**
+     * The team's **effective** rating for the per-set gap/expectation math (issue #486): the true
+     * [getTeamPreCalculationRating] with this side's handicap (if any) deducted, floored at the NTRP
+     * minimum. Only this feeds the delta computation; the true rating still drives previous/new and the
+     * doubles split. With no handicap this equals the true pre-calculation rating.
+     */
+    fun getTeamEffectiveRating(teamId: String): BigDecimal
+
     /** Record the audit entry for one team's computed step in one set. */
     fun createSetCalculationAudit(
         teamId: String,

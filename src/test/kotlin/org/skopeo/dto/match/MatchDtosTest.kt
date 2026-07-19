@@ -33,4 +33,41 @@ class MatchDtosTest {
     fun `negative games are still rejected (#116)`() {
         shouldThrow<IllegalArgumentException> { SetScoreRequest(team1Games = -1, team2Games = 0) }
     }
+
+    private fun fixture(
+        team1Handicap: String? = null,
+        team2Handicap: String? = null,
+    ) = CreateFixtureRequest(
+        matchFormat = "SINGLES",
+        matchType = "OPEN_PLAY",
+        matchDate = "2026-01-01",
+        team1 = listOf(element = "u1"),
+        team2 = listOf(element = "u2"),
+        team1Handicap = team1Handicap,
+        team2Handicap = team2Handicap,
+    )
+
+    @Test
+    fun `a handicap above 0 and up to 1_0 is accepted (#486)`() {
+        shouldNotThrowAny { fixture(team1Handicap = "0.001") }
+        shouldNotThrowAny { fixture(team2Handicap = "1.0") }
+        shouldNotThrowAny { fixture(team1Handicap = "0.3", team2Handicap = "0.5") }
+        shouldNotThrowAny { fixture() } // both null = no handicap
+    }
+
+    @Test
+    fun `a handicap of 0, above 1_0, or non-numeric is rejected (#486)`() {
+        shouldThrow<IllegalArgumentException> { fixture(team1Handicap = "0") }
+        shouldThrow<IllegalArgumentException> { fixture(team1Handicap = "0.0") }
+        shouldThrow<IllegalArgumentException> { fixture(team2Handicap = "1.01") }
+        shouldThrow<IllegalArgumentException> { fixture(team2Handicap = "-0.2") }
+        shouldThrow<IllegalArgumentException> { fixture(team1Handicap = "abc") }
+    }
+
+    @Test
+    fun `SetHandicapsRequest validates the same range (#486)`() {
+        shouldNotThrowAny { SetHandicapsRequest(team1Handicap = "0.4", team2Handicap = null) }
+        shouldThrow<IllegalArgumentException> { SetHandicapsRequest(team1Handicap = "1.5") }
+        shouldThrow<IllegalArgumentException> { SetHandicapsRequest(team2Handicap = "0") }
+    }
 }

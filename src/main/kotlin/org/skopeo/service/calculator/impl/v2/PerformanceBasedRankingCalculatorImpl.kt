@@ -41,7 +41,7 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
     companion object {
         private val ZERO = "0.0".bd
         private val ONE = "1.0".bd
-        private val NTRP_MIN = "1.0".bd
+        internal val NTRP_MIN = "1.0".bd
         private val NTRP_MAX = "7.0".bd
         private val NTRP_RANGE = NTRP_MAX - NTRP_MIN // 6.0
         internal val K_FACTOR_NTRP = "0.16".bd
@@ -60,13 +60,22 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
         val options = request.options ?: RatingCalculationOptions()
         val matchTypeFactor = options.matchTypeFactor.bd
 
+        // TRUE pre-calculation ratings drive previous/new and (for doubles) the split ratio.
         val team1PreCalculationRatingBD =
             matchTypeHandler.getTeamPreCalculationRating(teamId = team1Id).value.bd
         val team2PreCalculationRatingBD =
             matchTypeHandler.getTeamPreCalculationRating(teamId = team2Id).value.bd
 
-        var currentTeam1CalculatedRatingBD = team1PreCalculationRatingBD
-        var currentTeam2CalculatedRatingBD = team2PreCalculationRatingBD
+        // EFFECTIVE ratings (true − handicap, issue #486) seed the per-set gap/expectation math only. With
+        // no handicap these equal the true ratings, so unhandicapped matches are byte-for-byte unchanged.
+        var currentTeam1CalculatedRatingBD = matchTypeHandler.getTeamEffectiveRating(teamId = team1Id)
+        var currentTeam2CalculatedRatingBD = matchTypeHandler.getTeamEffectiveRating(teamId = team2Id)
+
+        // TRUE running ratings track the delta applied to the true baseline — used for the audit's per-set
+        // `ratingAfter` (so history reads against true ratings) and for the net change. Without a handicap
+        // these stay lock-step with the effective running ratings; with one they diverge by the handicap.
+        var trueTeam1RunningBD = team1PreCalculationRatingBD
+        var trueTeam2RunningBD = team2PreCalculationRatingBD
 
         request.matchScore.sets.forEachIndexed { index, set ->
             val setScore =
@@ -89,15 +98,19 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
                     teamId = team2Id,
                     matchTypeFactor = matchTypeFactor,
                 )
+            // The effective running rating carries the (handicapped) gap forward set-to-set.
             currentTeam1CalculatedRatingBD = clamp(value = currentTeam1CalculatedRatingBD + step1.delta)
             currentTeam2CalculatedRatingBD = clamp(value = currentTeam2CalculatedRatingBD + step2.delta)
+            // The true running rating carries the same deltas onto the true baseline for the audit.
+            trueTeam1RunningBD = clamp(value = trueTeam1RunningBD + step1.delta)
+            trueTeam2RunningBD = clamp(value = trueTeam2RunningBD + step2.delta)
 
             matchTypeHandler.createSetCalculationAudit(
                 teamId = team1Id,
                 setScore = set,
                 index = index,
                 step = step1,
-                ratingAfter = currentTeam1CalculatedRatingBD,
+                ratingAfter = trueTeam1RunningBD,
             )
 
             matchTypeHandler.createSetCalculationAudit(
@@ -105,20 +118,21 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
                 setScore = set,
                 index = index,
                 step = step2,
-                ratingAfter = currentTeam2CalculatedRatingBD,
+                ratingAfter = trueTeam2RunningBD,
             )
         }
 
+        // Net change is applied to the TRUE pre-calculation rating (the handicap only shaped the deltas).
         val newTeam1Rating =
             smoothAndClamp(
                 previous = team1PreCalculationRatingBD,
-                netChange = currentTeam1CalculatedRatingBD - team1PreCalculationRatingBD,
+                netChange = trueTeam1RunningBD - team1PreCalculationRatingBD,
                 options = options,
             )
         val newTeam2Rating =
             smoothAndClamp(
                 previous = team2PreCalculationRatingBD,
-                netChange = currentTeam2CalculatedRatingBD - team2PreCalculationRatingBD,
+                netChange = trueTeam2RunningBD - team2PreCalculationRatingBD,
                 options = options,
             )
 

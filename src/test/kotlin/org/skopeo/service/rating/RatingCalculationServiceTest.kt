@@ -53,6 +53,7 @@ import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
+import io.kotest.matchers.string.shouldContain as stringShouldContain
 
 class RatingCalculationServiceTest {
     companion object {
@@ -295,6 +296,41 @@ class RatingCalculationServiceTest {
         (openGain > BigDecimal.ZERO).shouldBeTrue()
         // TOURNAMENT_PLAYOFFS (1.2) scales the change well above OPEN_PLAY (0.5) for an identical match.
         (playoffGain > openGain).shouldBeTrue()
+    }
+
+    @Test
+    fun `a per-side handicap on the loser shrinks their loss, applied to the true rating (#486)`() {
+        provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val a1 = provisionUser(uid = "a1", rated = true)
+        val a2 = provisionUser(uid = "a2", rated = true)
+        val b1 = provisionUser(uid = "b1", rated = true)
+        val b2 = provisionUser(uid = "b2", rated = true)
+        // Two identical equal-4.0 dominant wins; one has a 0.3 handicap on the LOSING side (team2).
+        playedMatch(admin = "root", winner = a1.id, loser = a2.id, matchType = MatchType.OPEN_PLAY)
+        val handicapped =
+            matchService.createFixture(
+                token = token(uid = "root"),
+                request =
+                    FixtureInput(
+                        matchFormat = TeamType.SINGLES,
+                        matchType = MatchType.OPEN_PLAY,
+                        matchDate = LocalDate.parse("2026-01-01"),
+                        team1 = listOf(element = b1.id),
+                        team2 = listOf(element = b2.id),
+                        team2Handicap = BigDecimal("0.300"),
+                    ),
+            ).shouldBeRight()
+        recordResult(admin = "root", matchId = handicapped.id)
+
+        val changes = calc.calculate(token = token(uid = "root"), dryRun = true).shouldBeRight().matches.flatMap { it.changes }
+        val plainLoss = changes.first { it.userId == a2.id }.let { it.newRating - it.previousRating }
+        val handicappedLoss = changes.first { it.userId == b2.id }.let { it.newRating - it.previousRating }
+
+        // Both are losses; the handicapped side loses strictly less (closer to zero).
+        (plainLoss < BigDecimal.ZERO).shouldBeTrue()
+        (handicappedLoss > plainLoss).shouldBeTrue()
+        // The delta is applied to the TRUE 4.0 baseline — previous is the true rating, not 3.7.
+        changes.first { it.userId == b2.id }.previousRating shouldBe BigDecimal("4.000000")
     }
 
     @Test
@@ -656,5 +692,204 @@ class RatingCalculationServiceTest {
         transaction { UserRatingsTable.deleteAll() }
 
         calc.calculate(token = token(uid = "root"), dryRun = true).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    private val eventRepo = EventRepository()
+
+    /**
+     * Create a finalized event named [name] over [startDate]..[endDate] holding one completed fixture
+     * ([a] beats [b], dated at [startDate]); returns the event id. Finalized so its match is queue-eligible.
+     */
+    private fun finalizedEventWithMatch(
+        name: String,
+        startDate: LocalDate,
+        endDate: LocalDate,
+        a: UUID,
+        b: UUID,
+    ): UUID {
+        val root = users.findByFirebaseUid(firebaseUid = "root")!!.id
+        val event =
+            eventRepo.create(
+                command =
+                    CreateEventCommand(
+                        name = name,
+                        startDate = startDate,
+                        endDate = endDate,
+                        participantIds = listOf(a, b),
+                        createdBy = root,
+                    ),
+            )
+        val fixture =
+            matchService.createFixture(
+                token = token(uid = "root"),
+                request =
+                    FixtureInput(
+                        matchFormat = TeamType.SINGLES,
+                        matchType = MatchType.OPEN_PLAY,
+                        matchDate = startDate,
+                        team1 = listOf(element = a),
+                        team2 = listOf(element = b),
+                        eventId = event.id,
+                    ),
+            ).shouldBeRight()
+        recordResult(admin = "root", matchId = fixture.id)
+        eventRepo.finalize(id = event.id, finalizedAt = LocalDateTime.now(), finalizedBy = root)
+        return event.id
+    }
+
+    @Test
+    fun `no selection processes every pending event, unchanged behaviour (#479)`() {
+        provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val p3 = provisionUser(uid = "p3", rated = true)
+        val p4 = provisionUser(uid = "p4", rated = true)
+        finalizedEventWithMatch(
+            name = "A",
+            startDate = LocalDate.parse("2026-01-01"),
+            endDate = LocalDate.parse("2026-01-01"),
+            a = p1.id,
+            b = p2.id,
+        )
+        finalizedEventWithMatch(
+            name = "B",
+            startDate = LocalDate.parse("2026-02-01"),
+            endDate = LocalDate.parse("2026-02-01"),
+            a = p3.id,
+            b = p4.id,
+        )
+
+        val all = calc.calculate(token = token(uid = "root"), dryRun = true, eventIds = null).shouldBeRight()
+        all.matches.size shouldBe 2
+        // An empty selection is also the all-pending default.
+        calc.calculate(token = token(uid = "root"), dryRun = true, eventIds = emptyList()).shouldBeRight().matches.size shouldBe 2
+    }
+
+    @Test
+    fun `a selection matching no pending event is a no-op empty run (#479)`() {
+        provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        finalizedEventWithMatch(
+            name = "A",
+            startDate = LocalDate.parse("2026-01-01"),
+            endDate = LocalDate.parse("2026-01-01"),
+            a = p1.id,
+            b = p2.id,
+        )
+
+        // An eventId that matches nothing in the pending timeline scopes to an empty run.
+        calc
+            .calculate(token = token(uid = "root"), dryRun = true, eventIds = listOf(element = UUID.randomUUID().toString()))
+            .shouldBeRight()
+            .matches
+            .shouldBe(expected = emptyList())
+    }
+
+    @Test
+    fun `a valid prefix selection previews only those events and matches a full run for them (#479)`() {
+        provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val p3 = provisionUser(uid = "p3", rated = true)
+        val p4 = provisionUser(uid = "p4", rated = true)
+        val eventA =
+            finalizedEventWithMatch(
+                name = "A",
+                startDate = LocalDate.parse("2026-01-01"),
+                endDate = LocalDate.parse("2026-01-01"),
+                a = p1.id,
+                b = p2.id,
+            )
+        finalizedEventWithMatch(
+            name = "B",
+            startDate = LocalDate.parse("2026-02-01"),
+            endDate = LocalDate.parse("2026-02-01"),
+            a = p3.id,
+            b = p4.id,
+        )
+
+        val fullFirst = calc.calculate(token = token(uid = "root"), dryRun = true, eventIds = null).shouldBeRight().matches.first()
+        // Selecting only the earliest event (A) previews just its one match.
+        val scoped =
+            calc.calculate(
+                token = token(uid = "root"),
+                dryRun = true,
+                eventIds = listOf(element = eventA.toString()),
+            ).shouldBeRight()
+        scoped.matches.size shouldBe 1
+        scoped.matches.single().matchId shouldBe fullFirst.matchId
+        // The scoped ratings are identical to what a full run would produce for that same leading match.
+        scoped.matches.single().changes.map { it.userId to it.newRating }.toSet() shouldBe
+            fullFirst.changes.map { it.userId to it.newRating }.toSet()
+    }
+
+    @Test
+    fun `selecting a later event while an earlier one is excluded is rejected, naming the excluded event (#479)`() {
+        provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val p3 = provisionUser(uid = "p3", rated = true)
+        val p4 = provisionUser(uid = "p4", rated = true)
+        val eventA =
+            finalizedEventWithMatch(
+                name = "A",
+                startDate = LocalDate.parse("2026-01-01"),
+                endDate = LocalDate.parse("2026-01-01"),
+                a = p1.id,
+                b = p2.id,
+            )
+        val eventB =
+            finalizedEventWithMatch(
+                name = "B",
+                startDate = LocalDate.parse("2026-02-01"),
+                endDate = LocalDate.parse("2026-02-01"),
+                a = p3.id,
+                b = p4.id,
+            )
+
+        // Selecting only the LATER event B skips the earlier pending event A → rejected, naming A.
+        val error =
+            calc
+                .calculate(token = token(uid = "root"), dryRun = true, eventIds = listOf(element = eventB.toString()))
+                .shouldBeLeft()
+                .shouldBeInstanceOf<ServiceError.Validation>()
+        error.message stringShouldContain eventA.toString()
+        // The same guard applies to commit, not just preview.
+        calc
+            .calculate(token = token(uid = "root"), dryRun = false, eventIds = listOf(element = eventB.toString()))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `commit persists only the selected prefix and leaves later pending events unrated (#479)`() {
+        provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val p3 = provisionUser(uid = "p3", rated = true)
+        val p4 = provisionUser(uid = "p4", rated = true)
+        val eventA =
+            finalizedEventWithMatch(
+                name = "A",
+                startDate = LocalDate.parse("2026-01-01"),
+                endDate = LocalDate.parse("2026-01-01"),
+                a = p1.id,
+                b = p2.id,
+            )
+        finalizedEventWithMatch(
+            name = "B",
+            startDate = LocalDate.parse("2026-02-01"),
+            endDate = LocalDate.parse("2026-02-01"),
+            a = p3.id,
+            b = p4.id,
+        )
+
+        calc.calculate(token = token(uid = "root"), dryRun = false, eventIds = listOf(element = eventA.toString())).shouldBeRight()
+
+        // Event A's players are rated; event B's are untouched and B's match is still pending.
+        ratings.historyByUser(userId = p1.id).size shouldBe 1
+        ratings.historyByUser(userId = p3.id).shouldBe(expected = emptyList())
+        matchRepo.listPendingCalculation().size shouldBe 1
     }
 }

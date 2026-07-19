@@ -103,11 +103,17 @@ class RatingCalculationService(
     fun calculate(
         token: VerifiedFirebaseToken,
         dryRun: Boolean,
+        eventIds: List<String>? = null,
     ): Either<ServiceError, CalculationOutcome> =
         either {
             val adminId = requireAdmin(token = token).bind()
             val snapshot = mutableMapOf<UUID, BigDecimal>()
-            val processed = matches.listPendingCalculation().map { processMatch(match = it, snapshot = snapshot).bind() }
+            // The full pending timeline in global processing order (#335). A selection scopes the run to
+            // a leading PREFIX of it (#479) — ratings carry forward in date order, so an earlier pending
+            // match may never be skipped. selectPrefix enforces that and returns the scoped, ordered list.
+            val pending = matches.listPendingCalculation()
+            val scoped = selectPrefix(pending = pending, eventIds = eventIds).bind()
+            val processed = scoped.map { processMatch(match = it, snapshot = snapshot).bind() }
 
             if (!dryRun) {
                 commit(processed = processed, ratedBy = adminId)
@@ -128,6 +134,49 @@ class RatingCalculationService(
             }
             CalculationOutcome(dryRun = dryRun, matches = processed)
         }
+
+    /**
+     * Scope the pending timeline to a selection of events (#479), preserving global oldest→newest
+     * consistency. [pending] is the full timeline in processing order.
+     *
+     * - Null/empty [eventIds] → the whole timeline, unchanged (all pending, as before).
+     * - Otherwise, keep the matches whose event is selected. Ratings carry forward in date order, so
+     *   the selection MUST be a contiguous **prefix**: no pending match may be excluded while a LATER
+     *   selected match is included. Concretely, every pending match up to the last selected one must
+     *   also be selected (an eventless "Open" match can never be selected via event ids, so an earlier
+     *   Open match breaks the prefix). A skip is rejected as [ServiceError.Validation], naming the
+     *   earliest excluded match. The same guard runs for preview and commit alike.
+     */
+    internal fun selectPrefix(
+        pending: List<Match>,
+        eventIds: List<String>?,
+    ): Either<ServiceError, List<Match>> {
+        if (eventIds.isNullOrEmpty()) {
+            return pending.right()
+        }
+        val selected = eventIds.toSet()
+
+        fun isSelected(match: Match): Boolean = match.eventId?.toString() in selected
+
+        // The scoped run is the leading prefix up to the last selected match; nothing selected → empty (no-op).
+        val lastSelectedIndex = pending.indexOfLast { isSelected(match = it) }
+        val prefix = if (lastSelectedIndex < 0) emptyList() else pending.take(n = lastSelectedIndex + 1)
+
+        // Every match in that prefix must be selected; a gap means an earlier pending match would be left
+        // unrated while a later selected one is committed — reject, naming the earliest excluded match.
+        val excluded = prefix.firstOrNull { !isSelected(match = it) }
+        return if (excluded == null) {
+            prefix.right()
+        } else {
+            val label = excluded.eventId?.let { "event $it" } ?: "Open (eventless) match ${excluded.id}"
+            ServiceError.Validation(
+                message =
+                    "Selection must be a contiguous prefix of the pending timeline: " +
+                        "$label (match ${excluded.id}, dated ${excluded.matchDate}) is older than a " +
+                        "selected event but was not included.",
+            ).left()
+        }
+    }
 
     /** Shared summary details for a preview/commit audit entry: match count + distinct players affected. */
     private fun calculationDetails(processed: List<MatchCalculation>): Map<String, String?> =
@@ -394,8 +443,23 @@ private fun buildRequest(
     val t2 = match.team2.teamId.toString()
     val teams =
         mapOf(
-            t1 to teamOf(teamId = t1, userIds = match.team1.userIds, format = match.matchFormat, ratingsByUser = ratingsByUser),
-            t2 to teamOf(teamId = t2, userIds = match.team2.userIds, format = match.matchFormat, ratingsByUser = ratingsByUser),
+            t1 to
+                teamOf(
+                    teamId = t1,
+                    userIds = match.team1.userIds,
+                    format = match.matchFormat,
+                    ratingsByUser = ratingsByUser,
+                    // Per-side handicap (#486): deducted from this side for the delta calc only.
+                    handicap = match.team1Handicap,
+                ),
+            t2 to
+                teamOf(
+                    teamId = t2,
+                    userIds = match.team2.userIds,
+                    format = match.matchFormat,
+                    ratingsByUser = ratingsByUser,
+                    handicap = match.team2Handicap,
+                ),
         )
     val sets =
         match.sets.map { set ->
@@ -433,6 +497,7 @@ private fun teamOf(
     userIds: List<UUID>,
     format: TeamType,
     ratingsByUser: Map<UUID, BigDecimal>,
+    handicap: BigDecimal? = null,
 ): Team =
     Team(
         teamId = teamId,
@@ -446,4 +511,6 @@ private fun teamOf(
                 )
             },
         teamType = format,
+        // Team-mean NTRP-unit handicap (#486); the calculator deducts it from this side for the delta only.
+        handicap = handicap?.toPlainString(),
     )

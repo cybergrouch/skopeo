@@ -47,6 +47,7 @@ import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService
 import org.skopeo.service.user.VerifiedFirebaseToken
+import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
@@ -91,6 +92,12 @@ data class FixtureInput(
      * no designation (null), so it awards no points even under a points-awarding event.
      */
     val awardPoints: Boolean? = null,
+    /**
+     * Optional per-side rating handicap (#486) in team-mean NTRP units, `0 < h <= 1.0`; null = none.
+     * Validated at the boundary; deducted from that side for the rating-delta computation only.
+     */
+    val team1Handicap: BigDecimal? = null,
+    val team2Handicap: BigDecimal? = null,
 )
 
 /**
@@ -151,6 +158,8 @@ class MatchService(
                             tournamentName = request.tournamentName,
                             eventId = request.eventId,
                             designatedPoints = designated,
+                            team1Handicap = request.team1Handicap,
+                            team2Handicap = request.team2Handicap,
                         ),
                 )
             audit.record(
@@ -327,6 +336,44 @@ class MatchService(
             val updated = matches.setDesignatedPoints(matchId = matchId, designatedPoints = resolved).bind()
             // Log the designation set/clear; a cleared designation is a size-0 cost entry.
             auditDesignation(actorId = caller.id, matchId = matchId, points = resolved ?: 0, teamSize = match.team1.userIds.size)
+            updated
+        }
+
+    /**
+     * Set (or clear) a fixture's per-side rating handicaps (#486). Staff-only and only while the fixture
+     * is unrated (a rated match is frozen). Each value has already been range-validated at the boundary
+     * (`0 < h <= 1.0`); a null side clears that side's handicap. Audited as FIXTURE_HANDICAP_SET.
+     */
+    fun setHandicaps(
+        token: VerifiedFirebaseToken,
+        matchId: UUID,
+        team1Handicap: BigDecimal?,
+        team2Handicap: BigDecimal?,
+    ): Either<ServiceError, Match> =
+        either {
+            val caller = staffCaller(token = token).bind()
+            val match = matches.findById(matchId = matchId).bind()
+            ensure(condition = match.isActive) { ServiceError.Conflict(message = "Match is disabled") }
+            ensure(condition = match.ratedAt == null) {
+                ServiceError.Conflict(message = "Cannot change the handicap on a match that has already been rated")
+            }
+            val updated =
+                matches.setHandicaps(matchId = matchId, team1Handicap = team1Handicap, team2Handicap = team2Handicap).bind()
+            audit.record(
+                write =
+                    AuditWrite(
+                        actorUserId = caller.id,
+                        action = AuditAction.FIXTURE_HANDICAP_SET,
+                        entityType = AuditEntityType.MATCH,
+                        entityId = matchId,
+                        summary = "Set per-side handicap on the fixture",
+                        details =
+                            mapOf(
+                                "team1Handicap" to (team1Handicap?.toPlainString() ?: "none"),
+                                "team2Handicap" to (team2Handicap?.toPlainString() ?: "none"),
+                            ),
+                    ),
+            )
             updated
         }
 

@@ -184,6 +184,18 @@ Two implementation notes:
 - The factor is applied inside the calculator, so the **audited and persisted `scale`** already includes it: the per-match breakdown ([#97](#)) reflects the context-adjusted value, and stored history stays faithful even if the factors are later retuned.
 - It reaches the calculator via `RatingCalculationOptions.matchTypeFactor` (default **1.0** — no effect). The persistence flow supplies `match.matchType.factor`; the stateless what-if endpoint leaves it at the default. The factors live on the `MatchType` enum as the single tuning knob.
 
+### 2.6 `handicap` — the per-side fairness adjustment (optional)
+
+An organizer can set an optional **per-side handicap** `h` (`0 < h ≤ 1.0`, in team-mean NTRP units) on a fixture so a physically lopsided — but competitively *rated* — matchup produces fairer rating changes (issue #486). Unlike the other factors, the handicap does **not** enter the master formula as a term. Instead it is **deducted from the designated side's rating that feeds the gap** (`ratingGap` / `normalizedGap` in [§2.3](#23-scale--how-surprising)):
+
+```
+effectiveRating = trueRating − h        (singles: the player; doubles: the side mean)
+```
+
+The resulting `change` is then applied to the **true** (non-adjusted) rating. So the handicap only widens the *perceived* gap — scaling the delta's magnitude — while the true rating continues to drive band, ranking points, and confidence. For doubles the side **mean** is deducted and the team delta is split by each partner's **true** rating share (the existing proportional split), preserving rating conservation.
+
+There is **no special-casing**: because a handicap widens the gap, values near `1.0` can push it past the `0.5` [competitive threshold](#32-the-competitive-threshold-83--05-ntrp), so an as-expected dominant win yields **zero** change — an accepted, intended outcome. The applied handicap is recorded in the audit/breakdown context (`appliedHandicap`) so a history row's handicapped gap stays interpretable against its true previous/new ratings. Full design: [RATING_HANDICAP.md](./RATING_HANDICAP.md).
+
 ---
 
 ## 3. Deriving the Constants

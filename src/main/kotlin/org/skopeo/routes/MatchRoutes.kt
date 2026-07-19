@@ -21,6 +21,7 @@ import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.dto.match.MatchStateRequest
 import org.skopeo.dto.match.ReorderMatchesRequest
 import org.skopeo.dto.match.SetDesignationRequest
+import org.skopeo.dto.match.SetHandicapsRequest
 import org.skopeo.dto.match.toResponse
 import org.skopeo.dto.rating.toResponse
 import org.skopeo.model.MatchQuery
@@ -28,6 +29,7 @@ import org.skopeo.model.MatchType
 import org.skopeo.model.TeamType
 import org.skopeo.service.match.FixtureInput
 import org.skopeo.service.match.MatchService
+import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.format.DateTimeParseException
 import java.util.UUID
@@ -101,7 +103,10 @@ private fun toFixtureInput(request: CreateFixtureRequest): FixtureInput {
     val matchFormat = parseEnumParam<TeamType>(value = request.matchFormat, field = "matchFormat")
     val team1 = request.team1.map { parseUuid(value = it) }
     val team2 = request.team2.map { parseUuid(value = it) }
-    validateComposition(type = matchFormat, team1 = team1, team2 = team2)
+    // Composition check at the boundary: the right count per side and no player appearing twice.
+    val expected = if (matchFormat == TeamType.SINGLES) 1 else 2
+    require(value = team1.size == expected && team2.size == expected) { "$matchFormat needs $expected player(s) per side" }
+    (team1 + team2).let { all -> require(value = all.toSet().size == all.size) { "a player cannot appear more than once in a match" } }
     // Designated points (#403 Phase C) are whole and non-negative (decision #6) — reject at the boundary.
     request.designatedPoints?.let { require(value = it > 0) { "designatedPoints must be a positive integer" } }
     return FixtureInput(
@@ -115,18 +120,10 @@ private fun toFixtureInput(request: CreateFixtureRequest): FixtureInput {
         eventId = request.eventId?.let { parseUuid(value = it, field = "event id") },
         designatedPoints = request.designatedPoints,
         awardPoints = request.awardPoints,
+        // Range (0 < h <= 1.0) is enforced in CreateFixtureRequest.init; here we only parse to BigDecimal.
+        team1Handicap = request.team1Handicap?.let { BigDecimal(it) },
+        team2Handicap = request.team2Handicap?.let { BigDecimal(it) },
     )
-}
-
-private fun validateComposition(
-    type: TeamType,
-    team1: List<UUID>,
-    team2: List<UUID>,
-) {
-    val expected = if (type == TeamType.SINGLES) 1 else 2
-    require(value = team1.size == expected && team2.size == expected) { "$type needs $expected player(s) per side" }
-    val all = team1 + team2
-    require(value = all.toSet().size == all.size) { "a player cannot appear more than once in a match" }
 }
 
 private fun parseUuid(
@@ -192,6 +189,14 @@ private fun Route.byId(service: MatchService) {
             ) { match -> call.respond(status = HttpStatusCode.OK, message = match.toResponse()) }
         }
     }
+    fixtureUpdateRoutes(service = service)
+}
+
+/**
+ * Fixture field-update routes (before the match is rated): designated points (#466) and per-side rating
+ * handicaps (#486). Handicap ranges are validated in the DTO init; the service enforces the unrated guard.
+ */
+private fun Route.fixtureUpdateRoutes(service: MatchService) {
     // Set (or clear) a fixture's designated points (#466 opt-in "award points for this match" checkbox).
     put(path = "/{id}/designation") {
         respondMappingErrors {
@@ -203,6 +208,20 @@ private fun Route.byId(service: MatchService) {
                         token = verifiedToken(),
                         matchId = uuidParam(name = "id"),
                         designatedPoints = request.designatedPoints,
+                    ),
+            ) { match -> call.respond(status = HttpStatusCode.OK, message = match.toResponse()) }
+        }
+    }
+    put(path = "/{id}/handicaps") {
+        respondMappingErrors {
+            val request = call.receive<SetHandicapsRequest>()
+            respondEither(
+                result =
+                    service.setHandicaps(
+                        token = verifiedToken(),
+                        matchId = uuidParam(name = "id"),
+                        team1Handicap = request.team1Handicap?.let { BigDecimal(it) },
+                        team2Handicap = request.team2Handicap?.let { BigDecimal(it) },
                     ),
             ) { match -> call.respond(status = HttpStatusCode.OK, message = match.toResponse()) }
         }

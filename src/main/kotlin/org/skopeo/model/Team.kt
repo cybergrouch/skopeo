@@ -3,6 +3,8 @@
 
 package org.skopeo.model
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 
 /**
@@ -15,6 +17,10 @@ import kotlinx.serialization.Serializable
  * @property name Team name (for singles: player name, for doubles: "Player1/Player2")
  * @property players List of players in this team (size 1 for singles, 2 for doubles)
  * @property teamType Type of team (SINGLES, DOUBLES, MIXED_DOUBLES)
+ * @property handicap Optional per-side rating handicap in team-mean (player-level NTRP) units (issue #486).
+ *   When set, it is *deducted* from this side's rating for the rating-delta computation only (widening the
+ *   perceived gap); the resulting delta is applied to the players' true ratings. Range `0 < h <= 1.0`.
+ *   Serialized as a string to preserve money-style precision; `null` = no handicap. See RATING_HANDICAP.md.
  */
 @Serializable
 data class Team(
@@ -22,6 +28,11 @@ data class Team(
     val name: String,
     val players: List<PlayerProfile>,
     val teamType: TeamType = TeamType.SINGLES,
+    // Omitted from serialized output when null so the response contract stays free of null-valued
+    // fields (the exact-payload contract has no nulls); only appears when a handicap is actually set.
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val handicap: String? = null,
 ) {
     init {
         // Validation
@@ -33,6 +44,14 @@ data class Team(
         }
         require(value = players.isNotEmpty()) {
             "Team must have at least one player"
+        }
+
+        // Handicap (issue #486): optional per-side deduction in NTRP points, must be 0 < h <= 1.0.
+        handicap?.let { raw ->
+            val h = requireNotNull(value = raw.toDoubleOrNull()) { "Handicap must be a valid number, got '$raw'" }
+            require(value = h > 0.0 && h <= 1.0) {
+                "Handicap must be in the range 0 < h <= 1.0, got $raw"
+            }
         }
 
         // Team type validation

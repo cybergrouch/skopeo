@@ -69,6 +69,44 @@ describe('MatchPage', () => {
     expect(screen.getByRole('button', { name: 'Copy link' })).toBeInTheDocument()
   })
 
+  it('shows the applied per-side handicap transparently (#486)', () => {
+    useGetApiV1MatchesCodeCode.mockReturnValue({
+      data: { ...match, team2Handicap: '0.3' },
+      isLoading: false,
+    })
+    renderAt()
+    expect(screen.getByText(/Handicap applied:/i)).toBeInTheDocument()
+    expect(screen.getByText(/−0\.3 to Side 2/)).toBeInTheDocument()
+  })
+
+  it('shows both per-side handicaps, comma-separated, when each side has one (#486)', () => {
+    useGetApiV1MatchesCodeCode.mockReturnValue({
+      data: { ...match, team1Handicap: '0.4', team2Handicap: '0.2' },
+      isLoading: false,
+    })
+    renderAt()
+    expect(screen.getByText(/Handicap applied:/i)).toBeInTheDocument()
+    expect(screen.getByText(/−0\.4 to Side 1/)).toBeInTheDocument()
+    expect(screen.getByText(/−0\.2 to Side 2/)).toBeInTheDocument()
+  })
+
+  it('shows only Side 1 when just that side is handicapped (#486)', () => {
+    useGetApiV1MatchesCodeCode.mockReturnValue({
+      data: { ...match, team1Handicap: '0.5' },
+      isLoading: false,
+    })
+    renderAt()
+    expect(screen.getByText(/Handicap applied:/i)).toBeInTheDocument()
+    expect(screen.getByText(/0\.5 to Side 1/)).toBeInTheDocument()
+    expect(screen.queryByText(/to Side 2/)).not.toBeInTheDocument()
+  })
+
+  it('shows no handicap notice when none is applied (#486)', () => {
+    useGetApiV1MatchesCodeCode.mockReturnValue({ data: match, isLoading: false })
+    renderAt()
+    expect(screen.queryByText(/Handicap applied:/i)).not.toBeInTheDocument()
+  })
+
   it('flags a soft-deleted match but still renders it (#325)', () => {
     useGetApiV1MatchesCodeCode.mockReturnValue({
       data: { ...match, isActive: false },

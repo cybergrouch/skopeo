@@ -1,6 +1,6 @@
 # Rating Handicap
 
-> **Status:** Planned — design spec for [#486](https://github.com/cybergrouch/skopeo/issues/486). Not yet implemented.
+> **Status:** Implemented — [#486](https://github.com/cybergrouch/skopeo/issues/486).
 
 A **handicap** is a temporary, per-side rating deduction an organizer can apply to a fixture so that a physically lopsided — but competitively *rated* — matchup produces fairer rating changes. It affects only the rating-delta computation for that one match; it never changes anyone's stored rating baseline.
 
@@ -73,7 +73,7 @@ The competitive threshold is `0.5` points (8.3% of the NTRP range): expected win
 ## Auditability
 
 - The handicap is persisted per fixture per side and surfaced on the match/fixture.
-- **Breakdown caveat:** rating-history breakdown fields (dominance, gap, scale) reflect the *handicapped* gap, while `previousRating` / `newRating` are the **true** values. The applied handicap is recorded in the breakdown/audit context so history rows remain interpretable.
+- **Breakdown caveat:** rating-history breakdown fields (dominance, gap, scale) reflect the *handicapped* gap, while `previousRating` / `newRating` are the **true** values. The applied handicap is recorded in the breakdown/audit context (`appliedHandicap`) so history rows remain interpretable.
 
 ## Relationship to the algorithm
 
