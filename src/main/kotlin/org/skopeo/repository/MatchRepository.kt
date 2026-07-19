@@ -265,6 +265,64 @@ class MatchRepository {
     }
 
     /**
+     * Clear rated_at/rated_by on every match belonging to [eventId] (#478 reversal) so they re-enter the
+     * pending-calculation queue after the score is corrected and the event re-finalized. Returns the
+     * number of rows updated. The inverse of [markRated], scoped to an event.
+     */
+    fun clearRatedForEvent(eventId: UUID): Int =
+        transaction {
+            MatchesTable.update(where = { MatchesTable.eventId eq eventId }) {
+                it[ratedAt] = null
+                it[ratedBy] = null
+            }
+        }
+
+    /**
+     * The latest rated match date per user among [userIds] (#478): the max [MatchesTable.matchDate] over
+     * the user's matches that are still rated (rated_at non-null). Backs restoring `last_match_date` on a
+     * reversal — call it AFTER [clearRatedForEvent] so the reversed event's matches no longer count. A
+     * user with no remaining rated match is absent (their last_match_date becomes null).
+     */
+    fun latestRatedMatchDatesByUsers(userIds: List<UUID>): Map<UUID, java.time.LocalDate> =
+        transaction {
+            if (userIds.isEmpty()) {
+                emptyMap()
+            } else {
+                // team id → the queried users on that team (a doubles pair may both be in the query).
+                val usersByTeam =
+                    TeamUsersTable
+                        .selectAll()
+                        .where { TeamUsersTable.userId inList userIds }
+                        .groupBy(
+                            keySelector = { it[TeamUsersTable.teamId].value },
+                            valueTransform = { it[TeamUsersTable.userId].value },
+                        )
+                if (usersByTeam.isEmpty()) {
+                    emptyMap()
+                } else {
+                    val teamIds = usersByTeam.keys.toList()
+                    val perUser = mutableMapOf<UUID, java.time.LocalDate>()
+                    MatchesTable
+                        .selectAll()
+                        .where {
+                            ((MatchesTable.team1Id inList teamIds) or (MatchesTable.team2Id inList teamIds)) and
+                                MatchesTable.ratedAt.isNotNull()
+                        }.forEach { row ->
+                            val date = row[MatchesTable.matchDate]
+                            val players =
+                                usersByTeam[row[MatchesTable.team1Id].value].orEmpty() +
+                                    usersByTeam[row[MatchesTable.team2Id].value].orEmpty()
+                            players.forEach { uid ->
+                                val existing = perUser[uid]
+                                if (existing == null || date.isAfter(existing)) perUser[uid] = date
+                            }
+                        }
+                    perUser
+                }
+            }
+        }
+
+    /**
      * Active, completed, not-yet-rated matches in calculation (processing) order (#335). Matches are
      * grouped by event and the groups ordered by each event's *processing key* — its [Event.calcPriority]
      * override if set, else its end date (as an epoch-day number); an eventless ("Open") match keys off

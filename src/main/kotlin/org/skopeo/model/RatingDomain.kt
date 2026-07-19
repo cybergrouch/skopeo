@@ -173,3 +173,15 @@ data class MatchRatingWrite(
     val ratedAt: LocalDateTime,
     val bandJumped: Boolean,
 )
+
+/**
+ * One participant's pre-event rating (#478), read from the `previous_rating`/`previous_level` of their
+ * EARLIEST rating-history row for a match in the event being reversed. [reversal] restores their current
+ * rating to exactly this. Ordering to find "earliest": `(calculated_at ASC, completed_at ASC)`, and for
+ * an equal `completed_at` within a batch the row's own id ASC as a stable, deterministic tiebreak.
+ */
+data class PreEventRating(
+    val userId: UUID,
+    val previousRating: BigDecimal,
+    val previousLevel: String?,
+)

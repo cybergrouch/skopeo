@@ -696,4 +696,15 @@ class MatchRepositoryTest {
     fun `completedResultCountByEvents returns an empty map for no ids (#483)`() {
         matches.completedResultCountByEvents(eventIds = emptyList()).shouldBeEmpty()
     }
+
+    @Test
+    fun `latestRatedMatchDatesByUsers returns an empty map for no ids (#478)`() {
+        matches.latestRatedMatchDatesByUsers(userIds = emptyList()).shouldBeEmpty()
+    }
+
+    @Test
+    fun `latestRatedMatchDatesByUsers is empty for a user with no team memberships (#478)`() {
+        val loner = newUser(uid = "loner")
+        matches.latestRatedMatchDatesByUsers(userIds = listOf(element = loner)).shouldBeEmpty()
+    }
 }

@@ -90,6 +90,7 @@ class EventService(
     private val budgets: PointsBudgetRepository = PointsBudgetRepository(),
     private val awarder: EventFinalizeAwarder = EventFinalizeAwarder(),
     private val reverser: EventFinalizeReverser = EventFinalizeReverser(),
+    private val ratingsReverser: EventRatingsReverser = EventRatingsReverser(),
     private val audit: AuditService = AuditService(),
 ) {
     fun create(
@@ -507,6 +508,50 @@ class EventService(
             }
             // The reverser revokes the event's active awards + clears the flag in one transaction, then audits.
             reverser.reverse(event = event, revokedBy = caller.id, now = LocalDateTime.now())
+            toView(event = event.copy(finalizedAt = null, finalizedBy = null))
+        }
+
+    /**
+     * Reverse an already-rated event's ratings (#478): the rated-path complement of [unfinalize], which
+     * refuses once any of the event's matches are RATED. Reversing rewinds rating state, so it is a
+     * distinct, destructive, ADMINISTRATOR-only action (not the broader staff set) behind a mandatory
+     * client confirmation.
+     *
+     * Guards: the event must exist (NotFound), be finalized, have at least one RATED match (else there is
+     * nothing to reverse — use un-finalize), and be at the **rated tip** — no participant may have a rated
+     * match dated after their in-event match(es). A not-at-tip event is refused ([ServiceError.Validation])
+     * with a clear message: later matches were rated on top, so reversing this event alone would leave them
+     * stale. The full transitive rewind-and-replay for that case is deliberately out of scope (#478).
+     *
+     * When allowed, [EventRatingsReverser] does the whole reversal in one transaction: restore each
+     * participant to their pre-event rating, supersede (soft-delete) the event's rating-history rows,
+     * revoke its active awards, reset `rated_at` on its matches, and clear `finalized_at`/`finalized_by` so
+     * the score can be corrected and the event re-finalized. Audited as EVENT_RATINGS_REVERSED.
+     */
+    fun reverseRatings(
+        token: VerifiedFirebaseToken,
+        id: UUID,
+    ): Either<ServiceError, EventView> =
+        either {
+            val caller = staffCaller(users = users, token = token).bind()
+            ensure(condition = caller.capabilities.contains(element = Capability.ADMINISTRATOR)) { ServiceError.Forbidden() }
+            val event = ensureNotNull(value = events.findById(id = id)) { ServiceError.NotFound(message = "Event $id not found") }
+            ensure(condition = event.isFinalized) { ServiceError.Validation(message = "Event is not finalized") }
+            ensure(condition = matches.listByEvent(eventId = id).any { it.ratedAt != null }) {
+                ServiceError.Validation(
+                    message = "This event has no rated matches to reverse; use un-finalize instead.",
+                )
+            }
+            ensure(condition = ratings.isEventAtRatedTip(eventId = id)) {
+                ServiceError.Validation(
+                    message =
+                        "This event's ratings can't be reversed because later matches have already been rated " +
+                            "on top of them. Reversing only this event would leave those later ratings incorrect.",
+                )
+            }
+            // The reverser restores ratings, supersedes history, revokes awards, resets rated_at, and clears
+            // the finalize flag in one transaction, then audits.
+            ratingsReverser.reverse(event = event, reversedBy = caller.id, now = LocalDateTime.now())
             toView(event = event.copy(finalizedAt = null, finalizedBy = null))
         }
 
