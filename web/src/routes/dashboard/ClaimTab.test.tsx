@@ -5,14 +5,15 @@ import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ClaimTab } from "./ClaimTab";
 
-const { claimMutate } = vi.hoisted(() => ({
+const { claimMutate, claimState } = vi.hoisted(() => ({
   claimMutate: vi.fn(),
+  claimState: { isPending: false },
 }));
 
 vi.mock("@/api/generated/users/users", () => ({
   usePostApiV1UsersClaim: () => ({
     mutateAsync: claimMutate,
-    isPending: false,
+    isPending: claimState.isPending,
   }),
   getGetApiV1UsersMeQueryKey: () => ["me"],
 }));
@@ -30,6 +31,7 @@ function renderTab() {
 describe("ClaimTab", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    claimState.isPending = false;
     claimMutate.mockResolvedValue({
       id: "me",
       publicCode: "MYCODE",
@@ -85,6 +87,13 @@ describe("ClaimTab", () => {
     expect(
       await screen.findByText(/that code could not be used/i),
     ).toBeInTheDocument();
+  });
+
+  it("shows a pending label and disables the button while claiming", () => {
+    claimState.isPending = true;
+    renderTab();
+    const button = screen.getByRole("button", { name: "Claiming…" });
+    expect(button).toBeDisabled();
   });
 
   it("validates that a code is entered", async () => {

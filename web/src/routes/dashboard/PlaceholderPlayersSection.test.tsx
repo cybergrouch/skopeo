@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PlaceholderPlayersSection } from "./PlaceholderPlayersSection";
@@ -75,6 +75,70 @@ describe("PlaceholderPlayersSection", () => {
     expect(screen.getByTestId("claim-code")).toHaveTextContent("SECRET-1234");
     expect(screen.getByText(/won.t be shown again/i)).toBeInTheDocument();
     expect(screen.getByText(/Expires 2026-07-27/)).toBeInTheDocument();
+  });
+
+  it("copies the code to the clipboard and confirms, then dismisses the panel", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    // Define the clipboard AFTER setup so it wins over userEvent's own clipboard stub.
+    const user = userEvent.setup();
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+    renderSection(["ADMINISTRATOR"]);
+
+    await user.click(
+      screen.getByRole("button", { name: "Generate claim code" }),
+    );
+    await waitFor(() => expect(screen.getByTestId("claim-code")).toBeInTheDocument());
+
+    // fireEvent (not userEvent) so the component's navigator.clipboard mock is used, not userEvent's stub.
+    fireEvent.click(screen.getByRole("button", { name: "Copy code" }));
+    expect(writeText).toHaveBeenCalledWith("SECRET-1234");
+    expect(await screen.findByRole("button", { name: "Copied" })).toBeInTheDocument();
+
+    // Dismiss clears the panel from the screen.
+    await user.click(screen.getByRole("button", { name: "Done" }));
+    expect(screen.queryByTestId("claim-code")).not.toBeInTheDocument();
+  });
+
+  it("does not claim a successful copy when the clipboard is unavailable", async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error("blocked"));
+    const user = userEvent.setup();
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+    renderSection(["ADMINISTRATOR"]);
+
+    await user.click(
+      screen.getByRole("button", { name: "Generate claim code" }),
+    );
+    await waitFor(() => expect(screen.getByTestId("claim-code")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy code" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
+    // The button label stays "Copy code" — no false "Copied" confirmation.
+    expect(
+      await screen.findByRole("button", { name: "Copy code" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Copied" })).not.toBeInTheDocument();
+  });
+
+  it("refreshes the list on demand", async () => {
+    const queryClient = new QueryClient();
+    const invalidate = vi
+      .spyOn(queryClient, "invalidateQueries")
+      .mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PlaceholderPlayersSection capabilities={["ADMINISTRATOR"] as never} />
+      </QueryClientProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["placeholders"] });
   });
 
   it("does not offer code generation to non-admin match managers", () => {

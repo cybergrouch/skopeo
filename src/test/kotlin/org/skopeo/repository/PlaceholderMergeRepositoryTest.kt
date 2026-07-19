@@ -121,6 +121,44 @@ class PlaceholderMergeRepositoryTest {
         retired.claimedBy shouldBe claimant.id
     }
 
+    @Test
+    fun `claim dedupes shared ratings, player-lists and clubs when the claimant already belongs`() {
+        val claimant = realUser(uid = "claimant")
+        val ph = placeholder(name = "Dummy")
+
+        // Both already have a user_ratings row → the placeholder's row is dropped (line 365 dedupe branch).
+        insertRating(userId = claimant.id, rating = "4.000000")
+        insertRating(userId = ph.id, rating = "3.500000")
+
+        // A player list both are on (dedupe) + a list only the placeholder is on (re-point).
+        val sharedList = insertPlayerList(owner = claimant.id, name = "shared")
+        val phOnlyList = insertPlayerList(owner = claimant.id, name = "phOnly")
+        insertListMember(listId = sharedList, userId = claimant.id)
+        insertListMember(listId = sharedList, userId = ph.id)
+        insertListMember(listId = phOnlyList, userId = ph.id)
+
+        // A club both own (dedupe) + a club only the placeholder owns (re-point).
+        val sharedClub = insertClub(name = "sharedClub")
+        val phOnlyClub = insertClub(name = "phOnlyClub")
+        insertClubOwner(clubId = sharedClub, userId = claimant.id)
+        insertClubOwner(clubId = sharedClub, userId = ph.id)
+        insertClubOwner(clubId = phOnlyClub, userId = ph.id)
+
+        users.claimPlaceholder(placeholderId = ph.id, claimantId = claimant.id, claimedAt = LocalDateTime.now())
+
+        // user_ratings: the claimant keeps its own row; the placeholder's duplicate is gone.
+        ratingUserIds().shouldContainExactlyInAnyOrder(expected = listOf(element = claimant.id))
+        ratingFor(userId = claimant.id) shouldBe BigDecimal("4.000000")
+
+        // player_list_members: shared list keeps ONE row (claimant's); ph-only re-pointed.
+        listsFor(userId = claimant.id).shouldContainExactlyInAnyOrder(expected = listOf(sharedList, phOnlyList))
+        listsFor(userId = ph.id).shouldBe(expected = emptyList())
+
+        // club_owners: same dedupe/re-point shape.
+        clubsFor(userId = claimant.id).shouldContainExactlyInAnyOrder(expected = listOf(sharedClub, phOnlyClub))
+        clubsFor(userId = ph.id).shouldBe(expected = emptyList())
+    }
+
     // ---- direct-insert helpers (tables are internal to this package) ----
 
     private fun insertTeam(name: String): UUID =
@@ -214,5 +252,89 @@ class PlaceholderMergeRepositoryTest {
     private fun pointsAwardUserIds(): List<UUID> =
         transaction {
             RankingPointAwardsTable.selectAll().map { it[RankingPointAwardsTable.userId].value }
+        }
+
+    private fun insertRating(
+        userId: UUID,
+        rating: String,
+    ) {
+        transaction {
+            UserRatingsTable.insert {
+                it[UserRatingsTable.userId] = userId
+                it[currentRating] = BigDecimal(rating)
+                it[currentLevel] = "3.5"
+            }
+        }
+    }
+
+    private fun ratingUserIds(): List<UUID> =
+        transaction {
+            UserRatingsTable.selectAll().map { it[UserRatingsTable.userId].value }
+        }
+
+    private fun ratingFor(userId: UUID): BigDecimal =
+        transaction {
+            UserRatingsTable.selectAll().where { UserRatingsTable.userId eq userId }.single()[UserRatingsTable.currentRating]
+        }
+
+    private fun insertPlayerList(
+        owner: UUID,
+        name: String,
+    ): UUID =
+        transaction {
+            PlayerListsTable.insertAndGetId {
+                it[ownerId] = owner
+                it[PlayerListsTable.name] = name
+                it[createdAt] = LocalDateTime.now()
+            }.value
+        }
+
+    private fun insertListMember(
+        listId: UUID,
+        userId: UUID,
+    ) {
+        transaction {
+            PlayerListMembersTable.insert {
+                it[PlayerListMembersTable.listId] = listId
+                it[PlayerListMembersTable.userId] = userId
+                it[addedAt] = LocalDateTime.now()
+            }
+        }
+    }
+
+    private fun listsFor(userId: UUID): List<UUID> =
+        transaction {
+            PlayerListMembersTable
+                .selectAll()
+                .where { PlayerListMembersTable.userId eq userId }
+                .map { it[PlayerListMembersTable.listId].value }
+        }
+
+    private fun insertClub(name: String): UUID =
+        transaction {
+            ClubsTable.insertAndGetId {
+                it[ClubsTable.name] = name
+                it[publicCode] = name.take(n = 6).uppercase().padEnd(length = 6, padChar = 'X')
+                it[createdBy] = null
+                it[createdAt] = LocalDateTime.now()
+            }.value
+        }
+
+    private fun insertClubOwner(
+        clubId: UUID,
+        userId: UUID,
+    ) {
+        transaction {
+            ClubOwnersTable.insert {
+                it[ClubOwnersTable.clubId] = clubId
+                it[ClubOwnersTable.userId] = userId
+                it[createdAt] = LocalDateTime.now()
+            }
+        }
+    }
+
+    private fun clubsFor(userId: UUID): List<UUID> =
+        transaction {
+            ClubOwnersTable.selectAll().where { ClubOwnersTable.userId eq userId }.map { it[ClubOwnersTable.clubId].value }
         }
 }

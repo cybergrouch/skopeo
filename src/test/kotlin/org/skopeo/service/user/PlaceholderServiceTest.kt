@@ -31,6 +31,7 @@ import org.skopeo.model.UserName
 import org.skopeo.model.displayName
 import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.PlaceholderClaimCodeRepository
+import org.skopeo.repository.PlaceholderClaimCodesTable
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRatingHistoryTable
 import org.skopeo.repository.UserRepository
@@ -126,6 +127,16 @@ class PlaceholderServiceTest {
             .shouldBeInstanceOf<ServiceError.Validation>()
     }
 
+    @Test
+    fun `creating a placeholder rejects a blank display name`() {
+        host(uid = "host")
+
+        service
+            .createPlaceholder(token = token(uid = "host"), displayName = "   ", sex = "Male")
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
     // ---- Generate claim code ----
 
     @Test
@@ -177,6 +188,22 @@ class PlaceholderServiceTest {
             .shouldBeInstanceOf<ServiceError.Validation>()
     }
 
+    @Test
+    fun `a claim code cannot be generated for an already-claimed placeholder`() {
+        admin(uid = "root")
+        host(uid = "host")
+        val placeholder = service.createPlaceholder(token = token(uid = "host"), displayName = "Dummy", sex = "Male").shouldBeRight()
+        val claimant = provisionUser(uid = "claimant")
+        val code = service.generateClaimCode(token = token(uid = "root"), placeholderId = placeholder.id).shouldBeRight()
+        service.claim(token = token(uid = "claimant"), code = code.plaintext).shouldBeRight()
+        claimant.id shouldNotBe placeholder.id
+
+        service
+            .generateClaimCode(token = token(uid = "root"), placeholderId = placeholder.id)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Conflict>()
+    }
+
     // ---- Claim (success) ----
 
     @Test
@@ -222,6 +249,41 @@ class PlaceholderServiceTest {
             .claim(token = token(uid = "claimant"), code = "TOTALLYBOGUSCODE0000")
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
+    fun `claim rejects a caller who has not signed up`() {
+        // No user provisioned for this uid — the caller cannot be resolved from the token.
+        service
+            .claim(token = token(uid = "ghost"), code = "ANYCODE0000")
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
+    @Test
+    fun `claim rejects a blank code`() {
+        provisionUser(uid = "claimant")
+
+        service
+            .claim(token = token(uid = "claimant"), code = "   ")
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `claim rejects an expired code`() {
+        admin(uid = "root")
+        host(uid = "host")
+        val placeholder = service.createPlaceholder(token = token(uid = "host"), displayName = "Dummy", sex = "Male").shouldBeRight()
+        provisionUser(uid = "claimant")
+        val code = service.generateClaimCode(token = token(uid = "root"), placeholderId = placeholder.id).shouldBeRight()
+        // Backdate the code's expiry so it is ACTIVE but no longer usable.
+        expireCode(codeHash = code.code.codeHash)
+
+        service
+            .claim(token = token(uid = "claimant"), code = code.plaintext)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
     }
 
     @Test
@@ -291,6 +353,15 @@ class PlaceholderServiceTest {
     private fun markAsPlaceholder(userId: UUID) {
         transaction {
             UsersTable.update(where = { UsersTable.id eq userId }) { it[placeholder] = true }
+        }
+    }
+
+    /** Backdate the ACTIVE code with [codeHash] so it is expired but not yet superseded (#496 expiry guard). */
+    private fun expireCode(codeHash: String) {
+        transaction {
+            PlaceholderClaimCodesTable.update(where = { PlaceholderClaimCodesTable.codeHash eq codeHash }) {
+                it[expiresAt] = LocalDateTime.now().minusDays(1)
+            }
         }
     }
 }

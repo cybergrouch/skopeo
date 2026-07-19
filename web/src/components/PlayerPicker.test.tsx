@@ -148,6 +148,30 @@ describe("PlayerPicker", () => {
     expect(createMutate).not.toHaveBeenCalled();
   });
 
+  it("cancels the form, resetting fields and hiding it", async () => {
+    const user = userEvent.setup();
+    renderPicker();
+
+    await user.click(
+      screen.getByRole("button", { name: "Add placeholder player" }),
+    );
+    await user.type(screen.getByLabelText("Display name"), "Typed Name");
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    // The form is hidden and the create was never called.
+    expect(
+      screen.queryByRole("button", { name: "Create placeholder" }),
+    ).not.toBeInTheDocument();
+    expect(createMutate).not.toHaveBeenCalled();
+
+    // Re-opening shows an empty display-name field (state was reset).
+    await user.click(
+      screen.getByRole("button", { name: "Add placeholder player" }),
+    );
+    expect(screen.getByLabelText("Display name")).toHaveValue("");
+  });
+
   it("shows an inline error when the create fails", async () => {
     createMutate.mockRejectedValue(new Error("boom"));
     const user = userEvent.setup();
