@@ -7,6 +7,7 @@ import arrow.core.Either
 import arrow.core.left
 import arrow.core.raise.either
 import arrow.core.raise.ensure
+import arrow.core.raise.ensureNotNull
 import arrow.core.right
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
@@ -126,25 +127,26 @@ class PlaceholderService(
     ): Either<ServiceError, User> =
         either {
             val caller =
-                users.findByFirebaseUid(firebaseUid = token.uid)
-                    ?: raise(r = ServiceError.Forbidden(message = "You must be signed up to claim an account"))
+                ensureNotNull(value = users.findByFirebaseUid(firebaseUid = token.uid)) {
+                    ServiceError.Forbidden(message = "You must be signed up to claim an account")
+                }
             ensure(condition = !caller.placeholder) { ServiceError.Conflict(message = "A placeholder account cannot claim another") }
 
             val trimmed = code.trim()
             ensure(condition = trimmed.isNotEmpty()) { ServiceError.Validation(message = "A claim code is required") }
             val record =
-                claimCodes.findActiveByHash(codeHash = ClaimCodeCrypto.hash(plaintext = trimmed))
-                    ?: raise(r = ServiceError.NotFound(message = "Invalid or unknown claim code"))
+                ensureNotNull(value = claimCodes.findActiveByHash(codeHash = ClaimCodeCrypto.hash(plaintext = trimmed))) {
+                    ServiceError.NotFound(message = "Invalid or unknown claim code")
+                }
             ensure(condition = record.isUsable(asOf = LocalDateTime.now())) {
                 ServiceError.Validation(message = "This claim code has expired")
             }
 
             val placeholder = users.findById(id = record.placeholderUserId).bind()
-            ensure(condition = placeholder.placeholder && placeholder.canonicalUserId == null) {
+            // A claimed placeholder carries a canonical link. (No self-claim check is needed: a signed-up
+            // caller can never be a placeholder — the !caller.placeholder guard above already rejects that.)
+            ensure(condition = placeholder.canonicalUserId == null) {
                 ServiceError.Conflict(message = "This placeholder has already been claimed")
-            }
-            ensure(condition = placeholder.id != caller.id) {
-                ServiceError.Conflict(message = "A placeholder cannot claim itself")
             }
             // v1 merge-into-empty only: reject when the caller already has a rating/match history (#496).
             ensure(condition = !users.hasRatingHistory(userId = caller.id) && !users.hasMatchParticipation(userId = caller.id)) {

@@ -319,6 +319,24 @@ class PlaceholderServiceTest {
     }
 
     @Test
+    fun `claim rejects an already-claimed placeholder`() {
+        admin(uid = "root")
+        host(uid = "host")
+        val placeholder = service.createPlaceholder(token = token(uid = "host"), displayName = "Dummy", sex = "Male").shouldBeRight()
+        provisionUser(uid = "claimant")
+        val other = provisionUser(uid = "other")
+        val code = service.generateClaimCode(token = token(uid = "root"), placeholderId = placeholder.id).shouldBeRight()
+        // Construct the (normally-unreachable) already-claimed state — a canonical link set while the code is
+        // still active — so the claim hits the already-claimed guard.
+        markClaimed(userId = placeholder.id, canonicalId = other.id)
+
+        service
+            .claim(token = token(uid = "claimant"), code = code.plaintext)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Conflict>()
+    }
+
+    @Test
     fun `a placeholder cannot claim another placeholder`() {
         admin(uid = "root")
         host(uid = "host")
@@ -353,6 +371,16 @@ class PlaceholderServiceTest {
     private fun markAsPlaceholder(userId: UUID) {
         transaction {
             UsersTable.update(where = { UsersTable.id eq userId }) { it[placeholder] = true }
+        }
+    }
+
+    /** Point [userId] at a canonical account (test-only) to construct the already-claimed guard state. */
+    private fun markClaimed(
+        userId: UUID,
+        canonicalId: UUID,
+    ) {
+        transaction {
+            UsersTable.update(where = { UsersTable.id eq userId }) { it[canonicalUserId] = canonicalId }
         }
     }
 
