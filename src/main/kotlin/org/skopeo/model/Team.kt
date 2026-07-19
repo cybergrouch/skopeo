@@ -3,6 +3,8 @@
 
 package org.skopeo.model
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 
 /**
@@ -26,6 +28,10 @@ data class Team(
     val name: String,
     val players: List<PlayerProfile>,
     val teamType: TeamType = TeamType.SINGLES,
+    // Omitted from serialized output when null so the response contract stays free of null-valued
+    // fields (the exact-payload contract has no nulls); only appears when a handicap is actually set.
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
     val handicap: String? = null,
 ) {
     init {
