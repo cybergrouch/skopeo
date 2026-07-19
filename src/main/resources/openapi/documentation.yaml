@@ -2140,6 +2140,44 @@ paths:
         '404':
           description: No such event
 
+  /api/v1/events/{id}/reverse-ratings:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      summary: Reverse an already-rated event's ratings (ADMINISTRATOR only)
+      description: >-
+        Reverse an already-rated event's ratings (#478) — the rated-path complement of un-finalize, which
+        refuses once any of the event's matches are rated. In one transaction it restores each participant
+        to their pre-event rating (from user_rating_history.previous_rating), supersedes (soft-deletes) the
+        event's rating-history rows, revokes its active ranking-point awards, resets rated_at on its matches
+        (re-queuing them for calculation), and clears the finalize flag so the score can be corrected and
+        the event re-finalized. Destructive and ADMINISTRATOR-only. Refused unless the event is finalized,
+        has at least one rated match, and is at the rated tip — no participant has a rated match dated after
+        their in-event match(es); a not-at-tip event is refused because reversing it alone would leave the
+        later ratings stale. Audited as EVENT_RATINGS_REVERSED.
+      tags:
+        - Events
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The reversed (re-openable) event
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventResponse'
+        '400':
+          description: Event is not finalized, has no rated matches, or is not at the rated tip
+        '403':
+          description: Caller is not an administrator
+        '404':
+          description: No such event
+
   /api/v1/events/{id}/participants:
     parameters:
       - name: id

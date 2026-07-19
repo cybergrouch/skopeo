@@ -20,6 +20,7 @@ import {
   usePatchApiV1EventsId,
   usePostApiV1EventsIdFinalize,
   usePostApiV1EventsIdUnfinalize,
+  usePostApiV1EventsIdReverseRatings,
   usePostApiV1EventsIdParticipants,
   usePostApiV1EventsIdParticipantsUserIdDecision,
   usePutApiV1EventsIdClub,
@@ -35,7 +36,7 @@ import {
   usePostApiV1Matches,
 } from "@/api/generated/matches/matches";
 import { useGetApiV1UsersMe } from "@/api/generated/users/users";
-import { canEditEndedEvents } from "@/auth/capabilities";
+import { canEditEndedEvents, isAdministrator } from "@/auth/capabilities";
 import { UserSearchSelect } from "@/components/UserSearchSelect";
 import { HandicapField } from "@/components/HandicapField";
 import { playerLabel } from "@/lib/playerLabel";
@@ -154,6 +155,10 @@ export function EventDetail({
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
   const [confirmingUnfinalize, setConfirmingUnfinalize] = useState(false);
   const [unfinalizeError, setUnfinalizeError] = useState<string | null>(null);
+  // Reverse Ratings (#478): a distinct, destructive, ADMINISTRATOR-only action for an already-rated event.
+  const [confirmingReverse, setConfirmingReverse] = useState(false);
+  const [reverseError, setReverseError] = useState<string | null>(null);
+  const isAdmin = isAdministrator(me?.capabilities);
 
   // Points config (#403 Phase C): the per-match reward window + validity window, edited inline for a
   // budgeted-type event. Drafts are kept as strings so the number inputs can be cleared while editing.
@@ -426,6 +431,36 @@ export function EventDetail({
         eventErrorMessage(e, "Could not un-finalize this event."),
       );
       setConfirmingUnfinalize(false);
+    }
+  }
+
+  // Reverse Ratings (#478): the rated-path complement of un-finalize. It rewinds an already-rated event's
+  // ratings, so it is ADMINISTRATOR-only, styled as a caution, and behind a mandatory confirmation. On
+  // success refresh (badge/controls reopen) and invalidate the rating-affected reads so the UI recomputes.
+  const reverseRatings = usePostApiV1EventsIdReverseRatings({
+    mutation: {
+      onSuccess: () => {
+        refreshEvent();
+        void queryClient.invalidateQueries({
+          queryKey: getGetApiV1EventsQueryKey(),
+        });
+        void queryClient.invalidateQueries({
+          queryKey: getGetApiV1MatchesQueryKey(),
+        });
+        setConfirmingReverse(false);
+      },
+    },
+  });
+
+  async function confirmReverse() {
+    setReverseError(null);
+    try {
+      await reverseRatings.mutateAsync({ id: eventId });
+    } catch (e) {
+      setReverseError(
+        eventErrorMessage(e, "Could not reverse this event's ratings."),
+      );
+      setConfirmingReverse(false);
     }
   }
 
@@ -1345,6 +1380,70 @@ export function EventDetail({
                 {unfinalizeError ? (
                   <p className="text-sm text-destructive" role="alert">
                     {unfinalizeError}
+                  </p>
+                ) : null}
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {finalized && isAdmin ? (
+            <Card className="border-destructive/50">
+              <CardHeader>
+                <CardTitle className="text-destructive">
+                  Reverse ratings
+                </CardTitle>
+                <CardDescription>
+                  This is a destructive correction for an event whose matches
+                  have already been rated. It restores every participant to their
+                  pre-event rating, reverses this event’s rating history, and
+                  revokes the ranking points it awarded, then reopens the event so
+                  the score can be corrected and re-finalized. It is refused
+                  unless this event is at the tip of the rated timeline — no later
+                  match may have been rated on top of it.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {confirmingReverse ? (
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                      disabled={reverseRatings.isPending}
+                      onClick={confirmReverse}
+                    >
+                      {reverseRatings.isPending
+                        ? "Reversing ratings…"
+                        : "Confirm reverse (rewinds ratings, revokes points)"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={reverseRatings.isPending}
+                      onClick={() => setConfirmingReverse(false)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                    onClick={() => {
+                      setReverseError(null);
+                      setConfirmingReverse(true);
+                    }}
+                  >
+                    Reverse ratings
+                  </Button>
+                )}
+                {reverseError ? (
+                  <p className="text-sm text-destructive" role="alert">
+                    {reverseError}
                   </p>
                 ) : null}
               </CardContent>

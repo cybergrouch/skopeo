@@ -20,6 +20,7 @@ const {
   clubMutate,
   finalizeMutate,
   unfinalizeMutate,
+  reverseMutate,
   pointsConfigMutate,
   state,
 } =
@@ -38,6 +39,7 @@ const {
     clubMutate: vi.fn(),
     finalizeMutate: vi.fn(),
     unfinalizeMutate: vi.fn(),
+    reverseMutate: vi.fn(),
     pointsConfigMutate: vi.fn(),
     state: {
       addFail: false,
@@ -54,6 +56,9 @@ const {
       unfinalizeFail: false,
       unfinalizePending: false,
       unfinalizeErrorMessage: null as string | null,
+      reverseFail: false,
+      reversePending: false,
+      reverseErrorMessage: null as string | null,
       pointsConfigFail: false,
       pointsConfigPending: false,
       pointsConfigErrorMessage: null as string | null,
@@ -130,6 +135,18 @@ vi.mock('@/api/generated/events/events', () => ({
       if (state.unfinalizeFail) {
         throw state.unfinalizeErrorMessage
           ? { response: { data: { message: state.unfinalizeErrorMessage } } }
+          : new Error('boom')
+      }
+      opts?.mutation?.onSuccess?.()
+    },
+  }),
+  usePostApiV1EventsIdReverseRatings: (opts?: { mutation?: { onSuccess?: () => void } }) => ({
+    isPending: state.reversePending,
+    mutateAsync: async (vars: unknown) => {
+      reverseMutate(vars)
+      if (state.reverseFail) {
+        throw state.reverseErrorMessage
+          ? { response: { data: { message: state.reverseErrorMessage } } }
           : new Error('boom')
       }
       opts?.mutation?.onSuccess?.()
@@ -246,6 +263,9 @@ describe('EventDetail', () => {
     state.unfinalizeFail = false
     state.unfinalizePending = false
     state.unfinalizeErrorMessage = null
+    state.reverseFail = false
+    state.reversePending = false
+    state.reverseErrorMessage = null
     state.pointsConfigFail = false
     state.pointsConfigPending = false
     state.pointsConfigErrorMessage = null
@@ -956,6 +976,63 @@ describe('EventDetail', () => {
 
     const unfinalizing = screen.getByRole('button', { name: 'Un-finalizing…' })
     expect(unfinalizing).toBeDisabled()
+  })
+
+  // ---- Reverse Ratings (#478) ----
+
+  it('reverses an already-rated event after a confirm step and calls the mutation (#478)', async () => {
+    useGetApiV1EventsId.mockReturnValue({
+      data: { ...event, type: 'LEAGUE', endDate: '2999-01-01', isFinalized: true },
+      isLoading: false,
+    })
+    const user = userEvent.setup()
+    renderDetail()
+
+    // The destructive Reverse ratings action is shown for an admin on a finalized event.
+    await user.click(screen.getByRole('button', { name: 'Reverse ratings' }))
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Confirm reverse (rewinds ratings, revokes points)',
+      }),
+    )
+
+    expect(reverseMutate).toHaveBeenCalledWith({ id: 'e1' })
+  })
+
+  it('shows the not-at-tip refusal inline when reverse ratings fails (#478)', async () => {
+    useGetApiV1EventsId.mockReturnValue({
+      data: { ...event, type: 'LEAGUE', endDate: '2999-01-01', isFinalized: true },
+      isLoading: false,
+    })
+    state.reverseFail = true
+    state.reverseErrorMessage =
+      "This event's ratings can't be reversed because later matches have already been rated on top of them."
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.click(screen.getByRole('button', { name: 'Reverse ratings' }))
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Confirm reverse (rewinds ratings, revokes points)',
+      }),
+    )
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'later matches have already been rated on top of them',
+    )
+  })
+
+  it('hides the Reverse ratings action from a non-administrator (#478)', () => {
+    useGetApiV1UsersMe.mockReturnValue({ data: { capabilities: ['HOST'] } })
+    useGetApiV1EventsId.mockReturnValue({
+      data: { ...event, type: 'LEAGUE', endDate: '2999-01-01', isFinalized: true },
+      isLoading: false,
+    })
+    renderDetail()
+
+    // A HOST still sees Un-finalize (their action) but not the admin-only Reverse ratings.
+    expect(screen.getByRole('button', { name: 'Un-finalize event' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Reverse ratings' })).not.toBeInTheDocument()
   })
 
   // ---- Points config + fixture designation (#403 Phase C) ----

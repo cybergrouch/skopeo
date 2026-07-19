@@ -184,8 +184,10 @@ private fun Route.renameEvent(service: EventService) {
 
 /**
  * An event's finalize lifecycle: finalize (#403) closes it to changes and queues its matches for
- * rating; un-finalize (#477) reverses that so an erroneous score can be corrected and re-finalized.
- * Both are staff-only (HOST owns / ADMINISTRATOR / CLUB_OWNER), enforced in the service.
+ * rating; un-finalize (#477) reverses that so an erroneous score can be corrected and re-finalized;
+ * reverse-ratings (#478) is the rated-path complement that rewinds an already-rated event. Finalize
+ * and un-finalize are staff-only (HOST owns / ADMINISTRATOR / CLUB_OWNER); reverse-ratings is
+ * ADMINISTRATOR-only. All authz is enforced in the service.
  */
 private fun Route.finalizeEvent(service: EventService) {
     post(path = "/{id}/finalize") {
@@ -200,6 +202,15 @@ private fun Route.finalizeEvent(service: EventService) {
         respondMappingErrors {
             respondEither(
                 result = service.unfinalize(token = verifiedToken(), id = uuidParam(name = "id")),
+            ) { event -> call.respond(status = HttpStatusCode.OK, message = event.toResponse()) }
+        }
+    }
+    // Reverse an already-rated event's ratings (#478), ADMINISTRATOR-only. Rejected if the event is not
+    // finalized, has no rated matches, or is not at the rated tip (later matches rated on top).
+    post(path = "/{id}/reverse-ratings") {
+        respondMappingErrors {
+            respondEither(
+                result = service.reverseRatings(token = verifiedToken(), id = uuidParam(name = "id")),
             ) { event -> call.respond(status = HttpStatusCode.OK, message = event.toResponse()) }
         }
     }

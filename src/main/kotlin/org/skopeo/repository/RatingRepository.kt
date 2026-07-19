@@ -6,16 +6,20 @@ package org.skopeo.repository
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
+import org.jetbrains.exposed.sql.JoinType
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.SqlExpressionBuilder
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.inSubQuery
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.intLiteral
+import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.model.MatchRatingWrite
+import org.skopeo.model.PreEventRating
 import org.skopeo.model.RatingHistoryEntry
 import org.skopeo.model.RatingHistoryWrite
 import org.skopeo.model.SetCalculationBreakdown
@@ -23,6 +27,7 @@ import org.skopeo.model.UserRating
 import org.skopeo.model.WindowMatch
 import org.skopeo.model.confidenceAt
 import java.math.BigDecimal
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -128,7 +133,8 @@ class RatingRepository(
         transaction {
             UserRatingHistoryTable
                 .selectAll()
-                .where { UserRatingHistoryTable.userId eq userId }
+                // Exclude rows superseded by an event-scoped reversal (#478) — soft-deleted, not live.
+                .where { (UserRatingHistoryTable.userId eq userId) and UserRatingHistoryTable.reversedAt.isNull() }
                 // Newest-first (#301). A calc batch stamps every row with one identical calculatedAt,
                 // so completedAt breaks the intra-batch ties with the true chronology; match-less rows
                 // (null completedAt) sort last, i.e. earliest.
@@ -147,6 +153,8 @@ class RatingRepository(
         transaction {
             UserRatingHistoryTable
                 .selectAll()
+                // Exclude rows superseded by an event-scoped reversal (#478) — soft-deleted, not live.
+                .where { UserRatingHistoryTable.reversedAt.isNull() }
                 .orderBy(UserRatingHistoryTable.calculatedAt to SortOrder.ASC)
                 .map { it.toRatingHistory() }
         }
@@ -162,9 +170,127 @@ class RatingRepository(
             } else {
                 UserRatingHistoryTable
                     .selectAll()
-                    .where { UserRatingHistoryTable.matchId inList matchIds }
+                    // Exclude rows superseded by an event-scoped reversal (#478) — soft-deleted, not live.
+                    .where { (UserRatingHistoryTable.matchId inList matchIds) and UserRatingHistoryTable.reversedAt.isNull() }
                     .map { it.toRatingHistory() }
             }
+        }
+
+    /**
+     * Each participant's pre-event rating (#478): the `previous_rating`/`previous_level` of that user's
+     * EARLIEST live rating-history row for a match belonging to [eventId]. "Earliest" orders by
+     * `(calculated_at ASC, completed_at ASC)` with the row's own id ASC as a stable tiebreak for an equal
+     * `completed_at` within one calc batch (rows in one run share `calculated_at`). Keyed by user id;
+     * absent for a participant with no in-event history row. Already-reversed rows are ignored, so a
+     * second reversal is a clean no-op. One join, ordered in SQL, first-per-user picked in memory (an
+     * event's row count is small).
+     */
+    fun preEventRatings(eventId: UUID): Map<UUID, PreEventRating> =
+        transaction {
+            // match_id is a plain uuid column (not an Exposed reference), so join on it explicitly.
+            UserRatingHistoryTable
+                .join(
+                    otherTable = MatchesTable,
+                    joinType = JoinType.INNER,
+                    onColumn = UserRatingHistoryTable.matchId,
+                    otherColumn = MatchesTable.id,
+                ).selectAll()
+                .where { (MatchesTable.eventId eq eventId) and UserRatingHistoryTable.reversedAt.isNull() }
+                .orderBy(
+                    UserRatingHistoryTable.calculatedAt to SortOrder.ASC,
+                    UserRatingHistoryTable.completedAt to SortOrder.ASC_NULLS_FIRST,
+                    UserRatingHistoryTable.id to SortOrder.ASC,
+                ).fold(initial = linkedMapOf()) { acc, row ->
+                    // First row per user is the earliest (SQL order); keep it, ignore later in-event rows.
+                    val uid = row[UserRatingHistoryTable.userId].value
+                    acc.getOrPut(key = uid) {
+                        PreEventRating(
+                            userId = uid,
+                            previousRating = row[UserRatingHistoryTable.previousRating],
+                            previousLevel = row[UserRatingHistoryTable.previousLevel],
+                        )
+                    }
+                    acc
+                }
+        }
+
+    /**
+     * Tip check for an event-scoped reversal (#478): true when NO participant of [eventId] has a live
+     * rating-history row ordered strictly AFTER their LATEST in-event row — i.e. no rated match built on
+     * top of this event for any participant. Ordering key is `(calculated_at, completed_at, id)`, matching
+     * [preEventRatings]. Compares across ALL of each participant's live history rows (any event, and
+     * event-less matches too), so a later event-less match also fails the tip. Rows already reversed are
+     * ignored on both sides.
+     */
+    fun isEventAtRatedTip(eventId: UUID): Boolean =
+        transaction {
+            // Every affected user's live history rows as ordering keys, tagged with whether they are in-event.
+            // match_id is a plain uuid column (not an Exposed reference), so join on it explicitly; the inner
+            // join drops match-less rows (initial assessments), which are irrelevant to the tip check.
+            val rows =
+                UserRatingHistoryTable
+                    .join(
+                        otherTable = MatchesTable,
+                        joinType = JoinType.INNER,
+                        onColumn = UserRatingHistoryTable.matchId,
+                        otherColumn = MatchesTable.id,
+                    ).selectAll()
+                    .where { UserRatingHistoryTable.reversedAt.isNull() }
+                    .map { row ->
+                        HistoryOrderKey(
+                            userId = row[UserRatingHistoryTable.userId].value,
+                            calculatedAt = row[UserRatingHistoryTable.calculatedAt],
+                            completedAt = row[UserRatingHistoryTable.completedAt],
+                            rowId = row[UserRatingHistoryTable.id].value,
+                            inEvent = row[MatchesTable.eventId]?.value == eventId,
+                        )
+                    }
+            val byUser = rows.groupBy { it.userId }
+            // For each user that has an in-event row, their latest in-event key must be the max over ALL
+            // their rows; if any row sorts strictly after it, a later match was rated on top → not the tip.
+            byUser.values.all { userRows ->
+                val latestInEvent = userRows.filter { it.inEvent }.maxWithOrNull(comparator = HISTORY_ORDER) ?: return@all true
+                userRows.none { HISTORY_ORDER.compare(it, latestInEvent) > 0 }
+            }
+        }
+
+    /**
+     * Soft-delete (supersede) every live rating-history row for a match in [eventId] (#478) by stamping
+     * [reversedAt]. Does NOT hard-delete — the ledger stays append-only. Returns the number of rows
+     * marked. Rows already reversed are left untouched (idempotent). Uses a subquery on match ids so a
+     * null-event history row is never touched.
+     */
+    fun markEventHistoryReversed(
+        eventId: UUID,
+        reversedAt: LocalDateTime,
+    ): Int =
+        transaction {
+            val matchIds = MatchesTable.select(columns = listOf(element = MatchesTable.id)).where { MatchesTable.eventId eq eventId }
+            UserRatingHistoryTable.update(
+                where = { (UserRatingHistoryTable.matchId inSubQuery matchIds) and UserRatingHistoryTable.reversedAt.isNull() },
+            ) {
+                it[UserRatingHistoryTable.reversedAt] = reversedAt
+            }
+        }
+
+    /**
+     * Restore a participant's current rating to their pre-event value (#478): set current_rating/level and
+     * last_match_date directly (no matches-played change — a reversal unwinds, it does not add play). The
+     * caller (event reversal) has confirmed the user has a rating row, so a missing id is a harmless no-op.
+     */
+    fun restoreCurrentRating(
+        userId: UUID,
+        rating: BigDecimal,
+        level: String?,
+        lastMatchDate: LocalDate?,
+    ): Unit =
+        transaction {
+            UserRatingsTable.update(where = { UserRatingsTable.userId eq userId }) {
+                it[currentRating] = rating
+                it[currentLevel] = level
+                it[UserRatingsTable.lastMatchDate] = lastMatchDate
+            }
+            Unit
         }
 
     /**
@@ -303,3 +429,25 @@ internal fun ResultRow.toRatingHistory(): RatingHistoryEntry =
 /** JSON codec and serializer for the per-set breakdown column (#110). */
 private val RATING_HISTORY_JSON = Json
 private val SET_BREAKDOWN_SERIALIZER = ListSerializer(elementSerializer = serializer<SetCalculationBreakdown>())
+
+/**
+ * A live rating-history row reduced to its chronological ordering key for the tip check (#478), tagged
+ * with whether its match belongs to the event being reversed. Ordered by [HISTORY_ORDER].
+ */
+private data class HistoryOrderKey(
+    val userId: UUID,
+    val calculatedAt: LocalDateTime,
+    val completedAt: LocalDateTime?,
+    val rowId: UUID,
+    val inEvent: Boolean,
+)
+
+/**
+ * The rating-history processing order (#478): `(calculated_at, completed_at, id)` — the same key
+ * [RatingRepository.preEventRatings] uses. A null `completed_at` (match-less row) sorts first (earliest),
+ * mirroring ASC_NULLS_FIRST; the row id is the final stable tiebreak for an equal `completed_at`.
+ */
+private val HISTORY_ORDER: Comparator<HistoryOrderKey> =
+    compareBy<HistoryOrderKey> { it.calculatedAt }
+        .thenBy(comparator = nullsFirst(comparator = naturalOrder())) { it.completedAt }
+        .thenBy { it.rowId }

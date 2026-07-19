@@ -69,4 +69,9 @@ internal object UserRatingHistoryTable : UUIDTable(name = "user_rating_history")
     // Identity of the calc batch that produced this row (#481); one id per calc run, shared by every
     // row it writes — a deterministic ordering/grouping key. Null for admin/self-set (non-batch) rows.
     val ratingRunId = uuid(name = "rating_run_id").nullable()
+
+    // Soft-delete marker for an event-scoped rating reversal (#478); null = live. A "Reverse Ratings"
+    // action supersedes (does not hard-delete) this event's rows by stamping this; the rating-history
+    // read paths exclude any row where it is non-null so the ledger stays append-only.
+    val reversedAt = datetime(name = "reversed_at").nullable()
 }
