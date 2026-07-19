@@ -42,17 +42,62 @@ function EventRow({ event }: { event: MyEventResponse }) {
   )
 }
 
+/** A labelled section of events with its own empty state (#483). */
+function EventSection({
+  title,
+  events,
+  emptyLabel,
+}: {
+  title: string
+  events: MyEventResponse[]
+  emptyLabel: string
+}) {
+  return (
+    <div>
+      <div className="text-xs font-medium uppercase text-muted-foreground">{title}</div>
+      {events.length > 0 ? (
+        <ul className="mt-1 space-y-1">
+          {events.map((e) => (
+            <EventRow key={e.publicCode} event={e} />
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-1 text-muted-foreground">{emptyLabel}</p>
+      )}
+    </div>
+  )
+}
+
+/** Recorded results present (#483) — the "has results" signal for the Unfinalized bucket. */
+function hasResults(event: MyEventResponse): boolean {
+  return (event.completedMatchCount ?? 0) > 0
+}
+
 /**
  * The player's "Events history" on their Profile tab (#202): the events they're signed up for, split
- * into upcoming and past (by end date). Mirrors the Match history card. Pending/held requests are
- * labelled so they're distinguishable from confirmed participation.
+ * into three buckets (#483). Finalized status wins over everything — a finalized event is always
+ * Finalized, even with a future end date or no results. Otherwise Unfinalized = the event ended OR has
+ * recorded results (activity started, not concluded); Upcoming = future and untouched. Mirrors the
+ * Match history card. Pending/held requests are labelled so confirmed participation stands out.
  */
 export function EventsHistoryCard() {
   const query = useGetApiV1EventsMine()
   const events = query.data ?? []
   const today = todayIso()
-  const upcoming = events.filter((e) => e.endDate >= today)
-  const past = events.filter((e) => e.endDate < today)
+
+  // Finalized first (precedence over date + results); the rest split over the non-finalized set.
+  const finalized = events.filter((e) => e.isFinalized)
+  const active = events.filter((e) => !e.isFinalized)
+  const unfinalized = active.filter((e) => e.endDate < today || hasResults(e))
+  const upcoming = active.filter((e) => e.endDate >= today && !hasResults(e))
+
+  // Sort within buckets: Finalized + Unfinalized newest end date first (this DTO carries no
+  // finalizedAt, so end date is the fallback), Upcoming earliest start date first.
+  const byEndDesc = (a: MyEventResponse, b: MyEventResponse) => b.endDate.localeCompare(a.endDate)
+  const byStartAsc = (a: MyEventResponse, b: MyEventResponse) => a.startDate.localeCompare(b.startDate)
+  const upcomingSorted = [...upcoming].sort(byStartAsc)
+  const unfinalizedSorted = [...unfinalized].sort(byEndDesc)
+  const finalizedSorted = [...finalized].sort(byEndDesc)
 
   return (
     <Card>
@@ -67,30 +112,17 @@ export function EventsHistoryCard() {
           <p className="text-muted-foreground">You haven’t joined any events yet.</p>
         ) : (
           <>
-            <div>
-              <div className="text-xs font-medium uppercase text-muted-foreground">Upcoming</div>
-              {upcoming.length > 0 ? (
-                <ul className="mt-1 space-y-1">
-                  {upcoming.map((e) => (
-                    <EventRow key={e.publicCode} event={e} />
-                  ))}
-                </ul>
-              ) : (
-                <p className="mt-1 text-muted-foreground">No upcoming events.</p>
-              )}
-            </div>
-            <div>
-              <div className="text-xs font-medium uppercase text-muted-foreground">Past</div>
-              {past.length > 0 ? (
-                <ul className="mt-1 space-y-1">
-                  {past.map((e) => (
-                    <EventRow key={e.publicCode} event={e} />
-                  ))}
-                </ul>
-              ) : (
-                <p className="mt-1 text-muted-foreground">No past events.</p>
-              )}
-            </div>
+            <EventSection title="Upcoming" events={upcomingSorted} emptyLabel="No upcoming events." />
+            <EventSection
+              title="Unfinalized"
+              events={unfinalizedSorted}
+              emptyLabel="No unfinalized events."
+            />
+            <EventSection
+              title="Finalized"
+              events={finalizedSorted}
+              emptyLabel="No finalized events."
+            />
           </>
         )}
       </CardContent>

@@ -167,6 +167,14 @@ class EventService(
             caller?.let { events.findForParticipant(userId = it.id) }.orEmpty()
         }
 
+    /**
+     * The recorded-result count per event id for a page of events (#483), batched in one grouped query
+     * (no N+1). Event ids with no recorded results are absent from the returned map; the DTO mapping
+     * defaults them to 0. Backs the client's Finalized / Unfinalized / Upcoming bucketing of the event
+     * lists — the "has results" signal that keeps a not-yet-finalized event with results out of Upcoming.
+     */
+    fun completedResultCounts(eventIds: List<UUID>): Map<UUID, Int> = matches.completedResultCountByEvents(eventIds = eventIds)
+
     fun get(
         token: VerifiedFirebaseToken,
         id: UUID,

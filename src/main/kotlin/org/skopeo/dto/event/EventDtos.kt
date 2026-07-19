@@ -96,7 +96,9 @@ data class EventParticipantResponse(
 
 /**
  * A player's own event (#202) for the Profile "Events history": the event's details plus the
- * caller's standing ([status]: APPROVED | PENDING | HOLD). The client splits upcoming vs past by date.
+ * caller's standing ([status]: APPROVED | PENDING | HOLD). The client buckets the event into
+ * Finalized / Unfinalized / Upcoming (#483) using [isFinalized], the end date, and
+ * [completedMatchCount] (its "has results" signal).
  */
 @Serializable
 data class MyEventResponse(
@@ -105,6 +107,11 @@ data class MyEventResponse(
     val startDate: String,
     val endDate: String,
     val status: String,
+    // True once the event has been finalized (#403/#483) — always buckets to Finalized on the client.
+    val isFinalized: Boolean = false,
+    // Number of recorded results (COMPLETED with a decided winner) in this event (#483); the client's
+    // "has results" signal for the Unfinalized bucket. Zero when no result has been recorded yet.
+    val completedMatchCount: Int = 0,
 )
 
 @Serializable
@@ -130,6 +137,9 @@ data class EventResponse(
     val finalizedAt: String? = null,
     // True once the event has been finalized (#403) — closed to changes; its matches queue for rating.
     val isFinalized: Boolean = false,
+    // Number of recorded results (COMPLETED with a decided winner) in this event (#483); the client's
+    // "has results" signal for the Unfinalized bucket. Zero when no result has been recorded yet.
+    val completedMatchCount: Int = 0,
     // Points config (#403 Phase C): the per-match reward window and validity dates; null for OPEN_PLAY.
     val minPointsPerMatch: Int? = null,
     val maxPointsPerMatch: Int? = null,
@@ -137,16 +147,18 @@ data class EventResponse(
     val pointValidityEnd: String? = null,
 )
 
-fun MyEvent.toResponse(): MyEventResponse =
+fun MyEvent.toResponse(completedMatchCount: Int = 0): MyEventResponse =
     MyEventResponse(
         publicCode = event.publicCode,
         name = event.name,
         startDate = event.startDate.toString(),
         endDate = event.endDate.toString(),
         status = status.name,
+        isFinalized = event.isFinalized,
+        completedMatchCount = completedMatchCount,
     )
 
-fun EventView.toResponse(): EventResponse =
+fun EventView.toResponse(completedMatchCount: Int = 0): EventResponse =
     EventResponse(
         id = event.id.toString(),
         publicCode = event.publicCode,
@@ -163,6 +175,7 @@ fun EventView.toResponse(): EventResponse =
         type = event.type.name,
         finalizedAt = event.finalizedAt?.toString(),
         isFinalized = event.isFinalized,
+        completedMatchCount = completedMatchCount,
         minPointsPerMatch = event.minPointsPerMatch,
         maxPointsPerMatch = event.maxPointsPerMatch,
         pointValidityStart = event.pointValidityStart?.toString(),
