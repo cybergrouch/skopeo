@@ -61,7 +61,11 @@ describe('MatchPage', () => {
     // The player name link wears the themed content-link style (#451).
     expect(anaLink).toHaveClass('content-link')
     expect(screen.getByRole('link', { name: 'Bob' })).toHaveAttribute('href', '/players/BBB222')
-    expect(screen.getByText('Winner')).toBeInTheDocument() // exactly one side won
+    // The Winner tag uses the AA-on-card `text-link` token, not the low-contrast text-primary (#491).
+    const winner = screen.getByText('Winner')
+    expect(winner).toBeInTheDocument() // exactly one side won
+    expect(winner).toHaveClass('text-link')
+    expect(winner).not.toHaveClass('text-primary')
     expect(screen.getByText('6-4 6-2')).toBeInTheDocument()
     expect(screen.getByText(/Center Court/)).toBeInTheDocument()
     // The shareable QR card (#137) appears once the match loads.
@@ -435,6 +439,9 @@ describe('MatchPage', () => {
 
     const link = screen.getByRole('link', { name: 'Spring Open' })
     expect(link).toHaveAttribute('href', '/events/EVT001')
+    // The event link wears the themed content-link style, not text-primary (#491).
+    expect(link).toHaveClass('content-link')
+    expect(link).not.toHaveClass('text-primary')
     expect(screen.getByText(/Part of event:/)).toBeInTheDocument()
   })
 

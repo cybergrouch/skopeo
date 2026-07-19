@@ -1,4 +1,4 @@
-import { Link, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { ContentLink } from '@/components/ContentLink'
 import { PublicPageLink } from '@/components/PublicPageLink'
 import {
@@ -45,7 +45,7 @@ function Side({
         ))}
       </span>
       {isWinner ? (
-        <span className="rounded bg-primary/10 px-1.5 py-0.5 text-xs font-medium text-primary">
+        <span className="rounded border border-link/40 px-1.5 py-0.5 text-xs font-medium text-link">
           Winner
         </span>
       ) : null}
@@ -243,12 +243,9 @@ export function MatchPage() {
               {match.event ? (
                 <div>
                   Part of event:{' '}
-                  <Link
-                    to={`/events/${match.event.publicCode}`}
-                    className="text-primary hover:underline"
-                  >
+                  <ContentLink to={`/events/${match.event.publicCode}`}>
                     {match.event.name}
-                  </Link>
+                  </ContentLink>
                 </div>
               ) : null}
               <Side players={match.team1} isWinner={match.winner === 'TEAM1'} />
