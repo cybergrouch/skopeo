@@ -9,6 +9,8 @@ import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.doubles.plusOrMinus
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
+import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -181,6 +183,7 @@ class RatingRepositoryTest {
         breakdown: CalculationBreakdownSnapshot?,
         completedAt: LocalDateTime? = null,
         calculatedAt: LocalDateTime = LocalDateTime.now(),
+        ratingRunId: UUID? = null,
     ) = RatingHistoryWrite(
         userId = userId,
         matchId = null,
@@ -194,6 +197,7 @@ class RatingRepositoryTest {
         breakdown = breakdown,
         completedAt = completedAt,
         calculatedAt = calculatedAt,
+        ratingRunId = ratingRunId,
     )
 
     @Test
@@ -238,6 +242,48 @@ class RatingRepositoryTest {
         byRating.getValue(key = BigDecimal("4.100000")).setBreakdown shouldBe emptyList()
         byRating.getValue(key = BigDecimal("4.200000")).setBreakdown shouldBe emptyList()
         byRating.getValue(key = BigDecimal("4.300000")).setBreakdown shouldBe listOf(element = step)
+    }
+
+    /** The persisted rating_run_id per row, keyed by its new_rating (unique in these tests). */
+    private fun runIdsByNewRating(userId: UUID): Map<BigDecimal, UUID?> =
+        transaction {
+            UserRatingHistoryTable
+                .selectAll()
+                .where { UserRatingHistoryTable.userId eq userId }
+                .associate { it[UserRatingHistoryTable.newRating] to it[UserRatingHistoryTable.ratingRunId] }
+        }
+
+    @Test
+    fun `appendHistory persists the rating_run_id, shared within a run and null for match-less rows (#481)`() {
+        val userId = newUser(uid = "runid")
+        val runId = UUID.randomUUID()
+
+        // Two rows written in one calc run share the run's id; a match-less admin row carries none.
+        ratings.appendHistory(write = historyWrite(userId = userId, newRating = "4.1", breakdown = null, ratingRunId = runId))
+        ratings.appendHistory(write = historyWrite(userId = userId, newRating = "4.2", breakdown = null, ratingRunId = runId))
+        ratings.appendHistory(write = historyWrite(userId = userId, newRating = "4.9", breakdown = null, ratingRunId = null))
+
+        val byRating = runIdsByNewRating(userId = userId)
+        byRating.getValue(key = BigDecimal("4.100000")) shouldBe runId
+        byRating.getValue(key = BigDecimal("4.200000")) shouldBe runId
+        byRating.getValue(key = BigDecimal("4.900000")).shouldBeNull()
+    }
+
+    @Test
+    fun `a second calc run gets a distinct rating_run_id from the first (#481)`() {
+        val userId = newUser(uid = "tworuns")
+        val run1 = UUID.randomUUID()
+        val run2 = UUID.randomUUID()
+
+        ratings.appendHistory(write = historyWrite(userId = userId, newRating = "4.1", breakdown = null, ratingRunId = run1))
+        ratings.appendHistory(write = historyWrite(userId = userId, newRating = "4.2", breakdown = null, ratingRunId = run2))
+
+        val byRating = runIdsByNewRating(userId = userId)
+        val first = byRating.getValue(key = BigDecimal("4.100000"))
+        val second = byRating.getValue(key = BigDecimal("4.200000"))
+        first shouldBe run1
+        second shouldBe run2
+        (first == second) shouldBe false
     }
 
     @Test

@@ -65,4 +65,8 @@ internal object UserRatingHistoryTable : UUIDTable(name = "user_rating_history")
     // Snapshot of the source match's completed_at at commit (#301); the intra-batch tiebreaker used
     // to order history newest-first. Null for match-less rows (initial assessments) → sort last.
     val completedAt = datetime(name = "completed_at").nullable()
+
+    // Identity of the calc batch that produced this row (#481); one id per calc run, shared by every
+    // row it writes — a deterministic ordering/grouping key. Null for admin/self-set (non-batch) rows.
+    val ratingRunId = uuid(name = "rating_run_id").nullable()
 }

@@ -7,12 +7,14 @@ import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.doubles.plusOrMinus
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import org.jetbrains.exposed.sql.deleteAll
+import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
@@ -37,6 +39,7 @@ import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RatingRepository
+import org.skopeo.repository.UserRatingHistoryTable
 import org.skopeo.repository.UserRatingsTable
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.calculator.RankingCalculationResult
@@ -331,6 +334,43 @@ class RatingCalculationServiceTest {
 
         // idempotent — nothing left to process
         calc.calculate(token = token(uid = "root"), dryRun = false).shouldBeRight().matches.shouldBe(expected = emptyList())
+    }
+
+    /** Every persisted rating_run_id (nulls excluded), one entry per history row. */
+    private fun persistedRunIds(): List<UUID> =
+        transaction {
+            UserRatingHistoryTable
+                .selectAll()
+                .mapNotNull { it[UserRatingHistoryTable.ratingRunId] }
+        }
+
+    @Test
+    fun `one commit stamps all its rows with a single rating_run_id, a later commit gets a distinct one (#481)`() {
+        provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val p3 = provisionUser(uid = "p3", rated = true)
+        val p4 = provisionUser(uid = "p4", rated = true)
+        // Two matches (four rows) rated together in one calc run.
+        playedMatch(admin = "root", winner = p1.id, loser = p2.id)
+        playedMatch(admin = "root", winner = p3.id, loser = p4.id)
+
+        calc.calculate(token = token(uid = "root"), dryRun = false).shouldBeRight()
+        val firstRun = persistedRunIds()
+        // All four rows of the one run share one non-null id.
+        firstRun.size shouldBe 4
+        firstRun.toSet().size shouldBe 1
+
+        // A second run over fresh matches produces a distinct run id.
+        val p5 = provisionUser(uid = "p5", rated = true)
+        val p6 = provisionUser(uid = "p6", rated = true)
+        playedMatch(admin = "root", winner = p5.id, loser = p6.id)
+        calc.calculate(token = token(uid = "root"), dryRun = false).shouldBeRight()
+
+        val allRunIds = persistedRunIds().toSet()
+        // Two distinct runs now; the first run's id is one of them and the second differs from it.
+        allRunIds.size shouldBe 2
+        allRunIds shouldContain firstRun.first()
     }
 
     @Test

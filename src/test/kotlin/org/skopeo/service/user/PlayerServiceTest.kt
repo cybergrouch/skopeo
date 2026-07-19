@@ -149,6 +149,7 @@ class PlayerServiceTest {
                 breakdown = null,
                 completedAt = null,
                 calculatedAt = LocalDateTime.now(),
+                ratingRunId = null,
             ),
     )
 

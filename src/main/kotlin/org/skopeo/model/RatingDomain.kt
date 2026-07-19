@@ -155,6 +155,9 @@ data class RatingHistoryWrite(
     // The source match's completed_at, snapshotted for ordering (#301); null for non-match rows.
     val completedAt: LocalDateTime?,
     val calculatedAt: LocalDateTime,
+    // Identity of the calc batch that produced this row (#481); one id per run, shared by all its
+    // rows — a deterministic ordering/grouping key. Null for admin/self-set rows (not calc batches).
+    val ratingRunId: UUID?,
 )
 
 /**

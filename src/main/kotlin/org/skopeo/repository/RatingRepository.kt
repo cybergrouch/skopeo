@@ -242,6 +242,7 @@ class RatingRepository(
                     }
                 it[calculatedAt] = write.calculatedAt
                 it[completedAt] = write.completedAt
+                it[ratingRunId] = write.ratingRunId
             }
         }
     }
