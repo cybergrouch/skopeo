@@ -148,7 +148,8 @@ class EventServiceTest {
         view.event.name shouldBe "Spring Open"
         view.event.publicCode.length shouldBe 6
         view.participants.map { it.userId }.shouldContainExactlyInAnyOrder(p1.id, p2.id)
-        view.participants.first().displayName shouldBe "p1"
+        // Participant order isn't guaranteed, so look p1 up by id rather than assuming it's first.
+        view.participants.single { it.userId == p1.id }.displayName shouldBe "p1"
         view.club.shouldBeNull() // clubless by default
     }
 
