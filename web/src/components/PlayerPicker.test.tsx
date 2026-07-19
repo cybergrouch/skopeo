@@ -3,8 +3,9 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PlayerPicker } from "./PlayerPicker";
 
-const { createMutate } = vi.hoisted(() => ({
+const { createMutate, createPending } = vi.hoisted(() => ({
   createMutate: vi.fn(),
+  createPending: { value: false },
 }));
 
 // The embedded search is exercised elsewhere; stub it to a button that emits a picked player, so this
@@ -31,7 +32,7 @@ vi.mock("@/components/UserSearchSelect", () => ({
 vi.mock("@/api/generated/users/users", () => ({
   usePostApiV1UsersPlaceholders: () => ({
     mutateAsync: createMutate,
-    isPending: false,
+    isPending: createPending.value,
   }),
 }));
 
@@ -43,6 +44,7 @@ function renderPicker(onSelect = vi.fn()) {
 describe("PlayerPicker", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    createPending.value = false;
     createMutate.mockResolvedValue({
       id: "p1",
       publicCode: "PLH001",
@@ -93,6 +95,49 @@ describe("PlayerPicker", () => {
         sex: "Female",
       }),
     );
+  });
+
+  it("maps a created placeholder with no name or sex to null/undefined", async () => {
+    createMutate.mockResolvedValue({
+      id: "p2",
+      publicCode: "PLH002",
+      country: "PH",
+      kycVerified: false,
+      isActive: true,
+      sex: null,
+      names: [],
+      contacts: [],
+      identities: [],
+      capabilities: [],
+    });
+    const user = userEvent.setup();
+    const onSelect = renderPicker();
+
+    await user.click(
+      screen.getByRole("button", { name: "Add placeholder player" }),
+    );
+    await user.type(screen.getByLabelText("Display name"), "New Player");
+    await user.selectOptions(screen.getByLabelText("Sex"), "Female");
+    await user.click(
+      screen.getByRole("button", { name: "Create placeholder" }),
+    );
+
+    await waitFor(() =>
+      expect(onSelect).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "p2", displayName: null, sex: undefined }),
+      ),
+    );
+  });
+
+  it("disables the submit with a pending label while creating", async () => {
+    createPending.value = true;
+    const user = userEvent.setup();
+    renderPicker();
+
+    await user.click(
+      screen.getByRole("button", { name: "Add placeholder player" }),
+    );
+    expect(screen.getByRole("button", { name: "Creating…" })).toBeDisabled();
   });
 
   it("sends the optional date of birth when provided", async () => {

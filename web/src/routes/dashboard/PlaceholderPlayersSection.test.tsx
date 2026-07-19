@@ -4,9 +4,10 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PlaceholderPlayersSection } from "./PlaceholderPlayersSection";
 
-const { useGetApiV1UsersPlaceholders, generateMutate } = vi.hoisted(() => ({
+const { useGetApiV1UsersPlaceholders, generateMutate, generatePending } = vi.hoisted(() => ({
   useGetApiV1UsersPlaceholders: vi.fn(),
   generateMutate: vi.fn(),
+  generatePending: { value: false },
 }));
 
 vi.mock("@/api/generated/users/users", () => ({
@@ -14,7 +15,7 @@ vi.mock("@/api/generated/users/users", () => ({
   getGetApiV1UsersPlaceholdersQueryKey: () => ["placeholders"],
   usePostApiV1UsersIdClaimCode: () => ({
     mutateAsync: generateMutate,
-    isPending: false,
+    isPending: generatePending.value,
   }),
 }));
 
@@ -40,6 +41,7 @@ const placeholder = {
 describe("PlaceholderPlayersSection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    generatePending.value = false;
     useGetApiV1UsersPlaceholders.mockReturnValue({
       data: [placeholder],
       isLoading: false,
@@ -56,6 +58,44 @@ describe("PlaceholderPlayersSection", () => {
     renderSection();
     expect(screen.getByText("Alex P.")).toBeInTheDocument();
     expect(screen.getByText(/PLH001 · Female · 30/)).toBeInTheDocument();
+  });
+
+  it("omits the meta suffix when a placeholder has no sex or age", () => {
+    useGetApiV1UsersPlaceholders.mockReturnValue({
+      data: [{ id: "p9", publicCode: "PLH009", displayName: "No Meta", capabilities: [] }],
+      isLoading: false,
+      isFetching: false,
+    });
+    renderSection();
+    // publicCode shows without the " · …" meta suffix.
+    expect(screen.getByText("PLH009")).toBeInTheDocument();
+    expect(screen.queryByText(/PLH009 ·/)).not.toBeInTheDocument();
+  });
+
+  it("shows a pending label while a claim code is generating (admin)", async () => {
+    generatePending.value = true;
+    renderSection(["ADMINISTRATOR"]);
+    expect(screen.getByRole("button", { name: "Generating…" })).toBeDisabled();
+  });
+
+  it("shows a loading state", () => {
+    useGetApiV1UsersPlaceholders.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isFetching: true,
+    });
+    renderSection();
+    expect(screen.getByText("Loading…")).toBeInTheDocument();
+  });
+
+  it("shows a refreshing label while refetching", () => {
+    useGetApiV1UsersPlaceholders.mockReturnValue({
+      data: [placeholder],
+      isLoading: false,
+      isFetching: true,
+    });
+    renderSection();
+    expect(screen.getByRole("button", { name: "Refreshing…" })).toBeInTheDocument();
   });
 
   it("shows the plaintext claim code once after generating (admin)", async () => {
