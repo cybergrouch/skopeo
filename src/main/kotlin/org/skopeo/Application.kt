@@ -37,6 +37,7 @@ import org.skopeo.routes.configureInviteRoutes
 import org.skopeo.routes.configureMatchRoutes
 import org.skopeo.routes.configureNameRoutes
 import org.skopeo.routes.configureOpenGraphRoutes
+import org.skopeo.routes.configurePlaceholderRoutes
 import org.skopeo.routes.configurePlayerListRoutes
 import org.skopeo.routes.configurePlayerRoutes
 import org.skopeo.routes.configurePointsBudgetRoutes
@@ -95,6 +96,7 @@ fun Application.module(
     configureRouting()
     configureRankingRoutes()
     configureUserRoutes(service = UserService(adminEmails = adminEmails()))
+    configurePlaceholderRoutes()
     configurePlayerRoutes()
     configureContactRoutes()
     configureNameRoutes()

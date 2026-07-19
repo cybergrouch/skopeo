@@ -11,8 +11,10 @@ import org.jetbrains.exposed.sql.FloatColumnType
 import org.jetbrains.exposed.sql.Op
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.TextColumnType
 import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.exists
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.insertAndGetId
@@ -25,7 +27,9 @@ import org.jetbrains.exposed.sql.update
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.Contact
+import org.skopeo.model.CreatePlaceholderCommand
 import org.skopeo.model.Name
+import org.skopeo.model.NameType
 import org.skopeo.model.NumericRange
 import org.skopeo.model.ProfilePatch
 import org.skopeo.model.ProvisionUserCommand
@@ -35,6 +39,7 @@ import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserSearchQuery
 import org.skopeo.model.effectivePhotoUrl
 import java.text.Normalizer
+import java.time.LocalDateTime
 import java.util.UUID
 
 private const val SEARCH_LIMIT = 20
@@ -284,6 +289,181 @@ class UserRepository {
                 .mapNotNull { loadAggregate(id = it) }
         }
 
+    /**
+     * Create a login-less placeholder ("dummy") player (#496): a users row with firebase_uid = NULL,
+     * placeholder = true, an auto public code, a DISPLAY name, and the PLAYER capability only — no
+     * identities/contacts. Written atomically like [provision]. Returns the created aggregate.
+     */
+    fun createPlaceholder(command: CreatePlaceholderCommand): User =
+        transaction {
+            val userId =
+                UsersTable.insertAndGetId {
+                    it[UsersTable.publicCode] = generateUniquePublicCode()
+                    it[UsersTable.firebaseUid] = null
+                    it[UsersTable.placeholder] = true
+                    it[UsersTable.sex] = command.sex
+                    it[UsersTable.dateOfBirth] = command.dateOfBirth
+                }
+            UserNamesTable.insert {
+                it[UserNamesTable.userId] = userId
+                it[UserNamesTable.nameType] = NameType.DISPLAY.name
+                it[UserNamesTable.value] = command.displayName
+            }
+            UserCapabilitiesTable.insert {
+                it[UserCapabilitiesTable.userId] = userId
+                it[UserCapabilitiesTable.capability] = Capability.PLAYER.name
+            }
+            loadAggregateOrThrow(id = userId.value)
+        }
+
+    /** Active, unclaimed placeholders (#496), newest-id first, for the management view. */
+    fun listPlaceholders(): List<User> =
+        transaction {
+            UsersTable
+                .selectAll()
+                .where { (UsersTable.placeholder eq true) and UsersTable.isActive }
+                .orderBy(UsersTable.id to SortOrder.DESC)
+                .map { loadAggregate(id = it[UsersTable.id].value)!! }
+        }
+
+    /** True when [userId] has any rating-history rows (#496) — part of the "empty account" check for a claim. */
+    fun hasRatingHistory(userId: UUID): Boolean =
+        transaction {
+            UserRatingHistoryTable.selectAll().where { UserRatingHistoryTable.userId eq userId }.any()
+        }
+
+    /** True when [userId] appears on any match roster (#496) — the second half of the "empty account" check. */
+    fun hasMatchParticipation(userId: UUID): Boolean =
+        transaction {
+            TeamUsersTable.selectAll().where { TeamUsersTable.userId eq userId }.any()
+        }
+
+    /**
+     * Claim/adopt (#496): merge a placeholder into an (empty) real account and retire the placeholder,
+     * atomically. Every `user_id` FK is re-pointed from [placeholderId] to [claimantId] (per the issue's
+     * merge inventory), deduping any row that would violate a per-user UNIQUE constraint; then the
+     * placeholder is disabled and linked via the canonical pattern (is_active = false, canonical_user_id
+     * = claimant, claimed_at/by). The claimant is empty in v1 (enforced in the service), so re-points are
+     * conflict-free except the membership tables, where the placeholder simply has none.
+     */
+    fun claimPlaceholder(
+        placeholderId: UUID,
+        claimantId: UUID,
+        claimedAt: LocalDateTime,
+    ): Unit =
+        transaction {
+            // History + points: pure re-point (no per-user uniqueness).
+            UserRatingHistoryTable.update(where = { UserRatingHistoryTable.userId eq placeholderId }) {
+                it[userId] = claimantId
+            }
+            RankingPointAwardsTable.update(where = { RankingPointAwardsTable.userId eq placeholderId }) {
+                it[userId] = claimantId
+            }
+            // user_ratings: UNIQUE(user_id). The claimant is empty (no row), so a straight re-point is safe;
+            // guard anyway by dropping the placeholder's row if the claimant somehow already has one.
+            if (UserRatingsTable.selectAll().where { UserRatingsTable.userId eq claimantId }.any()) {
+                UserRatingsTable.deleteWhere { UserRatingsTable.userId eq placeholderId }
+            } else {
+                UserRatingsTable.update(where = { UserRatingsTable.userId eq placeholderId }) { it[userId] = claimantId }
+            }
+            // Rosters + memberships with a per-(parent,user) UNIQUE: dedupe, then re-point the rest.
+            repointTeamUsers(placeholderId = placeholderId, claimantId = claimantId)
+            repointEventParticipants(placeholderId = placeholderId, claimantId = claimantId)
+            repointPlayerListMembers(placeholderId = placeholderId, claimantId = claimantId)
+            repointClubOwners(placeholderId = placeholderId, claimantId = claimantId)
+            // seeding_entries: SET NULL semantics — re-point the id so a re-render shows the real player.
+            SeedingEntriesTable.update(where = { SeedingEntriesTable.userId eq placeholderId }) { it[userId] = claimantId }
+
+            // Retire the placeholder via the canonical-merge pattern (#124), plus claim provenance.
+            UsersTable.update(where = { UsersTable.id eq placeholderId }) {
+                it[canonicalUserId] = claimantId
+                it[isActive] = false
+                it[UsersTable.claimedAt] = claimedAt
+                it[claimedBy] = claimantId
+            }
+        }
+
+    /**
+     * team_users re-point (#496): re-point the placeholder's rows to the claimant, dropping any row for a
+     * team the claimant is already on (UNIQUE team_id, user_id, joined_at). Must run in a transaction.
+     */
+    private fun repointTeamUsers(
+        placeholderId: UUID,
+        claimantId: UUID,
+    ) {
+        TeamUsersTable.selectAll().where { TeamUsersTable.userId eq placeholderId }.toList().forEach { row ->
+            val teamId = row[TeamUsersTable.teamId]
+            val claimantOnTeam =
+                TeamUsersTable.selectAll().where { (TeamUsersTable.userId eq claimantId) and (TeamUsersTable.teamId eq teamId) }.any()
+            if (claimantOnTeam) {
+                TeamUsersTable.deleteWhere { TeamUsersTable.id eq row[TeamUsersTable.id] }
+            } else {
+                TeamUsersTable.update(where = { TeamUsersTable.id eq row[TeamUsersTable.id] }) { it[userId] = claimantId }
+            }
+        }
+    }
+
+    /** event_participants re-point (#496): re-point, dropping duplicates (UNIQUE event_id, user_id). In a transaction. */
+    private fun repointEventParticipants(
+        placeholderId: UUID,
+        claimantId: UUID,
+    ) {
+        EventParticipantsTable.selectAll().where { EventParticipantsTable.userId eq placeholderId }.toList().forEach { row ->
+            val eventId = row[EventParticipantsTable.eventId]
+            val claimantInEvent =
+                EventParticipantsTable
+                    .selectAll()
+                    .where { (EventParticipantsTable.userId eq claimantId) and (EventParticipantsTable.eventId eq eventId) }
+                    .any()
+            if (claimantInEvent) {
+                EventParticipantsTable.deleteWhere { EventParticipantsTable.id eq row[EventParticipantsTable.id] }
+            } else {
+                EventParticipantsTable.update(where = { EventParticipantsTable.id eq row[EventParticipantsTable.id] }) {
+                    it[userId] = claimantId
+                }
+            }
+        }
+    }
+
+    /** player_list_members re-point (#496): re-point, dropping duplicates (UNIQUE list_id, user_id). In a transaction. */
+    private fun repointPlayerListMembers(
+        placeholderId: UUID,
+        claimantId: UUID,
+    ) {
+        PlayerListMembersTable.selectAll().where { PlayerListMembersTable.userId eq placeholderId }.toList().forEach { row ->
+            val listId = row[PlayerListMembersTable.listId]
+            val claimantInList =
+                PlayerListMembersTable
+                    .selectAll()
+                    .where { (PlayerListMembersTable.userId eq claimantId) and (PlayerListMembersTable.listId eq listId) }
+                    .any()
+            if (claimantInList) {
+                PlayerListMembersTable.deleteWhere { PlayerListMembersTable.id eq row[PlayerListMembersTable.id] }
+            } else {
+                PlayerListMembersTable.update(where = { PlayerListMembersTable.id eq row[PlayerListMembersTable.id] }) {
+                    it[userId] = claimantId
+                }
+            }
+        }
+    }
+
+    /** club_owners re-point (#496): re-point, dropping duplicates (UNIQUE club_id, user_id). In a transaction. */
+    private fun repointClubOwners(
+        placeholderId: UUID,
+        claimantId: UUID,
+    ) {
+        ClubOwnersTable.selectAll().where { ClubOwnersTable.userId eq placeholderId }.toList().forEach { row ->
+            val clubId = row[ClubOwnersTable.clubId]
+            val claimantOwnsClub =
+                ClubOwnersTable.selectAll().where { (ClubOwnersTable.userId eq claimantId) and (ClubOwnersTable.clubId eq clubId) }.any()
+            if (claimantOwnsClub) {
+                ClubOwnersTable.deleteWhere { ClubOwnersTable.id eq row[ClubOwnersTable.id] }
+            } else {
+                ClubOwnersTable.update(where = { ClubOwnersTable.id eq row[ClubOwnersTable.id] }) { it[userId] = claimantId }
+            }
+        }
+    }
+
     /** Load the aggregate as an [Either], turning absence into a [ServiceError.NotFound]. Must run in a transaction. */
     private fun aggregateOrNotFound(id: UUID): Either<ServiceError, User> {
         val user = loadAggregate(id = id)
@@ -434,6 +614,9 @@ private fun ResultRow.toUser(
         isActive = this[UsersTable.isActive],
         proposedRating = this[UsersTable.proposedRating],
         canonicalUserId = this[UsersTable.canonicalUserId]?.value,
+        placeholder = this[UsersTable.placeholder],
+        claimedAt = this[UsersTable.claimedAt],
+        claimedBy = this[UsersTable.claimedBy]?.value,
         names = names,
         contacts = contacts,
         identities = identities,

@@ -37,7 +37,7 @@ import {
 } from "@/api/generated/matches/matches";
 import { useGetApiV1UsersMe } from "@/api/generated/users/users";
 import { canEditEndedEvents, isAdministrator } from "@/auth/capabilities";
-import { UserSearchSelect } from "@/components/UserSearchSelect";
+import { PlayerPicker } from "@/components/PlayerPicker";
 import { HandicapField } from "@/components/HandicapField";
 import { playerLabel } from "@/lib/playerLabel";
 import { formatConfidence } from "@/lib/confidence";
@@ -775,7 +775,7 @@ export function EventDetail({
               )}
               {locked ? null : (
                 <div className="space-y-1">
-                  <UserSearchSelect
+                  <PlayerPicker
                     label="Add a participant"
                     placeholder="Search players…"
                     excludeIds={allParticipants.map((p) => p.userId)}

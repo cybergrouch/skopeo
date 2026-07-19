@@ -31,6 +31,7 @@ import { StandingsTab } from "./dashboard/StandingsTab";
 import { InvitesTab } from "./dashboard/InvitesTab";
 import { ActivityTab } from "./dashboard/ActivityTab";
 import { ReportTab } from "./dashboard/ReportTab";
+import { ClaimTab } from "./dashboard/ClaimTab";
 
 interface Section {
   value: string;
@@ -84,6 +85,9 @@ export function DashboardPage() {
       ? [{ value: "research", label: "Research", element: <ResearchTab /> }]
       : []),
     { value: "standings", label: "Standings", element: <StandingsTab /> },
+    // Claiming a placeholder account (#496) is open to any signed-in user; they need only a code from
+    // an administrator, so this tab is always present.
+    { value: "claim", label: "Claim account", element: <ClaimTab /> },
     ...(showMatches
       ? [
           {

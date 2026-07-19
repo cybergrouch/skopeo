@@ -72,6 +72,8 @@ class PlayerService(
                                 confidence = it.confidence.toPlainString(),
                             )
                         },
+                    // A login-less, unclaimed placeholder renders an "unclaimed" indicator + claim entry (#496).
+                    isPlaceholder = located.placeholder,
                 )
             }
         }

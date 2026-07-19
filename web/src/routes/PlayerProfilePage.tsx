@@ -126,6 +126,25 @@ export function PlayerProfilePage() {
               </div>
             </CardHeader>
             <CardContent>
+              {/* Placeholder account (#496): a login-less player awaiting a real person to adopt it.
+                  Show an "unclaimed" indicator plus a "Claim this account" entry point that deep-links
+                  a signed-in user to the claim page (they need a code from an administrator). */}
+              {player.isPlaceholder ? (
+                <div className="mb-3 space-y-2 rounded-md border border-amber-500/50 bg-amber-500/10 p-3">
+                  <p className="text-sm font-medium">Unclaimed placeholder account</p>
+                  <p className="text-xs text-muted-foreground">
+                    This player was created without a login. If this is you, ask
+                    an administrator for a claim code, then adopt the account and
+                    its history.
+                  </p>
+                  <Link
+                    to="/dashboard?tab=claim"
+                    className="text-sm text-primary hover:underline"
+                  >
+                    Claim this account →
+                  </Link>
+                </div>
+              ) : null}
               {player.rating ? (
                 <p className="text-sm">
                   <span className="font-medium">NTRP</span>{' '}

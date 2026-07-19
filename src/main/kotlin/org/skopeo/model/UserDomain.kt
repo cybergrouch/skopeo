@@ -130,6 +130,11 @@ data class User(
     val proposedRating: BigDecimal? = null,
     // When set, this user is a disabled duplicate of the referenced canonical ("true") account (#124).
     val canonicalUserId: UUID? = null,
+    // Login-less placeholder ("dummy") player (#496): a user matches can be logged against before the
+    // real person signs up. PLAYER-only, no login; [claimedAt]/[claimedBy] are set when it is adopted.
+    val placeholder: Boolean = false,
+    val claimedAt: LocalDateTime? = null,
+    val claimedBy: UUID? = null,
     val names: List<Name>,
     val contacts: List<Contact>,
     val identities: List<UserIdentity>,
@@ -183,4 +188,50 @@ data class ProfilePatch(
     val dateOfBirth: LocalDate? = null,
     val sex: String? = null,
     val city: String? = null,
+)
+
+/**
+ * Everything needed to create a login-less placeholder ("dummy") player (#496) in one transaction: a
+ * users row with [firebaseUid] = NULL, [placeholder] = true, an auto public code, a DISPLAY name, and
+ * the PLAYER capability only. [displayName] and [sex] are required; [dateOfBirth] is optional.
+ */
+data class CreatePlaceholderCommand(
+    val displayName: String,
+    val sex: String,
+    val dateOfBirth: LocalDate? = null,
+)
+
+/** Lifecycle of a placeholder claim code (#496): ACTIVE (usable) or CONSUMED (claimed or superseded). */
+enum class ClaimCodeStatus { ACTIVE, CONSUMED }
+
+/**
+ * A backend-generated secret claim code for a placeholder account (#496). Only the [codeHash] is
+ * stored — the plaintext is returned once on generation and never persisted. One-time-use and
+ * expiring: a claim is admitted only by an ACTIVE code whose hash matches and which is not past
+ * [expiresAt].
+ */
+data class ClaimCode(
+    val id: UUID,
+    val placeholderUserId: UUID,
+    val codeHash: String,
+    val expiresAt: LocalDateTime,
+    val status: ClaimCodeStatus,
+    val createdBy: UUID? = null,
+    val createdAt: LocalDateTime,
+    val consumedAt: LocalDateTime? = null,
+    val consumedBy: UUID? = null,
+) {
+    /** True when the code still admits a claim: ACTIVE and not past its expiry. */
+    fun isUsable(asOf: LocalDateTime): Boolean = status == ClaimCodeStatus.ACTIVE && expiresAt.isAfter(asOf)
+}
+
+/**
+ * The one-time result of generating a claim code (#496): the [plaintext] to hand off (shown once,
+ * never re-derivable) plus the stored [code] record. Only the plaintext leaves the service to the admin.
+ */
+data class GeneratedClaimCode(
+    val plaintext: String,
+    val code: ClaimCode,
+    // The placeholder's shareable public code, so the caller can render which account the code adopts.
+    val placeholderPublicCode: String,
 )

@@ -242,6 +242,25 @@ describe('PlayerProfilePage', () => {
     expect(screen.queryByText('points-audit:ABC234')).not.toBeInTheDocument()
   })
 
+  it('shows an unclaimed indicator and a claim entry point for a placeholder (#496)', () => {
+    useGetApiV1PlayersCode.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: {
+        publicCode: 'PLH001',
+        displayName: 'Alex P.',
+        photoUrl: null,
+        rating: undefined,
+        isPlaceholder: true,
+      },
+    })
+    renderAt('PLH001')
+    expect(screen.getByText('Unclaimed placeholder account')).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: /claim this account/i }),
+    ).toHaveAttribute('href', '/dashboard?tab=claim')
+  })
+
   it('renders a merged notice linking to the canonical for a disabled duplicate (#124)', () => {
     useGetApiV1PlayersCode.mockReturnValue({
       isLoading: false,
