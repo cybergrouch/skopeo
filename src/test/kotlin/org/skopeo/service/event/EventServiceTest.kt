@@ -19,6 +19,7 @@ import org.jetbrains.exposed.sql.update
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.dto.event.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuthProvider
@@ -147,7 +148,8 @@ class EventServiceTest {
         view.event.name shouldBe "Spring Open"
         view.event.publicCode.length shouldBe 6
         view.participants.map { it.userId }.shouldContainExactlyInAnyOrder(p1.id, p2.id)
-        view.participants.first().displayName shouldBe "p1"
+        // Participant order isn't guaranteed, so look p1 up by id rather than assuming it's first.
+        view.participants.single { it.userId == p1.id }.displayName shouldBe "p1"
         view.club.shouldBeNull() // clubless by default
     }
 
@@ -1085,6 +1087,51 @@ class EventServiceTest {
 
         // An unprovisioned caller simply has no events.
         service.myEvents(token = token(uid = "ghost")).shouldBeRight() shouldBe emptyList()
+    }
+
+    @Test
+    fun `completedResultCounts is batched and counts only recorded results per event (#483)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        val withResults =
+            service.create(
+                token = token(uid = "host"),
+                input = input(name = "WithResults", participants = listOf(p1.id, p2.id)),
+            ).shouldBeRight().event
+        val scheduledOnly =
+            service.create(
+                token = token(uid = "host"),
+                input = input(name = "ScheduledOnly", participants = listOf(p1.id, p2.id)),
+            ).shouldBeRight().event
+        recordResult(match = seedFixture(eventId = withResults.id, host = host, p1 = p1, p2 = p2))
+        // A scheduled fixture (no recorded result) must not lift the count off zero.
+        seedFixture(eventId = scheduledOnly.id, host = host, p1 = p1, p2 = p2)
+
+        val counts = service.completedResultCounts(eventIds = listOf(withResults.id, scheduledOnly.id))
+        counts[withResults.id] shouldBe 1
+        counts[scheduledOnly.id].shouldBeNull()
+    }
+
+    @Test
+    fun `MyEventResponse carries isFinalized and completedMatchCount for the client's buckets (#483)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        val created =
+            service.create(
+                token = token(uid = "host"),
+                input = input(name = "Finalized", participants = listOf(p1.id, p2.id)),
+            ).shouldBeRight().event
+        recordResult(match = seedFixture(eventId = created.id, host = host, p1 = p1, p2 = p2))
+        service.finalize(token = token(uid = "host"), id = created.id).shouldBeRight()
+
+        // p1 is an approved participant, so the event shows on their "Events history".
+        val mine = service.myEvents(token = token(uid = "p1")).shouldBeRight().single { it.event.id == created.id }
+        val counts = service.completedResultCounts(eventIds = listOf(element = created.id))
+        val dto = mine.toResponse(completedMatchCount = counts[created.id] ?: 0)
+        dto.isFinalized.shouldBeTrue()
+        dto.completedMatchCount shouldBe 1
     }
 
     // --- Points config (#403 Phase C). Global policy seeded by V16: OPEN_PLAY 1..10/30, LEAGUE 5..50/90,

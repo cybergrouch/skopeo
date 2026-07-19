@@ -497,15 +497,29 @@ function groupByClub(events: EventResponse[]): ClubGroup[] {
     .map((entry) => entry.group);
 }
 
-/** Split a group's events into upcoming (end date today or later) and past, each date-sorted. */
-function splitByDate(events: EventResponse[], today: string) {
+/** Recorded results present (#483) — the "has results" signal for the Unfinalized bucket. */
+function hasResults(event: EventResponse): boolean {
+  return (event.completedMatchCount ?? 0) > 0;
+}
+
+/**
+ * Split a group's events into three buckets (#483). Finalized status wins over everything: a finalized
+ * event is always Finalized, even with a future end date or no results. Otherwise Unfinalized = the
+ * event ended OR has recorded results (activity started, not concluded); Upcoming = future + untouched.
+ * Sort: Upcoming by start date asc, Unfinalized by end date desc, Finalized by finalizedAt desc
+ * (falling back to end date desc when a finalized row somehow lacks the timestamp).
+ */
+function splitByBucket(events: EventResponse[], today: string) {
+  const finalized = events.filter((e) => e.isFinalized);
+  const active = events.filter((e) => !e.isFinalized);
+  const unfinalized = active.filter((e) => e.endDate < today || hasResults(e));
+  const upcoming = active.filter((e) => e.endDate >= today && !hasResults(e));
   return {
-    upcoming: events
-      .filter((e) => e.endDate >= today)
-      .sort((a, b) => a.startDate.localeCompare(b.startDate)),
-    past: events
-      .filter((e) => e.endDate < today)
-      .sort((a, b) => b.startDate.localeCompare(a.startDate)),
+    upcoming: [...upcoming].sort((a, b) => a.startDate.localeCompare(b.startDate)),
+    unfinalized: [...unfinalized].sort((a, b) => b.endDate.localeCompare(a.endDate)),
+    finalized: [...finalized].sort((a, b) =>
+      (b.finalizedAt ?? b.endDate).localeCompare(a.finalizedAt ?? a.endDate),
+    ),
   };
 }
 
@@ -548,8 +562,8 @@ function EventSection({
 
 /**
  * A collapsible per-club group (#367): the header is an accessible toggle (aria-expanded, keyboard-
- * operable button) showing the club name and its event count; the Upcoming/Past subsections render
- * only while expanded.
+ * operable button) showing the club name and its event count; the Upcoming/Unfinalized/Finalized
+ * subsections (#483) render only while expanded.
  */
 function ClubGroupSection({
   group,
@@ -564,7 +578,7 @@ function ClubGroupSection({
   onToggle: () => void;
   onSelect: (id: string) => void;
 }) {
-  const { upcoming, past } = splitByDate(group.events, today);
+  const { upcoming, unfinalized, finalized } = splitByBucket(group.events, today);
   return (
     <div className="space-y-3">
       <button
@@ -590,10 +604,17 @@ function ClubGroupSection({
             onSelect={onSelect}
           />
           <EventSection
-            title="Past"
-            events={past}
+            title="Unfinalized"
+            events={unfinalized}
             upcoming={false}
-            emptyLabel="No past events."
+            emptyLabel="No unfinalized events."
+            onSelect={onSelect}
+          />
+          <EventSection
+            title="Finalized"
+            events={finalized}
+            upcoming={false}
+            emptyLabel="No finalized events."
             onSelect={onSelect}
           />
         </>

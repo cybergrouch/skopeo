@@ -15,6 +15,7 @@ import org.jetbrains.exposed.sql.SqlExpressionBuilder.greaterEq
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.inSubQuery
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.lessEq
 import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.sql.count
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.insertAndGetId
@@ -321,6 +322,33 @@ class MatchRepository {
                 ),
         )
     }
+
+    /**
+     * The number of recorded results per event for a set of event ids at once (#483) — the "has
+     * results" signal for the event-list DTOs, batched to avoid N+1 (one grouped scan for the whole
+     * page, mirroring [winLossByUsers]). A match counts when it is active, COMPLETED, has a decided
+     * winner, and links to one of [eventIds]. Events with no recorded results are absent from the map;
+     * callers default them to 0.
+     */
+    fun completedResultCountByEvents(eventIds: List<UUID>): Map<UUID, Int> =
+        transaction {
+            if (eventIds.isEmpty()) {
+                return@transaction emptyMap()
+            }
+            val countAlias = MatchesTable.id.count()
+            MatchesTable
+                .select(columns = listOf(MatchesTable.eventId, countAlias))
+                .where {
+                    MatchesTable.isActive and
+                        (MatchesTable.status eq MatchStatus.COMPLETED.name) and
+                        MatchesTable.winnerTeamId.isNotNull() and
+                        (MatchesTable.eventId inList eventIds)
+                }.groupBy(MatchesTable.eventId)
+                .mapNotNull { row ->
+                    // event_id is non-null for every row (the inList filter above excludes null keys).
+                    row[MatchesTable.eventId]?.value?.let { it to row[countAlias].toInt() }
+                }.toMap()
+        }
 
     /**
      * All of an event's active, completed fixtures — rated or not (#138). Lets the event page keep a

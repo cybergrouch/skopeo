@@ -654,4 +654,34 @@ class MatchRepositoryTest {
         awaiting shouldContain today.id
         awaiting shouldContain future.id
     }
+
+    @Test
+    fun `completedResultCountByEvents counts recorded results per event, batched, omits the resultless (#483)`() {
+        val creator = newUser(uid = "cr")
+        val a = newUser(uid = "ca")
+        val b = newUser(uid = "cb")
+        val withResults = event(creator = creator, endDate = LocalDate.of(2026, 3, 1), members = listOf(a, b))
+        val scheduledOnly = event(creator = creator, endDate = LocalDate.of(2026, 4, 1), members = listOf(a, b))
+
+        // Two recorded results in the first event, plus a scheduled (undecided) fixture that must not count.
+        completedMatch(u1 = a, u2 = b, matchDate = LocalDate.of(2026, 2, 20), eventId = withResults)
+        completedMatch(u1 = b, u2 = a, matchDate = LocalDate.of(2026, 2, 25), eventId = withResults)
+        fixture(u1 = a, u2 = b, date = LocalDate.of(2026, 2, 28)).let { f ->
+            transaction { MatchesTable.update(where = { MatchesTable.id eq f.id }) { it[eventId] = withResults } }
+        }
+        // The second event has only a scheduled fixture — no recorded result.
+        fixture(u1 = a, u2 = b, date = LocalDate.of(2026, 3, 20)).let { f ->
+            transaction { MatchesTable.update(where = { MatchesTable.id eq f.id }) { it[eventId] = scheduledOnly } }
+        }
+
+        val counts = matches.completedResultCountByEvents(eventIds = listOf(withResults, scheduledOnly))
+        counts[withResults] shouldBe 2
+        // An event with no recorded result is absent from the map (callers default it to 0).
+        counts[scheduledOnly].shouldBeNull()
+    }
+
+    @Test
+    fun `completedResultCountByEvents returns an empty map for no ids (#483)`() {
+        matches.completedResultCountByEvents(eventIds = emptyList()).shouldBeEmpty()
+    }
 }

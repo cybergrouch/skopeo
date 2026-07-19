@@ -61,7 +61,12 @@ private fun Route.listAndCreate(service: EventService) {
     get {
         respondMappingErrors {
             respondEither(result = service.list(token = verifiedToken())) { events ->
-                call.respond(status = HttpStatusCode.OK, message = events.map { it.toResponse() })
+                // Batched "has results" counts (#483) in one grouped query — no per-event N+1.
+                val counts = service.completedResultCounts(eventIds = events.map { it.event.id })
+                call.respond(
+                    status = HttpStatusCode.OK,
+                    message = events.map { it.toResponse(completedMatchCount = counts[it.event.id] ?: 0) },
+                )
             }
         }
     }
@@ -78,7 +83,12 @@ private fun Route.listAndCreate(service: EventService) {
     get(path = "/mine") {
         respondMappingErrors {
             respondEither(result = service.myEvents(token = verifiedToken())) { events ->
-                call.respond(status = HttpStatusCode.OK, message = events.map { it.toResponse() })
+                // Batched "has results" counts (#483) in one grouped query — no per-event N+1.
+                val counts = service.completedResultCounts(eventIds = events.map { it.event.id })
+                call.respond(
+                    status = HttpStatusCode.OK,
+                    message = events.map { it.toResponse(completedMatchCount = counts[it.event.id] ?: 0) },
+                )
             }
         }
     }

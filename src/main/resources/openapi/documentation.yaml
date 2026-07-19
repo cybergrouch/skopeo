@@ -5232,6 +5232,12 @@ components:
         status:
           type: string
           enum: [APPROVED, PENDING, HOLD]
+        isFinalized:
+          type: boolean
+          description: True once the event is finalized (#403/#483); always buckets to Finalized on the client.
+        completedMatchCount:
+          type: integer
+          description: Recorded results (COMPLETED with a decided winner) in the event (#483); the client's has-results signal.
 
     EventResponse:
       type: object
@@ -5298,6 +5304,9 @@ components:
         isFinalized:
           type: boolean
           description: True once the event is finalized (#403) — closed to changes; its matches queue for rating.
+        completedMatchCount:
+          type: integer
+          description: Recorded results (COMPLETED with a decided winner) in the event (#483); the client's has-results signal.
         minPointsPerMatch:
           type: integer
           nullable: true

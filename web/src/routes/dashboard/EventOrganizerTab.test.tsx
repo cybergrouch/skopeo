@@ -185,7 +185,7 @@ describe("EventOrganizerTab", () => {
     expect(screen.getAllByText(/Filed by/)).toHaveLength(1);
   });
 
-  it("splits events into Upcoming and Past subsections by end date (#271)", () => {
+  it("buckets events into Upcoming / Unfinalized / Finalized (#483)", () => {
     const upcoming = {
       ...event,
       id: "up",
@@ -193,7 +193,82 @@ describe("EventOrganizerTab", () => {
       startDate: "2999-01-01",
       endDate: "2999-01-02",
     };
-    const past = {
+    const pastUnfinalized = {
+      ...event,
+      id: "pa",
+      name: "Old Open",
+      startDate: "2000-01-01",
+      endDate: "2000-01-02",
+    };
+    // Finalized with a FUTURE end date + no results → Finalized, never Upcoming.
+    const finalizedFuture = {
+      ...event,
+      id: "ff",
+      name: "Early Bird Final",
+      startDate: "2999-05-01",
+      endDate: "2999-05-05",
+      isFinalized: true,
+      completedMatchCount: 0,
+    };
+    // Finalized in the past → Finalized, not Unfinalized.
+    const finalizedPast = {
+      ...event,
+      id: "fp",
+      name: "Old Champs",
+      startDate: "2001-01-01",
+      endDate: "2001-01-02",
+      isFinalized: true,
+      completedMatchCount: 4,
+    };
+    // Future end date but has results → Unfinalized, not Upcoming.
+    const futureWithResults = {
+      ...event,
+      id: "fw",
+      name: "In-Flight Meet",
+      startDate: "2999-07-01",
+      endDate: "2999-07-30",
+      completedMatchCount: 2,
+    };
+    useGetApiV1Events.mockReturnValue({
+      data: [
+        pastUnfinalized,
+        upcoming,
+        finalizedFuture,
+        finalizedPast,
+        futureWithResults,
+      ],
+      isLoading: false,
+    });
+    renderTab();
+
+    // All three section headings render.
+    expect(screen.getByText("Upcoming")).toBeInTheDocument();
+    expect(screen.getByText("Unfinalized")).toBeInTheDocument();
+    expect(screen.getByText("Finalized")).toBeInTheDocument();
+
+    // The finalized-future event is under Finalized, not Upcoming.
+    const finalizedHeading = screen.getByText("Finalized");
+    const finalizedSection = finalizedHeading.parentElement as HTMLElement;
+    expect(finalizedSection).toHaveTextContent("Early Bird Final");
+    expect(finalizedSection).toHaveTextContent("Old Champs");
+
+    // Upcoming holds only the untouched future event.
+    const upcomingSection = screen.getByText("Upcoming")
+      .parentElement as HTMLElement;
+    expect(upcomingSection).toHaveTextContent("Future Fest");
+    expect(upcomingSection).not.toHaveTextContent("Early Bird Final");
+    expect(upcomingSection).not.toHaveTextContent("In-Flight Meet");
+
+    // Unfinalized holds the past-unfinalized and the future-with-results events.
+    const unfinalizedSection = screen.getByText("Unfinalized")
+      .parentElement as HTMLElement;
+    expect(unfinalizedSection).toHaveTextContent("Old Open");
+    expect(unfinalizedSection).toHaveTextContent("In-Flight Meet");
+    expect(unfinalizedSection).not.toHaveTextContent("Old Champs");
+  });
+
+  it("shows a per-section empty state when a bucket has no events (#483)", () => {
+    const pastUnfinalized = {
       ...event,
       id: "pa",
       name: "Old Open",
@@ -201,35 +276,16 @@ describe("EventOrganizerTab", () => {
       endDate: "2000-01-02",
     };
     useGetApiV1Events.mockReturnValue({
-      data: [past, upcoming],
+      data: [pastUnfinalized],
       isLoading: false,
     });
     renderTab();
 
-    expect(screen.getByText("Upcoming")).toBeInTheDocument();
-    expect(screen.getByText("Past")).toBeInTheDocument();
-    expect(screen.getByText("Future Fest")).toBeInTheDocument();
-    expect(screen.getByText("Old Open")).toBeInTheDocument();
-    // No per-section empty state when both sections have events.
-    expect(screen.queryByText("No upcoming events.")).not.toBeInTheDocument();
-    expect(screen.queryByText("No past events.")).not.toBeInTheDocument();
-  });
-
-  it("shows a per-section empty state when a section has no events (#271)", () => {
-    const past = {
-      ...event,
-      id: "pa",
-      name: "Old Open",
-      startDate: "2000-01-01",
-      endDate: "2000-01-02",
-    };
-    useGetApiV1Events.mockReturnValue({ data: [past], isLoading: false });
-    renderTab();
-
+    // Only the Unfinalized bucket has an event; the other two show their empty state.
     expect(screen.getByText("No upcoming events.")).toBeInTheDocument();
+    expect(screen.getByText("No finalized events.")).toBeInTheDocument();
     expect(screen.getByText("Old Open")).toBeInTheDocument();
-    // The Past section has the event, so no "No past events." message.
-    expect(screen.queryByText("No past events.")).not.toBeInTheDocument();
+    expect(screen.queryByText("No unfinalized events.")).not.toBeInTheDocument();
   });
 
   it("shows only the start date for upcoming and only the end date for past events (#296)", () => {
