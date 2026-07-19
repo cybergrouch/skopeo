@@ -406,6 +406,26 @@ describe('EventDetail', () => {
     )
   })
 
+  it('sends both per-side handicaps in the create payload when applied (#486)', async () => {
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.selectOptions(screen.getByLabelText('Player 1'), 'u1')
+    await user.selectOptions(screen.getByLabelText('Player 2'), 'u2')
+    await user.type(screen.getByLabelText('Date'), '2026-03-02')
+    await user.click(screen.getByLabelText('Apply handicap'))
+    await user.type(screen.getByLabelText('Side 1 handicap'), '0.4')
+    await user.type(screen.getByLabelText('Side 2 handicap'), '0.2')
+
+    await user.click(screen.getByRole('button', { name: 'Schedule fixture' }))
+    expect(createFixtureMutate).toHaveBeenCalledWith(
+      {
+        data: expect.objectContaining({ team1Handicap: '0.4', team2Handicap: '0.2' }),
+      },
+      expect.anything(),
+    )
+  })
+
   it('excludes the player chosen in one dropdown from the other', async () => {
     const user = userEvent.setup()
     renderDetail()

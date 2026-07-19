@@ -79,6 +79,17 @@ describe('MatchPage', () => {
     expect(screen.getByText(/−0\.3 to Side 2/)).toBeInTheDocument()
   })
 
+  it('shows both per-side handicaps, comma-separated, when each side has one (#486)', () => {
+    useGetApiV1MatchesCodeCode.mockReturnValue({
+      data: { ...match, team1Handicap: '0.4', team2Handicap: '0.2' },
+      isLoading: false,
+    })
+    renderAt()
+    expect(screen.getByText(/Handicap applied:/i)).toBeInTheDocument()
+    expect(screen.getByText(/−0\.4 to Side 1/)).toBeInTheDocument()
+    expect(screen.getByText(/−0\.2 to Side 2/)).toBeInTheDocument()
+  })
+
   it('shows no handicap notice when none is applied (#486)', () => {
     useGetApiV1MatchesCodeCode.mockReturnValue({ data: match, isLoading: false })
     renderAt()
