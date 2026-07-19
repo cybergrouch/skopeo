@@ -404,6 +404,13 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  /*
+   * Content-link colour exposed as a Tailwind utility (#491). `--link` is tuned per theme to be
+   * WCAG-AA against the card (see the .content-link block), so `text-link` gives non-anchor accents
+   * — e.g. the public match page "Winner" badge — the same AA-on-card contrast the `text-primary`
+   * action colour lacks (grass primary #452263 is 1.03:1 on its card; --link #ccff00 is 10.47:1).
+   */
+  --color-link: var(--link);
 }
 
 @layer base {
