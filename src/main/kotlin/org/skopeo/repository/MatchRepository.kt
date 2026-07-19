@@ -498,10 +498,14 @@ class MatchRepository {
             if (teamIds.isEmpty()) {
                 emptyList()
             } else {
+                // Container-exclusion (#497): leftJoin the event so matches under a soft-deleted event
+                // (or club, via cascade) drop out while eventless matches survive the join.
                 MatchesTable
-                    .selectAll()
+                    .leftJoin(otherTable = EventsTable)
+                    .select(columns = listOf(element = MatchesTable.id))
                     .where {
-                        (MatchesTable.team1Id inList teamIds) or (MatchesTable.team2Id inList teamIds)
+                        ((MatchesTable.team1Id inList teamIds) or (MatchesTable.team2Id inList teamIds)) and
+                            eventContainerActive()
                     }.orderBy(MatchesTable.matchDate to SortOrder.DESC)
                     .map { loadMatch(id = it[MatchesTable.id].value)!! }
             }
@@ -533,11 +537,15 @@ class MatchRepository {
             }
             val teamIds = usersByTeam.keys.toList()
             val outcomes =
+                // Container-exclusion (#497): leftJoin the event so a soft-deleted event's (or club's, via
+                // cascade) matches are not counted, while eventless matches survive the join.
                 MatchesTable
-                    .selectAll()
+                    .leftJoin(otherTable = EventsTable)
+                    .select(columns = listOf(MatchesTable.team1Id, MatchesTable.team2Id, MatchesTable.winnerTeamId))
                     .where {
                         ((MatchesTable.team1Id inList teamIds) or (MatchesTable.team2Id inList teamIds)) and
-                            MatchesTable.winnerTeamId.isNotNull()
+                            MatchesTable.winnerTeamId.isNotNull() and
+                            eventContainerActive()
                     }.flatMap { row ->
                         // Guaranteed non-null by the winnerTeamId.isNotNull() filter in the WHERE clause above.
                         val winnerTeam = checkNotNull(value = row[MatchesTable.winnerTeamId]).value
@@ -598,13 +606,17 @@ class MatchRepository {
             // One scan over the completed, in-window matches on any of those teams; fan each match out to
             // its queried participants as a (date, weight class) row.
             val rows = mutableMapOf<UUID, MutableList<WindowMatch>>()
+            // Container-exclusion (#497): leftJoin the event so container-deleted matches (soft-deleted
+            // event, or club via cascade) stop feeding rating confidence, while eventless matches survive.
             MatchesTable
+                .leftJoin(otherTable = EventsTable)
                 .select(columns = listOf(MatchesTable.team1Id, MatchesTable.team2Id, MatchesTable.matchType, MatchesTable.matchDate))
                 .where {
                     ((MatchesTable.team1Id inList teamIds) or (MatchesTable.team2Id inList teamIds)) and
                         (MatchesTable.status eq MatchStatus.COMPLETED.name) and
                         (MatchesTable.matchDate greaterEq windowStart) and
-                        (MatchesTable.matchDate lessEq today)
+                        (MatchesTable.matchDate lessEq today) and
+                        eventContainerActive()
                 }.forEach { row ->
                     val weightClass = MatchType.valueOf(value = row[MatchesTable.matchType]).weightClass()
                     val matchDate = row[MatchesTable.matchDate]
@@ -635,16 +647,32 @@ class MatchRepository {
             if (teamsA.isEmpty() || teamsB.isEmpty()) {
                 emptyList()
             } else {
+                // Container-exclusion (#497): leftJoin the event so meetings under a soft-deleted event
+                // (or club, via cascade) drop out while eventless meetings survive the join. A directly
+                // soft-deleted meeting (event still active) still counts here for traceability (#325).
                 MatchesTable
-                    .selectAll()
+                    .leftJoin(otherTable = EventsTable)
+                    .select(columns = listOf(element = MatchesTable.id))
                     .where {
-                        // Soft-deleted meetings still count for traceability (#325); ratings are frozen.
-                        ((MatchesTable.team1Id inList teamsA) and (MatchesTable.team2Id inList teamsB)) or
-                            ((MatchesTable.team1Id inList teamsB) and (MatchesTable.team2Id inList teamsA))
+                        (
+                            ((MatchesTable.team1Id inList teamsA) and (MatchesTable.team2Id inList teamsB)) or
+                                ((MatchesTable.team1Id inList teamsB) and (MatchesTable.team2Id inList teamsA))
+                        ) and
+                            eventContainerActive()
                     }.orderBy(MatchesTable.matchDate to SortOrder.DESC)
                     .map { loadMatch(id = it[MatchesTable.id].value)!! }
             }
         }
+
+    /**
+     * The container-exclusion predicate (#497): keep a match only when it is standalone (event_id is
+     * null) OR its event is still active. Deleting an event soft-deletes it (events.is_active = false),
+     * and deleting a club cascades that onto its events, so this single event check hides both
+     * container-deleted cases while leaving each surface's own matches.is_active policy (direct-delete
+     * traceability, #325) untouched. Requires the query to leftJoin [EventsTable] on the event_id
+     * reference so eventless rows survive the join.
+     */
+    private fun ISqlExpressionBuilder.eventContainerActive(): Op<Boolean> = MatchesTable.eventId.isNull() or (EventsTable.isActive eq true)
 
     /** The (temporary singles) team ids a user has ever played in — the join basis for match lookups. */
     private fun teamIdsOf(userId: UUID): List<UUID> =

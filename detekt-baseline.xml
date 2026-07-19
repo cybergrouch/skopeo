@@ -13,6 +13,7 @@
     <ID>ImplicitDefaultLocale:RatingChangeReport.kt$RatingChangeReport$String.format("%.2f", result.ratio)</ID>
     <ID>LargeClass:EventService.kt$EventService</ID>
     <ID>LargeClass:EventServiceTest.kt$EventServiceTest</ID>
+    <ID>LargeClass:MatchRepositoryTest.kt$MatchRepositoryTest</ID>
     <ID>LargeClass:MatchServiceTest.kt$MatchServiceTest</ID>
     <ID>LargeClass:RankingCalculationPayloadTest.kt$RankingCalculationPayloadTest</ID>
     <ID>LargeClass:RatingCalculationServiceTest.kt$RatingCalculationServiceTest</ID>
