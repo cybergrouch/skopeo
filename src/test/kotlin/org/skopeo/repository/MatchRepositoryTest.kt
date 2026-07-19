@@ -522,6 +522,18 @@ class MatchRepositoryTest {
     }
 
     @Test
+    fun `setHandicaps on an unknown match is not found (#486)`() {
+        matches
+            .setHandicaps(
+                matchId = UUID.randomUUID(),
+                team1Handicap = java.math.BigDecimal("0.300"),
+                team2Handicap = null,
+            )
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
     fun `setDesignatedPoints sets then clears a fixture designation (#466)`() {
         val match = fixture(u1 = newUser(uid = "d1"), u2 = newUser(uid = "d2"))
 

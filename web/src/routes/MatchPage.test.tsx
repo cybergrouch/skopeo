@@ -90,6 +90,17 @@ describe('MatchPage', () => {
     expect(screen.getByText(/−0\.2 to Side 2/)).toBeInTheDocument()
   })
 
+  it('shows only Side 1 when just that side is handicapped (#486)', () => {
+    useGetApiV1MatchesCodeCode.mockReturnValue({
+      data: { ...match, team1Handicap: '0.5' },
+      isLoading: false,
+    })
+    renderAt()
+    expect(screen.getByText(/Handicap applied:/i)).toBeInTheDocument()
+    expect(screen.getByText(/0\.5 to Side 1/)).toBeInTheDocument()
+    expect(screen.queryByText(/to Side 2/)).not.toBeInTheDocument()
+  })
+
   it('shows no handicap notice when none is applied (#486)', () => {
     useGetApiV1MatchesCodeCode.mockReturnValue({ data: match, isLoading: false })
     renderAt()
