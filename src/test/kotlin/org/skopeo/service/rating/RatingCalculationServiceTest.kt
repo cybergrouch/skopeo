@@ -731,6 +731,27 @@ class RatingCalculationServiceTest {
     }
 
     @Test
+    fun `a selection matching no pending event is a no-op empty run (#479)`() {
+        provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        finalizedEventWithMatch(
+            name = "A",
+            startDate = LocalDate.parse("2026-01-01"),
+            endDate = LocalDate.parse("2026-01-01"),
+            a = p1.id,
+            b = p2.id,
+        )
+
+        // An eventId that matches nothing in the pending timeline scopes to an empty run.
+        calc
+            .calculate(token = token(uid = "root"), dryRun = true, eventIds = listOf(element = UUID.randomUUID().toString()))
+            .shouldBeRight()
+            .matches
+            .shouldBe(expected = emptyList())
+    }
+
+    @Test
     fun `a valid prefix selection previews only those events and matches a full run for them (#479)`() {
         provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val p1 = provisionUser(uid = "p1", rated = true)
