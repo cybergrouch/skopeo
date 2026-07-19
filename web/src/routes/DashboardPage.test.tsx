@@ -50,6 +50,9 @@ vi.mock('./dashboard/ReportTab', () => ({
 vi.mock('./dashboard/admin/PointsManagementSection', () => ({
   PointsManagementSection: () => <div>points management content</div>,
 }))
+vi.mock('./dashboard/ClaimTab', () => ({
+  ClaimTab: () => <div>claim content</div>,
+}))
 
 /** Surfaces the current query string so a test can assert the tab is synced into the URL (#323). */
 function SearchProbe() {

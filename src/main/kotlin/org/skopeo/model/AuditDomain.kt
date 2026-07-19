@@ -58,6 +58,8 @@ enum class AuditAction {
     STANDINGS_PUBLISHED,
     POINTS_POLICY_UPDATED,
     POINTS_BUDGET_ALLOCATED,
+    PLACEHOLDER_CREATED,
+    PLACEHOLDER_CLAIMED,
 }
 
 /** The kind of entity an [AuditAction] concerns. */
@@ -103,7 +105,7 @@ enum class AuditCategory {
 val AuditAction.category: AuditCategory
     get() =
         when (this) {
-            AuditAction.USER_CREATED -> AuditCategory.USER_CREATION
+            AuditAction.USER_CREATED, AuditAction.PLACEHOLDER_CREATED -> AuditCategory.USER_CREATION
             AuditAction.NAME_ADDED, AuditAction.NAME_UPDATED -> AuditCategory.NAME_CHANGE
             AuditAction.CONTACT_ADDED, AuditAction.CONTACT_UPDATED -> AuditCategory.CONTACT_CHANGE
             AuditAction.CAPABILITY_GRANTED, AuditAction.CAPABILITY_REVOKED -> AuditCategory.CAPABILITY_CHANGE
@@ -137,6 +139,8 @@ val AuditAction.category: AuditCategory
             AuditAction.DUPLICATE_CANDIDATE_FLAGGED,
             AuditAction.DUPLICATE_CANDIDATE_DISMISSED,
             AuditAction.DUPLICATE_CANDIDATE_CONFIRMED,
+            // Claiming retires a placeholder via the same canonical-link mechanism as a duplicate merge (#496).
+            AuditAction.PLACEHOLDER_CLAIMED,
             -> AuditCategory.DUPLICATE_RECTIFICATION
             AuditAction.CLUB_CREATED,
             AuditAction.CLUB_RENAMED,

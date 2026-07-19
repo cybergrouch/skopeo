@@ -181,8 +181,8 @@ vi.mock('@/api/generated/matches/matches', () => ({
     },
   }),
 }))
-vi.mock('@/components/UserSearchSelect', () => ({
-  UserSearchSelect: ({
+vi.mock('@/components/PlayerPicker', () => ({
+  PlayerPicker: ({
     placeholder,
     onSelect,
   }: {

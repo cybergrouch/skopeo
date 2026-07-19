@@ -37,8 +37,8 @@ vi.mock("@/api/generated/points-budget/points-budget", () => ({
   useGetApiV1PointsPolicies,
 }));
 vi.mock("@/api/generated/users/users", () => ({ useGetApiV1UsersMe }));
-vi.mock("@/components/UserSearchSelect", () => ({
-  UserSearchSelect: ({
+vi.mock("@/components/PlayerPicker", () => ({
+  PlayerPicker: ({
     placeholder,
     onSelect,
   }: {
@@ -58,6 +58,9 @@ vi.mock("@/components/UserSearchSelect", () => ({
       {placeholder}
     </button>
   ),
+}));
+vi.mock("./PlaceholderPlayersSection", () => ({
+  PlaceholderPlayersSection: () => <div>placeholder players content</div>,
 }));
 vi.mock("./events/EventDetail", () => ({
   EventDetail: ({

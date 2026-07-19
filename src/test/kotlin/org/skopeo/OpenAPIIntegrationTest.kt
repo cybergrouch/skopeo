@@ -60,6 +60,14 @@ class OpenAPIIntegrationTest {
             // The manual signed point adjustment (#469): the adjustments endpoint + its request schema.
             body shouldContain "/api/v1/users/{userId}/ranking-points/adjustments"
             body shouldContain "AdjustRankingPointsRequest"
+            // Placeholder ("dummy") player accounts + claim/adopt (#496): the create/list, claim-code
+            // generation, and claim paths plus their request/response schemas are documented.
+            body shouldContain "/api/v1/users/placeholders"
+            body shouldContain "/api/v1/users/{id}/claim-code"
+            body shouldContain "/api/v1/users/claim"
+            body shouldContain "CreatePlaceholderRequest"
+            body shouldContain "ClaimRequest"
+            body shouldContain "ClaimCodeResponse"
             // Profile band+sex rank + points and the owner-or-admin points audit (#448).
             body shouldContain "/api/v1/players/{code}/standing"
             body shouldContain "PlayerStandingResponse"

@@ -19,6 +19,9 @@ data class PublicPlayerResponse(
     // notice and [canonical] links to the true account. Active profiles leave these at the defaults.
     val isDisabled: Boolean = false,
     val canonical: OpponentSummary? = null,
+    // Set for a login-less, not-yet-claimed placeholder ("dummy") player (#496): the public page shows an
+    // "unclaimed" indicator + a "Claim this account" entry point. Real/claimed profiles leave it false.
+    val isPlaceholder: Boolean = false,
 )
 
 @Serializable

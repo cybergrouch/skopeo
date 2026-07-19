@@ -381,6 +381,164 @@ paths:
             A manual (password/email-link) sign-up whose email has no open invite (issue #74).
             OAuth sign-ups are exempt.
 
+  /api/v1/users/placeholders:
+    post:
+      summary: Create a login-less placeholder ("dummy") player (#496)
+      description: |
+        HOST/CLUB_OWNER/ADMINISTRATOR only; no invite gate. Creates a login-less user
+        (firebase_uid = NULL, placeholder = true) with an auto public code, a DISPLAY name, and the
+        PLAYER capability only, so matches can be logged against a person who hasn't signed up yet.
+        `displayName` and `sex` are required; `dateOfBirth` is optional.
+      tags:
+        - Users
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePlaceholderRequest'
+      responses:
+        '201':
+          description: Placeholder created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          description: Missing display name or invalid sex
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid Firebase token
+        '403':
+          description: Caller lacks a match-management capability (HOST/CLUB_OWNER/ADMINISTRATOR)
+    get:
+      summary: List unclaimed placeholder players (#496)
+      description: |
+        HOST/CLUB_OWNER/ADMINISTRATOR only. Returns the active, unclaimed placeholders for the
+        management view (list, generate claim code, deactivate).
+      tags:
+        - Users
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: Unclaimed placeholders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserSummaryResponse'
+        '401':
+          description: Missing or invalid Firebase token
+        '403':
+          description: Caller lacks a match-management capability
+
+  /api/v1/users/{id}/claim-code:
+    post:
+      summary: Generate a secret claim code for a placeholder (#496)
+      description: |
+        ADMINISTRATOR only. The backend generates a cryptographically-random, one-time, expiring
+        (7-day) claim code, stores only its hash, supersedes any prior active code, and returns the
+        plaintext once. The admin hands the code to the verified person out-of-band. Valid only for a
+        placeholder that has not been claimed.
+      tags:
+        - Users
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The placeholder user's id.
+      responses:
+        '201':
+          description: Claim code generated (plaintext returned once)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimCodeResponse'
+        '400':
+          description: The target user is not a placeholder
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid Firebase token
+        '403':
+          description: Caller is not an ADMINISTRATOR
+        '404':
+          description: No such user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: The placeholder has already been claimed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/users/claim:
+    post:
+      summary: Claim (adopt) a placeholder account by code (#496)
+      description: |
+        Any authenticated user. The caller pastes the secret claim code; if it hashes to an active,
+        non-expired record and the caller's account is empty (no rating history and no match
+        participation) and is not itself a placeholder, the placeholder's history is merged into the
+        caller's account, the placeholder is retired via the canonical-link pattern, and the code is
+        consumed. Rejected on a bad/expired/consumed code, a non-empty caller account, or a
+        caller-is-placeholder.
+      tags:
+        - Users
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClaimRequest'
+      responses:
+        '200':
+          description: Placeholder claimed; the caller's (now-merged) profile is returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          description: Missing code or the code has expired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid Firebase token
+        '403':
+          description: Caller is not signed up
+        '404':
+          description: Unknown/invalid claim code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Caller account is non-empty, or already-claimed placeholder
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/v1/users/me:
     get:
       summary: Get the authenticated user's own profile
@@ -4121,6 +4279,9 @@ components:
         isDisabled:
           type: boolean
           description: True when this profile was marked a duplicate and disabled (#124); the card is a "merged" notice.
+        isPlaceholder:
+          type: boolean
+          description: True for a login-less, not-yet-claimed placeholder player (#496); the card shows an "unclaimed" indicator + a "Claim this account" entry point.
         canonical:
           nullable: true
           description: When disabled, the canonical ("true") account to link to.
@@ -4136,6 +4297,55 @@ components:
             photoUrl:
               type: string
               nullable: true
+
+    CreatePlaceholderRequest:
+      type: object
+      description: Body for POST /api/v1/users/placeholders — create a login-less placeholder player (#496).
+      required:
+        - displayName
+        - sex
+      properties:
+        displayName:
+          type: string
+          description: The single name shown for the placeholder (required).
+        sex:
+          type: string
+          enum: [Male, Female]
+          description: Required — drives (band, sex) standings/points.
+        dateOfBirth:
+          type: string
+          format: date
+          nullable: true
+          description: Optional ISO date of birth.
+
+    ClaimRequest:
+      type: object
+      description: Body for POST /api/v1/users/claim — the secret code the caller pastes to adopt a placeholder (#496).
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          description: The secret claim code handed to the person by an administrator.
+
+    ClaimCodeResponse:
+      type: object
+      description: The one-time plaintext claim code returned on generation (#496); never stored or re-derivable.
+      required:
+        - code
+        - expiresAt
+        - placeholderPublicCode
+      properties:
+        code:
+          type: string
+          description: The plaintext claim code — shown once; hand it to the verified person.
+        expiresAt:
+          type: string
+          format: date-time
+          description: When the code expires (7 days from generation).
+        placeholderPublicCode:
+          type: string
+          description: The placeholder's shareable public code, so the UI can show which account the code adopts.
 
     PlayerMatchHistoryEntry:
       type: object

@@ -8,6 +8,7 @@ Docs are grouped by audience, then by topic.
 - [RATING_SMOOTHING.md](product/RATING_SMOOTHING.md) — optional USTA-style smoothing of rating changes.
 - [USTA_FEATURE_COMPARISON.md](product/USTA_FEATURE_COMPARISON.md) — roadmap study comparing Skopeo to USTA NTRP (adopted / in-pipeline / not-planned).
 - [RATING_SIMULATION_STUDIES.md](product/RATING_SIMULATION_STUDIES.md) — matchup-matrix + Monte Carlo findings, K-factor sensitivity (0.16 vs 0.016), and where a configurable K should reside.
+- [PLACEHOLDER_ACCOUNTS.md](product/PLACEHOLDER_ACCOUNTS.md) — login-less "dummy" players + the secret-code claim/adopt (merge-into-empty) flow (#496).
 
 ## `engineering/` — how it's built and run
 

@@ -46,6 +46,12 @@ internal object UsersTable : UUIDTable(name = "users") {
     // When set, this user is a disabled duplicate of the referenced canonical account (#124).
     val canonicalUserId =
         reference(name = "canonical_user_id", foreign = UsersTable, onDelete = ReferenceOption.SET_NULL).nullable()
+
+    // Login-less placeholder ("dummy") player (#496): firebase_uid is NULL, PLAYER-only. claimedAt/By
+    // are set on claim, alongside canonicalUserId + isActive, when the real person adopts it.
+    val placeholder = bool(name = "placeholder").default(defaultValue = false)
+    val claimedAt = datetime(name = "claimed_at").nullable()
+    val claimedBy = reference(name = "claimed_by", foreign = UsersTable, onDelete = ReferenceOption.SET_NULL).nullable()
 }
 
 internal object UserNamesTable : UUIDTable(name = "user_names") {
