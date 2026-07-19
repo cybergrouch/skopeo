@@ -698,6 +698,74 @@ class MatchRepositoryTest {
     }
 
     @Test
+    fun `listByUser excludes a container-deleted event's match, keeps eventless and active-event ones (#497)`() {
+        val u1 = newUser(uid = "cu-1")
+        val u2 = newUser(uid = "cu-2")
+        val deletedEvent = event(creator = u1, endDate = LocalDate.of(2026, 1, 10), members = listOf(u1, u2))
+        val activeEvent = event(creator = u1, endDate = LocalDate.of(2026, 1, 20), members = listOf(u1, u2))
+        val inDeleted = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 8), eventId = deletedEvent)
+        val inActive = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 18), eventId = activeEvent)
+        val standalone = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 15))
+        // Soft-delete the container event (the state both event-delete and club-delete cascades produce).
+        events.setActive(id = deletedEvent, active = false, disabledAt = LocalDateTime.now())
+
+        val history = matches.listByUser(userId = u1).map { it.id }
+
+        history shouldContainExactlyInAnyOrder listOf(inActive, standalone)
+        history shouldNotContain inDeleted
+    }
+
+    @Test
+    fun `winLossByUsers excludes a container-deleted event's decided match (#497)`() {
+        val u1 = newUser(uid = "wl-1")
+        val u2 = newUser(uid = "wl-2")
+        val deletedEvent = event(creator = u1, endDate = LocalDate.of(2026, 1, 10), members = listOf(u1, u2))
+        // Two decided wins for u1 under the event, plus one standalone decided win.
+        completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 8), eventId = deletedEvent)
+        completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 9), eventId = deletedEvent)
+        completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 15))
+        events.setActive(id = deletedEvent, active = false, disabledAt = LocalDateTime.now())
+
+        // Only the standalone win survives once the container event is soft-deleted.
+        matches.winLossByUsers(userIds = listOf(u1, u2)).getValue(key = u1) shouldBe WinLossRecord(wins = 1, losses = 0)
+        matches.winLossByUsers(userIds = listOf(u1, u2)).getValue(key = u2) shouldBe WinLossRecord(wins = 0, losses = 1)
+    }
+
+    @Test
+    fun `listBetweenUsers excludes a container-deleted event meeting, keeps a directly deleted one for traceability (#497)`() {
+        val a = newUser(uid = "h2h-a")
+        val b = newUser(uid = "h2h-b")
+        val deletedEvent = event(creator = a, endDate = LocalDate.of(2026, 1, 10), members = listOf(a, b))
+        val underDeletedEvent = completedMatch(u1 = a, u2 = b, matchDate = LocalDate.of(2026, 1, 8), eventId = deletedEvent)
+        val standalone = completedMatch(u1 = a, u2 = b, matchDate = LocalDate.of(2026, 1, 15))
+        // A directly soft-deleted meeting whose event is still active must keep counting (#325 traceability).
+        val directlyDeleted = completedMatch(u1 = a, u2 = b, matchDate = LocalDate.of(2026, 1, 20))
+        matches.setActive(matchId = directlyDeleted, active = false, disabledAt = LocalDateTime.now())
+        events.setActive(id = deletedEvent, active = false, disabledAt = LocalDateTime.now())
+
+        val meetings = matches.listBetweenUsers(userIdA = a, userIdB = b).map { it.id }
+
+        meetings shouldContainExactlyInAnyOrder listOf(standalone, directlyDeleted)
+        meetings shouldNotContain underDeletedEvent
+    }
+
+    @Test
+    fun `windowedMatchesInWindow excludes a container-deleted event's match from confidence input (#497)`() {
+        val asOf = LocalDateTime.of(2026, 6, 1, 12, 0)
+        val today = asOf.toLocalDate()
+        val player = newUser(uid = "conf-p")
+        val opponent = newUser(uid = "conf-o")
+        val deletedEvent = event(creator = player, endDate = today, members = listOf(player, opponent))
+        completedMatch(u1 = player, u2 = opponent, matchDate = today.minusDays(2), eventId = deletedEvent)
+        completedMatch(u1 = player, u2 = opponent, matchDate = today.minusDays(5))
+        events.setActive(id = deletedEvent, active = false, disabledAt = LocalDateTime.now())
+
+        // Only the standalone in-window match feeds confidence once the container event is deleted.
+        matches.windowedMatchesInWindow(userId = player, asOf = asOf) shouldContainExactlyInAnyOrder
+            listOf(element = WindowMatch(matchDate = today.minusDays(5), weightClass = WeightClass.OPEN_PLAY))
+    }
+
+    @Test
     fun `latestRatedMatchDatesByUsers returns an empty map for no ids (#478)`() {
         matches.latestRatedMatchDatesByUsers(userIds = emptyList()).shouldBeEmpty()
     }

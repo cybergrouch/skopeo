@@ -5,7 +5,9 @@ package org.skopeo.service.club
 
 import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
+import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -20,6 +22,7 @@ import org.skopeo.model.Capability
 import org.skopeo.model.CreateEventCommand
 import org.skopeo.model.CreateFixtureCommand
 import org.skopeo.model.EventType
+import org.skopeo.model.MatchSetResult
 import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
@@ -35,6 +38,7 @@ import org.skopeo.repository.UserRepository
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.util.UUID
 
 class ClubServiceTest {
@@ -224,6 +228,73 @@ class ClubServiceTest {
         // …but stay traceable by public code, flagged not-active (#325).
         events.findByPublicCode(code = event.publicCode)!!.isActive shouldBe false
         matchRepo.findByPublicCode(code = match.publicCode)!!.isActive shouldBe false
+    }
+
+    @Test
+    fun `deleting a club excludes its event's match from player match history via the container join (#497)`() {
+        val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        val club = service.create(token = token(uid = "admin"), name = "Doomed2").shouldBeRight()
+        val event =
+            events.create(
+                command =
+                    CreateEventCommand(
+                        name = "Meet2",
+                        startDate = LocalDate.now(),
+                        endDate = LocalDate.now().plusDays(1),
+                        participantIds = listOf(p1.id, p2.id),
+                        createdBy = admin.id,
+                        clubId = club.id,
+                    ),
+            )
+        val underClub =
+            matchRepo.createFixture(
+                command =
+                    CreateFixtureCommand(
+                        matchFormat = TeamType.SINGLES,
+                        matchType = MatchType.OPEN_PLAY,
+                        matchDate = LocalDate.now(),
+                        team1UserIds = listOf(element = p1.id),
+                        team2UserIds = listOf(element = p2.id),
+                        team1Name = "p1",
+                        team2Name = "p2",
+                        createdBy = admin.id,
+                        eventId = event.id,
+                    ),
+            )
+        matchRepo.addResult(
+            matchId = underClub.id,
+            sets = listOf(element = MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 0, winnerTeamId = underClub.team1.teamId)),
+            winnerTeamId = underClub.team1.teamId,
+            recordedBy = admin.id,
+            completedAt = LocalDateTime.now(),
+        )
+        // A standalone (clubless) match must still surface after the club delete.
+        val standalone =
+            matchRepo.createFixture(
+                command =
+                    CreateFixtureCommand(
+                        matchFormat = TeamType.SINGLES,
+                        matchType = MatchType.OPEN_PLAY,
+                        matchDate = LocalDate.now(),
+                        team1UserIds = listOf(element = p1.id),
+                        team2UserIds = listOf(element = p2.id),
+                        team1Name = "p1",
+                        team2Name = "p2",
+                        createdBy = admin.id,
+                    ),
+            )
+
+        // Deleting the club cascades is_active=false down through its event onto the match.
+        service.delete(token = token(uid = "admin"), clubId = club.id).shouldBeRight()
+
+        val history = matchRepo.listByUser(userId = p1.id).map { it.id }
+        history shouldContain standalone.id
+        history shouldNotContain underClub.id
+        // Win/loss likewise drops the only decided match (the container-deleted one), leaving p1 with no
+        // decided record at all — absent from the aggregate map.
+        matchRepo.winLossByUsers(userIds = listOf(element = p1.id)).containsKey(key = p1.id) shouldBe false
     }
 
     @Test
