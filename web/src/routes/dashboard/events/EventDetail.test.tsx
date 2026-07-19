@@ -1035,6 +1035,35 @@ describe('EventDetail', () => {
     expect(screen.queryByRole('button', { name: 'Reverse ratings' })).not.toBeInTheDocument()
   })
 
+  it('shows a pending label on the reverse confirm while the mutation runs (#478)', async () => {
+    useGetApiV1EventsId.mockReturnValue({
+      data: { ...event, type: 'LEAGUE', endDate: '2999-01-01', isFinalized: true },
+      isLoading: false,
+    })
+    state.reversePending = true
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.click(screen.getByRole('button', { name: 'Reverse ratings' }))
+    expect(screen.getByRole('button', { name: 'Reversing ratings…' })).toBeDisabled()
+  })
+
+  it('cancels the reverse confirm without calling the mutation (#478)', async () => {
+    useGetApiV1EventsId.mockReturnValue({
+      data: { ...event, type: 'LEAGUE', endDate: '2999-01-01', isFinalized: true },
+      isLoading: false,
+    })
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.click(screen.getByRole('button', { name: 'Reverse ratings' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(
+      screen.queryByRole('button', { name: 'Confirm reverse (rewinds ratings, revokes points)' }),
+    ).not.toBeInTheDocument()
+    expect(reverseMutate).not.toHaveBeenCalled()
+  })
+
   // ---- Points config + fixture designation (#403 Phase C) ----
 
   const tournamentEvent = {
