@@ -150,35 +150,33 @@ class RatingCalculationService(
     internal fun selectPrefix(
         pending: List<Match>,
         eventIds: List<String>?,
-    ): Either<ServiceError, List<Match>> =
-        either {
-            if (eventIds.isNullOrEmpty()) {
-                return@either pending
-            }
-            val selected = eventIds.toSet()
-
-            fun isSelected(match: Match): Boolean = match.eventId?.toString() in selected
-
-            val lastSelectedIndex = pending.indexOfLast { isSelected(match = it) }
-            // Nothing in the pending timeline matches the selection → an empty (no-op) scoped run.
-            if (lastSelectedIndex < 0) {
-                return@either emptyList()
-            }
-            // Every pending match up to (and including) the last selected one must be selected; a gap
-            // means an earlier pending match would be left unrated while a later one is committed.
-            val prefix = pending.take(n = lastSelectedIndex + 1)
-            val excluded = prefix.firstOrNull { !isSelected(match = it) }
-            if (excluded != null) {
-                val label = excluded.eventId?.let { "event $it" } ?: "Open (eventless) match ${excluded.id}"
-                ServiceError.Validation(
-                    message =
-                        "Selection must be a contiguous prefix of the pending timeline: " +
-                            "$label (match ${excluded.id}, dated ${excluded.matchDate}) is older than a " +
-                            "selected event but was not included.",
-                ).left().bind()
-            }
-            prefix
+    ): Either<ServiceError, List<Match>> {
+        if (eventIds.isNullOrEmpty()) {
+            return pending.right()
         }
+        val selected = eventIds.toSet()
+
+        fun isSelected(match: Match): Boolean = match.eventId?.toString() in selected
+
+        // The scoped run is the leading prefix up to the last selected match; nothing selected → empty (no-op).
+        val lastSelectedIndex = pending.indexOfLast { isSelected(match = it) }
+        val prefix = if (lastSelectedIndex < 0) emptyList() else pending.take(n = lastSelectedIndex + 1)
+
+        // Every match in that prefix must be selected; a gap means an earlier pending match would be left
+        // unrated while a later selected one is committed — reject, naming the earliest excluded match.
+        val excluded = prefix.firstOrNull { !isSelected(match = it) }
+        return if (excluded == null) {
+            prefix.right()
+        } else {
+            val label = excluded.eventId?.let { "event $it" } ?: "Open (eventless) match ${excluded.id}"
+            ServiceError.Validation(
+                message =
+                    "Selection must be a contiguous prefix of the pending timeline: " +
+                        "$label (match ${excluded.id}, dated ${excluded.matchDate}) is older than a " +
+                        "selected event but was not included.",
+            ).left()
+        }
+    }
 
     /** Shared summary details for a preview/commit audit entry: match count + distinct players affected. */
     private fun calculationDetails(processed: List<MatchCalculation>): Map<String, String?> =
