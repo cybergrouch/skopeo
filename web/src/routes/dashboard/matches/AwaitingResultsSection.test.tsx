@@ -219,6 +219,17 @@ describe('AwaitingResultsSection', () => {
     expect(screen.queryByText(/to Side 2/)).not.toBeInTheDocument()
   })
 
+  it('shows only Side 2 in the handicap line when just that side is set (#486)', () => {
+    useGetApiV1Matches.mockReturnValue({
+      data: [{ ...match, team2Handicap: '0.5' }],
+      isLoading: false,
+    })
+    renderSection()
+    expect(screen.getByText(/Handicap:/)).toBeInTheDocument()
+    expect(screen.getByText(/0\.5 to Side 2/)).toBeInTheDocument()
+    expect(screen.queryByText(/to Side 1/)).not.toBeInTheDocument()
+  })
+
   it('omits the handicap line when no handicap is set (#486)', () => {
     renderSection()
     expect(screen.queryByText(/Handicap:/)).not.toBeInTheDocument()
