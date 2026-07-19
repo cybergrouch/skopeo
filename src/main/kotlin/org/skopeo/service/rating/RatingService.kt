@@ -116,6 +116,8 @@ class RatingService(
                             // Manual override, not match-driven — no completed_at; sorts last (#301).
                             completedAt = null,
                             calculatedAt = LocalDateTime.now(),
+                            // Admin/self-set override, not a calc batch — no run identity (#481).
+                            ratingRunId = null,
                         ),
                 )
             }

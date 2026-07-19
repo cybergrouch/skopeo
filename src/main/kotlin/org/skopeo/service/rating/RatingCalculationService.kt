@@ -141,6 +141,9 @@ class RatingCalculationService(
         ratedBy: UUID,
     ) {
         val now = LocalDateTime.now()
+        // One identity per calc run, shared by every history row it writes (#481) — mirrors how `now`
+        // is captured once per run. A deterministic key to order/group this batch's rows.
+        val ratingRunId = UUID.randomUUID()
         transaction {
             processed.forEach { calc ->
                 calc.changes.forEach { change ->
@@ -171,6 +174,7 @@ class RatingCalculationService(
                                 breakdown = change.breakdown.toSnapshot(),
                                 completedAt = calc.completedAt,
                                 calculatedAt = now,
+                                ratingRunId = ratingRunId,
                             ),
                     )
                 }

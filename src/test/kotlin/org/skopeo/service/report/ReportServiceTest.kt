@@ -95,6 +95,7 @@ class ReportServiceTest {
                     breakdown = null,
                     completedAt = null,
                     calculatedAt = LocalDateTime.parse(at),
+                    ratingRunId = null,
                 ),
         )
     }
@@ -199,6 +200,7 @@ class ReportServiceTest {
                     breakdown = null,
                     completedAt = null,
                     calculatedAt = LocalDateTime.parse("2026-03-10T10:00"),
+                    ratingRunId = null,
                 ),
         )
 
@@ -231,6 +233,7 @@ class ReportServiceTest {
                     breakdown = null,
                     completedAt = null,
                     calculatedAt = LocalDateTime.parse(at),
+                    ratingRunId = null,
                 ),
         )
     }
