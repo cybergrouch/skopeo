@@ -6,6 +6,7 @@ package org.skopeo.service.rating
 import arrow.core.Either
 import arrow.core.left
 import arrow.core.raise.either
+import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -103,11 +104,17 @@ class RatingCalculationService(
     fun calculate(
         token: VerifiedFirebaseToken,
         dryRun: Boolean,
+        eventIds: List<String>? = null,
     ): Either<ServiceError, CalculationOutcome> =
         either {
             val adminId = requireAdmin(token = token).bind()
             val snapshot = mutableMapOf<UUID, BigDecimal>()
-            val processed = matches.listPendingCalculation().map { processMatch(match = it, snapshot = snapshot).bind() }
+            // The full pending timeline in global processing order (#335). A selection scopes the run to
+            // a leading PREFIX of it (#479) — ratings carry forward in date order, so an earlier pending
+            // match may never be skipped. selectPrefix enforces that and returns the scoped, ordered list.
+            val pending = matches.listPendingCalculation()
+            val scoped = selectPrefix(pending = pending, eventIds = eventIds).bind()
+            val processed = scoped.map { processMatch(match = it, snapshot = snapshot).bind() }
 
             if (!dryRun) {
                 commit(processed = processed, ratedBy = adminId)
@@ -127,6 +134,51 @@ class RatingCalculationService(
                 )
             }
             CalculationOutcome(dryRun = dryRun, matches = processed)
+        }
+
+    /**
+     * Scope the pending timeline to a selection of events (#479), preserving global oldest→newest
+     * consistency. [pending] is the full timeline in processing order.
+     *
+     * - Null/empty [eventIds] → the whole timeline, unchanged (all pending, as before).
+     * - Otherwise, keep the matches whose event is selected. Ratings carry forward in date order, so
+     *   the selection MUST be a contiguous **prefix**: no pending match may be excluded while a LATER
+     *   selected match is included. Concretely, every pending match up to the last selected one must
+     *   also be selected (an eventless "Open" match can never be selected via event ids, so an earlier
+     *   Open match breaks the prefix). A skip is rejected as [ServiceError.Validation], naming the
+     *   earliest excluded match. The same guard runs for preview and commit alike.
+     */
+    internal fun selectPrefix(
+        pending: List<Match>,
+        eventIds: List<String>?,
+    ): Either<ServiceError, List<Match>> =
+        either {
+            if (eventIds.isNullOrEmpty()) {
+                return@either pending
+            }
+            val selected = eventIds.toSet()
+
+            fun isSelected(match: Match): Boolean = match.eventId?.toString() in selected
+
+            val lastSelectedIndex = pending.indexOfLast { isSelected(match = it) }
+            // Nothing in the pending timeline matches the selection → an empty (no-op) scoped run.
+            if (lastSelectedIndex < 0) {
+                return@either emptyList()
+            }
+            // Every pending match up to (and including) the last selected one must be selected; a gap
+            // means an earlier pending match would be left unrated while a later one is committed.
+            val prefix = pending.take(n = lastSelectedIndex + 1)
+            val excluded = prefix.firstOrNull { !isSelected(match = it) }
+            ensure(condition = excluded == null) {
+                val label = excluded!!.eventId?.let { "event $it" } ?: "Open (eventless) match ${excluded.id}"
+                ServiceError.Validation(
+                    message =
+                        "Selection must be a contiguous prefix of the pending timeline: " +
+                            "$label (match ${excluded.id}, dated ${excluded.matchDate}) is older than a " +
+                            "selected event but was not included.",
+                )
+            }
+            prefix
         }
 
     /** Shared summary details for a preview/commit audit entry: match count + distinct players affected. */

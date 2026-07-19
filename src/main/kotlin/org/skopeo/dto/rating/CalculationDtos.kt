@@ -15,10 +15,20 @@ import org.skopeo.service.rating.RatingCalculationService
 /**
  * Body for `POST /api/v1/ratings/calculations`. [dryRun] defaults to true (preview only);
  * set it explicitly to false to commit the rating changes.
+ *
+ * [eventIds] optionally scopes the run to a selection of finalized events (#479). When null or empty,
+ * behaviour is unchanged: every pending match is processed, oldest→newest. When provided, only those
+ * events' pending matches are previewed/committed — but ratings must still carry forward on a
+ * consistent timeline, so the selection MUST form a **contiguous prefix of the pending timeline**: you
+ * may not select an event while an OLDER pending match (an earlier event, or an eventless "Open" match)
+ * is left out. A selection that skips an earlier pending match is rejected with a validation error
+ * naming the earliest excluded match. The same guard applies to both the preview and the commit, so a
+ * preview reflects exactly what a commit would do.
  */
 @Serializable
 data class CalculationRequest(
     val dryRun: Boolean = true,
+    val eventIds: List<String>? = null,
 )
 
 @Serializable
