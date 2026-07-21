@@ -8,6 +8,7 @@ import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContain
+import io.kotest.matchers.comparables.shouldBeEqualComparingTo
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
@@ -157,7 +158,7 @@ class PlaceholderServiceTest {
 
         val current = ratings.findCurrentRating(userId = created.id).shouldNotBeNull()
         // Compare by value (scale-insensitive): the stored rating is padded to the money-style scale.
-        current.currentRating.compareTo(BigDecimal("4.0")) shouldBe 0
+        current.currentRating shouldBeEqualComparingTo BigDecimal("4.0")
         // The rating set is audited (initial set, not an override).
         AuditRepository()
             .list(actions = listOf(element = AuditAction.RATING_SET), limit = 10, offset = 0)
