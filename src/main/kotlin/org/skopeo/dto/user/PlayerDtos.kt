@@ -82,6 +82,9 @@ data class MatchHistoryParticipant(
     val levelAtMatch: String?,
     // This participant's *current* rating confidence (#343), a 0..1 decimal string shown as a percentage.
     val confidence: String? = null,
+    // True for a login-less, not-yet-claimed placeholder ("dummy") player (#496/#505): the history row
+    // renders an "Unclaimed" tag beside the name. Real/claimed players leave it false.
+    val isPlaceholder: Boolean = false,
 )
 
 /** A related player identified the same privacy-conscious way as a public profile (e.g. a merged card's canonical). */

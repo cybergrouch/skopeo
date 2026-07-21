@@ -69,6 +69,7 @@ class SeedingService(
                         rating = rating.currentRating.toPlainString(),
                         sex = user.sex,
                         age = user.dateOfBirth?.let { ageInYears(dateOfBirth = it, asOf = today) },
+                        placeholder = user.placeholder,
                     )
                 }
             seedings.replace(listId = listId, generatedBy = list.ownerId, entries = entries)

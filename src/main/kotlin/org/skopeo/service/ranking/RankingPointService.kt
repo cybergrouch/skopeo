@@ -66,6 +66,9 @@ class RankingPointService(
         val playerPublicCode: String?,
         val matchPublicCode: String?,
         val eventPublicCode: String?,
+        // True for a login-less, not-yet-claimed placeholder ("dummy") player (#496/#505), resolved from
+        // the batched user lookup — the ledger renders an "Unclaimed" tag beside the name.
+        val playerIsPlaceholder: Boolean = false,
     )
 
     /** One page of the whole ledger (#472): the resolved rows plus the full total for the pager. */
@@ -312,6 +315,7 @@ class RankingPointService(
                         playerPublicCode = user?.publicCode,
                         matchPublicCode = award.matchId?.let { matchRefs[it]?.publicCode },
                         eventPublicCode = award.eventId?.let { eventCodes[it] },
+                        playerIsPlaceholder = user?.placeholder ?: false,
                     )
                 }
             AwardsPage(rows = resolved, total = total.toInt(), limit = pageSize, offset = pageOffset)

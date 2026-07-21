@@ -18,6 +18,7 @@ import {
 import type { EventParticipantResponse, MatchPublicResponse } from '@/api/generated/model'
 import { ShareCard } from '@/components/ShareCard'
 import { ContentLink } from '@/components/ContentLink'
+import { PlaceholderTag } from '@/components/PlaceholderTag'
 import { PublicPageNav } from '@/components/PublicPageNav'
 import { useAuth } from '@/auth/useAuth'
 import { playerLabel } from '@/lib/playerLabel'
@@ -84,8 +85,19 @@ function JoinCard({ code, viewerStatus }: { code: string; viewerStatus?: string 
 /** A participant as a link to their public profile, falling back to the code / "Unknown". */
 function ParticipantLink({ p }: { p: EventParticipantResponse }) {
   const label = playerLabel(p.displayName, p.publicCode, p.userId)
-  if (!p.publicCode) return <span>{label}</span>
-  return <ContentLink to={`/players/${p.publicCode}`}>{label}</ContentLink>
+  if (!p.publicCode)
+    return (
+      <span>
+        {label}
+        <PlaceholderTag show={p.isPlaceholder} />
+      </span>
+    )
+  return (
+    <>
+      <ContentLink to={`/players/${p.publicCode}`}>{label}</ContentLink>
+      <PlaceholderTag show={p.isPlaceholder} />
+    </>
+  )
 }
 
 type StatusBadge = { label: string; variant: 'default' | 'secondary' | 'outline' }

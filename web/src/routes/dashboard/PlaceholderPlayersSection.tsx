@@ -19,6 +19,7 @@ import type {
 } from "@/api/generated/model";
 import { isAdministrator, type Capability } from "@/auth/capabilities";
 import { playerLabel } from "@/lib/playerLabel";
+import { PlaceholderTag } from "@/components/PlaceholderTag";
 
 /** "Female · 34" — a placeholder's sex and age, omitting whatever is missing. */
 function placeholderMeta(user: UserSummaryResponse): string {
@@ -114,6 +115,7 @@ function PlaceholderRow({
         <div className="min-w-0">
           <div className="truncate font-medium">
             {playerLabel(user.displayName, user.publicCode, user.id)}
+            <PlaceholderTag show={user.isPlaceholder} />
           </div>
           <div className="text-xs text-muted-foreground">
             {user.publicCode}

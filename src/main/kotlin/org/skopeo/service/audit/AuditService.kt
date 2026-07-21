@@ -103,7 +103,15 @@ class AuditService(
             }
         return users
             .findAllByIds(ids = ids.toList())
-            .associate { it.id to AuditPersonRef(userId = it.id, displayName = it.displayName(), publicCode = it.publicCode) }
+            .associate { user ->
+                user.id to
+                    AuditPersonRef(
+                        userId = user.id,
+                        displayName = user.displayName(),
+                        publicCode = user.publicCode,
+                        placeholder = user.placeholder,
+                    )
+            }
     }
 
     /** Resolve every MATCH-typed target id on the page to its public code + date, in one lookup (#136). */

@@ -192,6 +192,9 @@ data class UserSummaryResponse(
     val capabilities: List<String>,
     // Decided win–loss record (singles + doubles) — populated for research results (#342), else null.
     val record: WinLossDto? = null,
+    // True for a login-less, not-yet-claimed placeholder ("dummy") player (#496/#505): pickers/search
+    // render an "Unclaimed" tag beside the name. Real/claimed players leave it false.
+    val isPlaceholder: Boolean = false,
 )
 
 /** A player's decided win–loss record (#342): singles + doubles combined; [total] = wins + losses. */
@@ -223,6 +226,7 @@ fun User.toSummary(
             },
         capabilities = capabilities.map { it.name }.sorted(),
         record = record?.let { WinLossDto(wins = it.wins, losses = it.losses, total = it.total) },
+        isPlaceholder = placeholder,
     )
 
 /** A page of search results plus the total match count, for numbered pagination (#232). */

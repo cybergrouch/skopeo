@@ -30,7 +30,7 @@ const base: PlayerMatchHistoryEntry = {
 describe('MatchHistoryRow', () => {
   it('renders a rated match with opponent photo, result, scores and at-the-time bands', () => {
     const { container } = renderRow(base)
-    expect(screen.getByText('vs Ben')).toBeInTheDocument()
+    expect(container.textContent).toContain('vs Ben')
     expect(screen.getByText('Rated')).toBeInTheDocument()
     expect(screen.getByText(/2026-01-01 · WIN · 6-4 6-3/)).toBeInTheDocument()
     expect(screen.getByText(/NTRP 4.0 vs 3.5 \(at the time\)/)).toBeInTheDocument()
@@ -68,25 +68,32 @@ describe('MatchHistoryRow', () => {
   })
 
   it('labels a completed-but-unrated match as awaiting rating, with a placeholder opponent', () => {
-    renderRow({ ...base, rated: false, result: 'LOSS', setScores: ['4-6'], opponents: [], playerLevelAtMatch: null })
+    const { container } = renderRow({
+      ...base,
+      rated: false,
+      result: 'LOSS',
+      setScores: ['4-6'],
+      opponents: [],
+      playerLevelAtMatch: null,
+    })
     expect(screen.getByText('Awaiting rating')).toBeInTheDocument()
-    expect(screen.getByText('vs Player')).toBeInTheDocument()
+    expect(container.textContent).toContain('vs Player')
     expect(screen.getByText(/2026-01-01 · LOSS · 4-6/)).toBeInTheDocument()
   })
 
   it('renders a dash for a missing band and "Player" for a nameless opponent', () => {
-    renderRow({
+    const { container } = renderRow({
       ...base,
       setScores: ['6-0', '6-0'],
       opponents: [{ publicCode: 'BEN123', displayName: null, photoUrl: null, levelAtMatch: null }],
       playerLevelAtMatch: null,
     })
     expect(screen.getByText(/NTRP — vs — \(at the time\)/)).toBeInTheDocument()
-    expect(screen.getByText('vs Player')).toBeInTheDocument()
+    expect(container.textContent).toContain('vs Player')
   })
 
   it('renders a doubles match with the partner and both opponents and their bands', () => {
-    renderRow({
+    const { container } = renderRow({
       ...base,
       setScores: ['6-3'],
       partners: [{ publicCode: 'BEA123', displayName: 'Bea', photoUrl: null, levelAtMatch: '3.5' }],
@@ -95,7 +102,19 @@ describe('MatchHistoryRow', () => {
         { publicCode: 'DEB123', displayName: 'Deb', photoUrl: null, levelAtMatch: '3.5' },
       ],
     })
-    expect(screen.getByText('with Bea · vs Cy, Deb')).toBeInTheDocument()
+    expect(container.textContent).toContain('with Bea · vs Cy, Deb')
     expect(screen.getByText(/NTRP 4.0 vs 3.0, 3.5 \(at the time\)/)).toBeInTheDocument()
+  })
+
+  it('tags a placeholder opponent as Unclaimed and leaves a normal one untagged (#505)', () => {
+    renderRow({
+      ...base,
+      opponents: [
+        { publicCode: 'DUMMY1', displayName: 'Dummy', photoUrl: null, levelAtMatch: '3.5', isPlaceholder: true },
+        { publicCode: 'REAL01', displayName: 'Real', photoUrl: null, levelAtMatch: '3.5', isPlaceholder: false },
+      ],
+    })
+    // Exactly one "Unclaimed" tag — beside the placeholder opponent only, not the normal one.
+    expect(screen.getAllByText('Unclaimed')).toHaveLength(1)
   })
 })

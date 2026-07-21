@@ -125,6 +125,9 @@ data class AwardedPointRow(
     val validFrom: String,
     val validUntil: String,
     val status: String,
+    // True for a login-less, not-yet-claimed placeholder ("dummy") player (#496/#505): the points ledger
+    // renders an "Unclaimed" tag beside the name. Real/claimed players leave it false.
+    val isPlaceholder: Boolean = false,
 )
 
 /** A page of the ledger (#472) mirroring the standings page shape: rows + total + window. */
@@ -164,6 +167,7 @@ private fun RankingPointService.ResolvedAward.toRow(): AwardedPointRow =
         validFrom = award.validFrom.toString(),
         validUntil = award.validUntil.toString(),
         status = award.status.name,
+        isPlaceholder = playerIsPlaceholder,
     )
 
 /** The display source: the granting match code, else the event code, else "manual"/"EXTERNAL". */

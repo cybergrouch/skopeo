@@ -50,8 +50,8 @@ describe('PlayerMatchesPage', () => {
 
   it('renders a page of matches with the pager and requests the first page', () => {
     renderPage()
-    expect(screen.getByText('vs Ben')).toBeInTheDocument()
-    expect(screen.getByText('vs Cara')).toBeInTheDocument()
+    expect(screen.getByText('Ben')).toBeInTheDocument()
+    expect(screen.getByText('Cara')).toBeInTheDocument()
     expect(screen.getByText('Showing 1–20 of 45')).toBeInTheDocument()
     expect(useGetApiV1PlayersCodeMatchHistory).toHaveBeenLastCalledWith(
       'K7Q2MX',

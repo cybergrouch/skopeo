@@ -102,6 +102,7 @@ class ReportService(
                                             displayName = user.displayName(),
                                             fromBand = hop.fromBand,
                                             toBand = hop.toBand,
+                                            isPlaceholder = user.placeholder,
                                         )
                                     }.sortedBy { it.publicCode },
                         )

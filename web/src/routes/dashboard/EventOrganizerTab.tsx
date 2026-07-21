@@ -27,6 +27,7 @@ import { Capability, hasCapability } from "@/auth/capabilities";
 import { PlayerPicker } from "@/components/PlayerPicker";
 import { plural } from "@/lib/plural";
 import { playerLabel } from "@/lib/playerLabel";
+import { PlaceholderTag } from "@/components/PlaceholderTag";
 import { EventDetail } from "./events/EventDetail";
 import { PlaceholderPlayersSection } from "./PlaceholderPlayersSection";
 
@@ -382,7 +383,8 @@ function NewEventForm() {
                         setRoster((r) => r.filter((x) => x.id !== u.id))
                       }
                     >
-                      {playerLabel(u.displayName, u.publicCode, u.id)} ✕
+                      {playerLabel(u.displayName, u.publicCode, u.id)}
+                      <PlaceholderTag show={u.isPlaceholder} /> ✕
                     </Button>
                   </li>
                 ))}

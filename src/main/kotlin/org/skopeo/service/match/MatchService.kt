@@ -483,7 +483,7 @@ class MatchService(
             val usersById = users.findAllByIds(ids = ids).associateBy { it.id }
             val players =
                 usersById.mapValues { (_, user) ->
-                    MatchPublicPlayer(displayName = user.displayName(), publicCode = user.publicCode)
+                    MatchPublicPlayer(displayName = user.displayName(), publicCode = user.publicCode, isPlaceholder = user.placeholder)
                 }
             // Once rated, surface the per-player rating change (#136): bands for everyone, precise
             // rates only for RATER/ADMINISTRATOR viewers.
@@ -531,7 +531,7 @@ class MatchService(
                 opponents =
                     opponentIds.map { id ->
                         val user = playersById.getValue(key = id)
-                        MatchPublicPlayer(displayName = user.displayName(), publicCode = user.publicCode)
+                        MatchPublicPlayer(displayName = user.displayName(), publicCode = user.publicCode, isPlaceholder = user.placeholder)
                     },
             )
         }
@@ -607,6 +607,7 @@ class MatchService(
         val revealRates = callerCanSeeRates(token = token)
         val names = usersById.mapValues { (_, user) -> user.displayName() }
         val codes = usersById.mapValues { (_, user) -> user.publicCode }
+        val placeholderByUser = usersById.mapValues { (_, user) -> user.placeholder }
         val order = match.team1.userIds + match.team2.userIds
         // Each player's *current* rating confidence (#343), shown beside the historical band change.
         val confidenceByUser =
@@ -624,6 +625,7 @@ class MatchService(
                     newRating = if (revealRates) history.newRating.toPlainString() else null,
                     ratingChange = if (revealRates) history.ratingChange.toPlainString() else null,
                     confidence = confidenceByUser[history.userId],
+                    isPlaceholder = placeholderByUser[history.userId] ?: false,
                 )
             }
     }

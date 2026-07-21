@@ -45,4 +45,8 @@ data class SeedingEntry(
     val rating: String,
     val sex: String?,
     val age: Int?,
+    // True for a login-less, not-yet-claimed placeholder ("dummy") player (#496/#505): the seeding view
+    // renders an "Unclaimed" tag beside the name. Resolved from the live user at read time (the snapshot
+    // table doesn't persist it). Real/claimed players leave it false.
+    val placeholder: Boolean = false,
 )

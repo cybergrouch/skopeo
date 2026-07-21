@@ -29,6 +29,7 @@ import type {
 } from "@/api/generated/model";
 import { NumberedPager } from "@/components/NumberedPager";
 import { ContentLink } from "@/components/ContentLink";
+import { PlaceholderTag } from "@/components/PlaceholderTag";
 import { formatPoints } from "@/lib/points";
 import type { Capability } from "@/auth/capabilities";
 import { canManagePointsBudget } from "@/auth/capabilities";
@@ -133,6 +134,7 @@ function AwardedPointsRow({ row }: { row: AwardedPointRow }) {
         ) : (
           player
         )}
+        <PlaceholderTag show={row.isPlaceholder} />
       </td>
       <td className="py-1 pr-2 tabular-nums">{formatPoints(row.points) ?? row.points}</td>
       <td className="py-1 pr-2">

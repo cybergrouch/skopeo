@@ -23,6 +23,9 @@ data class AuditPersonResponse(
     val userId: String,
     val displayName: String? = null,
     val publicCode: String? = null,
+    // True for a login-less, not-yet-claimed placeholder ("dummy") player (#496/#505): the activity log
+    // renders an "Unclaimed" tag beside the name. Real/claimed users leave it false.
+    val isPlaceholder: Boolean = false,
 )
 
 /** A match-typed target resolved to its public code + date, so the row links to the public match page (#136). */
@@ -75,7 +78,7 @@ private fun AuditEntryView.toResponse(): AuditEntryResponse =
     )
 
 private fun AuditPersonRef.toResponse(): AuditPersonResponse =
-    AuditPersonResponse(userId = userId.toString(), displayName = displayName, publicCode = publicCode)
+    AuditPersonResponse(userId = userId.toString(), displayName = displayName, publicCode = publicCode, isPlaceholder = placeholder)
 
 private fun AuditMatchRef.toResponse(): AuditMatchResponse =
     AuditMatchResponse(matchId = matchId.toString(), publicCode = publicCode, matchDate = matchDate.toString())

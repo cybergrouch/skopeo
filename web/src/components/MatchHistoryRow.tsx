@@ -1,5 +1,6 @@
 import type { PlayerMatchHistoryEntry } from '@/api/generated/model'
 import { PublicPageLink } from '@/components/PublicPageLink'
+import { PlaceholderTag } from '@/components/PlaceholderTag'
 import { Badge } from '@/components/ui/badge'
 import { formatConfidence } from '@/lib/confidence'
 
@@ -17,9 +18,23 @@ function statusLabel(match: PlayerMatchHistoryEntry): string {
   return 'Awaiting rating'
 }
 
-/** Comma-separated display names for a side (partners or opponents); "Player" for anyone unnamed. */
-function names(side: PlayerMatchHistoryEntry['opponents']): string {
-  return side.map((p) => p.displayName ?? 'Player').join(', ')
+/**
+ * Comma-separated display names for a side (partners or opponents); "Player" for anyone unnamed. Each
+ * placeholder participant (#505) gets an "Unclaimed" tag beside their name, driven off isPlaceholder.
+ */
+function NameList({ side }: { side: PlayerMatchHistoryEntry['opponents'] }) {
+  if (side.length === 0) return <>Player</>
+  return (
+    <>
+      {side.map((p, i) => (
+        <span key={p.publicCode ?? i}>
+          {p.displayName ?? 'Player'}
+          <PlaceholderTag show={p.isPlaceholder} />
+          {i < side.length - 1 ? ', ' : ''}
+        </span>
+      ))}
+    </>
+  )
 }
 
 /**
@@ -58,8 +73,12 @@ export function MatchHistoryRow({ match }: { match: PlayerMatchHistoryEntry }) {
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
             <span className="font-medium">
-              {match.partners.length > 0 ? `with ${names(match.partners)} · ` : ''}
-              vs {names(match.opponents) || 'Player'}
+              {match.partners.length > 0 ? (
+                <>
+                  with <NameList side={match.partners} /> ·{' '}
+                </>
+              ) : null}
+              vs <NameList side={match.opponents} />
             </span>
             <Badge variant="secondary">{statusLabel(match)}</Badge>
           </div>

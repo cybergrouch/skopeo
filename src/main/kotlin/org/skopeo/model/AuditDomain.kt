@@ -206,6 +206,9 @@ data class AuditPersonRef(
     val userId: UUID,
     val displayName: String?,
     val publicCode: String?,
+    // True for a login-less, not-yet-claimed placeholder ("dummy") player (#496/#505): the activity log
+    // renders an "Unclaimed" tag beside the name. Real/claimed users leave it false.
+    val placeholder: Boolean = false,
 )
 
 /** A match id resolved to its public code + date, so a match-targeted entry can link to its page (#136). */
