@@ -92,6 +92,9 @@ data class EventParticipantResponse(
     // The participant's standing (#201): "APPROVED" | "PENDING" | "HOLD". Null on the public roster
     // (which lists approved members only).
     val status: String? = null,
+    // True for a login-less, not-yet-claimed placeholder ("dummy") player (#496/#505): the roster
+    // renders an "Unclaimed" tag beside the name. Real/claimed participants leave it false.
+    val isPlaceholder: Boolean = false,
 )
 
 /**
@@ -198,6 +201,7 @@ internal fun EventParticipantRef.toResponse(): EventParticipantResponse =
                 )
             },
         status = status.name,
+        isPlaceholder = placeholder,
     )
 
 /**

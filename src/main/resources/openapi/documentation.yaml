@@ -4440,6 +4440,9 @@ components:
           type: string
           nullable: true
           description: This participant's current rating confidence 0..1 (#343), shown as a %; 0 when not match-derived.
+        isPlaceholder:
+          type: boolean
+          description: True for a login-less, not-yet-claimed placeholder player (#496/#505); the history row shows an "Unclaimed" tag beside the name.
 
     PlayerResultsSummary:
       type: object
@@ -4627,6 +4630,9 @@ components:
             total:
               type: integer
               description: Total decided matches (wins + losses).
+        isPlaceholder:
+          type: boolean
+          description: True for a login-less, not-yet-claimed placeholder player (#496/#505); pickers/search show an "Unclaimed" tag beside the name.
 
     UserResponse:
       type: object
@@ -5539,6 +5545,9 @@ components:
           nullable: true
           enum: [APPROVED, PENDING, HOLD]
           description: Participant standing (#201); null on the public roster (approved only).
+        isPlaceholder:
+          type: boolean
+          description: True for a login-less, not-yet-claimed placeholder player (#496/#505); the roster shows an "Unclaimed" tag beside the name.
 
     MyEventResponse:
       type: object
@@ -5709,6 +5718,9 @@ components:
         publicCode:
           type: string
           nullable: true
+        isPlaceholder:
+          type: boolean
+          description: True for a login-less, not-yet-claimed placeholder player (#496/#505); the roster shows an "Unclaimed" tag beside the name.
 
     UpcomingMatchResponse:
       type: object
@@ -5941,6 +5953,9 @@ components:
           type: string
           nullable: true
           description: The player's current rating confidence 0..1 (#343), shown as a %; 0 when not match-derived.
+        isPlaceholder:
+          type: boolean
+          description: True for a login-less, not-yet-claimed placeholder player (#496/#505); the row shows an "Unclaimed" tag beside the name.
 
     CalculationRequest:
       type: object
@@ -6619,6 +6634,9 @@ components:
         publicCode:
           type: string
           nullable: true
+        isPlaceholder:
+          type: boolean
+          description: True for a login-less, not-yet-claimed placeholder player (#496/#505); the activity log shows an "Unclaimed" tag beside the name.
 
     AuditMatchResponse:
       type: object
@@ -6718,6 +6736,9 @@ components:
         toBand:
           type: string
           description: NTRP band at the window close (label only).
+        isPlaceholder:
+          type: boolean
+          description: True for a login-less, not-yet-claimed placeholder player (#496/#505); the report shows an "Unclaimed" tag beside the name.
 
     BandHopBucket:
       type: object
@@ -6849,6 +6870,9 @@ components:
         age:
           type: integer
           nullable: true
+        isPlaceholder:
+          type: boolean
+          description: True for a login-less, not-yet-claimed placeholder player (#496/#505); the seeding view shows an "Unclaimed" tag beside the name.
 
     SeedingResponse:
       type: object
@@ -6897,6 +6921,9 @@ components:
           description: >-
             The row's points total (snapshot ordering value); the POINTS-source metric, present
             (public, #64/#114/#457) for every viewer when source=POINTS, null under RATING.
+        isPlaceholder:
+          type: boolean
+          description: True for a login-less, not-yet-claimed placeholder player (#496/#505); the leaderboard shows an "Unclaimed" tag beside the name.
 
     StandingsGroupResponse:
       type: object
@@ -7302,6 +7329,9 @@ components:
           enum:
             - ACTIVE
             - REVOKED
+        isPlaceholder:
+          type: boolean
+          description: True for a login-less, not-yet-claimed placeholder player (#496/#505); the ledger shows an "Unclaimed" tag beside the name.
 
     AwardedPointsPageResponse:
       type: object

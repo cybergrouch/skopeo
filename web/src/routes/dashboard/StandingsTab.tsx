@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { formatPoints } from '@/lib/points'
 import { ContentLink } from '@/components/ContentLink'
+import { PlaceholderTag } from '@/components/PlaceholderTag'
 import { NumberedPager } from '@/components/NumberedPager'
 import {
   useGetApiV1Standings,
@@ -241,6 +242,7 @@ export function StandingsTab() {
                           <ContentLink to={`/players/${entry.publicCode}`}>
                             {entry.displayName ?? entry.publicCode}
                           </ContentLink>
+                          <PlaceholderTag show={entry.isPlaceholder} />
                           {isMe ? (
                             <span className="ml-2 text-xs font-normal text-muted-foreground">
                               You

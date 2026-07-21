@@ -59,8 +59,8 @@ describe('MatchHistoryCard', () => {
       isLoading: false,
     })
     renderCard()
-    expect(screen.getByText('vs Ben')).toBeInTheDocument()
-    expect(screen.getByText('vs Cara')).toBeInTheDocument()
+    expect(screen.getByText('Ben')).toBeInTheDocument()
+    expect(screen.getByText('Cara')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'View all 12 matches' })).toHaveAttribute('href', '/players/K7Q2MX/matches')
   })
 
@@ -70,7 +70,7 @@ describe('MatchHistoryCard', () => {
       isLoading: false,
     })
     renderCard()
-    expect(screen.getByText('vs Ben')).toBeInTheDocument()
+    expect(screen.getByText('Ben')).toBeInTheDocument()
     expect(screen.queryByText(/View all/)).not.toBeInTheDocument()
   })
 })

@@ -112,6 +112,9 @@ data class EventParticipantRef(
     val rating: UserRating? = null,
     // The participant's standing (#201): APPROVED roster member, PENDING request, or HOLD (soft deny).
     val status: EventParticipantStatus = EventParticipantStatus.APPROVED,
+    // True for a login-less, not-yet-claimed placeholder ("dummy") player (#496/#505): the roster
+    // renders an "Unclaimed" tag beside the name. Real/claimed participants leave it false.
+    val placeholder: Boolean = false,
 )
 
 /**

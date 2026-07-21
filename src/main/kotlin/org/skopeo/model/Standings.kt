@@ -72,6 +72,9 @@ data class StandingEntry(
     val age: Int?,
     val currentRating: String? = null,
     val points: String? = null,
+    // True for a login-less, not-yet-claimed placeholder ("dummy") player (#496/#505): the leaderboard
+    // renders an "Unclaimed" tag beside the name. Real/claimed players leave it false.
+    val placeholder: Boolean = false,
 )
 
 /**

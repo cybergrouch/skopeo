@@ -12,6 +12,7 @@ import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.insertAndGetId
+import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.skopeo.model.Seeding
@@ -61,26 +62,45 @@ class SeedingRepository {
                 ServiceError.NotFound(message = "No seeding for list $listId").left()
             } else {
                 val id = row[SeedingsTable.id].value
-                val entries =
+                val rows =
                     SeedingEntriesTable
                         .selectAll()
                         .where { SeedingEntriesTable.seedingId eq id }
                         .orderBy(SeedingEntriesTable.position to SortOrder.ASC)
-                        .map { it.toSeedingEntry() }
+                        .toList()
+                // The snapshot table doesn't persist the placeholder flag (#496/#505); resolve it from the
+                // live user rows in ONE batched query keyed by user id (never per-row). A claimed placeholder
+                // is re-pointed to the claimant (#496), so a stored user id always resolves to a current user.
+                val placeholderById = placeholderByUserId(userIds = rows.mapNotNull { it[SeedingEntriesTable.userId]?.value })
+                val entries = rows.map { it.toSeedingEntry(placeholderById = placeholderById) }
                 Seeding(id = id, listId = listId, generatedAt = row[SeedingsTable.generatedAt], entries = entries).right()
             }
         }
 
-    private fun ResultRow.toSeedingEntry(): SeedingEntry =
-        SeedingEntry(
+    /** Batched user id → placeholder flag lookup (#496/#505) for a page of seeding rows; empty ids → empty map. */
+    private fun placeholderByUserId(userIds: List<UUID>): Map<UUID, Boolean> =
+        if (userIds.isEmpty()) {
+            emptyMap()
+        } else {
+            UsersTable
+                .select(columns = listOf(UsersTable.id, UsersTable.placeholder))
+                .where { UsersTable.id inList userIds.distinct() }
+                .associate { it[UsersTable.id].value to it[UsersTable.placeholder] }
+        }
+
+    private fun ResultRow.toSeedingEntry(placeholderById: Map<UUID, Boolean>): SeedingEntry {
+        val userId = this[SeedingEntriesTable.userId]?.value
+        return SeedingEntry(
             seed = this[SeedingEntriesTable.seed],
             position = this[SeedingEntriesTable.position],
-            userId = this[SeedingEntriesTable.userId]?.value,
+            userId = userId,
             displayName = this[SeedingEntriesTable.displayName],
             publicCode = this[SeedingEntriesTable.publicCode],
             ntrpBand = this[SeedingEntriesTable.ntrpBand],
             rating = this[SeedingEntriesTable.rating],
             sex = this[SeedingEntriesTable.sex],
             age = this[SeedingEntriesTable.age],
+            placeholder = userId?.let { placeholderById[it] } ?: false,
         )
+    }
 }

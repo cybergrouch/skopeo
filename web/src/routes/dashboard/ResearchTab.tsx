@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { PlaceholderTag } from '@/components/PlaceholderTag'
 import {
   Card,
   CardContent,
@@ -106,7 +107,8 @@ export function ResearchTab() {
                         )}
                         <div className="min-w-0 flex-1">
                           <div className="font-medium">
-                            {user.displayName ?? user.id}{' '}
+                            {user.displayName ?? user.id}
+                            <PlaceholderTag show={user.isPlaceholder} />{' '}
                             <span className="font-normal text-muted-foreground">
                               · {user.publicCode}
                             </span>

@@ -27,6 +27,7 @@ import org.skopeo.model.AwardStatus
 import org.skopeo.model.Capability
 import org.skopeo.model.CreateClubCommand
 import org.skopeo.model.CreateFixtureCommand
+import org.skopeo.model.CreatePlaceholderCommand
 import org.skopeo.model.EventParticipantStatus
 import org.skopeo.model.EventType
 import org.skopeo.model.Match
@@ -87,6 +88,10 @@ class EventServiceTest {
                     capabilities = roles,
                 ),
         )
+
+    // A login-less placeholder ("dummy") player (#496/#505) — a real users row with placeholder = true.
+    private fun placeholder(displayName: String): User =
+        users.createPlaceholder(command = CreatePlaceholderCommand(displayName = displayName, sex = "Male"))
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
@@ -151,6 +156,22 @@ class EventServiceTest {
         // Participant order isn't guaranteed, so look p1 up by id rather than assuming it's first.
         view.participants.single { it.userId == p1.id }.displayName shouldBe "p1"
         view.club.shouldBeNull() // clubless by default
+    }
+
+    @Test
+    fun `event participants carry the placeholder flag, true for a dummy and false for a real player (#505)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val real = provision(uid = "real")
+        val dummy = placeholder(displayName = "Dummy")
+
+        val view =
+            service.create(token = token(uid = "host"), input = input(participants = listOf(real.id, dummy.id))).shouldBeRight()
+
+        view.participants.single { it.userId == dummy.id }.placeholder.shouldBeTrue()
+        view.participants.single { it.userId == real.id }.placeholder.shouldBeFalse()
+        // The DTO mapper carries the flag through verbatim (#505).
+        view.toResponse().participants.single { it.userId == dummy.id.toString() }.isPlaceholder.shouldBeTrue()
+        view.toResponse().participants.single { it.userId == real.id.toString() }.isPlaceholder.shouldBeFalse()
     }
 
     @Test

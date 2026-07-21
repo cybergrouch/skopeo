@@ -17,6 +17,9 @@ data class BandHopUserRow(
     val displayName: String?,
     val fromBand: String,
     val toBand: String,
+    // True for a login-less, not-yet-claimed placeholder ("dummy") player (#496/#505): the report
+    // renders an "Unclaimed" tag beside the name. Real/claimed players leave it false.
+    val isPlaceholder: Boolean = false,
 )
 
 /** All players who moved a given [hopDistance] over the window, with the count for a quick summary. */

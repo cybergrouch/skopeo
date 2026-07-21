@@ -151,6 +151,7 @@ class StandingsService(
                             // Revealed only to privileged viewers (#186); read straight from the live rating,
                             // so there is no map miss and no dead null-rating branch.
                             currentRating = if (request.revealRates) player.rating.currentRating.toPlainString() else null,
+                            placeholder = player.user.placeholder,
                         )
                     }
             StandingsView(
@@ -244,6 +245,7 @@ class StandingsService(
                     // The POINTS metric shown is the snapshot's ordering value (points), public per #64/#114
                     // (#457). The rating is NOT the served metric here, so it stays null — never leaked.
                     points = entry.orderingValue.toPlainString(),
+                    placeholder = user.placeholder,
                 )
             }
         return StandingsView(

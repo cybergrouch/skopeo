@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { ContentLink } from '@/components/ContentLink'
+import { PlaceholderTag } from '@/components/PlaceholderTag'
 import {
   Card,
   CardContent,
@@ -51,9 +52,18 @@ function person(p: AuditPersonResponse | null | undefined): string {
 /** A user cell — links to the public profile when a public code is known (#136). */
 function PersonCell({ p }: { p: AuditPersonResponse | null | undefined }) {
   if (!p) return <>System</>
-  if (!p.publicCode) return <>{person(p)}</>
+  if (!p.publicCode)
+    return (
+      <>
+        {person(p)}
+        <PlaceholderTag show={p.isPlaceholder} />
+      </>
+    )
   return (
-    <ContentLink to={`/players/${p.publicCode}`}>{person(p)}</ContentLink>
+    <>
+      <ContentLink to={`/players/${p.publicCode}`}>{person(p)}</ContentLink>
+      <PlaceholderTag show={p.isPlaceholder} />
+    </>
   )
 }
 

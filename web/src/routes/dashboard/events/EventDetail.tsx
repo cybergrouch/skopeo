@@ -40,6 +40,7 @@ import { canEditEndedEvents, isAdministrator } from "@/auth/capabilities";
 import { PlayerPicker } from "@/components/PlayerPicker";
 import { HandicapField } from "@/components/HandicapField";
 import { playerLabel } from "@/lib/playerLabel";
+import { PlaceholderTag } from "@/components/PlaceholderTag";
 import { formatConfidence } from "@/lib/confidence";
 import type { EventParticipantResponse } from "@/api/generated/model";
 import { ShareCard } from "@/components/ShareCard";
@@ -585,6 +586,7 @@ export function EventDetail({
             .map((p) => (
               <option key={p.userId} value={p.userId}>
                 {playerLabel(p.displayName, p.publicCode, p.userId)}
+                {p.isPlaceholder ? " (Unclaimed)" : ""}
               </option>
             ))}
         </select>
@@ -737,6 +739,7 @@ export function EventDetail({
                         <span className="min-w-0">
                           <span className="block">
                             {playerLabel(p.displayName, p.publicCode, p.userId)}
+                            <PlaceholderTag show={p.isPlaceholder} />
                             {p.publicCode ? (
                               <span className="text-muted-foreground">
                                 {" "}
@@ -974,6 +977,7 @@ export function EventDetail({
                         <span className="min-w-0">
                           <span className="block">
                             {playerLabel(p.displayName, p.publicCode, p.userId)}
+                            <PlaceholderTag show={p.isPlaceholder} />
                             {p.status === "HOLD" ? (
                               <span className="text-muted-foreground">
                                 {" "}

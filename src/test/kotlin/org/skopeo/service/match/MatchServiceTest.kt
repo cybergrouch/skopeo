@@ -5,6 +5,8 @@ package org.skopeo.service.match
 
 import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
+import io.kotest.matchers.booleans.shouldBeFalse
+import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.collections.shouldNotContain
@@ -24,6 +26,7 @@ import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.CreateClubCommand
 import org.skopeo.model.CreateEventCommand
+import org.skopeo.model.CreatePlaceholderCommand
 import org.skopeo.model.Event
 import org.skopeo.model.EventType
 import org.skopeo.model.Match
@@ -97,6 +100,10 @@ class MatchServiceTest {
         }
         return user
     }
+
+    // A login-less placeholder ("dummy") player (#496/#505) — a real users row with placeholder = true.
+    private fun placeholderUser(displayName: String): User =
+        users.createPlaceholder(command = CreatePlaceholderCommand(displayName = displayName, sex = "Male"))
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
@@ -628,6 +635,21 @@ class MatchServiceTest {
             .publicByCode(token = token(uid = "host"), code = "ZZZZZZ")
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
+    fun `publicByCode marks a placeholder participant with isPlaceholder, real players stay false (#505)`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val real = provisionUser(uid = "real", rated = true)
+        val dummy = placeholderUser(displayName = "Dummy")
+        // A fixture requires both players to be rated; rate the placeholder so the fixture is accepted.
+        ratings.setRating(userId = dummy.id, rating = BigDecimal("4.0"), level = "4.0")
+        val match =
+            service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = real.id, p2 = dummy.id)).shouldBeRight()
+
+        val public = service.publicByCode(token = token(uid = "host"), code = match.publicCode).shouldBeRight()
+        public.team1.single().isPlaceholder.shouldBeFalse() // real player
+        public.team2.single().isPlaceholder.shouldBeTrue() // placeholder / dummy
     }
 
     @Test

@@ -3,6 +3,8 @@
 
 package org.skopeo.service.standings
 
+import io.kotest.matchers.booleans.shouldBeFalse
+import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
@@ -13,6 +15,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
+import org.skopeo.model.CreatePlaceholderCommand
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.SnapshotSource
@@ -120,6 +123,12 @@ class StandingsServiceTest {
         ratings.setRating(userId = user.id, rating = BigDecimal(value), level = level)
     }
 
+    // A login-less placeholder ("dummy") player (#496/#505) — a real users row with placeholder = true.
+    private fun placeholder(
+        displayName: String,
+        sex: String = "Male",
+    ): User = users.createPlaceholder(command = CreatePlaceholderCommand(displayName = displayName, sex = sex))
+
     private fun page(
         band: StandingsBand?,
         sex: String?,
@@ -168,6 +177,16 @@ class StandingsServiceTest {
         // The selectors list both the Men and Women groups of the 4.0 band.
         men.groups.map { it.band to it.sex } shouldContainExactly
             listOf(StandingsBand.FROM_4_0 to "Male", StandingsBand.FROM_4_0 to "Female")
+    }
+
+    @Test
+    fun `standings entries carry the placeholder flag, true for a dummy and false for a real player (#505)`() {
+        val real = provision(uid = "real", sex = "Male").also { rate(user = it, value = "4.3") }
+        val dummy = placeholder(displayName = "Dummy").also { rate(user = it, value = "4.1") }
+
+        val men = page(band = StandingsBand.FROM_4_0, sex = "Male")
+        men.entries.single { it.userId == dummy.id }.placeholder.shouldBeTrue()
+        men.entries.single { it.userId == real.id }.placeholder.shouldBeFalse()
     }
 
     @Test

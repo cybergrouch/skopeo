@@ -716,6 +716,7 @@ class EventService(
                         userId = id.toString(),
                         displayName = user.displayName(),
                         publicCode = user.publicCode,
+                        isPlaceholder = user.placeholder,
                     )
                 }
             val matchResponses =
@@ -723,7 +724,11 @@ class EventService(
                     val players =
                         (match.team1.userIds + match.team2.userIds).associateWith { id ->
                             val user = byId.getValue(key = id)
-                            MatchPublicPlayer(displayName = user.displayName(), publicCode = user.publicCode)
+                            MatchPublicPlayer(
+                                displayName = user.displayName(),
+                                publicCode = user.publicCode,
+                                isPlaceholder = user.placeholder,
+                            )
                         }
                     match.toPublicResponse(players = players)
                 }
@@ -844,6 +849,7 @@ class EventService(
                     age = user.dateOfBirth?.let { ageInYears(dateOfBirth = it, asOf = LocalDate.now()) },
                     rating = ratingById[entry.userId],
                     status = entry.status,
+                    placeholder = user.placeholder,
                 )
             }
         val creator =

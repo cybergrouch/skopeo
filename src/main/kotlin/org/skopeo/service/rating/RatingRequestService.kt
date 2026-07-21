@@ -161,7 +161,15 @@ class RatingRequestService(
     private fun resolveRequesters(requests: List<RatingRequest>): Map<UUID, AuditPersonRef> =
         users
             .findAllByIds(ids = requests.map { it.userId }.distinct())
-            .associate { it.id to AuditPersonRef(userId = it.id, displayName = it.displayName(), publicCode = it.publicCode) }
+            .associate { user ->
+                user.id to
+                    AuditPersonRef(
+                        userId = user.id,
+                        displayName = user.displayName(),
+                        publicCode = user.publicCode,
+                        placeholder = user.placeholder,
+                    )
+            }
 
     private fun requireRater(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
         val caller = users.findByFirebaseUid(firebaseUid = token.uid) ?: return ServiceError.Forbidden().left()

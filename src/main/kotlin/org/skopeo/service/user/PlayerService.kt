@@ -361,6 +361,7 @@ class PlayerService(
                 photoUrl = user.photoUrl,
                 levelAtMatch = levels?.get(key = userId),
                 confidence = confidences[userId],
+                isPlaceholder = user.placeholder,
             )
         }
 

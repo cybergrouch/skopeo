@@ -1,5 +1,6 @@
 import { useParams } from 'react-router-dom'
 import { ContentLink } from '@/components/ContentLink'
+import { PlaceholderTag } from '@/components/PlaceholderTag'
 import { PublicPageLink } from '@/components/PublicPageLink'
 import {
   Card,
@@ -22,8 +23,19 @@ import { ConfidenceValue } from '@/components/ConfidenceValue'
 /** A player's name as a link to their public profile, falling back to the code or "Unknown". */
 function PlayerLink({ player }: { player: MatchPublicPlayer }) {
   const label = player.displayName ?? player.publicCode ?? 'Unknown'
-  if (!player.publicCode) return <span>{label}</span>
-  return <ContentLink to={`/players/${player.publicCode}`}>{label}</ContentLink>
+  if (!player.publicCode)
+    return (
+      <span>
+        {label}
+        <PlaceholderTag show={player.isPlaceholder} />
+      </span>
+    )
+  return (
+    <>
+      <ContentLink to={`/players/${player.publicCode}`}>{label}</ContentLink>
+      <PlaceholderTag show={player.isPlaceholder} />
+    </>
+  )
 }
 
 /** A side's players, comma-separated, marked as the winner when applicable. */
@@ -76,6 +88,7 @@ function RatingChangeRow({ change }: { change: MatchPublicRatingChange }) {
         ) : (
           name
         )}
+        <PlaceholderTag show={change.isPlaceholder} />
       </span>
       {showRates ? (
         <span className="font-mono text-xs">
