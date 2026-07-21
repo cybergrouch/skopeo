@@ -4317,6 +4317,12 @@ components:
           format: date
           nullable: true
           description: Optional ISO date of birth.
+        initialRating:
+          type: string
+          nullable: true
+          description: >-
+            Optional NTRP initial rating (1.0–7.0), set in the same flow (#503). RATER/ADMINISTRATOR-gated
+            and validated only when present; omit it to create a rating-less placeholder.
 
     ClaimRequest:
       type: object

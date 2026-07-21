@@ -12,12 +12,15 @@ import org.skopeo.model.GeneratedClaimCode
 /**
  * Body for `POST /api/v1/users/placeholders` — create a login-less placeholder player (#496).
  * [displayName] and [sex] (Male/Female) are required; [dateOfBirth] (ISO yyyy-MM-dd) is optional.
+ * [initialRating] (#503) is an optional NTRP value (1.0–7.0) set in the same flow; it is
+ * RATER/ADMINISTRATOR-gated and validated only when present — a rating-less create always succeeds.
  */
 @Serializable
 data class CreatePlaceholderRequest(
     val displayName: String,
     val sex: String,
     val dateOfBirth: String? = null,
+    val initialRating: String? = null,
 )
 
 /** Body for `POST /api/v1/users/claim` — the secret code the caller pastes to adopt a placeholder (#496). */

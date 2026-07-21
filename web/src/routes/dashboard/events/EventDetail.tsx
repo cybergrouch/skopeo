@@ -36,7 +36,7 @@ import {
   usePostApiV1Matches,
 } from "@/api/generated/matches/matches";
 import { useGetApiV1UsersMe } from "@/api/generated/users/users";
-import { canEditEndedEvents, isAdministrator } from "@/auth/capabilities";
+import { canEditEndedEvents, canRate, isAdministrator } from "@/auth/capabilities";
 import { PlayerPicker } from "@/components/PlayerPicker";
 import { HandicapField } from "@/components/HandicapField";
 import { playerLabel } from "@/lib/playerLabel";
@@ -782,6 +782,7 @@ export function EventDetail({
                     label="Add a participant"
                     placeholder="Search players…"
                     excludeIds={allParticipants.map((p) => p.userId)}
+                    canSetRating={canRate(me?.capabilities)}
                     onSelect={(user) => {
                       setRosterError(null);
                       addParticipant.mutate(

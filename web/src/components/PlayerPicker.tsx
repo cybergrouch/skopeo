@@ -13,6 +13,10 @@ import type {
 
 const SEXES = ["Male", "Female"] as const;
 
+/** NTRP bounds for the optional initial rating (#503) — validated only when a value is entered. */
+const NTRP_MIN = 1.0;
+const NTRP_MAX = 7.0;
+
 /**
  * Adapt the full {@link UserResponse} returned by the placeholder-create endpoint into the slim
  * {@link UserSummaryResponse} shape the pickers emit, so a freshly created placeholder is handed back
@@ -36,6 +40,12 @@ interface PlayerPickerProps {
   excludeIds?: string[];
   /** Optional sex/age/rating/capability constraints merged into the search query. */
   filters?: Pick<GetApiV1UsersParams, "sex" | "age" | "rating" | "capability">;
+  /**
+   * When true, the placeholder-create form offers an optional "Initial rating" field (#503),
+   * set in the same flow. Surface this only to RATER/ADMINISTRATOR callers (the rating set is
+   * RATER-gated on the backend); everyone can still create a rating-less placeholder.
+   */
+  canSetRating?: boolean;
   onSelect: (user: UserSummaryResponse) => void;
 }
 
@@ -50,12 +60,14 @@ export function PlayerPicker({
   placeholder,
   excludeIds = [],
   filters = {},
+  canSetRating = false,
   onSelect,
 }: PlayerPickerProps) {
   const [creating, setCreating] = useState(false);
   const [displayName, setDisplayName] = useState("");
   const [sex, setSex] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
+  const [initialRating, setInitialRating] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const create = usePostApiV1UsersPlaceholders();
@@ -64,6 +76,7 @@ export function PlayerPicker({
     setDisplayName("");
     setSex("");
     setDateOfBirth("");
+    setInitialRating("");
     setError(null);
   }
 
@@ -79,6 +92,15 @@ export function PlayerPicker({
       setError("Sex is required.");
       return;
     }
+    // The initial rating is optional; validate the NTRP range only when a value is entered.
+    const rating = initialRating.trim();
+    if (canSetRating && rating !== "") {
+      const parsed = Number(rating);
+      if (Number.isNaN(parsed) || parsed < NTRP_MIN || parsed > NTRP_MAX) {
+        setError("Initial rating must be a number between 1.0 and 7.0.");
+        return;
+      }
+    }
     try {
       const user = await create.mutateAsync({
         data: {
@@ -86,6 +108,8 @@ export function PlayerPicker({
           sex: sex as CreatePlaceholderRequestSex,
           // Send the DOB only when provided; the field is optional.
           ...(dateOfBirth !== "" ? { dateOfBirth } : {}),
+          // Send the initial rating only when the caller may set it and entered a value.
+          ...(canSetRating && rating !== "" ? { initialRating: rating } : {}),
         },
       });
       onSelect(toSummary(user));
@@ -161,6 +185,21 @@ export function PlayerPicker({
               />
             </div>
           </div>
+          {canSetRating ? (
+            <div className="space-y-1">
+              <Label htmlFor="placeholder-rating" className="text-xs">
+                Initial rating (optional)
+              </Label>
+              <Input
+                id="placeholder-rating"
+                type="text"
+                inputMode="decimal"
+                value={initialRating}
+                onChange={(e) => setInitialRating(e.target.value)}
+                placeholder="NTRP 1.0–7.0"
+              />
+            </div>
+          ) : null}
           {error ? (
             <p className="text-sm text-destructive" role="alert">
               {error}

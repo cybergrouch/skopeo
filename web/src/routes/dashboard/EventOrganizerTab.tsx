@@ -23,7 +23,7 @@ import type {
   EventResponse,
   UserSummaryResponse,
 } from "@/api/generated/model";
-import { Capability, hasCapability } from "@/auth/capabilities";
+import { Capability, canRate, hasCapability } from "@/auth/capabilities";
 import { PlayerPicker } from "@/components/PlayerPicker";
 import { plural } from "@/lib/plural";
 import { playerLabel } from "@/lib/playerLabel";
@@ -394,6 +394,7 @@ function NewEventForm() {
               label="Add participant"
               placeholder="Search players to add…"
               excludeIds={roster.map((u) => u.id)}
+              canSetRating={canRate(me?.capabilities)}
               onSelect={(user) =>
                 setRoster((r) =>
                   r.some((x) => x.id === user.id) ? r : [...r, user],

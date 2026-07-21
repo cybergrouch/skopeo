@@ -50,6 +50,7 @@ private fun Route.createPlaceholder(service: PlaceholderService) {
                     displayName = request.displayName,
                     sex = request.sex,
                     dateOfBirth = request.dateOfBirth?.let { LocalDate.parse(it) },
+                    initialRating = request.initialRating,
                 )
             respondEither(result = result) { user -> call.respond(status = HttpStatusCode.Created, message = user.toResponse()) }
         }
