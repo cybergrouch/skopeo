@@ -15,12 +15,15 @@ import org.skopeo.model.AuditWrite
 import org.skopeo.model.Capability
 import org.skopeo.model.CreatePlaceholderCommand
 import org.skopeo.model.GeneratedClaimCode
+import org.skopeo.model.Rating
 import org.skopeo.model.ServiceError
 import org.skopeo.model.User
 import org.skopeo.model.displayName
 import org.skopeo.repository.PlaceholderClaimCodeRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService
+import org.skopeo.service.rating.RatingService
+import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
@@ -45,23 +48,35 @@ class PlaceholderService(
     private val users: UserRepository = UserRepository(),
     private val claimCodes: PlaceholderClaimCodeRepository = PlaceholderClaimCodeRepository(),
     private val audit: AuditService = AuditService(),
+    private val ratings: RatingService = RatingService(),
 ) {
     /**
      * Create a login-less placeholder player (#496) — HOST/CLUB_OWNER/ADMINISTRATOR, no invite gate.
      * [displayName] and [sex] are required; [dateOfBirth] is optional. The row gets firebase_uid = NULL,
      * placeholder = true, an auto public code, a DISPLAY name, and the PLAYER capability only.
+     *
+     * [initialRating] (#503) is optional and always may be omitted (a rating-less create always
+     * succeeds). When present it is set in the same flow via [RatingService.setRating], so it inherits
+     * that path's RATER/ADMINISTRATOR gate, NTRP-range validation, and audit. To keep the create-then-rate
+     * pair consistent, the RATER capability and the NTRP range are validated BEFORE the placeholder row is
+     * written, so a non-RATER caller passing a rating (or an out-of-range value) is rejected up front and
+     * no orphan placeholder is created.
      */
     fun createPlaceholder(
         token: VerifiedFirebaseToken,
         displayName: String,
         sex: String,
         dateOfBirth: LocalDate? = null,
+        initialRating: String? = null,
     ): Either<ServiceError, User> =
         either {
             val actorId = requireMatchManager(token = token).bind()
             val name = displayName.trim()
             ensure(condition = name.isNotEmpty()) { ServiceError.Validation(message = "A display name is required") }
             ensure(condition = sex in ALLOWED_SEXES) { ServiceError.Validation(message = "sex must be one of $ALLOWED_SEXES") }
+            // Validate the optional rating (RATER gate + NTRP range) before creating, so a rejected rating
+            // never leaves an orphan placeholder. A caller who omits [initialRating] skips all of this.
+            val ratingValue = initialRating?.let { validatedRating(caller = actorId, raw = it).bind() }
             val created =
                 users.createPlaceholder(
                     command = CreatePlaceholderCommand(displayName = name, sex = sex, dateOfBirth = dateOfBirth),
@@ -77,7 +92,32 @@ class PlaceholderService(
                         details = mapOf("publicCode" to created.publicCode, "displayName" to name),
                     ),
             )
+            // Set the pre-validated rating via the canonical path (RATER-gated + audited). requireRater there
+            // re-checks the caller, matching the up-front validation.
+            if (ratingValue != null) {
+                ratings.setRating(token = token, userId = created.id, value = ratingValue).bind()
+            }
             created
+        }
+
+    /**
+     * Validate an optional initial rating (#503): the caller must hold RATER/ADMINISTRATOR and the value
+     * must be a numeric NTRP rating in 1.0–7.0. Returns the parsed [BigDecimal] to hand to the rating path.
+     */
+    private fun validatedRating(
+        caller: UUID,
+        raw: String,
+    ): Either<ServiceError, BigDecimal> =
+        either {
+            ensure(condition = canRate(userId = caller)) { ServiceError.Forbidden() }
+            val parsed =
+                try {
+                    Rating.fromValue(value = raw) // rejects non-numeric / out-of-range with IllegalArgumentException
+                    BigDecimal(raw)
+                } catch (e: IllegalArgumentException) {
+                    raise(r = ServiceError.Validation(message = e.message ?: "Invalid rating '$raw'"))
+                }
+            parsed
         }
 
     /** Unclaimed placeholders (#496), for the admin/host management view. Match-management access. */
@@ -185,6 +225,12 @@ class PlaceholderService(
         } else {
             caller.id.right()
         }
+    }
+
+    /** True when [userId] holds RATER or ADMINISTRATOR (ADMINISTRATOR implicitly rates, #106). */
+    private fun canRate(userId: UUID): Boolean {
+        val caller = users.findById(id = userId).getOrNull() ?: return false
+        return Capability.RATER in caller.capabilities || Capability.ADMINISTRATOR in caller.capabilities
     }
 
     /** HOST/CLUB_OWNER/ADMINISTRATOR (match-management); returns the caller's id (the audit actor). */

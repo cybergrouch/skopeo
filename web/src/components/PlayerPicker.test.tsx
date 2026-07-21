@@ -36,8 +36,14 @@ vi.mock("@/api/generated/users/users", () => ({
   }),
 }));
 
-function renderPicker(onSelect = vi.fn()) {
-  render(<PlayerPicker label="Add participant" onSelect={onSelect} />);
+function renderPicker(onSelect = vi.fn(), canSetRating = false) {
+  render(
+    <PlayerPicker
+      label="Add participant"
+      canSetRating={canSetRating}
+      onSelect={onSelect}
+    />,
+  );
   return onSelect;
 }
 
@@ -215,6 +221,89 @@ describe("PlayerPicker", () => {
       screen.getByRole("button", { name: "Add placeholder player" }),
     );
     expect(screen.getByLabelText("Display name")).toHaveValue("");
+  });
+
+  it("hides the initial-rating field from a non-RATER caller", async () => {
+    const user = userEvent.setup();
+    renderPicker(vi.fn(), false);
+
+    await user.click(
+      screen.getByRole("button", { name: "Add placeholder player" }),
+    );
+    expect(
+      screen.queryByLabelText("Initial rating (optional)"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows the initial-rating field for a RATER caller and includes it in the payload", async () => {
+    const user = userEvent.setup();
+    renderPicker(vi.fn(), true);
+
+    await user.click(
+      screen.getByRole("button", { name: "Add placeholder player" }),
+    );
+    await user.type(screen.getByLabelText("Display name"), "New Player");
+    await user.selectOptions(screen.getByLabelText("Sex"), "Female");
+    await user.type(
+      screen.getByLabelText("Initial rating (optional)"),
+      "4.0",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Create placeholder" }),
+    );
+
+    await waitFor(() =>
+      expect(createMutate).toHaveBeenCalledWith({
+        data: {
+          displayName: "New Player",
+          sex: "Female",
+          initialRating: "4.0",
+        },
+      }),
+    );
+  });
+
+  it("omits the initial rating when a RATER leaves it blank", async () => {
+    const user = userEvent.setup();
+    renderPicker(vi.fn(), true);
+
+    await user.click(
+      screen.getByRole("button", { name: "Add placeholder player" }),
+    );
+    await user.type(screen.getByLabelText("Display name"), "New Player");
+    await user.selectOptions(screen.getByLabelText("Sex"), "Female");
+    await user.click(
+      screen.getByRole("button", { name: "Create placeholder" }),
+    );
+
+    await waitFor(() =>
+      expect(createMutate).toHaveBeenCalledWith({
+        data: { displayName: "New Player", sex: "Female" },
+      }),
+    );
+  });
+
+  it("rejects an out-of-range initial rating before calling create", async () => {
+    const user = userEvent.setup();
+    renderPicker(vi.fn(), true);
+
+    await user.click(
+      screen.getByRole("button", { name: "Add placeholder player" }),
+    );
+    await user.type(screen.getByLabelText("Display name"), "New Player");
+    await user.selectOptions(screen.getByLabelText("Sex"), "Female");
+    await user.type(
+      screen.getByLabelText("Initial rating (optional)"),
+      "9",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Create placeholder" }),
+    );
+
+    expect(
+      await screen.findByText(/between 1.0 and 7.0/i),
+    ).toBeInTheDocument();
+    expect(createMutate).not.toHaveBeenCalled();
   });
 
   it("shows an inline error when the create fails", async () => {

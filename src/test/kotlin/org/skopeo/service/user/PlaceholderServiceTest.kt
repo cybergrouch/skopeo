@@ -36,6 +36,7 @@ import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRatingHistoryTable
 import org.skopeo.repository.UserRepository
 import org.skopeo.repository.UsersTable
+import org.skopeo.service.rating.RatingService
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.math.BigDecimal
 import java.time.LocalDate
@@ -54,7 +55,8 @@ class PlaceholderServiceTest {
     private val users = UserRepository()
     private val claimCodes = PlaceholderClaimCodeRepository()
     private val ratings = RatingRepository()
-    private val service = PlaceholderService(users = users, claimCodes = claimCodes)
+    private val ratingService = RatingService(ratings = ratings, users = users)
+    private val service = PlaceholderService(users = users, claimCodes = claimCodes, ratings = ratingService)
 
     @BeforeEach
     fun reset() {
@@ -135,6 +137,83 @@ class PlaceholderServiceTest {
             .createPlaceholder(token = token(uid = "host"), displayName = "   ", sex = "Male")
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    // ---- Create with an optional initial rating (#503) ----
+
+    @Test
+    fun `a RATER host creates a placeholder with an initial rating that is set in one flow`() {
+        provisionUser(uid = "rhost", roles = setOf(Capability.PLAYER, Capability.HOST, Capability.RATER))
+
+        val created =
+            service
+                .createPlaceholder(
+                    token = token(uid = "rhost"),
+                    displayName = "Rated Stand-in",
+                    sex = "Male",
+                    initialRating = "4.0",
+                )
+                .shouldBeRight()
+
+        val current = ratings.findCurrentRating(userId = created.id).shouldNotBeNull()
+        // Compare by value (scale-insensitive): the stored rating is padded to the money-style scale.
+        current.currentRating.compareTo(BigDecimal("4.0")) shouldBe 0
+        // The rating set is audited (initial set, not an override).
+        AuditRepository()
+            .list(actions = listOf(element = AuditAction.RATING_SET), limit = 10, offset = 0)
+            .first
+            .map { it.entityId } shouldContain created.id
+    }
+
+    @Test
+    fun `creating a placeholder without a rating succeeds and leaves no rating row`() {
+        host(uid = "host")
+
+        val created =
+            service
+                .createPlaceholder(token = token(uid = "host"), displayName = "Rating-less", sex = "Male")
+                .shouldBeRight()
+
+        ratings.findCurrentRating(userId = created.id) shouldBe null
+    }
+
+    @Test
+    fun `a non-RATER host passing an initial rating is rejected and no placeholder is created`() {
+        host(uid = "host")
+
+        service
+            .createPlaceholder(token = token(uid = "host"), displayName = "Nope", sex = "Male", initialRating = "4.0")
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+
+        // The rejected rating left no orphan placeholder.
+        service.listPlaceholders(token = token(uid = "host")).shouldBeRight() shouldBe emptyList()
+    }
+
+    @Test
+    fun `a non-RATER host can still create rating-less after being rejected for a rating`() {
+        host(uid = "host")
+
+        val created =
+            service
+                .createPlaceholder(token = token(uid = "host"), displayName = "Fine", sex = "Male")
+                .shouldBeRight()
+
+        created.placeholder.shouldBeTrue()
+        ratings.findCurrentRating(userId = created.id) shouldBe null
+    }
+
+    @Test
+    fun `creating a placeholder rejects an out-of-range initial rating`() {
+        provisionUser(uid = "rhost", roles = setOf(Capability.PLAYER, Capability.HOST, Capability.RATER))
+
+        service
+            .createPlaceholder(token = token(uid = "rhost"), displayName = "Too High", sex = "Male", initialRating = "9.0")
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+
+        // Out-of-range rejection also leaves no orphan placeholder.
+        service.listPlaceholders(token = token(uid = "rhost")).shouldBeRight() shouldBe emptyList()
     }
 
     // ---- Generate claim code ----
