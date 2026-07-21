@@ -7,6 +7,7 @@ import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -1142,7 +1143,7 @@ class MatchServiceTest {
     }
 
     @Test
-    fun `match history includes a soft-deleted match, flagged not-active (#325)`() {
+    fun `match history excludes a soft-deleted match, though it still resolves by code (#502)`() {
         provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val p1 = provisionUser(uid = "p1", rated = true)
         val p2 = provisionUser(uid = "p2", rated = true)
@@ -1150,8 +1151,10 @@ class MatchServiceTest {
             service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
         service.setActive(token = token(uid = "host"), matchId = match.id, active = false).shouldBeRight()
 
-        matchRepo.listByUser(userId = p1.id).map { it.id } shouldContain match.id
-        matchRepo.listByUser(userId = p1.id).single { it.id == match.id }.isActive shouldBe false
+        // #502: a directly soft-deleted match drops out of the history listing on both profiles...
+        matchRepo.listByUser(userId = p1.id).map { it.id } shouldNotContain match.id
+        // ...yet its shared link still resolves (#325), flagged as deleted.
+        service.publicByCode(token = token(uid = "host"), code = match.publicCode).shouldBeRight().isActive shouldBe false
     }
 
     @Test
