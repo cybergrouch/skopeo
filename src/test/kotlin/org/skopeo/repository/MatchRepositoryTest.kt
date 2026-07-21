@@ -732,21 +732,23 @@ class MatchRepositoryTest {
     }
 
     @Test
-    fun `listBetweenUsers excludes a container-deleted event meeting, keeps a directly deleted one for traceability (#497)`() {
+    fun `listBetweenUsers excludes both a container-deleted event meeting and a directly deleted one (#502)`() {
         val a = newUser(uid = "h2h-a")
         val b = newUser(uid = "h2h-b")
         val deletedEvent = event(creator = a, endDate = LocalDate.of(2026, 1, 10), members = listOf(a, b))
         val underDeletedEvent = completedMatch(u1 = a, u2 = b, matchDate = LocalDate.of(2026, 1, 8), eventId = deletedEvent)
         val standalone = completedMatch(u1 = a, u2 = b, matchDate = LocalDate.of(2026, 1, 15))
-        // A directly soft-deleted meeting whose event is still active must keep counting (#325 traceability).
+        // #502: a directly soft-deleted meeting (event still active) is now dropped from head-to-head too
+        // — deleted = gone from history, consistent with listByUser (superseding #325 traceability here).
         val directlyDeleted = completedMatch(u1 = a, u2 = b, matchDate = LocalDate.of(2026, 1, 20))
         matches.setActive(matchId = directlyDeleted, active = false, disabledAt = LocalDateTime.now())
         events.setActive(id = deletedEvent, active = false, disabledAt = LocalDateTime.now())
 
         val meetings = matches.listBetweenUsers(userIdA = a, userIdB = b).map { it.id }
 
-        meetings shouldContainExactlyInAnyOrder listOf(standalone, directlyDeleted)
+        meetings shouldContainExactlyInAnyOrder listOf(element = standalone)
         meetings shouldNotContain underDeletedEvent
+        meetings shouldNotContain directlyDeleted
     }
 
     @Test
@@ -763,6 +765,63 @@ class MatchRepositoryTest {
         // Only the standalone in-window match feeds confidence once the container event is deleted.
         matches.windowedMatchesInWindow(userId = player, asOf = asOf) shouldContainExactlyInAnyOrder
             listOf(element = WindowMatch(matchDate = today.minusDays(5), weightClass = WeightClass.OPEN_PLAY))
+    }
+
+    @Test
+    fun `listByUser excludes a directly soft-deleted match, keeps active ones (#502)`() {
+        val u1 = newUser(uid = "dd-lu-1")
+        val u2 = newUser(uid = "dd-lu-2")
+        val deleted = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 8))
+        val active = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 15))
+        // Directly soft-delete the match (its event is null, so this is a direct is_active flip).
+        matches.setActive(matchId = deleted, active = false, disabledAt = LocalDateTime.now())
+
+        val history = matches.listByUser(userId = u1).map { it.id }
+
+        history shouldContainExactlyInAnyOrder listOf(element = active)
+        history shouldNotContain deleted
+    }
+
+    @Test
+    fun `winLossByUsers excludes a directly soft-deleted decided match (#502)`() {
+        val u1 = newUser(uid = "dd-wl-1")
+        val u2 = newUser(uid = "dd-wl-2")
+        // Two decided wins for u1; one is then directly soft-deleted.
+        val deleted = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 8))
+        completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 15))
+        matches.setActive(matchId = deleted, active = false, disabledAt = LocalDateTime.now())
+
+        matches.winLossByUsers(userIds = listOf(u1, u2)).getValue(key = u1) shouldBe WinLossRecord(wins = 1, losses = 0)
+        matches.winLossByUsers(userIds = listOf(u1, u2)).getValue(key = u2) shouldBe WinLossRecord(wins = 0, losses = 1)
+    }
+
+    @Test
+    fun `windowedMatchesInWindow excludes a directly soft-deleted match from confidence input (#502)`() {
+        val asOf = LocalDateTime.of(2026, 6, 1, 12, 0)
+        val today = asOf.toLocalDate()
+        val player = newUser(uid = "dd-conf-p")
+        val opponent = newUser(uid = "dd-conf-o")
+        val deleted = completedMatch(u1 = player, u2 = opponent, matchDate = today.minusDays(2))
+        completedMatch(u1 = player, u2 = opponent, matchDate = today.minusDays(5))
+        matches.setActive(matchId = deleted, active = false, disabledAt = LocalDateTime.now())
+
+        // Only the active in-window match feeds confidence once the other is directly soft-deleted.
+        matches.windowedMatchesInWindow(userId = player, asOf = asOf) shouldContainExactlyInAnyOrder
+            listOf(element = WindowMatch(matchDate = today.minusDays(5), weightClass = WeightClass.OPEN_PLAY))
+    }
+
+    @Test
+    fun `findByPublicCode still resolves a directly soft-deleted match for shared links (#502, #325)`() {
+        val u1 = newUser(uid = "pub-1")
+        val u2 = newUser(uid = "pub-2")
+        val match = fixture(u1 = u1, u2 = u2)
+        matches.setActive(matchId = match.id, active = false, disabledAt = LocalDateTime.now())
+
+        // The public match page (/matches/:code) must still open a deleted match, flagged as deleted.
+        val resolved = matches.findByPublicCode(code = match.publicCode)
+        resolved.shouldNotBeNull()
+        resolved.id shouldBe match.id
+        resolved.isActive.shouldBeFalse()
     }
 
     @Test
