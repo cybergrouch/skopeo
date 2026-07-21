@@ -465,6 +465,24 @@ describe('EventDetail', () => {
     expect(within(player1).queryByRole('option', { name: 'Bob' })).not.toBeInTheDocument()
   })
 
+  it('marks a placeholder participant as (Unclaimed) in the fixture player dropdowns (#505)', () => {
+    useGetApiV1EventsId.mockReturnValue({
+      data: {
+        ...event,
+        participants: [
+          { userId: 'u1', displayName: 'Ana', publicCode: 'AAA111', status: 'APPROVED', isPlaceholder: true },
+          { userId: 'u2', displayName: 'Bob', publicCode: 'BBB222', status: 'APPROVED' },
+        ],
+      },
+      isLoading: false,
+    })
+    renderDetail()
+    const player1 = screen.getByLabelText('Player 1')
+    // The `<option>` can't host the badge component, so a placeholder gets an "(Unclaimed)" text suffix.
+    expect(within(player1).getByRole('option', { name: 'Ana (Unclaimed)' })).toBeInTheDocument()
+    expect(within(player1).getByRole('option', { name: 'Bob' })).toBeInTheDocument()
+  })
+
   it('schedules a doubles fixture with two players a side (disabled until all four picked)', async () => {
     useGetApiV1EventsId.mockReturnValue({ data: doublesRoster, isLoading: false })
     const user = userEvent.setup()
