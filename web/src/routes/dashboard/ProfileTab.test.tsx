@@ -62,6 +62,10 @@ vi.mock("@/components/ProfileFieldsForm", () => ({
 vi.mock("@/components/PhotoSettingsForm", () => ({
   PhotoSettingsForm: () => <div>photo settings form</div>,
 }));
+// The local-theme selector has its own API wiring + tests (#514); stub it here.
+vi.mock("@/components/LocalThemeForm", () => ({
+  LocalThemeForm: () => <div>local theme form</div>,
+}));
 // The events-history card has its own tests (#202) + its own API hook; stub it here.
 vi.mock("@/components/EventsHistoryCard", () => ({
   EventsHistoryCard: () => <div>events history</div>,

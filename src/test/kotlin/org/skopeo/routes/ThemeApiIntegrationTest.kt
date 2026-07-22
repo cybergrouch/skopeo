@@ -21,6 +21,8 @@ import io.ktor.server.testing.testApplication
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.dto.settings.LocalThemeResponse
+import org.skopeo.dto.settings.SetLocalThemeRequest
 import org.skopeo.dto.settings.SetThemeRequest
 import org.skopeo.dto.settings.ThemeResponse
 import org.skopeo.model.AuthProvider
@@ -122,5 +124,83 @@ class ThemeApiIntegrationTest {
                 contentType(type = ContentType.Application.Json)
                 setBody(body = SetThemeRequest(theme = "NEON"))
             }.status shouldBe HttpStatusCode.BadRequest
+        }
+
+    @Test
+    fun `the local theme is unset by default (#514)`() =
+        withApp { client ->
+            seedUser(uid = "u", roles = setOf(element = Capability.PLAYER))
+            val token = TestFirebaseAuth.mintToken(uid = "u")
+
+            val response =
+                client.get(urlString = "/api/v1/users/me/theme") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $token")
+                }
+            response.status shouldBe HttpStatusCode.OK
+            response.body<LocalThemeResponse>().theme shouldBe null
+        }
+
+    @Test
+    fun `the caller sets their local theme and the read reflects it (#514)`() =
+        withApp { client ->
+            seedUser(uid = "u", roles = setOf(element = Capability.PLAYER))
+            val token = TestFirebaseAuth.mintToken(uid = "u")
+
+            val set =
+                client.put(urlString = "/api/v1/users/me/theme") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $token")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = SetLocalThemeRequest(theme = "GRASS"))
+                }
+            set.status shouldBe HttpStatusCode.OK
+            val setBody = set.body<LocalThemeResponse>()
+            setBody.theme shouldBe "GRASS"
+            (setBody.setAt != null) shouldBe true
+
+            client.get(urlString = "/api/v1/users/me/theme") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $token")
+            }.body<LocalThemeResponse>().theme shouldBe "GRASS"
+        }
+
+    @Test
+    fun `PUT null clears the local theme (#514)`() =
+        withApp { client ->
+            seedUser(uid = "u", roles = setOf(element = Capability.PLAYER))
+            val token = TestFirebaseAuth.mintToken(uid = "u")
+            client.put(urlString = "/api/v1/users/me/theme") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $token")
+                contentType(type = ContentType.Application.Json)
+                setBody(body = SetLocalThemeRequest(theme = "CLAY"))
+            }
+
+            val cleared =
+                client.put(urlString = "/api/v1/users/me/theme") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $token")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = SetLocalThemeRequest(theme = null))
+                }
+            cleared.status shouldBe HttpStatusCode.OK
+            val body = cleared.body<LocalThemeResponse>()
+            body.theme shouldBe null
+            body.setAt shouldBe null
+        }
+
+    @Test
+    fun `setting an unknown local theme is a 400 (#514)`() =
+        withApp { client ->
+            seedUser(uid = "u", roles = setOf(element = Capability.PLAYER))
+            val token = TestFirebaseAuth.mintToken(uid = "u")
+
+            client.put(urlString = "/api/v1/users/me/theme") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $token")
+                contentType(type = ContentType.Application.Json)
+                setBody(body = SetLocalThemeRequest(theme = "NEON"))
+            }.status shouldBe HttpStatusCode.BadRequest
+        }
+
+    @Test
+    fun `an anonymous request cannot read the local theme (#514)`() =
+        withApp { client ->
+            client.get(urlString = "/api/v1/users/me/theme").status shouldBe HttpStatusCode.Unauthorized
         }
 }

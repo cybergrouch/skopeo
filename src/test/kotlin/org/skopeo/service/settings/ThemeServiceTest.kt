@@ -27,6 +27,7 @@ import org.skopeo.repository.AppSettingsTable
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.testsupport.PostgresTestDatabase
+import java.time.LocalDateTime
 
 class ThemeServiceTest {
     companion object {
@@ -138,5 +139,90 @@ class ThemeServiceTest {
         val current = service.getTheme()
         current.theme shouldBe ThemeSetting.AUTO
         current.updatedBy.shouldBeNull()
+    }
+
+    @Test
+    fun `local theme defaults to unset for a fresh user (#514)`() {
+        provision(uid = "u")
+        val value = service.getLocalTheme(token = token(uid = "u")).shouldBeRight()
+        value.theme.shouldBeNull()
+        value.setAt.shouldBeNull()
+    }
+
+    @Test
+    fun `setting a local theme stamps setAt and the read reflects it (#514)`() {
+        provision(uid = "u")
+        val at = LocalDateTime.of(2026, 1, 15, 10, 0)
+
+        val set = service.setLocalTheme(token = token(uid = "u"), theme = "GRASS", now = at).shouldBeRight()
+        set.theme shouldBe ThemeSetting.GRASS
+        set.setAt shouldBe at
+
+        val read = service.getLocalTheme(token = token(uid = "u")).shouldBeRight()
+        read.theme shouldBe ThemeSetting.GRASS
+        read.setAt shouldBe at
+    }
+
+    @Test
+    fun `setting a null local theme clears both columns (#514)`() {
+        provision(uid = "u")
+        service.setLocalTheme(token = token(uid = "u"), theme = "CLAY", now = LocalDateTime.of(2026, 1, 15, 10, 0)).shouldBeRight()
+
+        val cleared = service.setLocalTheme(token = token(uid = "u"), theme = null).shouldBeRight()
+        cleared.theme.shouldBeNull()
+        cleared.setAt.shouldBeNull()
+
+        val read = service.getLocalTheme(token = token(uid = "u")).shouldBeRight()
+        read.theme.shouldBeNull()
+        read.setAt.shouldBeNull()
+    }
+
+    @Test
+    fun `local theme parsing is case-insensitive (#514)`() {
+        provision(uid = "u")
+        service.setLocalTheme(token = token(uid = "u"), theme = "clay").shouldBeRight().theme shouldBe ThemeSetting.CLAY
+    }
+
+    @Test
+    fun `an unknown local theme string is a validation error (#514)`() {
+        provision(uid = "u")
+        service.setLocalTheme(token = token(uid = "u"), theme = "NEON")
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `an unprovisioned caller cannot read a local theme (#514)`() {
+        service.getLocalTheme(token = token(uid = "ghost"))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
+    @Test
+    fun `an unprovisioned caller cannot set a local theme (#514)`() {
+        service.setLocalTheme(token = token(uid = "ghost"), theme = "GRASS")
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
+    @Test
+    fun `re-setting a local theme re-stamps setAt so the user reclaims their choice (#514)`() {
+        provision(uid = "u")
+        val first = LocalDateTime.of(2026, 1, 1, 0, 0)
+        val later = LocalDateTime.of(2026, 4, 5, 12, 0)
+        service.setLocalTheme(token = token(uid = "u"), theme = "GRASS", now = first).shouldBeRight()
+
+        val second = service.setLocalTheme(token = token(uid = "u"), theme = "CLAY", now = later).shouldBeRight()
+        second.theme shouldBe ThemeSetting.CLAY
+        second.setAt shouldBe later
+    }
+
+    @Test
+    fun `a local theme set to one user does not leak to another (#514)`() {
+        provision(uid = "a")
+        provision(uid = "b")
+        service.setLocalTheme(token = token(uid = "a"), theme = "GRASS", now = LocalDateTime.of(2026, 1, 1, 0, 0)).shouldBeRight()
+
+        service.getLocalTheme(token = token(uid = "b")).shouldBeRight().theme.shouldBeNull()
     }
 }

@@ -37,6 +37,10 @@ class OpenAPIIntegrationTest {
             body shouldContain "Skopeo API"
             body shouldContain "/api/v1/calculate-ranking"
             body shouldContain "/api/v1/theme"
+            // Per-user local theme (#514): the self-service path and its request/response schemas.
+            body shouldContain "/api/v1/users/me/theme"
+            body shouldContain "LocalThemeResponse"
+            body shouldContain "SetLocalThemeRequest"
             // The standings serving-source toggle (#146): its read/write path and schemas.
             body shouldContain "/api/v1/settings/standings-source"
             body shouldContain "StandingsSourceResponse"

@@ -14,6 +14,7 @@ import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
+import org.skopeo.dto.settings.SetLocalThemeRequest
 import org.skopeo.dto.settings.SetThemeRequest
 import org.skopeo.dto.settings.toResponse
 import org.skopeo.service.settings.ThemeService
@@ -38,6 +39,29 @@ fun Application.configureThemeRoutes(service: ThemeService = ThemeService()) {
                     respondMappingErrors {
                         val request = call.receive<SetThemeRequest>()
                         respondEither(result = service.setTheme(token = verifiedToken(), theme = request.theme)) { value ->
+                            call.respond(status = HttpStatusCode.OK, message = value.toResponse())
+                        }
+                    }
+                }
+            }
+        }
+
+        // Per-user "local theme" (#514): self-service, authenticated. The caller reads/writes only their
+        // OWN theme — the id is taken from the verified token, never a path parameter, so there is no
+        // path to set another user's. PUT { theme } sets + stamps setAt; PUT { theme: null } clears it.
+        route(path = "/api/v1/users/me/theme") {
+            authenticate(FIREBASE_AUTH) {
+                get {
+                    respondMappingErrors {
+                        respondEither(result = service.getLocalTheme(token = verifiedToken())) { value ->
+                            call.respond(status = HttpStatusCode.OK, message = value.toResponse())
+                        }
+                    }
+                }
+                put {
+                    respondMappingErrors {
+                        val request = call.receive<SetLocalThemeRequest>()
+                        respondEither(result = service.setLocalTheme(token = verifiedToken(), theme = request.theme)) { value ->
                             call.respond(status = HttpStatusCode.OK, message = value.toResponse())
                         }
                     }
