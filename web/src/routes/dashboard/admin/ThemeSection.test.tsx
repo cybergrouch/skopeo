@@ -39,10 +39,10 @@ describe('ThemeSection', () => {
     }))
   })
 
-  it('renders the AUTO + eleven theme options', () => {
+  it('renders the AUTO + twelve theme options', () => {
     renderSection()
     const select = screen.getByLabelText('Theme') as HTMLSelectElement
-    expect(select.options).toHaveLength(12)
+    expect(select.options).toHaveLength(13)
     expect(screen.getByRole('option', { name: 'Auto (by season)' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: 'US Open' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: 'Grass' })).toBeInTheDocument()
@@ -55,12 +55,18 @@ describe('ThemeSection', () => {
     }
   })
 
+  it('renders the Skopeo OG option (#512)', () => {
+    renderSection()
+    expect(screen.getByRole('option', { name: 'Skopeo OG' })).toBeInTheDocument()
+  })
+
   it.each([
     ['VALENTINES', "Valentine's Day"],
     ['SPRING', 'Spring'],
     ['RAINY', 'Rainy'],
     ['HALLOWEEN', 'Halloween'],
     ['AUTUMN', 'Autumn'],
+    ['SKOPEO_OG', 'Skopeo OG'],
   ])('selecting %s and saving calls the mutation with that value', async (value, label) => {
     const user = userEvent.setup()
     renderSection()

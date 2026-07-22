@@ -43,6 +43,12 @@ describe('ThemeProvider', () => {
     expect(document.documentElement.dataset.theme).toBe('uso')
   })
 
+  it('maps SKOPEO_OG to the og data-theme (#512, manual-only)', () => {
+    useGetApiV1Theme.mockReturnValue({ data: { theme: 'SKOPEO_OG' } })
+    renderProvider()
+    expect(document.documentElement.dataset.theme).toBe('og')
+  })
+
   it('falls back to the season resolver when the setting is missing/unknown', () => {
     useGetApiV1Theme.mockReturnValue({ data: undefined })
     renderProvider()

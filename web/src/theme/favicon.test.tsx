@@ -26,6 +26,7 @@ const EXPECTED: Record<ThemeName, string> = {
   rainy: "#37474F",
   halloween: "#E65100",
   autumn: "#BF360C",
+  og: "#303030",
 };
 
 describe("favicon helper", () => {

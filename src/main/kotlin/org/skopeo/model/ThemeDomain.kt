@@ -23,6 +23,7 @@ enum class ThemeSetting {
     RAINY,
     HALLOWEEN,
     AUTUMN,
+    SKOPEO_OG,
 }
 
 /**

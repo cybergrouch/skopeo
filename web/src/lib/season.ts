@@ -17,6 +17,9 @@ export type ThemeName =
   | 'rainy'
   | 'halloween'
   | 'autumn'
+  // Skopeo OG (#512): the original all-white look. Manually-selectable only — deliberately NOT
+  // produced by resolveSeasonTheme (it's not part of the AUTO rotation).
+  | 'og'
 
 /** Month is 1-based here (Jan = 1) to match how the windows read in the design doc. */
 interface DateParts {
@@ -73,6 +76,9 @@ const ENUM_TO_THEME: Record<string, ThemeName> = {
   RAINY: 'rainy',
   HALLOWEEN: 'halloween',
   AUTUMN: 'autumn',
+  // Skopeo OG (#512) is manual-only, so it appears here (explicit picks map 1:1) but not in
+  // resolveSeasonTheme (the AUTO date rotation).
+  SKOPEO_OG: 'og',
 }
 
 /** Resolve the setting value (poss. AUTO / unknown) to the active `data-theme` name for `now`. */
