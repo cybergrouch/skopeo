@@ -12,6 +12,7 @@ import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
 import org.skopeo.model.Capability
+import org.skopeo.model.LocalThemeValue
 import org.skopeo.model.ServiceError
 import org.skopeo.model.ThemeSetting
 import org.skopeo.model.ThemeSettingValue
@@ -19,6 +20,7 @@ import org.skopeo.repository.AppSettingsRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService
 import org.skopeo.service.user.VerifiedFirebaseToken
+import java.time.LocalDateTime
 import java.util.UUID
 
 /** The app_settings key backing the single global UI theme (#378). */
@@ -71,6 +73,44 @@ class ThemeService(
             )
             ThemeSettingValue(theme = parsed, updatedBy = row.updatedBy, updatedAt = row.updatedAt)
         }
+
+    /**
+     * The caller's own per-profile local theme (#514). Self-service: resolves the caller from their
+     * token; [ServiceError.Forbidden] when the token maps to no provisioned user.
+     */
+    fun getLocalTheme(token: VerifiedFirebaseToken): Either<ServiceError, LocalThemeValue> =
+        either {
+            val caller = requireCaller(token = token).bind()
+            users.getLocalTheme(id = caller).bind()
+        }
+
+    /**
+     * Set (or clear) the caller's own local theme (#514). Self-service: the profile owner sets their
+     * OWN — the caller id comes from the token, never a path parameter, so there is no other-user path.
+     * A non-null [theme] must parse to a [ThemeSetting] and stamps `local_theme_set_at = now`; a null
+     * [theme] clears both, reverting to the global theme.
+     */
+    fun setLocalTheme(
+        token: VerifiedFirebaseToken,
+        theme: String?,
+        now: LocalDateTime = LocalDateTime.now(),
+    ): Either<ServiceError, LocalThemeValue> =
+        either {
+            val caller = requireCaller(token = token).bind()
+            val parsed =
+                theme?.let { raw ->
+                    ensureNotNull(value = ThemeSetting.entries.firstOrNull { it.name.equals(other = raw, ignoreCase = true) }) {
+                        ServiceError.Validation(message = "Unknown theme $raw")
+                    }
+                }
+            users.setLocalTheme(id = caller, theme = parsed, setAt = now).bind()
+        }
+
+    /** Resolve the caller's provisioned user id, or [ServiceError.Forbidden] when the token maps to none. */
+    private fun requireCaller(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+        return if (caller == null) ServiceError.Forbidden().left() else caller.id.right()
+    }
 
     /** ADMINISTRATOR-only access; returns the caller's id (the audit actor). */
     private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {

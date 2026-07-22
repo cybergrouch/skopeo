@@ -193,6 +193,18 @@ When the setting is `AUTO`, a small data-driven table (`resolveSeasonTheme` in `
 
 The five seasonal themes (valentines, spring, rainy, halloween, autumn) fill the former Feb–Mar and Sep–Nov "swing" gaps; the short Oct 17–24 offseason strip separates the rainy and halloween windows, and Christmas remains a December carve-out.
 
+The windows are contiguous and cover the whole year, so the table is stored as an ordered list of *window starts* (`SEASON_WINDOWS` in `season.ts`, the single source of truth); `resolveSeasonTheme` returns the theme of the last window whose start is on/before `now`. A companion `resolveSeasonStart(now)` returns that window's **start boundary** (midnight, `now`'s year) — used by the per-user local theme below to detect a new-season takeover.
+
+### 6.1 Per-user "local theme" (#514)
+
+On top of the single global theme, a profile owner can set their **own** theme; it defaults to **unset (null) = follow the global theme**. Stored per user as `local_theme` (a `ThemeSetting` name) + `local_theme_set_at`, exposed self-service at `GET`/`PUT /api/v1/users/me/theme` (authenticated; the caller is resolved from the token, never a path param). The **effective** theme is computed client-side by `resolveEffectiveTheme({ global, localTheme, localSetAt }, now)`:
+
+1. **local unset** → the global path (`resolveActiveTheme(global, now)`), unchanged.
+2. **local set + a fixed (non-AUTO) global** → local wins (a fixed global never overrides a local choice).
+3. **local set + global AUTO** → compare `resolveSeasonStart(now)` against `local_theme_set_at`: a season that started **after** the user set local → the seasonal theme wins (new-season takeover); otherwise local wins. Re-setting local re-stamps `local_theme_set_at`, so the user reclaims their choice until the next season boundary. Stateless — no scheduled/batch clearing.
+
+Wiring: `ThemeProvider` (above `AuthProvider`, so the public global fetch still skins logged-out pages) is the single `data-theme` writer. A nested `LocalThemeApplier` mounted **inside** the authed tree fetches `/users/me/theme` (disabled while logged out) and reports the local theme up to `ThemeProvider`, which folds it into the effective theme. With no local theme the effective theme equals the global one, so logged-out behavior is unchanged; the hourly tick still re-resolves AUTO/season boundaries live.
+
 ---
 
 ## 7. Contrast checklist

@@ -17,6 +17,7 @@ private const val CONTACT_TYPE_MAX = 10
 private const val CODE_MAX = 20 // enum-like codes: name_type, provider, source, verification_*, capability
 private const val VALUE_MAX = 255 // free-text values: name value, provider_uid, contact value
 private const val PUBLIC_CODE_LEN = 6 // shareable player code
+private const val THEME_MAX = 32 // ThemeSetting name (mirrors users.local_theme VARCHAR(32))
 private const val RATING_PRECISION = 10 // NUMERIC(10,6), mirrors user_ratings.current_rating
 private const val RATING_SCALE = 6
 
@@ -42,6 +43,11 @@ internal object UsersTable : UUIDTable(name = "users") {
     val isActive = bool(name = "is_active").default(defaultValue = true)
     val publicCode = varchar(name = "public_code", length = PUBLIC_CODE_LEN)
     val proposedRating = decimal(name = "proposed_rating", precision = RATING_PRECISION, scale = RATING_SCALE).nullable()
+
+    // Per-user "local theme" (#514): a ThemeSetting name overriding the global theme, plus when it was
+    // set. Both null (the default) = follow the global theme. See ThemeService.getLocalTheme/setLocalTheme.
+    val localTheme = varchar(name = "local_theme", length = THEME_MAX).nullable()
+    val localThemeSetAt = datetime(name = "local_theme_set_at").nullable()
 
     // When set, this user is a disabled duplicate of the referenced canonical account (#124).
     val canonicalUserId =

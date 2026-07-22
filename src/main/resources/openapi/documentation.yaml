@@ -2842,6 +2842,58 @@ paths:
         '403':
           description: Caller is not an ADMINISTRATOR
 
+  /api/v1/users/me/theme:
+    get:
+      summary: Get the caller's local theme (#514)
+      description: >-
+        The caller's own per-profile "local theme" (#514): a ThemeSetting name overriding the global
+        theme, plus when it was set. Both null when the user follows the global theme (the default).
+        Self-service — the caller is resolved from the verified token, never a path parameter.
+      tags:
+        - Settings
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The caller's local theme (theme/setAt null when following the global theme)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocalThemeResponse'
+        '401':
+          description: Missing or invalid Firebase token
+        '403':
+          description: The token maps to no provisioned user
+    put:
+      summary: Set or clear the caller's local theme (#514)
+      description: >-
+        Set the caller's own local theme (#514) to a known theme name (stamps local_theme_set_at =
+        now), or clear it with { "theme": null } to revert to the global theme. Self-service: the
+        caller sets only their OWN theme (id from the token, never a path parameter).
+      tags:
+        - Settings
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetLocalThemeRequest'
+      responses:
+        '200':
+          description: The updated local theme
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocalThemeResponse'
+        '400':
+          description: Unknown theme value
+        '401':
+          description: Missing or invalid Firebase token
+        '403':
+          description: The token maps to no provisioned user
+
   /api/v1/settings/standings-source:
     get:
       summary: Get the standings serving source (#146)
@@ -6217,6 +6269,28 @@ components:
           type: string
           enum: [AUTO, GRASS, CLAY, AO, US_OPEN, OFF_SEASON, CHRISTMAS, VALENTINES, SPRING, RAINY, HALLOWEEN, AUTUMN, SKOPEO_OG]
           description: The UI theme to set (#378).
+
+    LocalThemeResponse:
+      type: object
+      properties:
+        theme:
+          type: string
+          nullable: true
+          enum: [AUTO, GRASS, CLAY, AO, US_OPEN, OFF_SEASON, CHRISTMAS, VALENTINES, SPRING, RAINY, HALLOWEEN, AUTUMN, SKOPEO_OG]
+          description: The caller's chosen local theme (#514); null when following the global theme.
+        setAt:
+          type: string
+          nullable: true
+          description: ISO timestamp of when the local theme was last set (#514); null when unset.
+
+    SetLocalThemeRequest:
+      type: object
+      properties:
+        theme:
+          type: string
+          nullable: true
+          enum: [AUTO, GRASS, CLAY, AO, US_OPEN, OFF_SEASON, CHRISTMAS, VALENTINES, SPRING, RAINY, HALLOWEEN, AUTUMN, SKOPEO_OG]
+          description: The local theme to set (#514), or null to clear it (follow the global theme).
 
     StandingsSourceResponse:
       type: object

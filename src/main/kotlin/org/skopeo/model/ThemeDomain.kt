@@ -37,6 +37,17 @@ data class ThemeSettingValue(
 )
 
 /**
+ * A user's per-profile "local theme" (#514): the chosen [theme] (null = follow the global theme, the
+ * default) and [setAt], the moment it was last set (null when unset). The web computes the effective
+ * theme from this plus the global setting; when the global theme is AUTO, [setAt] is compared against
+ * the current season's start so a new season re-applies the seasonal look.
+ */
+data class LocalThemeValue(
+    val theme: ThemeSetting?,
+    val setAt: LocalDateTime?,
+)
+
+/**
  * The resolved standings serving source (#146) plus its provenance: who last set it ([updatedBy]) and
  * when ([updatedAt]). Both are null when the source has never been explicitly set (default is
  * [SnapshotSource.RATING]).

@@ -28,12 +28,14 @@ import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.Contact
 import org.skopeo.model.CreatePlaceholderCommand
+import org.skopeo.model.LocalThemeValue
 import org.skopeo.model.Name
 import org.skopeo.model.NameType
 import org.skopeo.model.NumericRange
 import org.skopeo.model.ProfilePatch
 import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.ServiceError
+import org.skopeo.model.ThemeSetting
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserSearchQuery
@@ -106,6 +108,43 @@ class UserRepository {
         }
 
     fun findById(id: UUID): Either<ServiceError, User> = transaction { aggregateOrNotFound(id = id) }
+
+    /**
+     * The user's per-profile "local theme" (#514): the raw stored [ThemeSetting] name (null = follow
+     * global) and when it was set. [ServiceError.NotFound] when there is no such user.
+     */
+    fun getLocalTheme(id: UUID): Either<ServiceError, LocalThemeValue> =
+        transaction {
+            val row = UsersTable.selectAll().where { UsersTable.id eq id }.singleOrNull()
+            if (row == null) {
+                ServiceError.NotFound(message = "User $id not found").left()
+            } else {
+                val theme = row[UsersTable.localTheme]?.let { name -> ThemeSetting.entries.firstOrNull { it.name == name } }
+                LocalThemeValue(theme = theme, setAt = row[UsersTable.localThemeSetAt]).right()
+            }
+        }
+
+    /**
+     * Set (or clear) the user's local theme (#514): a non-null [theme] stamps [setAt]; a null [theme]
+     * clears both columns (revert to the global theme). Returns the refreshed value or [ServiceError.NotFound].
+     */
+    fun setLocalTheme(
+        id: UUID,
+        theme: ThemeSetting?,
+        setAt: LocalDateTime,
+    ): Either<ServiceError, LocalThemeValue> =
+        transaction {
+            val updated =
+                UsersTable.update(where = { UsersTable.id eq id }) {
+                    it[localTheme] = theme?.name
+                    it[localThemeSetAt] = theme?.let { setAt }
+                }
+            if (updated == 0) {
+                ServiceError.NotFound(message = "User $id not found").left()
+            } else {
+                LocalThemeValue(theme = theme, setAt = theme?.let { setAt }).right()
+            }
+        }
 
     /** Resolve multiple ids to their aggregates in one transaction; unknown ids are dropped. */
     fun findAllByIds(ids: List<UUID>): List<User> = transaction { ids.distinct().mapNotNull { loadAggregate(id = it) } }
