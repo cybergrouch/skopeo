@@ -26,6 +26,7 @@ import org.skopeo.model.NameType
 import org.skopeo.model.ProfilePatch
 import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.ServiceError
+import org.skopeo.model.ThemeSetting
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.model.UserSearchQuery
@@ -33,6 +34,7 @@ import org.skopeo.model.VerificationMethod
 import org.skopeo.model.VerificationStatus
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.util.UUID
 
 /**
@@ -283,5 +285,18 @@ class UserRepositoryTest {
         assertThrows<Exception> {
             repository.provision(command = googleSignup(email = "shared@example.com"))
         }
+    }
+
+    @Test
+    fun `getLocalTheme reports NotFound for an unknown id (#514)`() {
+        repository.getLocalTheme(id = UUID.randomUUID()).shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
+    fun `setLocalTheme reports NotFound for an unknown id (#514)`() {
+        repository
+            .setLocalTheme(id = UUID.randomUUID(), theme = ThemeSetting.AUTO, setAt = LocalDateTime.now())
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
     }
 }

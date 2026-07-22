@@ -73,4 +73,37 @@ describe('LocalThemeForm (#514)', () => {
     await userEvent.click(screen.getByRole('button', { name: /save theme/i }))
     await waitFor(() => expect(putMutate).toHaveBeenCalledWith({ data: { theme: null } }))
   })
+
+  it('shows a loading state while the local theme is fetched', () => {
+    useGetApiV1UsersMeTheme.mockReturnValue({ data: undefined, isLoading: true })
+    renderForm()
+    expect(screen.getByText('Loading…')).toBeInTheDocument()
+  })
+
+  it('shows a pending label while saving', () => {
+    useGetApiV1UsersMeTheme.mockReturnValue({ data: { theme: null, setAt: null }, isLoading: false })
+    usePutApiV1UsersMeTheme.mockReturnValue({
+      isPending: true,
+      mutateAsync: async (vars: unknown) => putMutate(vars),
+    })
+    renderForm()
+    expect(screen.getByRole('button', { name: 'Saving…' })).toBeDisabled()
+  })
+
+  it('confirms with a Saved status after a successful save', async () => {
+    useGetApiV1UsersMeTheme.mockReturnValue({ data: { theme: null, setAt: null }, isLoading: false })
+    renderForm()
+    await userEvent.selectOptions(screen.getByLabelText('Theme'), 'GRASS')
+    await userEvent.click(screen.getByRole('button', { name: /save theme/i }))
+    expect(await screen.findByRole('status')).toHaveTextContent('Saved')
+  })
+
+  it('shows an inline error when the save fails', async () => {
+    putMutate.mockRejectedValue(new Error('boom'))
+    useGetApiV1UsersMeTheme.mockReturnValue({ data: { theme: null, setAt: null }, isLoading: false })
+    renderForm()
+    await userEvent.selectOptions(screen.getByLabelText('Theme'), 'GRASS')
+    await userEvent.click(screen.getByRole('button', { name: /save theme/i }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not save your theme')
+  })
 })
