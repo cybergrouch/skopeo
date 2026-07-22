@@ -52,6 +52,40 @@
 }
 
 /*
+ * Skopeo OG (#512) — the app's original all-white look from before seasonal theming (#378),
+ * brought back as a manually-selectable theme (not part of the AUTO rotation). This block
+ * re-asserts the pre-#378 neutral light palette — the same token values `:root` still carries as
+ * the default/fallback (sourced from web/src/index.css at commit 424cc13, the last state before the
+ * seasonal `[data-theme]` blocks were added) — so selecting SKOPEO_OG swaps the UI back to the
+ * clean neutral surface. The `--link*` content-link tokens use the original neutral treatment
+ * (dark foreground link, mid-gray underline), matching the `:root` fallback added in #394.
+ */
+[data-theme='og'] {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --link: oklch(0.205 0 0);
+  --link-underline: oklch(0.556 0 0);
+  --link-hover: oklch(0.145 0 0);
+}
+
+/*
  * Seasonal UI themes (#378; all-dark in #399/#402; revised to "Vibrant Depth" in #409). Each
  * `[data-theme="…"]` block is a full token set. The all-dark canvases muted the court identities,
  * so the four court seasons (christmas/ao/clay/grass) now use a *saturated court-tone canvas* (60%)

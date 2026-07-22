@@ -31,6 +31,8 @@ import type { ThemeName } from "@/lib/season";
  * - halloween: Pumpkin Orange canvas `#E65100` (3.79:1). The toxic-green accent `#76FF03` washes
  *   out (1.31:1) — the orange reads unmistakably spooky.
  * - autumn: Burnt-Rust canvas `#BF360C` (5.60:1). The amber accent `#FFB300` washes out (1.79:1).
+ * - og (#512): the original neutral primary, a near-black dark gray `#303030` (oklch(0.205 0 0)) —
+ *   high contrast against the white ball (~11:1), matching the clean all-white OG surface.
  */
 const THEME_ACCENT: Record<ThemeName, string> = {
   offseason: "#212529",
@@ -44,6 +46,7 @@ const THEME_ACCENT: Record<ThemeName, string> = {
   rainy: "#37474F",
   halloween: "#E65100",
   autumn: "#BF360C",
+  og: "#303030",
 };
 
 /** Neutral (no `data-theme`) tint — the default dark-slate mark. */

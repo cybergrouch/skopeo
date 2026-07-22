@@ -145,6 +145,9 @@ The four court seasons are Vibrant Depth (#409); Off-Season + US Open stay all-d
 | **Rainy** *(vibrant)* | `#37474F` Storm Slate | `#212121` Near-Black · `#ECEFF1` | `#00E5FF` Electric Cyan | `#ECEFF1` Cloud (2px) | Moody, cool, overcast |
 | **Halloween** *(vibrant)* | `#E65100` Pumpkin Orange | `#1A0933` Witching Purple · `#FFFFFF` | `#76FF03` Toxic Green | `#FFFFFF` White (2px) | Spooky, high-contrast, playful |
 | **Autumn** *(vibrant)* | `#BF360C` Burnt Rust | `#3E2723` Cocoa · `#FFF3E0` | `#FFB300` Amber | `#FFF3E0` Linen (2px) | Warm, harvest, earthy |
+| **Skopeo OG** *(light, manual-only)* | `#FFFFFF` White | `#FFFFFF` White · near-black `oklch(0.145 0 0)` | dark neutral `oklch(0.205 0 0)` | `oklch(0.922 0 0)` Light Gray (1px) | The original clean all-white look |
+
+> **Skopeo OG (#512):** the app's original all-white look from before seasonal theming (#378), brought back as a **manually-selectable** theme (backend enum `SKOPEO_OG`; `data-theme='og'`; label "Skopeo OG"). It re-asserts the pre-#378 neutral light palette that `:root` still carries as the default/fallback (`web/src/index.css`), so it is **not** part of the AUTO rotation (§6) — an admin picks it explicitly. Because it drives the same tokens as every other theme, the shared content links/badges stay AA on the OG surface.
 
 ### 5.1 Content-link colors (#399, supersedes #394/#395)
 
@@ -163,6 +166,7 @@ Public-page / share links (the "Public page (QR)" anchors and similar) get an ex
 | **Rainy** | `#00E5FF` Electric Cyan | `#ECEFF1` Cloud | 10.47:1 — AA ✅ (on `#212121`) |
 | **Halloween** | `#76FF03` Toxic Green | `#FFFFFF` White | 14.22:1 — AA ✅ (on `#1A0933`) |
 | **Autumn** | `#FFB300` Amber | `#FFF3E0` Linen | 7.70:1 — AA ✅ (on `#3E2723`) |
+| **Skopeo OG** | dark neutral `oklch(0.205 0 0)` | near-black `oklch(0.145 0 0)` | ~14:1 — AA ✅ (on white card) |
 
 > **Clay/Grass link note:** clay `#E07A5F` still doubles as the button, and Wimbledon purple `#452263` is the grass button — too dark to double as a link on the deep card. Clay reuses `#E07A5F` for both the link and the button fill (the button *label* is the dark `#2B1A12`, see §5/§7). Grass's link is the "Balanced Wimbledon" **Optic Tennis Yellow `#CCFF00`** (#417) — it jumps off the forest-green card at 10.47:1 and stays distinct from the purple action button (it replaced the earlier lavender `#C5A3E8`, which passed AA at 5.73:1 but read faint).
 

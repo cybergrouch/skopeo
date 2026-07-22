@@ -52,6 +52,7 @@ describe('resolveActiveTheme ENUM_TO_THEME mapping', () => {
     ['RAINY', 'rainy'],
     ['HALLOWEEN', 'halloween'],
     ['AUTUMN', 'autumn'],
+    ['SKOPEO_OG', 'og'],
   ]
 
   it.each(cases)('%s pins to its theme', (setting, expected) => {

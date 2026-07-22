@@ -87,6 +87,7 @@ class ThemeServiceTest {
                 ThemeSetting.RAINY,
                 ThemeSetting.HALLOWEEN,
                 ThemeSetting.AUTUMN,
+                ThemeSetting.SKOPEO_OG,
             )
         newThemes.forEach { theme ->
             service.setTheme(token = token(uid = "admin"), theme = theme.name).shouldBeRight().theme shouldBe theme

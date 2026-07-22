@@ -6196,7 +6196,7 @@ components:
       properties:
         theme:
           type: string
-          enum: [AUTO, GRASS, CLAY, AO, US_OPEN, OFF_SEASON, CHRISTMAS, VALENTINES, SPRING, RAINY, HALLOWEEN, AUTUMN]
+          enum: [AUTO, GRASS, CLAY, AO, US_OPEN, OFF_SEASON, CHRISTMAS, VALENTINES, SPRING, RAINY, HALLOWEEN, AUTUMN, SKOPEO_OG]
           description: The current global UI theme (#378); AUTO when unset.
         updatedAt:
           type: string
@@ -6215,7 +6215,7 @@ components:
       properties:
         theme:
           type: string
-          enum: [AUTO, GRASS, CLAY, AO, US_OPEN, OFF_SEASON, CHRISTMAS, VALENTINES, SPRING, RAINY, HALLOWEEN, AUTUMN]
+          enum: [AUTO, GRASS, CLAY, AO, US_OPEN, OFF_SEASON, CHRISTMAS, VALENTINES, SPRING, RAINY, HALLOWEEN, AUTUMN, SKOPEO_OG]
           description: The UI theme to set (#378).
 
     StandingsSourceResponse:
