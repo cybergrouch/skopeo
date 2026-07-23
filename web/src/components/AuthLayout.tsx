@@ -25,6 +25,20 @@ export function AuthLayout({
     <div className="flex min-h-svh items-center justify-center bg-muted/40 p-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
+          <div className="mb-2 flex flex-col items-center gap-2">
+            <img
+              src="/logo-mark.svg"
+              alt="Skopeo"
+              className="h-12 w-12"
+              width={48}
+              height={48}
+            />
+            <span className="text-xl font-semibold tracking-tight">Skopeo</span>
+            <p className="text-sm text-muted-foreground">
+              Skopeo calculates performance-based NTRP tennis ratings from your
+              match results.
+            </p>
+          </div>
           <CardTitle className="text-2xl">{title}</CardTitle>
           <CardDescription>{description}</CardDescription>
         </CardHeader>
