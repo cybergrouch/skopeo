@@ -129,6 +129,18 @@ So the designation-plus-policy machinery is **obsolete for both**, and two of th
 
 ---
 
+## Award creation, audit & trigger — unchanged (awarded at finalize)
+
+Only the **amount** of an award changes (rule-computed for open play, placement-based for tournaments). The **record, audit, and trigger stay exactly as they are today**:
+
+- **Record + trace (unchanged).** Each award is one ledger row per recipient carrying the points, a validity window (`valid_from`/`valid_until`), and a trace to whom it applies (`user_id`) and what granted it (source `event_id`/`match_id`), band- and sex-tagged and revocable.
+- **Audit (unchanged).** Awarding is audited as it is now — an `EVENT_POINTS_AWARDED` summary alongside `EVENT_FINALIZED`.
+- **Trigger (unchanged) — at event finalize.** Awards are created **inside `EventService.finalize()`, in the same DB transaction as the finalize**, by whoever finalizes the event (HOST on their own event, or ADMINISTRATOR / CLUB_OWNER). Awarding is **not** moved to the administrator rating-calculation trigger; that separate ADMINISTRATOR step (`RatingCalculationService`, dry-run→commit) computes **ratings** only and runs later — points are already awarded at finalize, independent of it.
+
+In short: the new work replaces *how the amount is derived*, and adds a loser row for open play; it does **not** change when or by whom awards are created, nor the audit.
+
+---
+
 ## How this maps onto the current code
 
 Grounded in a read of the points/band/event code (file references for implementers):
