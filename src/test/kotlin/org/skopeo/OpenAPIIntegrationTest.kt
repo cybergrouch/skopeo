@@ -36,6 +36,10 @@ class OpenAPIIntegrationTest {
             body shouldContain "openapi: 3.0.0"
             body shouldContain "Skopeo API"
             body shouldContain "/api/v1/calculate-ranking"
+            // Circuits (#525): admin-managed groupings of tournaments, with request/response schemas.
+            body shouldContain "/api/v1/circuits"
+            body shouldContain "CircuitResponse"
+            body shouldContain "CreateCircuitRequest"
             body shouldContain "/api/v1/theme"
             // Per-user local theme (#514): the self-service path and its request/response schemas.
             body shouldContain "/api/v1/users/me/theme"

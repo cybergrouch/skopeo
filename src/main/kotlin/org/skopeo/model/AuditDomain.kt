@@ -50,6 +50,9 @@ enum class AuditAction {
     CLUB_DELETED,
     CLUB_OWNER_ASSIGNED,
     CLUB_OWNER_REMOVED,
+    CIRCUIT_CREATED,
+    CIRCUIT_RENAMED,
+    CIRCUIT_DELETED,
     SETTINGS_THEME_CHANGED,
     SETTINGS_STANDINGS_SOURCE_CHANGED,
     RANKING_POINTS_AWARDED,
@@ -72,6 +75,7 @@ enum class AuditEntityType {
     INVITE,
     MATCH,
     CLUB,
+    CIRCUIT,
     EVENT,
     CALCULATION,
     SETTING,
@@ -96,6 +100,7 @@ enum class AuditCategory {
     RATING_CALCULATION,
     DUPLICATE_RECTIFICATION,
     CLUB_MANAGEMENT,
+    CIRCUIT_MANAGEMENT,
     EVENT_MANAGEMENT,
     SETTINGS_MANAGEMENT,
     RANKING_POINTS,
@@ -155,6 +160,10 @@ val AuditAction.category: AuditCategory
             AuditAction.CLUB_OWNER_ASSIGNED,
             AuditAction.CLUB_OWNER_REMOVED,
             -> AuditCategory.CLUB_MANAGEMENT
+            AuditAction.CIRCUIT_CREATED,
+            AuditAction.CIRCUIT_RENAMED,
+            AuditAction.CIRCUIT_DELETED,
+            -> AuditCategory.CIRCUIT_MANAGEMENT
             AuditAction.SETTINGS_THEME_CHANGED,
             AuditAction.SETTINGS_STANDINGS_SOURCE_CHANGED,
             -> AuditCategory.SETTINGS_MANAGEMENT

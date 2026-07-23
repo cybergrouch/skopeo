@@ -35,6 +35,8 @@ tags:
     description: Global app settings; the UI theme is publicly readable and administrator-writable
   - name: Points Budget
     description: Global points policy and per-club budgets; points-manager (or administrator) managed
+  - name: Circuits
+    description: Administrator-defined groupings of tournaments (e.g. NORTH, SOUTH)
 
 paths:
   /api/v1/calculate-ranking:
@@ -2644,6 +2646,105 @@ paths:
           description: No such request
         '409':
           description: The request is already resolved
+
+  /api/v1/circuits:
+    post:
+      summary: Create a circuit
+      description: ADMINISTRATOR only (#525). Creates a circuit (a grouping of tournaments).
+      tags:
+        - Circuits
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCircuitRequest'
+      responses:
+        '201':
+          description: The created circuit
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CircuitResponse'
+        '400':
+          description: Invalid body (e.g. blank name)
+        '401':
+          description: Missing or invalid Firebase token
+        '403':
+          description: Caller is not an ADMINISTRATOR
+    get:
+      summary: List circuits
+      description: Staff (HOST/CLUB_OWNER/ADMINISTRATOR, #525) — e.g. to pick a circuit when creating a tournament. All active circuits, alphabetical.
+      tags:
+        - Circuits
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The circuits
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CircuitResponse'
+        '403':
+          description: Caller is not staff
+
+  /api/v1/circuits/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    patch:
+      summary: Rename a circuit
+      description: ADMINISTRATOR only (#525). Renames the circuit; the name is validated (non-blank) and trimmed.
+      tags:
+        - Circuits
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCircuitRequest'
+      responses:
+        '200':
+          description: The updated circuit
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CircuitResponse'
+        '400':
+          description: Invalid body (e.g. blank name) or malformed id
+        '403':
+          description: Caller is not an ADMINISTRATOR
+        '404':
+          description: No such circuit
+    delete:
+      summary: Delete a circuit
+      description: >-
+        ADMINISTRATOR only (#525). Soft-deletes the circuit (is_active → false), like clubs: it drops
+        out of the circuit list but the row is kept for history and any future tournament references.
+      tags:
+        - Circuits
+      security:
+        - firebaseAuth: []
+      responses:
+        '204':
+          description: The circuit was deleted
+        '400':
+          description: Malformed id
+        '403':
+          description: Caller is not an ADMINISTRATOR
+        '404':
+          description: No such circuit (or already deleted)
 
   /api/v1/clubs:
     post:
@@ -6454,6 +6555,39 @@ components:
         budgetedPoints:
           type: integer
           description: The non-negative whole-number budget to set for the club and type (#403 Phase B).
+
+    CreateCircuitRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: The circuit name (non-blank; trimmed server-side).
+
+    UpdateCircuitRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: The new circuit name (non-blank; trimmed server-side).
+
+    CircuitResponse:
+      type: object
+      required:
+        - id
+        - name
+        - isActive
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        isActive:
+          type: boolean
 
     CreateClubRequest:
       type: object

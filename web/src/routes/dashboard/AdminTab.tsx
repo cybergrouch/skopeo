@@ -1,4 +1,5 @@
 import { BuildInfoSection } from "./admin/BuildInfoSection";
+import { CircuitsSection } from "./admin/CircuitsSection";
 import { ClubsSection } from "./admin/ClubsSection";
 import { DeletedAccountsSection } from "./admin/DeletedAccountsSection";
 import { DuplicateCandidatesSection } from "./admin/DuplicateCandidatesSection";
@@ -14,6 +15,7 @@ export function AdminTab() {
       <ManagePlayerSection />
       <DeletedAccountsSection />
       <ClubsSection />
+      <CircuitsSection />
       <DuplicatesSection />
       <DuplicateCandidatesSection />
       <PendingCalculationSection />
