@@ -86,7 +86,7 @@ Points are computed **per set and summed across the sets** of the match:
 ### Open decisions (Part B)
 
 - **Resolved:** points are computed **per set and summed** (see [Per-set aggregation](#per-set-aggregation)). Each set's winner/loser and games drive the table; the overall match winner is not used; multi-set matches can exceed the single-set table values.
-- **OPEN — negative awards.** The upset-loser case yields **−2 / −1**. Confirm the ledger carries negative points (the column is a signed `DECIMAL`, so it is storable) and that band-race standings net them.
+- **Resolved — net, no floor.** The upset-loser case yields **−2 / −1**; these are stored as-is (the ledger `points` column is a signed `DECIMAL`) and **net straight into** the band-race total, with **no floor at zero**. Two existing mechanisms naturally bound the effect, so a floor is unnecessary: (1) **band-tagging** — if a run of upset losses actually deflates a player's rating into a lower band, they begin a **fresh points race in the new band** and the old-band negatives no longer weigh on them; and (2) the **validity window** — every award carries a start date and expiry (per the existing points contract), so a negative award ages out. Displays may floor the *shown* number at zero if a negative leaderboard value is undesirable, but the stored/aggregated value is not floored.
 - **OPEN — band at which time?** Bands for the comparison — at match-play time or at finalize time? Finalize-time current bands are readily available; match-time bands would need to be snapshotted.
 - **OPEN — band tagging of the award.** Which band does each award count toward (winner's band, or each recipient's own band) given the existing band-scoped race?
 
