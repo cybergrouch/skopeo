@@ -440,3 +440,14 @@ tasks.register<JavaExec>("generateDoublesDominanceReport") {
     classpath = sourceSets.getByName("test").runtimeClasspath
     mainClass.set("org.skopeo.service.calculator.impl.v2.DoublesDominanceReportKt")
 }
+
+// Monte Carlo study of the ranking-POINTS design (#525): expected steady-state leaderboard score
+// and its cap, per player archetype and points-validity setting. Writes /tmp/points_ranking.txt and
+// presentations/points_ranking.md.  Usage: ./gradlew generatePointsSimulationReport
+tasks.register<JavaExec>("generatePointsSimulationReport") {
+    group = "reports"
+    description = "Monte Carlo simulation of ranking-points steady-state score and its cap"
+    dependsOn(tasks.named("testClasses"))
+    classpath = sourceSets.getByName("test").runtimeClasspath
+    mainClass.set("org.skopeo.service.calculator.impl.v2.PointsRankingSimulationReportKt")
+}

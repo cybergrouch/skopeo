@@ -1,0 +1,144 @@
+# Points Ranking — Monte Carlo Simulation Study
+
+> **Status:** Study of record for the ranking-points design ([#525](https://github.com/cybergrouch/skopeo/issues/525)). The points formulas are **design-only** (not yet implemented); this study encodes them standalone — exactly as the rating studies encode the rating algorithm — to answer a policy question **before** we build.
+
+## The question
+
+**Is there a point where a player's reward points cap? Can we estimate that cap? Or do points grow to infinity?**
+
+## The answer
+
+**The score is bounded — it does not grow to infinity — because points expire.** A player's leaderboard score is the sum of their still-valid points, and each award drops out after its validity window. Once a player's *earning rate* equals their *expiry rate*, the score plateaus. The plateau is the cap:
+
+> **Cap ≈ Σ over event types of ( events per day × expected points per event × validity days )**
+>
+> equivalently **`Cap ≈ (validity ÷ cadence) × E[points per event]`** per event type, summed.
+
+The Monte Carlo mean matches this closed-form estimate to within noise (see §5), which is the empirical proof of boundedness: if the score diverged, no finite estimate would track it.
+
+Three consequences fall out:
+
+1. **Validity is a linear dial on the cap.** Doubling a validity window doubles that component's cap. Open play at 2 months caps at ~2× its 1-month value; tournament points at 12 months cap at ~4× their 3-month value (§2, §3).
+2. **The cap is finite and estimable from known factors** — cadence, win/placement rate, and validity — with no free parameters once those are fixed.
+3. **There is also a hard absolute ceiling** (all-wins upper bound) = `(validity ÷ cadence) × max points per event`, e.g. **45** open-play-only, **240** tournaments-only, **330** for a heavy player, under the default validity policy (§5). Real expected caps sit well below these.
+
+**Bottom line:** points do **not** go to infinity. Under the default policy (open play 2 mo, tournament 6 mo), a realistic even-skill player who plays weekly and enters a tournament every two months plateaus around **80 points**; a strong, heavy-playing competitor around **120**; the theoretical ceiling for that behaviour is **330**. Validity length is the primary lever on where the plateau sits.
+
+## How to run (reproducible)
+
+```bash
+./gradlew generatePointsSimulationReport
+```
+
+Writes `/tmp/points_ranking.txt` and `presentations/points_ranking.md` (git-ignored). Deterministic: **seed `20260724`**, **40,000 trials per cell**. Source: `src/test/kotlin/org/skopeo/service/calculator/impl/v2/PointsRankingSimulationReport.kt`. The tables below are copied from a run of that program.
+
+## Methodology
+
+Two independent player axes give a 3 × 4 grid of archetypes:
+
+**Skill class** — win rate on open play and chance of a tournament placement:
+
+| Class | Open-play win rate | Tournament placement chance |
+| --- | ---: | ---: |
+| Below 50% | 35% | 35% |
+| Even 50% | 50% | 50% |
+| Above 50% | 65% | 65% |
+
+**Behaviour class** — attendance cadence (frequency for the "only" classes is taken to match the balanced player's respective cadence):
+
+| Class | Open play | Tournament |
+| --- | --- | --- |
+| Open play only | 1×/week | never |
+| Tournaments only | never | 1 per 2 months |
+| Balanced | 1×/week | 1 per 2 months |
+| Heavy-open | 2×/week | 1 per 2 months |
+
+**Points model** (the [generalized open-play algorithm](./TOURNAMENTS_CIRCUITS_AND_OPEN_PLAY_POINTS.md#generalized-algorithm-implementation-spec) and the placement table, encoded standalone):
+
+- Open play is single-set. Per match the player is **equal-band** (p = 0.40), the **higher band / favorite** (p = 0.30), or the **lower band / underdog** (p = 0.30); win/loss is a Bernoulli draw at the class win rate, independent of the band relation; on an unequal-band loss the loser clears the ALP ≥ 4-games threshold with p = 0.50. Points then follow the parameter table (equal 3/0; favorite-win 2, loser 1 + ALP; upset-win 5, loser −2 + ALP).
+- A tournament yields a placement with probability = the class placement chance; given a placement it is 1st/2nd/3rd/4th with p = 0.10 / 0.20 / 0.30 / 0.40. Points use the **sanctioned** table (80/60/40/30). **Unsanctioned is exactly half**, so every tournament figure below halves for an unsanctioned circuit.
+
+**Score metric.** Events occur at a fixed cadence (the randomness is in outcomes, not timing). The score is read at a **uniformly-random instant** in a steady window (final year of a 3-year horizon, so every window ≤ 12 months is fully warmed). A random phase offset places the snapshot at a random point on the event grid, so the expected active-event count is exactly `validity ÷ cadence`. Negative open-play awards net in.
+
+**These assumptions are documented so they can be tuned; the relative findings (linearity in validity, boundedness, tournament dominance) are robust to them.** The band-relation mix (40/30/30) and placement distribution (10/20/30/40) are the two most load-bearing.
+
+## Results
+
+### 1. Expected points per event
+
+| Skill class | Open-play match (avg pts) | Tournament (avg pts, sanctioned) |
+| --- | ---: | ---: |
+| Below 50% | 1.2 | 15.4 |
+| Even 50% | 1.7 | 22.0 |
+| Above 50% | 2.1 | 28.6 |
+
+A single tournament placement is worth **~10–20× an open-play match** on average — the dominant driver of a high score.
+
+### 2. Open-play steady-state score (mean active points)
+
+| Skill class | Cadence | 1-month validity | 2-month validity | 2mo ÷ 1mo |
+| --- | --- | ---: | ---: | ---: |
+| Below 50% | 1×/wk | 5.0 | 10.1 | 2.0× |
+| Below 50% | 2×/wk | 9.9 | 20.1 | 2.0× |
+| Even 50% | 1×/wk | 7.1 | 14.4 | 2.0× |
+| Even 50% | 2×/wk | 14.2 | 28.8 | 2.0× |
+| Above 50% | 1×/wk | 9.2 | 18.7 | 2.0× |
+| Above 50% | 2×/wk | 18.4 | 37.4 | 2.0× |
+
+Validity is a clean linear multiplier; cadence (attendance) and win rate scale the plateau proportionally.
+
+### 3. Tournament steady-state score (mean ± sd, 1 tournament / 2 months)
+
+| Skill class | 3-month | 6-month | 12-month | 12mo ÷ 3mo |
+| --- | ---: | ---: | ---: | ---: |
+| Below 50% | 22.9 ± 29.0 | 45.9 ± 39.9 | 92.0 ± 56.3 | 4.0× |
+| Even 50% | 32.9 ± 32.3 | 66.0 ± 43.0 | 131.8 ± 60.7 | 4.0× |
+| Above 50% | 43.0 ± 33.6 | 86.1 ± 42.9 | 171.6 ± 60.6 | 4.0× |
+
+Tournament points are **large and bursty** — the standard deviation rivals the mean at short validity because the score jumps on a placement and decays between tournaments. Longer validity both raises the plateau (linearly) and smooths the variability (more concurrent active tournaments).
+
+### 4. Combined steady-state score — default policy (open play 2 mo, tournament 6 mo)
+
+Mean total leaderboard points (p5 / median / p95 in parentheses).
+
+| Behaviour class | Below 50% | Even 50% | Above 50% |
+| --- | ---: | ---: | ---: |
+| Open play only (1×/wk) | 10.1 (1/10/20) | 14.4 (4/14/24) | 18.7 (9/19/28) |
+| Tournaments only (1 / 2 mo) | 46.3 (0/40/120) | 65.8 (0/60/140) | 86.0 (30/90/160) |
+| 1×/wk open + 1 / 2 mo tourney | 56.4 (5/49/131) | 80.1 (13/78/156) | 104.3 (40/103/178) |
+| 2×/wk open + 1 / 2 mo tourney | 66.1 (13/60/142) | 94.6 (26/92/172) | 123.3 (56/122/197) |
+
+### 5. Is the score capped? Yes — it plateaus (default policy)
+
+The Monte Carlo mean (the realised expected cap) matches the closed-form `rate · μ · V` estimate; the ceiling is the all-wins upper bound.
+
+| Behaviour class | Skill | MC mean (expected cap) | Analytic rate·μ·V | Absolute ceiling |
+| --- | --- | ---: | ---: | ---: |
+| Open play only (1×/wk) | Below 50% | 10.1 | 10.1 | 45 |
+| Open play only (1×/wk) | Even 50% | 14.4 | 14.4 | 45 |
+| Open play only (1×/wk) | Above 50% | 18.7 | 18.7 | 45 |
+| Tournaments only (1 / 2 mo) | Below 50% | 46.3 | 46.1 | 240 |
+| Tournaments only (1 / 2 mo) | Even 50% | 65.8 | 66.0 | 240 |
+| Tournaments only (1 / 2 mo) | Above 50% | 86.0 | 85.9 | 240 |
+| Balanced | Below 50% | 56.4 | 56.2 | 285 |
+| Balanced | Even 50% | 80.1 | 80.4 | 285 |
+| Balanced | Above 50% | 104.3 | 104.5 | 285 |
+| Heavy-open | Below 50% | 66.1 | 66.3 | 330 |
+| Heavy-open | Even 50% | 94.6 | 94.7 | 330 |
+| Heavy-open | Above 50% | 123.3 | 123.2 | 330 |
+
+The MC-vs-analytic agreement across every cell is the evidence: the score converges to a **finite** plateau equal to `rate × E[pts/event] × validity`, not to infinity.
+
+## Findings & policy implications
+
+- **No runaway.** Expiry guarantees a finite plateau. The only way points would grow unbounded is to remove the validity window entirely.
+- **Validity is the master lever.** The cap is linear in validity. Choosing tournament validity = 12 months roughly quadruples the tournament plateau vs 3 months and lets a single strong season dominate the table for a year; 3–6 months keeps standings fresher. This is a product choice, now quantified.
+- **Tournaments dominate magnitude; open play provides a stable floor.** One 1st place (80) outweighs ~40 open-play matches. Open-play points are small but steady; tournament points are large but bursty (high variance at short validity).
+- **Estimating any configuration.** For any cadence/validity, `Cap ≈ (validity ÷ cadence) × E[pts/event]`, with `E[open] ≈ 1.2–2.1` and `E[tourney, sanctioned] ≈ placementChance × 44` (halve for unsanctioned). No simulation needed for a first-order estimate — the sim confirms it and supplies the distribution.
+- **Skill and attendance scale the plateau proportionally**, not explosively — a below-average player and an above-average player differ by well under 2× at equal behaviour.
+
+## References
+
+- Design of record: [`TOURNAMENTS_CIRCUITS_AND_OPEN_PLAY_POINTS.md`](./TOURNAMENTS_CIRCUITS_AND_OPEN_PLAY_POINTS.md) · Issue [#525](https://github.com/cybergrouch/skopeo/issues/525)
+- Sibling simulation studies: [`RATING_SIMULATION_STUDIES.md`](./RATING_SIMULATION_STUDIES.md), [`DOUBLES_RATING_STUDY.md`](./DOUBLES_RATING_STUDY.md)
+- Program: `src/test/kotlin/org/skopeo/service/calculator/impl/v2/PointsRankingSimulationReport.kt`
