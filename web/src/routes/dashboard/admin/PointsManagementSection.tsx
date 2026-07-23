@@ -134,7 +134,7 @@ function AwardedPointsRow({ row }: { row: AwardedPointRow }) {
         ) : (
           player
         )}
-        <PlaceholderTag show={row.isPlaceholder} />
+        <PlaceholderTag show={row.isPlaceholder} deleted={row.isDeleted} />
       </td>
       <td className="py-1 pr-2 tabular-nums">{formatPoints(row.points) ?? row.points}</td>
       <td className="py-1 pr-2">

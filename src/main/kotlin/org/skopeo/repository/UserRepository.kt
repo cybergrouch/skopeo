@@ -161,23 +161,33 @@ class UserRepository {
         query: UserSearchQuery,
         limit: Int = SEARCH_LIMIT,
         offset: Int = 0,
+        // When true, include soft-deleted/inactive accounts (Research; #518). Default excludes them so
+        // pickers and normal search remain active-only.
+        includeInactive: Boolean = false,
     ): List<User> =
         transaction {
             UsersTable
                 .selectAll()
-                .where { conditionsFor(query = query) }
+                .where { conditionsFor(query = query, includeInactive = includeInactive) }
                 .orderBy(UsersTable.id to SortOrder.ASC)
                 .limit(n = limit, offset = offset.toLong())
                 .map { loadAggregate(id = it[UsersTable.id].value)!! }
         }
 
-    /** Total active users matching [query] (#232) — the same predicate as [search], for paging totals. */
-    fun countSearch(query: UserSearchQuery): Long = transaction { UsersTable.selectAll().where { conditionsFor(query = query) }.count() }
+    /** Total users matching [query] (#232) — the same predicate as [search], for paging totals. */
+    fun countSearch(
+        query: UserSearchQuery,
+        includeInactive: Boolean = false,
+    ): Long = transaction { UsersTable.selectAll().where { conditionsFor(query = query, includeInactive = includeInactive) }.count() }
 
     /** The AND-combined predicate for [search]/[countSearch]: every supplied facet of [query]. */
-    private fun conditionsFor(query: UserSearchQuery): Op<Boolean> =
+    private fun conditionsFor(
+        query: UserSearchQuery,
+        includeInactive: Boolean,
+    ): Op<Boolean> =
         buildList {
-            add(element = Op.build { UsersTable.isActive eq true })
+            // Normal search/pickers exclude inactive; Research opts in (#518) to surface deleted accounts.
+            if (!includeInactive) add(element = Op.build { UsersTable.isActive eq true })
             query.sex?.let { sex -> add(element = Op.build { UsersTable.sex eq sex }) }
             query.dobMin?.let { min -> add(element = Op.build { UsersTable.dateOfBirth greaterEq min }) }
             query.dobMax?.let { max -> add(element = Op.build { UsersTable.dateOfBirth lessEq max }) }
@@ -289,6 +299,17 @@ class UserRepository {
     fun deactivate(id: UUID): Either<ServiceError, Unit> =
         transaction {
             val updated = UsersTable.update(where = { UsersTable.id eq id }) { it[UsersTable.isActive] = false }
+            if (updated == 0) ServiceError.NotFound(message = "User $id not found").left() else Unit.right()
+        }
+
+    /**
+     * Re-allow login for a soft-deleted account (#518): flip is_active back to true. A deleted account
+     * already has a null canonical pointer, so nothing else changes; mirrors [deactivate]. Returns a
+     * [ServiceError.NotFound] when there is no such user.
+     */
+    fun reactivate(id: UUID): Either<ServiceError, Unit> =
+        transaction {
+            val updated = UsersTable.update(where = { UsersTable.id eq id }) { it[UsersTable.isActive] = true }
             if (updated == 0) ServiceError.NotFound(message = "User $id not found").left() else Unit.right()
         }
 

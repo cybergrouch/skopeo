@@ -152,6 +152,13 @@ fun effectivePhotoUrl(
     photoHidden: Boolean,
 ): String? = if (photoHidden) null else customPhotoUrl ?: providerPhotoUrl
 
+/**
+ * True when this account was soft-deleted by an administrator (#518). `is_active` is overloaded — a
+ * merged duplicate (#124) is also inactive but carries a [User.canonicalUserId], so "deleted" is
+ * qualified as inactive AND canonical-less. Centralized so every "Deleted" flag/list uses the same rule.
+ */
+fun User.isDeleted(): Boolean = !isActive && canonicalUserId == null
+
 /** The user's single active display name, if any (names include disabled ones). */
 fun User.displayName(): String? = names.firstOrNull { it.type == NameType.DISPLAY && it.isActive }?.value
 

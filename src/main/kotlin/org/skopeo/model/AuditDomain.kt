@@ -60,6 +60,8 @@ enum class AuditAction {
     POINTS_BUDGET_ALLOCATED,
     PLACEHOLDER_CREATED,
     PLACEHOLDER_CLAIMED,
+    ACCOUNT_DELETED,
+    ACCOUNT_REACTIVATED,
 }
 
 /** The kind of entity an [AuditAction] concerns. */
@@ -105,7 +107,12 @@ enum class AuditCategory {
 val AuditAction.category: AuditCategory
     get() =
         when (this) {
-            AuditAction.USER_CREATED, AuditAction.PLACEHOLDER_CREATED -> AuditCategory.USER_CREATION
+            AuditAction.USER_CREATED,
+            AuditAction.PLACEHOLDER_CREATED,
+            // Admin soft-delete / re-allow-login (#518) roll up with the rest of the user lifecycle.
+            AuditAction.ACCOUNT_DELETED,
+            AuditAction.ACCOUNT_REACTIVATED,
+            -> AuditCategory.USER_CREATION
             AuditAction.NAME_ADDED, AuditAction.NAME_UPDATED -> AuditCategory.NAME_CHANGE
             AuditAction.CONTACT_ADDED, AuditAction.CONTACT_UPDATED -> AuditCategory.CONTACT_CHANGE
             AuditAction.CAPABILITY_GRANTED, AuditAction.CAPABILITY_REVOKED -> AuditCategory.CAPABILITY_CHANGE
@@ -209,6 +216,8 @@ data class AuditPersonRef(
     // True for a login-less, not-yet-claimed placeholder ("dummy") player (#496/#505): the activity log
     // renders an "Unclaimed" tag beside the name. Real/claimed users leave it false.
     val placeholder: Boolean = false,
+    // True for an admin-soft-deleted account (#518): the activity log renders a dominant "Deleted" chip.
+    val deleted: Boolean = false,
 )
 
 /** A match id resolved to its public code + date, so a match-targeted entry can link to its page (#136). */

@@ -11,10 +11,12 @@ const {
   usePostApiV1UsersUserIdCapabilities,
   useDeleteApiV1UsersUserIdCapabilitiesCapability,
   usePostApiV1UsersUserIdRankingPointsAdjustments,
+  useDeleteApiV1UsersId,
   putMutate,
   grantMutate,
   revokeMutate,
   adjustMutate,
+  deleteMutate,
   picked,
 } = vi.hoisted(() => ({
   useGetApiV1UsersUserIdRatings: vi.fn(),
@@ -23,10 +25,12 @@ const {
   usePostApiV1UsersUserIdCapabilities: vi.fn(),
   useDeleteApiV1UsersUserIdCapabilitiesCapability: vi.fn(),
   usePostApiV1UsersUserIdRankingPointsAdjustments: vi.fn(),
+  useDeleteApiV1UsersId: vi.fn(),
   putMutate: vi.fn(),
   grantMutate: vi.fn(),
   revokeMutate: vi.fn(),
   adjustMutate: vi.fn(),
+  deleteMutate: vi.fn(),
   // The player the stub picker selects — overridable per test.
   picked: {
     current: {
@@ -57,6 +61,9 @@ vi.mock('@/api/generated/capabilities/capabilities', () => ({
 }))
 vi.mock('@/api/generated/ranking-points/ranking-points', () => ({
   usePostApiV1UsersUserIdRankingPointsAdjustments,
+}))
+vi.mock('@/api/generated/users/users', () => ({
+  useDeleteApiV1UsersId,
 }))
 // Drive selection from a stub so the real picker (axios → firebase) never loads.
 vi.mock('@/components/UserSearchSelect', () => ({
@@ -121,6 +128,13 @@ describe('ManagePlayerSection', () => {
       isPending: false,
       mutateAsync: async (vars: unknown) => {
         adjustMutate(vars)
+        options.mutation.onSuccess()
+      },
+    }))
+    useDeleteApiV1UsersId.mockImplementation((options: SuccessOpts) => ({
+      isPending: false,
+      mutate: (vars: unknown) => {
+        deleteMutate(vars)
         options.mutation.onSuccess()
       },
     }))
@@ -356,5 +370,43 @@ describe('ManagePlayerSection', () => {
     await user.type(screen.getByLabelText('Validity end'), '2026-06-01')
     await user.click(screen.getByRole('button', { name: 'Apply adjustment' }))
     expect(await screen.findByText('Player has no rating')).toBeInTheDocument()
+  })
+
+  it('gates the delete behind a confirmation, then deletes and returns to search (#518)', async () => {
+    const user = await selectAlice()
+    // The first click only reveals the confirmation — it must not delete yet.
+    await user.click(screen.getByRole('button', { name: 'Delete account' }))
+    expect(deleteMutate).not.toHaveBeenCalled()
+    expect(screen.getByText(/can no longer sign in/i)).toBeInTheDocument()
+
+    // Confirming calls the delete mutation with the selected user's id, then resets to the picker.
+    await user.click(screen.getByRole('button', { name: 'Confirm delete account' }))
+    expect(deleteMutate).toHaveBeenCalledWith({ id: 'u1' })
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'pick Alice' })).toBeInTheDocument(),
+    )
+  })
+
+  it('can cancel the delete confirmation without deleting (#518)', async () => {
+    const user = await selectAlice()
+    await user.click(screen.getByRole('button', { name: 'Delete account' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(deleteMutate).not.toHaveBeenCalled()
+    // Still on the manage view (the danger-zone button is back).
+    expect(screen.getByRole('button', { name: 'Delete account' })).toBeInTheDocument()
+  })
+
+  it('surfaces the backend reason when a delete is refused, e.g. last admin (#518)', async () => {
+    useDeleteApiV1UsersId.mockImplementation((options: SuccessOpts) => ({
+      isPending: false,
+      mutate: () =>
+        options.mutation.onError?.({
+          response: { data: { message: 'Cannot delete the last active ADMINISTRATOR' } },
+        }),
+    }))
+    const user = await selectAlice()
+    await user.click(screen.getByRole('button', { name: 'Delete account' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm delete account' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('Cannot delete the last active ADMINISTRATOR')
   })
 })

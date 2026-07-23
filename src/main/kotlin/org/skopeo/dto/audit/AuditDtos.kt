@@ -26,6 +26,8 @@ data class AuditPersonResponse(
     // True for a login-less, not-yet-claimed placeholder ("dummy") player (#496/#505): the activity log
     // renders an "Unclaimed" tag beside the name. Real/claimed users leave it false.
     val isPlaceholder: Boolean = false,
+    // True for an admin-soft-deleted account (#518): the activity log renders a dominant "Deleted" chip.
+    val isDeleted: Boolean = false,
 )
 
 /** A match-typed target resolved to its public code + date, so the row links to the public match page (#136). */
@@ -78,7 +80,13 @@ private fun AuditEntryView.toResponse(): AuditEntryResponse =
     )
 
 private fun AuditPersonRef.toResponse(): AuditPersonResponse =
-    AuditPersonResponse(userId = userId.toString(), displayName = displayName, publicCode = publicCode, isPlaceholder = placeholder)
+    AuditPersonResponse(
+        userId = userId.toString(),
+        displayName = displayName,
+        publicCode = publicCode,
+        isPlaceholder = placeholder,
+        isDeleted = deleted,
+    )
 
 private fun AuditMatchRef.toResponse(): AuditMatchResponse =
     AuditMatchResponse(matchId = matchId.toString(), publicCode = publicCode, matchDate = matchDate.toString())

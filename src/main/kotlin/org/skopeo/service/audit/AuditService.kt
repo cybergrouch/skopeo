@@ -20,6 +20,7 @@ import org.skopeo.model.Capability
 import org.skopeo.model.ServiceError
 import org.skopeo.model.actions
 import org.skopeo.model.displayName
+import org.skopeo.model.isDeleted
 import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository
@@ -110,6 +111,7 @@ class AuditService(
                         displayName = user.displayName(),
                         publicCode = user.publicCode,
                         placeholder = user.placeholder,
+                        deleted = user.isDeleted(),
                     )
             }
     }

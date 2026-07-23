@@ -64,9 +64,34 @@ describe('ResearchTab', () => {
     expect(screen.getByRole('link', { name: /Alice/ })).toHaveAttribute('href', '/players/AAA111')
     // 25 per page now that the endpoint returns a total (no +1 look-ahead).
     expect(useGetApiV1UsersSearch).toHaveBeenCalledWith(
-      { name: 'ali', limit: 25, offset: 0 },
+      { name: 'ali', limit: 25, offset: 0, includeInactive: true },
       { query: { enabled: true } },
     )
+  })
+
+  it('includes soft-deleted accounts (includeInactive) and flags them with a "Deleted" chip (#518)', async () => {
+    useGetApiV1UsersSearch.mockReturnValue(
+      page([
+        {
+          id: 'd1',
+          publicCode: 'DEL111',
+          displayName: 'Gone Player',
+          photoUrl: null,
+          sex: 'Male',
+          age: 40,
+          rating: undefined,
+          capabilities: ['PLAYER'],
+          isDeleted: true,
+        },
+      ]),
+    )
+    const user = userEvent.setup()
+    renderTab()
+    await user.type(screen.getByLabelText('Name'), 'gone')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+
+    expect(screen.getByText('Gone Player')).toBeInTheDocument()
+    expect(screen.getByText('Deleted')).toBeInTheDocument()
   })
 
   it('shows the computed rating confidence as a percentage beside the band (#343)', async () => {
@@ -172,7 +197,7 @@ describe('ResearchTab', () => {
     await user.click(screen.getByRole('button', { name: 'Search' }))
 
     expect(useGetApiV1UsersSearch).toHaveBeenLastCalledWith(
-      { sex: 'Male', age: '[20,30]', rating: '[3.0,)', limit: 25, offset: 0 },
+      { sex: 'Male', age: '[20,30]', rating: '[3.0,)', limit: 25, offset: 0, includeInactive: true },
       { query: { enabled: true } },
     )
   })
@@ -185,7 +210,7 @@ describe('ResearchTab', () => {
     await user.click(screen.getByRole('button', { name: 'Search' }))
 
     expect(useGetApiV1UsersSearch).toHaveBeenLastCalledWith(
-      { age: '(,30]', rating: '(,4.5]', limit: 25, offset: 0 },
+      { age: '(,30]', rating: '(,4.5]', limit: 25, offset: 0, includeInactive: true },
       { query: { enabled: true } },
     )
   })
@@ -238,21 +263,21 @@ describe('ResearchTab', () => {
     expect(screen.getByRole('button', { name: '3' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled()
     expect(useGetApiV1UsersSearch).toHaveBeenLastCalledWith(
-      { name: 'p', limit: 25, offset: 0 },
+      { name: 'p', limit: 25, offset: 0, includeInactive: true },
       { query: { enabled: true } },
     )
 
     // Clicking a numbered page link jumps straight to that page (offset 50 for page 3).
     await user.click(screen.getByRole('button', { name: '3' }))
     expect(useGetApiV1UsersSearch).toHaveBeenLastCalledWith(
-      { name: 'p', limit: 25, offset: 50 },
+      { name: 'p', limit: 25, offset: 50, includeInactive: true },
       { query: { enabled: true } },
     )
 
     // A fresh search restarts at page 1 (offset 0).
     await user.click(screen.getByRole('button', { name: 'Search' }))
     expect(useGetApiV1UsersSearch).toHaveBeenLastCalledWith(
-      { name: 'p', limit: 25, offset: 0 },
+      { name: 'p', limit: 25, offset: 0, includeInactive: true },
       { query: { enabled: true } },
     )
   })

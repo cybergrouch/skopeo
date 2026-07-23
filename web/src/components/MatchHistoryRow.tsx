@@ -29,7 +29,7 @@ function NameList({ side }: { side: PlayerMatchHistoryEntry['opponents'] }) {
       {side.map((p, i) => (
         <span key={p.publicCode ?? i}>
           {p.displayName ?? 'Player'}
-          <PlaceholderTag show={p.isPlaceholder} />
+          <PlaceholderTag show={p.isPlaceholder} deleted={p.isDeleted} />
           {i < side.length - 1 ? ', ' : ''}
         </span>
       ))}

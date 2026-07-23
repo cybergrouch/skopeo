@@ -42,8 +42,12 @@ export function ResearchTab() {
   const [page, setPage] = useState(0)
 
   // Paged search (#232): the endpoint returns { items, total } so we can show numbered pages.
+  // Research includes soft-deleted accounts (#518), flagged with a "Deleted" chip, so they stay
+  // discoverable for history/lookup; pickers keep the default (active-only) behaviour.
   const query = useGetApiV1UsersSearch(
-    applied ? { ...applied, limit: PAGE_SIZE, offset: page * PAGE_SIZE } : {},
+    applied
+      ? { ...applied, limit: PAGE_SIZE, offset: page * PAGE_SIZE, includeInactive: true }
+      : {},
     { query: { enabled: applied !== null } },
   )
   const results = query.data?.items ?? []
@@ -108,7 +112,7 @@ export function ResearchTab() {
                         <div className="min-w-0 flex-1">
                           <div className="font-medium">
                             {user.displayName ?? user.id}
-                            <PlaceholderTag show={user.isPlaceholder} />{' '}
+                            <PlaceholderTag show={user.isPlaceholder} deleted={user.isDeleted} />{' '}
                             <span className="font-normal text-muted-foreground">
                               · {user.publicCode}
                             </span>

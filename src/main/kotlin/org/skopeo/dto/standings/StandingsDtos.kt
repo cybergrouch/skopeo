@@ -26,6 +26,8 @@ data class StandingEntryResponse(
     // True for a login-less, not-yet-claimed placeholder ("dummy") player (#496/#505): the leaderboard
     // renders an "Unclaimed" tag beside the name. Real/claimed players leave it false.
     val isPlaceholder: Boolean = false,
+    // True for an admin-soft-deleted account (#518): the leaderboard renders a dominant "Deleted" chip.
+    val isDeleted: Boolean = false,
 )
 
 /** A selectable (band, sex) group present in the current snapshot (#220): the band code + label + sex. */
@@ -115,4 +117,5 @@ fun StandingEntry.toResponse(): StandingEntryResponse =
         currentRating = currentRating,
         points = points,
         isPlaceholder = placeholder,
+        isDeleted = deleted,
     )

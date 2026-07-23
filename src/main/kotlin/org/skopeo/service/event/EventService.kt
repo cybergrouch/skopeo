@@ -32,6 +32,7 @@ import org.skopeo.model.ServiceError
 import org.skopeo.model.User
 import org.skopeo.model.ageInYears
 import org.skopeo.model.displayName
+import org.skopeo.model.isDeleted
 import org.skopeo.model.isExpired
 import org.skopeo.repository.ClubRepository
 import org.skopeo.repository.EventRepository
@@ -650,6 +651,10 @@ class EventService(
                 ensureNotNull(value = users.findByFirebaseUid(firebaseUid = token.uid)) {
                     ServiceError.Forbidden(message = "Create your profile before signing up for events")
                 }
+            // A deleted account (#518) is blocked from the sign-in path already, but guard defensively.
+            ensure(condition = !caller.isDeleted()) {
+                ServiceError.Validation(message = "A deleted account cannot sign up for events")
+            }
             val event =
                 ensureNotNull(value = events.findByPublicCode(code = code)) {
                     ServiceError.NotFound(message = "Event $code not found")
@@ -717,6 +722,7 @@ class EventService(
                         displayName = user.displayName(),
                         publicCode = user.publicCode,
                         isPlaceholder = user.placeholder,
+                        isDeleted = user.isDeleted(),
                     )
                 }
             val matchResponses =
@@ -728,6 +734,7 @@ class EventService(
                                 displayName = user.displayName(),
                                 publicCode = user.publicCode,
                                 isPlaceholder = user.placeholder,
+                                isDeleted = user.isDeleted(),
                             )
                         }
                     match.toPublicResponse(players = players)
@@ -850,6 +857,7 @@ class EventService(
                     rating = ratingById[entry.userId],
                     status = entry.status,
                     placeholder = user.placeholder,
+                    deleted = user.isDeleted(),
                 )
             }
         val creator =
@@ -911,16 +919,22 @@ private fun ensureNotFinalized(event: Event): Either<ServiceError, Unit> =
         ensure(condition = !event.isFinalized) { ServiceError.Validation(message = "Event is finalized") }
     }
 
-/** Every id must map to an existing user, else a [ServiceError.Validation]. */
+/**
+ * Every id must map to an existing, non-deleted user. A missing id is a [ServiceError.Validation]; a
+ * soft-deleted account (#518) is rejected too — deletion blocks NEW event/match references (existing
+ * rosters are untouched).
+ */
 private fun ensureKnownUsers(
     users: UserRepository,
     ids: List<UUID>,
 ): Either<ServiceError, Unit> {
     val distinct = ids.distinct()
-    val found = users.findAllByIds(ids = distinct).map { it.id }.toSet()
-    return if (found.containsAll(elements = distinct)) {
-        Unit.right()
-    } else {
-        ServiceError.Validation(message = "One or more participants do not exist").left()
+    val loaded = users.findAllByIds(ids = distinct)
+    return when {
+        !loaded.map { it.id }.toSet().containsAll(elements = distinct) ->
+            ServiceError.Validation(message = "One or more participants do not exist").left()
+        loaded.any { it.isDeleted() } ->
+            ServiceError.Validation(message = "A deleted account cannot be added to an event").left()
+        else -> Unit.right()
     }
 }

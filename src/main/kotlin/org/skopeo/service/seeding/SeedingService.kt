@@ -11,6 +11,7 @@ import org.skopeo.model.ServiceError
 import org.skopeo.model.User
 import org.skopeo.model.ageInYears
 import org.skopeo.model.displayName
+import org.skopeo.model.isDeleted
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.SeedingRepository
 import org.skopeo.repository.UserRepository
@@ -70,6 +71,7 @@ class SeedingService(
                         sex = user.sex,
                         age = user.dateOfBirth?.let { ageInYears(dateOfBirth = it, asOf = today) },
                         placeholder = user.placeholder,
+                        deleted = user.isDeleted(),
                     )
                 }
             seedings.replace(listId = listId, generatedBy = list.ownerId, entries = entries)

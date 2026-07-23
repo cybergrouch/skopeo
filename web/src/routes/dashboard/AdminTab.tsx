@@ -1,5 +1,6 @@
 import { BuildInfoSection } from "./admin/BuildInfoSection";
 import { ClubsSection } from "./admin/ClubsSection";
+import { DeletedAccountsSection } from "./admin/DeletedAccountsSection";
 import { DuplicateCandidatesSection } from "./admin/DuplicateCandidatesSection";
 import { DuplicatesSection } from "./admin/DuplicatesSection";
 import { ManagePlayerSection } from "./admin/ManagePlayerSection";
@@ -11,6 +12,7 @@ export function AdminTab() {
   return (
     <div className="grid gap-4">
       <ManagePlayerSection />
+      <DeletedAccountsSection />
       <ClubsSection />
       <DuplicatesSection />
       <DuplicateCandidatesSection />

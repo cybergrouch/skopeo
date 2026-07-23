@@ -102,6 +102,9 @@ internal suspend fun RoutingContext.respondError(error: ServiceError) {
             val body = error.canonicalPublicCode?.let { base + ("canonicalCode" to it) } ?: base
             call.respond(status = HttpStatusCode.Forbidden, message = body)
         }
+        is ServiceError.AccountDeleted ->
+            // An admin-deleted account's sign-in (#518): 403 with a contact-an-administrator message.
+            call.respond(status = HttpStatusCode.Forbidden, message = errorBody(error = "Account deleted", message = error.message))
     }
 }
 

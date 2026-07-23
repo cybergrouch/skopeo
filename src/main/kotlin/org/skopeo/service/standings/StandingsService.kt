@@ -13,6 +13,7 @@ import org.skopeo.model.User
 import org.skopeo.model.UserRating
 import org.skopeo.model.ageInYears
 import org.skopeo.model.displayName
+import org.skopeo.model.isDeleted
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.StandingsSnapshotRepository
 import org.skopeo.repository.UserRepository
@@ -152,6 +153,7 @@ class StandingsService(
                             // so there is no map miss and no dead null-rating branch.
                             currentRating = if (request.revealRates) player.rating.currentRating.toPlainString() else null,
                             placeholder = player.user.placeholder,
+                            deleted = player.user.isDeleted(),
                         )
                     }
             StandingsView(
@@ -246,6 +248,7 @@ class StandingsService(
                     // (#457). The rating is NOT the served metric here, so it stays null — never leaked.
                     points = entry.orderingValue.toPlainString(),
                     placeholder = user.placeholder,
+                    deleted = user.isDeleted(),
                 )
             }
         return StandingsView(

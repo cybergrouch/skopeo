@@ -56,13 +56,13 @@ function PersonCell({ p }: { p: AuditPersonResponse | null | undefined }) {
     return (
       <>
         {person(p)}
-        <PlaceholderTag show={p.isPlaceholder} />
+        <PlaceholderTag show={p.isPlaceholder} deleted={p.isDeleted} />
       </>
     )
   return (
     <>
       <ContentLink to={`/players/${p.publicCode}`}>{person(p)}</ContentLink>
-      <PlaceholderTag show={p.isPlaceholder} />
+      <PlaceholderTag show={p.isPlaceholder} deleted={p.isDeleted} />
     </>
   )
 }

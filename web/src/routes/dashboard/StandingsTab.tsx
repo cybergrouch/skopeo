@@ -242,7 +242,7 @@ export function StandingsTab() {
                           <ContentLink to={`/players/${entry.publicCode}`}>
                             {entry.displayName ?? entry.publicCode}
                           </ContentLink>
-                          <PlaceholderTag show={entry.isPlaceholder} />
+                          <PlaceholderTag show={entry.isPlaceholder} deleted={entry.isDeleted} />
                           {isMe ? (
                             <span className="ml-2 text-xs font-normal text-muted-foreground">
                               You

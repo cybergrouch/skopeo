@@ -95,6 +95,8 @@ data class EventParticipantResponse(
     // True for a login-less, not-yet-claimed placeholder ("dummy") player (#496/#505): the roster
     // renders an "Unclaimed" tag beside the name. Real/claimed participants leave it false.
     val isPlaceholder: Boolean = false,
+    // True for an admin-soft-deleted account (#518): the roster renders a dominant "Deleted" chip.
+    val isDeleted: Boolean = false,
 )
 
 /**
@@ -202,6 +204,7 @@ internal fun EventParticipantRef.toResponse(): EventParticipantResponse =
             },
         status = status.name,
         isPlaceholder = placeholder,
+        isDeleted = deleted,
     )
 
 /**

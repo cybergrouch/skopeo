@@ -25,6 +25,7 @@ import {
   usePostApiV1UsersUserIdCapabilities,
 } from '@/api/generated/capabilities/capabilities'
 import { usePostApiV1UsersUserIdRankingPointsAdjustments } from '@/api/generated/ranking-points/ranking-points'
+import { useDeleteApiV1UsersId } from '@/api/generated/users/users'
 import type { UserSummaryResponse } from '@/api/generated/model'
 
 // Roles an admin can grant/revoke here. ADMINISTRATOR is included (#194) but gated behind a confirm
@@ -379,6 +380,93 @@ function ManageBlock({ title, children }: { title: string; children: React.React
 }
 
 /**
+ * Danger-zone "Delete account" (#518): an admin soft-deletes any account. Deactivates it (login is
+ * blocked), retains all history, and blocks it from new events — reversible via "Allow login" in the
+ * Deleted accounts admin view. ADMINISTRATOR-only (this whole section is admin-gated). The first click
+ * asks for an explicit confirmation spelling out the consequences; the backend refuses to delete the
+ * last active administrator, and that message is surfaced here.
+ */
+function DeleteAccountForm({
+  userId,
+  onDeleted,
+}: {
+  userId: string
+  onDeleted: () => void
+}) {
+  const [confirming, setConfirming] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const del = useDeleteApiV1UsersId({
+    mutation: {
+      onSuccess: onDeleted,
+      onError: (e) => setError(errorMessage(e, 'Could not delete the account.')),
+    },
+  })
+
+  if (!confirming) {
+    return (
+      <div className="space-y-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="border-destructive/50 text-destructive hover:bg-destructive/10"
+          aria-label="Delete account"
+          onClick={() => {
+            setError(null)
+            setConfirming(true)
+          }}
+        >
+          Delete account
+        </Button>
+        {error ? (
+          <p className="text-xs text-destructive" role="alert">
+            {error}
+          </p>
+        ) : null}
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-2 rounded-md border border-destructive/50 p-2">
+      <p className="text-xs text-muted-foreground">
+        This deactivates the account: the player can no longer sign in, but their history (matches,
+        ratings, points) is retained and they cannot be added to new events. You can re-allow login
+        later from the Deleted accounts view. Continue?
+      </p>
+      <div className="flex items-center gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="border-destructive/50 text-destructive hover:bg-destructive/10"
+          disabled={del.isPending}
+          aria-label="Confirm delete account"
+          onClick={() => del.mutate({ id: userId })}
+        >
+          Confirm delete
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={del.isPending}
+          onClick={() => setConfirming(false)}
+        >
+          Cancel
+        </Button>
+      </div>
+      {error ? (
+        <p className="text-xs text-destructive" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
+/**
  * Admin player management (#96): find a member, then edit their profile (sex, date of birth),
  * override their NTRP rating, grant/revoke roles, and make a manual point adjustment (#469) — all in
  * one place. Reached via search, so the public profile page stays read-only.
@@ -417,6 +505,9 @@ export function ManagePlayerSection() {
             </ManageBlock>
             <ManageBlock title="Point adjustment">
               <PointAdjustmentForm key={user.id} userId={user.id} />
+            </ManageBlock>
+            <ManageBlock title="Danger zone">
+              <DeleteAccountForm key={user.id} userId={user.id} onDeleted={() => setUser(null)} />
             </ManageBlock>
           </div>
         ) : (
