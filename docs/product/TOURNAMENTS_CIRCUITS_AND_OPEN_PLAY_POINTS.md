@@ -76,9 +76,18 @@ Worked out:
 - **Favorite (higher band) wins** → winner **2**; loser **1** (or **2** with ALP).
 - **Underdog (lower band) upsets** → winner **5**; loser **−2** (or **−1** with ALP). **Loser points can be negative.**
 
+### Per-set aggregation
+
+Points are computed **per set and summed across the sets** of the match:
+
+- Open play in Manila is generally **single-set**, but **3-set** open play is emerging. The formula runs **per set**: for each set, the set's winner/loser drives the table and **ALP is evaluated on that set's games** ("the set they lost" = each set the team lost).
+- The **band comparison is constant** across the match (same two teams), so only the set outcome and per-set games vary.
+- The **overall match `winnerTeamId` is not used** for open-play points — each set is scored independently.
+- **Consequence:** a 3-set match can total **more (or, for an upset loser, more negative) points** than the single-set table values. This is intended.
+
 ### Open decisions (Part B)
 
-- **OPEN — per-set vs. per-match.** The rule says "the set they lost" (singular), but an open-play `Match` can be multi-set (`Match.sets` is a list). Clarify whether open play is single-set, or points are computed per set and summed, or per match using a designated deciding set. This affects both ALP evaluation and winner/loser determination.
+- **Resolved:** points are computed **per set and summed** (see [Per-set aggregation](#per-set-aggregation)). Each set's winner/loser and games drive the table; the overall match winner is not used; multi-set matches can exceed the single-set table values.
 - **OPEN — negative awards.** The upset-loser case yields **−2 / −1**. Confirm the ledger carries negative points (the column is a signed `DECIMAL`, so it is storable) and that band-race standings net them.
 - **OPEN — band at which time?** Bands for the comparison — at match-play time or at finalize time? Finalize-time current bands are readily available; match-time bands would need to be snapshotted.
 - **OPEN — band tagging of the award.** Which band does each award count toward (winner's band, or each recipient's own band) given the existing band-scoped race?
@@ -100,7 +109,7 @@ Grounded in a read of the points/band/event code (file references for implemente
 - `service/calculator/impl/v2/DoublesMatchTypeHandler.kt` — team rating = mean of partners; feed that mean into `Level.fromValue` for the doubles team band.
 
 ### Match result already carries games-in-lost-set
-- `model/MatchDomain.kt` — `MatchSetResult(setNumber, team1Games, team2Games, winnerTeamId, …)` and `Match.sets: List<MatchSetResult>`. The losing team's games in a set: `if (winnerTeamId == team1) team2Games else team1Games`. ALP (≥ 4) is directly computable. Per-set vs. per-match aggregation is the one thing the model doesn't dictate — hence the OPEN decision above.
+- `model/MatchDomain.kt` — `MatchSetResult(setNumber, team1Games, team2Games, winnerTeamId, …)` and `Match.sets: List<MatchSetResult>`. The losing team's games in a set: `if (winnerTeamId == team1) team2Games else team1Games`. ALP (≥ 4) is directly computable per set. Points are summed over `Match.sets` (per-set aggregation, resolved), so the awarder iterates the sets rather than reading only the overall `winnerTeamId`.
 
 ### Ledger already supports what we need
 - `repository/RankingPointRepository.kt` / `RankingPointAwardsTable` — `points` is a **signed** `DECIMAL(10,4)` (negatives OK); rows are **band-tagged** and **sex-tagged**, carry a validity window and `event_id`/`match_id` links, and are append-only/revocable. No schema change is needed for negative open-play awards or loser rows.
