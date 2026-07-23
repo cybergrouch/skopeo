@@ -1,0 +1,128 @@
+# Tournaments, Circuits & Open-Play Points
+
+> **Status:** Proposed — discussion of record for [#525](https://github.com/cybergrouch/skopeo/issues/525). Not yet implemented; open decisions are marked **OPEN** below.
+
+This document captures the design discussion for two related additions to the competitive model and the ranking-points system:
+
+1. **Tournaments & Circuits** — a first-class **Tournament** (sanctioned or unsanctioned) that belongs to an admin-defined **Circuit**, where the sanction status selects the points a tournament contributes.
+2. **Open-play points reimplementation** — replace host-*designated* per-match points for **open play** with a **computed** formula driven by the difference between the two teams' NTRP **band** ratings.
+
+The fuller working model (band matrices, edge cases) lives in the working Google Sheet referenced on #525; this document records the rules confirmed so far and how they map onto the existing code.
+
+---
+
+## Part A — Tournaments & Circuits
+
+### Concepts
+
+| Concept | Definition |
+| --- | --- |
+| **Circuit** | An **administrator-defined** grouping of tournaments. Flexible — admins create/rename/retire circuits; it is **not** a hard-coded enum. Seed data: **NORTH**, **SOUTH**. |
+| **Tournament** | Belongs to exactly one Circuit. Carries a **sanction status**: `SANCTIONED` \| `UNSANCTIONED`. |
+| **Sanction status** | Selects which **placement → points** table applies (see below). It does **not** scale per-match points. |
+
+All three are net-new: today `EventType.TOURNAMENT` is only an event flavor — there is no tournament entity, no circuit, and no sanction flag anywhere in the codebase.
+
+### Tournament points distribution (by final placement)
+
+Points are awarded **once per participant** by **finishing placement**. The sanction status selects the table (sanctioned = exactly **2×** unsanctioned):
+
+| Placement | Sanctioned | Unsanctioned |
+| --- | --- | --- |
+| 1st | **80** | **40** |
+| 2nd | **60** | **30** |
+| 3rd | **40** | **20** |
+| 4th | **30** | **15** |
+
+- **Resolved:** placements beyond 4th earn **0 points** — the table above is the full schedule.
+- **OPEN:** ties for a placement (e.g. two semi-final losers both "3rd/4th") — split, both-high, or both-low?
+- **OPEN:** does the payout depend on **draw size** (a 4-player draw and a 32-player draw both paying 80 for 1st)? Common in real circuits.
+
+### Model decisions
+
+- **Circuit as its own entity.** A `circuits` table (`id`, `name`, `is_active`, audit cols) + admin CRUD, seeded with NORTH/SOUTH — preferred over a free-text field so seeding/renaming and reporting-by-circuit are clean.
+- **OPEN — Tournament vs. Event relationship.** Two options:
+  - **(a) Tournament as its own entity** that *owns* a set of `EventType.TOURNAMENT` events and produces a final ranking of participants. Preferred; aligns with deferred [#390](https://github.com/cybergrouch/skopeo/issues/390) (tournament brackets) and is required by the placement-based payout (a tournament must yield 1st–4th).
+  - **(b) Attributes on the event** (`circuit_id`, `sanction_status` directly on the event). Smaller step, but doesn't naturally produce a multi-event final standing.
+- **Placement source.** The placement-based table requires each tournament to produce a final ranking of participants (bracket result, standings, or host-entered placements). This is the main reason to favour option (a).
+
+---
+
+## Part B — Open-play points
+
+Points for an **open-play** result are computed from the **NTRP band difference** between the two teams, who won, and games won in the lost set — replacing the current host-designated amount for open play.
+
+### Band comparison
+
+- A team's band is `Level.fromValue(rating)` — a 0.5-wide floor over the 1.0–7.0 NTRP range ("4.0", "4.5", …).
+- For **doubles**, a team's band is the band of the **mean** of the partnership's two NTRP ratings (matching how `DoublesMatchTypeHandler` already means partners).
+- Higher band = higher-ranked team.
+
+### Points table
+
+Define **RLP** (Regular Loser Points, a constant per case) and **ALP** (Additional Loser Points):
+
+> **ALP = 1 if the losing team won ≥ 4 games in the set they lost, else 0.**
+
+| Case | Winner points | Loser points |
+| --- | --- | --- |
+| **Equal bands** | **3** | **0** |
+| **Unequal — higher-ranked team wins** | **2** | **RLP + ALP**, `RLP = 1` |
+| **Unequal — lower-ranked team wins (upset)** | **5** | **RLP + ALP**, `RLP = −2` |
+
+Worked out:
+
+- **Equal bands** → winner **3**, loser **0**.
+- **Favorite (higher band) wins** → winner **2**; loser **1** (or **2** with ALP).
+- **Underdog (lower band) upsets** → winner **5**; loser **−2** (or **−1** with ALP). **Loser points can be negative.**
+
+### Open decisions (Part B)
+
+- **OPEN — per-set vs. per-match.** The rule says "the set they lost" (singular), but an open-play `Match` can be multi-set (`Match.sets` is a list). Clarify whether open play is single-set, or points are computed per set and summed, or per match using a designated deciding set. This affects both ALP evaluation and winner/loser determination.
+- **OPEN — negative awards.** The upset-loser case yields **−2 / −1**. Confirm the ledger carries negative points (the column is a signed `DECIMAL`, so it is storable) and that band-race standings net them.
+- **OPEN — band at which time?** Bands for the comparison — at match-play time or at finalize time? Finalize-time current bands are readily available; match-time bands would need to be snapshotted.
+- **OPEN — band tagging of the award.** Which band does each award count toward (winner's band, or each recipient's own band) given the existing band-scoped race?
+
+---
+
+## How this maps onto the current code
+
+Grounded in a read of the points/band/event code (file references for implementers):
+
+### Points are awarded at event finalize
+`service/event/EventFinalizeAwarder.kt` (`awardForFinalizedEvent`) is the single choke point. It filters fixtures that are `COMPLETED`, have a `winnerTeamId`, and carry a non-null `designatedPoints`; resolves each winner's **current band** (`ratings.findCurrentRatings`) and sex; maps the event's `pointValidity{Start,End}` to a `PointClass`; and writes one ledger row **per winning-team member** with the host-designated amount.
+
+- **Open play (Part B) plugs in here.** All inputs the formula needs are available at finalize time: both teams' current bands, `match.winnerTeamId`, per-set games (`match.sets[].team1Games/team2Games`), `event.type`, `match.matchType`. The change: for `EventType.OPEN_PLAY` fixtures, replace "read `designatedPoints`" with `computeOpenPlayPoints(winnerBand, loserBand, sets)`, and **also emit a loser award** (today only winners are paid) — including zero/negative amounts.
+- **Tournaments (Part A) need a different branch.** Tournaments award once per **participant** by final placement, not per fixture. The awarder (or a sibling) reads each participant's placement at tournament finalize and writes a single ledger row from the sanctioned/unsanctioned table.
+
+### Band model already supports the comparison
+- `model/Level.kt` — `Level.fromValue(rating)` floors a rating to a 0.5 band; bands compare numerically via `minRating`. Equal/higher/lower is straightforward.
+- `service/calculator/impl/v2/DoublesMatchTypeHandler.kt` — team rating = mean of partners; feed that mean into `Level.fromValue` for the doubles team band.
+
+### Match result already carries games-in-lost-set
+- `model/MatchDomain.kt` — `MatchSetResult(setNumber, team1Games, team2Games, winnerTeamId, …)` and `Match.sets: List<MatchSetResult>`. The losing team's games in a set: `if (winnerTeamId == team1) team2Games else team1Games`. ALP (≥ 4) is directly computable. Per-set vs. per-match aggregation is the one thing the model doesn't dictate — hence the OPEN decision above.
+
+### Ledger already supports what we need
+- `repository/RankingPointRepository.kt` / `RankingPointAwardsTable` — `points` is a **signed** `DECIMAL(10,4)` (negatives OK); rows are **band-tagged** and **sex-tagged**, carry a validity window and `event_id`/`match_id` links, and are append-only/revocable. No schema change is needed for negative open-play awards or loser rows.
+
+### Upset detection exists but is rating-based, not band-based
+- `service/calculator/impl/v2/PerformanceBasedRankingCalculatorImpl.kt` computes `isUpset` from the continuous **rating** advantage, not the discrete **band** difference. The open-play formula keys off **band** difference, so it should compute the band comparison independently (cheap; both ratings are in hand) rather than reuse `isUpset`.
+
+### Net-new for Part A
+No `circuit`, `tournament`, or `sanction` concept exists (`EventType` / `MatchType` / `WeightClass` are the only competition-shape enums). Circuits + tournaments + sanction status are all new tables, models, repositories, services, routes, DTOs, OpenAPI entries, and web surfaces.
+
+---
+
+## Suggested increments (not a commitment)
+
+1. **Open-play computed points** (Part B) — self-contained: a new `computeOpenPlayPoints(...)`, wired into `EventFinalizeAwarder` for `OPEN_PLAY`, paying losers too, with tests. New V-migration only if we choose to snapshot match-time bands.
+2. **Circuits** — `circuits` table + admin CRUD (seed NORTH/SOUTH); model/repo/service/routes/DTO/OpenAPI + an Admin web tab.
+3. **Tournaments + sanction** — `tournaments` table referencing `circuit_id` + `sanction_status`, tied to events, producing a final placement per participant, with the placement → points table applied at finalize.
+
+## References
+
+- Issue: [#525](https://github.com/cybergrouch/skopeo/issues/525)
+- Related deferred work: [#390](https://github.com/cybergrouch/skopeo/issues/390) (tournament brackets)
+- Existing points design: [`POINTS_AWARDING_AND_BUDGET.md`](./POINTS_AWARDING_AND_BUDGET.md)
+- Rating algorithm & bands: [`RATING_CALCULATION_ALGORITHM.md`](./RATING_CALCULATION_ALGORITHM.md)
+- Working model (band matrices, source of truth): Google Sheet linked from #525.
