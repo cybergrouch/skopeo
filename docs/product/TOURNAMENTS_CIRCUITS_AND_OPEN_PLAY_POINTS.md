@@ -35,7 +35,7 @@ Points are awarded **once per participant** by **finishing placement**. The sanc
 | 4th | **30** | **15** |
 
 - **Resolved:** placements beyond 4th earn **0 points** — the table above is the full schedule.
-- **OPEN:** ties for a placement (e.g. two semi-final losers both "3rd/4th") — split, both-high, or both-low?
+- **Resolved:** ties for a placement (e.g. two semi-final losers both "3rd/4th") are **the tournament's choice** — each tournament defines how it resolves placements it doesn't play out to a definite finish (e.g. play a 3rd-place match, or split/assign the tied points per its own rule). The platform stores the resulting per-participant placement + points rather than imposing a single global tie rule.
 - **OPEN:** does the payout depend on **draw size** (a 4-player draw and a 32-player draw both paying 80 for 1st)? Common in real circuits.
 
 ### Model decisions
