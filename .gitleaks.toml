@@ -19,3 +19,11 @@ commits = [
   "15f1e5bab79f1e589a76d9089ed1f2536cc0fcf2",
   "dbbbd2a96c7dc14009fc7f98e6b23e8623a2f13f",
 ]
+# Product/design docs are prose, not code. EVENT_PAYMENTS.md's wording ("…provider API
+# keys as secrets, refund/cancellation flow…") trips the generic-api-key rule as a false
+# positive (#523). Allowlist by PATH rather than commit SHA so it survives rebases and the
+# squash-merge (a commit SHA would change and re-trip on main). A Markdown design doc must
+# never carry a real secret, so path-allowlisting it is safe.
+paths = [
+  '''docs/product/EVENT_PAYMENTS\.md''',
+]
