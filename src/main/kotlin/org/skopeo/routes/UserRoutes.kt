@@ -130,6 +130,7 @@ private fun Route.searchUsers(service: UserService) {
                             ),
                         limit = params["limit"]?.toIntOrNull() ?: DEFAULT_SEARCH_PAGE_SIZE,
                         offset = params["offset"]?.toIntOrNull() ?: 0,
+                        includeInactive = params["includeInactive"]?.toBoolean() ?: false,
                     )
                 }
             respondEither(result = results) { users ->
@@ -164,6 +165,8 @@ private fun Route.searchUsersPaged(service: UserService) {
                         ),
                     limit = params["limit"]?.toIntOrNull() ?: DEFAULT_SEARCH_PAGE_SIZE,
                     offset = params["offset"]?.toIntOrNull() ?: 0,
+                    // Research opts in to include soft-deleted accounts (flagged), #518.
+                    includeInactive = params["includeInactive"]?.toBoolean() ?: false,
                 )
             respondEither(result = page) { result ->
                 val ids = result.items.map { it.id }
@@ -279,6 +282,14 @@ private fun Route.userById(service: UserService) {
     delete(path = "/{id}") {
         respondMappingErrors {
             respondEither(result = service.deactivate(token = verifiedToken(), id = uuidParam(name = "id"))) {
+                call.respond(status = HttpStatusCode.NoContent, message = "")
+            }
+        }
+    }
+    // Admin-only "Allow login": re-enable a soft-deleted account (#518).
+    post(path = "/{id}/reactivate") {
+        respondMappingErrors {
+            respondEither(result = service.reactivate(token = verifiedToken(), id = uuidParam(name = "id"))) {
                 call.respond(status = HttpStatusCode.NoContent, message = "")
             }
         }

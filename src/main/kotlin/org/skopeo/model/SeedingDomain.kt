@@ -49,4 +49,7 @@ data class SeedingEntry(
     // renders an "Unclaimed" tag beside the name. Resolved from the live user at read time (the snapshot
     // table doesn't persist it). Real/claimed players leave it false.
     val placeholder: Boolean = false,
+    // True for an admin-soft-deleted account (#518): the seeding view renders a dominant "Deleted" chip.
+    // Resolved from the live user at read time, like [placeholder].
+    val deleted: Boolean = false,
 )

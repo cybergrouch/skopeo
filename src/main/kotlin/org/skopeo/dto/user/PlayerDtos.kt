@@ -22,6 +22,8 @@ data class PublicPlayerResponse(
     // Set for a login-less, not-yet-claimed placeholder ("dummy") player (#496): the public page shows an
     // "unclaimed" indicator + a "Claim this account" entry point. Real/claimed profiles leave it false.
     val isPlaceholder: Boolean = false,
+    // True for an admin-soft-deleted account (#518): the public page shows a dominant "Deleted" chip.
+    val isDeleted: Boolean = false,
 )
 
 @Serializable
@@ -85,6 +87,8 @@ data class MatchHistoryParticipant(
     // True for a login-less, not-yet-claimed placeholder ("dummy") player (#496/#505): the history row
     // renders an "Unclaimed" tag beside the name. Real/claimed players leave it false.
     val isPlaceholder: Boolean = false,
+    // True for an admin-soft-deleted account (#518): the history row renders a dominant "Deleted" chip.
+    val isDeleted: Boolean = false,
 )
 
 /** A related player identified the same privacy-conscious way as a public profile (e.g. a merged card's canonical). */

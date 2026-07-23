@@ -25,6 +25,7 @@ import org.skopeo.model.UserSearchQuery
 import org.skopeo.model.WinLossRecord
 import org.skopeo.model.ageRangeToDob
 import org.skopeo.model.effectivePhotoUrl
+import org.skopeo.model.isDeleted
 import org.skopeo.repository.CapabilityRepository
 import org.skopeo.repository.InviteRepository
 import org.skopeo.repository.MatchRepository
@@ -95,6 +96,8 @@ class UserService(
         filters: UserSearchFilters,
         limit: Int = DEFAULT_SEARCH_LIMIT,
         offset: Int = 0,
+        // Include soft-deleted/inactive accounts (Research; #518). Default false keeps pickers active-only.
+        includeInactive: Boolean = false,
     ): Either<ServiceError, List<User>> =
         either {
             requireResearchAccess(repository = repository, token = token).bind()
@@ -103,6 +106,7 @@ class UserService(
                 query = query,
                 limit = limit.coerceIn(minimumValue = 1, maximumValue = MAX_SEARCH_LIMIT),
                 offset = offset.coerceAtLeast(minimumValue = 0),
+                includeInactive = includeInactive,
             )
         }
 
@@ -112,6 +116,8 @@ class UserService(
         filters: UserSearchFilters,
         limit: Int,
         offset: Int,
+        // Include soft-deleted/inactive accounts (Research; #518). Default false keeps pickers active-only.
+        includeInactive: Boolean = false,
     ): Either<ServiceError, UserSearchPage> =
         either {
             requireResearchAccess(repository = repository, token = token).bind()
@@ -122,8 +128,9 @@ class UserService(
                         query = query,
                         limit = limit.coerceIn(minimumValue = 1, maximumValue = MAX_SEARCH_LIMIT),
                         offset = offset.coerceAtLeast(minimumValue = 0),
+                        includeInactive = includeInactive,
                     ),
-                total = repository.countSearch(query = query),
+                total = repository.countSearch(query = query, includeInactive = includeInactive),
             )
         }
 
@@ -191,18 +198,27 @@ class UserService(
             }
         }
 
-    /** Idempotent re-provision of an already-known uid: reject a merged duplicate, else promote-and-return. */
+    /**
+     * Idempotent re-provision of an already-known uid: reject a merged duplicate (#124) or an
+     * admin-deleted account (#518), else promote-and-return.
+     */
     private fun provisionExisting(
         token: VerifiedFirebaseToken,
         existing: User,
     ): Either<ServiceError, Provisioned> {
         // A disabled duplicate (#124) cannot sign back in; point them at the canonical account.
         val canonical = existing.canonicalUserId?.let { repository.findById(id = it).getOrNull() }
-        if (canonical != null) {
-            return ServiceError.AccountMerged(canonicalPublicCode = canonical.publicCode).left()
+        return when {
+            canonical != null -> ServiceError.AccountMerged(canonicalPublicCode = canonical.publicCode).left()
+            // An admin-deleted account (#518) — inactive with no canonical pointer (a merged duplicate was
+            // ruled out above) — cannot sign back in until an admin re-allows login.
+            existing.isDeleted() -> ServiceError.AccountDeleted.left()
+            else -> {
+                val promoted =
+                    promoteIfBootstrapAdmin(token = token, user = existing, adminEmails = adminEmails, capabilities = capabilities)
+                Provisioned(user = refreshPhoto(token = token, user = promoted), created = false).right()
+            }
         }
-        val promoted = promoteIfBootstrapAdmin(token = token, user = existing, adminEmails = adminEmails, capabilities = capabilities)
-        return Provisioned(user = refreshPhoto(token = token, user = promoted), created = false).right()
     }
 
     /**
@@ -305,14 +321,60 @@ class UserService(
             repository.replaceProfile(id = id, patch = patch).bind()
         }
 
+    /**
+     * Admin-only soft-delete of an account (#518): flip `is_active = false`, retaining the row and all
+     * history. Tightened from the self-or-admin [requireAccess] to ADMINISTRATOR-only — there is no
+     * owner self-delete. Guards against deleting the last active ADMINISTRATOR (avoids an admin lockout).
+     * Audited (target = the deleted user).
+     */
     fun deactivate(
         token: VerifiedFirebaseToken,
         id: UUID,
     ): Either<ServiceError, Unit> =
         either {
+            val actorId = requireAdmin(token = token).bind()
             val target = repository.findById(id = id).bind()
-            requireAccess(token = token, target = target).bind()
+            // Don't let a delete drop the system to zero active admins.
+            ensure(
+                condition = Capability.ADMINISTRATOR !in target.capabilities || capabilities.countActiveAdministrators() > 1,
+            ) {
+                ServiceError.Validation(message = "Cannot delete the last active ADMINISTRATOR")
+            }
             repository.deactivate(id = id).bind()
+            audit.record(
+                write =
+                    AuditWrite(
+                        actorUserId = actorId,
+                        action = AuditAction.ACCOUNT_DELETED,
+                        entityType = AuditEntityType.USER,
+                        entityId = target.id,
+                        summary = "Deleted account ${target.publicCode}",
+                    ),
+            )
+        }
+
+    /**
+     * Admin-only re-allow-login (#518): flip a soft-deleted account's `is_active` back to true. A deleted
+     * account already has a null canonical pointer, so this is a pure reactivation. Audited (target = user).
+     */
+    fun reactivate(
+        token: VerifiedFirebaseToken,
+        id: UUID,
+    ): Either<ServiceError, Unit> =
+        either {
+            val actorId = requireAdmin(token = token).bind()
+            val target = repository.findById(id = id).bind()
+            repository.reactivate(id = id).bind()
+            audit.record(
+                write =
+                    AuditWrite(
+                        actorUserId = actorId,
+                        action = AuditAction.ACCOUNT_REACTIVATED,
+                        entityType = AuditEntityType.USER,
+                        entityId = target.id,
+                        summary = "Re-allowed login for account ${target.publicCode}",
+                    ),
+            )
         }
 
     /** Allow only the target user themselves or an ADMINISTRATOR. */
@@ -324,6 +386,16 @@ class UserService(
         val isSelf = caller?.id == target.id
         val isAdmin = caller != null && caller.capabilities.contains(element = Capability.ADMINISTRATOR)
         return if (!isSelf && !isAdmin) ServiceError.Forbidden().left() else Unit.right()
+    }
+
+    /** Allow only an ADMINISTRATOR caller; returns their id for audit attribution. */
+    private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
+        val caller = repository.findByFirebaseUid(firebaseUid = token.uid)
+        return if (caller == null || Capability.ADMINISTRATOR !in caller.capabilities) {
+            ServiceError.Forbidden().left()
+        } else {
+            caller.id.right()
+        }
     }
 }
 

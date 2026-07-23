@@ -115,7 +115,7 @@ function PlaceholderRow({
         <div className="min-w-0">
           <div className="truncate font-medium">
             {playerLabel(user.displayName, user.publicCode, user.id)}
-            <PlaceholderTag show={user.isPlaceholder} />
+            <PlaceholderTag show={user.isPlaceholder} deleted={user.isDeleted} />
           </div>
           <div className="text-xs text-muted-foreground">
             {user.publicCode}

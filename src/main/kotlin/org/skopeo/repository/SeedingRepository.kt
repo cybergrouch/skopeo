@@ -68,28 +68,42 @@ class SeedingRepository {
                         .where { SeedingEntriesTable.seedingId eq id }
                         .orderBy(SeedingEntriesTable.position to SortOrder.ASC)
                         .toList()
-                // The snapshot table doesn't persist the placeholder flag (#496/#505); resolve it from the
-                // live user rows in ONE batched query keyed by user id (never per-row). A claimed placeholder
-                // is re-pointed to the claimant (#496), so a stored user id always resolves to a current user.
-                val placeholderById = placeholderByUserId(userIds = rows.mapNotNull { it[SeedingEntriesTable.userId]?.value })
-                val entries = rows.map { it.toSeedingEntry(placeholderById = placeholderById) }
+                // The snapshot table doesn't persist the placeholder/deleted flags (#496/#505/#518); resolve
+                // them from the live user rows in ONE batched query keyed by user id (never per-row). A claimed
+                // placeholder is re-pointed to the claimant (#496), so a stored user id always resolves.
+                val statusById = statusByUserId(userIds = rows.mapNotNull { it[SeedingEntriesTable.userId]?.value })
+                val entries = rows.map { it.toSeedingEntry(statusById = statusById) }
                 Seeding(id = id, listId = listId, generatedAt = row[SeedingsTable.generatedAt], entries = entries).right()
             }
         }
 
-    /** Batched user id → placeholder flag lookup (#496/#505) for a page of seeding rows; empty ids → empty map. */
-    private fun placeholderByUserId(userIds: List<UUID>): Map<UUID, Boolean> =
+    /** The live placeholder/deleted flags for a snapshotted seeding user (#496/#505/#518), resolved at read. */
+    private data class UserStatus(
+        val placeholder: Boolean,
+        val deleted: Boolean,
+    )
+
+    /** Batched user id → live status lookup for a page of seeding rows; empty ids → empty map. */
+    private fun statusByUserId(userIds: List<UUID>): Map<UUID, UserStatus> =
         if (userIds.isEmpty()) {
             emptyMap()
         } else {
             UsersTable
-                .select(columns = listOf(UsersTable.id, UsersTable.placeholder))
+                .select(columns = listOf(UsersTable.id, UsersTable.placeholder, UsersTable.isActive, UsersTable.canonicalUserId))
                 .where { UsersTable.id inList userIds.distinct() }
-                .associate { it[UsersTable.id].value to it[UsersTable.placeholder] }
+                .associate {
+                    it[UsersTable.id].value to
+                        UserStatus(
+                            placeholder = it[UsersTable.placeholder],
+                            // "deleted" = inactive AND no canonical pointer (#518) — a merged duplicate is not deleted.
+                            deleted = !it[UsersTable.isActive] && it[UsersTable.canonicalUserId] == null,
+                        )
+                }
         }
 
-    private fun ResultRow.toSeedingEntry(placeholderById: Map<UUID, Boolean>): SeedingEntry {
+    private fun ResultRow.toSeedingEntry(statusById: Map<UUID, UserStatus>): SeedingEntry {
         val userId = this[SeedingEntriesTable.userId]?.value
+        val status = userId?.let { statusById[it] }
         return SeedingEntry(
             seed = this[SeedingEntriesTable.seed],
             position = this[SeedingEntriesTable.position],
@@ -100,7 +114,8 @@ class SeedingRepository {
             rating = this[SeedingEntriesTable.rating],
             sex = this[SeedingEntriesTable.sex],
             age = this[SeedingEntriesTable.age],
-            placeholder = userId?.let { placeholderById[it] } ?: false,
+            placeholder = status?.placeholder ?: false,
+            deleted = status?.deleted ?: false,
         )
     }
 }

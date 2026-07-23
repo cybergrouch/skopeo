@@ -57,6 +57,8 @@ data class SeedingEntryResponse(
     // True for a login-less, not-yet-claimed placeholder ("dummy") player (#496/#505): the seeding view
     // renders an "Unclaimed" tag beside the name. Real/claimed players leave it false.
     val isPlaceholder: Boolean = false,
+    // True for an admin-soft-deleted account (#518): the seeding view renders a dominant "Deleted" chip.
+    val isDeleted: Boolean = false,
 )
 
 /** A generated seeding: the timestamp plus the rating-sorted rows. */
@@ -92,4 +94,5 @@ fun SeedingEntry.toResponse(): SeedingEntryResponse =
         sex = sex,
         age = age,
         isPlaceholder = placeholder,
+        isDeleted = deleted,
     )

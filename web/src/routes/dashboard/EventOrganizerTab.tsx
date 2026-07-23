@@ -384,7 +384,7 @@ function NewEventForm() {
                       }
                     >
                       {playerLabel(u.displayName, u.publicCode, u.id)}
-                      <PlaceholderTag show={u.isPlaceholder} /> ✕
+                      <PlaceholderTag show={u.isPlaceholder} deleted={u.isDeleted} /> ✕
                     </Button>
                   </li>
                 ))}

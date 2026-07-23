@@ -20,6 +20,7 @@ import org.skopeo.model.RatingRequestStatus
 import org.skopeo.model.RatingRequestView
 import org.skopeo.model.ServiceError
 import org.skopeo.model.displayName
+import org.skopeo.model.isDeleted
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.RatingRequestRepository
 import org.skopeo.repository.UserRepository
@@ -168,6 +169,7 @@ class RatingRequestService(
                         displayName = user.displayName(),
                         publicCode = user.publicCode,
                         placeholder = user.placeholder,
+                        deleted = user.isDeleted(),
                     )
             }
 

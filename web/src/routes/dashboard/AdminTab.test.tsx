@@ -8,6 +8,9 @@ vi.mock("./admin/PendingCalculationSection", () => ({
 vi.mock("./admin/ManagePlayerSection", () => ({
   ManagePlayerSection: () => <div>manage player section</div>,
 }));
+vi.mock("./admin/DeletedAccountsSection", () => ({
+  DeletedAccountsSection: () => <div>deleted accounts section</div>,
+}));
 vi.mock("./admin/DuplicatesSection", () => ({
   DuplicatesSection: () => <div>duplicates section</div>,
 }));
@@ -31,6 +34,7 @@ describe("AdminTab", () => {
   it("renders the admin sections (invites #135 and activity log #134 now live in their own tabs)", () => {
     render(<AdminTab />);
     expect(screen.getByText("manage player section")).toBeInTheDocument();
+    expect(screen.getByText("deleted accounts section")).toBeInTheDocument();
     expect(screen.getByText("clubs section")).toBeInTheDocument();
     expect(screen.getByText("duplicates section")).toBeInTheDocument();
     expect(

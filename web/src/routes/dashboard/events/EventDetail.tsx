@@ -739,7 +739,7 @@ export function EventDetail({
                         <span className="min-w-0">
                           <span className="block">
                             {playerLabel(p.displayName, p.publicCode, p.userId)}
-                            <PlaceholderTag show={p.isPlaceholder} />
+                            <PlaceholderTag show={p.isPlaceholder} deleted={p.isDeleted} />
                             {p.publicCode ? (
                               <span className="text-muted-foreground">
                                 {" "}
@@ -978,7 +978,7 @@ export function EventDetail({
                         <span className="min-w-0">
                           <span className="block">
                             {playerLabel(p.displayName, p.publicCode, p.userId)}
-                            <PlaceholderTag show={p.isPlaceholder} />
+                            <PlaceholderTag show={p.isPlaceholder} deleted={p.isDeleted} />
                             {p.status === "HOLD" ? (
                               <span className="text-muted-foreground">
                                 {" "}

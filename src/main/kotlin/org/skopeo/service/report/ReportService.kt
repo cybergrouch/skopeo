@@ -17,6 +17,7 @@ import org.skopeo.model.RatingHistoryEntry
 import org.skopeo.model.ServiceError
 import org.skopeo.model.UserRating
 import org.skopeo.model.displayName
+import org.skopeo.model.isDeleted
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.user.VerifiedFirebaseToken
@@ -103,6 +104,7 @@ class ReportService(
                                             fromBand = hop.fromBand,
                                             toBand = hop.toBand,
                                             isPlaceholder = user.placeholder,
+                                            isDeleted = user.isDeleted(),
                                         )
                                     }.sortedBy { it.publicCode },
                         )

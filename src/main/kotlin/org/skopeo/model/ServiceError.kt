@@ -46,4 +46,13 @@ sealed interface ServiceError {
     ) : ServiceError {
         override val message: String = "This account has been merged into another profile"
     }
+
+    /**
+     * The account behind this sign-in was soft-deleted by an administrator (#518) — `is_active = false`
+     * with no canonical pointer (distinguishing it from a merged duplicate, [AccountMerged]). It can no
+     * longer sign in until an admin re-allows login; mapped to 403.
+     */
+    data object AccountDeleted : ServiceError {
+        override val message: String = "This account has been deleted. Contact an administrator to restore access."
+    }
 }

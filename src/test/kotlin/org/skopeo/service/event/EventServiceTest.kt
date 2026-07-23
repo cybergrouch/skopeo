@@ -175,6 +175,56 @@ class EventServiceTest {
     }
 
     @Test
+    fun `a soft-deleted account cannot be added to a new event or an existing one (#518)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val gone = provision(uid = "gone")
+        users.deactivate(id = gone.id).shouldBeRight()
+
+        // Rejected at event creation.
+        service
+            .create(token = token(uid = "host"), input = input(participants = listOf(element = gone.id)))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+
+        // And rejected when adding to an already-created event (existing rosters are untouched).
+        val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight()
+        service
+            .addParticipant(token = token(uid = "host"), eventId = event.event.id, userId = gone.id)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `event participants carry isDeleted, true for a deleted account and false for a real player (#518)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val real = provision(uid = "real")
+        val gone = provision(uid = "gone")
+        // Build the roster while both are active, then delete one (existing references are retained).
+        val event =
+            service.create(token = token(uid = "host"), input = input(participants = listOf(real.id, gone.id))).shouldBeRight()
+        users.deactivate(id = gone.id).shouldBeRight()
+
+        val participants = service.publicByCode(token = token(uid = "host"), code = event.event.publicCode).shouldBeRight().participants
+        participants.single { it.userId == gone.id.toString() }.isDeleted.shouldBeTrue()
+        participants.single { it.userId == real.id.toString() }.isDeleted.shouldBeFalse()
+    }
+
+    @Test
+    fun `a merged duplicate is not flagged deleted on the roster (#518)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val canonical = provision(uid = "canon")
+        val dup = provision(uid = "dup")
+        val event =
+            service.create(token = token(uid = "host"), input = input(participants = listOf(element = dup.id))).shouldBeRight()
+        // Mark dup a merged duplicate AFTER it's on the roster: inactive but with a canonical pointer.
+        users.markDuplicates(canonicalId = canonical.id, duplicateIds = listOf(element = dup.id))
+
+        val participants = service.publicByCode(token = token(uid = "host"), code = event.event.publicCode).shouldBeRight().participants
+        // A merged duplicate is NOT deleted (canonical != null), so isDeleted stays false.
+        participants.single { it.userId == dup.id.toString() }.isDeleted.shouldBeFalse()
+    }
+
+    @Test
     fun `creating an event writes an Activity Log entry (#334)`() {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val view = service.create(token = token(uid = "host"), input = input()).shouldBeRight()
@@ -938,6 +988,20 @@ class EventServiceTest {
         val view = service.get(token = token(uid = "host"), id = event.id).shouldBeRight()
         view.participants.single { it.userId == player.id }.status shouldBe EventParticipantStatus.PENDING
         view.event.participantIds.contains(element = player.id).shouldBeFalse()
+    }
+
+    @Test
+    fun `a deleted account cannot self-sign-up for events (#518)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val player = provision(uid = "player")
+        val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight().event
+        // Soft-delete the player (is_active=false, canonical null → isDeleted()).
+        UserRepository().deactivate(id = player.id).shouldBeRight()
+
+        service
+            .selfSignup(token = token(uid = "player"), code = event.publicCode)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
     }
 
     @Test

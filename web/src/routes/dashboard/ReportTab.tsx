@@ -30,7 +30,7 @@ function UserRow({ user }: { user: BandHopUserRow }) {
     <li className="flex items-center justify-between gap-2 py-1 text-sm">
       <span>
         <ContentLink to={`/players/${user.publicCode}`}>{playerName(user)}</ContentLink>
-        <PlaceholderTag show={user.isPlaceholder} />
+        <PlaceholderTag show={user.isPlaceholder} deleted={user.isDeleted} />
       </span>
       <span className="font-mono text-xs text-muted-foreground">
         {user.fromBand} → {user.toBand}

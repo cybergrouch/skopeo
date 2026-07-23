@@ -38,6 +38,7 @@ import org.skopeo.model.ServiceError
 import org.skopeo.model.TeamType
 import org.skopeo.model.User
 import org.skopeo.model.displayName
+import org.skopeo.model.isDeleted
 import org.skopeo.model.isExpired
 import org.skopeo.model.pointsWindow
 import org.skopeo.repository.EventRepository
@@ -483,7 +484,12 @@ class MatchService(
             val usersById = users.findAllByIds(ids = ids).associateBy { it.id }
             val players =
                 usersById.mapValues { (_, user) ->
-                    MatchPublicPlayer(displayName = user.displayName(), publicCode = user.publicCode, isPlaceholder = user.placeholder)
+                    MatchPublicPlayer(
+                        displayName = user.displayName(),
+                        publicCode = user.publicCode,
+                        isPlaceholder = user.placeholder,
+                        isDeleted = user.isDeleted(),
+                    )
                 }
             // Once rated, surface the per-player rating change (#136): bands for everyone, precise
             // rates only for RATER/ADMINISTRATOR viewers.
@@ -531,7 +537,12 @@ class MatchService(
                 opponents =
                     opponentIds.map { id ->
                         val user = playersById.getValue(key = id)
-                        MatchPublicPlayer(displayName = user.displayName(), publicCode = user.publicCode, isPlaceholder = user.placeholder)
+                        MatchPublicPlayer(
+                            displayName = user.displayName(),
+                            publicCode = user.publicCode,
+                            isPlaceholder = user.placeholder,
+                            isDeleted = user.isDeleted(),
+                        )
                     },
             )
         }
@@ -608,6 +619,7 @@ class MatchService(
         val names = usersById.mapValues { (_, user) -> user.displayName() }
         val codes = usersById.mapValues { (_, user) -> user.publicCode }
         val placeholderByUser = usersById.mapValues { (_, user) -> user.placeholder }
+        val deletedByUser = usersById.mapValues { (_, user) -> user.isDeleted() }
         val order = match.team1.userIds + match.team2.userIds
         // Each player's *current* rating confidence (#343), shown beside the historical band change.
         val confidenceByUser =
@@ -626,6 +638,7 @@ class MatchService(
                     ratingChange = if (revealRates) history.ratingChange.toPlainString() else null,
                     confidence = confidenceByUser[history.userId],
                     isPlaceholder = placeholderByUser[history.userId] ?: false,
+                    isDeleted = deletedByUser[history.userId] ?: false,
                 )
             }
     }

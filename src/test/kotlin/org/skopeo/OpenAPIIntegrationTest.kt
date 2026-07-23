@@ -72,6 +72,11 @@ class OpenAPIIntegrationTest {
             body shouldContain "CreatePlaceholderRequest"
             body shouldContain "ClaimRequest"
             body shouldContain "ClaimCodeResponse"
+            // Admin soft-delete + re-allow login (#518): the reactivate path, the Research include-inactive
+            // search param, and the "Deleted" flag on player-reference DTOs are documented.
+            body shouldContain "/api/v1/users/{id}/reactivate"
+            body shouldContain "includeInactive"
+            body shouldContain "isDeleted"
             // Profile band+sex rank + points and the owner-or-admin points audit (#448).
             body shouldContain "/api/v1/players/{code}/standing"
             body shouldContain "PlayerStandingResponse"

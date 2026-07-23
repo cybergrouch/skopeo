@@ -9,6 +9,7 @@ import org.skopeo.model.User
 import org.skopeo.model.UserRating
 import org.skopeo.model.WinLossRecord
 import org.skopeo.model.ageInYears
+import org.skopeo.model.isDeleted
 import java.net.URI
 import java.time.LocalDate
 
@@ -195,6 +196,8 @@ data class UserSummaryResponse(
     // True for a login-less, not-yet-claimed placeholder ("dummy") player (#496/#505): pickers/search
     // render an "Unclaimed" tag beside the name. Real/claimed players leave it false.
     val isPlaceholder: Boolean = false,
+    // True for an admin-soft-deleted account (#518): search/Research renders a dominant "Deleted" chip.
+    val isDeleted: Boolean = false,
 )
 
 /** A player's decided win–loss record (#342): singles + doubles combined; [total] = wins + losses. */
@@ -227,6 +230,7 @@ fun User.toSummary(
         capabilities = capabilities.map { it.name }.sorted(),
         record = record?.let { WinLossDto(wins = it.wins, losses = it.losses, total = it.total) },
         isPlaceholder = placeholder,
+        isDeleted = isDeleted(),
     )
 
 /** A page of search results plus the total match count, for numbered pagination (#232). */

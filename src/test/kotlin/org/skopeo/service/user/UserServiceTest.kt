@@ -7,6 +7,7 @@ import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
@@ -308,22 +309,97 @@ class UserServiceTest {
             .shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
+    /** Provision an ADMINISTRATOR directly (bypassing the invite gate) so admin-only paths can be exercised (#518). */
+    private fun provisionAdmin(uid: String) =
+        repository.provision(
+            command =
+                ProvisionUserCommand(
+                    firebaseUid = uid,
+                    identity = UserIdentity(provider = org.skopeo.model.AuthProvider.GOOGLE, providerUid = uid, isPrimary = true),
+                    names = listOf(element = UserName(type = org.skopeo.model.NameType.FIRST, value = uid)),
+                    capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
+                ),
+        )
+
     @Test
-    fun `deactivate soft-deletes the caller's own account`() {
-        val user = service.provision(token = token(uid = "d1"), request = request).shouldBeRight().user
+    fun `an ADMINISTRATOR soft-deletes another account and it is audited (#518)`() {
+        provisionAdmin(uid = "admin-del")
+        val target = service.provision(token = token(uid = "victim"), request = request).shouldBeRight().user
 
-        service.deactivate(token = token(uid = "d1"), id = user.id).shouldBeRight()
+        service.deactivate(token = token(uid = "admin-del"), id = target.id).shouldBeRight()
 
-        service.getById(token = token(uid = "d1"), id = user.id).shouldBeRight().isActive.shouldBeFalse()
+        // The row is retained but inactive; and it is a "deleted" (no canonical) account, not a merge.
+        val reloaded = repository.findById(id = target.id).shouldBeRight()
+        reloaded.isActive.shouldBeFalse()
+        reloaded.canonicalUserId.shouldBeNull()
+        AuditRepository().list(actions = listOf(element = AuditAction.ACCOUNT_DELETED), limit = 10, offset = 0).first.single().let {
+            it.entityId shouldBe target.id
+        }
     }
 
     @Test
-    fun `deactivate forbids others and 404s on unknown`() {
-        val user = service.provision(token = token(uid = "d2"), request = request).shouldBeRight().user
+    fun `deactivate is ADMINISTRATOR-only, self cannot delete, and 404s on unknown (#518)`() {
+        val user = service.provision(token = token(uid = "self-del"), request = request).shouldBeRight().user
         service.provision(token = token(uid = "stranger"), request = request).shouldBeRight()
 
+        // Self is no longer allowed (tightened from self-or-admin to admin-only).
+        service.deactivate(token = token(uid = "self-del"), id = user.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
         service.deactivate(token = token(uid = "stranger"), id = user.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
-        service.deactivate(token = token(uid = "d2"), id = UUID.randomUUID()).shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+
+        provisionAdmin(uid = "admin-404")
+        service.deactivate(
+            token = token(uid = "admin-404"),
+            id = UUID.randomUUID(),
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
+    fun `deleting the last active ADMINISTRATOR is rejected (#518)`() {
+        val onlyAdmin = provisionAdmin(uid = "sole-admin")
+
+        service
+            .deactivate(token = token(uid = "sole-admin"), id = onlyAdmin.id)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+
+        // A second admin lifts the guard, so one of them can then be deleted.
+        val second = provisionAdmin(uid = "second-admin")
+        service.deactivate(token = token(uid = "sole-admin"), id = second.id).shouldBeRight()
+    }
+
+    @Test
+    fun `a deleted account is blocked from signing in as AccountDeleted, but a merged duplicate stays AccountMerged (#518)`() {
+        provisionAdmin(uid = "admin-login")
+        val deleted = service.provision(token = token(uid = "gone"), request = request).shouldBeRight().user
+        service.deactivate(token = token(uid = "admin-login"), id = deleted.id).shouldBeRight()
+
+        // A still-valid Firebase login for the deleted account is refused.
+        service.provision(token = token(uid = "gone"), request = request).shouldBeLeft() shouldBe ServiceError.AccountDeleted
+
+        // A merged duplicate keeps its distinct "merged" treatment (unchanged).
+        val canonical = service.provision(token = token(uid = "keep2"), request = request).shouldBeRight().user
+        val dup = service.provision(token = token(uid = "dup2"), request = request).shouldBeRight().user
+        repository.markDuplicates(canonicalId = canonical.id, duplicateIds = listOf(element = dup.id))
+        service.provision(token = token(uid = "dup2"), request = request).shouldBeLeft().shouldBeInstanceOf<ServiceError.AccountMerged>()
+    }
+
+    @Test
+    fun `reactivate re-allows a deleted account to sign in, admin-only and audited (#518)`() {
+        provisionAdmin(uid = "admin-re")
+        val target = service.provision(token = token(uid = "back"), request = request).shouldBeRight().user
+        service.deactivate(token = token(uid = "admin-re"), id = target.id).shouldBeRight()
+
+        // A non-admin cannot reactivate.
+        service.provision(token = token(uid = "nobody"), request = request).shouldBeRight()
+        service.reactivate(token = token(uid = "nobody"), id = target.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+
+        service.reactivate(token = token(uid = "admin-re"), id = target.id).shouldBeRight()
+        repository.findById(id = target.id).shouldBeRight().isActive.shouldBeTrue()
+        // Login works again.
+        service.provision(token = token(uid = "back"), request = request).shouldBeRight()
+        AuditRepository().list(actions = listOf(element = AuditAction.ACCOUNT_REACTIVATED), limit = 10, offset = 0).first.single().let {
+            it.entityId shouldBe target.id
+        }
     }
 
     @Test
@@ -415,6 +491,54 @@ class UserServiceTest {
         val found =
             service.search(token = token(uid = "staff"), filters = UserSearchFilters(code = member.publicCode.lowercase())).shouldBeRight()
         found.single().id shouldBe member.id
+    }
+
+    @Test
+    fun `search excludes a deleted account by default but includeInactive surfaces it (#518)`() {
+        provisionAdmin(uid = "staff-inc")
+        val member = service.provision(token = token(uid = "inc1"), request = request).shouldBeRight().user
+        service.deactivate(token = token(uid = "staff-inc"), id = member.id).shouldBeRight()
+
+        // Default (pickers/normal search) excludes the now-deleted account.
+        service
+            .search(token = token(uid = "staff-inc"), filters = UserSearchFilters(code = member.publicCode))
+            .shouldBeRight()
+            .shouldBeEmpty()
+
+        // Research opts in and finds it.
+        service
+            .search(token = token(uid = "staff-inc"), filters = UserSearchFilters(code = member.publicCode), includeInactive = true)
+            .shouldBeRight()
+            .single()
+            .id shouldBe member.id
+    }
+
+    @Test
+    fun `searchPage total and items honour includeInactive for a deleted account (#518)`() {
+        provisionAdmin(uid = "staff-pg")
+        val member = service.provision(token = token(uid = "pg1"), request = request).shouldBeRight().user
+        service.deactivate(token = token(uid = "staff-pg"), id = member.id).shouldBeRight()
+
+        // Default (pickers) excludes the deleted account — empty page and zero total.
+        val default =
+            service
+                .searchPage(token = token(uid = "staff-pg"), filters = UserSearchFilters(code = member.publicCode), limit = 20, offset = 0)
+                .shouldBeRight()
+        default.items.shouldBeEmpty()
+        default.total shouldBe 0
+
+        // Research opts in — the deleted account and a total of 1.
+        val included =
+            service
+                .searchPage(
+                    token = token(uid = "staff-pg"),
+                    filters = UserSearchFilters(code = member.publicCode),
+                    limit = 20,
+                    offset = 0,
+                    includeInactive = true,
+                ).shouldBeRight()
+        included.items.single().id shouldBe member.id
+        included.total shouldBe 1
     }
 
     @Test

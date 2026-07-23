@@ -23,6 +23,7 @@ import org.skopeo.model.RankingPointAward
 import org.skopeo.model.RankingPointAwardWrite
 import org.skopeo.model.ServiceError
 import org.skopeo.model.displayName
+import org.skopeo.model.isDeleted
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RankingPointRepository
@@ -69,6 +70,9 @@ class RankingPointService(
         // True for a login-less, not-yet-claimed placeholder ("dummy") player (#496/#505), resolved from
         // the batched user lookup — the ledger renders an "Unclaimed" tag beside the name.
         val playerIsPlaceholder: Boolean = false,
+        // True for an admin-soft-deleted account (#518), resolved from the same batched user lookup — the
+        // ledger renders a dominant "Deleted" chip.
+        val playerIsDeleted: Boolean = false,
     )
 
     /** One page of the whole ledger (#472): the resolved rows plus the full total for the pager. */
@@ -316,6 +320,7 @@ class RankingPointService(
                         matchPublicCode = award.matchId?.let { matchRefs[it]?.publicCode },
                         eventPublicCode = award.eventId?.let { eventCodes[it] },
                         playerIsPlaceholder = user?.placeholder ?: false,
+                        playerIsDeleted = user?.isDeleted() ?: false,
                     )
                 }
             AwardsPage(rows = resolved, total = total.toInt(), limit = pageSize, offset = pageOffset)

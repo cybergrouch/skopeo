@@ -25,6 +25,7 @@ import org.skopeo.model.ServiceError
 import org.skopeo.model.TeamType
 import org.skopeo.model.User
 import org.skopeo.model.displayName
+import org.skopeo.model.isDeleted
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RankingPointRepository
@@ -80,7 +81,9 @@ class PlayerService(
 
     /**
      * A disabled duplicate (#124) renders a "merged" card linking to its canonical account; a
-     * plain-deactivated account (no canonical) stays hidden (treated as not-found).
+     * plain-deactivated (admin-deleted, #518) account has no canonical and stays hidden from direct
+     * browsing (treated as not-found). Its historical references elsewhere still carry the "Deleted"
+     * flag; only the direct profile-by-code lookup is a 404, matching the existing contract.
      */
     private fun mergedCard(located: User): Either<ServiceError, PublicPlayerResponse> {
         val canonicalId = located.canonicalUserId
@@ -362,6 +365,7 @@ class PlayerService(
                 levelAtMatch = levels?.get(key = userId),
                 confidence = confidences[userId],
                 isPlaceholder = user.placeholder,
+                isDeleted = user.isDeleted(),
             )
         }
 

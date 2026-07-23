@@ -221,6 +221,8 @@ data class MatchPublicPlayer(
     // True for a login-less, not-yet-claimed placeholder ("dummy") player (#496/#505): the roster
     // renders an "Unclaimed" tag beside the name. Real/claimed players leave it false.
     val isPlaceholder: Boolean = false,
+    // True for an admin-soft-deleted account (#518): the roster renders a dominant "Deleted" chip.
+    val isDeleted: Boolean = false,
 )
 
 /**
@@ -343,6 +345,8 @@ data class MatchPublicRatingChange(
     // True for a login-less, not-yet-claimed placeholder ("dummy") player (#496/#505): the rating-change
     // row renders an "Unclaimed" tag beside the name. Real/claimed players leave it false.
     val isPlaceholder: Boolean = false,
+    // True for an admin-soft-deleted account (#518): the rating-change row renders a dominant "Deleted" chip.
+    val isDeleted: Boolean = false,
 )
 
 /** Build the public response, resolving each side's players via [players] (id → name/code). */

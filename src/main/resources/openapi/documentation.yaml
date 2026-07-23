@@ -216,6 +216,14 @@ paths:
           schema:
             type: integer
           description: Results to skip for pagination; default 0.
+        - name: includeInactive
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: >-
+            Include soft-deleted/inactive accounts (flagged `isDeleted`), for the Research tab (#518).
+            Default false, so normal search and pickers stay active-only.
       responses:
         '200':
           description: A page of matching users with the total count
@@ -319,6 +327,14 @@ paths:
           schema:
             type: integer
           description: Number of results to skip (search mode) for pagination; default 0.
+        - name: includeInactive
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: >-
+            Include soft-deleted/inactive accounts (flagged `isDeleted`), for the Research tab (#518).
+            Default false, so pickers/normal search stay active-only.
       responses:
         '200':
           description: Matching users
@@ -853,17 +869,48 @@ paths:
         '404':
           description: No such user
     delete:
-      summary: Deactivate (soft-delete) a user
-      description: Sets is_active to false. Self-or-ADMINISTRATOR only.
+      summary: Delete (soft-delete) an account
+      description: >-
+        Sets `is_active = false`, retaining the row and all history (matches, ratings, points).
+        ADMINISTRATOR only (#518) — there is no owner self-delete. Rejected with 400 when the target is
+        the last active ADMINISTRATOR. The account is then blocked from signing in until an admin
+        re-allows login (see `POST /api/v1/users/{id}/reactivate`). Audited.
       tags:
         - Users
       security:
         - firebaseAuth: []
       responses:
         '204':
-          description: User deactivated
+          description: Account deleted
+        '400':
+          description: Cannot delete the last active ADMINISTRATOR
         '403':
-          description: Forbidden
+          description: Caller is not an ADMINISTRATOR
+        '404':
+          description: No such user
+
+  /api/v1/users/{id}/reactivate:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      summary: Re-allow login for a soft-deleted account (#518)
+      description: >-
+        Flips `is_active` back to true, restoring sign-in for an admin-deleted account. ADMINISTRATOR
+        only; audited. A deleted account has no canonical pointer, so this is a pure reactivation.
+      tags:
+        - Users
+      security:
+        - firebaseAuth: []
+      responses:
+        '204':
+          description: Login re-allowed
+        '403':
+          description: Caller is not an ADMINISTRATOR
         '404':
           description: No such user
 
@@ -4334,6 +4381,9 @@ components:
         isPlaceholder:
           type: boolean
           description: True for a login-less, not-yet-claimed placeholder player (#496); the card shows an "unclaimed" indicator + a "Claim this account" entry point.
+        isDeleted:
+          type: boolean
+          description: True for an admin-soft-deleted account (#518); rendered as a dominant "Deleted" chip wherever the name appears.
         canonical:
           nullable: true
           description: When disabled, the canonical ("true") account to link to.
@@ -4502,6 +4552,9 @@ components:
           type: boolean
           description: True for a login-less, not-yet-claimed placeholder player (#496/#505); the history row shows an "Unclaimed" tag beside the name.
 
+        isDeleted:
+          type: boolean
+          description: True for an admin-soft-deleted account (#518); rendered as a dominant "Deleted" chip wherever the name appears.
     PlayerResultsSummary:
       type: object
       description: A player's win–loss record over time (#276), split into singles and doubles; one bucket per month, oldest first.
@@ -4692,6 +4745,9 @@ components:
           type: boolean
           description: True for a login-less, not-yet-claimed placeholder player (#496/#505); pickers/search show an "Unclaimed" tag beside the name.
 
+        isDeleted:
+          type: boolean
+          description: True for an admin-soft-deleted account (#518); rendered as a dominant "Deleted" chip wherever the name appears.
     UserResponse:
       type: object
       required:
@@ -5607,6 +5663,9 @@ components:
           type: boolean
           description: True for a login-less, not-yet-claimed placeholder player (#496/#505); the roster shows an "Unclaimed" tag beside the name.
 
+        isDeleted:
+          type: boolean
+          description: True for an admin-soft-deleted account (#518); rendered as a dominant "Deleted" chip wherever the name appears.
     MyEventResponse:
       type: object
       description: One of the caller's own events (#202) with their standing in it.
@@ -5780,6 +5839,9 @@ components:
           type: boolean
           description: True for a login-less, not-yet-claimed placeholder player (#496/#505); the roster shows an "Unclaimed" tag beside the name.
 
+        isDeleted:
+          type: boolean
+          description: True for an admin-soft-deleted account (#518); rendered as a dominant "Deleted" chip wherever the name appears.
     UpcomingMatchResponse:
       type: object
       description: A caller's upcoming (scheduled) match for their private profile (#251).
@@ -6015,6 +6077,9 @@ components:
           type: boolean
           description: True for a login-less, not-yet-claimed placeholder player (#496/#505); the row shows an "Unclaimed" tag beside the name.
 
+        isDeleted:
+          type: boolean
+          description: True for an admin-soft-deleted account (#518); rendered as a dominant "Deleted" chip wherever the name appears.
     CalculationRequest:
       type: object
       properties:
@@ -6718,6 +6783,9 @@ components:
           type: boolean
           description: True for a login-less, not-yet-claimed placeholder player (#496/#505); the activity log shows an "Unclaimed" tag beside the name.
 
+        isDeleted:
+          type: boolean
+          description: True for an admin-soft-deleted account (#518); rendered as a dominant "Deleted" chip wherever the name appears.
     AuditMatchResponse:
       type: object
       description: A match-typed target resolved to its public code + date, linking to the public match page (#136).
@@ -6820,6 +6888,9 @@ components:
           type: boolean
           description: True for a login-less, not-yet-claimed placeholder player (#496/#505); the report shows an "Unclaimed" tag beside the name.
 
+        isDeleted:
+          type: boolean
+          description: True for an admin-soft-deleted account (#518); rendered as a dominant "Deleted" chip wherever the name appears.
     BandHopBucket:
       type: object
       required:
@@ -6954,6 +7025,9 @@ components:
           type: boolean
           description: True for a login-less, not-yet-claimed placeholder player (#496/#505); the seeding view shows an "Unclaimed" tag beside the name.
 
+        isDeleted:
+          type: boolean
+          description: True for an admin-soft-deleted account (#518); rendered as a dominant "Deleted" chip wherever the name appears.
     SeedingResponse:
       type: object
       required:
@@ -7005,6 +7079,9 @@ components:
           type: boolean
           description: True for a login-less, not-yet-claimed placeholder player (#496/#505); the leaderboard shows an "Unclaimed" tag beside the name.
 
+        isDeleted:
+          type: boolean
+          description: True for an admin-soft-deleted account (#518); rendered as a dominant "Deleted" chip wherever the name appears.
     StandingsGroupResponse:
       type: object
       description: A selectable (band, sex) group present in the current snapshot (#220).
@@ -7413,6 +7490,9 @@ components:
           type: boolean
           description: True for a login-less, not-yet-claimed placeholder player (#496/#505); the ledger shows an "Unclaimed" tag beside the name.
 
+        isDeleted:
+          type: boolean
+          description: True for an admin-soft-deleted account (#518); rendered as a dominant "Deleted" chip wherever the name appears.
     AwardedPointsPageResponse:
       type: object
       description: One page of the ranking-points ledger (#472) — rows plus the total for the pager.

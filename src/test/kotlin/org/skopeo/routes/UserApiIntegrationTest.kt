@@ -140,7 +140,7 @@ class UserApiIntegrationTest {
         }
 
     @Test
-    fun `PATCH updates and DELETE deactivates`() =
+    fun `PATCH updates self profile, a self DELETE is forbidden (admin-only, #518)`() =
         withApp { client ->
             val token = TestFirebaseAuth.mintToken(uid = "fb-4")
             val user = client.createUser(token = token).body<UserResponse>()
@@ -160,11 +160,13 @@ class UserApiIntegrationTest {
                 setBody(body = ProfileRequest(city = "Davao"))
             }.body<UserResponse>().city shouldBe "Davao"
 
+            // Deletion is ADMINISTRATOR-only (#518): a user cannot delete their own account.
             client.delete(urlString = "/api/v1/users/${user.id}") { header(key = HttpHeaders.Authorization, value = "Bearer $token") }
-                .status shouldBe HttpStatusCode.NoContent
+                .status shouldBe HttpStatusCode.Forbidden
 
+            // The account is untouched — still active.
             client.get(urlString = "/api/v1/users/me") { header(key = HttpHeaders.Authorization, value = "Bearer $token") }
-                .body<UserResponse>().isActive shouldBe false
+                .body<UserResponse>().isActive shouldBe true
         }
 
     @Test

@@ -27,13 +27,13 @@ function PlayerLink({ player }: { player: MatchPublicPlayer }) {
     return (
       <span>
         {label}
-        <PlaceholderTag show={player.isPlaceholder} />
+        <PlaceholderTag show={player.isPlaceholder} deleted={player.isDeleted} />
       </span>
     )
   return (
     <>
       <ContentLink to={`/players/${player.publicCode}`}>{label}</ContentLink>
-      <PlaceholderTag show={player.isPlaceholder} />
+      <PlaceholderTag show={player.isPlaceholder} deleted={player.isDeleted} />
     </>
   )
 }
@@ -88,7 +88,7 @@ function RatingChangeRow({ change }: { change: MatchPublicRatingChange }) {
         ) : (
           name
         )}
-        <PlaceholderTag show={change.isPlaceholder} />
+        <PlaceholderTag show={change.isPlaceholder} deleted={change.isDeleted} />
       </span>
       {showRates ? (
         <span className="font-mono text-xs">

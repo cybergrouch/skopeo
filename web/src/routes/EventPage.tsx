@@ -89,13 +89,13 @@ function ParticipantLink({ p }: { p: EventParticipantResponse }) {
     return (
       <span>
         {label}
-        <PlaceholderTag show={p.isPlaceholder} />
+        <PlaceholderTag show={p.isPlaceholder} deleted={p.isDeleted} />
       </span>
     )
   return (
     <>
       <ContentLink to={`/players/${p.publicCode}`}>{label}</ContentLink>
-      <PlaceholderTag show={p.isPlaceholder} />
+      <PlaceholderTag show={p.isPlaceholder} deleted={p.isDeleted} />
     </>
   )
 }
