@@ -55,6 +55,7 @@ Points for an **open-play** result are computed from the **NTRP band difference*
 - A team's band is `Level.fromValue(rating)` — a 0.5-wide floor over the 1.0–7.0 NTRP range ("4.0", "4.5", …).
 - For **doubles**, a team's band is the band of the **mean** of the partnership's two NTRP ratings (matching how `DoublesMatchTypeHandler` already means partners).
 - Higher band = higher-ranked team.
+- **Comparison is binary — equal vs. unequal only.** Scoring depends solely on whether the two bands are the same or different (and, when different, which side won); it does **not** scale with the *size* of the gap. A one-band gap and a three-band gap award the same points. This keeps all awards **integral** (no fractional parts) and lets the whole open-play schedule be stated in the single table below.
 
 ### Points table
 
