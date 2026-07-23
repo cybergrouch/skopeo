@@ -125,12 +125,7 @@ So the designation-plus-policy machinery is **obsolete for both**, and two of th
 
 **Decision:** **remove the global points policy.** The new rule-based requirement supersedes it. Concretely this means retiring the `points_policies` table (new down/forward migration), the `PointsPolicy` domain/validation, and the per-event `[min,max]` designation path *for the rule-based event types*, and allowing **0 and negative** awards on the finalize path.
 
-**⚠️ Consequence — League is undefined.** `EventType.LEAGUE` currently shares the *same* designated-points + policy machinery as open play and tournaments. Removing the global policy and the designation path leaves league without a points model. This issue's scope (open play + tournaments) does **not** define league's new behavior. **OPEN:** decide one of —
-- (a) **League keeps host-designated points** but with the global cap removed (per-event window only, or unbounded); or
-- (b) **League gets its own rule-based model** (separate follow-up issue); or
-- (c) **League is temporarily excluded** from awarding until defined.
-
-This must be settled before the policy is torn out, so league awarding doesn't silently break.
+**Resolved — League is excluded from awarding for now.** `EventType.LEAGUE` currently shares the *same* designated-points + policy machinery as open play and tournaments. Removing the global policy and the designation path leaves league without a points model, and this issue's scope (open play + tournaments) does not define league's new behavior. **Decision: (c) — league is temporarily excluded from awarding** until a league points model is defined in a later issue. Concretely: **remove `LEAGUE` from `AWARDING_TYPES`** so finalizing a league event produces no ranking points (ratings still compute as normal). A follow-up issue will define league's rule-based points.
 
 ---
 
