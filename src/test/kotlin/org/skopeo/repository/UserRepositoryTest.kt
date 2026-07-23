@@ -299,4 +299,25 @@ class UserRepositoryTest {
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.NotFound>()
     }
+
+    @Test
+    fun `countSearch excludes inactive by default and includeInactive counts them (#518)`() {
+        repository.provision(
+            command = googleSignup().copy(identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = "cs-1", isPrimary = true)),
+        )
+        val deleted =
+            repository.provision(
+                command =
+                    googleSignup().copy(
+                        identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = "cs-2", isPrimary = true),
+                    ),
+            )
+        repository.deactivate(id = deleted.id).shouldBeRight()
+        val query = UserSearchQuery(name = null, code = null, q = null, sex = "Male", dobMin = null, dobMax = null, rating = null)
+
+        // Relies on the includeInactive=false default → excludes the deactivated account.
+        repository.countSearch(query = query) shouldBe 1L
+        // Opting in counts it too.
+        repository.countSearch(query = query, includeInactive = true) shouldBe 2L
+    }
 }
