@@ -41,10 +41,8 @@ Points are awarded **once per participant** by **finishing placement**. The sanc
 ### Model decisions
 
 - **Circuit as its own entity.** A `circuits` table (`id`, `name`, `is_active`, audit cols) + admin CRUD, seeded with NORTH/SOUTH — preferred over a free-text field so seeding/renaming and reporting-by-circuit are clean.
-- **OPEN — Tournament vs. Event relationship.** Two options:
-  - **(a) Tournament as its own entity** that *owns* a set of `EventType.TOURNAMENT` events and produces a final ranking of participants. Preferred; aligns with deferred [#390](https://github.com/cybergrouch/skopeo/issues/390) (tournament brackets) and is required by the placement-based payout (a tournament must yield 1st–4th).
-  - **(b) Attributes on the event** (`circuit_id`, `sanction_status` directly on the event). Smaller step, but doesn't naturally produce a multi-event final standing.
-- **Placement source.** The placement-based table requires each tournament to produce a final ranking of participants (bracket result, standings, or host-entered placements). This is the main reason to favour option (a).
+- **Resolved — one entity, one UI.** A tournament is an **`EventType.TOURNAMENT` event**, not a separate entity. Circuit + sanction status are conditional fields shown in the existing **Event Organizer** flow when the type is TOURNAMENT. Rationale: an event already provides everything a tournament needs operationally (participants, fixtures, result upload, finalize); the genuinely new work — placement capture + placement-based awarding — exists regardless of entity shape, so a separate entity buys nothing there. The **Circuit** supplies the grouping. If a single tournament ever needs to span **multiple events** (multi-day, multiple sub-draws) under one standing, a parent Tournament entity can be added later without redoing the event work — but given small local draw sizes, one-event-per-tournament fits now.
+- **Placement source.** The placement-based table requires each tournament to produce a final ranking of participants. For small draws this is a **host-entered final standings** step at finalize; a full bracket is deferred [#390](https://github.com/cybergrouch/skopeo/issues/390) and not required to ship this.
 
 ---
 
@@ -118,7 +116,7 @@ Grounded in a read of the points/band/event code (file references for implemente
 - `service/calculator/impl/v2/PerformanceBasedRankingCalculatorImpl.kt` computes `isUpset` from the continuous **rating** advantage, not the discrete **band** difference. The open-play formula keys off **band** difference, so it should compute the band comparison independently (cheap; both ratings are in hand) rather than reuse `isUpset`.
 
 ### Net-new for Part A
-No `circuit`, `tournament`, or `sanction` concept exists (`EventType` / `MatchType` / `WeightClass` are the only competition-shape enums). Circuits + tournaments + sanction status are all new tables, models, repositories, services, routes, DTOs, OpenAPI entries, and web surfaces.
+No `circuit` or `sanction` concept exists (`EventType` / `MatchType` / `WeightClass` are the only competition-shape enums). Net-new: a **`circuits`** table + admin CRUD; **`circuit_id` + `sanction_status`** columns on the **event** (not a separate tournament table — one entity); a **final-placement** capture per participant; and a **placement-based awarding branch**. Plus the corresponding models, repositories, services, routes, DTOs, OpenAPI entries, and Event Organizer web fields.
 
 ---
 
@@ -126,7 +124,7 @@ No `circuit`, `tournament`, or `sanction` concept exists (`EventType` / `MatchTy
 
 1. **Open-play computed points** (Part B) — self-contained: a new `computeOpenPlayPoints(...)`, wired into `EventFinalizeAwarder` for `OPEN_PLAY`, paying losers too, with tests. New V-migration only if we choose to snapshot match-time bands.
 2. **Circuits** — `circuits` table + admin CRUD (seed NORTH/SOUTH); model/repo/service/routes/DTO/OpenAPI + an Admin web tab.
-3. **Tournaments + sanction** — `tournaments` table referencing `circuit_id` + `sanction_status`, tied to events, producing a final placement per participant, with the placement → points table applied at finalize.
+3. **Tournaments + sanction** — `circuit_id` + `sanction_status` on the event (conditional Event Organizer fields when type = TOURNAMENT), final-placement capture per participant, and the placement → points table applied at finalize via a new awarding branch. Model the table as a **configurable schedule** so a draw-size-tiered spread can be added later.
 
 ## References
 
