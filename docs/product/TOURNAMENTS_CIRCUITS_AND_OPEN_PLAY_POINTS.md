@@ -93,6 +93,28 @@ Points are computed **per set and summed across the sets** of the match:
 
 ---
 
+## Points policy — removed, superseded by rule-based awarding
+
+The existing **global points policy** (`points_policies`, seeded in V16: per-`EventType` `min`/`max`/`max_validity_days`, e.g. OPEN_PLAY 1–10) exists to bound a **host-designated** per-fixture points amount: an organizer picks a number within the event's `[min, max]` window, which is itself capped by the policy, validated in `MatchService.resolveDesignation`.
+
+Under this design, points are **determined by rules, not designated by a host**:
+
+- **Open play** — computed from the band-difference table (integral values `−2 … 5`).
+- **Tournaments** — fixed placement schedule (80/60/40/30, halved when unsanctioned).
+
+So the designation-plus-policy machinery is **obsolete for both**, and two of the computed values (**0** and **negative**) would actually *violate* the policy's positive `min` and the `points > 0` guard in `RankingPointService.grant`.
+
+**Decision:** **remove the global points policy.** The new rule-based requirement supersedes it. Concretely this means retiring the `points_policies` table (new down/forward migration), the `PointsPolicy` domain/validation, and the per-event `[min,max]` designation path *for the rule-based event types*, and allowing **0 and negative** awards on the finalize path.
+
+**⚠️ Consequence — League is undefined.** `EventType.LEAGUE` currently shares the *same* designated-points + policy machinery as open play and tournaments. Removing the global policy and the designation path leaves league without a points model. This issue's scope (open play + tournaments) does **not** define league's new behavior. **OPEN:** decide one of —
+- (a) **League keeps host-designated points** but with the global cap removed (per-event window only, or unbounded); or
+- (b) **League gets its own rule-based model** (separate follow-up issue); or
+- (c) **League is temporarily excluded** from awarding until defined.
+
+This must be settled before the policy is torn out, so league awarding doesn't silently break.
+
+---
+
 ## How this maps onto the current code
 
 Grounded in a read of the points/band/event code (file references for implementers):
