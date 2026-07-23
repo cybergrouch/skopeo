@@ -36,7 +36,7 @@ Points are awarded **once per participant** by **finishing placement**. The sanc
 
 - **Resolved:** placements beyond 4th earn **0 points** — the table above is the full schedule.
 - **Resolved:** ties for a placement (e.g. two semi-final losers both "3rd/4th") are **the tournament's choice** — each tournament defines how it resolves placements it doesn't play out to a definite finish (e.g. play a 3rd-place match, or split/assign the tied points per its own rule). The platform stores the resulting per-participant placement + points rather than imposing a single global tie rule.
-- **OPEN:** does the payout depend on **draw size** (a 4-player draw and a 32-player draw both paying 80 for 1st)? Common in real circuits.
+- **Resolved (for now):** payout does **not** depend on **draw size** — a single table applies to all tournament sizes, since local (Manila) tournaments are small due to limited courts and cost. However, the implementation should be **flexible enough** to later define the points spread by tournament size (i.e. model the placement → points table as a configurable/selectable schedule, not a hard-coded constant), so a draw-size-tiered table can be introduced when tournaments grow.
 
 ### Model decisions
 
