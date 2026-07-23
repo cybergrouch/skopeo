@@ -102,6 +102,70 @@ Points are computed **per set and summed across the sets** of the match:
 - **Retirement / walkover (open play):** the match awards **0 points** — no computed award for either side.
 - **Retirement / walkover (tournament):** placement is unaffected — the recorded winner of a placement match still receives that placement's points (and the loser their placement's points), since tournament points depend on placement, not on games played.
 
+### Generalized algorithm (implementation spec)
+
+The rules above generalize to a small, configurable scoring function evaluated **per set** and summed. Nothing here is hard-coded beyond the parameter table — the constants are the only tunables.
+
+**Parameters** (the entire schedule; a draw-size- or context-tiered variant later just swaps this table):
+
+| Symbol | Meaning | Value |
+| --- | --- | --- |
+| `WIN_EQUAL` | winner's points, equal bands | `3` |
+| `WIN_FAVORITE` | winner's points, favorite (higher band) wins | `2` |
+| `WIN_UPSET` | winner's points, upset (lower band) wins | `5` |
+| `RLP_EQUAL` | loser base points, equal bands | `0` |
+| `RLP_FAVORITE` | loser base points, favorite wins | `1` |
+| `RLP_UPSET` | loser base points, upset | `−2` |
+| `ALP_AWARD` | additional loser point | `1` |
+| `ALP_THRESHOLD` | games the loser must win in the set to earn ALP | `4` |
+| `ALP_CASES` | cases in which the loser may earn ALP | `{FAVORITE, UPSET}` (not `EQUAL`) |
+
+**Definitions:**
+
+- **Entry band** `band(T)` — team `T`'s band from its rating **as of event start** (§*bands locked at event entry*). Doubles: band of the **mean** of the partners' ratings.
+- **Band relation** `rel` — computed **once per match** from the two teams' entry bands: `EQUAL` if the bands are the same; otherwise one team is the **higher-banded** and the other the **lower-banded**.
+- **Set category** `category(s)` — for each set `s`, derived from `rel` and who **won that set**:
+  - `rel == EQUAL` → `EQUAL`
+  - `rel != EQUAL` and the set winner is the **higher-banded** team → `FAVORITE`
+  - `rel != EQUAL` and the set winner is the **lower-banded** team → `UPSET`
+  - *(Because the relation is fixed but the set winner can vary, a favorite can post an `UPSET`-category set loss inside a match they otherwise dominate — this is why the overall match winner is irrelevant.)*
+- **Loser games** `loserGames(s)` — games won by the set's losing team; for a **tiebreak-decided** set with no recorded games, the loser's **tiebreak points** are used instead.
+- **ALP** `alp(s)` — `ALP_AWARD` if `category(s) ∈ ALP_CASES` **and** `loserGames(s) ≥ ALP_THRESHOLD`, else `0`.
+
+**Per-set points** — for set `s`, winner and loser team points:
+
+```
+winnerPts(s) = { EQUAL: WIN_EQUAL, FAVORITE: WIN_FAVORITE, UPSET: WIN_UPSET }[category(s)]
+loserPts(s)  = loserBase(category(s)) + alp(s)
+  where loserBase = { EQUAL: RLP_EQUAL, FAVORITE: RLP_FAVORITE, UPSET: RLP_UPSET }
+```
+
+**Match total & award:**
+
+```
+for each team T in the match:
+    teamTotal(T) = Σ over sets s of ( winnerPts(s) if T won s, else loserPts(s) )
+    for each participant p in T:            # doubles: each partner
+        create award(user = p, points = teamTotal(T),
+                     band = band(p) at entry, sex = p.sex,
+                     validFrom = event.end, validUntil = event.end + 2 months,
+                     trace = {event, match})   # same record/audit/finalize path as today
+# retirement / walkover: skip computation, award 0 for the match.
+```
+
+**Worked examples** (singles, so team = player):
+
+| Match (winner bands vs loser) | Per-set breakdown | Winner total | Loser total |
+| --- | --- | --- | --- |
+| Equal bands, `6–3` | EQUAL: W +3, L +0 | **3** | **0** |
+| Favorite wins `6–4` | FAVORITE: W +2, L base 1 + ALP 1 (4 ≥ 4) | **2** | **2** |
+| Favorite wins `6–2` | FAVORITE: W +2, L base 1 + ALP 0 (2 < 4) | **2** | **1** |
+| Upset (lower beats higher) `6–4` | UPSET: W +5, L base −2 + ALP 1 | **5** | **−1** |
+| Upset `6–1` | UPSET: W +5, L base −2 + ALP 0 | **5** | **−2** |
+| Favorite over 3 sets `6–4, 4–6, 6–3` | S1 FAVORITE (fav +2 / und base1+ALP1=2); S2 UPSET, favorite *loses* the set (und +5 / fav base−2+ALP1=−1); S3 FAVORITE (fav +2 / und base1+0=1) | **fav 3** | **und 8** |
+
+The last row shows the underdog out-earning the favorite over a match the favorite won 2–1 — a direct consequence of per-set scoring, and intended.
+
 ### Open decisions (Part B)
 
 - **Resolved:** points are computed **per set and summed** (see [Per-set aggregation](#per-set-aggregation)). Each set's winner/loser and games drive the table; the overall match winner is not used; multi-set matches can exceed the single-set table values.
