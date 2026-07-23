@@ -73,6 +73,15 @@ describe('DeletedAccountsSection (#518)', () => {
     expect(screen.queryByText('Merged')).not.toBeInTheDocument()
   })
 
+  it('shows an empty state when a search matches no deleted accounts', async () => {
+    items.current = []
+    const user = userEvent.setup()
+    renderSection()
+    await user.type(screen.getByLabelText('Search'), 'zzz')
+
+    expect(await screen.findByText('No deleted accounts match.')).toBeInTheDocument()
+  })
+
   it('searches with includeInactive=true so deleted accounts are discoverable', async () => {
     const user = userEvent.setup()
     renderSection()

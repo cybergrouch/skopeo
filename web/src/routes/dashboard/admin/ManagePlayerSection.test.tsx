@@ -409,4 +409,21 @@ describe('ManagePlayerSection', () => {
     await user.click(screen.getByRole('button', { name: 'Confirm delete account' }))
     expect(screen.getByRole('alert')).toHaveTextContent('Cannot delete the last active ADMINISTRATOR')
   })
+
+  it('keeps the delete error visible after cancelling back to the manage view (#518)', async () => {
+    useDeleteApiV1UsersId.mockImplementation((options: SuccessOpts) => ({
+      isPending: false,
+      mutate: () =>
+        options.mutation.onError?.({
+          response: { data: { message: 'Cannot delete the last active ADMINISTRATOR' } },
+        }),
+    }))
+    const user = await selectAlice()
+    await user.click(screen.getByRole('button', { name: 'Delete account' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm delete account' }))
+    // Cancelling returns to the manage view; the error stays visible there.
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.getByRole('button', { name: 'Delete account' })).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent('Cannot delete the last active ADMINISTRATOR')
+  })
 })

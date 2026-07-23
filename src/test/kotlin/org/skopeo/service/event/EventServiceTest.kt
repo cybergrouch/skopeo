@@ -991,6 +991,20 @@ class EventServiceTest {
     }
 
     @Test
+    fun `a deleted account cannot self-sign-up for events (#518)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val player = provision(uid = "player")
+        val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight().event
+        // Soft-delete the player (is_active=false, canonical null → isDeleted()).
+        UserRepository().deactivate(id = player.id).shouldBeRight()
+
+        service
+            .selfSignup(token = token(uid = "player"), code = event.publicCode)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
     fun `a host approves a request, adding the player to the roster (#201)`() {
         provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val player = provision(uid = "player")

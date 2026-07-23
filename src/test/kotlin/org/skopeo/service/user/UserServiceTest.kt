@@ -514,6 +514,34 @@ class UserServiceTest {
     }
 
     @Test
+    fun `searchPage total and items honour includeInactive for a deleted account (#518)`() {
+        provisionAdmin(uid = "staff-pg")
+        val member = service.provision(token = token(uid = "pg1"), request = request).shouldBeRight().user
+        service.deactivate(token = token(uid = "staff-pg"), id = member.id).shouldBeRight()
+
+        // Default (pickers) excludes the deleted account — empty page and zero total.
+        val default =
+            service
+                .searchPage(token = token(uid = "staff-pg"), filters = UserSearchFilters(code = member.publicCode), limit = 20, offset = 0)
+                .shouldBeRight()
+        default.items.shouldBeEmpty()
+        default.total shouldBe 0
+
+        // Research opts in — the deleted account and a total of 1.
+        val included =
+            service
+                .searchPage(
+                    token = token(uid = "staff-pg"),
+                    filters = UserSearchFilters(code = member.publicCode),
+                    limit = 20,
+                    offset = 0,
+                    includeInactive = true,
+                ).shouldBeRight()
+        included.items.single().id shouldBe member.id
+        included.total shouldBe 1
+    }
+
+    @Test
     fun `a RATER can search, a plain player cannot (#205)`() {
         repository.provision(
             command =
