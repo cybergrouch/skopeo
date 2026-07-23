@@ -50,6 +50,7 @@ At finalize, the awarder reads the result of each placement match and awards the
 ### Model decisions
 
 - **Circuit as its own entity.** A `circuits` table (`id`, `name`, `is_active`, audit cols) + admin CRUD, seeded with NORTH/SOUTH — preferred over a free-text field so seeding/renaming and reporting-by-circuit are clean.
+- **Resolved — circuit is required for tournaments (no legacy to migrate).** A tournament event **must** reference a circuit (`circuit_id` NOT NULL for `EventType.TOURNAMENT`). There are **no tournaments in the system yet**, so this can be introduced cleanly with no back-compat/data-fix step.
 - **Resolved — one entity, one UI.** A tournament is an **`EventType.TOURNAMENT` event**, not a separate entity. The **Circuit** is a conditional field in the existing **Event Organizer** flow when the type is TOURNAMENT; **sanction is inherited from the event's Club** (see below), not entered per event. Rationale: an event already provides everything a tournament needs operationally (participants, fixtures, result upload, finalize); the genuinely new work — placement matches + placement-based awarding — exists regardless of entity shape, so a separate entity buys nothing there. If a single tournament ever needs to span **multiple events** (multi-day, multiple sub-draws) under one standing, a parent Tournament entity can be added later without redoing the event work — but given small local draw sizes, one-event-per-tournament fits now.
 - **Resolved — sanction is a Club flag, inherited by the tournament.** Sanction status lives on the **Club** (a new boolean, e.g. `tournaments_sanctioned`), and a tournament event inherits it via its existing **event↔club** association. This reuses the current club-scoping of events and keeps sanctioning an **admin/club-governance** decision rather than a per-event choice by the organizing host. **OPEN (minor):** who toggles the club flag — ADMINISTRATOR only, or also CLUB_OWNER? (Recommend ADMINISTRATOR, since sanctioning is an authority function and self-sanctioning a club is the same governance concern.) **OPEN (minor):** a tournament event with **no club** is implicitly **unsanctioned**.
 - **Resolved — placement source is designated placement matches.** Placement is derived from the results of **placement matches** the organizer flags at match creation (Super Finals → 1st/2nd, Plate Finals → 3rd/4th), not a host-entered final-standings step and not a full bracket ([#390](https://github.com/cybergrouch/skopeo/issues/390) stays deferred). This needs a new per-match input: an `isPlacementMatch` flag + a placement-bracket selector (e.g. `SUPER_FINALS` \| `PLATE_FINALS`). Regular (non-placement) matches award no points.
@@ -73,6 +74,8 @@ Define **RLP** (Regular Loser Points, a constant per case) and **ALP** (Addition
 
 > **ALP = 1 if the losing team won ≥ 4 games in the set they lost, else 0.**
 
+**Tiebreaks count as games (open play only).** When a set is decided by a tiebreak, the **tiebreak points count as that set's games** for the ALP threshold — so a set/match tiebreak that stands in for a full set (recorded with 0 games) uses the loser's tiebreak points as their "games won" (e.g. a 10–8 match tiebreak → the loser's 8 clears the ≥ 4 threshold). A conventional 7–6 set already records the loser's 6 games, which clears the threshold on its own. ALP is an open-play concept only; it does not apply to tournaments (which are placement-based).
+
 | Case | Winner points | Loser points |
 | --- | --- | --- |
 | **Equal bands** | **3** | **0** |
@@ -93,6 +96,11 @@ Points are computed **per set and summed across the sets** of the match:
 - The **band comparison is constant** across the match (same two teams), so only the set outcome and per-set games vary.
 - The **overall match `winnerTeamId` is not used** for open-play points — each set is scored independently.
 - **Consequence:** a 3-set match can total **more (or, for an upset loser, more negative) points** than the single-set table values. This is intended.
+
+### Edge cases
+
+- **Retirement / walkover (open play):** the match awards **0 points** — no computed award for either side.
+- **Retirement / walkover (tournament):** placement is unaffected — the recorded winner of a placement match still receives that placement's points (and the loser their placement's points), since tournament points depend on placement, not on games played.
 
 ### Open decisions (Part B)
 
@@ -153,6 +161,10 @@ Grounded in a read of the points/band/event code (file references for implemente
 No `circuit` or `sanction` concept exists (`EventType` / `MatchType` / `WeightClass` are the only competition-shape enums). Net-new: a **`circuits`** table + admin CRUD; a **`circuit_id`** column on the **event** (not a separate tournament table — one entity); a **sanction flag on the Club** (inherited by the event via its club association); a per-match **`is_placement_match` + placement-bracket** input (`SUPER_FINALS`/`PLATE_FINALS`); and a **placement-based awarding branch**. Plus the corresponding models, repositories, services, routes, DTOs, OpenAPI entries, and Event Organizer / club-admin web fields.
 
 ---
+
+## Rollout
+
+**Going forward only.** The new open-play formula and tournament placement points apply to events finalized **after** the change ships. Already-finalized open-play events are **not** recomputed or re-awarded — their existing ledger rows stand. No historical migration of awards.
 
 ## Suggested increments (not a commitment)
 
