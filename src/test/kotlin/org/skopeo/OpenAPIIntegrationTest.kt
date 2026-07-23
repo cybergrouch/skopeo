@@ -18,6 +18,19 @@ import org.yaml.snakeyaml.Yaml
 import kotlin.test.Test
 
 class OpenAPIIntegrationTest {
+    /** Circuits (#525): the admin-managed groupings-of-tournaments contract is documented. */
+    @Test
+    fun testOpenAPISpecIncludesCircuits() =
+        testApplication {
+            application {
+                module(initDatabase = false)
+            }
+            val body = client.get(urlString = "/openapi.yaml").bodyAsText()
+            body shouldContain "/api/v1/circuits"
+            body shouldContain "CircuitResponse"
+            body shouldContain "CreateCircuitRequest"
+        }
+
     @Test
     fun testOpenAPISpecEndpoint() =
         testApplication {
@@ -36,10 +49,6 @@ class OpenAPIIntegrationTest {
             body shouldContain "openapi: 3.0.0"
             body shouldContain "Skopeo API"
             body shouldContain "/api/v1/calculate-ranking"
-            // Circuits (#525): admin-managed groupings of tournaments, with request/response schemas.
-            body shouldContain "/api/v1/circuits"
-            body shouldContain "CircuitResponse"
-            body shouldContain "CreateCircuitRequest"
             body shouldContain "/api/v1/theme"
             // Per-user local theme (#514): the self-service path and its request/response schemas.
             body shouldContain "/api/v1/users/me/theme"
