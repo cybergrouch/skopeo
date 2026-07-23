@@ -14,6 +14,23 @@ describe('AuthLayout', () => {
     expect(screen.getByText('body')).toBeInTheDocument()
   })
 
+  it('renders the Skopeo brand, logo, and app description', () => {
+    render(
+      <AuthLayout title="Welcome back" description="Sign in">
+        <p>body</p>
+      </AuthLayout>,
+    )
+    expect(screen.getByText('Skopeo')).toBeInTheDocument()
+    const logo = screen.getByAltText('Skopeo')
+    expect(logo).toBeInTheDocument()
+    expect(logo).toHaveAttribute('src', '/logo-mark.svg')
+    expect(
+      screen.getByText(
+        /Skopeo calculates performance-based NTRP tennis ratings/i,
+      ),
+    ).toBeInTheDocument()
+  })
+
   it('renders the footer when provided', () => {
     render(
       <AuthLayout title="t" description="d" footer={<span>footer text</span>}>
