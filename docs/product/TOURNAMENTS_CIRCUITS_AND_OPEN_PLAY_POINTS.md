@@ -1,6 +1,6 @@
 # Tournaments, Circuits & Open-Play Points
 
-> **Status:** Proposed — discussion of record for [#525](https://github.com/cybergrouch/skopeo/issues/525). Not yet implemented; open decisions are marked **OPEN** below.
+> **Status:** Proposed — discussion of record for [#525](https://github.com/cybergrouch/skopeo/issues/525). Not yet implemented. All design decisions are resolved (marked **Resolved** below); remaining detail (band matrices) lives in the working sheet referenced on #525.
 
 This document captures the design discussion for two related additions to the competitive model and the ranking-points system:
 
@@ -87,8 +87,8 @@ Points are computed **per set and summed across the sets** of the match:
 
 - **Resolved:** points are computed **per set and summed** (see [Per-set aggregation](#per-set-aggregation)). Each set's winner/loser and games drive the table; the overall match winner is not used; multi-set matches can exceed the single-set table values.
 - **Resolved — net, no floor.** The upset-loser case yields **−2 / −1**; these are stored as-is (the ledger `points` column is a signed `DECIMAL`) and **net straight into** the band-race total, with **no floor at zero**. Two existing mechanisms naturally bound the effect, so a floor is unnecessary: (1) **band-tagging** — if a run of upset losses actually deflates a player's rating into a lower band, they begin a **fresh points race in the new band** and the old-band negatives no longer weigh on them; and (2) the **validity window** — every award carries a start date and expiry (per the existing points contract), so a negative award ages out. Displays may floor the *shown* number at zero if a negative leaderboard value is undesirable, but the stored/aggregated value is not floored.
-- **OPEN — band at which time?** Bands for the comparison — at match-play time or at finalize time? Finalize-time current bands are readily available; match-time bands would need to be snapshotted.
-- **OPEN — band tagging of the award.** Which band does each award count toward (winner's band, or each recipient's own band) given the existing band-scoped race?
+- **Resolved — bands locked at event entry.** The rating basis is **fixed at the start of the event** (a player's rating *entering* the tournament / open-play event) and is **not dynamic**. If a team is bumped to a higher or lower NTRP band *during* the event, it does **not** change the points basis — what counts is the band they entered with. This is fairer (matchups are scored on how players stood entering the competition) and stable (every match in the event uses the same snapshot). It is neither match-play-time nor finalize-time — it is an **as-of-event-start** snapshot.
+- **Resolved — each recipient's award is tagged with their own entry band.** Consistent with "locked at entry" and the existing per-user, band-scoped ledger: winner and loser each get a row tagged with **their own** band as of event start (not the opponent's, not a finalize-time band).
 
 ---
 
@@ -99,7 +99,7 @@ Grounded in a read of the points/band/event code (file references for implemente
 ### Points are awarded at event finalize
 `service/event/EventFinalizeAwarder.kt` (`awardForFinalizedEvent`) is the single choke point. It filters fixtures that are `COMPLETED`, have a `winnerTeamId`, and carry a non-null `designatedPoints`; resolves each winner's **current band** (`ratings.findCurrentRatings`) and sex; maps the event's `pointValidity{Start,End}` to a `PointClass`; and writes one ledger row **per winning-team member** with the host-designated amount.
 
-- **Open play (Part B) plugs in here.** All inputs the formula needs are available at finalize time: both teams' current bands, `match.winnerTeamId`, per-set games (`match.sets[].team1Games/team2Games`), `event.type`, `match.matchType`. The change: for `EventType.OPEN_PLAY` fixtures, replace "read `designatedPoints`" with `computeOpenPlayPoints(winnerBand, loserBand, sets)`, and **also emit a loser award** (today only winners are paid) — including zero/negative amounts.
+- **Open play (Part B) plugs in here.** Most inputs are available at finalize time: `match.winnerTeamId` (per set), per-set games (`match.sets[].team1Games/team2Games`), `event.type`, `match.matchType`. The one change from today's flow is the band basis: instead of `findCurrentRatings` (finalize-time), the bands must be resolved **as of event start** (entry band — see the resolved decision above), e.g. from `user_rating_history` as-of the event start date or an entry snapshot taken at registration. The awarder change: for `EventType.OPEN_PLAY` fixtures, replace "read `designatedPoints`" with `computeOpenPlayPoints(entryBandTeamA, entryBandTeamB, sets)` iterating the sets, and **also emit a loser award** (today only winners are paid) — including zero/negative amounts.
 - **Tournaments (Part A) need a different branch.** Tournaments award once per **participant** by final placement, not per fixture. The awarder (or a sibling) reads each participant's placement at tournament finalize and writes a single ledger row from the sanctioned/unsanctioned table.
 
 ### Band model already supports the comparison
@@ -122,7 +122,7 @@ No `circuit` or `sanction` concept exists (`EventType` / `MatchType` / `WeightCl
 
 ## Suggested increments (not a commitment)
 
-1. **Open-play computed points** (Part B) — self-contained: a new `computeOpenPlayPoints(...)`, wired into `EventFinalizeAwarder` for `OPEN_PLAY`, paying losers too, with tests. New V-migration only if we choose to snapshot match-time bands.
+1. **Open-play computed points** (Part B) — a new `computeOpenPlayPoints(...)`, wired into `EventFinalizeAwarder` for `OPEN_PLAY`, resolving each team's **entry band** (as-of-event-start), iterating sets, and paying losers too, with tests. Needs an as-of-event-start band lookup (rating-history query or an entry snapshot); a new V-migration if we persist an entry snapshot rather than deriving it from history.
 2. **Circuits** — `circuits` table + admin CRUD (seed NORTH/SOUTH); model/repo/service/routes/DTO/OpenAPI + an Admin web tab.
 3. **Tournaments + sanction** — `circuit_id` + `sanction_status` on the event (conditional Event Organizer fields when type = TOURNAMENT), final-placement capture per participant, and the placement → points table applied at finalize via a new awarding branch. Model the table as a **configurable schedule** so a draw-size-tiered spread can be added later.
 
