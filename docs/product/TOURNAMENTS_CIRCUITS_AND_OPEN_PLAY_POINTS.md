@@ -17,15 +17,15 @@ The fuller working model (band matrices, edge cases) lives in the working Google
 
 | Concept | Definition |
 | --- | --- |
-| **Circuit** | An **administrator-defined** grouping of tournaments. Flexible — admins create/rename/retire circuits; it is **not** a hard-coded enum. Seed data: **NORTH**, **SOUTH**. |
-| **Tournament** | Belongs to exactly one Circuit. Carries a **sanction status**: `SANCTIONED` \| `UNSANCTIONED`. |
-| **Sanction status** | Selects which **placement → points** table applies (see below). It does **not** scale per-match points. |
+| **Circuit** | An **administrator-defined** grouping of tournaments. Flexible — admins create/rename/retire circuits; it is **not** a hard-coded enum. Seed data: **NORTH**, **SOUTH**. Selected on the tournament event. |
+| **Tournament** | An `EventType.TOURNAMENT` event that belongs to exactly one Circuit and is **associated with a Club**. Its sanction status is **inherited from that club** (not set per-tournament). |
+| **Sanction status** | A flag on the **Club** — whether tournaments hosted by that club are **sanctioned**. It selects which **placement → points** table applies (see below); it does **not** scale per-match points. Putting it on the club (an admin-governed entity) rather than the event closes the governance hole where a host could self-declare their own tournament sanctioned. |
 
-All three are net-new: today `EventType.TOURNAMENT` is only an event flavor — there is no tournament entity, no circuit, and no sanction flag anywhere in the codebase.
+These are net-new: today `EventType.TOURNAMENT` is only an event flavor — there is no circuit, and no club-level sanction flag, anywhere in the codebase.
 
 ### Tournament points distribution (by final placement)
 
-Points are awarded **once per participant** by **finishing placement**. The sanction status selects the table (sanctioned = exactly **2×** unsanctioned):
+Points are awarded **once per participant** by **finishing placement**, and **only for placement** — tournaments do **not** award per-match points the way open play does (a tournament's regular rounds earn nothing; rating changes still apply). The sanction status selects the table (sanctioned = exactly **2×** unsanctioned):
 
 | Placement | Sanctioned | Unsanctioned |
 | --- | --- | --- |
@@ -34,15 +34,25 @@ Points are awarded **once per participant** by **finishing placement**. The sanc
 | 3rd | **40** | **20** |
 | 4th | **30** | **15** |
 
-- **Resolved:** placements beyond 4th earn **0 points** — the table above is the full schedule.
-- **Resolved:** ties for a placement (e.g. two semi-final losers both "3rd/4th") are **the tournament's choice** — each tournament defines how it resolves placements it doesn't play out to a definite finish (e.g. play a 3rd-place match, or split/assign the tied points per its own rule). The platform stores the resulting per-participant placement + points rather than imposing a single global tie rule.
+**Placement comes from designated placement matches** (not host-entered standings). When creating a tournament match, the organizer marks whether it is a **placement match** and, if so, *which* placement it decides:
+
+| Placement match | Winner → | Loser → |
+| --- | --- | --- |
+| **Super Finals** | **1st** | **2nd** |
+| **Plate Finals** | **3rd** | **4th** |
+
+At finalize, the awarder reads the result of each placement match and awards the winner/loser their placement points from the sanction-selected table. A tournament that plays only a Super Finals awards just 1st/2nd; a Plate Finals adds 3rd/4th.
+
+- **Resolved:** placements beyond 4th earn **0 points** — the table above is the full schedule (Super Finals + Plate Finals cover 1st–4th).
+- **Resolved:** ties for a placement are **the tournament's choice** — a tournament resolves 3rd/4th by playing a **Plate Finals** (the standard path); if it chooses not to play one out, it simply doesn't award those placements. The platform derives placement from the placement matches that were actually played rather than imposing a global tie rule.
 - **Resolved (for now):** payout does **not** depend on **draw size** — a single table applies to all tournament sizes, since local (Manila) tournaments are small due to limited courts and cost. However, the implementation should be **flexible enough** to later define the points spread by tournament size (i.e. model the placement → points table as a configurable/selectable schedule, not a hard-coded constant), so a draw-size-tiered table can be introduced when tournaments grow.
 
 ### Model decisions
 
 - **Circuit as its own entity.** A `circuits` table (`id`, `name`, `is_active`, audit cols) + admin CRUD, seeded with NORTH/SOUTH — preferred over a free-text field so seeding/renaming and reporting-by-circuit are clean.
-- **Resolved — one entity, one UI.** A tournament is an **`EventType.TOURNAMENT` event**, not a separate entity. Circuit + sanction status are conditional fields shown in the existing **Event Organizer** flow when the type is TOURNAMENT. Rationale: an event already provides everything a tournament needs operationally (participants, fixtures, result upload, finalize); the genuinely new work — placement capture + placement-based awarding — exists regardless of entity shape, so a separate entity buys nothing there. The **Circuit** supplies the grouping. If a single tournament ever needs to span **multiple events** (multi-day, multiple sub-draws) under one standing, a parent Tournament entity can be added later without redoing the event work — but given small local draw sizes, one-event-per-tournament fits now.
-- **Placement source.** The placement-based table requires each tournament to produce a final ranking of participants. For small draws this is a **host-entered final standings** step at finalize; a full bracket is deferred [#390](https://github.com/cybergrouch/skopeo/issues/390) and not required to ship this.
+- **Resolved — one entity, one UI.** A tournament is an **`EventType.TOURNAMENT` event**, not a separate entity. The **Circuit** is a conditional field in the existing **Event Organizer** flow when the type is TOURNAMENT; **sanction is inherited from the event's Club** (see below), not entered per event. Rationale: an event already provides everything a tournament needs operationally (participants, fixtures, result upload, finalize); the genuinely new work — placement matches + placement-based awarding — exists regardless of entity shape, so a separate entity buys nothing there. If a single tournament ever needs to span **multiple events** (multi-day, multiple sub-draws) under one standing, a parent Tournament entity can be added later without redoing the event work — but given small local draw sizes, one-event-per-tournament fits now.
+- **Resolved — sanction is a Club flag, inherited by the tournament.** Sanction status lives on the **Club** (a new boolean, e.g. `tournaments_sanctioned`), and a tournament event inherits it via its existing **event↔club** association. This reuses the current club-scoping of events and keeps sanctioning an **admin/club-governance** decision rather than a per-event choice by the organizing host. **OPEN (minor):** who toggles the club flag — ADMINISTRATOR only, or also CLUB_OWNER? (Recommend ADMINISTRATOR, since sanctioning is an authority function and self-sanctioning a club is the same governance concern.) **OPEN (minor):** a tournament event with **no club** is implicitly **unsanctioned**.
+- **Resolved — placement source is designated placement matches.** Placement is derived from the results of **placement matches** the organizer flags at match creation (Super Finals → 1st/2nd, Plate Finals → 3rd/4th), not a host-entered final-standings step and not a full bracket ([#390](https://github.com/cybergrouch/skopeo/issues/390) stays deferred). This needs a new per-match input: an `isPlacementMatch` flag + a placement-bracket selector (e.g. `SUPER_FINALS` \| `PLATE_FINALS`). Regular (non-placement) matches award no points.
 
 ---
 
@@ -124,7 +134,7 @@ Grounded in a read of the points/band/event code (file references for implemente
 `service/event/EventFinalizeAwarder.kt` (`awardForFinalizedEvent`) is the single choke point. It filters fixtures that are `COMPLETED`, have a `winnerTeamId`, and carry a non-null `designatedPoints`; resolves each winner's **current band** (`ratings.findCurrentRatings`) and sex; maps the event's `pointValidity{Start,End}` to a `PointClass`; and writes one ledger row **per winning-team member** with the host-designated amount.
 
 - **Open play (Part B) plugs in here.** Most inputs are available at finalize time: `match.winnerTeamId` (per set), per-set games (`match.sets[].team1Games/team2Games`), `event.type`, `match.matchType`. The one change from today's flow is the band basis: instead of `findCurrentRatings` (finalize-time), the bands must be resolved **as of event start** (entry band — see the resolved decision above), e.g. from `user_rating_history` as-of the event start date or an entry snapshot taken at registration. The awarder change: for `EventType.OPEN_PLAY` fixtures, replace "read `designatedPoints`" with `computeOpenPlayPoints(entryBandTeamA, entryBandTeamB, sets)` iterating the sets, and **also emit a loser award** (today only winners are paid) — including zero/negative amounts.
-- **Tournaments (Part A) need a different branch.** Tournaments award once per **participant** by final placement, not per fixture. The awarder (or a sibling) reads each participant's placement at tournament finalize and writes a single ledger row from the sanctioned/unsanctioned table.
+- **Tournaments (Part A) need a different branch.** Tournaments award **only** by placement (no per-match points). Requires a new per-match input (`isPlacementMatch` + placement bracket `SUPER_FINALS`/`PLATE_FINALS` — a `Match`/`MatchTables` column + DTO/OpenAPI + Event Organizer field). At finalize, the awarder finds the placement matches, maps **Super Finals winner→1st / loser→2nd** and **Plate Finals winner→3rd / loser→4th**, and writes one ledger row per team member with the sanction-selected table amount. Regular tournament fixtures write nothing.
 
 ### Band model already supports the comparison
 - `model/Level.kt` — `Level.fromValue(rating)` floors a rating to a 0.5 band; bands compare numerically via `minRating`. Equal/higher/lower is straightforward.
@@ -140,7 +150,7 @@ Grounded in a read of the points/band/event code (file references for implemente
 - `service/calculator/impl/v2/PerformanceBasedRankingCalculatorImpl.kt` computes `isUpset` from the continuous **rating** advantage, not the discrete **band** difference. The open-play formula keys off **band** difference, so it should compute the band comparison independently (cheap; both ratings are in hand) rather than reuse `isUpset`.
 
 ### Net-new for Part A
-No `circuit` or `sanction` concept exists (`EventType` / `MatchType` / `WeightClass` are the only competition-shape enums). Net-new: a **`circuits`** table + admin CRUD; **`circuit_id` + `sanction_status`** columns on the **event** (not a separate tournament table — one entity); a **final-placement** capture per participant; and a **placement-based awarding branch**. Plus the corresponding models, repositories, services, routes, DTOs, OpenAPI entries, and Event Organizer web fields.
+No `circuit` or `sanction` concept exists (`EventType` / `MatchType` / `WeightClass` are the only competition-shape enums). Net-new: a **`circuits`** table + admin CRUD; a **`circuit_id`** column on the **event** (not a separate tournament table — one entity); a **sanction flag on the Club** (inherited by the event via its club association); a per-match **`is_placement_match` + placement-bracket** input (`SUPER_FINALS`/`PLATE_FINALS`); and a **placement-based awarding branch**. Plus the corresponding models, repositories, services, routes, DTOs, OpenAPI entries, and Event Organizer / club-admin web fields.
 
 ---
 
@@ -148,7 +158,7 @@ No `circuit` or `sanction` concept exists (`EventType` / `MatchType` / `WeightCl
 
 1. **Open-play computed points** (Part B) — a new `computeOpenPlayPoints(...)`, wired into `EventFinalizeAwarder` for `OPEN_PLAY`, resolving each team's **entry band** (as-of-event-start), iterating sets, and paying losers too, with tests. Needs an as-of-event-start band lookup (rating-history query or an entry snapshot); a new V-migration if we persist an entry snapshot rather than deriving it from history.
 2. **Circuits** — `circuits` table + admin CRUD (seed NORTH/SOUTH); model/repo/service/routes/DTO/OpenAPI + an Admin web tab.
-3. **Tournaments + sanction** — `circuit_id` + `sanction_status` on the event (conditional Event Organizer fields when type = TOURNAMENT), final-placement capture per participant, and the placement → points table applied at finalize via a new awarding branch. Model the table as a **configurable schedule** so a draw-size-tiered spread can be added later.
+3. **Tournaments + sanction** — `circuit_id` on the event (conditional Event Organizer field when type = TOURNAMENT), a **sanction flag on the Club** (admin-toggled, inherited by the event), a per-match `is_placement_match` + bracket input, and the placement → points table applied at finalize via a new awarding branch. Model the table as a **configurable schedule** so a draw-size-tiered spread can be added later.
 
 ## References
 
