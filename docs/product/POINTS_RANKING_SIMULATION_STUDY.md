@@ -211,6 +211,50 @@ The condition that makes this reduce collisions (rather than just relabel them):
 
 So the practical path is: design the margin/graduated-band tuning in whatever fractional terms are natural, then **multiply the entire schedule by a common base unit** (e.g. ×100, "centi-points", for headroom) to ship **pure integers**. Storage is unaffected — the ledger `points` column is already a signed `DECIMAL` — and the display can be scaled down for legibility. The ×scale also raises the ceiling as a bonus. This removes the earlier "continuous points" caveat: the hard-no on a fractional *type* does not block the granularity benefit.
 
+# Part 3 — Alternative open-play scheme: game-margin Fibonacci ([#530](https://github.com/cybergrouch/skopeo/issues/530))
+
+An exploration (for discussion, **not** an adopted change to the #525 formula): does awarding open-play points by **game margin** instead of band difference give better spread / fewer collisions?
+
+## The scheme
+
+Per set, the **winner** gets `fib(2 + margin)` where `margin = winnerGames − loserGames` (clamped at 6); the loser gets 0; a draw gets 0. No bands, no ALP, no negatives.
+
+| Margin | Example set scores | Award = fib(2+margin) |
+| ---: | --- | ---: |
+| 1 | 6-5, 5-4, 4-3 | **2** |
+| 2 | 6-4, 5-3, 7-5 | **3** |
+| 3 | 6-3, 5-2, 3-0 | **5** |
+| 4 | 6-2, 5-1 | **8** |
+| 5 | 6-1, 5-0 | **13** |
+| ≥6 | 6-0, 7-0, 8-0 | **21** |
+| draw | 6-6, 5-5, … | **0** |
+
+Points are summed per set (same per-set model as the band scheme). So the increment set is **{2, 3, 5, 8, 13, 21}** (Fibonacci) versus the band scheme's **{−2, 0, 1, 2, 3, 5}**.
+
+## Method (Part 3)
+
+Both schemes run on the **same** 2,000-player population and the same default policy (×1 scale, open 2 mo / tournament 6 mo); **only the open-play point function differs** (the tournament component is identical, so the comparison isolates the open-play scheme). Win/loss is the class win rate as before; for the margin scheme the winning margin is drawn from a fixed, documented set-score mix (weights by margin 1→6: 0.18 / 0.25 / 0.20 / 0.15 / 0.12 / 0.10). Seeded/reproducible.
+
+## 8. Head-to-head — band difference vs game-margin Fibonacci
+
+Range = min–max player total; distinct = number of distinct integer totals; collision % = share of players tied on an exact integer total.
+
+| Horizon | band sd | band range | band distinct | band coll% | fib sd | fib range | fib distinct | fib coll% |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1mo | 19.3 | −6–108 | 101 | 99.4% | 23.7 | 0–146 | 115 | 99.4% |
+| 2mo | 26.4 | −9–128 | 124 | 99.4% | 36.0 | 0–200 | 161 | 99.3% |
+| 4mo | 38.8 | −6–197 | 170 | 98.8% | 46.9 | 0–233 | 204 | 98.7% |
+| 8mo | 49.6 | −4–226 | 202 | 99.0% | 58.5 | 0–323 | 238 | 98.7% |
+| 1yr | 50.9 | −6–264 | 212 | 98.8% | 56.7 | 0–305 | 236 | 98.9% |
+| 2yr | 49.9 | −5–229 | 211 | 98.7% | 56.8 | 0–280 | 238 | 98.7% |
+| 3yr | 50.2 | −5–257 | 204 | 99.2% | 57.6 | 0–308 | 243 | 98.2% |
+
+## Findings & recommendation (Part 3)
+
+- **Fibonacci-margin wins on variance and ceiling.** SD is higher at every horizon (e.g. +36% at 2 mo, +11% at 1 yr), the max/range is wider (1-yr ceiling ~305 vs ~264), and it yields **more distinct totals** (e.g. 161 vs 124 at 2 mo; 243 vs 204 at 3 yr). It also removes negatives (min is 0, vs −5…−9 for the band scheme). This is exactly the **"diversity of increments"** effect from Parts 1–2: `{2,3,5,8,13,21}` is more varied and larger-magnitude than `{−2,0,1,2,3,5}`, so it spreads the field further.
+- **But it does *not* fix collisions.** Both schemes sit at **~99%** tied throughout. The reason is the same pigeonhole limit as before: with only ~240 distinct reachable totals and 2,000 players, almost everyone shares a total regardless of the increment set. Margin diversity raises the distinct-total count (~15–30%), but nowhere near the thousands needed to separate the field.
+- **Verdict.** The Fibonacci-margin scheme is a **genuine improvement in variance, ceiling, and diversity** and is worth considering for #525 on those merits (and for being simpler — no bands/ALP/negatives). But collisions are governed by *distinct-totals vs population size*, so cutting them still requires the earlier levers — **longer validity** (more accumulated events) and/or **fixed-point scaling** (finer granularity) — on top of a diverse increment set. Fibonacci margin is a strong *ingredient*, not a standalone fix. Recommended next exploration: Fibonacci-margin **combined with** longer validity + a ×100 fixed-point scale.
+
 ## References
 
 - Design of record: [`TOURNAMENTS_CIRCUITS_AND_OPEN_PLAY_POINTS.md`](./TOURNAMENTS_CIRCUITS_AND_OPEN_PLAY_POINTS.md) · Issue [#525](https://github.com/cybergrouch/skopeo/issues/525)
