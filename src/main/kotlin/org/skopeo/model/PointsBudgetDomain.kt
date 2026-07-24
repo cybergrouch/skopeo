@@ -6,18 +6,6 @@ package org.skopeo.model
 import java.util.UUID
 
 /**
- * The global master points policy for one event type (#403 Phase B, §2.1). Per type the policy
- * bounds the per-match reward ([minPoints]..[maxPoints]) events may designate, and how long an
- * awarded point may stay valid ([maxValidityDays]). All values are whole integers (decision #6).
- */
-data class PointsPolicy(
-    val eventType: EventType,
-    val minPoints: Int,
-    val maxPoints: Int,
-    val maxValidityDays: Int,
-)
-
-/**
  * A club's budget allocation for one event type (#403 Phase B, §2.2): the total number of ranking
  * points the club may designate for that type. Whole integers (decision #6).
  */

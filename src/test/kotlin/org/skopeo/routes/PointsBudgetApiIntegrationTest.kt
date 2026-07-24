@@ -24,9 +24,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.dto.points.ClubBudgetResponse
 import org.skopeo.dto.points.ClubPointsSummaryResponse
-import org.skopeo.dto.points.PointsPolicyResponse
 import org.skopeo.dto.points.SetClubBudgetRequest
-import org.skopeo.dto.points.SetPointsPolicyRequest
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.CreateClubCommand
@@ -82,27 +80,11 @@ class PointsBudgetApiIntegrationTest {
     private fun seedClub(ownerId: UUID): UUID = ClubRepository().create(command = CreateClubCommand(name = "Club", createdBy = ownerId)).id
 
     @Test
-    fun `a points manager reads and sets policies and budgets (#403)`() =
+    fun `a points manager sets and reads a club budget (#403)`() =
         withApp { client ->
             val pm = seedUser(uid = "pm", roles = setOf(Capability.PLAYER, Capability.POINTS_MANAGER))
             val pmToken = TestFirebaseAuth.mintToken(uid = "pm")
             val club = seedClub(ownerId = pm.id)
-
-            // Read the seeded policies.
-            val policiesGet =
-                client.get(urlString = "/api/v1/points/policies") { header(key = HttpHeaders.Authorization, value = "Bearer $pmToken") }
-            policiesGet.status shouldBe HttpStatusCode.OK
-            policiesGet.body<List<PointsPolicyResponse>>() shouldHaveSize 3
-
-            // Set the LEAGUE policy.
-            val setPolicy =
-                client.put(urlString = "/api/v1/points/policies/LEAGUE") {
-                    header(key = HttpHeaders.Authorization, value = "Bearer $pmToken")
-                    contentType(type = ContentType.Application.Json)
-                    setBody(body = SetPointsPolicyRequest(minPoints = 4, maxPoints = 42, maxValidityDays = 90))
-                }
-            setPolicy.status shouldBe HttpStatusCode.OK
-            setPolicy.body<PointsPolicyResponse>().maxPoints shouldBe 42
 
             // Set a club budget.
             val setBudget =
@@ -131,7 +113,7 @@ class PointsBudgetApiIntegrationTest {
             seedUser(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
             val adminToken = TestFirebaseAuth.mintToken(uid = "admin")
 
-            client.get(urlString = "/api/v1/points/policies") { header(key = HttpHeaders.Authorization, value = "Bearer $adminToken") }
+            client.get(urlString = "/api/v1/points/budgets") { header(key = HttpHeaders.Authorization, value = "Bearer $adminToken") }
                 .status shouldBe HttpStatusCode.OK
         }
 
@@ -141,9 +123,6 @@ class PointsBudgetApiIntegrationTest {
             seedUser(uid = "player", roles = setOf(element = Capability.PLAYER))
             val playerToken = TestFirebaseAuth.mintToken(uid = "player")
 
-            client.get(urlString = "/api/v1/points/policies") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
-            }.status shouldBe HttpStatusCode.Forbidden
             client.get(urlString = "/api/v1/points/budgets") {
                 header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
             }.status shouldBe HttpStatusCode.Forbidden
@@ -156,10 +135,10 @@ class PointsBudgetApiIntegrationTest {
             val pmToken = TestFirebaseAuth.mintToken(uid = "pm")
             val club = seedClub(ownerId = pm.id)
 
-            client.put(urlString = "/api/v1/points/policies/NONSENSE") {
+            client.put(urlString = "/api/v1/clubs/$club/point-budgets/NONSENSE") {
                 header(key = HttpHeaders.Authorization, value = "Bearer $pmToken")
                 contentType(type = ContentType.Application.Json)
-                setBody(body = SetPointsPolicyRequest(minPoints = 1, maxPoints = 5, maxValidityDays = 30))
+                setBody(body = SetClubBudgetRequest(budgetedPoints = 10))
             }.status shouldBe HttpStatusCode.BadRequest
 
             client.put(urlString = "/api/v1/clubs/$club/point-budgets/OPEN_PLAY") {
@@ -172,7 +151,7 @@ class PointsBudgetApiIntegrationTest {
     @Test
     fun `the points-budget API requires a token (#403)`() =
         withApp { client ->
-            client.get(urlString = "/api/v1/points/policies").status shouldBe HttpStatusCode.Unauthorized
+            client.get(urlString = "/api/v1/points/budgets").status shouldBe HttpStatusCode.Unauthorized
         }
 
     @Test

@@ -38,14 +38,12 @@ import org.skopeo.repository.CircuitRepository
 import org.skopeo.repository.ClubRepository
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
-import org.skopeo.repository.PointsBudgetRepository
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService
 import org.skopeo.service.user.VerifiedFirebaseToken
 import java.time.LocalDate
 import java.time.LocalDateTime
-import java.time.temporal.ChronoUnit
 import java.util.UUID
 
 private val STAFF_ROLES = setOf(Capability.HOST, Capability.CLUB_OWNER, Capability.ADMINISTRATOR)
@@ -92,7 +90,6 @@ class EventService(
     private val ratings: RatingRepository = RatingRepository(),
     private val clubs: ClubRepository = ClubRepository(),
     private val circuits: CircuitRepository = CircuitRepository(),
-    private val budgets: PointsBudgetRepository = PointsBudgetRepository(),
     private val awarder: EventFinalizeAwarder = EventFinalizeAwarder(),
     private val reverser: EventFinalizeReverser = EventFinalizeReverser(),
     private val ratingsReverser: EventRatingsReverser = EventRatingsReverser(),
@@ -368,7 +365,6 @@ class EventService(
     ): Either<ServiceError, EventView> =
         either {
             validatePointsWindow(
-                eventType = event.type,
                 minPoints = config.minPoints,
                 maxPoints = config.maxPoints,
                 validityStart = config.validityStart,
@@ -808,7 +804,6 @@ class EventService(
                 val start = ensureNotNull(value = input.pointValidityStart) { pointsConfigRequired() }
                 val end = ensureNotNull(value = input.pointValidityEnd) { pointsConfigRequired() }
                 validatePointsWindow(
-                    eventType = input.type,
                     minPoints = min,
                     maxPoints = max,
                     validityStart = start,
@@ -819,42 +814,25 @@ class EventService(
         }
 
     /**
-     * Validate a points window against the global per-type policy (#403 Phase C): integers > 0, the
-     * event's [min, max] within the global bounds, min ≤ max, end ≥ start, and the validity span within
-     * the global max validity days. A missing global policy for the type is a [ServiceError.Validation].
+     * Validate a points window's basic shape (#403; global policy removed in #525): integers > 0,
+     * min ≤ max, and end ≥ start. There is no longer a global per-type ceiling — the obsolete
+     * points-policy layer was removed, so an event may set any well-formed window.
      */
     private fun validatePointsWindow(
-        eventType: EventType,
         minPoints: Int,
         maxPoints: Int,
         validityStart: LocalDate,
         validityEnd: LocalDate,
     ): Either<ServiceError, Unit> =
         either {
-            val policy =
-                ensureNotNull(value = budgets.findPolicy(eventType = eventType)) {
-                    ServiceError.Validation(message = "No global points policy is configured for $eventType")
-                }
             ensure(condition = minPoints > 0 && maxPoints > 0) {
                 ServiceError.Validation(message = "Points per match must be greater than zero")
             }
             ensure(condition = minPoints <= maxPoints) {
                 ServiceError.Validation(message = "Min points must not exceed max points")
             }
-            ensure(condition = minPoints >= policy.minPoints) {
-                ServiceError.Validation(message = "Min points must be at least the global minimum of ${policy.minPoints}")
-            }
-            ensure(condition = maxPoints <= policy.maxPoints) {
-                ServiceError.Validation(message = "Max points must not exceed the global maximum of ${policy.maxPoints}")
-            }
             ensure(condition = !validityEnd.isBefore(validityStart)) {
                 ServiceError.Validation(message = "Point validity end cannot be before the start")
-            }
-            val spanDays = ChronoUnit.DAYS.between(validityStart, validityEnd)
-            ensure(condition = spanDays <= policy.maxValidityDays) {
-                ServiceError.Validation(
-                    message = "Point validity window of $spanDays days exceeds the global maximum of ${policy.maxValidityDays}",
-                )
             }
         }
 

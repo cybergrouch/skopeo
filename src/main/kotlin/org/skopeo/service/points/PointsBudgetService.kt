@@ -17,7 +17,6 @@ import org.skopeo.model.ClubBudgetView
 import org.skopeo.model.ClubEventPointsView
 import org.skopeo.model.ClubPointsSummaryView
 import org.skopeo.model.EventType
-import org.skopeo.model.PointsPolicy
 import org.skopeo.model.ServiceError
 import org.skopeo.repository.ClubRepository
 import org.skopeo.repository.EventRepository
@@ -43,49 +42,6 @@ class PointsBudgetService(
     private val events: EventRepository = EventRepository(),
     private val audit: AuditService = AuditService(),
 ) {
-    /** The global per-type policies. Readable by staff (points managers / administrators). */
-    fun policies(token: VerifiedFirebaseToken): Either<ServiceError, List<PointsPolicy>> =
-        either {
-            requirePointsManager(token = token).bind()
-            budgets.listPolicies()
-        }
-
-    /** Set the global policy for one event type (points-manager). Validates min ≤ max and all > 0. */
-    fun setPolicy(
-        token: VerifiedFirebaseToken,
-        policy: PointsPolicy,
-    ): Either<ServiceError, PointsPolicy> =
-        either {
-            val actorId = requirePointsManager(token = token).bind()
-            ensure(condition = policy.minPoints > 0) { ServiceError.Validation(message = "Min points must be greater than zero") }
-            ensure(condition = policy.maxPoints > 0) { ServiceError.Validation(message = "Max points must be greater than zero") }
-            ensure(condition = policy.maxValidityDays > 0) {
-                ServiceError.Validation(message = "Max validity days must be greater than zero")
-            }
-            ensure(condition = policy.minPoints <= policy.maxPoints) {
-                ServiceError.Validation(message = "Min points must not exceed max points")
-            }
-            val saved = budgets.upsertPolicy(policy = policy)
-            audit.record(
-                write =
-                    AuditWrite(
-                        actorUserId = actorId,
-                        action = AuditAction.POINTS_POLICY_UPDATED,
-                        entityType = AuditEntityType.POINTS_BUDGET,
-                        entityId = null,
-                        summary = "Set ${saved.eventType} points policy to ${saved.minPoints}-${saved.maxPoints}",
-                        details =
-                            mapOf(
-                                "eventType" to saved.eventType.name,
-                                "minPoints" to saved.minPoints.toString(),
-                                "maxPoints" to saved.maxPoints.toString(),
-                                "maxValidityDays" to saved.maxValidityDays.toString(),
-                            ),
-                    ),
-            )
-            saved
-        }
-
     /**
      * The per club × event-type accounting ([ClubBudgetView]s), optionally scoped to one [clubId]
      * (points-manager). [ClubBudgetView.allocated] is [allocatedFor] (0 now) and free = budgeted −

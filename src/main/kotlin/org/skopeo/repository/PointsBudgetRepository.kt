@@ -5,7 +5,6 @@ package org.skopeo.repository
 
 import org.jetbrains.exposed.sql.Op
 import org.jetbrains.exposed.sql.ResultRow
-import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.SqlExpressionBuilder
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.and
@@ -18,7 +17,6 @@ import org.skopeo.model.AwardStatus
 import org.skopeo.model.ClubPointBudget
 import org.skopeo.model.EventType
 import org.skopeo.model.MatchStatus
-import org.skopeo.model.PointsPolicy
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -28,47 +26,6 @@ import java.util.UUID
  * app_settings pattern; the event type is persisted as its enum name.
  */
 class PointsBudgetRepository {
-    /** All global policies (one per event type), ordered by event type for a stable read. */
-    fun listPolicies(): List<PointsPolicy> =
-        transaction {
-            PointsPoliciesTable
-                .selectAll()
-                .orderBy(PointsPoliciesTable.eventType to SortOrder.ASC)
-                .map { it.toPolicy() }
-        }
-
-    /** The global policy for [eventType], or null if none is seeded. */
-    fun findPolicy(eventType: EventType): PointsPolicy? =
-        transaction {
-            PointsPoliciesTable
-                .selectAll()
-                .where { PointsPoliciesTable.eventType eq eventType.name }
-                .singleOrNull()
-                ?.toPolicy()
-        }
-
-    /** Insert-or-update the global policy for its event type; returns the stored row. */
-    fun upsertPolicy(policy: PointsPolicy): PointsPolicy =
-        transaction {
-            val exists =
-                PointsPoliciesTable.selectAll().where { PointsPoliciesTable.eventType eq policy.eventType.name }.any()
-            if (exists) {
-                PointsPoliciesTable.update(where = { PointsPoliciesTable.eventType eq policy.eventType.name }) {
-                    it[minPoints] = policy.minPoints
-                    it[maxPoints] = policy.maxPoints
-                    it[maxValidityDays] = policy.maxValidityDays
-                }
-            } else {
-                PointsPoliciesTable.insert {
-                    it[eventType] = policy.eventType.name
-                    it[minPoints] = policy.minPoints
-                    it[maxPoints] = policy.maxPoints
-                    it[maxValidityDays] = policy.maxValidityDays
-                }
-            }
-            PointsPoliciesTable.selectAll().where { PointsPoliciesTable.eventType eq policy.eventType.name }.single().toPolicy()
-        }
-
     /** Every club's per-type budgets (all clubs × types that have a row). */
     fun listBudgets(): List<ClubPointBudget> = transaction { ClubPointBudgetsTable.selectAll().map { it.toBudget() } }
 
@@ -225,14 +182,6 @@ class PointsBudgetRepository {
                 .toInt()
         }
 }
-
-private fun ResultRow.toPolicy(): PointsPolicy =
-    PointsPolicy(
-        eventType = EventType.valueOf(value = this[PointsPoliciesTable.eventType]),
-        minPoints = this[PointsPoliciesTable.minPoints],
-        maxPoints = this[PointsPoliciesTable.maxPoints],
-        maxValidityDays = this[PointsPoliciesTable.maxValidityDays],
-    )
 
 private fun ResultRow.toBudget(): ClubPointBudget =
     ClubPointBudget(
