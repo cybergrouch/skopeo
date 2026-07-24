@@ -16,6 +16,8 @@ data class Club(
     // The shareable code for the club's public-by-code page (#327), mirroring events/matches.
     val publicCode: String,
     val isActive: Boolean = true,
+    // Whether tournaments hosted by this club are sanctioned (#525); a tournament inherits this.
+    val tournamentsSanctioned: Boolean = false,
     val createdBy: UUID? = null,
     val ownerIds: List<UUID> = emptyList(),
 )
@@ -40,6 +42,8 @@ data class ClubView(
     // The shareable code for the club's public-by-code page (#327).
     val publicCode: String,
     val isActive: Boolean,
+    // Whether this club's tournaments are sanctioned (#525).
+    val tournamentsSanctioned: Boolean,
     val owners: List<ClubOwnerRef>,
 )
 

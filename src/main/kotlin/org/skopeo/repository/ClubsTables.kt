@@ -19,6 +19,7 @@ internal object ClubsTable : UUIDTable(name = "clubs") {
     val name = varchar(name = "name", length = CLUB_NAME_MAX)
     val publicCode = varchar(name = "public_code", length = CLUB_CODE_MAX)
     val isActive = bool(name = "is_active").default(defaultValue = true)
+    val tournamentsSanctioned = bool(name = "tournaments_sanctioned").default(defaultValue = false)
     val createdBy = reference(name = "created_by", foreign = UsersTable, onDelete = ReferenceOption.SET_NULL).nullable()
     val createdAt = datetime(name = "created_at")
 }

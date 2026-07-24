@@ -34,6 +34,7 @@ import org.skopeo.model.MatchSetResult
 import org.skopeo.model.MatchStatus
 import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
+import org.skopeo.model.PlacementBracket
 import org.skopeo.model.ServiceError
 import org.skopeo.model.TeamType
 import org.skopeo.model.User
@@ -99,6 +100,12 @@ data class FixtureInput(
      */
     val team1Handicap: BigDecimal? = null,
     val team2Handicap: BigDecimal? = null,
+    /**
+     * Tournament placement match (#525): when true this fixture decides a placement, and
+     * [placementBracket] says which (Super/Plate Finals). Regular fixtures leave these default.
+     */
+    val isPlacementMatch: Boolean = false,
+    val placementBracket: PlacementBracket? = null,
 )
 
 /**
@@ -146,21 +153,12 @@ class MatchService(
             val match =
                 matches.createFixture(
                     command =
-                        CreateFixtureCommand(
-                            matchFormat = request.matchFormat,
-                            matchType = request.matchType,
-                            matchDate = request.matchDate,
-                            team1UserIds = request.team1,
-                            team2UserIds = request.team2,
+                        fixtureCommand(
+                            request = request,
                             team1Name = teamName(users = team1Users),
                             team2Name = teamName(users = team2Users),
                             createdBy = createdBy,
-                            venue = request.venue,
-                            tournamentName = request.tournamentName,
-                            eventId = request.eventId,
-                            designatedPoints = designated,
-                            team1Handicap = request.team1Handicap,
-                            team2Handicap = request.team2Handicap,
+                            designated = designated,
                         ),
                 )
             audit.record(
@@ -185,6 +183,33 @@ class MatchService(
             }
             match
         }
+
+    /** Build the persistence command for a fixture from its validated [request] (#525 placement fields included). */
+    private fun fixtureCommand(
+        request: FixtureInput,
+        team1Name: String,
+        team2Name: String,
+        createdBy: UUID,
+        designated: Int?,
+    ): CreateFixtureCommand =
+        CreateFixtureCommand(
+            matchFormat = request.matchFormat,
+            matchType = request.matchType,
+            matchDate = request.matchDate,
+            team1UserIds = request.team1,
+            team2UserIds = request.team2,
+            team1Name = team1Name,
+            team2Name = team2Name,
+            createdBy = createdBy,
+            venue = request.venue,
+            tournamentName = request.tournamentName,
+            eventId = request.eventId,
+            designatedPoints = designated,
+            team1Handicap = request.team1Handicap,
+            team2Handicap = request.team2Handicap,
+            isPlacementMatch = request.isPlacementMatch,
+            placementBracket = request.placementBracket,
+        )
 
     /** Record the FIXTURE_POINTS_DESIGNATED audit entry (#403 Phase C): amount, team size, and cost. */
     private fun auditDesignation(

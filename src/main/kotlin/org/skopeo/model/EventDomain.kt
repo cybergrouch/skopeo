@@ -44,6 +44,8 @@ data class Event(
     val createdBy: UUID? = null,
     // The club this event belongs to (#313), or null for a clubless ("Open") event.
     val clubId: UUID? = null,
+    // The circuit a TOURNAMENT event belongs to (#525); required for tournaments, null otherwise.
+    val circuitId: UUID? = null,
     // Admin override for calculation processing order (#335); null = order by end date.
     val calcPriority: Double? = null,
     // The event's class (#403): OPEN_PLAY | LEAGUE | TOURNAMENT.
@@ -89,6 +91,8 @@ data class CreateEventCommand(
     val participantIds: List<UUID>,
     val createdBy: UUID,
     val clubId: UUID? = null,
+    // The circuit a TOURNAMENT event belongs to (#525); required for tournaments.
+    val circuitId: UUID? = null,
     // The event's class (#403); defaults to OPEN_PLAY for backward compatibility.
     val type: EventType = EventType.OPEN_PLAY,
     // Points config (#403 Phase C): set for a club event of any type (OPEN_PLAY unified), null when clubless.

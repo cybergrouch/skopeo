@@ -55,6 +55,12 @@ data class MatchSide(
     val userIds: List<UUID>,
 )
 
+/**
+ * The placement a tournament "placement match" decides (#525). SUPER_FINALS awards 1st to its winner
+ * and 2nd to its loser; PLATE_FINALS awards 3rd to its winner and 4th to its loser.
+ */
+enum class PlacementBracket { SUPER_FINALS, PLATE_FINALS }
+
 /** A completed set's score, with an optional tiebreak. Winner is derived from the games/tiebreak. */
 data class MatchSetResult(
     val setNumber: Int,
@@ -99,6 +105,10 @@ data class Match(
     // rating for the delta computation only. Range 0 < h <= 1.0, editable while unrated.
     val team1Handicap: BigDecimal? = null,
     val team2Handicap: BigDecimal? = null,
+    // Tournament placement match (#525): when true this fixture decides a placement; [placementBracket]
+    // says which (Super/Plate Finals). Regular fixtures are false/null and award no tournament points.
+    val isPlacementMatch: Boolean = false,
+    val placementBracket: PlacementBracket? = null,
 )
 
 /** Everything needed to create a fixture (the result is uploaded separately). */
@@ -119,6 +129,9 @@ data class CreateFixtureCommand(
     // Per-side rating handicap in team-mean NTRP units (#486); null = none. Range 0 < h <= 1.0.
     val team1Handicap: BigDecimal? = null,
     val team2Handicap: BigDecimal? = null,
+    // Tournament placement match (#525): flag + which bracket it decides (Super/Plate Finals).
+    val isPlacementMatch: Boolean = false,
+    val placementBracket: PlacementBracket? = null,
 )
 
 /** A set's raw score as submitted with results; winners are derived server-side. */

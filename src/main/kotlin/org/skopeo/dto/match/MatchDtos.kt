@@ -55,6 +55,12 @@ data class CreateFixtureRequest(
      */
     val team1Handicap: String? = null,
     val team2Handicap: String? = null,
+    /**
+     * Tournament placement match (#525): when true this fixture decides a placement, and
+     * [placementBracket] says which — "SUPER_FINALS" (1st/2nd) or "PLATE_FINALS" (3rd/4th).
+     */
+    val isPlacementMatch: Boolean = false,
+    val placementBracket: String? = null,
 ) {
     init {
         validateHandicap(raw = team1Handicap)

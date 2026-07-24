@@ -2820,6 +2820,41 @@ paths:
         '404':
           description: No club with that code
 
+  /api/v1/clubs/{id}/sanction:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    patch:
+      summary: Set a club's tournament sanction (#525)
+      description: >-
+        CLUB_OWNER or ADMINISTRATOR (#525). Sets whether tournaments hosted by this club are
+        sanctioned; a tournament event inherits this, and the sanction selects its placement points table.
+      tags:
+        - Clubs
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetSanctionRequest'
+      responses:
+        '200':
+          description: The updated club
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClubResponse'
+        '403':
+          description: Caller is not a club owner or administrator
+        '404':
+          description: No such club
+
   /api/v1/clubs/{id}:
     parameters:
       - name: id
@@ -5387,6 +5422,14 @@ components:
           type: string
           nullable: true
           description: Optional per-side rating handicap (#486) for team2, in team-mean NTRP units, 0 < h <= 1.0.
+        isPlacementMatch:
+          type: boolean
+          description: Tournament placement match (#525) — when true this fixture decides a placement.
+        placementBracket:
+          type: string
+          nullable: true
+          enum: [SUPER_FINALS, PLATE_FINALS]
+          description: Which placement the match decides (#525) — SUPER_FINALS (1st/2nd) or PLATE_FINALS (3rd/4th).
 
     SetScoreRequest:
       type: object
@@ -5590,6 +5633,11 @@ components:
           format: uuid
           nullable: true
           description: Optional club to file the event under (#313); omit for a clubless ("Open") event.
+        circuitId:
+          type: string
+          format: uuid
+          nullable: true
+          description: The circuit a TOURNAMENT event belongs to (#525); required for tournaments, ignored otherwise.
         type:
           type: string
           nullable: true
@@ -5845,6 +5893,11 @@ components:
           type: string
           nullable: true
           description: The event's club name (#313), for grouping/display; null for a clubless event.
+        circuitId:
+          type: string
+          format: uuid
+          nullable: true
+          description: The circuit a TOURNAMENT event belongs to (#525); null for non-tournament events.
         calcPriority:
           type: number
           format: double
@@ -6617,6 +6670,15 @@ components:
           format: uuid
           description: The existing user to record as an owner of the club.
 
+    SetSanctionRequest:
+      type: object
+      required:
+        - sanctioned
+      properties:
+        sanctioned:
+          type: boolean
+          description: Whether this club's tournaments are sanctioned (#525).
+
     ClubResponse:
       type: object
       required:
@@ -6636,6 +6698,9 @@ components:
           description: The shareable code for the club's public-by-code page (#327).
         isActive:
           type: boolean
+        tournamentsSanctioned:
+          type: boolean
+          description: Whether this club's tournaments are sanctioned (#525); a tournament inherits this.
         owners:
           type: array
           items:

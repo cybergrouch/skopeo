@@ -50,6 +50,7 @@ enum class AuditAction {
     CLUB_DELETED,
     CLUB_OWNER_ASSIGNED,
     CLUB_OWNER_REMOVED,
+    CLUB_SANCTION_CHANGED,
     CIRCUIT_CREATED,
     CIRCUIT_RENAMED,
     CIRCUIT_DELETED,
@@ -159,6 +160,7 @@ val AuditAction.category: AuditCategory
             AuditAction.CLUB_DELETED,
             AuditAction.CLUB_OWNER_ASSIGNED,
             AuditAction.CLUB_OWNER_REMOVED,
+            AuditAction.CLUB_SANCTION_CHANGED,
             -> AuditCategory.CLUB_MANAGEMENT
             AuditAction.CIRCUIT_CREATED,
             AuditAction.CIRCUIT_RENAMED,

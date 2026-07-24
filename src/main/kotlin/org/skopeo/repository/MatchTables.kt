@@ -61,6 +61,10 @@ internal object MatchesTable : UUIDTable(name = "matches") {
     // rating for the delta calc only; range 0 < h <= 1.0 (CHECK in V21). Editable while unrated.
     val team1Handicap = decimal(name = "team1_handicap", precision = HANDICAP_PRECISION, scale = HANDICAP_SCALE).nullable()
     val team2Handicap = decimal(name = "team2_handicap", precision = HANDICAP_PRECISION, scale = HANDICAP_SCALE).nullable()
+
+    // Tournament placement match (#525): flag + which bracket it decides (SUPER_FINALS / PLATE_FINALS).
+    val isPlacementMatch = bool(name = "is_placement_match").default(defaultValue = false)
+    val placementBracket = varchar(name = "placement_bracket", length = TYPE_MAX).nullable()
 }
 
 internal object MatchSetsTable : UUIDTable(name = "match_sets") {

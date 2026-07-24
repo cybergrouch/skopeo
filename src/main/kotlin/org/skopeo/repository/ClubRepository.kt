@@ -27,7 +27,7 @@ class ClubRepository {
             val id =
                 ClubsTable.insertAndGetId {
                     it[name] = command.name
-                    it[publicCode] = generateUniqueClubCode()
+                    it[publicCode] = PublicCode.generate { code -> ClubsTable.selectAll().where { ClubsTable.publicCode eq code }.any() }
                     it[createdBy] = command.createdBy
                 }.value
             ClubsTable.selectAll().where { ClubsTable.id eq id }.single().toClub()
@@ -102,6 +102,17 @@ class ClubRepository {
             club.toClub()
         }
 
+    /** Set whether this club's tournaments are sanctioned (#525). Returns the refreshed club, or null if missing. */
+    fun setSanction(
+        id: UUID,
+        sanctioned: Boolean,
+    ): Club? =
+        transaction {
+            ClubsTable.selectAll().where { ClubsTable.id eq id }.singleOrNull() ?: return@transaction null
+            ClubsTable.update(where = { ClubsTable.id eq id }) { it[tournamentsSanctioned] = sanctioned }
+            ClubsTable.selectAll().where { ClubsTable.id eq id }.single().toClub()
+        }
+
     /** Map a clubs row to the domain, loading its owner ids (runs in the caller's transaction). */
     private fun ResultRow.toClub(): Club {
         val clubId = this[ClubsTable.id].value
@@ -112,12 +123,9 @@ class ClubRepository {
             name = this[ClubsTable.name],
             publicCode = this[ClubsTable.publicCode],
             isActive = this[ClubsTable.isActive],
+            tournamentsSanctioned = this[ClubsTable.tournamentsSanctioned],
             createdBy = this[ClubsTable.createdBy]?.value,
             ownerIds = ownerIds,
         )
     }
-
-    /** A fresh, unique club code (#327), reusing the shared generator; runs in the caller's transaction. */
-    private fun generateUniqueClubCode(): String =
-        PublicCode.generate { code -> ClubsTable.selectAll().where { ClubsTable.publicCode eq code }.any() }
 }

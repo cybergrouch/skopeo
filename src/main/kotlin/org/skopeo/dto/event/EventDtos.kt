@@ -19,6 +19,8 @@ data class CreateEventRequest(
     val participantIds: List<String> = emptyList(),
     // Optional club (#313) to assign the event to; omit for a clubless ("Open") event.
     val clubId: String? = null,
+    // The circuit a TOURNAMENT event belongs to (#525); required for tournaments, ignored otherwise.
+    val circuitId: String? = null,
     // The event's class (#403): OPEN_PLAY | LEAGUE | TOURNAMENT; omit for the OPEN_PLAY default.
     val type: String? = null,
     // Points config (#403 Phase C): required for a club event of any type (OPEN_PLAY unified), optional
@@ -134,6 +136,8 @@ data class EventResponse(
     // The event's club (#313): id + name, or null for a clubless event.
     val clubId: String? = null,
     val clubName: String? = null,
+    // The circuit a TOURNAMENT event belongs to (#525); null for non-tournament events.
+    val circuitId: String? = null,
     // Admin override for calculation processing order (#335); null = order by end date.
     val calcPriority: Double? = null,
     // The event's class (#403): "OPEN_PLAY" | "LEAGUE" | "TOURNAMENT".
@@ -176,6 +180,7 @@ fun EventView.toResponse(completedMatchCount: Int = 0): EventResponse =
         creatorPublicCode = creator?.publicCode,
         clubId = club?.id?.toString(),
         clubName = club?.name,
+        circuitId = event.circuitId?.toString(),
         calcPriority = event.calcPriority,
         type = event.type.name,
         finalizedAt = event.finalizedAt?.toString(),

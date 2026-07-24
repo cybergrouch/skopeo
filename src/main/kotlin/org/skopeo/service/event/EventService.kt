@@ -34,6 +34,7 @@ import org.skopeo.model.ageInYears
 import org.skopeo.model.displayName
 import org.skopeo.model.isDeleted
 import org.skopeo.model.isExpired
+import org.skopeo.repository.CircuitRepository
 import org.skopeo.repository.ClubRepository
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
@@ -60,6 +61,8 @@ data class CreateEventInput(
     val endDate: LocalDate,
     val participantIds: List<UUID>,
     val clubId: UUID? = null,
+    // The circuit a TOURNAMENT event belongs to (#525); required for tournaments, ignored otherwise.
+    val circuitId: UUID? = null,
     // The event's class (#403); defaults to OPEN_PLAY for backward compatibility.
     val type: EventType = EventType.OPEN_PLAY,
     // Points config (#403 Phase C): required for a club event of any type; optional/deferred when clubless.
@@ -88,6 +91,7 @@ class EventService(
     private val matches: MatchRepository = MatchRepository(),
     private val ratings: RatingRepository = RatingRepository(),
     private val clubs: ClubRepository = ClubRepository(),
+    private val circuits: CircuitRepository = CircuitRepository(),
     private val budgets: PointsBudgetRepository = PointsBudgetRepository(),
     private val awarder: EventFinalizeAwarder = EventFinalizeAwarder(),
     private val reverser: EventFinalizeReverser = EventFinalizeReverser(),
@@ -109,6 +113,8 @@ class EventService(
             input.clubId?.let { clubId ->
                 ensureNotNull(value = clubs.findById(id = clubId)) { ServiceError.Validation(message = "Club $clubId not found") }
             }
+            // A TOURNAMENT must belong to a circuit (#525); it must exist. Non-tournaments carry none.
+            val circuitId = resolveCircuit(type = input.type, circuitId = input.circuitId).bind()
             // Points config (#403 Phase C): a club event of any type must carry a valid per-match reward +
             // validity window, validated against the global policy; a clubless event may defer it.
             val config = resolveCreatePointsConfig(input = input).bind()
@@ -122,6 +128,7 @@ class EventService(
                             participantIds = input.participantIds.distinct(),
                             createdBy = createdBy,
                             clubId = input.clubId,
+                            circuitId = circuitId,
                             type = input.type,
                             minPointsPerMatch = config?.minPoints,
                             maxPointsPerMatch = config?.maxPoints,
@@ -753,6 +760,24 @@ class EventService(
                 matches = matchResponses,
                 viewerStatus = viewerStatus,
             )
+        }
+
+    /**
+     * Resolve the circuit for a new event (#525): a TOURNAMENT must reference an existing circuit;
+     * any other type carries none (a supplied id is ignored). Returns the validated id, or null.
+     */
+    private fun resolveCircuit(
+        type: EventType,
+        circuitId: UUID?,
+    ): Either<ServiceError, UUID?> =
+        either {
+            if (type != EventType.TOURNAMENT) {
+                null
+            } else {
+                val id = ensureNotNull(value = circuitId) { ServiceError.Validation(message = "A tournament must belong to a circuit") }
+                ensureNotNull(value = circuits.findById(id = id)) { ServiceError.Validation(message = "Circuit $id not found") }
+                id
+            }
         }
 
     /**

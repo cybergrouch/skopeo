@@ -31,6 +31,7 @@ import org.skopeo.model.MatchSetResult
 import org.skopeo.model.MatchSide
 import org.skopeo.model.MatchStatus
 import org.skopeo.model.MatchType
+import org.skopeo.model.PlacementBracket
 import org.skopeo.model.ServiceError
 import org.skopeo.model.TeamType
 import org.skopeo.model.WinLossRecord
@@ -68,6 +69,8 @@ class MatchRepository {
                     it[designatedPoints] = command.designatedPoints
                     it[team1Handicap] = command.team1Handicap
                     it[team2Handicap] = command.team2Handicap
+                    it[isPlacementMatch] = command.isPlacementMatch
+                    it[placementBracket] = command.placementBracket?.name
                 }.value
             loadMatchOrThrow(id = matchId)
         }
@@ -752,6 +755,8 @@ private fun buildMatch(
         designatedPoints = row[MatchesTable.designatedPoints],
         team1Handicap = row[MatchesTable.team1Handicap],
         team2Handicap = row[MatchesTable.team2Handicap],
+        isPlacementMatch = row[MatchesTable.isPlacementMatch],
+        placementBracket = row[MatchesTable.placementBracket]?.let { PlacementBracket.valueOf(value = it) },
     )
 
 private fun sideOf(teamId: UUID): MatchSide =
