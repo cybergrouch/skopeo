@@ -8,9 +8,9 @@ This study has evolved through three questions. The first is **settled**; the la
 
 1. **Capping — resolved (yes).** Does a player's score cap, or grow to infinity? It **caps** (points expire → the score plateaus). Estimable in closed form. Covered briefly in [The answer](#the-answer) / §5; not revisited further.
 2. **Variance / spread — live focus.** How widely are player scores spread, and does the spread *grow over time*? Treated in detail in Part 2 (§6–7) and compared across schemes in Part 3 (§8) and Part 4 (§9).
-3. **Collisions — live focus.** How many players are *tied* on the same total (a congested, uninformative leaderboard)? Treated in detail across §6–9, with the combined-levers experiment (Part 4) as the culminating analysis of what actually reduces them.
+3. **Collisions — live focus.** How many players are *tied* on the same total (a congested, uninformative leaderboard)? Treated in detail across §6–9 (Part 4), then reframed **per NTRP band cohort** in Part 5 (§10–12) — which is how the standings actually run and the single biggest legitimate reducer.
 
-**One-line takeaway on 2 & 3:** *diverse increments* widen variance and the ceiling but don't fix collisions on their own; **longer validity** is the real, legitimate collision lever (99%→85%). A **finer (sub-integer) increment carried as fixed-point integers** appears to push collisions lower still (→46%), but as implemented it separates players by *random noise*, not merit — so it is **not** a recommended lever (see [Cons of the finer increment](#cons-of-the-finer-increment) in Part 4). Uniform ×N scaling is pure relabeling. Details in Part 4.
+**One-line takeaway on 2 & 3:** *diverse increments* widen variance and the ceiling but don't fix collisions on their own; **longer validity** is the real, legitimate collision lever (pooled 99%→85%). A **finer (sub-integer) increment carried as fixed-point integers** appears to push pooled collisions lower still (→46%), but as implemented it separates players by *random noise*, not merit — so it is **dropped** (see [Cons of the finer increment](#cons-of-the-finer-increment) in Part 4). The real fix is structural: because points are **band-tagged**, measuring collisions **within band cohorts** ([Part 5](#part-5--band-scoped-collisions--band-movement-542)) drops them to **~35% at steady state** — on merit, with legible ~60–1,300-point ranges and no fixed-point. Uniform ×N scaling is pure relabeling.
 
 ## The question
 
@@ -301,6 +301,66 @@ The 46.1% figure looks like the win of Part 4, but it is **not** a legitimate co
 ## Recommendation (Part 4)
 
 To get a leaderboard that both **spreads players** and **keeps separating them over time**, the legitimate recipe is: **diverse increments (Fibonacci-margin) + long validity (tournaments > open play)**, with residual collisions reduced *structurally* via **per-band-cohort scoping** ([#542](https://github.com/cybergrouch/skopeo/issues/542)) rather than by injected noise. Longer validity does most of the collision reduction on merit. The **finer sub-integer increment is dropped** from the recipe — see [Cons of the finer increment](#cons-of-the-finer-increment): its reduction is a random tie-breaker, not real separation. Plain ×N scaling is likewise dropped — it buys legibility-of-magnitude at best, never separation. These are tunable knobs for the #525 validity settings and increment table if a well-separated, evolving leaderboard is desired.
+
+# Part 5 — Band-scoped collisions & band movement ([#542](https://github.com/cybergrouch/skopeo/issues/542))
+
+Every collision figure up to here is **pooled** — it treats all 2,000 players as one race. But ranking points are **band-tagged** ([#525](./TOURNAMENTS_CIRCUITS_AND_OPEN_PLAY_POINTS.md)): the standings run **per NTRP band**, so two players only "collide" if they are tied *and in the same band*. Part 5 recomputes the metrics **within band cohorts**, and then adds a rare **band-movement** model. Per the [Part 4 cons](#cons-of-the-finer-increment), the finer increment and the ×100 fixed-point are **excluded** — this part measures the honest, merit-based recipe only: **Fibonacci-margin open play + long validity (open 12 mo / tournament 36 mo), ×1.**
+
+## Method (Part 5)
+
+Each of the 2,000 players is assigned an NTRP band from a documented recreational mix (seeded, weighted toward the 3.0–4.5 middle). Collisions are then counted *inside* each band cohort and aggregated as a population-weighted rate. The band-movement model moves ~**8% of players per month** (≈ the observed 8-of-100-in-month-1); on a move the player's **current-band total resets to 0** and the old-band points go **dormant** (they reactivate only on a move back), and their active score counts only points earned since the last move. Same seeded population throughout; the exact band split and move rate are tunable and the relative findings are robust to them.
+
+### 10. Band-scoped vs pooled collisions
+
+Population NTRP-band mix (2.5–5.5): 8.0% / 17.8% / 23.5% / 22.4% / 15.2% / 8.4% / 4.8%.
+
+Collision % — pooled (one race) vs band-scoped (within each cohort), for the **current** scheme (band-difference, 2mo/6mo, ×1) and the **long** recipe (Fibonacci-margin, 12mo/36mo, ×1):
+
+| Horizon | pooled (current) | band-scoped (current) | pooled (long) | band-scoped (long) |
+| --- | ---: | ---: | ---: | ---: |
+| 1mo | 99.4% | 92.0% | 99.1% | 91.7% |
+| 2mo | 99.4% | 89.8% | 98.9% | 85.6% |
+| 4mo | 98.8% | 85.0% | 98.0% | 75.4% |
+| 8mo | 99.0% | 81.9% | 94.5% | 59.6% |
+| 1yr | 98.8% | 80.5% | 92.2% | 49.4% |
+| 2yr | 98.7% | 80.5% | 88.8% | 41.3% |
+| 3yr | 99.2% | 79.5% | 84.9% | **35.5%** |
+
+### 11. Per-band cohort detail at 3 years (long recipe)
+
+| NTRP band | players | sd | min–max points | distinct totals | collision % |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 2.5 | 159 | 274.6 | 77 – 1,113 | 142 | 20.8% |
+| 3.0 | 355 | 270.6 | 70 – 1,203 | 286 | 34.1% |
+| 3.5 | 471 | 274.9 | 59 – 1,229 | 342 | 47.3% |
+| 4.0 | 448 | 259.9 | 62 – 1,313 | 340 | 41.7% |
+| 4.5 | 304 | 265.7 | 62 – 1,168 | 248 | 32.9% |
+| 5.0 | 168 | 292.7 | 70 – 1,305 | 150 | 20.2% |
+| 5.5 | 95 | 267.9 | 99 – 1,221 | 89 | 12.6% |
+
+### 12. Band movement (~8% of players move band per month)
+
+| Horizon | moved players | band-scoped (no move) | band-scoped (with move) | mean pts (with move) | mean pts (no move) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 1mo | 6.7% | 91.1% | 91.6% | 22.1 | 23.9 |
+| 2mo | 14.2% | 85.8% | 86.4% | 42.7 | 48.9 |
+| 4mo | 25.7% | 75.1% | 75.8% | 79.1 | 97.6 |
+| 8mo | 42.4% | 58.5% | 62.6% | 132.6 | 193.5 |
+| 1yr | 51.4% | 50.1% | 51.7% | 174.0 | 289.7 |
+| 2yr | 64.4% | 41.4% | 48.3% | 205.0 | 383.7 |
+| 3yr | 70.1% | 34.4% | 47.9% | 215.9 | 471.7 |
+
+## Findings (Part 5)
+
+- **Band-scoping alone is the biggest legitimate collision lever — bigger than any point-formula change.** Even the *current* scheme drops from **~99% pooled to ~80% band-scoped**, purely by measuring the race the way it is actually run. It costs nothing — the points design is unchanged; only the denominator (who competes with whom) changes.
+- **Band-scoping + long validity gets collisions to ~35% with no tricks.** The long recipe falls from 84.9% pooled to **35.5% band-scoped at 3 years** — comparable to the discredited finer-increment result (46% *pooled*), but achieved on merit: diverse Fibonacci increments accumulated over a long window, separated within the cohort that actually competes. No random sub-tier, no fixed-point, no cap inflation.
+- **Reward-points ranges are clean and legible.** Per band at 3 years the totals span roughly **60 – 1,300 points** (sd ≈ 260–290), versus the ~140,000 the discarded ×100 finer-increment scheme produced. This is a leaderboard a human can read.
+- **Smaller cohorts separate better.** Collisions track cohort size: the 5.5 band (95 players) sits at **12.6%**, the crowded 3.5 band (471 players) at **47.3%**. Fewer players chasing the same reachable totals ⇒ fewer ties — the pigeonhole principle working *for* us once the population is partitioned.
+- **Band movement pushes collisions back up modestly and roughly halves the active mean.** With ~8%/month movement, 70% of players have changed band by 3 years; each move resets the active race, so band-scoped collisions rise **35.5% → 47.9%** at 3 years (negligible at ≤1 yr: 50.1% → 51.7%) and the mean active score drops **471.7 → 215.9** (resets keep wiping accumulated points, and freshly-moved players cluster near zero). The dormant-points model means those points are not lost — they reactivate on return — but they do not count toward the current-band race.
+
+## Recommendation (Part 5)
+
+**Measure and display standings per NTRP band cohort** — this is the single most effective, zero-cost collision reducer, and it matches how #525 already tags points. Combined with **long validity** (the Part 3–4 merit lever), it reaches ~35% collisions at steady state with **legible ~60–1,300-point ranges** and no reliance on the disqualified finer-increment / fixed-point machinery. Band movement is a real, second-order effect (it re-congests the low end and trims active means as players reset), so the standings UI should expect a meaningful churn of near-zero, freshly-promoted players — but it does not undermine the band-scoping benefit. Net: **band-scoping + long validity is the recipe; the finer increment and fixed-point are not needed and are dropped.**
 
 ## References
 
