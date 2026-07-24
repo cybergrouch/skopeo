@@ -1,6 +1,16 @@
 # Points Ranking — Monte Carlo Simulation Study
 
-> **Status:** Study of record for the ranking-points design ([#525](https://github.com/cybergrouch/skopeo/issues/525)). The points formulas are **design-only** (not yet implemented); this study encodes them standalone — exactly as the rating studies encode the rating algorithm — to answer a policy question **before** we build.
+> **Status:** Study of record for the ranking-points design ([#525](https://github.com/cybergrouch/skopeo/issues/525)). Encodes the points formulas standalone — exactly as the rating studies encode the rating algorithm — to answer policy questions with Monte Carlo simulation.
+
+## Study focus — three questions, in order
+
+This study has evolved through three questions. The first is **settled**; the latter two are the **live focus** and are treated in detail below.
+
+1. **Capping — resolved (yes).** Does a player's score cap, or grow to infinity? It **caps** (points expire → the score plateaus). Estimable in closed form. Covered briefly in [The answer](#the-answer) / §5; not revisited further.
+2. **Variance / spread — live focus.** How widely are player scores spread, and does the spread *grow over time*? Treated in detail in Part 2 (§6–7) and compared across schemes in Part 3 (§8) and Part 4 (§9).
+3. **Collisions — live focus.** How many players are *tied* on the same total (a congested, uninformative leaderboard)? Treated in detail across §6–9, with the combined-levers experiment (Part 4) as the culminating analysis of what actually reduces them.
+
+**One-line takeaway on 2 & 3:** *diverse increments* widen variance and the ceiling but don't fix collisions on their own; **longer validity** is the real collision lever (99%→85%), and a **finer (sub-integer) increment carried as fixed-point integers** is what pushes collisions materially lower (→46%). Uniform ×N scaling is pure relabeling. Details in Part 4.
 
 ## The question
 
@@ -253,7 +263,31 @@ Range = min–max player total; distinct = number of distinct integer totals; co
 
 - **Fibonacci-margin wins on variance and ceiling.** SD is higher at every horizon (e.g. +36% at 2 mo, +11% at 1 yr), the max/range is wider (1-yr ceiling ~305 vs ~264), and it yields **more distinct totals** (e.g. 161 vs 124 at 2 mo; 243 vs 204 at 3 yr). It also removes negatives (min is 0, vs −5…−9 for the band scheme). This is exactly the **"diversity of increments"** effect from Parts 1–2: `{2,3,5,8,13,21}` is more varied and larger-magnitude than `{−2,0,1,2,3,5}`, so it spreads the field further.
 - **But it does *not* fix collisions.** Both schemes sit at **~99%** tied throughout. The reason is the same pigeonhole limit as before: with only ~240 distinct reachable totals and 2,000 players, almost everyone shares a total regardless of the increment set. Margin diversity raises the distinct-total count (~15–30%), but nowhere near the thousands needed to separate the field.
-- **Verdict.** The Fibonacci-margin scheme is a **genuine improvement in variance, ceiling, and diversity** and is worth considering for #525 on those merits (and for being simpler — no bands/ALP/negatives). But collisions are governed by *distinct-totals vs population size*, so cutting them still requires the earlier levers — **longer validity** (more accumulated events) and/or **fixed-point scaling** (finer granularity) — on top of a diverse increment set. Fibonacci margin is a strong *ingredient*, not a standalone fix. Recommended next exploration: Fibonacci-margin **combined with** longer validity + a ×100 fixed-point scale.
+- **Verdict.** The Fibonacci-margin scheme is a **genuine improvement in variance, ceiling, and diversity** and is worth considering for #525 on those merits (and for being simpler — no bands/ALP/negatives). But collisions are governed by *distinct-totals vs population size*, so cutting them still requires the earlier levers — **longer validity** (more accumulated events) and/or **fixed-point scaling** (finer granularity) — on top of a diverse increment set. Fibonacci margin is a strong *ingredient*, not a standalone fix. That combination is the subject of Part 4.
+
+# Part 4 — Combined levers: Fibonacci margin + longer validity + fixed-point ([#539](https://github.com/cybergrouch/skopeo/issues/539))
+
+The culminating experiment: apply the three levers **together** and isolate which one actually moves **variance** and **collisions**. All rows use the Fibonacci-margin open-play scheme (diverse increments); they differ only in **validity length**, **scale**, and — the last row — a **finer sub-integer increment** carried as fixed-point integers. Measured on the same 2,000-player population at the **3-year** (fully-warmed) horizon. "Long validity" = open play 12 months / tournaments 36 months (tournaments strictly longer). Range = min–max player total; distinct = number of distinct integer totals; collision % = share of players tied on an exact total.
+
+## 9. Combined-levers comparison (3-year horizon, 2,000 players)
+
+| Scenario | sd (variance) | range (min–max) | distinct totals | collision % |
+| --- | ---: | ---: | ---: | ---: |
+| Fibonacci, short validity (2mo/6mo), ×1 | 56.6 | 0 – 263 | 234 | 98.9% |
+| Fibonacci, **long** validity (12mo/36mo), ×1 | 270.0 | 55 – 1,280 | 804 | **85.1%** |
+| Fibonacci, long validity, **×100** (relabel) | 26,997 | 5,500 – 128,000 | 804 | **85.1%** |
+| Fibonacci + **finer increment**, long, ×100 | 27,338 | 3,000 – 140,275 | 1,432 | **46.1%** |
+
+## Findings (Part 4) — what actually moves variance and collisions
+
+- **Longer validity is the real lever for both.** Going from short (2mo/6mo) to long (12mo/36mo) validity, on the *same* Fibonacci scheme, roughly **5×'s the variance** (sd 56.6 → 270), widens the range from `0–263` to `55–1,280`, more than **3×'s the distinct totals** (234 → 804), and cuts collisions **98.9% → 85.1%**. More un-expired results accumulate before dropping off, so player histories diverge. This is the single biggest mover of collisions — and, notably, it makes the minimum non-zero (55): with a long window even a modest player always holds some points.
+- **Uniform ×100 scaling is pure relabeling — zero effect on collisions.** Scaling the long-validity scheme by ×100 multiplies sd and the range by exactly 100 (ceiling → ~128,000, easily past the ~10,000 target) but leaves **distinct totals (804) and collisions (85.1%) unchanged** — every total is just a multiple of 100. This is the concrete confirmation of the [fixed-point caveat](#fixed-point-keep-integers-without-losing-fractional-granularity): scale changes the axis, never the separation.
+- **Fixed-point only pays off with a *finer* increment.** Adding a sub-integer margin component (fractions, then integerized by the ×100 scale) is what finally bites: distinct totals jump **804 → 1,432** and collisions fall **85.1% → 46.1%** — from "almost everyone tied" to "about half distinct." The scale isn't the point; the *finer, diverse increment it lets you carry as integers* is.
+- **The ceiling target (~10k) is trivially met** once you scale — but the study's whole point is that the ceiling was never the interesting variable; **collisions and variance are**, and they are governed by *distinct-totals vs population size*.
+
+## Recommendation (Part 4)
+
+To get a leaderboard that both **spreads players** and **keeps separating them over time**, the effective recipe is: **diverse increments (Fibonacci-margin) + long validity (tournaments > open play) + a finer sub-integer increment carried as ×100 fixed-point integers.** Longer validity does most of the collision reduction; the fixed-point-carried finer increment does the rest. Plain ×N scaling can be dropped from the recipe — it buys legibility-of-magnitude at best, never separation. These are tunable knobs for the #525 validity settings and increment table if a well-separated, evolving leaderboard is desired.
 
 ## References
 
