@@ -18,6 +18,19 @@ import org.yaml.snakeyaml.Yaml
 import kotlin.test.Test
 
 class OpenAPIIntegrationTest {
+    /** Circuits (#525): the admin-managed groupings-of-tournaments contract is documented. */
+    @Test
+    fun testOpenAPISpecIncludesCircuits() =
+        testApplication {
+            application {
+                module(initDatabase = false)
+            }
+            val body = client.get(urlString = "/openapi.yaml").bodyAsText()
+            body shouldContain "/api/v1/circuits"
+            body shouldContain "CircuitResponse"
+            body shouldContain "CreateCircuitRequest"
+        }
+
     @Test
     fun testOpenAPISpecEndpoint() =
         testApplication {

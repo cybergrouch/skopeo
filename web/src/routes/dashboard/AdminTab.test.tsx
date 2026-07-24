@@ -23,6 +23,9 @@ vi.mock("./admin/BuildInfoSection", () => ({
 vi.mock("./admin/ClubsSection", () => ({
   ClubsSection: () => <div>clubs section</div>,
 }));
+vi.mock("./admin/CircuitsSection", () => ({
+  CircuitsSection: () => <div>circuits section</div>,
+}));
 vi.mock("./admin/ThemeSection", () => ({
   ThemeSection: () => <div>theme section</div>,
 }));
@@ -36,6 +39,7 @@ describe("AdminTab", () => {
     expect(screen.getByText("manage player section")).toBeInTheDocument();
     expect(screen.getByText("deleted accounts section")).toBeInTheDocument();
     expect(screen.getByText("clubs section")).toBeInTheDocument();
+    expect(screen.getByText("circuits section")).toBeInTheDocument();
     expect(screen.getByText("duplicates section")).toBeInTheDocument();
     expect(
       screen.getByText("duplicate candidates section"),
