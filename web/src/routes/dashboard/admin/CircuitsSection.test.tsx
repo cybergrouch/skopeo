@@ -144,6 +144,49 @@ describe("CircuitsSection", () => {
     );
   });
 
+  it("disables the create button while the request is pending", () => {
+    state.createPending = true;
+    renderSection();
+    expect(screen.getByRole("button", { name: "Creating…" })).toBeDisabled();
+  });
+
+  it("rejects a blank rename and can be cancelled", async () => {
+    useGetApiV1Circuits.mockReturnValue({
+      data: [{ id: "c1", name: "NORTH", isActive: true }],
+      isLoading: false,
+    });
+    const user = userEvent.setup();
+    renderSection();
+
+    await user.click(screen.getByRole("button", { name: "Rename" }));
+    await user.clear(screen.getByLabelText("Circuit name"));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Circuit name is required.",
+    );
+    expect(renameMutate).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByLabelText("Circuit name")).not.toBeInTheDocument();
+    expect(screen.getByText("NORTH")).toBeInTheDocument();
+  });
+
+  it("surfaces an error when a rename fails", async () => {
+    state.renameFail = true;
+    useGetApiV1Circuits.mockReturnValue({
+      data: [{ id: "c1", name: "NORTH", isActive: true }],
+      isLoading: false,
+    });
+    const user = userEvent.setup();
+    renderSection();
+
+    await user.click(screen.getByRole("button", { name: "Rename" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not rename the circuit.",
+    );
+  });
+
   it("deletes a circuit after a confirm step", async () => {
     useGetApiV1Circuits.mockReturnValue({
       data: [{ id: "c1", name: "NORTH", isActive: true }],
@@ -157,6 +200,36 @@ describe("CircuitsSection", () => {
     await user.click(screen.getByRole("button", { name: "Confirm" }));
     await waitFor(() =>
       expect(deleteMutate).toHaveBeenCalledWith({ id: "c1" }),
+    );
+  });
+
+  it("cancels a pending delete without calling the API", async () => {
+    useGetApiV1Circuits.mockReturnValue({
+      data: [{ id: "c1", name: "NORTH", isActive: true }],
+      isLoading: false,
+    });
+    const user = userEvent.setup();
+    renderSection();
+
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(deleteMutate).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
+  });
+
+  it("surfaces an error when a delete fails", async () => {
+    state.deleteFail = true;
+    useGetApiV1Circuits.mockReturnValue({
+      data: [{ id: "c1", name: "NORTH", isActive: true }],
+      isLoading: false,
+    });
+    const user = userEvent.setup();
+    renderSection();
+
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    await user.click(screen.getByRole("button", { name: "Confirm" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not delete the circuit.",
     );
   });
 });

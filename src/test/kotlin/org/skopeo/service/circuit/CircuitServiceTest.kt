@@ -91,7 +91,7 @@ class CircuitServiceTest {
 
     @Test
     fun `a plain player cannot read the list`() {
-        provision(uid = "player", roles = setOf(Capability.PLAYER))
+        provision(uid = "player", roles = setOf(element = Capability.PLAYER))
 
         service.list(token = token(uid = "player")).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
     }

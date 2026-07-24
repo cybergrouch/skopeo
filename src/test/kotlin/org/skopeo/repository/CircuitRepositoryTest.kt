@@ -67,7 +67,7 @@ class CircuitRepositoryTest {
         circuits.list().map { it.name } shouldBe listOf("NORTH", "SOUTH")
 
         circuits.disable(id = north.id) shouldBe true
-        circuits.list().map { it.name } shouldBe listOf("SOUTH")
+        circuits.list().map { it.name } shouldBe listOf(element = "SOUTH")
     }
 
     @Test
