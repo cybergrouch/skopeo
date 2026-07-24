@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { ContentLink } from '@/components/ContentLink'
 import { PlaceholderTag } from '@/components/PlaceholderTag'
@@ -129,10 +129,29 @@ export function ActivityLogSection() {
   const items = query.data?.items ?? []
   const total = query.data?.total ?? 0
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const [pageInput, setPageInput] = useState('')
+  const topRef = useRef<HTMLDivElement>(null)
 
   function changeCategory(next: CategoryFilter) {
     setCategory(next)
     setPage(0)
+  }
+
+  // Jump to a page (0-based, clamped to the valid range) and return the list to the top so the newly
+  // loaded page starts at the top rather than mid-scroll (#529). scrollIntoView is optional-chained so
+  // it is a no-op under jsdom.
+  function goToPage(target: number) {
+    const clamped = Math.min(Math.max(target, 0), pageCount - 1)
+    setPage(clamped)
+    topRef.current?.scrollIntoView?.({ block: 'start' })
+  }
+
+  // The jump-to-page box takes a 1-based page number.
+  function submitJump(event: FormEvent) {
+    event.preventDefault()
+    const parsed = Number.parseInt(pageInput, 10)
+    if (!Number.isNaN(parsed)) goToPage(parsed - 1)
+    setPageInput('')
   }
 
   return (
@@ -161,7 +180,7 @@ export function ActivityLogSection() {
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : items.length > 0 ? (
           <>
-            <div className="overflow-x-auto">
+            <div ref={topRef} className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="text-xs text-muted-foreground">
                   <tr>
@@ -194,28 +213,71 @@ export function ActivityLogSection() {
               </table>
             </div>
             {total > PAGE_SIZE ? (
-              <div className="flex items-center justify-between text-sm">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={page === 0}
-                  onClick={() => setPage((p) => p - 1)}
-                >
-                  Previous
-                </Button>
-                <span className="text-muted-foreground">
-                  Page {page + 1} of {pageCount} · {total} total
-                </span>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={page >= pageCount - 1}
-                  onClick={() => setPage((p) => p + 1)}
-                >
-                  Next
-                </Button>
+              <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                <div className="flex items-center gap-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    aria-label="First page"
+                    disabled={page === 0}
+                    onClick={() => goToPage(0)}
+                  >
+                    « First
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={page === 0}
+                    onClick={() => goToPage(page - 1)}
+                  >
+                    Previous
+                  </Button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground">
+                    Page {page + 1} of {pageCount} · {total} total
+                  </span>
+                  <form onSubmit={submitJump} className="flex items-center gap-1">
+                    <label htmlFor="activity-jump" className="sr-only">
+                      Go to page
+                    </label>
+                    <Input
+                      id="activity-jump"
+                      type="number"
+                      inputMode="numeric"
+                      className="h-8 w-16"
+                      placeholder="#"
+                      value={pageInput}
+                      onChange={(e) => setPageInput(e.target.value)}
+                    />
+                    <Button type="submit" variant="outline" size="sm">
+                      Go
+                    </Button>
+                  </form>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={page >= pageCount - 1}
+                    onClick={() => goToPage(page + 1)}
+                  >
+                    Next
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    aria-label="Last page"
+                    disabled={page >= pageCount - 1}
+                    onClick={() => goToPage(pageCount - 1)}
+                  >
+                    Last »
+                  </Button>
+                </div>
               </div>
             ) : null}
           </>
