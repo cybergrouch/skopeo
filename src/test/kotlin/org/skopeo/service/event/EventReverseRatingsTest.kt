@@ -28,6 +28,7 @@ import org.skopeo.model.Match
 import org.skopeo.model.MatchSetResult
 import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
+import org.skopeo.model.PlacementBracket
 import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.ServiceError
 import org.skopeo.model.TeamType
@@ -125,13 +126,16 @@ class EventReverseRatingsTest {
         return CircuitRepository().create(command = CreateCircuitCommand(name = "NORTH", createdBy = creator.id)).id
     }
 
-    /** Seed a COMPLETED singles fixture on [date] where team1 (p1) beats p2, designating [designated] points. */
+    /**
+     * Seed a COMPLETED singles Super Finals placement match (#525) on [date] where team1 (p1) beats p2,
+     * so finalize awards placement points (1st to p1, 2nd to p2) that a reversal then revokes.
+     */
     private fun seedCompletedFixture(
         eventId: UUID,
         host: User,
         p1: User,
         p2: User,
-        designated: Int? = 30,
+        designated: Int? = null,
         date: LocalDate = LocalDate.now(),
     ): Match {
         val match =
@@ -148,6 +152,8 @@ class EventReverseRatingsTest {
                         createdBy = host.id,
                         eventId = eventId,
                         designatedPoints = designated,
+                        isPlacementMatch = true,
+                        placementBracket = PlacementBracket.SUPER_FINALS,
                     ),
             )
         matchRepo.addResult(
@@ -223,7 +229,8 @@ class EventReverseRatingsTest {
     @Test
     fun `reversal revokes the event's active awards, appending a revocation marker (#478)`() {
         val re = ratedEvent()
-        awardRepo.listActiveByEvent(eventId = re.eventId) shouldHaveSize 1
+        // A Super Finals placement match pays both players → two active awards.
+        awardRepo.listActiveByEvent(eventId = re.eventId) shouldHaveSize 2
 
         service.reverseRatings(token = token(uid = "admin"), id = re.eventId).shouldBeRight()
 
@@ -262,7 +269,7 @@ class EventReverseRatingsTest {
                 it.entityType shouldBe AuditEntityType.EVENT
                 it.summary shouldContain "Reversed ratings for event Spring Open"
                 it.details["participantsRestored"] shouldBe "2"
-                it.details["awardsRevoked"] shouldBe "1"
+                it.details["awardsRevoked"] shouldBe "2"
             }
     }
 
@@ -317,9 +324,9 @@ class EventReverseRatingsTest {
             service.reverseRatings(token = token(uid = "admin"), id = eventA.id)
                 .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
         error.message shouldContain "later matches have already been rated"
-        // Nothing was touched: A stays finalized and its award stays live.
+        // Nothing was touched: A stays finalized and its awards stay live (both placements).
         events.findById(id = eventA.id).shouldNotBeNull().isFinalized.shouldBeTrue()
-        awardRepo.listActiveByEvent(eventId = eventA.id) shouldHaveSize 1
+        awardRepo.listActiveByEvent(eventId = eventA.id) shouldHaveSize 2
 
         // The tip event B, however, reverses cleanly.
         service.reverseRatings(token = token(uid = "admin"), id = eventB.id).shouldBeRight()

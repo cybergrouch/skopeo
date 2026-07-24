@@ -13,10 +13,12 @@ import org.skopeo.model.Level
 import org.skopeo.model.Match
 import org.skopeo.model.MatchSide
 import org.skopeo.model.MatchStatus
+import org.skopeo.model.PlacementBracket
 import org.skopeo.model.PointClass
 import org.skopeo.model.PointSourceType
 import org.skopeo.model.RankingPointAwardWrite
 import org.skopeo.model.UserRating
+import org.skopeo.repository.ClubRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RankingPointRepository
 import org.skopeo.repository.RatingRepository
@@ -24,20 +26,12 @@ import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService
 import java.math.BigDecimal
 import java.math.RoundingMode
-import java.time.LocalDate
 import java.time.LocalDateTime
-import java.time.temporal.ChronoUnit
 import java.util.UUID
 
 // Only TOURNAMENT (host-designated points) and OPEN_PLAY (computed per-set points, #525) award on
 // finalize; LEAGUE is intentionally excluded for now (its points model is deferred to a follow-up
 // issue), so finalizing a league event awards nothing. See the `when` in [awardForFinalizedEvent].
-
-// Validity-window thresholds (in days) that map an event's point window to the nearest existing
-// PointClass (§7 + Interpretation B). ≤ 31d → 1M, ≤ 92d → 3M, ≤ 184d → 6M, else ANNUAL.
-private const val ONE_MONTH_DAYS = 31L
-private const val THREE_MONTH_DAYS = 92L
-private const val SIX_MONTH_DAYS = 184L
 
 private const val UNSPECIFIED_SEX = "Unspecified"
 
@@ -46,21 +40,37 @@ private const val UNSPECIFIED_SEX = "Unspecified"
 private const val OPEN_PLAY_VALIDITY_MONTHS = 2L
 private const val BAND_MEAN_SCALE = 4
 
+// Tournament placement points (#525), a configurable schedule indexed by finishing place (1st..4th).
+// Sanctioned clubs use the full table; unsanctioned clubs (or a tournament with no club) use half.
+@Suppress("MagicNumber") // the published placement points schedule
+private val SANCTIONED_PLACEMENT_POINTS = listOf(80, 60, 40, 30)
+
+@Suppress("MagicNumber") // the published placement points schedule (unsanctioned = half)
+private val UNSANCTIONED_PLACEMENT_POINTS = listOf(40, 30, 20, 15)
+
+// Zero-based indices into the placement schedule for each finishing place.
+private const val PLACE_FIRST = 0
+private const val PLACE_SECOND = 1
+private const val PLACE_THIRD = 2
+private const val PLACE_FOURTH = 3
+
+// Tournament points default to a 12-month validity when the organizer set no explicit window (#525).
+private const val TOURNAMENT_VALIDITY_MONTHS = 12L
+
 /**
- * Finalize-time points awarding (#403 Phase D, POINTS_AWARDING_AND_BUDGET.md §2.5/§3). A small
+ * Finalize-time points awarding (#403 Phase D; open-play + tournament model #525). A small
  * collaborator of [EventService.finalize] so the awarding logic stays cohesive and testable without
- * bloating EventService. On finalize of a budgeted-type event it converts each qualifying fixture's
- * designation into ledger awards — one row per winning-team member, each carrying the FULL designated
- * points (decision #4), so a team of N produces N rows of `designated` (total `designated × N`,
- * matching the Phase C reservation). Every event class awards (OPEN_PLAY unified with
- * TOURNAMENT/LEAGUE). Non-awarding paths (no winner / cancelled / no designation / winner unrated)
- * simply produce nothing (the "release").
+ * bloating EventService. Awarding is by event type: OPEN_PLAY is computed per set from band
+ * difference (both winner and loser); TOURNAMENT pays placement points from designated placement
+ * matches (Super/Plate Finals), sanction-selected via the event's club; LEAGUE awards nothing for
+ * now. A winner/participant with no current rating has no band to tag and is skipped.
  */
 class EventFinalizeAwarder(
     private val matches: MatchRepository = MatchRepository(),
     private val awards: RankingPointRepository = RankingPointRepository(),
     private val ratings: RatingRepository = RatingRepository(),
     private val users: UserRepository = UserRepository(),
+    private val clubs: ClubRepository = ClubRepository(),
     private val audit: AuditService = AuditService(),
 ) {
     /** Summary of one finalize's awarding, for the audit trail: how many fixtures paid out and the total. */
@@ -70,12 +80,7 @@ class EventFinalizeAwarder(
         val totalPoints: BigDecimal,
     )
 
-    /**
-     * Award the winners of [event]'s qualifying fixtures. A fixture qualifies when it is COMPLETED,
-     * has a winner, carries a designation, and belongs to this event (decision #3). The award band is
-     * the winner's CURRENT band at finalize (Interpretation A); a winner with no rating is skipped.
-     * Validity + point class come from the event's window (Interpretation B). Returns an [AwardSummary].
-     */
+    /** Award [event]'s finalized fixtures by type (see class doc). Returns an [AwardSummary]. */
     fun awardForFinalizedEvent(
         event: Event,
         grantedBy: UUID,
@@ -83,84 +88,113 @@ class EventFinalizeAwarder(
     ): AwardSummary =
         when (event.type) {
             EventType.OPEN_PLAY -> awardComputedOpenPlay(event = event, grantedBy = grantedBy, now = now)
-            EventType.TOURNAMENT -> awardDesignated(event = event, grantedBy = grantedBy, now = now)
+            EventType.TOURNAMENT -> awardPlacement(event = event, grantedBy = grantedBy, now = now)
             // LEAGUE and any future type: no awarding yet (#525).
             else -> AwardSummary(matchCount = 0, awardCount = 0, totalPoints = BigDecimal.ZERO)
         }
 
     /**
-     * Host-designated awarding (TOURNAMENT): one full-designation row per winning-team member, band =
-     * the winner's current band at finalize, validity + point class from the event's window.
+     * Placement-based tournament awarding (#525). Each COMPLETED placement match (Super Finals →
+     * 1st/2nd, Plate Finals → 3rd/4th) pays its winner and loser from the sanction-selected schedule
+     * — the full table if the event's club has tournaments sanctioned, else the halved table (a
+     * tournament with no club is unsanctioned). One full-amount row per team member (doubles: both
+     * partners), tagged with each recipient's current band + sex. Regular fixtures award nothing.
      */
-    private fun awardDesignated(
+    private fun awardPlacement(
         event: Event,
         grantedBy: UUID,
         now: LocalDateTime,
     ): AwardSummary {
-        val start = event.pointValidityStart
-        val end = event.pointValidityEnd
-        if (start == null || end == null) return AwardSummary(matchCount = 0, awardCount = 0, totalPoints = BigDecimal.ZERO)
-        val validFrom = start.atStartOfDay()
-        // Exclusive end: the day after the last valid day, at start-of-day — matching the ledger's
-        // [valid_from, valid_until) convention (activeAsOf uses validUntil greater asOf).
-        val validUntil = end.plusDays(1).atStartOfDay()
-        val pointClass = pointClassFor(start = start, end = end)
-
-        // Each qualifying fixture already carries a non-null designation (see [qualifyingWins]); resolve
-        // its winners up front so the award loop has no null-handling branches to leave uncovered.
-        val wins = qualifyingWins(eventId = event.id)
-        val winnerIds = wins.flatMap { it.winnerIds }.distinct()
-        val bands = ratings.findCurrentRatings(userIds = winnerIds)
-        val sexes = users.findAllByIds(ids = winnerIds).associate { it.id to (it.sex ?: UNSPECIFIED_SEX) }
+        val sanctioned = event.clubId?.let { clubs.findById(id = it)?.tournamentsSanctioned } ?: false
+        val schedule = if (sanctioned) SANCTIONED_PLACEMENT_POINTS else UNSANCTIONED_PLACEMENT_POINTS
+        val start = event.pointValidityStart ?: event.endDate
+        val end = event.pointValidityEnd ?: event.endDate.plusMonths(TOURNAMENT_VALIDITY_MONTHS)
+        val placementMatches = matches.listByEvent(eventId = event.id).filter { isAwardablePlacement(match = it) }
+        val userIds = placementMatches.flatMap { it.team1.userIds + it.team2.userIds }.distinct()
+        val ctx =
+            AwardContext(
+                bands = ratings.findCurrentRatings(userIds = userIds),
+                sexes = users.findAllByIds(ids = userIds).associate { it.id to (it.sex ?: UNSPECIFIED_SEX) },
+                grantedBy = grantedBy,
+                now = now,
+                validFrom = start.atStartOfDay(),
+                validUntil = end.plusDays(1).atStartOfDay(),
+            )
 
         var matchCount = 0
         var awardCount = 0
         var total = BigDecimal.ZERO
-        wins.forEach { win ->
-            var paidThisMatch = false
-            win.winnerIds.forEach { userId ->
-                // A winner with no current rating has no band to tag — skip that award (Interpretation A).
-                val band = bands[userId]?.currentLevel ?: return@forEach
-                awards.award(
-                    write =
-                        awardWrite(
-                            event = event,
-                            matchId = win.matchId,
-                            userId = userId,
-                            points = BigDecimal(win.designated),
-                            band = band,
-                            sex = sexes.getOrDefault(key = userId, defaultValue = UNSPECIFIED_SEX),
-                            pointClass = pointClass,
-                            validFrom = validFrom,
-                            validUntil = validUntil,
-                            grantedBy = grantedBy,
-                            now = now,
-                        ),
-                )
-                // Per-award audit (#471): one entry targeting the awarded player (USER) so the reward is
-                // individually auditable in the Activity Log with the player as the Target — the actor is
-                // the finalizer (grantedBy). This is in addition to EventService's event-level summary.
-                audit.record(
-                    write =
-                        pointsAudit(
-                            event = event,
-                            matchId = win.matchId,
-                            matchPublicCode = win.matchPublicCode,
-                            userId = userId,
-                            points = win.designated,
-                            band = band,
-                            grantedBy = grantedBy,
-                            validFrom = validFrom,
-                            validUntil = validUntil,
-                        ),
-                )
-                awardCount += 1
-                total = total.add(BigDecimal(win.designated))
-                paidThisMatch = true
-            }
-            if (paidThisMatch) matchCount += 1
+        placementMatches.forEach { match ->
+            val bracket = match.placementBracket ?: return@forEach
+            val (winnerIdx, loserIdx) = placeIndices(bracket = bracket)
+            val team1Won = match.winnerTeamId == match.team1.teamId
+            val winnerSide = if (team1Won) match.team1 else match.team2
+            val loserSide = if (team1Won) match.team2 else match.team1
+            val rows =
+                awardPlacementSide(event = event, match = match, side = winnerSide, placePoints = schedule[winnerIdx], ctx = ctx) +
+                    awardPlacementSide(event = event, match = match, side = loserSide, placePoints = schedule[loserIdx], ctx = ctx)
+            awardCount += rows
+            total = total.add(BigDecimal(schedule[winnerIdx] * winnerSide.userIds.size + schedule[loserIdx] * loserSide.userIds.size))
+            if (rows > 0) matchCount += 1
         }
         return AwardSummary(matchCount = matchCount, awardCount = awardCount, totalPoints = total)
+    }
+
+    /** A COMPLETED placement match with a bracket and a winner — the only fixtures that pay placement points. */
+    private fun isAwardablePlacement(match: Match): Boolean =
+        match.status == MatchStatus.COMPLETED && match.isPlacementMatch && match.placementBracket != null && match.winnerTeamId != null
+
+    /** (winner index, loser index) into the placement schedule: Super Finals → 1st/2nd, Plate Finals → 3rd/4th. */
+    private fun placeIndices(bracket: PlacementBracket): Pair<Int, Int> =
+        when (bracket) {
+            PlacementBracket.SUPER_FINALS -> PLACE_FIRST to PLACE_SECOND
+            PlacementBracket.PLATE_FINALS -> PLACE_THIRD to PLACE_FOURTH
+        }
+
+    /** Award [placePoints] to every member of [side], each tagged with their own band + sex. Returns rows written. */
+    private fun awardPlacementSide(
+        event: Event,
+        match: Match,
+        side: MatchSide,
+        placePoints: Int,
+        ctx: AwardContext,
+    ): Int {
+        var written = 0
+        side.userIds.forEach { userId ->
+            val band = ctx.bands[userId]?.currentLevel ?: return@forEach
+            awards.award(
+                write =
+                    awardWrite(
+                        event = event,
+                        matchId = match.id,
+                        userId = userId,
+                        points = BigDecimal(placePoints),
+                        band = band,
+                        sex = ctx.sexes.getOrDefault(key = userId, defaultValue = UNSPECIFIED_SEX),
+                        pointClass = PointClass.ANNUAL_TOURNAMENT,
+                        validFrom = ctx.validFrom,
+                        validUntil = ctx.validUntil,
+                        grantedBy = ctx.grantedBy,
+                        now = ctx.now,
+                    ),
+            )
+            audit.record(
+                write =
+                    pointsAudit(
+                        event = event,
+                        matchId = match.id,
+                        matchPublicCode = match.publicCode,
+                        userId = userId,
+                        points = placePoints,
+                        band = band,
+                        grantedBy = ctx.grantedBy,
+                        validFrom = ctx.validFrom,
+                        validUntil = ctx.validUntil,
+                    ),
+            )
+            written += 1
+        }
+        return written
     }
 
     /**
@@ -183,7 +217,7 @@ class EventFinalizeAwarder(
         val bands = ratings.findCurrentRatings(userIds = userIds)
         val sexes = users.findAllByIds(ids = userIds).associate { it.id to (it.sex ?: UNSPECIFIED_SEX) }
         val ctx =
-            OpenPlayContext(
+            AwardContext(
                 bands = bands,
                 sexes = sexes,
                 grantedBy = grantedBy,
@@ -215,7 +249,7 @@ class EventFinalizeAwarder(
     }
 
     /** The finalize-time invariants shared by every open-play award row (bundled to keep signatures small). */
-    private data class OpenPlayContext(
+    private data class AwardContext(
         val bands: Map<UUID, UserRating>,
         val sexes: Map<UUID, String>,
         val grantedBy: UUID,
@@ -230,7 +264,7 @@ class EventFinalizeAwarder(
         match: Match,
         side: MatchSide,
         teamPoints: Int,
-        ctx: OpenPlayContext,
+        ctx: AwardContext,
     ): Int {
         var written = 0
         side.userIds.forEach { userId ->
@@ -280,34 +314,6 @@ class EventFinalizeAwarder(
         val mean = ratingValues.reduce { a, b -> a.add(b) }.divide(BigDecimal(userIds.size), BAND_MEAN_SCALE, RoundingMode.HALF_UP)
         return Level.fromValue(value = mean.toPlainString()).value
     }
-
-    /** One qualifying fixture reduced to what awarding needs: its id, public code, designation, and winning members. */
-    private data class QualifyingWin(
-        val matchId: UUID,
-        val matchPublicCode: String,
-        val designated: Int,
-        val winnerIds: List<UUID>,
-    )
-
-    /**
-     * The event's fixtures that pay out (decision #3): COMPLETED, with a winner and a designation.
-     * [Match.designatedPoints] and [Match.winnerTeamId] are resolved here so the caller never re-checks
-     * for null — a fixture that fails any part of the filter simply produces no [QualifyingWin].
-     */
-    private fun qualifyingWins(eventId: UUID): List<QualifyingWin> =
-        matches
-            .listByEvent(eventId = eventId)
-            .filter { it.status == MatchStatus.COMPLETED }
-            .mapNotNull { match ->
-                val designated = match.designatedPoints ?: return@mapNotNull null
-                val winnerIds = winningUserIds(match = match).ifEmpty { return@mapNotNull null }
-                QualifyingWin(
-                    matchId = match.id,
-                    matchPublicCode = match.publicCode,
-                    designated = designated,
-                    winnerIds = winnerIds,
-                )
-            }
 
     @Suppress("LongParameterList")
     private fun awardWrite(
@@ -378,25 +384,4 @@ class EventFinalizeAwarder(
                     "validUntil" to validUntil.toString(),
                 ),
         )
-
-    private fun winningUserIds(match: Match): List<UUID> =
-        when (match.winnerTeamId) {
-            match.team1.teamId -> match.team1.userIds
-            match.team2.teamId -> match.team2.userIds
-            else -> emptyList()
-        }
-
-    /** Map the event's validity-window length to the nearest existing PointClass (Interpretation B). */
-    private fun pointClassFor(
-        start: LocalDate,
-        end: LocalDate,
-    ): PointClass {
-        val days = ChronoUnit.DAYS.between(start, end)
-        return when {
-            days <= ONE_MONTH_DAYS -> PointClass.SEASONAL_TOURNAMENT_1M
-            days <= THREE_MONTH_DAYS -> PointClass.SEASONAL_TOURNAMENT_3M
-            days <= SIX_MONTH_DAYS -> PointClass.SEASONAL_TOURNAMENT_6M
-            else -> PointClass.ANNUAL_TOURNAMENT
-        }
-    }
 }

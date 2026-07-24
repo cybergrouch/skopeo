@@ -35,6 +35,7 @@ import org.skopeo.model.Match
 import org.skopeo.model.MatchSetResult
 import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
+import org.skopeo.model.PlacementBracket
 import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.ServiceError
 import org.skopeo.model.TeamType
@@ -911,7 +912,15 @@ class EventServiceTest {
         rate(userId = p1.id, level = "4.0")
         rate(userId = p2.id, level = "4.0")
         val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id))
-        val match = seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2, designated = 30)
+        val match =
+            seedCompletedFixture(
+                eventId = event.id,
+                host = host,
+                p1 = p1,
+                p2 = p2,
+                designated = null,
+                placementBracket = PlacementBracket.SUPER_FINALS,
+            )
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
         // The Administrator has since run the rating-calculation trigger on this match.
         matchRepo.markRated(matchId = match.id, ratedAt = LocalDateTime.now(), ratedBy = host.id)
@@ -920,9 +929,9 @@ class EventServiceTest {
             service.unfinalize(token = token(uid = "host"), id = event.id)
                 .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
         error.message shouldContain "already-rated"
-        // The event stays finalized and its award stays live — nothing was reversed.
+        // The event stays finalized and its awards stay live — nothing was reversed (both placements).
         events.findById(id = event.id)!!.isFinalized.shouldBeTrue()
-        awardRepo.listActiveByEvent(eventId = event.id) shouldHaveSize 1
+        awardRepo.listActiveByEvent(eventId = event.id) shouldHaveSize 2
     }
 
     @Test
@@ -933,13 +942,21 @@ class EventServiceTest {
         rate(userId = p1.id, level = "4.0")
         rate(userId = p2.id, level = "4.0")
         val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id))
-        seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2, designated = 30)
+        seedCompletedFixture(
+            eventId = event.id,
+            host = host,
+            p1 = p1,
+            p2 = p2,
+            designated = null,
+            placementBracket = PlacementBracket.SUPER_FINALS,
+        )
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
-        awardRepo.listActiveByEvent(eventId = event.id) shouldHaveSize 1
+        // A Super Finals placement match pays both players → two active awards.
+        awardRepo.listActiveByEvent(eventId = event.id) shouldHaveSize 2
 
         service.unfinalize(token = token(uid = "host"), id = event.id).shouldBeRight()
 
-        // No active awards remain for the event; the original flips to REVOKED and a marker row is appended.
+        // No active awards remain for the event; each original flips to REVOKED and a marker row is appended.
         awardRepo.listActiveByEvent(eventId = event.id) shouldHaveSize 0
         val rows = awardRepo.listByUser(userId = p1.id)
         rows shouldHaveSize 2
@@ -948,9 +965,9 @@ class EventServiceTest {
         marker.status shouldBe AwardStatus.REVOKED
         marker.points shouldBe BigDecimal("0.0000")
         marker.reason.shouldNotBeNull() shouldContain "Reversed on un-finalize"
-        // The reversal is audited with the revoked count.
+        // The reversal is audited with the revoked count (both placement awards).
         AuditRepository().list(actions = listOf(element = AuditAction.EVENT_UNFINALIZED), limit = 10, offset = 0)
-            .first.single().details["awardsRevoked"] shouldBe "1"
+            .first.single().details["awardsRevoked"] shouldBe "2"
     }
 
     @Test
@@ -961,14 +978,21 @@ class EventServiceTest {
         rate(userId = p1.id, level = "4.0")
         rate(userId = p2.id, level = "4.0")
         val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id))
-        seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2, designated = 30)
+        seedCompletedFixture(
+            eventId = event.id,
+            host = host,
+            p1 = p1,
+            p2 = p2,
+            designated = null,
+            placementBracket = PlacementBracket.SUPER_FINALS,
+        )
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
         service.unfinalize(token = token(uid = "host"), id = event.id).shouldBeRight()
 
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
 
-        // A fresh ACTIVE award exists after re-finalize; the earlier one stays revoked.
-        awardRepo.listActiveByEvent(eventId = event.id) shouldHaveSize 1
+        // Fresh ACTIVE awards exist after re-finalize (both placements); the earlier ones stay revoked.
+        awardRepo.listActiveByEvent(eventId = event.id) shouldHaveSize 2
     }
 
     @Test
@@ -1759,7 +1783,11 @@ class EventServiceTest {
         return CircuitRepository().create(command = CreateCircuitCommand(name = "NORTH", createdBy = creator.id)).id
     }
 
-    /** Seed a COMPLETED singles fixture designating [designated], won by team1 (p1). */
+    /**
+     * Seed a COMPLETED singles fixture won by team1 (p1). [placementBracket] marks it a tournament
+     * placement match (#525) — the only kind that pays tournament points; [designated] is legacy and
+     * ignored by awarding now.
+     */
     private fun seedCompletedFixture(
         eventId: UUID,
         host: User,
@@ -1769,6 +1797,7 @@ class EventServiceTest {
         format: TeamType = TeamType.SINGLES,
         team1UserIds: List<UUID> = listOf(element = p1.id),
         team2UserIds: List<UUID> = listOf(element = p2.id),
+        placementBracket: PlacementBracket? = null,
     ): Match {
         val match =
             matchRepo.createFixture(
@@ -1784,6 +1813,8 @@ class EventServiceTest {
                         createdBy = host.id,
                         eventId = eventId,
                         designatedPoints = designated,
+                        isPlacementMatch = placementBracket != null,
+                        placementBracket = placementBracket,
                     ),
             )
         recordResult(match = match)
@@ -1796,31 +1827,39 @@ class EventServiceTest {
     ) = RatingRepository().setRating(userId = userId, rating = BigDecimal(level), level = level)
 
     @Test
-    fun `finalizing a TOURNAMENT event awards each winner the full designated points with the event window (#403)`() {
+    fun `finalizing a TOURNAMENT event awards placement points from the sanction-selected table (#525)`() {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val p1 = provision(uid = "p1")
         val p2 = provision(uid = "p2")
         rate(userId = p1.id, level = "4.0")
         rate(userId = p2.id, level = "4.0")
+        // The event has no club, so the tournament is unsanctioned → 1st = 40, 2nd = 30.
         val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id))
-        seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2, designated = 30)
+        seedCompletedFixture(
+            eventId = event.id,
+            host = host,
+            p1 = p1,
+            p2 = p2,
+            designated = null,
+            placementBracket = PlacementBracket.SUPER_FINALS,
+        )
 
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
 
-        // SINGLES → exactly one award row (the winner p1), the full 30 points.
-        awardRepo.listByUser(userId = p2.id) shouldHaveSize 0
-        val award = awardRepo.listByUser(userId = p1.id).single()
-        award.points shouldBe BigDecimal("30.0000")
-        award.band shouldBe "4.0"
-        award.eventId shouldBe event.id
-        award.sourceId shouldBe event.id.toString()
-        award.pointClass shouldBe org.skopeo.model.PointClass.SEASONAL_TOURNAMENT_1M
+        // Super Finals: winner p1 → 1st (40), loser p2 → 2nd (30).
+        val winner = awardRepo.listByUser(userId = p1.id).single()
+        winner.points shouldBe BigDecimal("40.0000")
+        winner.band shouldBe "4.0"
+        winner.eventId shouldBe event.id
+        winner.sourceId shouldBe event.id.toString()
+        winner.pointClass shouldBe org.skopeo.model.PointClass.ANNUAL_TOURNAMENT
         // Validity from the event window: start-of-day start, exclusive next-day after the end.
-        award.validFrom shouldBe LocalDate.now().atStartOfDay()
-        award.validUntil shouldBe LocalDate.now().plusDays(31).atStartOfDay()
-        // The award is audited.
+        winner.validFrom shouldBe LocalDate.now().atStartOfDay()
+        winner.validUntil shouldBe LocalDate.now().plusDays(31).atStartOfDay()
+        awardRepo.listByUser(userId = p2.id).single().points shouldBe BigDecimal("30.0000")
+        // The award summary totals both placements (40 + 30).
         AuditRepository().list(actions = listOf(element = AuditAction.EVENT_POINTS_AWARDED), limit = 10, offset = 0)
-            .first.single().details["totalPoints"] shouldBe "30"
+            .first.single().details["totalPoints"] shouldBe "70"
     }
 
     @Test
@@ -1841,29 +1880,27 @@ class EventServiceTest {
     }
 
     @Test
-    fun `finalize records one per-player audit entry targeting each awarded winner (#471)`() {
+    fun `finalize records one per-player audit entry targeting each awarded player (#471)`() {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val p1 = provision(uid = "p1")
         val p2 = provision(uid = "p2")
         rate(userId = p1.id, level = "4.0")
         rate(userId = p2.id, level = "4.0")
         val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id))
-        // Two SINGLES fixtures, each with a distinct winner (team1 wins), so both players are awarded.
-        val matchA = seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2, designated = 30)
-        val matchB =
+        // A Super Finals placement match pays both sides: winner p1 → 1st (40), loser p2 → 2nd (30).
+        val match =
             seedCompletedFixture(
                 eventId = event.id,
                 host = host,
-                p1 = p2,
-                p2 = p1,
-                designated = 20,
-                team1UserIds = listOf(element = p2.id),
-                team2UserIds = listOf(element = p1.id),
+                p1 = p1,
+                p2 = p2,
+                designated = null,
+                placementBracket = PlacementBracket.SUPER_FINALS,
             )
 
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
 
-        // One RANKING_POINTS_AWARDED entry per awarded winner, each targeting the player (USER), with the
+        // One RANKING_POINTS_AWARDED entry per awarded player, each targeting the player (USER), with the
         // finalizer as actor and the points/match in the detail (#471).
         val entries =
             AuditRepository()
@@ -1875,15 +1912,15 @@ class EventServiceTest {
         entries.map { it.entityId }.toSet() shouldBe setOf(p1.id, p2.id)
 
         val p1Entry = entries.single { it.entityId == p1.id }
-        p1Entry.details["points"] shouldBe "30"
-        p1Entry.details["matchId"] shouldBe matchA.id.toString()
-        p1Entry.details["matchPublicCode"] shouldBe matchA.publicCode
+        p1Entry.details["points"] shouldBe "40"
+        p1Entry.details["matchId"] shouldBe match.id.toString()
+        p1Entry.details["matchPublicCode"] shouldBe match.publicCode
         p1Entry.details["eventId"] shouldBe event.id.toString()
         p1Entry.details["band"] shouldBe "4.0"
 
         val p2Entry = entries.single { it.entityId == p2.id }
-        p2Entry.details["points"] shouldBe "20"
-        p2Entry.details["matchId"] shouldBe matchB.id.toString()
+        p2Entry.details["points"] shouldBe "30"
+        p2Entry.details["matchId"] shouldBe match.id.toString()
     }
 
     @Test
@@ -1894,12 +1931,20 @@ class EventServiceTest {
         rate(userId = p1.id, level = "4.0")
         rate(userId = p2.id, level = "4.0")
         val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id))
-        val match = seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2, designated = 30)
+        val match =
+            seedCompletedFixture(
+                eventId = event.id,
+                host = host,
+                p1 = p1,
+                p2 = p2,
+                designated = null,
+                placementBracket = PlacementBracket.SUPER_FINALS,
+            )
 
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
 
-        // The winner's award is tagged with the exact fixture that granted it (#448) — the audit links
-        // straight to that match — while still carrying the event link for the fallback.
+        // The winner's award is tagged with the exact placement match that granted it (#448) — the audit
+        // links straight to that match — while still carrying the event link for the fallback.
         val award = awardRepo.listByUser(userId = p1.id).single()
         award.matchId shouldBe match.id
         award.eventId shouldBe event.id
@@ -1946,25 +1991,27 @@ class EventServiceTest {
         val d = provision(uid = "d")
         listOf(a, b, c, d).forEach { rate(userId = it.id, level = "3.5") }
         val event = budgetedEvent(hostUid = "host", participants = listOf(a.id, b.id, c.id, d.id), type = EventType.TOURNAMENT)
+        // Doubles Super Finals: winning pair (a, b) each place 1st (40); losing pair (c, d) each place 2nd (30).
         seedCompletedFixture(
             eventId = event.id,
             host = host,
             p1 = a,
             p2 = c,
-            designated = 40,
+            designated = null,
             format = TeamType.DOUBLES,
             team1UserIds = listOf(a.id, b.id),
             team2UserIds = listOf(c.id, d.id),
+            placementBracket = PlacementBracket.SUPER_FINALS,
         )
 
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
 
-        // Both winning-team members get the FULL 40 (two rows of 40, not a split).
+        // Both winning-team members get the FULL 1st-place points (two rows of 40, not a split).
         awardRepo.listByUser(userId = a.id).single().points shouldBe BigDecimal("40.0000")
         awardRepo.listByUser(userId = b.id).single().points shouldBe BigDecimal("40.0000")
-        // Losers get nothing.
-        awardRepo.listByUser(userId = c.id) shouldHaveSize 0
-        awardRepo.listByUser(userId = d.id) shouldHaveSize 0
+        // Both losing-team members get 2nd-place points.
+        awardRepo.listByUser(userId = c.id).single().points shouldBe BigDecimal("30.0000")
+        awardRepo.listByUser(userId = d.id).single().points shouldBe BigDecimal("30.0000")
     }
 
     @Test
@@ -2050,7 +2097,7 @@ class EventServiceTest {
     }
 
     @Test
-    fun `the award's point class maps the event window length to the nearest class (#403)`() {
+    fun `placement awards use the ANNUAL_TOURNAMENT point class regardless of the event window (#525)`() {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
 
         fun finalizeWithWindow(
@@ -2061,17 +2108,23 @@ class EventServiceTest {
             val p1 = provision(uid = p1uid)
             val p2 = provision(uid = p2uid)
             rate(userId = p1.id, level = "4.0")
+            rate(userId = p2.id, level = "4.0")
             val event =
                 budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id), type = EventType.TOURNAMENT, validityDays = days)
-            seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2, designated = 20)
+            seedCompletedFixture(
+                eventId = event.id,
+                host = host,
+                p1 = p1,
+                p2 = p2,
+                designated = null,
+                placementBracket = PlacementBracket.SUPER_FINALS,
+            )
             service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
             return awardRepo.listByUser(userId = p1.id).single().pointClass
         }
 
-        // ≤31d → 1M, ≤92d → 3M, ≤184d → 6M, else ANNUAL — all four when-arms.
-        finalizeWithWindow(days = 20, p1uid = "a1", p2uid = "a2") shouldBe org.skopeo.model.PointClass.SEASONAL_TOURNAMENT_1M
-        finalizeWithWindow(days = 60, p1uid = "b1", p2uid = "b2") shouldBe org.skopeo.model.PointClass.SEASONAL_TOURNAMENT_3M
-        finalizeWithWindow(days = 120, p1uid = "c1", p2uid = "c2") shouldBe org.skopeo.model.PointClass.SEASONAL_TOURNAMENT_6M
+        // Placement points always carry ANNUAL_TOURNAMENT (#525) — the old window→class mapping is gone.
+        finalizeWithWindow(days = 20, p1uid = "a1", p2uid = "a2") shouldBe org.skopeo.model.PointClass.ANNUAL_TOURNAMENT
         finalizeWithWindow(days = 300, p1uid = "d1", p2uid = "d2") shouldBe org.skopeo.model.PointClass.ANNUAL_TOURNAMENT
     }
 
@@ -2096,10 +2149,11 @@ class EventServiceTest {
                         team2Name = "t2",
                         createdBy = host.id,
                         eventId = event.id,
-                        designatedPoints = 30,
+                        isPlacementMatch = true,
+                        placementBracket = PlacementBracket.SUPER_FINALS,
                     ),
             )
-        // team2 (p2) wins → the winningUserIds team2 arm is exercised.
+        // team2 (p2) wins the Super Finals → p2 places 1st (40), the team1 loser places 2nd (30).
         matchRepo.addResult(
             matchId = match.id,
             sets = listOf(element = MatchSetResult(setNumber = 1, team1Games = 4, team2Games = 6, winnerTeamId = match.team2.teamId)),
@@ -2109,7 +2163,71 @@ class EventServiceTest {
         )
 
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
-        awardRepo.listByUser(userId = p2.id).single().points shouldBe BigDecimal("30.0000")
-        awardRepo.listByUser(userId = p1.id) shouldHaveSize 0
+        awardRepo.listByUser(userId = p2.id).single().points shouldBe BigDecimal("40.0000")
+        awardRepo.listByUser(userId = p1.id).single().points shouldBe BigDecimal("30.0000")
+    }
+
+    @Test
+    fun `a sanctioned club's tournament awards the full placement table (#525)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        rate(userId = p1.id, level = "4.0")
+        rate(userId = p2.id, level = "4.0")
+        val club = clubs.create(command = CreateClubCommand(name = "Downtown TC", createdBy = host.id))
+        clubs.setSanction(id = club.id, sanctioned = true)
+        val event =
+            service.create(
+                token = token(uid = "host"),
+                input =
+                    input(
+                        type = EventType.TOURNAMENT,
+                        participants = listOf(p1.id, p2.id),
+                        clubId = club.id,
+                        circuitId = seedCircuit(hostUid = "host"),
+                        minPoints = 10,
+                        maxPoints = 50,
+                        validityStart = LocalDate.now(),
+                        validityEnd = LocalDate.now().plusDays(30),
+                    ),
+            ).shouldBeRight().event
+        seedCompletedFixture(
+            eventId = event.id,
+            host = host,
+            p1 = p1,
+            p2 = p2,
+            designated = null,
+            placementBracket = PlacementBracket.SUPER_FINALS,
+        )
+
+        service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+
+        // Sanctioned Super Finals: winner p1 → 1st (80), loser p2 → 2nd (60).
+        awardRepo.listByUser(userId = p1.id).single().points shouldBe BigDecimal("80.0000")
+        awardRepo.listByUser(userId = p2.id).single().points shouldBe BigDecimal("60.0000")
+    }
+
+    @Test
+    fun `a Plate Finals awards 3rd and 4th place, and an unrated placer is skipped (#525)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        // p1 (winner) is rated → 3rd place; p2 (loser) has no rating → no band → skipped.
+        rate(userId = p1.id, level = "4.0")
+        val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id))
+        seedCompletedFixture(
+            eventId = event.id,
+            host = host,
+            p1 = p1,
+            p2 = p2,
+            designated = null,
+            placementBracket = PlacementBracket.PLATE_FINALS,
+        )
+
+        service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+
+        // Unsanctioned Plate Finals: winner p1 → 3rd (20); the unrated loser p2 is skipped.
+        awardRepo.listByUser(userId = p1.id).single().points shouldBe BigDecimal("20.0000")
+        awardRepo.listByUser(userId = p2.id) shouldHaveSize 0
     }
 }
