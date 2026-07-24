@@ -36,6 +36,10 @@ import kotlin.random.Random
  *  - Events occur at a fixed cadence (randomness is in outcomes, not timing); the score is read at a
  *    uniformly-random instant in a steady window well past the longest validity.
  *
+ * Part 2 (#530) adds population point-spread & collisions over time; Part 3 (#530) evaluates an
+ * alternative open-play scheme — game-margin Fibonacci, fib(2+margin) to the set winner — head-to-head
+ * against the current band-difference scheme on the same population.
+ *
  * Output: /tmp/points_ranking.txt and presentations/points_ranking.md (git-ignored). The curated
  * tables live in docs/product/POINTS_RANKING_SIMULATION_STUDY.md.  Run: ./gradlew generatePointsSimulationReport
  */
@@ -114,6 +118,23 @@ class PointsRankingSimulationReport {
 
         // Per-player seed offsets so each scenario/population draw is independent yet reproducible.
         private const val POPULATION_SEED = 900L
+
+        // --- #530 Part 3: alternative game-margin Fibonacci open-play scheme ---
+        // The set WINNER gets fib(2 + margin), margin = winnerGames − loserGames clamped at 6; the
+        // loser (and a draw) get 0. fib(2+m) for m = 0..6 → [1,2,3,5,8,13,21], with m = 0 (a draw)
+        // forced to 0. Indexed by margin (0 = draw). No bands, no ALP, no negatives.
+        @Suppress("MagicNumber") // the fib(2+margin) award table, indexed by margin 0..6 (0 = draw = 0 pts)
+        private val FIB_MARGIN_POINTS = doubleArrayOf(0.0, 2.0, 3.0, 5.0, 8.0, 13.0, 21.0)
+
+        // Winner set-score margin mix over legal scores: 7-6→1, {6-4,7-5}→2, 6-3→3, 6-2→4, 6-1→5, 6-0→6.
+        // Weights are indexed by (margin − 1), i.e. margins 1..6. A fixed, documented mix (not skill-dependent).
+        @Suppress("MagicNumber") // documented set-score margin distribution (margins 1..6)
+        private val MARGIN_WEIGHTS = doubleArrayOf(0.18, 0.25, 0.20, 0.15, 0.12, 0.10)
+        private const val MAX_MARGIN = 6
+
+        // Part 3 reuses the baseline scenario (×1, 2mo/6mo) so only the open-play point function differs
+        // between the two schemes; the Fibonacci run uses a distinct seed tag for independent draws.
+        private const val FIB_SEED_TAG = 4_242
     }
 
     private enum class SkillClass(val label: String, val winRate: Double, val placementChance: Double) {
@@ -195,6 +216,29 @@ class PointsRankingSimulationReport {
             relation < P_EQUAL + P_PLAYER_HIGHER -> if (won) WIN_FAVORITE else RLP_UPSET + alp(rng = rng)
             else -> if (won) WIN_UPSET else RLP_FAVORITE + alp(rng = rng)
         }
+    }
+
+    /**
+     * Alternative open-play scheme (#530 Part 3): the set winner gets fib(2 + margin) from
+     * [FIB_MARGIN_POINTS]; the loser (a lost set) gets 0. Win/loss is the class win rate; the winning
+     * margin is drawn from [MARGIN_WEIGHTS]. No bands, no ALP, no negatives.
+     */
+    private fun fibMarginOpenPlayPoints(
+        rng: Random,
+        winRate: Double,
+    ): Double {
+        if (rng.nextDouble() >= winRate) return 0.0
+        val draw = rng.nextDouble()
+        var acc = 0.0
+        var margin = MAX_MARGIN
+        for (i in MARGIN_WEIGHTS.indices) {
+            acc += MARGIN_WEIGHTS[i]
+            if (draw < acc) {
+                margin = i + 1
+                break
+            }
+        }
+        return FIB_MARGIN_POINTS[margin]
     }
 
     /** Points to the player from one tournament (0 if they did not place). */
@@ -446,6 +490,54 @@ class PointsRankingSimulationReport {
             append(section5(skills = skills, archetype = archetype, expectedOpen = expectedOpen, expectedTourney = expectedTourney))
             append(section6(baseline = baseline))
             append(section7(all = allScenarioScores))
+            append(section8(assignments = assignments))
+        }
+    }
+
+    /** #530 Part 3: the current band scheme vs the game-margin Fibonacci scheme on the same population. */
+    private fun section8(assignments: List<Pair<SkillClass, BehaviorClass>>): String {
+        val baseline = scenarios.first()
+        val band = scenarioScores(scenario = baseline, assignments = assignments)
+        val fib =
+            scenarioScores(scenario = baseline, assignments = assignments, openFn = ::fibMarginOpenPlayPoints, seedTag = FIB_SEED_TAG)
+        return buildString {
+            append("\n## 8. Alternative open-play scheme — game-margin Fibonacci vs band difference (#530)\n\n")
+            append(
+                "_Same $POPULATION-player population & default policy (×1 scale, open 2 mo / tourney 6 mo); " +
+                    "only the open-play point function differs. Band = current design (increments {−2,0,1,2,3,5}); " +
+                    "Fib = fib(2+margin) to the set winner (increments {2,3,5,8,13,21}). Range = min–max player total._\n\n",
+            )
+            append(
+                row(
+                    cells =
+                        listOf(
+                            "Horizon",
+                            "band sd", "band range", "band distinct", "band coll%",
+                            "fib sd", "fib range", "fib distinct", "fib coll%",
+                        ),
+                ),
+            )
+            append(row(cells = listOf("---", "---:", "---:", "---:", "---:", "---:", "---:", "---:", "---:")))
+            HORIZONS.forEach { (days, label) ->
+                val b = spreadStats(scores = band.getValue(key = days))
+                val f = spreadStats(scores = fib.getValue(key = days))
+                append(
+                    row(
+                        cells =
+                            listOf(
+                                label,
+                                fmt(value = b.sd),
+                                "${fmt(value = b.min)}–${fmt(value = b.max)}",
+                                b.distinctCount.toString(),
+                                "${fmt(value = b.collisionPct)}%",
+                                fmt(value = f.sd),
+                                "${fmt(value = f.min)}–${fmt(value = f.max)}",
+                                f.distinctCount.toString(),
+                                "${fmt(value = f.collisionPct)}%",
+                            ),
+                    ),
+                )
+            }
         }
     }
 
@@ -567,12 +659,17 @@ class PointsRankingSimulationReport {
         return items[hit ?: items.lastIndex]
     }
 
-    /** One player's full event timeline over [0, MAX_HORIZON], points scaled and tagged with validity. */
+    /**
+     * One player's full event timeline over [0, MAX_HORIZON], points scaled and tagged with validity.
+     * [openFn] is the open-play point function — the current band scheme by default; Part 3 passes the
+     * Fibonacci-margin scheme to compare the two on the same population.
+     */
     private fun playerStream(
         skill: SkillClass,
         behavior: BehaviorClass,
         scenario: Scenario,
         rng: Random,
+        openFn: (Random, Double) -> Double = ::openPlayPoints,
     ): List<Ev> {
         val out = ArrayList<Ev>()
         behavior.openSpacingDays?.let { spacing ->
@@ -582,7 +679,7 @@ class PointsRankingSimulationReport {
                     element =
                         Ev(
                             time = t,
-                            points = openPlayPoints(rng = rng, winRate = skill.winRate) * scenario.scale,
+                            points = openFn(rng, skill.winRate) * scenario.scale,
                             validity = scenario.openValidity,
                         ),
                 )
@@ -615,11 +712,13 @@ class PointsRankingSimulationReport {
     private fun scenarioScores(
         scenario: Scenario,
         assignments: List<Pair<SkillClass, BehaviorClass>>,
+        openFn: (Random, Double) -> Double = ::openPlayPoints,
+        seedTag: Int = scenario.label.hashCode(),
     ): Map<Int, DoubleArray> {
         val perHorizon = HORIZONS.associate { (days, _) -> days to DoubleArray(size = POPULATION) }
         assignments.forEachIndexed { idx, (skill, behavior) ->
-            val rng = Random(seed = SEED + scenario.label.hashCode() + idx)
-            val stream = playerStream(skill = skill, behavior = behavior, scenario = scenario, rng = rng)
+            val rng = Random(seed = SEED + seedTag + idx)
+            val stream = playerStream(skill = skill, behavior = behavior, scenario = scenario, rng = rng, openFn = openFn)
             HORIZONS.forEach { (days, _) -> perHorizon.getValue(key = days)[idx] = activeScoreAt(stream = stream, horizon = days) }
         }
         return perHorizon
