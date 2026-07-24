@@ -7,6 +7,7 @@ import { EventOrganizerTab } from "./EventOrganizerTab";
 const {
   useGetApiV1Events,
   useGetApiV1Clubs,
+  useGetApiV1Circuits,
   useGetApiV1PointsPolicies,
   useGetApiV1UsersMe,
   createMutate,
@@ -14,6 +15,7 @@ const {
 } = vi.hoisted(() => ({
   useGetApiV1Events: vi.fn(),
   useGetApiV1Clubs: vi.fn(),
+  useGetApiV1Circuits: vi.fn(),
   useGetApiV1PointsPolicies: vi.fn(),
   useGetApiV1UsersMe: vi.fn(),
   createMutate: vi.fn(),
@@ -33,6 +35,7 @@ vi.mock("@/api/generated/events/events", () => ({
   }),
 }));
 vi.mock("@/api/generated/clubs/clubs", () => ({ useGetApiV1Clubs }));
+vi.mock("@/api/generated/circuits/circuits", () => ({ useGetApiV1Circuits }));
 vi.mock("@/api/generated/points-budget/points-budget", () => ({
   useGetApiV1PointsPolicies,
 }));
@@ -105,6 +108,7 @@ describe("EventOrganizerTab", () => {
     state.fail = false;
     useGetApiV1Events.mockReturnValue({ data: [], isLoading: false });
     useGetApiV1Clubs.mockReturnValue({ data: [], isLoading: false });
+    useGetApiV1Circuits.mockReturnValue({ data: [], isLoading: false });
     // Default global policies: OPEN_PLAY 1..10/30d, LEAGUE 5..50/90d, TOURNAMENT 10..500/365d (V16 seeds).
     useGetApiV1PointsPolicies.mockReturnValue({
       data: [
@@ -616,7 +620,7 @@ describe("EventOrganizerTab", () => {
     await user.type(screen.getByLabelText("Name"), "Casual Meetup");
     await user.type(screen.getByLabelText("Start date"), "2026-06-01");
     await user.type(screen.getByLabelText("End date"), "2026-06-02");
-    await user.selectOptions(screen.getByLabelText("Type"), "TOURNAMENT");
+    await user.selectOptions(screen.getByLabelText("Type"), "LEAGUE");
 
     // Checkbox left unchecked → the create payload carries no points fields.
     await user.click(screen.getByRole("button", { name: "Create event" }));
@@ -625,8 +629,38 @@ describe("EventOrganizerTab", () => {
         name: "Casual Meetup",
         startDate: "2026-06-01",
         endDate: "2026-06-02",
+        type: "LEAGUE",
+        participantIds: [],
+      },
+    });
+  });
+
+  it("requires and sends a circuit for a TOURNAMENT event (#525)", async () => {
+    useGetApiV1Circuits.mockReturnValue({
+      data: [{ id: "cir1", name: "NORTH", isActive: true }],
+      isLoading: false,
+    });
+    const user = userEvent.setup();
+    renderTab();
+    await user.type(screen.getByLabelText("Name"), "City Open");
+    await user.type(screen.getByLabelText("Start date"), "2026-06-01");
+    await user.type(screen.getByLabelText("End date"), "2026-06-02");
+    await user.selectOptions(screen.getByLabelText("Type"), "TOURNAMENT");
+
+    // The circuit picker appears only for tournaments, and Create stays disabled until one is chosen.
+    expect(screen.getByRole("button", { name: "Create event" })).toBeDisabled();
+    expect(createMutate).not.toHaveBeenCalled();
+
+    await user.selectOptions(screen.getByLabelText("Circuit"), "cir1");
+    await user.click(screen.getByRole("button", { name: "Create event" }));
+    expect(createMutate).toHaveBeenCalledWith({
+      data: {
+        name: "City Open",
+        startDate: "2026-06-01",
+        endDate: "2026-06-02",
         type: "TOURNAMENT",
         participantIds: [],
+        circuitId: "cir1",
       },
     });
   });

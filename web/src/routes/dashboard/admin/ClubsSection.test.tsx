@@ -12,6 +12,7 @@ const {
   removeMutate,
   renameMutate,
   deleteMutate,
+  sanctionMutate,
   state,
 } = vi.hoisted(() => ({
   useGetApiV1Clubs: vi.fn(),
@@ -20,6 +21,7 @@ const {
   removeMutate: vi.fn(),
   renameMutate: vi.fn(),
   deleteMutate: vi.fn(),
+  sanctionMutate: vi.fn(),
   state: {
     createFail: false,
     createPending: false,
@@ -64,6 +66,12 @@ vi.mock("@/api/generated/clubs/clubs", () => ({
     isPending: false,
     mutateAsync: async (vars: unknown) => {
       removeMutate(vars);
+    },
+  }),
+  usePatchApiV1ClubsIdSanction: () => ({
+    isPending: false,
+    mutateAsync: async (vars: unknown) => {
+      sanctionMutate(vars);
     },
   }),
 }));
@@ -381,6 +389,31 @@ describe("ClubsSection", () => {
     await user.click(screen.getByRole("button", { name: "Confirm delete" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Could not delete the club.",
+    );
+  });
+
+  it("toggles a club's tournament sanction (#525)", async () => {
+    useGetApiV1Clubs.mockReturnValue({
+      data: [
+        {
+          id: "c1",
+          name: "Downtown TC",
+          isActive: true,
+          owners: [],
+          tournamentsSanctioned: false,
+        },
+      ],
+      isLoading: false,
+    });
+    const user = userEvent.setup();
+    renderSection();
+
+    await user.click(screen.getByRole("checkbox", { name: "Tournaments sanctioned" }));
+    await waitFor(() =>
+      expect(sanctionMutate).toHaveBeenCalledWith({
+        id: "c1",
+        data: { sanctioned: true },
+      }),
     );
   });
 });

@@ -385,6 +385,43 @@ describe('EventDetail', () => {
     )
   })
 
+  it('schedules a tournament placement match with a bracket (#525)', async () => {
+    useGetApiV1EventsId.mockReturnValue({
+      data: { ...event, type: 'TOURNAMENT' },
+      isLoading: false,
+    })
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.selectOptions(screen.getByLabelText('Player 1'), 'u1')
+    await user.selectOptions(screen.getByLabelText('Player 2'), 'u2')
+    await user.type(screen.getByLabelText('Date'), '2026-03-02')
+    await user.click(screen.getByLabelText('Placement match'))
+    await user.selectOptions(screen.getByLabelText('Placement'), 'PLATE_FINALS')
+
+    await user.click(screen.getByRole('button', { name: 'Schedule fixture' }))
+    expect(createFixtureMutate).toHaveBeenCalledWith(
+      {
+        data: {
+          matchFormat: 'SINGLES',
+          matchType: 'OPEN_PLAY',
+          matchDate: '2026-03-02',
+          team1: ['u1'],
+          team2: ['u2'],
+          eventId: 'e1',
+          isPlacementMatch: true,
+          placementBracket: 'PLATE_FINALS',
+        },
+      },
+      expect.anything(),
+    )
+  })
+
+  it('does not show the placement input for a non-tournament event (#525)', () => {
+    renderDetail()
+    expect(screen.queryByLabelText('Placement match')).not.toBeInTheDocument()
+  })
+
   it('hides the handicap input until the "Apply handicap" box is ticked, and clears it on un-tick (#486)', async () => {
     const user = userEvent.setup()
     renderDetail()

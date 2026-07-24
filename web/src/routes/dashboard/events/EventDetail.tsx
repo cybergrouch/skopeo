@@ -144,6 +144,11 @@ export function EventDetail({
   const [matchType, setMatchType] =
     useState<(typeof MATCH_TYPES)[number]>("OPEN_PLAY");
   const [date, setDate] = useState("");
+  // Tournament placement match (#525): mark a fixture as deciding a placement + which bracket.
+  const [isPlacement, setIsPlacement] = useState(false);
+  const [placementBracket, setPlacementBracket] = useState<
+    "SUPER_FINALS" | "PLATE_FINALS"
+  >("SUPER_FINALS");
   const [fixtureError, setFixtureError] = useState<string | null>(null);
   const [rosterError, setRosterError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -244,6 +249,7 @@ export function EventDetail({
         setTeam2a("");
         setTeam2b("");
         setDate("");
+        setIsPlacement(false);
         void queryClient.invalidateQueries({
           queryKey: getGetApiV1MatchesQueryKey(),
         });
@@ -466,6 +472,8 @@ export function EventDetail({
   }
 
   const isDoubles = format !== "SINGLES";
+  // Placement-match input is only meaningful for a tournament (#525).
+  const isTournament = event?.type === "TOURNAMENT";
   // Only the slots this format uses; "b" slots participate for doubles/mixed doubles.
   const chosen = isDoubles
     ? [team1a, team1b, team2a, team2b]
@@ -528,6 +536,10 @@ export function EventDetail({
             : {}),
           ...(applyHandicap && team2HandicapDraft !== ""
             ? { team2Handicap: team2HandicapDraft }
+            : {}),
+          // Tournament placement match (#525): winner/loser get placement points at finalize.
+          ...(isTournament && isPlacement
+            ? { isPlacementMatch: true, placementBracket }
             : {}),
         },
       },
@@ -1173,6 +1185,47 @@ export function EventDetail({
                       />
                     </div>
                   </div>
+                  {/* Placement match (#525): only for tournaments. Marks the fixture as a Super/Plate
+                      Finals so its winner/loser get placement points (1st/2nd or 3rd/4th) at finalize. */}
+                  {isTournament ? (
+                    <div className="space-y-2 rounded-md border border-input p-3">
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={isPlacement}
+                          onChange={(e) => setIsPlacement(e.target.checked)}
+                          aria-label="Placement match"
+                        />
+                        Placement match
+                      </label>
+                      {isPlacement ? (
+                        <div className="space-y-1">
+                          <Label htmlFor="event-placement" className="text-xs">
+                            Placement
+                          </Label>
+                          <select
+                            id="event-placement"
+                            className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                            value={placementBracket}
+                            onChange={(e) =>
+                              setPlacementBracket(
+                                e.target.value as
+                                  | "SUPER_FINALS"
+                                  | "PLATE_FINALS",
+                              )
+                            }
+                          >
+                            <option value="SUPER_FINALS">
+                              Super Finals (1st / 2nd)
+                            </option>
+                            <option value="PLATE_FINALS">
+                              Plate Finals (3rd / 4th)
+                            </option>
+                          </select>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
                   {/* Fixture points (#466): the per-match "Award points for this match" checkbox appears
                       only when the event awards points; default checked. Un-ticking opts this match out. */}
                   {showDesignation ? (

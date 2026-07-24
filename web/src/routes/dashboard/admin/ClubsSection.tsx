@@ -18,6 +18,7 @@ import {
   useDeleteApiV1ClubsIdOwnersUserId,
   useGetApiV1Clubs,
   usePatchApiV1ClubsId,
+  usePatchApiV1ClubsIdSanction,
   usePostApiV1Clubs,
   usePostApiV1ClubsIdOwners,
 } from "@/api/generated/clubs/clubs";
@@ -117,7 +118,18 @@ function ClubRow({
   const remove = useDeleteApiV1ClubsIdOwnersUserId();
   const rename = usePatchApiV1ClubsId();
   const del = useDeleteApiV1ClubsId();
+  const sanction = usePatchApiV1ClubsIdSanction();
   const busy = assign.isPending || remove.isPending;
+
+  async function toggleSanction(sanctioned: boolean) {
+    setError(null);
+    try {
+      await sanction.mutateAsync({ id: club.id, data: { sanctioned } });
+      onChange();
+    } catch {
+      setError("Could not update the sanction setting.");
+    }
+  }
 
   const [editing, setEditing] = useState(false);
   const [nameDraft, setNameDraft] = useState(club.name);
@@ -245,6 +257,17 @@ function ClubRow({
           </>
         )}
       </div>
+      {/* Tournament sanction (#525): sanctioned clubs award the full placement table (2× unsanctioned). */}
+      <label className="flex items-center gap-2 text-sm text-muted-foreground">
+        <input
+          type="checkbox"
+          checked={club.tournamentsSanctioned ?? false}
+          disabled={sanction.isPending}
+          onChange={(e) => toggleSanction(e.target.checked)}
+          aria-label="Tournaments sanctioned"
+        />
+        Tournaments sanctioned
+      </label>
       {error ? (
         <p className="text-sm text-destructive" role="alert">
           {error}
