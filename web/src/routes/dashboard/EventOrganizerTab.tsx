@@ -16,6 +16,7 @@ import {
   usePostApiV1Events,
 } from "@/api/generated/events/events";
 import { useGetApiV1Clubs } from "@/api/generated/clubs/clubs";
+import { useGetApiV1Circuits } from "@/api/generated/circuits/circuits";
 import { useGetApiV1PointsPolicies } from "@/api/generated/points-budget/points-budget";
 import { useGetApiV1UsersMe } from "@/api/generated/users/users";
 import type {
@@ -71,6 +72,8 @@ function NewEventForm() {
   const [roster, setRoster] = useState<UserSummaryResponse[]>([]);
   // The event's class (#403); OPEN_PLAY is the default and the backward-compatible choice.
   const [type, setType] = useState<EventType>("OPEN_PLAY");
+  // The circuit a TOURNAMENT belongs to (#525); required for tournaments, ignored otherwise.
+  const [circuitId, setCircuitId] = useState("");
   const [error, setError] = useState<string | null>(null);
   // "Award ranking points" checkbox (#466): opt-in, default UNCHECKED → the event awards no points and
   // the config fields are hidden. Ticking it reveals + requires the per-match reward + validity window.
@@ -84,6 +87,8 @@ function NewEventForm() {
   // Clubs to optionally file the event under (#313). Readable by staff; empty when none exist.
   const clubsData = useGetApiV1Clubs().data;
   const clubs = clubsData ?? [];
+  // Circuits to file a TOURNAMENT under (#525). Staff-readable; empty when none exist.
+  const circuits = useGetApiV1Circuits().data ?? [];
   const me = useGetApiV1UsersMe().data;
   // Global per-type policy bounds (#403 Phase C), for the client-side hints + validation. A
   // non-manager caller simply gets nothing (retry off keeps a 403 quiet); the fields still render.
@@ -106,6 +111,7 @@ function NewEventForm() {
         setClubIdChoice(undefined);
         setRoster([]);
         setType("OPEN_PLAY");
+        setCircuitId("");
         setAwardPoints(false);
         setMinPoints("");
         setMaxPoints("");
@@ -181,6 +187,7 @@ function NewEventForm() {
           type,
           participantIds: roster.map((u) => u.id),
           ...(clubId ? { clubId } : {}),
+          ...(type === "TOURNAMENT" ? { circuitId } : {}),
           // Only send a points config when "Award ranking points" is ticked (#466); off = no points.
           ...(showPointsConfig
             ? {
@@ -203,7 +210,8 @@ function NewEventForm() {
     name.trim() !== "" &&
     startDate !== "" &&
     endDate !== "" &&
-    pointsError === null;
+    pointsError === null &&
+    (type !== "TOURNAMENT" || circuitId !== "");
 
   return (
     <Card>
@@ -267,6 +275,27 @@ function NewEventForm() {
               ))}
             </select>
           </div>
+          {/* Circuit picker (#525): a tournament must belong to a circuit; shown only for TOURNAMENT. */}
+          {type === "TOURNAMENT" ? (
+            <div className="space-y-1">
+              <Label htmlFor="event-circuit" className="text-xs">
+                Circuit
+              </Label>
+              <select
+                id="event-circuit"
+                value={circuitId}
+                onChange={(e) => setCircuitId(e.target.value)}
+                className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+              >
+                <option value="">Select a circuit…</option>
+                {circuits.map((circuit) => (
+                  <option key={circuit.id} value={circuit.id}>
+                    {circuit.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
           {clubs.length > 0 ? (
             <div className="space-y-1">
               <Label htmlFor="event-club" className="text-xs">

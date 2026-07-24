@@ -12,6 +12,7 @@ const {
   removeMutate,
   renameMutate,
   deleteMutate,
+  sanctionMutate,
   state,
 } = vi.hoisted(() => ({
   useGetApiV1Clubs: vi.fn(),
@@ -20,6 +21,7 @@ const {
   removeMutate: vi.fn(),
   renameMutate: vi.fn(),
   deleteMutate: vi.fn(),
+  sanctionMutate: vi.fn(),
   state: {
     createFail: false,
     createPending: false,
@@ -27,6 +29,7 @@ const {
     renamePending: false,
     deleteFail: false,
     deletePending: false,
+    sanctionFail: false,
   },
 }));
 
@@ -64,6 +67,13 @@ vi.mock("@/api/generated/clubs/clubs", () => ({
     isPending: false,
     mutateAsync: async (vars: unknown) => {
       removeMutate(vars);
+    },
+  }),
+  usePatchApiV1ClubsIdSanction: () => ({
+    isPending: false,
+    mutateAsync: async (vars: unknown) => {
+      sanctionMutate(vars);
+      if (state.sanctionFail) throw new Error("boom");
     },
   }),
 }));
@@ -114,6 +124,7 @@ describe("ClubsSection", () => {
     state.renamePending = false;
     state.deleteFail = false;
     state.deletePending = false;
+    state.sanctionFail = false;
     useGetApiV1Clubs.mockReturnValue({ data: [], isLoading: false });
   });
 
@@ -382,5 +393,51 @@ describe("ClubsSection", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Could not delete the club.",
     );
+  });
+
+  it("toggles a club's tournament sanction (#525)", async () => {
+    useGetApiV1Clubs.mockReturnValue({
+      data: [
+        {
+          id: "c1",
+          name: "Downtown TC",
+          isActive: true,
+          owners: [],
+          tournamentsSanctioned: false,
+        },
+      ],
+      isLoading: false,
+    });
+    const user = userEvent.setup();
+    renderSection();
+
+    await user.click(screen.getByRole("checkbox", { name: "Tournaments sanctioned" }));
+    await waitFor(() =>
+      expect(sanctionMutate).toHaveBeenCalledWith({
+        id: "c1",
+        data: { sanctioned: true },
+      }),
+    );
+  });
+
+  it("shows an error when the sanction toggle fails (#525)", async () => {
+    state.sanctionFail = true;
+    useGetApiV1Clubs.mockReturnValue({
+      data: [
+        {
+          id: "c1",
+          name: "Downtown TC",
+          isActive: true,
+          owners: [],
+          tournamentsSanctioned: false,
+        },
+      ],
+      isLoading: false,
+    });
+    const user = userEvent.setup();
+    renderSection();
+
+    await user.click(screen.getByRole("checkbox", { name: "Tournaments sanctioned" }));
+    expect(await screen.findByText("Could not update the sanction setting.")).toBeInTheDocument();
   });
 });
