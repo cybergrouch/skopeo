@@ -198,6 +198,17 @@ Points must remain **integers** (continuous/fractional points are a hard no), so
 
 **Recommended integer-only combination:** **longer validity + a margin/dominance component + standings tie-breakers**, with graduated bands and extra placement tiers as optional further separation. A follow-up can extend this simulation to quantify levers 2–3 (margin component, graduated bands) before adopting them.
 
+### Fixed-point: keep integers without losing fractional granularity
+
+The ~89% floor above is a *granularity* limit, not a *type* limit — and granularity does **not** require a fractional points type. Fractional points are simply **integer points at a finer scale**: pick a base unit small enough to represent every tuned increment exactly (like currency uses cents, not dollars), multiply the whole schedule by the least common denominator, and every value becomes a whole number with nothing lost. e.g. increments `{3, 2, 5, 0, −2, 1}` plus tuned `{0.5, 1.5, 0.25}` × 4 → `{12, 8, 20, 0, −8, 4, 2, 6, 1}` — all integers.
+
+The condition that makes this reduce collisions (rather than just relabel them): the resulting integer increments must be **diverse (GCD = 1)**.
+
+- **Uniform scaling of the current coarse set does nothing** — `{3,2,5,0,−2,1} × 100` are all multiples of 100, so the collision pattern is unchanged (this is why ×10 alone kept collisions ~99%).
+- **Integerizing *diverse fractional tuning* works** — `{12,8,20,4,2,6,1}` has GCD 1, so partial sums fill the integer line densely and collisions fall. The granularity must come from the *diversity of the tuned increments* (levers 2–3); fixed-point scaling preserves that diversity exactly as integers.
+
+So the practical path is: design the margin/graduated-band tuning in whatever fractional terms are natural, then **multiply the entire schedule by a common base unit** (e.g. ×100, "centi-points", for headroom) to ship **pure integers**. Storage is unaffected — the ledger `points` column is already a signed `DECIMAL` — and the display can be scaled down for legibility. The ×scale also raises the ceiling as a bonus. This removes the earlier "continuous points" caveat: the hard-no on a fractional *type* does not block the granularity benefit.
+
 ## References
 
 - Design of record: [`TOURNAMENTS_CIRCUITS_AND_OPEN_PLAY_POINTS.md`](./TOURNAMENTS_CIRCUITS_AND_OPEN_PLAY_POINTS.md) · Issue [#525](https://github.com/cybergrouch/skopeo/issues/525)
