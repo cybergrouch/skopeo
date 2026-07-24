@@ -1305,37 +1305,24 @@ class EventServiceTest {
     }
 
     @Test
-    fun `a budgeted event create rejects min below the global minimum (#403)`() {
+    fun `a budgeted event create allows a wide window now that the global policy is gone (#525)`() {
         provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
-        service.create(
-            token = token(uid = "host"),
-            // minPoints 1 is below LEAGUE's global min of 5.
-            input =
-                input(
-                    type = EventType.LEAGUE,
-                    minPoints = 1,
-                    maxPoints = 40,
-                    validityStart = LocalDate.now(),
-                    validityEnd = LocalDate.now().plusDays(10),
-                ),
-        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
-    }
-
-    @Test
-    fun `a budgeted event create rejects a validity window over the global maximum (#403)`() {
-        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
-        service.create(
-            token = token(uid = "host"),
-            // A 200-day validity window exceeds LEAGUE's 90-day max.
-            input =
-                input(
-                    type = EventType.LEAGUE,
-                    minPoints = 5,
-                    maxPoints = 40,
-                    validityStart = LocalDate.now(),
-                    validityEnd = LocalDate.now().plusDays(200),
-                ),
-        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        // Formerly rejected against LEAGUE's 5..50 / 90-day policy; the policy layer is removed (#525),
+        // so any well-formed window is accepted.
+        val ok =
+            service.create(
+                token = token(uid = "host"),
+                input =
+                    input(
+                        type = EventType.LEAGUE,
+                        minPoints = 1,
+                        maxPoints = 500,
+                        validityStart = LocalDate.now(),
+                        validityEnd = LocalDate.now().plusDays(400),
+                    ),
+            ).shouldBeRight()
+        ok.event.minPointsPerMatch shouldBe 1
+        ok.event.maxPointsPerMatch shouldBe 500
     }
 
     @Test
@@ -1400,21 +1387,7 @@ class EventServiceTest {
         service.create(token = token(uid = "host"), input = input(type = EventType.OPEN_PLAY, clubId = club.id))
             .shouldBeRight().event.minPointsPerMatch.shouldBeNull()
 
-        // A window beyond the global OPEN_PLAY max (10) is rejected.
-        service.create(
-            token = token(uid = "host"),
-            input =
-                input(
-                    type = EventType.OPEN_PLAY,
-                    clubId = club.id,
-                    minPoints = 2,
-                    maxPoints = 20,
-                    validityStart = start,
-                    validityEnd = end,
-                ),
-        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
-
-        // A valid window within the global 1..10 policy is stored.
+        // A well-formed window is stored (there is no longer a global ceiling, #525).
         val ok =
             service.create(
                 token = token(uid = "host"),
@@ -1459,28 +1432,8 @@ class EventServiceTest {
         attempt(min = 5, max = 0, end = start.plusDays(10))
         // Min greater than max.
         attempt(min = 40, max = 10, end = start.plusDays(10))
-        // Max above LEAGUE's global maximum of 50.
-        attempt(min = 5, max = 60, end = start.plusDays(10))
         // Validity end before start.
         attempt(min = 5, max = 40, end = start.minusDays(1))
-    }
-
-    @Test
-    fun `a budgeted event create is rejected when the type has no global policy (#403)`() {
-        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
-        // Remove the LEAGUE global policy so validatePointsWindow hits the missing-policy path.
-        transaction { exec(stmt = "DELETE FROM points_policies WHERE event_type = 'LEAGUE'") }
-        service.create(
-            token = token(uid = "host"),
-            input =
-                input(
-                    type = EventType.LEAGUE,
-                    minPoints = 5,
-                    maxPoints = 40,
-                    validityStart = LocalDate.now(),
-                    validityEnd = LocalDate.now().plusDays(10),
-                ),
-        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
     }
 
     @Test
@@ -1535,10 +1488,10 @@ class EventServiceTest {
     }
 
     @Test
-    fun `setPointsConfig accepts an OPEN_PLAY event within the global policy, but rejects out-of-range (#403)`() {
+    fun `setPointsConfig accepts an OPEN_PLAY event's well-formed window, but rejects an inverted one (#403)`() {
         provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val event = service.create(token = token(uid = "host"), input = input(type = EventType.OPEN_PLAY)).shouldBeRight().event
-        // OPEN_PLAY now carries a config like the other types; 2..5 is within the global 1..10 window.
+        // OPEN_PLAY carries a config like the other types; there is no global ceiling anymore (#525).
         val view =
             service.setPointsConfig(
                 token = token(uid = "host"),
@@ -1547,11 +1500,11 @@ class EventServiceTest {
             ).shouldBeRight()
         view.event.minPointsPerMatch shouldBe 2
         view.event.maxPointsPerMatch shouldBe 5
-        // A window beyond the global OPEN_PLAY max (10) is still rejected.
+        // A malformed window (min > max) is still rejected by the basic shape check.
         service.setPointsConfig(
             token = token(uid = "host"),
             id = event.id,
-            config = config(min = 2, max = 20, end = LocalDate.now().plusDays(10)),
+            config = config(min = 20, max = 2, end = LocalDate.now().plusDays(10)),
         ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
     }
 
@@ -1637,7 +1590,7 @@ class EventServiceTest {
     }
 
     @Test
-    fun `setPointsConfig rejects a window outside the global policy and a finalized event (#403)`() {
+    fun `setPointsConfig is frozen once the event is finalized (#403)`() {
         provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val event =
             service.create(
@@ -1652,11 +1605,7 @@ class EventServiceTest {
                     ),
             ).shouldBeRight().event
 
-        // A window above LEAGUE's global max of 50 is rejected via validatePointsWindow.
-        service.setPointsConfig(token = token(uid = "host"), id = event.id, config = config(min = 5, max = 60))
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
-
-        // Once finalized, the config is frozen.
+        // Once finalized, the config is frozen (the global-policy ceiling was removed in #525).
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
         service.setPointsConfig(token = token(uid = "host"), id = event.id, config = config(min = 6, max = 30))
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
@@ -1673,7 +1622,7 @@ class EventServiceTest {
         off.event.minPointsPerMatch.shouldBeNull()
         off.event.pointValidityStart.shouldBeNull()
 
-        // Checkbox on — a full config within LEAGUE's global 5..50 window is stored.
+        // Checkbox on — a full, well-formed config is stored (no global ceiling anymore, #525).
         val on =
             service.create(
                 token = token(uid = "host"),
@@ -1688,14 +1637,14 @@ class EventServiceTest {
             ).shouldBeRight()
         on.event.minPointsPerMatch shouldBe 5
 
-        // On but out of the global window → rejected. On but partial → rejected.
+        // On but malformed (min > max) → rejected. On but partial → rejected.
         service.create(
             token = token(uid = "host"),
             input =
                 input(
                     type = EventType.LEAGUE,
-                    minPoints = 1,
-                    maxPoints = 40,
+                    minPoints = 40,
+                    maxPoints = 1,
                     validityStart = LocalDate.now(),
                     validityEnd = LocalDate.now().plusDays(30),
                 ),

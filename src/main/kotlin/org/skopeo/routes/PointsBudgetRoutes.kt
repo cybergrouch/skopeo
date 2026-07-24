@@ -16,10 +16,8 @@ import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.points.SetClubBudgetRequest
-import org.skopeo.dto.points.SetPointsPolicyRequest
 import org.skopeo.dto.points.toResponse
 import org.skopeo.model.EventType
-import org.skopeo.model.PointsPolicy
 import org.skopeo.service.points.PointsBudgetService
 
 /**
@@ -31,38 +29,10 @@ fun Application.configurePointsBudgetRoutes(service: PointsBudgetService = Point
     routing {
         authenticate(FIREBASE_AUTH) {
             route(path = "/api/v1/points") {
-                pointsPolicyRoutes(service = service)
                 pointsBudgetReadRoutes(service = service)
             }
             clubBudgetWriteRoute(service = service)
             clubPointsSummaryRoute(service = service)
-        }
-    }
-}
-
-/** Read all policies and set one type's global policy (points-manager). */
-private fun Route.pointsPolicyRoutes(service: PointsBudgetService) {
-    get(path = "/policies") {
-        respondMappingErrors {
-            respondEither(result = service.policies(token = verifiedToken())) { policies ->
-                call.respond(status = HttpStatusCode.OK, message = policies.map { it.toResponse() })
-            }
-        }
-    }
-    put(path = "/policies/{eventType}") {
-        respondMappingErrors {
-            val eventType = parseEnumParam<EventType>(value = call.parameters["eventType"].orEmpty(), field = "eventType")
-            val body = call.receive<SetPointsPolicyRequest>()
-            val policy =
-                PointsPolicy(
-                    eventType = eventType,
-                    minPoints = body.minPoints,
-                    maxPoints = body.maxPoints,
-                    maxValidityDays = body.maxValidityDays,
-                )
-            respondEither(result = service.setPolicy(token = verifiedToken(), policy = policy)) { saved ->
-                call.respond(status = HttpStatusCode.OK, message = saved.toResponse())
-            }
         }
     }
 }
