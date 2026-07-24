@@ -237,6 +237,13 @@ class PointsRankingSimulationReport {
         val movedScore: DoubleArray,
     )
 
+    /** A candidate validity policy (#542 §13): a label plus open-play and tournament validity (days). */
+    private data class ValidityStance(
+        val label: String,
+        val openValidity: Int,
+        val tourneyValidity: Int,
+    )
+
     // Baseline is the current design; the others explore raising the ceiling toward ~10k and growing
     // variance. Scaling alone raises the ceiling but not the collision rate; long validity accumulates
     // points so variance keeps growing and collisions fall. "Recommended" combines both to reach ~10k.
@@ -597,7 +604,8 @@ class PointsRankingSimulationReport {
             )
         return section10(bands = bands, pooledBaseline = baseline, longScores = longScores) +
             section11(bands = bands, longScores = longScores) +
-            section12(movement = movement)
+            section12(movement = movement) +
+            section13(assignments = assignments, bands = bands)
     }
 
     private fun p4Row(
@@ -1243,6 +1251,71 @@ class PointsRankingSimulationReport {
                                 "${fmt(value = withMove)}%",
                                 fmt(value = snap.movedScore.average()),
                                 fmt(value = snap.pooledScore.average()),
+                            ),
+                    ),
+                )
+            }
+        }
+
+    /**
+     * #542 §13: validity-window recommendation. The legitimate recipe (Fibonacci-margin, ×1, band-scoped)
+     * is run across candidate (open, tournament) validity pairs on the SAME seeded draws (only the
+     * validity window differs), so the comparison isolates validity. Reported at the 3-year horizon:
+     * pooled vs band-scoped collisions, spread, mean active points, and the population point range.
+     */
+    private fun section13(
+        assignments: List<Pair<SkillClass, BehaviorClass>>,
+        bands: IntArray,
+    ): String =
+        buildString {
+            val stances =
+                listOf(
+                    ValidityStance(label = "Current (1mo / 6mo)", openValidity = V_1_MONTH, tourneyValidity = V_6_MONTHS),
+                    ValidityStance(label = "Seasonal (3mo / 12mo)", openValidity = V_3_MONTHS, tourneyValidity = V_12_MONTHS),
+                    ValidityStance(label = "Extended (6mo / 12mo)", openValidity = V_6_MONTHS, tourneyValidity = V_12_MONTHS),
+                    ValidityStance(label = "Long (12mo / 36mo)", openValidity = V_12_MONTHS, tourneyValidity = V_36_MONTHS),
+                )
+            append("\n## 13. Validity-window recommendation (#542)\n\n")
+            append(
+                "_Legitimate recipe (Fibonacci-margin, ×1) at the 3-year horizon, band-scoped. Each stance keeps " +
+                    "tournaments strictly longer than open play; windows map to the existing PointClass tiers " +
+                    "(open-play / SEASONAL_TOURNAMENT_*M / ANNUAL_TOURNAMENT). All stances run on the SAME seeded draws, " +
+                    "so only the validity window differs. Range = min–max player total (pooled)._\n\n",
+            )
+            append(
+                row(
+                    cells = listOf("Stance (open / tourney)", "pooled coll%", "band-scoped coll%", "sd", "mean pts", "range"),
+                ),
+            )
+            append(row(cells = listOf("---", "---:", "---:", "---:", "---:", "---:")))
+            stances.forEach { st ->
+                val scenario =
+                    Scenario(
+                        label = st.label,
+                        scale = 1.0,
+                        openValidity = st.openValidity,
+                        tourneyValidity = st.tourneyValidity,
+                    )
+                val scores =
+                    scenarioScores(
+                        scenario = scenario,
+                        assignments = assignments,
+                        openFn = ::fibMarginOpenPlayPoints,
+                        seedTag = PART5_SEED_TAG,
+                    )
+                val at3 = scores.getValue(key = H_3YR)
+                val pooled = spreadStats(scores = at3)
+                val bs = bandScoped(scores = at3, bands = bands)
+                append(
+                    row(
+                        cells =
+                            listOf(
+                                st.label,
+                                "${fmt(value = pooled.collisionPct)}%",
+                                "${fmt(value = bs.aggregateCollisionPct)}%",
+                                fmt(value = pooled.sd),
+                                fmt(value = pooled.mean),
+                                "${fmt(value = pooled.min)}–${fmt(value = pooled.max)}",
                             ),
                     ),
                 )

@@ -350,6 +350,31 @@ Collision % — pooled (one race) vs band-scoped (within each cohort), for the *
 | 2yr | 64.4% | 41.4% | 48.3% | 205.0 | 383.7 |
 | 3yr | 70.1% | 34.4% | 47.9% | 215.9 | 471.7 |
 
+### 13. Validity-window recommendation
+
+"Long validity" needs to be **defined and qualified**, not left as "as long as possible." This sweep runs the legitimate recipe (Fibonacci-margin, ×1, band-scoped) across four candidate `(open-play, tournament)` validity stances — tournaments always strictly longer than open play — on the **same seeded draws** (only the window differs), read at the 3-year horizon. Windows map onto the existing `PointClass` tiers (open-play, `SEASONAL_TOURNAMENT_{1,3,6}M`, `ANNUAL_TOURNAMENT` = 12 mo).
+
+| Stance (open / tourney) | pooled coll% | band-scoped coll% | sd | mean pts | range |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Current (1 mo / 6 mo) | 98.9% | 82.8% | 52.5 | 61.8 | 0 – 240 |
+| Seasonal (3 mo / 12 mo) | 97.1% | 64.3% | 94.2 | 140.5 | 0 – 502 |
+| Extended (6 mo / 12 mo) | 95.9% | 57.9% | 113.3 | 191.7 | 0 – 633 |
+| Long (12 mo / 36 mo) | 84.9% | 35.5% | 270.7 | 472.2 | 59 – 1,313 |
+
+**Reading the curve.** Every metric is monotonic in validity — longer windows lower collisions and widen spread — but the marginal gains and the costs are not uniform:
+
+- **The biggest single step is Current → Seasonal** (band-scoped 82.8% → 64.3%, −18.5 pp) for a modest change that stays inside existing tiers: open play 1 → 3 months, tournaments 6 → 12 months (annual).
+- **Extended adds little** (64.3% → 57.9%) for doubling open-play validity (3 → 6 mo) with tournaments unchanged at annual.
+- **Long is the only stance under 50%** (35.5%) — but it requires **36-month tournament validity**, which (a) exceeds every existing `PointClass` tier and (b) means a placement from *three years ago* still counts at full weight, which is hard to defend as "current form."
+
+**Recommendation: `Seasonal` (open play 3 months / tournament 12 months, annual) as the default, with `Extended` (open 6 months) as the tunable upper bound.** Rationale:
+
+1. **Currency of form.** Open play is weekly and low-signal; a **3-month (one-season)** window keeps the leaderboard reflecting recent play while accumulating enough matches to separate. Tournaments are prestige events; a **12-month (annual)** window lets a placement stay meaningful across the competitive cycle and bridges to next year's edition — exactly what `ANNUAL_TOURNAMENT` already encodes.
+2. **Maps onto existing config** — no new `PointClass` tier is needed (unlike Long's 36 mo).
+3. **Collisions are not validity's job to finish.** Validity should be chosen for *meaning*, not pushed to extremes to chase collisions — the residual is the job of a **tie-breaker** ([#544](https://github.com/cybergrouch/skopeo/issues/544): rating confidence). Picking `Long` purely to reach 35% trades away currency-of-form for a number the tie-breaker resolves anyway.
+
+So `long validity` is qualified as **tournaments outliving open play by roughly 4× and spanning the annual cycle** — concretely **open 3 mo / tournament 12 mo** — not "maximal."
+
 ## Findings (Part 5)
 
 - **Band-scoping alone is the biggest legitimate collision lever — bigger than any point-formula change.** Even the *current* scheme drops from **~99% pooled to ~80% band-scoped**, purely by measuring the race the way it is actually run. It costs nothing — the points design is unchanged; only the denominator (who competes with whom) changes.
@@ -360,7 +385,7 @@ Collision % — pooled (one race) vs band-scoped (within each cohort), for the *
 
 ## Recommendation (Part 5)
 
-**Measure and display standings per NTRP band cohort** — this is the single most effective, zero-cost collision reducer, and it matches how #525 already tags points. Combined with **long validity** (the Part 3–4 merit lever), it reaches ~35% collisions at steady state with **legible ~60–1,300-point ranges** and no reliance on the disqualified finer-increment / fixed-point machinery. Band movement is a real, second-order effect (it re-congests the low end and trims active means as players reset), so the standings UI should expect a meaningful churn of near-zero, freshly-promoted players — but it does not undermine the band-scoping benefit. Net: **band-scoping + long validity is the recipe; the finer increment and fixed-point are not needed and are dropped.**
+**Measure and display standings per NTRP band cohort** — this is the single most effective, zero-cost collision reducer, and it matches how #525 already tags points. Combined with **qualified validity** (§13: open play 3 mo / tournament 12 mo, annual — *not* maximal), it reaches ~64% band-scoped collisions with **legible point ranges (0–502)** and no reliance on the disqualified finer-increment / fixed-point machinery. Band movement is a real, second-order effect (it re-congests the low end and trims active means as players reset), so the standings UI should expect a meaningful churn of near-zero, freshly-promoted players — but it does not undermine the band-scoping benefit. The residual collisions (which saturate with cohort population — [#544](https://github.com/cybergrouch/skopeo/issues/544)) are the job of a **rating-confidence tie-breaker**, not of pushing validity to extremes. Net: **band-scoping + qualified validity is the recipe; the finer increment and fixed-point are dropped, and a confidence tie-breaker handles the rest.**
 
 ## References
 
