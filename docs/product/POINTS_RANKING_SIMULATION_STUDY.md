@@ -181,8 +181,22 @@ Two independent levers:
 - **To raise the ceiling to ~10,000:** scale the point values (a ~×10 multiplier on the whole schedule puts a strong, active player near 10k). Scaling alone is a cosmetic axis change — necessary for the ceiling target, not sufficient for separation.
 - **To make variance grow over time (fewer collisions):** lengthen validity so points accumulate rather than plateau (e.g. open play 12 months, tournaments 24–36 months), or replace hard expiry with a slow decay/carry-over. This is the lever that actually spreads the field.
 - **Recommended adjustment:** a **~×10 point scale** combined with **12-month open-play and 24–36-month tournament validity** — reaches a ~10k ceiling, keeps variance rising through year 3, and roughly halves the collision *gap* (99%→89%).
-- **Residual collisions are a granularity limit.** Even the best scenario leaves ~89% of players tied, because points are small integers drawn from a discrete set — most players accumulate near-identical sums. To push collisions lower still, introduce **finer-grained** point components (non-integer/continuous increments, or draw-size- and margin-scaled tournament points via the configurable placement schedule). That is a larger design change and is called out as a follow-up rather than adopted here.
+- **Residual collisions are a granularity limit.** Even the best scenario leaves ~89% of players tied, because points are small integers drawn from a discrete set — most players accumulate near-identical sums. Continuous/fractional points would dissolve this, but **non-integer points are a hard product constraint (ruled out)**, so the fix must stay integer — see [Recommendations — integer-only tuning](#recommendations--integer-only-tuning) below.
 - **Trade-off to weigh:** longer validity and higher ceilings separate players but make the table slower to refresh and the numbers larger/less legible. The `10430` ceiling and `~89%` collision floor quantify both sides so the product choice is explicit.
+
+## Recommendations — integer-only tuning
+
+Points must remain **integers** (continuous/fractional points are a hard no), so the ~89% collision floor cannot be removed by adding granularity. The levers below preserve integer points and are the available knobs, in rough order of value; each feeds back as a tweak to the configurable schedules in the [#525 design](./TOURNAMENTS_CIRCUITS_AND_OPEN_PLAY_POINTS.md).
+
+1. **Longer validity (primary lever).** The only knob that makes variance *grow over time* rather than plateau — more un-expired results accumulate before dropping off, so player histories diverge. Recommended: open play ~12 months, tournaments ~24–36 months (or replace hard expiry with a slow decay/carry-over).
+2. **A dominance / margin component.** Let per-set points vary with *how* a set was won (games won / margin), not just win-vs-loss — e.g. a small bonus for a dominant set. This injects **varied increments**, which is what actually adds distinct reachable totals; it is the biggest collision-reducer that stays integer, and it rewards performance.
+3. **Graduate points by band-gap size.** Reward a 2–3-band upset more than a 1-band one — revisiting the *binary* equal/unequal choice made in #525. Adds distinct values; the trade-off is a less-simple table.
+4. **Standings tie-breakers.** Even when two players share a point total, order the leaderboard by a secondary key (current rating, recency, head-to-head). This resolves the *ranking position* users actually see **without changing the points model at all** — the highest value-for-effort option and fully integer-safe.
+5. **More tournament placement tiers.** Extend the 1st–4th schedule to 5th–8th (etc.) so tournament-heavy players spread further.
+
+**Why uniform scaling is not enough:** multiplying every value by a constant leaves all totals as multiples of that constant, so the collision *pattern* is unchanged — only **diverse, non-common-factor increments** (levers 2–3) add distinct totals. Scaling raises the ceiling; it does not separate the field.
+
+**Recommended integer-only combination:** **longer validity + a margin/dominance component + standings tie-breakers**, with graduated bands and extra placement tiers as optional further separation. A follow-up can extend this simulation to quantify levers 2–3 (margin component, graduated bands) before adopting them.
 
 ## References
 
