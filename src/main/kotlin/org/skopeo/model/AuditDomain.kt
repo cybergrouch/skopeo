@@ -60,7 +60,6 @@ enum class AuditAction {
     RANKING_POINTS_REVOKED,
     STANDINGS_RECALCULATED,
     STANDINGS_PUBLISHED,
-    POINTS_POLICY_UPDATED,
     POINTS_BUDGET_ALLOCATED,
     PLACEHOLDER_CREATED,
     PLACEHOLDER_CLAIMED,
@@ -175,7 +174,6 @@ val AuditAction.category: AuditCategory
             AuditAction.STANDINGS_RECALCULATED,
             AuditAction.STANDINGS_PUBLISHED,
             -> AuditCategory.STANDINGS
-            AuditAction.POINTS_POLICY_UPDATED,
             AuditAction.POINTS_BUDGET_ALLOCATED,
             -> AuditCategory.POINTS_BUDGET
         }

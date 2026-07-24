@@ -8,7 +8,6 @@ const {
   useGetApiV1Events,
   useGetApiV1Clubs,
   useGetApiV1Circuits,
-  useGetApiV1PointsPolicies,
   useGetApiV1UsersMe,
   createMutate,
   state,
@@ -16,7 +15,6 @@ const {
   useGetApiV1Events: vi.fn(),
   useGetApiV1Clubs: vi.fn(),
   useGetApiV1Circuits: vi.fn(),
-  useGetApiV1PointsPolicies: vi.fn(),
   useGetApiV1UsersMe: vi.fn(),
   createMutate: vi.fn(),
   state: { fail: false },
@@ -36,9 +34,6 @@ vi.mock("@/api/generated/events/events", () => ({
 }));
 vi.mock("@/api/generated/clubs/clubs", () => ({ useGetApiV1Clubs }));
 vi.mock("@/api/generated/circuits/circuits", () => ({ useGetApiV1Circuits }));
-vi.mock("@/api/generated/points-budget/points-budget", () => ({
-  useGetApiV1PointsPolicies,
-}));
 vi.mock("@/api/generated/users/users", () => ({ useGetApiV1UsersMe }));
 vi.mock("@/components/PlayerPicker", () => ({
   PlayerPicker: ({
@@ -109,19 +104,6 @@ describe("EventOrganizerTab", () => {
     useGetApiV1Events.mockReturnValue({ data: [], isLoading: false });
     useGetApiV1Clubs.mockReturnValue({ data: [], isLoading: false });
     useGetApiV1Circuits.mockReturnValue({ data: [], isLoading: false });
-    // Default global policies: OPEN_PLAY 1..10/30d, LEAGUE 5..50/90d, TOURNAMENT 10..500/365d (V16 seeds).
-    useGetApiV1PointsPolicies.mockReturnValue({
-      data: [
-        { eventType: "OPEN_PLAY", minPoints: 1, maxPoints: 10, maxValidityDays: 30 },
-        { eventType: "LEAGUE", minPoints: 5, maxPoints: 50, maxValidityDays: 90 },
-        {
-          eventType: "TOURNAMENT",
-          minPoints: 10,
-          maxPoints: 500,
-          maxValidityDays: 365,
-        },
-      ],
-    });
     // Default: a plain user with no CLUB_OWNER capability (so the #364 default never fires).
     useGetApiV1UsersMe.mockReturnValue({
       data: { id: "me", capabilities: ["HOST"] },
@@ -606,12 +588,9 @@ describe("EventOrganizerTab", () => {
     expect(screen.getByLabelText("Award ranking points")).not.toBeChecked();
     expect(screen.queryByLabelText("Min points")).not.toBeInTheDocument();
 
-    // Ticking it reveals the fields + the global-policy hint.
+    // Ticking it reveals the config fields.
     await user.click(screen.getByLabelText("Award ranking points"));
     expect(screen.getByLabelText("Min points")).toBeInTheDocument();
-    expect(
-      screen.getByText(/global Open play policy allows 1–10 points/),
-    ).toBeInTheDocument();
   });
 
   it("creates with no points fields when the award-points checkbox is off (#466)", async () => {
@@ -674,11 +653,8 @@ describe("EventOrganizerTab", () => {
     await user.selectOptions(screen.getByLabelText("Type"), "LEAGUE");
     await user.click(screen.getByLabelText("Award ranking points"));
 
-    // The points-config fields appear once ticked; the global hint shows.
+    // The points-config fields appear once ticked.
     expect(screen.getByLabelText("Min points")).toBeInTheDocument();
-    expect(
-      screen.getByText(/global League policy allows 5–50 points/),
-    ).toBeInTheDocument();
     // Required until filled: the submit stays disabled with the fields blank.
     expect(
       screen.getByRole("button", { name: "Create event" }),
@@ -715,9 +691,6 @@ describe("EventOrganizerTab", () => {
     // OPEN_PLAY (the default) awards points once ticked (unified with LEAGUE/TOURNAMENT).
     await user.click(screen.getByLabelText("Award ranking points"));
     expect(screen.getByLabelText("Min points")).toBeInTheDocument();
-    expect(
-      screen.getByText(/global Open play policy allows 1–10 points/),
-    ).toBeInTheDocument();
 
     await user.type(screen.getByLabelText("Min points"), "2");
     await user.type(screen.getByLabelText("Max points"), "8");
@@ -738,32 +711,6 @@ describe("EventOrganizerTab", () => {
         pointValidityEnd: "2026-06-20",
       },
     });
-  });
-
-  it("flags points values outside the global policy bounds (#466)", async () => {
-    const user = userEvent.setup();
-    renderTab();
-    await user.type(screen.getByLabelText("Name"), "League Night");
-    await user.type(screen.getByLabelText("Start date"), "2026-06-01");
-    await user.type(screen.getByLabelText("End date"), "2026-06-02");
-    await user.selectOptions(screen.getByLabelText("Type"), "LEAGUE");
-    await user.click(screen.getByLabelText("Award ranking points"));
-
-    // Min below LEAGUE's global minimum of 5 → the create button stays disabled (invalid window).
-    await user.type(screen.getByLabelText("Min points"), "1");
-    await user.type(screen.getByLabelText("Max points"), "40");
-    await user.type(screen.getByLabelText("Validity start"), "2026-06-01");
-    await user.type(screen.getByLabelText("Validity end"), "2026-08-01");
-    expect(
-      screen.getByRole("button", { name: "Create event" }),
-    ).toBeDisabled();
-    expect(createMutate).not.toHaveBeenCalled();
-
-    // Correcting the min to a within-bounds value re-enables and sends it.
-    await user.clear(screen.getByLabelText("Min points"));
-    await user.type(screen.getByLabelText("Min points"), "10");
-    await user.click(screen.getByRole("button", { name: "Create event" }));
-    expect(createMutate).toHaveBeenCalledTimes(1);
   });
 
   // Fill name + dates + type, then tick "Award ranking points" so the config panel is shown/required (#466).
@@ -832,29 +779,6 @@ describe("EventOrganizerTab", () => {
     expect(createMutate).not.toHaveBeenCalled();
   });
 
-  it("rejects a max above the global maximum (#434)", async () => {
-    useGetApiV1Clubs.mockReturnValue({
-      data: [{ id: "c1", name: "Downtown TC", isActive: true, owners: [] }],
-      isLoading: false,
-    });
-    const user = userEvent.setup();
-    renderTab();
-    // OPEN_PLAY global max is 10; 11 exceeds it.
-    await openBudgetedForm(user);
-    await user.type(screen.getByLabelText("Min points"), "2");
-    await user.type(screen.getByLabelText("Max points"), "11");
-    await user.type(screen.getByLabelText("Validity start"), "2026-06-01");
-    await user.type(screen.getByLabelText("Validity end"), "2026-06-20");
-
-    submitForm();
-    expect(
-      screen.getByText(
-        "Max points must not exceed the global maximum of 10.",
-      ),
-    ).toBeInTheDocument();
-    expect(createMutate).not.toHaveBeenCalled();
-  });
-
   it("rejects a validity end before its start (#434)", async () => {
     useGetApiV1Clubs.mockReturnValue({
       data: [{ id: "c1", name: "Downtown TC", isActive: true, owners: [] }],
@@ -897,56 +821,5 @@ describe("EventOrganizerTab", () => {
       screen.getByText("Min and max points must be positive whole numbers."),
     ).toBeInTheDocument();
     expect(createMutate).not.toHaveBeenCalled();
-  });
-
-  it("renders the global-policy hint and bound placeholders when a policy is present (#434)", async () => {
-    useGetApiV1Clubs.mockReturnValue({
-      data: [{ id: "c1", name: "Downtown TC", isActive: true, owners: [] }],
-      isLoading: false,
-    });
-    const user = userEvent.setup();
-    renderTab();
-    await openBudgetedForm(user);
-
-    // The hint reflects the OPEN_PLAY policy (1..10, 30 validity days).
-    expect(
-      screen.getByText(
-        /global Open play policy allows 1–10 points and up to 30 validity days/,
-      ),
-    ).toBeInTheDocument();
-    // Placeholders reflect the global bounds.
-    expect(screen.getByLabelText("Min points")).toHaveAttribute(
-      "placeholder",
-      "1",
-    );
-    expect(screen.getByLabelText("Max points")).toHaveAttribute(
-      "placeholder",
-      "10",
-    );
-  });
-
-  it("omits the hint and leaves placeholders empty when no policy is present (#434)", async () => {
-    useGetApiV1Clubs.mockReturnValue({
-      data: [{ id: "c1", name: "Downtown TC", isActive: true, owners: [] }],
-      isLoading: false,
-    });
-    // No global policies at all → globalPolicy is undefined for the chosen type.
-    useGetApiV1PointsPolicies.mockReturnValue({ data: [] });
-    const user = userEvent.setup();
-    renderTab();
-    await openBudgetedForm(user);
-
-    // The points panel still renders (budgeted + club), but with no global hint…
-    expect(screen.getByLabelText("Min points")).toBeInTheDocument();
-    expect(screen.queryByText(/policy allows/)).not.toBeInTheDocument();
-    // …and empty placeholders.
-    expect(screen.getByLabelText("Min points")).toHaveAttribute(
-      "placeholder",
-      "",
-    );
-    expect(screen.getByLabelText("Max points")).toHaveAttribute(
-      "placeholder",
-      "",
-    );
   });
 });

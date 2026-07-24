@@ -3940,67 +3940,6 @@ paths:
         '404':
           description: No active award with that id
 
-  /api/v1/points/policies:
-    get:
-      summary: List the global points policies (#403 Phase B)
-      description: >-
-        The global master points policy, one entry per event type. Readable by points managers
-        (ADMINISTRATOR is implicitly a points manager).
-      tags:
-        - Points Budget
-      security:
-        - firebaseAuth: []
-      responses:
-        '200':
-          description: The per-type policies
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/PointsPolicyResponse'
-        '401':
-          description: Missing or invalid Firebase token
-        '403':
-          description: Caller is not a points manager
-
-  /api/v1/points/policies/{eventType}:
-    put:
-      summary: Set a global points policy (#403 Phase B)
-      description: >-
-        Points-manager only. Sets the per-match reward bounds and max validity days for one event
-        type. Values are whole integers; min must not exceed max and all must be positive.
-      tags:
-        - Points Budget
-      security:
-        - firebaseAuth: []
-      parameters:
-        - name: eventType
-          in: path
-          required: true
-          schema:
-            type: string
-            enum: [OPEN_PLAY, LEAGUE, TOURNAMENT]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SetPointsPolicyRequest'
-      responses:
-        '200':
-          description: The updated policy
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PointsPolicyResponse'
-        '400':
-          description: Invalid event type or policy values
-        '401':
-          description: Missing or invalid Firebase token
-        '403':
-          description: Caller is not a points manager
-
   /api/v1/points/budgets:
     get:
       summary: List every club's per-type points budgets (#403 Phase B)
@@ -6539,41 +6478,6 @@ components:
           type: string
           enum: [RATING, POINTS]
           description: The standings serving source to set (#146).
-
-    PointsPolicyResponse:
-      type: object
-      required:
-        - eventType
-        - minPoints
-        - maxPoints
-        - maxValidityDays
-      properties:
-        eventType:
-          type: string
-          enum: [OPEN_PLAY, LEAGUE, TOURNAMENT]
-        minPoints:
-          type: integer
-          description: Minimum per-match reward for the type (#403 Phase B).
-        maxPoints:
-          type: integer
-          description: Maximum per-match reward for the type (#403 Phase B).
-        maxValidityDays:
-          type: integer
-          description: Max days an awarded point may stay valid for the type (#403 Phase B).
-
-    SetPointsPolicyRequest:
-      type: object
-      required:
-        - minPoints
-        - maxPoints
-        - maxValidityDays
-      properties:
-        minPoints:
-          type: integer
-        maxPoints:
-          type: integer
-        maxValidityDays:
-          type: integer
 
     ClubBudgetResponse:
       type: object

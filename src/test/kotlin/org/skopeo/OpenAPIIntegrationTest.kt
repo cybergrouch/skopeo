@@ -114,11 +114,10 @@ class OpenAPIIntegrationTest {
             body shouldContain "/api/v1/events/{id}/finalize"
             // Un-finalize (#477): the reverse-finalize path is documented.
             body shouldContain "/api/v1/events/{id}/unfinalize"
-            // Points budget foundation (#403 Phase B): the policy + budget paths and schemas.
-            body shouldContain "/api/v1/points/policies"
+            // Per-club points budget (#403 Phase B): the budget paths and schema (the global policy
+            // layer was removed in #525).
             body shouldContain "/api/v1/points/budgets"
             body shouldContain "/api/v1/clubs/{clubId}/point-budgets/{eventType}"
-            body shouldContain "PointsPolicyResponse"
             body shouldContain "ClubBudgetResponse"
             // Fixture designation + event points config (#403 Phase C): the config path, its request
             // schema, and the designatedPoints fixture field are all documented.

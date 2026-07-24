@@ -7,18 +7,14 @@ import { PointsManagementSection } from "./PointsManagementSection";
 import { Capability } from "@/auth/capabilities";
 
 const {
-  useGetApiV1PointsPolicies,
   useGetApiV1PointsBudgets,
   useGetApiV1Clubs,
   useGetApiV1RankingPoints,
-  policyMutate,
   budgetMutate,
 } = vi.hoisted(() => ({
-  useGetApiV1PointsPolicies: vi.fn(),
   useGetApiV1PointsBudgets: vi.fn(),
   useGetApiV1Clubs: vi.fn(),
   useGetApiV1RankingPoints: vi.fn(),
-  policyMutate: vi.fn(),
   budgetMutate: vi.fn(),
 }));
 
@@ -27,17 +23,8 @@ type MutationOpts = {
 };
 
 vi.mock("@/api/generated/points-budget/points-budget", () => ({
-  useGetApiV1PointsPolicies,
   useGetApiV1PointsBudgets,
-  getGetApiV1PointsPoliciesQueryKey: () => ["points-policies"],
   getGetApiV1PointsBudgetsQueryKey: () => ["points-budgets"],
-  usePutApiV1PointsPoliciesEventType: (options: MutationOpts) => ({
-    isPending: false,
-    mutate: (vars: unknown) => {
-      policyMutate(vars);
-      options.mutation.onSuccess();
-    },
-  }),
   usePutApiV1ClubsClubIdPointBudgetsEventType: (options: MutationOpts) => ({
     isPending: false,
     mutate: (vars: unknown) => {
@@ -75,17 +62,6 @@ function renderSection() {
 describe("PointsManagementSection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useGetApiV1PointsPolicies.mockReturnValue({
-      data: [
-        {
-          eventType: "OPEN_PLAY",
-          minPoints: 1,
-          maxPoints: 10,
-          maxValidityDays: 30,
-        },
-      ],
-      isLoading: false,
-    });
     useGetApiV1PointsBudgets.mockReturnValue({
       data: [
         {
@@ -131,20 +107,6 @@ describe("PointsManagementSection", () => {
     };
   }
 
-  it("renders the policy row with editable fields", () => {
-    renderSection();
-    expect(screen.getByText("OPEN_PLAY")).toBeInTheDocument();
-    expect(
-      (screen.getByLabelText("Min") as HTMLInputElement).value,
-    ).toBe("1");
-    expect(
-      (screen.getByLabelText("Max") as HTMLInputElement).value,
-    ).toBe("10");
-    expect(
-      (screen.getByLabelText("Validity (days)") as HTMLInputElement).value,
-    ).toBe("30");
-  });
-
   it("renders the budget row with the club name, Allocated 0 and Free", () => {
     renderSection();
     expect(screen.getByText("Downtown TC")).toBeInTheDocument();
@@ -157,21 +119,6 @@ describe("PointsManagementSection", () => {
     const cells = screen.getAllByRole("cell");
     expect(cells.some((c) => c.textContent === "0")).toBe(true);
     expect(cells.some((c) => c.textContent === "200")).toBe(true);
-  });
-
-  it("saves a policy edit with the entered values", async () => {
-    const user = userEvent.setup();
-    renderSection();
-    const max = screen.getByLabelText("Max");
-    await user.clear(max);
-    await user.type(max, "42");
-    await user.click(screen.getAllByRole("button", { name: "Save" })[0]);
-
-    expect(policyMutate).toHaveBeenCalledWith({
-      eventType: "OPEN_PLAY",
-      data: { minPoints: 1, maxPoints: 42, maxValidityDays: 30 },
-    });
-    expect(screen.getAllByRole("status")[0]).toHaveTextContent("Saved");
   });
 
   it("saves a club budget with the entered value", async () => {
@@ -189,12 +136,6 @@ describe("PointsManagementSection", () => {
       eventType: "LEAGUE",
       data: { budgetedPoints: 300 },
     });
-  });
-
-  it("shows a loading state while policies load", () => {
-    useGetApiV1PointsPolicies.mockReturnValue({ data: undefined, isLoading: true });
-    renderSection();
-    expect(screen.getAllByText("Loading…").length).toBeGreaterThan(0);
   });
 
   it("renders an awarded-points row with a player link, signed points and source", () => {

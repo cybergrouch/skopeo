@@ -19,7 +19,6 @@ import org.skopeo.model.CreateFixtureCommand
 import org.skopeo.model.EventType
 import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
-import org.skopeo.model.PointsPolicy
 import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.ServiceError
 import org.skopeo.model.TeamType
@@ -73,55 +72,18 @@ class PointsBudgetServiceTest {
 
     private fun newClub(ownerId: UUID): UUID = clubs.create(command = CreateClubCommand(name = "Club", createdBy = ownerId)).id
 
-    private fun policy(
-        type: EventType,
-        min: Int,
-        max: Int,
-        days: Int = 30,
-    ) = PointsPolicy(eventType = type, minPoints = min, maxPoints = max, maxValidityDays = days)
-
-    @Test
-    fun `a points manager reads and sets a policy (#403)`() {
-        provision(uid = "pm", roles = setOf(Capability.PLAYER, Capability.POINTS_MANAGER))
-
-        service.policies(token = token(uid = "pm")).shouldBeRight() shouldHaveSize EventType.entries.size
-
-        val saved =
-            service.setPolicy(token = token(uid = "pm"), policy = policy(type = EventType.LEAGUE, min = 3, max = 40, days = 60))
-                .shouldBeRight()
-        saved.minPoints shouldBe 3
-        saved.maxPoints shouldBe 40
-        saved.maxValidityDays shouldBe 60
-    }
-
     @Test
     fun `an administrator is implicitly a points manager (#403)`() {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
-        service.policies(token = token(uid = "admin")).shouldBeRight()
-        service.setPolicy(token = token(uid = "admin"), policy = policy(type = EventType.OPEN_PLAY, min = 1, max = 5))
-            .shouldBeRight()
+        // The points-manager gate accepts an administrator (exercised via the budget read).
+        service.clubBudgets(token = token(uid = "admin"), clubId = null).shouldBeRight()
     }
 
     @Test
-    fun `a plain player and an unprovisioned caller are forbidden (#403)`() {
+    fun `a plain player and an unprovisioned caller are forbidden the points-manager gate (#403)`() {
         provision(uid = "player")
-        service.policies(token = token(uid = "player")).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
-        service.policies(token = token(uid = "ghost")).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
-        service.setPolicy(token = token(uid = "player"), policy = policy(type = EventType.OPEN_PLAY, min = 1, max = 5))
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
-    }
-
-    @Test
-    fun `setPolicy rejects min greater than max and non-positive values (#403)`() {
-        provision(uid = "pm", roles = setOf(Capability.PLAYER, Capability.POINTS_MANAGER))
-        service.setPolicy(token = token(uid = "pm"), policy = policy(type = EventType.OPEN_PLAY, min = 10, max = 5))
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
-        service.setPolicy(token = token(uid = "pm"), policy = policy(type = EventType.OPEN_PLAY, min = 0, max = 5))
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
-        service.setPolicy(token = token(uid = "pm"), policy = policy(type = EventType.OPEN_PLAY, min = 1, max = 0))
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
-        service.setPolicy(token = token(uid = "pm"), policy = policy(type = EventType.OPEN_PLAY, min = 1, max = 5, days = 0))
-            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        service.clubBudgets(token = token(uid = "player"), clubId = null).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service.clubBudgets(token = token(uid = "ghost"), clubId = null).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test

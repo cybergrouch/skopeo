@@ -4,8 +4,6 @@
 package org.skopeo.repository
 
 import io.kotest.matchers.collections.shouldHaveSize
-import io.kotest.matchers.nulls.shouldBeNull
-import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
@@ -17,7 +15,6 @@ import org.skopeo.model.CreateFixtureCommand
 import org.skopeo.model.EventType
 import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
-import org.skopeo.model.PointsPolicy
 import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.TeamType
 import org.skopeo.model.UserIdentity
@@ -59,30 +56,6 @@ class PointsBudgetRepositoryTest {
         ).id
 
     @Test
-    fun `listPolicies returns the seeded policy per event type (#403)`() {
-        val policies = repo.listPolicies()
-        policies shouldHaveSize EventType.entries.size
-        policies.map { it.eventType }.toSet() shouldBe EventType.entries.toSet()
-    }
-
-    @Test
-    fun `findPolicy reads one type and upsertPolicy overwrites it in place (#403)`() {
-        repo.findPolicy(eventType = EventType.LEAGUE).shouldNotBeNull().minPoints shouldBe 5
-
-        val updated =
-            repo.upsertPolicy(
-                policy = PointsPolicy(eventType = EventType.LEAGUE, minPoints = 7, maxPoints = 99, maxValidityDays = 120),
-            )
-        updated.minPoints shouldBe 7
-        updated.maxPoints shouldBe 99
-        updated.maxValidityDays shouldBe 120
-
-        repo.findPolicy(eventType = EventType.LEAGUE).shouldNotBeNull().maxPoints shouldBe 99
-        // Upsert is in place — still one row per type.
-        repo.listPolicies() shouldHaveSize EventType.entries.size
-    }
-
-    @Test
     fun `upsertBudget inserts then updates a club × type row, keyed by the pair (#403)`() {
         val admin = newUser(uid = "admin")
         val club = clubs.create(command = CreateClubCommand(name = "Club", createdBy = admin)).id
@@ -114,31 +87,6 @@ class PointsBudgetRepositoryTest {
         repo.upsertBudget(clubId = clubB, eventType = EventType.LEAGUE, budgetedPoints = 20, updatedBy = admin)
 
         repo.listBudgets() shouldHaveSize 2
-    }
-
-    @Test
-    fun `upsertPolicy inserts a policy for a type that has no row (#403)`() {
-        // The seed gives every type a row; delete one so upsert takes the insert (not update) branch.
-        org.jetbrains.exposed.sql.transactions.transaction {
-            exec(stmt = "DELETE FROM points_policies WHERE event_type = 'TOURNAMENT'")
-        }
-        repo.findPolicy(eventType = EventType.TOURNAMENT).shouldBeNull()
-
-        val inserted =
-            repo.upsertPolicy(
-                policy = PointsPolicy(eventType = EventType.TOURNAMENT, minPoints = 2, maxPoints = 20, maxValidityDays = 200),
-            )
-        inserted.minPoints shouldBe 2
-        repo.findPolicy(eventType = EventType.TOURNAMENT).shouldNotBeNull().maxValidityDays shouldBe 200
-    }
-
-    @Test
-    fun `findPolicy is null for an event type with no policy row (#403)`() {
-        // Truncate wipes and reseeds all three types; delete one to hit the null-return path.
-        org.jetbrains.exposed.sql.transactions.transaction {
-            exec(stmt = "DELETE FROM points_policies WHERE event_type = 'TOURNAMENT'")
-        }
-        repo.findPolicy(eventType = EventType.TOURNAMENT).shouldBeNull()
     }
 
     // --- Emergent reservation (#403 Phase C): sumReservedPoints, no reservation table. ---

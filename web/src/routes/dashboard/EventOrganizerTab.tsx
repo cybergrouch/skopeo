@@ -17,7 +17,6 @@ import {
 } from "@/api/generated/events/events";
 import { useGetApiV1Clubs } from "@/api/generated/clubs/clubs";
 import { useGetApiV1Circuits } from "@/api/generated/circuits/circuits";
-import { useGetApiV1PointsPolicies } from "@/api/generated/points-budget/points-budget";
 import { useGetApiV1UsersMe } from "@/api/generated/users/users";
 import type {
   ClubResponse,
@@ -90,9 +89,6 @@ function NewEventForm() {
   // Circuits to file a TOURNAMENT under (#525). Staff-readable; empty when none exist.
   const circuits = useGetApiV1Circuits().data ?? [];
   const me = useGetApiV1UsersMe().data;
-  // Global per-type policy bounds (#403 Phase C), for the client-side hints + validation. A
-  // non-manager caller simply gets nothing (retry off keeps a 403 quiet); the fields still render.
-  const policies = useGetApiV1PointsPolicies({ query: { retry: false } }).data;
 
   // Default the selector to a CLUB_OWNER's own club (#364), but only while the field is untouched;
   // once the user selects anything (including "Open") their choice wins.
@@ -125,12 +121,11 @@ function NewEventForm() {
   });
 
   // Points are opt-in via the "Award ranking points" checkbox (#466), for any event type/club. When
-  // ticked the config fields appear + are required and validated against the global per-type policy.
+  // ticked the config fields appear + are required (no global policy bounds since #525).
   const showPointsConfig = awardPoints;
-  const globalPolicy = policies?.find((p) => p.eventType === type);
 
-  // Client-side validation of the points window against the global policy (#429), mirroring the
-  // EventDetail editor. Returns an error message, or null when the window is valid (or not required).
+  // Client-side validation of the points window (#429), mirroring the EventDetail editor.
+  // Returns an error message, or null when the window is valid (or not required).
   const pointsError = useMemo<string | null>(() => {
     if (!showPointsConfig) return null;
     if (
@@ -152,24 +147,11 @@ function NewEventForm() {
       return "Min and max points must be positive whole numbers.";
     }
     if (min > max) return "Min points cannot exceed max points.";
-    if (globalPolicy && min < globalPolicy.minPoints) {
-      return `Min points must be at least the global minimum of ${globalPolicy.minPoints}.`;
-    }
-    if (globalPolicy && max > globalPolicy.maxPoints) {
-      return `Max points must not exceed the global maximum of ${globalPolicy.maxPoints}.`;
-    }
     if (validityEnd < validityStart) {
       return "Validity end cannot be before the start.";
     }
     return null;
-  }, [
-    showPointsConfig,
-    minPoints,
-    maxPoints,
-    validityStart,
-    validityEnd,
-    globalPolicy,
-  ]);
+  }, [showPointsConfig, minPoints, maxPoints, validityStart, validityEnd]);
 
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -333,15 +315,6 @@ function NewEventForm() {
               <p className="text-xs font-medium uppercase text-muted-foreground">
                 Points config
               </p>
-              {globalPolicy ? (
-                <p className="text-xs text-muted-foreground">
-                  The global{" "}
-                  {EVENT_TYPE_OPTIONS.find((o) => o.value === type)?.label ??
-                    type}{" "}
-                  policy allows {globalPolicy.minPoints}–{globalPolicy.maxPoints}{" "}
-                  points and up to {globalPolicy.maxValidityDays} validity days.
-                </p>
-              ) : null}
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
                   <Label htmlFor="event-min-points" className="text-xs">
@@ -351,9 +324,6 @@ function NewEventForm() {
                     id="event-min-points"
                     type="number"
                     value={minPoints}
-                    placeholder={
-                      globalPolicy ? String(globalPolicy.minPoints) : ""
-                    }
                     onChange={(e) => setMinPoints(e.target.value)}
                   />
                 </div>
@@ -365,9 +335,6 @@ function NewEventForm() {
                     id="event-max-points"
                     type="number"
                     value={maxPoints}
-                    placeholder={
-                      globalPolicy ? String(globalPolicy.maxPoints) : ""
-                    }
                     onChange={(e) => setMaxPoints(e.target.value)}
                   />
                 </div>
