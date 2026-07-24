@@ -177,6 +177,39 @@ describe('ActivityLogSection', () => {
     expect(screen.getByText('Page 2 of 3 · 60 total')).toBeInTheDocument()
   })
 
+  it('jumps to the first, last, and a specific page (#529)', async () => {
+    useGetApiV1Audit.mockReturnValue(page([entry()], 60)) // 60 / 25 = 3 pages
+    const user = userEvent.setup()
+    renderSection()
+
+    // First is disabled on page 1; Last jumps straight to the final page.
+    expect(screen.getByRole('button', { name: 'First page' })).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: 'Last page' }))
+    expect(useGetApiV1Audit).toHaveBeenLastCalledWith({ category: undefined, limit: 25, offset: 50 })
+    expect(screen.getByText('Page 3 of 3 · 60 total')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Last page' })).toBeDisabled()
+
+    // First jumps back to page 1.
+    await user.click(screen.getByRole('button', { name: 'First page' }))
+    expect(screen.getByText('Page 1 of 3 · 60 total')).toBeInTheDocument()
+
+    // Jump-to-page takes a 1-based number and clears the box afterwards.
+    await user.type(screen.getByLabelText('Go to page'), '2')
+    await user.click(screen.getByRole('button', { name: 'Go' }))
+    expect(useGetApiV1Audit).toHaveBeenLastCalledWith({ category: undefined, limit: 25, offset: 25 })
+    expect(screen.getByText('Page 2 of 3 · 60 total')).toBeInTheDocument()
+    expect((screen.getByLabelText('Go to page') as HTMLInputElement).value).toBe('')
+  })
+
+  it('clamps an out-of-range jump to the last page (#529)', async () => {
+    useGetApiV1Audit.mockReturnValue(page([entry()], 60))
+    const user = userEvent.setup()
+    renderSection()
+    await user.type(screen.getByLabelText('Go to page'), '99')
+    await user.click(screen.getByRole('button', { name: 'Go' }))
+    expect(screen.getByText('Page 3 of 3 · 60 total')).toBeInTheDocument()
+  })
+
   it('prefills an existing note and saves an edit', async () => {
     useGetApiV1Audit.mockReturnValue(page([entry({ comment: 'existing note' })]))
     const user = userEvent.setup()
