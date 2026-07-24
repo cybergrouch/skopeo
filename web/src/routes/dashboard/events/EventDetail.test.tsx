@@ -9,7 +9,6 @@ const {
   useGetApiV1EventsId,
   useGetApiV1Clubs,
   useGetApiV1UsersMe,
-  useGetApiV1PointsPolicies,
   useGetApiV1PointsBudgets,
   addMutate,
   removeMutate,
@@ -28,7 +27,6 @@ const {
     useGetApiV1EventsId: vi.fn(),
     useGetApiV1Clubs: vi.fn(),
     useGetApiV1UsersMe: vi.fn(),
-    useGetApiV1PointsPolicies: vi.fn(),
     useGetApiV1PointsBudgets: vi.fn(),
     addMutate: vi.fn(),
     removeMutate: vi.fn(),
@@ -167,7 +165,6 @@ vi.mock('@/api/generated/events/events', () => ({
 }))
 vi.mock('@/api/generated/clubs/clubs', () => ({ useGetApiV1Clubs }))
 vi.mock('@/api/generated/points-budget/points-budget', () => ({
-  useGetApiV1PointsPolicies,
   useGetApiV1PointsBudgets,
 }))
 vi.mock('@/api/generated/matches/matches', () => ({
@@ -271,7 +268,6 @@ describe('EventDetail', () => {
     state.pointsConfigErrorMessage = null
     useGetApiV1EventsId.mockReturnValue({ data: event, isLoading: false })
     useGetApiV1Clubs.mockReturnValue({ data: [], isLoading: false })
-    useGetApiV1PointsPolicies.mockReturnValue({ data: [], isLoading: false })
     useGetApiV1PointsBudgets.mockReturnValue({ data: [], isLoading: false })
     // Default to an administrator so data-entry controls stay available on the (past-dated) fixture;
     // the #310 tests below override this to a plain HOST.
@@ -1149,25 +1145,6 @@ describe('EventDetail', () => {
     expect(screen.getByLabelText('Min points')).toBeInTheDocument()
   })
 
-  it('seeds the min/max placeholders from the global policy when the event has no config (#466)', async () => {
-    // No persisted min/max, but a matching global policy exists: ticking "Award ranking points" shows the
-    // fields with the policy's bounds as placeholders (the `: globalPolicy` arm of each placeholder).
-    useGetApiV1PointsPolicies.mockReturnValue({
-      data: [{ eventType: 'OPEN_PLAY', minPoints: 3, maxPoints: 12, maxValidityDays: 30 }],
-      isLoading: false,
-    })
-    useGetApiV1EventsId.mockReturnValue({
-      data: { ...event, type: 'OPEN_PLAY', endDate: '2999-01-01' },
-      isLoading: false,
-    })
-    const user = userEvent.setup()
-    renderDetail()
-
-    await user.click(screen.getByLabelText('Award ranking points'))
-    expect(screen.getByLabelText('Min points')).toHaveAttribute('placeholder', '3')
-    expect(screen.getByLabelText('Max points')).toHaveAttribute('placeholder', '12')
-  })
-
   it('shows a saving label and disables the button while the points config save is pending (#466)', () => {
     // A points event so the fields are shown, with the save mutation in flight → the button reads
     // "Saving…" and is disabled (the `setPointsConfig.isPending` arm).
@@ -1192,10 +1169,6 @@ describe('EventDetail', () => {
         pointValidityStart: '2026-03-01',
         pointValidityEnd: '2026-03-20',
       },
-      isLoading: false,
-    })
-    useGetApiV1PointsPolicies.mockReturnValue({
-      data: [{ eventType: 'OPEN_PLAY', minPoints: 1, maxPoints: 10, maxValidityDays: 30 }],
       isLoading: false,
     })
     renderDetail()
@@ -1251,18 +1224,12 @@ describe('EventDetail', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Could not clear the points config.')
   })
 
-  it('shows the points config with global bounds and current values, and saves an edit (#403 Phase C)', async () => {
+  it('shows the points config with current values, and saves an edit (#403 Phase C)', async () => {
     useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
-    useGetApiV1PointsPolicies.mockReturnValue({
-      data: [{ eventType: 'TOURNAMENT', minPoints: 5, maxPoints: 100, maxValidityDays: 365 }],
-      isLoading: false,
-    })
     const user = userEvent.setup()
     renderDetail()
 
     expect(screen.getByText('Points config')).toBeInTheDocument()
-    // Global bounds render as helper text.
-    expect(screen.getByText(/allows 5–100 points and up to 365 validity days/)).toBeInTheDocument()
     // Current config summary.
     expect(screen.getByTestId('points-config-summary')).toHaveTextContent('Currently 10–20 points')
     // The editor is pre-seeded from the event's persisted config (#440), not just placeholders.

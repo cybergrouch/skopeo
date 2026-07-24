@@ -29,7 +29,6 @@ import {
 import { useGetApiV1Clubs } from "@/api/generated/clubs/clubs";
 import {
   useGetApiV1PointsBudgets,
-  useGetApiV1PointsPolicies,
 } from "@/api/generated/points-budget/points-budget";
 import {
   getGetApiV1MatchesQueryKey,
@@ -220,10 +219,9 @@ export function EventDetail({
   // Clubs to (re)assign the event to (#319); staff-readable, empty when none exist.
   const clubs = useGetApiV1Clubs().data ?? [];
 
-  // The global per-type policy bounds and the club budgets (#403 Phase C), for helper text and the
-  // fixture free-budget hint. Both are points-manager reads — non-managers simply get nothing (retry
-  // off keeps a 403 quiet), and the section still renders with the event's own config.
-  const policies = useGetApiV1PointsPolicies({ query: { retry: false } }).data;
+  // Club budgets (#403 Phase C), for the fixture free-budget hint. A points-manager read — non-managers
+  // simply get nothing (retry off keeps a 403 quiet), and the section still renders with the event's
+  // own config. (The global points policy was removed in #525, so no per-type policy bounds.)
   const budgets = useGetApiV1PointsBudgets({ query: { retry: false } }).data;
 
   function refreshEvent() {
@@ -480,8 +478,7 @@ export function EventDetail({
     : [team1a, team2a];
 
   // Points are opt-in via the event's "Award ranking points" checkbox (#466), for any event type/club.
-  // The points-config editor is shown for every (non-deleted) event; the global policy bounds the hint.
-  const globalPolicy = policies?.find((p) => p.eventType === event?.type);
+  // The points-config editor is shown for every (non-deleted) event (no global policy bounds since #525).
   // The event awards points when it carries a config (min/max set). A fixture may then designate points.
   const hasPointsConfig =
     event?.minPointsPerMatch != null && event?.maxPointsPerMatch != null;
@@ -823,15 +820,6 @@ export function EventDetail({
               <CardDescription>
                 The per-match reward window a fixture may designate within, and
                 how long an awarded point stays valid.
-                {globalPolicy ? (
-                  <>
-                    {" "}
-                    The global {EVENT_TYPE_LABELS[event.type]} policy allows{" "}
-                    {globalPolicy.minPoints}–
-                    {globalPolicy.maxPoints} points and up to{" "}
-                    {globalPolicy.maxValidityDays} validity days.
-                  </>
-                ) : null}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -875,9 +863,7 @@ export function EventDetail({
                         placeholder={
                           event.minPointsPerMatch != null
                             ? String(event.minPointsPerMatch)
-                            : globalPolicy
-                              ? String(globalPolicy.minPoints)
-                              : ""
+                            : ""
                         }
                         onChange={(e) => {
                           setMinDraft(e.target.value);
@@ -896,9 +882,7 @@ export function EventDetail({
                         placeholder={
                           event.maxPointsPerMatch != null
                             ? String(event.maxPointsPerMatch)
-                            : globalPolicy
-                              ? String(globalPolicy.maxPoints)
-                              : ""
+                            : ""
                         }
                         onChange={(e) => {
                           setMaxDraft(e.target.value);
