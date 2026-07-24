@@ -137,6 +137,80 @@ The MC-vs-analytic agreement across every cell is the evidence: the score conver
 - **Estimating any configuration.** For any cadence/validity, `Cap ≈ (validity ÷ cadence) × E[pts/event]`, with `E[open] ≈ 1.2–2.1` and `E[tourney, sanctioned] ≈ placementChance × 44` (halve for unsanctioned). No simulation needed for a first-order estimate — the sim confirms it and supplies the distribution.
 - **Skill and attendance scale the plateau proportionally**, not explosively — a below-average player and an above-average player differ by well under 2× at equal behaviour.
 
+---
+
+# Part 2 — Point spread & collisions over time ([#530](https://github.com/cybergrouch/skopeo/issues/530))
+
+Part 1 measured a single player's *expected* score. Part 2 asks a **population** question: as time passes, do players **spread out** on the leaderboard, or do many **collide** on the same total? And can we raise the ceiling (toward ~10,000) and make variance keep growing?
+
+## Method (Part 2)
+
+A fixed population of **2,000 players** is simulated from day 0. Each player is assigned a skill class (Below/Even/Above, weights **30/40/30**) and a behaviour class (open-only / tournaments-only / balanced / heavy-open, weights **30/10/40/20**), then given a full event timeline; their still-valid score is read at **1mo, 2mo, 4mo, 8mo, 1yr, 2yr, 3yr**. A **collision** is a player sharing an exact integer total with at least one other player; **collision %** is the share of players who are not unique. Seeded (`20260724`), reproducible; run `./gradlew generatePointsSimulationReport`.
+
+## 6. Spread & collisions over time — baseline (current design)
+
+| Horizon | mean | sd | IQR p25–p75 | min–max | collision % | distinct totals |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1mo | 15.3 | 19.3 | 4.0–16.0 | −6.0–108.0 | 99.4% | 101 |
+| 2mo | 31.0 | 26.4 | 12.0–47.0 | −9.0–128.0 | 99.4% | 124 |
+| 4mo | 45.9 | 38.8 | 14.0–73.0 | −6.0–197.0 | 98.8% | 170 |
+| 8mo | 61.1 | 49.6 | 16.0–97.0 | −4.0–226.0 | 99.0% | 202 |
+| 1yr | 61.4 | 50.9 | 17.0–94.0 | −6.0–264.0 | 98.8% | 212 |
+| 2yr | 60.5 | 49.9 | 16.0–95.0 | −5.0–229.0 | 98.7% | 211 |
+| 3yr | 61.2 | 50.2 | 16.0–100.0 | −5.0–257.0 | 99.2% | 204 |
+
+**The concern is confirmed.** Spread grows only until the validity window fills (~8 months), then **freezes**: sd plateaus at ~50 and stays there through year 3, and **~99% of players collide** on a shared integer total at *every* horizon (only ~200 distinct totals across 2,000 players). Because points expire, variance cannot keep growing — the leaderboard stops separating players once steady state is reached.
+
+## 7. Raising the ceiling & growing variance — scenario comparison
+
+| Scenario | max @1yr | sd @1yr | coll% @1yr | max @3yr | sd @3yr | coll% @3yr |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Baseline (×1, 2mo/6mo) | 264 | 50.9 | 98.8% | 257 | 50.2 | 99.2% |
+| Scaled ×30 (2mo/6mo) | 7140 | 1527.5 | 98.9% | 6930 | 1521.5 | 99.0% |
+| Long validity (×1, 12mo/36mo) | 578 | 108.8 | 96.7% | 988 | 235.0 | 88.9% |
+| Recommended (×10, 12mo/36mo) | 5360 | 1059.9 | 96.2% | **10430** | 2353.3 | **88.6%** |
+
+Two independent levers:
+
+- **Scaling raises the ceiling but does NOT reduce collisions.** ×30 lifts the top score to ~7,000, yet collision % stays ~99% — multiplying every award just re-labels the same clustered structure on a wider axis.
+- **Longer validity grows variance over time and cuts collisions.** With 12-month open / 36-month tournament validity, points *accumulate*: sd rises from year 1 to year 3 (108→235) instead of freezing, and collisions fall from ~99% to ~89%. This is the only lever that makes the leaderboard keep separating players as time passes.
+- **Combined ("Recommended", ×10 + long validity)** reaches a **~10,430** ceiling at 3 years with **growing** variance (sd 1060→2353) and the lowest collision rate (~89%).
+
+## Findings & recommendation (Part 2)
+
+- **To raise the ceiling to ~10,000:** scale the point values (a ~×10 multiplier on the whole schedule puts a strong, active player near 10k). Scaling alone is a cosmetic axis change — necessary for the ceiling target, not sufficient for separation.
+- **To make variance grow over time (fewer collisions):** lengthen validity so points accumulate rather than plateau (e.g. open play 12 months, tournaments 24–36 months), or replace hard expiry with a slow decay/carry-over. This is the lever that actually spreads the field.
+- **Recommended adjustment:** a **~×10 point scale** combined with **12-month open-play and 24–36-month tournament validity** — reaches a ~10k ceiling, keeps variance rising through year 3, and roughly halves the collision *gap* (99%→89%).
+- **Residual collisions are a granularity limit.** Even the best scenario leaves ~89% of players tied, because points are small integers drawn from a discrete set — most players accumulate near-identical sums. Continuous/fractional points would dissolve this, but **non-integer points are a hard product constraint (ruled out)**, so the fix must stay integer — see [Recommendations — integer-only tuning](#recommendations--integer-only-tuning) below.
+- **Trade-off to weigh:** longer validity and higher ceilings separate players but make the table slower to refresh and the numbers larger/less legible. The `10430` ceiling and `~89%` collision floor quantify both sides so the product choice is explicit.
+
+## Recommendations — integer-only tuning
+
+> **Headline: the lever is increment _diversity_, not the number type.** Collisions arise when scores are built from a small set of increments that share a common factor — the reachable totals are sparse, so players pile onto the same few values. They fall when the increments are **varied and coprime (GCD = 1)**, which fills the number line densely. Non-integer points only ever helped as *one way to manufacture diversity* — the identical separation is achievable with **integers** (see [fixed-point](#fixed-point-keep-integers-without-losing-fractional-granularity) below). Two corollaries: **uniform scaling never helps** (it preserves the common factor, only stretching the ceiling), and **longer validity helps** because it accumulates more of those diverse increments over time. So the design question is *"are our point increments diverse?"* — not *"are they integers or fractions?"*
+
+Points must remain **integers** (continuous/fractional points are a hard no), and — per the headline above — that costs nothing once increments are diverse. The levers below preserve integer points and are the available knobs, in rough order of value; each feeds back as a tweak to the configurable schedules in the [#525 design](./TOURNAMENTS_CIRCUITS_AND_OPEN_PLAY_POINTS.md).
+
+1. **Longer validity (primary lever).** The only knob that makes variance *grow over time* rather than plateau — more un-expired results accumulate before dropping off, so player histories diverge. Recommended: open play ~12 months, tournaments ~24–36 months (or replace hard expiry with a slow decay/carry-over).
+2. **A dominance / margin component.** Let per-set points vary with *how* a set was won (games won / margin), not just win-vs-loss — e.g. a small bonus for a dominant set. This injects **varied increments**, which is what actually adds distinct reachable totals; it is the biggest collision-reducer that stays integer, and it rewards performance.
+3. **Graduate points by band-gap size.** Reward a 2–3-band upset more than a 1-band one — revisiting the *binary* equal/unequal choice made in #525. Adds distinct values; the trade-off is a less-simple table.
+4. **Standings tie-breakers.** Even when two players share a point total, order the leaderboard by a secondary key (current rating, recency, head-to-head). This resolves the *ranking position* users actually see **without changing the points model at all** — the highest value-for-effort option and fully integer-safe.
+5. **More tournament placement tiers.** Extend the 1st–4th schedule to 5th–8th (etc.) so tournament-heavy players spread further.
+
+**Why uniform scaling is not enough:** multiplying every value by a constant leaves all totals as multiples of that constant, so the collision *pattern* is unchanged — only **diverse, non-common-factor increments** (levers 2–3) add distinct totals. Scaling raises the ceiling; it does not separate the field.
+
+**Recommended integer-only combination:** **longer validity + a margin/dominance component + standings tie-breakers**, with graduated bands and extra placement tiers as optional further separation. A follow-up can extend this simulation to quantify levers 2–3 (margin component, graduated bands) before adopting them.
+
+### Fixed-point: keep integers without losing fractional granularity
+
+The ~89% floor above is a *granularity* limit, not a *type* limit — and granularity does **not** require a fractional points type. Fractional points are simply **integer points at a finer scale**: pick a base unit small enough to represent every tuned increment exactly (like currency uses cents, not dollars), multiply the whole schedule by the least common denominator, and every value becomes a whole number with nothing lost. e.g. increments `{3, 2, 5, 0, −2, 1}` plus tuned `{0.5, 1.5, 0.25}` × 4 → `{12, 8, 20, 0, −8, 4, 2, 6, 1}` — all integers.
+
+The condition that makes this reduce collisions (rather than just relabel them): the resulting integer increments must be **diverse (GCD = 1)**.
+
+- **Uniform scaling of the current coarse set does nothing** — `{3,2,5,0,−2,1} × 100` are all multiples of 100, so the collision pattern is unchanged (this is why ×10 alone kept collisions ~99%).
+- **Integerizing *diverse fractional tuning* works** — `{12,8,20,4,2,6,1}` has GCD 1, so partial sums fill the integer line densely and collisions fall. The granularity must come from the *diversity of the tuned increments* (levers 2–3); fixed-point scaling preserves that diversity exactly as integers.
+
+So the practical path is: design the margin/graduated-band tuning in whatever fractional terms are natural, then **multiply the entire schedule by a common base unit** (e.g. ×100, "centi-points", for headroom) to ship **pure integers**. Storage is unaffected — the ledger `points` column is already a signed `DECIMAL` — and the display can be scaled down for legibility. The ×scale also raises the ceiling as a bonus. This removes the earlier "continuous points" caveat: the hard-no on a fractional *type* does not block the granularity benefit.
+
 ## References
 
 - Design of record: [`TOURNAMENTS_CIRCUITS_AND_OPEN_PLAY_POINTS.md`](./TOURNAMENTS_CIRCUITS_AND_OPEN_PLAY_POINTS.md) · Issue [#525](https://github.com/cybergrouch/skopeo/issues/525)
