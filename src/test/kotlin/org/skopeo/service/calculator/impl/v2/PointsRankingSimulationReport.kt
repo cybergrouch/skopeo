@@ -90,6 +90,30 @@ class PointsRankingSimulationReport {
         private val PERCENTILES = listOf(5, 50, 95)
         private const val PERCENT = 100.0
         private const val EVENT_SAMPLES = 400_000 // for the per-event expectation table
+
+        // --- #530: population point-spread & collisions over time ---
+        // A fixed population is simulated from day 0; each player's still-valid score is read at a
+        // series of horizons. Spread (SD/IQR/range) and collisions (players sharing an exact integer
+        // total) are measured per horizon to see whether variance keeps growing or freezes at the plateau.
+        private const val POPULATION = 2_000
+        private const val MAX_HORIZON_DAYS = 1_095.0
+        private const val V_36_MONTHS = 1_095
+        private const val P25 = 25
+        private const val P75 = 75
+        private const val H_1YR = 365
+        private const val H_3YR = 1_095
+
+        // Horizons (days → label) at which the population's spread is measured.
+        private val HORIZONS =
+            listOf(30 to "1mo", 61 to "2mo", 122 to "4mo", 244 to "8mo", 365 to "1yr", 730 to "2yr", 1_095 to "3yr")
+
+        // Population mix (weights over SkillClass.entries and BehaviorClass.entries order). Documented
+        // in the study; the relative spread/collision findings are robust to the exact split.
+        private val SKILL_WEIGHTS = doubleArrayOf(0.30, 0.40, 0.30) // Below / Even / Above
+        private val BEHAVIOR_WEIGHTS = doubleArrayOf(0.30, 0.10, 0.40, 0.20) // open-only / tourney-only / balanced / heavy
+
+        // Per-player seed offsets so each scenario/population draw is independent yet reproducible.
+        private const val POPULATION_SEED = 900L
     }
 
     private enum class SkillClass(val label: String, val winRate: Double, val placementChance: Double) {
@@ -110,6 +134,40 @@ class PointsRankingSimulationReport {
     }
 
     private data class Stats(val mean: Double, val sd: Double, val percentiles: Map<Int, Double>)
+
+    /** One event on a player's timeline: when it happened, the points it carries, and its validity (days). */
+    private data class Ev(val time: Double, val points: Double, val validity: Int)
+
+    /** Spread + collision metrics for one population snapshot (#530). */
+    private data class SpreadStats(
+        val mean: Double,
+        val sd: Double,
+        val p25: Double,
+        val p75: Double,
+        val min: Double,
+        val max: Double,
+        val collisionPct: Double,
+        val distinctCount: Int,
+    )
+
+    /** A ceiling/variance scenario (#530): a point scale plus the open/tournament validity windows. */
+    private data class Scenario(
+        val label: String,
+        val scale: Double,
+        val openValidity: Int,
+        val tourneyValidity: Int,
+    )
+
+    // Baseline is the current design; the others explore raising the ceiling toward ~10k and growing
+    // variance. Scaling alone raises the ceiling but not the collision rate; long validity accumulates
+    // points so variance keeps growing and collisions fall. "Recommended" combines both to reach ~10k.
+    private val scenarios =
+        listOf(
+            Scenario(label = "Baseline (×1, 2mo/6mo)", scale = 1.0, openValidity = V_2_MONTHS, tourneyValidity = V_6_MONTHS),
+            Scenario(label = "Scaled ×30 (2mo/6mo)", scale = 30.0, openValidity = V_2_MONTHS, tourneyValidity = V_6_MONTHS),
+            Scenario(label = "Long validity (×1, 12mo/36mo)", scale = 1.0, openValidity = V_12_MONTHS, tourneyValidity = V_36_MONTHS),
+            Scenario(label = "Recommended (×10, 12mo/36mo)", scale = 10.0, openValidity = V_12_MONTHS, tourneyValidity = V_36_MONTHS),
+        )
 
     fun generatePointsSimulationReport() {
         val text = render()
@@ -374,6 +432,10 @@ class PointsRankingSimulationReport {
                 }
             }
 
+        val assignments = assignPopulation()
+        val allScenarioScores = scenarios.associate { it.label to scenarioScores(scenario = it, assignments = assignments) }
+        val baseline = allScenarioScores.getValue(key = scenarios.first().label)
+
         return buildString {
             append("# Points ranking — Monte Carlo results\n\n")
             append("_Seed $SEED, $TRIALS trials per cell. Sanctioned tournament table; unsanctioned = half._\n\n")
@@ -382,6 +444,8 @@ class PointsRankingSimulationReport {
             append(section3(skills = skills))
             append(section4(skills = skills, archetype = archetype))
             append(section5(skills = skills, archetype = archetype, expectedOpen = expectedOpen, expectedTourney = expectedTourney))
+            append(section6(baseline = baseline))
+            append(section7(all = allScenarioScores))
         }
     }
 
@@ -474,6 +538,171 @@ class PointsRankingSimulationReport {
                         )
                     append(row(cells = listOf(behavior.label, skill.label, mc, analytic, ceiling)))
                 }
+            }
+        }
+
+    // --- #530: population spread & collisions over time ---
+
+    /** Assign the population to (skill, behaviour) archetypes by the documented weights (seeded). */
+    private fun assignPopulation(): List<Pair<SkillClass, BehaviorClass>> {
+        val rng = Random(seed = SEED + POPULATION_SEED)
+        return List(size = POPULATION) {
+            pick(rng = rng, items = SkillClass.entries, weights = SKILL_WEIGHTS) to
+                pick(rng = rng, items = BehaviorClass.entries, weights = BEHAVIOR_WEIGHTS)
+        }
+    }
+
+    private fun <T> pick(
+        rng: Random,
+        items: List<T>,
+        weights: DoubleArray,
+    ): T {
+        val draw = rng.nextDouble()
+        var acc = 0.0
+        val hit =
+            items.indices.firstOrNull { i ->
+                acc += weights[i]
+                draw < acc
+            }
+        return items[hit ?: items.lastIndex]
+    }
+
+    /** One player's full event timeline over [0, MAX_HORIZON], points scaled and tagged with validity. */
+    private fun playerStream(
+        skill: SkillClass,
+        behavior: BehaviorClass,
+        scenario: Scenario,
+        rng: Random,
+    ): List<Ev> {
+        val out = ArrayList<Ev>()
+        behavior.openSpacingDays?.let { spacing ->
+            var t = rng.nextDouble() * spacing
+            while (t <= MAX_HORIZON_DAYS) {
+                out.add(
+                    element =
+                        Ev(
+                            time = t,
+                            points = openPlayPoints(rng = rng, winRate = skill.winRate) * scenario.scale,
+                            validity = scenario.openValidity,
+                        ),
+                )
+                t += spacing
+            }
+        }
+        behavior.tourneySpacingDays?.let { spacing ->
+            var t = rng.nextDouble() * spacing
+            while (t <= MAX_HORIZON_DAYS) {
+                out.add(
+                    element =
+                        Ev(
+                            time = t,
+                            points = tournamentPoints(rng = rng, placementChance = skill.placementChance) * scenario.scale,
+                            validity = scenario.tourneyValidity,
+                        ),
+                )
+                t += spacing
+            }
+        }
+        return out
+    }
+
+    private fun activeScoreAt(
+        stream: List<Ev>,
+        horizon: Int,
+    ): Double = stream.filter { it.time <= horizon && it.time > horizon - it.validity }.sumOf { it.points }
+
+    /** Per-horizon population scores for a scenario; each player is streamed once (seeded per player+scenario). */
+    private fun scenarioScores(
+        scenario: Scenario,
+        assignments: List<Pair<SkillClass, BehaviorClass>>,
+    ): Map<Int, DoubleArray> {
+        val perHorizon = HORIZONS.associate { (days, _) -> days to DoubleArray(size = POPULATION) }
+        assignments.forEachIndexed { idx, (skill, behavior) ->
+            val rng = Random(seed = SEED + scenario.label.hashCode() + idx)
+            val stream = playerStream(skill = skill, behavior = behavior, scenario = scenario, rng = rng)
+            HORIZONS.forEach { (days, _) -> perHorizon.getValue(key = days)[idx] = activeScoreAt(stream = stream, horizon = days) }
+        }
+        return perHorizon
+    }
+
+    private fun pct(
+        sorted: List<Double>,
+        p: Int,
+    ): Double = sorted[(p / PERCENT * (sorted.size - 1)).roundToInt()]
+
+    /** Spread + collision metrics: collisions = players sharing an exact integer total with someone else. */
+    private fun spreadStats(scores: DoubleArray): SpreadStats {
+        val sorted = scores.sorted()
+        val mean = scores.average()
+        val variance = scores.sumOf { v -> (v - mean) * (v - mean) } / scores.size
+        val counts = scores.asList().groupingBy { it.roundToInt() }.eachCount()
+        val collided = counts.values.filter { it > 1 }.sum()
+        return SpreadStats(
+            mean = mean,
+            sd = sqrt(x = variance),
+            p25 = pct(sorted = sorted, p = P25),
+            p75 = pct(sorted = sorted, p = P75),
+            min = sorted.first(),
+            max = sorted.last(),
+            collisionPct = collided.toDouble() / scores.size * PERCENT,
+            distinctCount = counts.size,
+        )
+    }
+
+    private fun section6(baseline: Map<Int, DoubleArray>): String =
+        buildString {
+            append("\n## 6. Population point-spread & collisions over time (baseline, default policy)\n\n")
+            append(
+                "_$POPULATION players (skill 30/40/30, behaviour 30/10/40/20); " +
+                    "collision % = share of players tied on an exact integer total._\n\n",
+            )
+            append(row(cells = listOf("Horizon", "mean", "sd", "IQR p25–p75", "min–max", "collision %", "distinct totals")))
+            append(row(cells = listOf("---", "---:", "---:", "---:", "---:", "---:", "---:")))
+            HORIZONS.forEach { (days, label) ->
+                val s = spreadStats(scores = baseline.getValue(key = days))
+                append(
+                    row(
+                        cells =
+                            listOf(
+                                label,
+                                fmt(value = s.mean),
+                                fmt(value = s.sd),
+                                "${fmt(value = s.p25)}–${fmt(value = s.p75)}",
+                                "${fmt(value = s.min)}–${fmt(value = s.max)}",
+                                "${fmt(value = s.collisionPct)}%",
+                                s.distinctCount.toString(),
+                            ),
+                    ),
+                )
+            }
+        }
+
+    private fun section7(all: Map<String, Map<Int, DoubleArray>>): String =
+        buildString {
+            append("\n## 7. Raising the ceiling & growing variance — scenario comparison\n\n")
+            append(
+                "_Max / sd / collision % at the 1-year and 3-year horizons. Scaling raises the ceiling but not " +
+                    "the collision rate; long validity accumulates points so variance grows and collisions fall._\n\n",
+            )
+            append(row(cells = listOf("Scenario", "max @1yr", "sd @1yr", "coll% @1yr", "max @3yr", "sd @3yr", "coll% @3yr")))
+            append(row(cells = listOf("---", "---:", "---:", "---:", "---:", "---:", "---:")))
+            scenarios.forEach { sc ->
+                val y1 = spreadStats(scores = all.getValue(key = sc.label).getValue(key = H_1YR))
+                val y3 = spreadStats(scores = all.getValue(key = sc.label).getValue(key = H_3YR))
+                append(
+                    row(
+                        cells =
+                            listOf(
+                                sc.label,
+                                fmt(value = y1.max),
+                                fmt(value = y1.sd),
+                                "${fmt(value = y1.collisionPct)}%",
+                                fmt(value = y3.max),
+                                fmt(value = y3.sd),
+                                "${fmt(value = y3.collisionPct)}%",
+                            ),
+                    ),
+                )
             }
         }
 }
