@@ -116,4 +116,26 @@ class CircuitServiceTest {
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.NotFound>()
     }
+
+    @Test
+    fun `renaming a missing circuit is a not-found and a blank rename is rejected`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val created = service.create(token = token(uid = "admin"), name = "NORTH").shouldBeRight()
+
+        service
+            .rename(token = token(uid = "admin"), circuitId = java.util.UUID.randomUUID(), name = "X")
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
+        service
+            .rename(token = token(uid = "admin"), circuitId = created.id, name = "   ")
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `an unknown token is forbidden for both admin and staff actions`() {
+        // No user is provisioned for this uid, so the caller resolves to null in both guards.
+        service.create(token = token(uid = "ghost"), name = "NORTH").shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service.list(token = token(uid = "ghost")).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
 }
