@@ -1707,7 +1707,9 @@ class EventServiceTest {
     private fun budgetedEvent(
         hostUid: String,
         participants: List<UUID>,
-        type: EventType = EventType.LEAGUE,
+        // TOURNAMENT is the remaining host-designated awarding type (#525): OPEN_PLAY is now computed
+        // and LEAGUE awards nothing, so the designated-award mechanics are exercised via TOURNAMENT.
+        type: EventType = EventType.TOURNAMENT,
         validityDays: Long = 30,
     ) = service.create(
         token = token(uid = hostUid),
@@ -1760,7 +1762,7 @@ class EventServiceTest {
     ) = RatingRepository().setRating(userId = userId, rating = BigDecimal(level), level = level)
 
     @Test
-    fun `finalizing a LEAGUE event awards each winner the full designated points with the event window (#403)`() {
+    fun `finalizing a TOURNAMENT event awards each winner the full designated points with the event window (#403)`() {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val p1 = provision(uid = "p1")
         val p2 = provision(uid = "p2")
@@ -1785,6 +1787,23 @@ class EventServiceTest {
         // The award is audited.
         AuditRepository().list(actions = listOf(element = AuditAction.EVENT_POINTS_AWARDED), limit = 10, offset = 0)
             .first.single().details["totalPoints"] shouldBe "30"
+    }
+
+    @Test
+    fun `finalizing a LEAGUE event awards nothing for now (deferred, #525)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        rate(userId = p1.id, level = "4.0")
+        rate(userId = p2.id, level = "4.0")
+        val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id), type = EventType.LEAGUE)
+        seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2, designated = 30)
+
+        service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+
+        // LEAGUE awarding is deferred to a follow-up issue (#525): finalizing a league event awards nothing.
+        awardRepo.listByUser(userId = p1.id) shouldHaveSize 0
+        awardRepo.listByUser(userId = p2.id) shouldHaveSize 0
     }
 
     @Test
@@ -1855,36 +1874,33 @@ class EventServiceTest {
     }
 
     @Test
-    fun `finalizing an OPEN_PLAY event awards each winner the designated points (unify)`() {
+    fun `finalizing an OPEN_PLAY event awards computed per-set points to winner and loser (#525)`() {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val p1 = provision(uid = "p1")
         val p2 = provision(uid = "p2")
+        // Equal entry bands (both 4.0): the set winner scores 3, the loser 0 (design table).
         rate(userId = p1.id, level = "4.0")
         rate(userId = p2.id, level = "4.0")
-        // OPEN_PLAY now carries a config (global 1..10) and awards on finalize like the other types.
         val event =
             service.create(
                 token = token(uid = "host"),
-                input =
-                    input(
-                        type = EventType.OPEN_PLAY,
-                        participants = listOf(p1.id, p2.id),
-                        minPoints = 1,
-                        maxPoints = 10,
-                        validityStart = LocalDate.now(),
-                        validityEnd = LocalDate.now().plusDays(30),
-                    ),
+                input = input(type = EventType.OPEN_PLAY, participants = listOf(p1.id, p2.id)),
             ).shouldBeRight().event
-        seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2, designated = 8)
+        // Open play does not designate points — the amount is computed from the result.
+        seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2, designated = null)
 
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
 
-        // SINGLES → one award row (winner p1), the full 8 designated points; the loser gets nothing.
-        awardRepo.listByUser(userId = p2.id) shouldHaveSize 0
-        val award = awardRepo.listByUser(userId = p1.id).single()
-        award.points shouldBe BigDecimal("8.0000")
-        award.band shouldBe "4.0"
-        award.eventId shouldBe event.id
+        // Winner p1 gets 3 (equal bands); loser p2 gets a 0-point row (both participants are recorded).
+        val winner = awardRepo.listByUser(userId = p1.id).single()
+        winner.points shouldBe BigDecimal("3.0000")
+        winner.band shouldBe "4.0"
+        winner.eventId shouldBe event.id
+        winner.pointClass shouldBe org.skopeo.model.PointClass.OPEN_PLAY
+        awardRepo.listByUser(userId = p2.id).single().points shouldBe BigDecimal("0.0000")
+        // Validity defaults to [event end, end + 2 months) when no window is configured (#525).
+        winner.validFrom shouldBe event.endDate.atStartOfDay()
+        winner.validUntil shouldBe event.endDate.plusMonths(2).plusDays(1).atStartOfDay()
     }
 
     @Test

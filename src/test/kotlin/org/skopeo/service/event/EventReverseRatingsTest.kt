@@ -107,7 +107,8 @@ class EventReverseRatingsTest {
                 startDate = LocalDate.now(),
                 endDate = LocalDate.now().plusDays(7),
                 participantIds = participants,
-                type = EventType.LEAGUE,
+                // TOURNAMENT is the host-designated awarding type (#525) — LEAGUE no longer awards.
+                type = EventType.TOURNAMENT,
                 minPointsPerMatch = 10,
                 maxPointsPerMatch = 50,
                 pointValidityStart = LocalDate.now(),
@@ -289,7 +290,7 @@ class EventReverseRatingsTest {
                         startDate = LocalDate.now(),
                         endDate = LocalDate.now().plusDays(1),
                         participantIds = listOf(p1.id, p2.id),
-                        type = EventType.LEAGUE,
+                        type = EventType.TOURNAMENT,
                         minPointsPerMatch = 10,
                         maxPointsPerMatch = 50,
                         pointValidityStart = LocalDate.now(),
