@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 package org.skopeo.service.event
-
 import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.booleans.shouldBeFalse
@@ -22,6 +21,7 @@ import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.AwardStatus
 import org.skopeo.model.Capability
+import org.skopeo.model.CreateCircuitCommand
 import org.skopeo.model.CreateFixtureCommand
 import org.skopeo.model.EventType
 import org.skopeo.model.Match
@@ -35,6 +35,7 @@ import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.repository.AuditRepository
+import org.skopeo.repository.CircuitRepository
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RankingPointRepository
@@ -109,12 +110,20 @@ class EventReverseRatingsTest {
                 participantIds = participants,
                 // TOURNAMENT is the host-designated awarding type (#525) — LEAGUE no longer awards.
                 type = EventType.TOURNAMENT,
+                // A tournament must reference a circuit (#525).
+                circuitId = seedCircuit(hostUid = hostUid),
                 minPointsPerMatch = 10,
                 maxPointsPerMatch = 50,
                 pointValidityStart = LocalDate.now(),
                 pointValidityEnd = LocalDate.now().plusDays(30),
             ),
     ).shouldBeRight().event
+
+    /** Seed a circuit (#525) attributed to [hostUid]; a tournament must reference one. */
+    private fun seedCircuit(hostUid: String): UUID {
+        val creator = requireNotNull(value = UserRepository().findByFirebaseUid(firebaseUid = hostUid)) { "unknown host $hostUid" }
+        return CircuitRepository().create(command = CreateCircuitCommand(name = "NORTH", createdBy = creator.id)).id
+    }
 
     /** Seed a COMPLETED singles fixture on [date] where team1 (p1) beats p2, designating [designated] points. */
     private fun seedCompletedFixture(
@@ -291,6 +300,7 @@ class EventReverseRatingsTest {
                         endDate = LocalDate.now().plusDays(1),
                         participantIds = listOf(p1.id, p2.id),
                         type = EventType.TOURNAMENT,
+                        circuitId = seedCircuit(hostUid = "host"),
                         minPointsPerMatch = 10,
                         maxPointsPerMatch = 50,
                         pointValidityStart = LocalDate.now(),

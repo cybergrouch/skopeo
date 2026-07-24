@@ -37,6 +37,7 @@ class EventRepository {
                     it[endDate] = command.endDate
                     it[createdBy] = command.createdBy
                     it[clubId] = command.clubId
+                    it[circuitId] = command.circuitId
                     it[type] = command.type.name
                     it[minPointsPerMatch] = command.minPointsPerMatch
                     it[maxPointsPerMatch] = command.maxPointsPerMatch
@@ -402,6 +403,7 @@ class EventRepository {
             isActive = row[EventsTable.isActive],
             createdBy = row[EventsTable.createdBy]?.value,
             clubId = row[EventsTable.clubId]?.value,
+            circuitId = row[EventsTable.circuitId]?.value,
             calcPriority = row[EventsTable.calcPriority],
             type = EventType.valueOf(value = row[EventsTable.type]),
             finalizedAt = row[EventsTable.finalizedAt],

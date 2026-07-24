@@ -25,6 +25,7 @@ import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.AwardStatus
 import org.skopeo.model.Capability
+import org.skopeo.model.CreateCircuitCommand
 import org.skopeo.model.CreateClubCommand
 import org.skopeo.model.CreateFixtureCommand
 import org.skopeo.model.CreatePlaceholderCommand
@@ -42,6 +43,7 @@ import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.model.ageInYears
 import org.skopeo.repository.AuditRepository
+import org.skopeo.repository.CircuitRepository
 import org.skopeo.repository.ClubRepository
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.EventsTable
@@ -103,6 +105,7 @@ class EventServiceTest {
         end: String = LocalDate.now().plusDays(7).toString(),
         participants: List<UUID> = emptyList(),
         clubId: UUID? = null,
+        circuitId: UUID? = null,
         type: EventType = EventType.OPEN_PLAY,
         minPoints: Int? = null,
         maxPoints: Int? = null,
@@ -114,6 +117,7 @@ class EventServiceTest {
         endDate = LocalDate.parse(end),
         participantIds = participants,
         clubId = clubId,
+        circuitId = circuitId,
         type = type,
         minPointsPerMatch = minPoints,
         maxPointsPerMatch = maxPoints,
@@ -690,6 +694,27 @@ class EventServiceTest {
     }
 
     @Test
+    fun `a tournament requires a circuit that exists, while non-tournaments carry none (#525)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+
+        // A tournament with no circuit is rejected.
+        service
+            .create(token = token(uid = "host"), input = input(type = EventType.TOURNAMENT))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+        // A tournament with an unknown circuit is rejected.
+        service
+            .create(token = token(uid = "host"), input = input(type = EventType.TOURNAMENT, circuitId = UUID.randomUUID()))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+        // A tournament with a valid circuit is created and carries it.
+        val circuitId = seedCircuit(hostUid = "host")
+        val created =
+            service.create(token = token(uid = "host"), input = input(type = EventType.TOURNAMENT, circuitId = circuitId)).shouldBeRight()
+        events.findById(id = created.event.id)!!.circuitId shouldBe circuitId
+    }
+
+    @Test
     fun `an event is created with each type, defaulting to OPEN_PLAY (#403)`() {
         provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
 
@@ -715,6 +740,7 @@ class EventServiceTest {
                     input(
                         name = "Tourney",
                         type = EventType.TOURNAMENT,
+                        circuitId = seedCircuit(hostUid = "host"),
                         minPoints = 10,
                         maxPoints = 100,
                         validityStart = LocalDate.now(),
@@ -1298,26 +1324,26 @@ class EventServiceTest {
         // Points are opt-in for every event/club (#466): a club event with NO config fields awards no
         // points and is valid (no config stored).
         val noPoints =
-            service.create(token = token(uid = "host"), input = input(type = EventType.TOURNAMENT, clubId = club.id)).shouldBeRight()
+            service.create(token = token(uid = "host"), input = input(type = EventType.LEAGUE, clubId = club.id)).shouldBeRight()
         noPoints.event.minPointsPerMatch.shouldBeNull()
         noPoints.event.pointValidityStart.shouldBeNull()
 
         // But opting in with a PARTIAL config (some but not all four fields) is still rejected.
         service.create(
             token = token(uid = "host"),
-            input = input(type = EventType.TOURNAMENT, clubId = club.id, maxPoints = 100, validityStart = start, validityEnd = end),
+            input = input(type = EventType.LEAGUE, clubId = club.id, maxPoints = 100, validityStart = start, validityEnd = end),
         ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
         service.create(
             token = token(uid = "host"),
-            input = input(type = EventType.TOURNAMENT, clubId = club.id, minPoints = 10, validityStart = start, validityEnd = end),
+            input = input(type = EventType.LEAGUE, clubId = club.id, minPoints = 10, validityStart = start, validityEnd = end),
         ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
         service.create(
             token = token(uid = "host"),
-            input = input(type = EventType.TOURNAMENT, clubId = club.id, minPoints = 10, maxPoints = 100, validityEnd = end),
+            input = input(type = EventType.LEAGUE, clubId = club.id, minPoints = 10, maxPoints = 100, validityEnd = end),
         ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
         service.create(
             token = token(uid = "host"),
-            input = input(type = EventType.TOURNAMENT, clubId = club.id, minPoints = 10, maxPoints = 100, validityStart = start),
+            input = input(type = EventType.LEAGUE, clubId = club.id, minPoints = 10, maxPoints = 100, validityStart = start),
         ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
     }
 
@@ -1327,15 +1353,15 @@ class EventServiceTest {
 
         // No club and no config fields → allowed; the config is deferred (settable later once a club is set).
         val deferred =
-            service.create(token = token(uid = "host"), input = input(type = EventType.TOURNAMENT)).shouldBeRight()
-        deferred.event.type shouldBe EventType.TOURNAMENT
+            service.create(token = token(uid = "host"), input = input(type = EventType.LEAGUE)).shouldBeRight()
+        deferred.event.type shouldBe EventType.LEAGUE
         deferred.event.minPointsPerMatch.shouldBeNull()
         deferred.event.pointValidityStart.shouldBeNull()
 
         // No club but a partial config supplied → still rejected (a partial config is never silently dropped).
         service.create(
             token = token(uid = "host"),
-            input = input(type = EventType.TOURNAMENT, minPoints = 10),
+            input = input(type = EventType.LEAGUE, minPoints = 10),
         ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
     }
 
@@ -1717,6 +1743,8 @@ class EventServiceTest {
             input(
                 type = type,
                 participants = participants,
+                // A TOURNAMENT must belong to a circuit (#525); other types carry none.
+                circuitId = if (type == EventType.TOURNAMENT) seedCircuit(hostUid = hostUid) else null,
                 // 10..50 satisfies both LEAGUE (5..50) and TOURNAMENT (10..500) global policies.
                 minPoints = 10,
                 maxPoints = 50,
@@ -1724,6 +1752,12 @@ class EventServiceTest {
                 validityEnd = LocalDate.now().plusDays(validityDays),
             ),
     ).shouldBeRight().event
+
+    /** Seed a circuit (#525) attributed to [hostUid], returning its id — tournaments must reference one. */
+    private fun seedCircuit(hostUid: String): UUID {
+        val creator = requireNotNull(value = UserRepository().findByFirebaseUid(firebaseUid = hostUid)) { "unknown host $hostUid" }
+        return CircuitRepository().create(command = CreateCircuitCommand(name = "NORTH", createdBy = creator.id)).id
+    }
 
     /** Seed a COMPLETED singles fixture designating [designated], won by team1 (p1). */
     private fun seedCompletedFixture(

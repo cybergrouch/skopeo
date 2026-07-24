@@ -19,6 +19,7 @@ import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.club.AssignOwnerRequest
 import org.skopeo.dto.club.CreateClubRequest
+import org.skopeo.dto.club.SetSanctionRequest
 import org.skopeo.dto.club.UpdateClubRequest
 import org.skopeo.dto.club.toResponse
 import org.skopeo.service.club.ClubService
@@ -93,6 +94,15 @@ private fun Route.clubMutations(service: ClubService) {
             respondEither(result = service.delete(token = verifiedToken(), clubId = uuidParam(name = "id"))) {
                 call.respond(status = HttpStatusCode.NoContent, message = "")
             }
+        }
+    }
+    // Set whether the club's tournaments are sanctioned (#525). CLUB_OWNER/ADMINISTRATOR (in the service).
+    patch(path = "/{id}/sanction") {
+        respondMappingErrors {
+            val sanctioned = call.receive<SetSanctionRequest>().sanctioned
+            respondEither(
+                result = service.setSanction(token = verifiedToken(), clubId = uuidParam(name = "id"), sanctioned = sanctioned),
+            ) { club -> call.respond(status = HttpStatusCode.OK, message = club.toResponse()) }
         }
     }
 }

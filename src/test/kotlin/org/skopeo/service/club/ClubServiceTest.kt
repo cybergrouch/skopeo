@@ -572,4 +572,26 @@ class ClubServiceTest {
                 it.publicCode shouldBe owner.publicCode
             }
     }
+
+    @Test
+    fun `a club owner or administrator sets the tournament sanction, others are forbidden (#525)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        provision(uid = "owner", roles = setOf(Capability.PLAYER, Capability.CLUB_OWNER))
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val club = service.create(token = token(uid = "admin"), name = "Club").shouldBeRight()
+        club.tournamentsSanctioned shouldBe false
+
+        // An admin sanctions the club; the flag flips and round-trips.
+        service.setSanction(token = token(uid = "admin"), clubId = club.id, sanctioned = true).shouldBeRight()
+            .tournamentsSanctioned shouldBe true
+        // A club owner may toggle it back.
+        service.setSanction(token = token(uid = "owner"), clubId = club.id, sanctioned = false).shouldBeRight()
+            .tournamentsSanctioned shouldBe false
+        // A plain host may not.
+        service.setSanction(token = token(uid = "host"), clubId = club.id, sanctioned = true)
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        // Sanctioning a missing club is a not-found.
+        service.setSanction(token = token(uid = "admin"), clubId = java.util.UUID.randomUUID(), sanctioned = true)
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+    }
 }

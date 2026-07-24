@@ -26,6 +26,7 @@ import org.skopeo.dto.match.toResponse
 import org.skopeo.dto.rating.toResponse
 import org.skopeo.model.MatchQuery
 import org.skopeo.model.MatchType
+import org.skopeo.model.PlacementBracket
 import org.skopeo.model.TeamType
 import org.skopeo.service.match.FixtureInput
 import org.skopeo.service.match.MatchService
@@ -123,6 +124,8 @@ private fun toFixtureInput(request: CreateFixtureRequest): FixtureInput {
         // Range (0 < h <= 1.0) is enforced in CreateFixtureRequest.init; here we only parse to BigDecimal.
         team1Handicap = request.team1Handicap?.let { BigDecimal(it) },
         team2Handicap = request.team2Handicap?.let { BigDecimal(it) },
+        isPlacementMatch = request.isPlacementMatch,
+        placementBracket = request.placementBracket?.let { parseEnumParam<PlacementBracket>(value = it, field = "placementBracket") },
     )
 }
 

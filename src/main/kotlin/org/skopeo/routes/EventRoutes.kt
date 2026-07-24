@@ -310,6 +310,7 @@ private fun toCreateEventInput(request: CreateEventRequest): CreateEventInput {
         endDate = parseDate(value = request.endDate, field = "endDate"),
         participantIds = request.participantIds.map { parseEventUuid(value = it) },
         clubId = request.clubId?.let { parseEventUuid(value = it, field = "club id") },
+        circuitId = request.circuitId?.let { parseEventUuid(value = it, field = "circuit id") },
         type = parseType(value = request.type),
         minPointsPerMatch = request.minPointsPerMatch,
         maxPointsPerMatch = request.maxPointsPerMatch,

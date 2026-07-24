@@ -26,6 +26,12 @@ data class AssignOwnerRequest(
     val userId: String,
 )
 
+/** Body for `PATCH /api/v1/clubs/{id}/sanction` — set whether the club's tournaments are sanctioned (#525). */
+@Serializable
+data class SetSanctionRequest(
+    val sanctioned: Boolean,
+)
+
 @Serializable
 data class ClubOwnerDto(
     val userId: String,
@@ -40,6 +46,8 @@ data class ClubResponse(
     // The shareable code for the club's public-by-code page (#327).
     val publicCode: String,
     val isActive: Boolean,
+    // Whether this club's tournaments are sanctioned (#525).
+    val tournamentsSanctioned: Boolean = false,
     val owners: List<ClubOwnerDto>,
 )
 
@@ -49,6 +57,7 @@ fun ClubView.toResponse(): ClubResponse =
         name = name,
         publicCode = publicCode,
         isActive = isActive,
+        tournamentsSanctioned = tournamentsSanctioned,
         owners =
             owners.map {
                 ClubOwnerDto(userId = it.userId.toString(), displayName = it.displayName, publicCode = it.publicCode)

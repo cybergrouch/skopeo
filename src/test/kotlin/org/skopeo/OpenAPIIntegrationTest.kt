@@ -31,6 +31,21 @@ class OpenAPIIntegrationTest {
             body shouldContain "CreateCircuitRequest"
         }
 
+    /** Tournaments (#525): circuit-on-event, club sanction, and placement-match fields are documented. */
+    @Test
+    fun testOpenAPISpecIncludesTournamentFields() =
+        testApplication {
+            application {
+                module(initDatabase = false)
+            }
+            val body = client.get(urlString = "/openapi.yaml").bodyAsText()
+            body shouldContain "/api/v1/clubs/{id}/sanction"
+            body shouldContain "SetSanctionRequest"
+            body shouldContain "tournamentsSanctioned"
+            body shouldContain "isPlacementMatch"
+            body shouldContain "placementBracket"
+        }
+
     @Test
     fun testOpenAPISpecEndpoint() =
         testApplication {

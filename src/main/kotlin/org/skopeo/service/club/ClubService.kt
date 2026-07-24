@@ -34,6 +34,8 @@ import java.util.UUID
 
 /** Roles that may read the club list (e.g. to pick a club when creating an event, #313). */
 private val CLUB_STAFF_ROLES = setOf(Capability.HOST, Capability.CLUB_OWNER, Capability.ADMINISTRATOR)
+private val ADMIN_ONLY = setOf(element = Capability.ADMINISTRATOR)
+private val OWNER_OR_ADMIN = setOf(Capability.CLUB_OWNER, Capability.ADMINISTRATOR)
 
 /**
  * Admin-only management of clubs (#313): create clubs and assign/remove CLUB_OWNER(s). A club's
@@ -56,7 +58,7 @@ class ClubService(
         name: String,
     ): Either<ServiceError, ClubView> =
         either {
-            val adminId = requireAdmin(token = token).bind()
+            val adminId = requireCapability(token = token, allowed = ADMIN_ONLY).bind()
             ensure(condition = name.isNotBlank()) { ServiceError.Validation(message = "Club name is required") }
             val club = clubs.create(command = CreateClubCommand(name = name.trim(), createdBy = adminId))
             audit.record(
@@ -76,7 +78,7 @@ class ClubService(
     /** Readable by staff (HOST/CLUB_OWNER/ADMINISTRATOR) so event creators can pick a club (#313). */
     fun list(token: VerifiedFirebaseToken): Either<ServiceError, List<ClubView>> =
         either {
-            requireStaff(token = token).bind()
+            requireCapability(token = token, allowed = CLUB_STAFF_ROLES).bind()
             clubs.list().map { toView(club = it) }
         }
 
@@ -87,7 +89,7 @@ class ClubService(
         name: String,
     ): Either<ServiceError, ClubView> =
         either {
-            val adminId = requireAdmin(token = token).bind()
+            val adminId = requireCapability(token = token, allowed = ADMIN_ONLY).bind()
             ensure(condition = name.isNotBlank()) { ServiceError.Validation(message = "Club name is required") }
             val updated =
                 ensureNotNull(value = clubs.rename(id = clubId, name = name.trim())) {
@@ -121,7 +123,7 @@ class ClubService(
         clubId: UUID,
     ): Either<ServiceError, Unit> =
         either {
-            val adminId = requireAdmin(token = token).bind()
+            val adminId = requireCapability(token = token, allowed = ADMIN_ONLY).bind()
             val club = ensureNotNull(value = clubs.findById(id = clubId)) { ServiceError.NotFound(message = "Club $clubId not found") }
             ensure(condition = clubs.disable(id = clubId)) { ServiceError.NotFound(message = "Club $clubId not found") }
             val now = LocalDateTime.now()
@@ -150,7 +152,7 @@ class ClubService(
         userId: UUID,
     ): Either<ServiceError, ClubView> =
         either {
-            val adminId = requireAdmin(token = token).bind()
+            val adminId = requireCapability(token = token, allowed = ADMIN_ONLY).bind()
             val owner = users.findById(id = userId).mapLeft { ServiceError.Validation(message = "Unknown user $userId") }.bind()
             ensure(condition = owner.isActive) { ServiceError.Validation(message = "User $userId is not active") }
             // A club owner must hold the CLUB_OWNER capability (#317) — grant it first via capabilities.
@@ -181,7 +183,7 @@ class ClubService(
         userId: UUID,
     ): Either<ServiceError, ClubView> =
         either {
-            val adminId = requireAdmin(token = token).bind()
+            val adminId = requireCapability(token = token, allowed = ADMIN_ONLY).bind()
             val updated =
                 ensureNotNull(value = clubs.removeOwner(clubId = clubId, userId = userId)) {
                     ServiceError.NotFound(message = "Club $clubId not found")
@@ -248,23 +250,49 @@ class ClubService(
             name = club.name,
             publicCode = club.publicCode,
             isActive = club.isActive,
+            tournamentsSanctioned = club.tournamentsSanctioned,
             owners =
                 users.findAllByIds(ids = club.ownerIds).map {
                     ClubOwnerRef(userId = it.id, displayName = it.displayName(), publicCode = it.publicCode)
                 },
         )
 
-    /** ADMINISTRATOR-only access; returns the caller's id (the audit actor). */
-    private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
-        val isAdmin = caller != null && caller.capabilities.contains(element = Capability.ADMINISTRATOR)
-        return if (caller == null || !isAdmin) ServiceError.Forbidden().left() else caller.id.right()
-    }
+    /**
+     * Set whether a club's tournaments are sanctioned (#525). CLUB_OWNER or ADMINISTRATOR only — the
+     * flag governs the placement points a tournament may award, so it is a club-governance decision.
+     */
+    fun setSanction(
+        token: VerifiedFirebaseToken,
+        clubId: UUID,
+        sanctioned: Boolean,
+    ): Either<ServiceError, ClubView> =
+        either {
+            val actorId = requireCapability(token = token, allowed = OWNER_OR_ADMIN).bind()
+            val updated =
+                ensureNotNull(value = clubs.setSanction(id = clubId, sanctioned = sanctioned)) {
+                    ServiceError.NotFound(message = "Club $clubId not found")
+                }
+            audit.record(
+                write =
+                    AuditWrite(
+                        actorUserId = actorId,
+                        action = AuditAction.CLUB_SANCTION_CHANGED,
+                        entityType = AuditEntityType.CLUB,
+                        entityId = clubId,
+                        summary = "Set ${updated.name} tournaments sanctioned=$sanctioned",
+                        details = mapOf("clubId" to clubId.toString(), "sanctioned" to sanctioned.toString()),
+                    ),
+            )
+            toView(club = updated)
+        }
 
-    /** Staff (HOST/CLUB_OWNER/ADMINISTRATOR) access, for reads like the club list. */
-    private fun requireStaff(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
+    /** Access gate: the caller must hold one of [allowed]. Returns the caller's id (the audit actor). */
+    private fun requireCapability(
+        token: VerifiedFirebaseToken,
+        allowed: Set<Capability>,
+    ): Either<ServiceError, UUID> {
         val caller = users.findByFirebaseUid(firebaseUid = token.uid)
-        val isStaff = caller != null && caller.capabilities.any { it in CLUB_STAFF_ROLES }
-        return if (caller == null || !isStaff) ServiceError.Forbidden().left() else caller.id.right()
+        val permitted = caller != null && caller.capabilities.any { it in allowed }
+        return if (caller == null || !permitted) ServiceError.Forbidden().left() else caller.id.right()
     }
 }

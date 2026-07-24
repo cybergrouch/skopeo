@@ -27,6 +27,7 @@ import org.skopeo.model.MatchSetResult
 import org.skopeo.model.MatchStatus
 import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
+import org.skopeo.model.PlacementBracket
 import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.ServiceError
 import org.skopeo.model.TeamType
@@ -204,6 +205,37 @@ class MatchRepositoryTest {
             completedAt = LocalDateTime.now(),
         )
         return match.id
+    }
+
+    @Test
+    fun `a placement fixture round-trips its bracket, a regular fixture has none (#525)`() {
+        val u1 = newUser(uid = "u1")
+        val u2 = newUser(uid = "u2")
+        val placement =
+            matches.createFixture(
+                command =
+                    CreateFixtureCommand(
+                        matchFormat = TeamType.SINGLES,
+                        matchType = MatchType.TOURNAMENT_PLAYOFFS,
+                        matchDate = LocalDate.of(2026, 1, 1),
+                        team1UserIds = listOf(element = u1),
+                        team2UserIds = listOf(element = u2),
+                        team1Name = "T1",
+                        team2Name = "T2",
+                        createdBy = u1,
+                        isPlacementMatch = true,
+                        placementBracket = PlacementBracket.SUPER_FINALS,
+                    ),
+            )
+        matches.findById(matchId = placement.id).shouldBeRight().let {
+            it.isPlacementMatch shouldBe true
+            it.placementBracket shouldBe PlacementBracket.SUPER_FINALS
+        }
+        // A regular fixture defaults to non-placement with no bracket.
+        fixture(u1 = u1, u2 = u2).let {
+            it.isPlacementMatch shouldBe false
+            it.placementBracket.shouldBeNull()
+        }
     }
 
     @Test
