@@ -6,6 +6,9 @@ package org.skopeo.service.calculator.impl.v2
 import java.io.File
 import java.util.Locale
 import kotlin.math.ceil
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 import kotlin.random.Random
@@ -173,6 +176,20 @@ class PointsRankingSimulationReport {
         private const val BAND_STEP_UP_PROB = 0.5
         private const val PART5_SEED_TAG = 6_262
         private const val PART5_MOVE_SEED_TAG = 7_272
+
+        // --- #544 Part 6: collision saturation vs cohort population + tie-breakers ---
+        // Collisions are ultimately governed by cohort population vs distinct reachable totals
+        // (pigeonhole). A single-band cohort of the recommended §13 recipe (Fibonacci-margin, Seasonal
+        // 3mo/12mo, ×1) is grown from 50 to 1600 players; collisions saturate toward 100% as N exceeds
+        // the recipe's distinct-total ceiling. Two tie-breakers are then measured: cumulative matches
+        // played, and rating confidence (0..1, modeled from recent-match recency × sparsity, per #343/#459).
+        @Suppress("MagicNumber") // cohort sizes swept for the saturation curve
+        private val COHORT_SIZES = listOf(50, 100, 200, 400, 800, 1_600)
+        private const val COHORT_MAX = 1_600
+        private const val CONF_MATCHES = 5.0 // matches to reach full sparsity credit (min(1, m/5))
+        private const val CONF_WINDOW_DAYS = 90.0 // recency window feeding the confidence measure
+        private const val CONF_BUCKET = 100.0 // confidence rounded to 2 decimals (0..1 → 101 buckets)
+        private const val SATURATION_SEED_TAG = 8_282
     }
 
     private enum class SkillClass(val label: String, val winRate: Double, val placementChance: Double) {
@@ -242,6 +259,17 @@ class PointsRankingSimulationReport {
         val label: String,
         val openValidity: Int,
         val tourneyValidity: Int,
+    )
+
+    /**
+     * One sampled player in the saturation study (#544): active [score] at the 3-year horizon, the two
+     * candidate tie-break keys — [cumulativeMatches] (all events to date) and [confidence] (0..1, modeled
+     * from recent-match recency × sparsity, per #343/#459).
+     */
+    private data class PlayerSample(
+        val score: Double,
+        val cumulativeMatches: Int,
+        val confidence: Double,
     )
 
     // Baseline is the current design; the others explore raising the ceiling toward ~10k and growing
@@ -562,6 +590,7 @@ class PointsRankingSimulationReport {
         return buildString {
             append("# Points ranking — Monte Carlo results\n\n")
             append("_Seed $SEED, $TRIALS trials per cell. Sanctioned tournament table; unsanctioned = half._\n\n")
+            append(section0(baseline = baseline, bands = assignBands()))
             append(section1(skills = skills, expectedOpen = expectedOpen, expectedTourney = expectedTourney))
             append(section2(skills = skills))
             append(section3(skills = skills))
@@ -572,6 +601,7 @@ class PointsRankingSimulationReport {
             append(section8(assignments = assignments))
             append(section9(assignments = assignments))
             append(part5(assignments = assignments, baseline = baseline))
+            append(part6())
         }
     }
 
@@ -705,7 +735,7 @@ class PointsRankingSimulationReport {
             append("\n## 8. Alternative open-play scheme — game-margin Fibonacci vs band difference (#530)\n\n")
             append(
                 "_Same $POPULATION-player population & default policy (×1 scale, open 2 mo / tourney 6 mo); " +
-                    "only the open-play point function differs. Band = current design (increments {−2,0,1,2,3,5}); " +
+                    "only the open-play point function differs. Band = current design (increments {−2,−1,0,1,2,3,5}); " +
                     "Fib = fib(2+margin) to the set winner (increments {2,3,5,8,13,21}). Range = min–max player total._\n\n",
             )
             append(
@@ -741,6 +771,50 @@ class PointsRankingSimulationReport {
             }
         }
     }
+
+    /**
+     * #525 §0: the CURRENT implementation, simulated on its own to frame the problem the study addresses
+     * — band-difference open play + placement tournaments at default validity, no Fibonacci / finer
+     * increment / fixed-point. Reuses the baseline scenario scores and the §10 band assignment.
+     */
+    private fun section0(
+        baseline: Map<Int, DoubleArray>,
+        bands: IntArray,
+    ): String =
+        buildString {
+            append("\n## 0. The problem — current ranking-points implementation (#525)\n\n")
+            append(
+                "_Monte Carlo of the CURRENT design only: band-difference open play (per-set increments " +
+                    "{−2, −1, 0, 1, 2, 3, 5}; the −1 = a favorite who loses but clears the ≥4-games ALP threshold, " +
+                    "RLP −2 + ALP +1) + placement tournaments (80/60/40/30), default validity open 2mo / " +
+                    "tournament 6mo, ×1. No Fibonacci, no finer increment, no fixed-point. $POPULATION players. " +
+                    "Everything after this section is an attempt to improve on these numbers._\n\n",
+            )
+            append(
+                row(
+                    cells = listOf("Horizon", "pooled coll%", "band-scoped coll%", "sd", "mean", "range", "distinct"),
+                ),
+            )
+            append(row(cells = listOf("---", "---:", "---:", "---:", "---:", "---:", "---:")))
+            HORIZONS.forEach { (days, label) ->
+                val s = spreadStats(scores = baseline.getValue(key = days))
+                val bs = bandScoped(scores = baseline.getValue(key = days), bands = bands)
+                append(
+                    row(
+                        cells =
+                            listOf(
+                                label,
+                                "${fmt(value = s.collisionPct)}%",
+                                "${fmt(value = bs.aggregateCollisionPct)}%",
+                                fmt(value = s.sd),
+                                fmt(value = s.mean),
+                                "${fmt(value = s.min)}–${fmt(value = s.max)}",
+                                s.distinctCount.toString(),
+                            ),
+                    ),
+                )
+            }
+        }
 
     private fun section1(
         skills: List<SkillClass>,
@@ -1316,6 +1390,138 @@ class PointsRankingSimulationReport {
                                 fmt(value = pooled.sd),
                                 fmt(value = pooled.mean),
                                 "${fmt(value = pooled.min)}–${fmt(value = pooled.max)}",
+                            ),
+                    ),
+                )
+            }
+        }
+
+    // --- #544 Part 6: collision saturation vs cohort population + tie-breakers ---
+
+    /**
+     * Sample [COHORT_MAX] players in a single band under the recommended §13 recipe (Fibonacci-margin,
+     * Seasonal 3mo/12mo, ×1). Each player is seeded independently by index, so a cohort of size N is the
+     * first N of this list — cohorts nest, giving a clean saturation curve.
+     */
+    private fun cohortSamples(): List<PlayerSample> {
+        val scenario =
+            Scenario(label = "Seasonal §544", scale = 1.0, openValidity = V_3_MONTHS, tourneyValidity = V_12_MONTHS)
+        return List(size = COHORT_MAX) { i ->
+            val rng = Random(seed = SEED + SATURATION_SEED_TAG + i)
+            val skill = pick(rng = rng, items = SkillClass.entries, weights = SKILL_WEIGHTS)
+            val behavior = pick(rng = rng, items = BehaviorClass.entries, weights = BEHAVIOR_WEIGHTS)
+            val stream =
+                playerStream(skill = skill, behavior = behavior, scenario = scenario, rng = rng, openFn = ::fibMarginOpenPlayPoints)
+            PlayerSample(
+                score = activeScoreAt(stream = stream, horizon = H_3YR),
+                cumulativeMatches = stream.count { it.time <= H_3YR },
+                confidence = confidenceOf(stream = stream),
+            )
+        }
+    }
+
+    /** Modeled rating confidence (#343/#459): recency × sparsity over the recent window; 0 if no recent play. */
+    private fun confidenceOf(stream: List<Ev>): Double {
+        val recent = stream.filter { it.time > H_3YR - CONF_WINDOW_DAYS && it.time <= H_3YR }
+        if (recent.isEmpty()) return 0.0
+        val sparsity = min(a = 1.0, b = recent.size / CONF_MATCHES)
+        val daysSinceLast = H_3YR - recent.maxOf { it.time }
+        val recency = max(a = 0.0, b = 1.0 - daysSinceLast / CONF_WINDOW_DAYS)
+        return sparsity * recency
+    }
+
+    /** Collision % among the first [n] samples with no tie-breaker (players sharing a rounded total). */
+    private fun rawCollisionPct(
+        samples: List<PlayerSample>,
+        n: Int,
+    ): Double = spreadStats(scores = DoubleArray(size = n) { samples[it].score }).collisionPct
+
+    /**
+     * Residual collision % after a tie-breaker: players sharing BOTH a rounded total AND a rounded
+     * tie-break key ([keyOf]) with someone else still count as collided.
+     */
+    private fun residualCollisionPct(
+        samples: List<PlayerSample>,
+        n: Int,
+        keyOf: (PlayerSample) -> Double,
+    ): Double {
+        val collided =
+            (0 until n)
+                .groupingBy { samples[it].score.roundToInt() to keyOf(samples[it]).roundToInt() }
+                .eachCount()
+                .values
+                .filter { it > 1 }
+                .sum()
+        return collided.toDouble() / n * PERCENT
+    }
+
+    /** Balls-in-bins (birthday) estimate of collision % for [n] players over [distinct] uniform totals. */
+    private fun analyticCollisionPct(
+        n: Int,
+        distinct: Int,
+    ): Double {
+        val occupied = distinct * (1.0 - (1.0 - 1.0 / distinct).pow(n = n))
+        return (1.0 - occupied / n) * PERCENT
+    }
+
+    private fun part6(): String {
+        val samples = cohortSamples()
+        val distinct = spreadStats(scores = DoubleArray(size = COHORT_MAX) { samples[it].score }).distinctCount
+        return section14(samples = samples, distinct = distinct) +
+            section15(samples = samples)
+    }
+
+    /** #544: collision saturation vs cohort population, MC vs the birthday-model estimate. */
+    private fun section14(
+        samples: List<PlayerSample>,
+        distinct: Int,
+    ): String =
+        buildString {
+            append("\n## 14. Collision saturation vs cohort population (#544)\n\n")
+            append(
+                "_Single-band cohort under the recommended §13 recipe (Fibonacci-margin, Seasonal 3mo/12mo, ×1), " +
+                    "grown from 50 to $COHORT_MAX players (cohorts nest). The recipe reaches **$distinct** distinct " +
+                    "reachable totals, so as N passes that ceiling collisions saturate toward 100%. 'Analytic' is the " +
+                    "balls-in-bins estimate over $distinct uniform bins — an optimistic lower bound (real totals are " +
+                    "peaked, so MC ≥ analytic)._\n\n",
+            )
+            append(row(cells = listOf("cohort N", "MC collision%", "analytic collision%")))
+            append(row(cells = listOf("---:", "---:", "---:")))
+            COHORT_SIZES.forEach { n ->
+                append(
+                    row(
+                        cells =
+                            listOf(
+                                n.toString(),
+                                "${fmt(value = rawCollisionPct(samples = samples, n = n))}%",
+                                "${fmt(value = analyticCollisionPct(n = n, distinct = distinct))}%",
+                            ),
+                    ),
+                )
+            }
+        }
+
+    /** #544: residual collisions after a tie-breaker — cumulative matches played vs rating confidence. */
+    private fun section15(samples: List<PlayerSample>): String =
+        buildString {
+            append("\n## 15. Tie-breaker efficacy — matches played vs rating confidence (#544)\n\n")
+            append(
+                "_Residual collision % after breaking ties on a secondary key. 'Matches played' = cumulative event " +
+                    "count (unbounded, high granularity). 'Confidence' = the 0..1 rating-confidence measure (recency × " +
+                    "sparsity, 2 decimals), which **saturates near 1.0** for active regulars — so it breaks fewer ties " +
+                    "among the established mass than an unbounded count does._\n\n",
+            )
+            append(row(cells = listOf("cohort N", "no tie-break", "+ matches played", "+ confidence")))
+            append(row(cells = listOf("---:", "---:", "---:", "---:")))
+            COHORT_SIZES.forEach { n ->
+                append(
+                    row(
+                        cells =
+                            listOf(
+                                n.toString(),
+                                "${fmt(value = rawCollisionPct(samples = samples, n = n))}%",
+                                "${fmt(value = residualCollisionPct(samples = samples, n = n) { it.cumulativeMatches.toDouble() })}%",
+                                "${fmt(value = residualCollisionPct(samples = samples, n = n) { it.confidence * CONF_BUCKET })}%",
                             ),
                     ),
                 )
