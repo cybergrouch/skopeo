@@ -149,6 +149,30 @@ class PointsRankingSimulationReport {
         @Suppress("MagicNumber") // dominance sub-tier fractional bonuses
         private val FRACTIONAL_TIERS = doubleArrayOf(0.0, 0.25, 0.50, 0.75)
         private const val PART4_SEED_TAG = 5_252
+
+        // --- #542 Part 5: band-scoped collisions & band movement ---
+        // Ranking points are band-tagged (#525): the standings race is per NTRP band, so collisions
+        // only matter WITHIN a band cohort, and a band move resets the current-band race (old points go
+        // dormant). Each player is assigned an NTRP band from a documented, realistic distribution; the
+        // spread/collision metrics are then recomputed per band cohort and contrasted with the pooled
+        // (all-players-one-race) numbers, and again under a rare band-movement model.
+        @Suppress("MagicNumber") // NTRP bands 2.5..5.5 in 0.5 steps
+        private val BANDS = doubleArrayOf(2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5)
+
+        // Realistic recreational mix, weighted toward the 3.0–4.5 middle (sums to 1.0). Documented in
+        // the study; the relative band-scoped vs pooled findings are robust to the exact split.
+        @Suppress("MagicNumber") // documented NTRP-band population weights
+        private val BAND_WEIGHTS = doubleArrayOf(0.08, 0.18, 0.24, 0.22, 0.15, 0.09, 0.04)
+        private const val BAND_SEED = 1_300L
+
+        // Band movement: ~8% of players move band per month (≈ the 8/100-in-the-first-month observation);
+        // on a move the current-band total resets to 0 and the old-band points go dormant. A move steps
+        // one band up or down with equal probability (clamped to the band range).
+        private const val DAYS_PER_MONTH = 30.0
+        private const val BAND_MOVE_MONTHLY_PROB = 0.08
+        private const val BAND_STEP_UP_PROB = 0.5
+        private const val PART5_SEED_TAG = 6_262
+        private const val PART5_MOVE_SEED_TAG = 7_272
     }
 
     private enum class SkillClass(val label: String, val winRate: Double, val placementChance: Double) {
@@ -189,6 +213,33 @@ class PointsRankingSimulationReport {
     private data class Scenario(
         val label: String,
         val scale: Double,
+        val openValidity: Int,
+        val tourneyValidity: Int,
+    )
+
+    /** Band-scoped spread/collisions (#542): per-band stats + sizes, plus the population-weighted collision rate. */
+    private data class BandScoped(
+        val perBand: Map<Int, SpreadStats>,
+        val perBandSize: Map<Int, Int>,
+        val aggregateCollisionPct: Double,
+    )
+
+    /**
+     * One horizon snapshot under band movement (#542). Arrays are indexed by player. [fixedBand] is the
+     * initial band (no-movement band-scoping); [currentBand] is the band in effect at the horizon
+     * (with-movement band-scoping). [pooledScore] is the full active score; [movedScore] is the
+     * current-band score (only points earned since the last band move at-or-before the horizon).
+     */
+    private data class MovementSnapshot(
+        val fixedBand: IntArray,
+        val currentBand: IntArray,
+        val pooledScore: DoubleArray,
+        val movedScore: DoubleArray,
+    )
+
+    /** A candidate validity policy (#542 §13): a label plus open-play and tournament validity (days). */
+    private data class ValidityStance(
+        val label: String,
         val openValidity: Int,
         val tourneyValidity: Int,
     )
@@ -520,7 +571,41 @@ class PointsRankingSimulationReport {
             append(section7(all = allScenarioScores))
             append(section8(assignments = assignments))
             append(section9(assignments = assignments))
+            append(part5(assignments = assignments, baseline = baseline))
         }
+    }
+
+    /** #542 Part 5: band-scoped collisions (§10–11) and band movement (§12) on the shared population. */
+    private fun part5(
+        assignments: List<Pair<SkillClass, BehaviorClass>>,
+        baseline: Map<Int, DoubleArray>,
+    ): String {
+        val bands = assignBands()
+        // Legitimate recipe (#542): Fibonacci-margin open play + long validity (12mo/36mo), ×1.
+        // No finer increment and no fixed-point scaling — both were disqualified in Part 4 (the finer
+        // increment separates by random noise, and ×100 was only introduced to carry it), so band
+        // scoping is measured on the honest, merit-based scheme.
+        val longScenario =
+            Scenario(label = "Fib long validity", scale = 1.0, openValidity = V_12_MONTHS, tourneyValidity = V_36_MONTHS)
+        val longScores =
+            scenarioScores(
+                scenario = longScenario,
+                assignments = assignments,
+                openFn = ::fibMarginOpenPlayPoints,
+                seedTag = PART5_SEED_TAG,
+            )
+        val movement =
+            movementRun(
+                scenario = longScenario,
+                assignments = assignments,
+                bands = bands,
+                openFn = ::fibMarginOpenPlayPoints,
+                seedTag = PART5_MOVE_SEED_TAG,
+            )
+        return section10(bands = bands, pooledBaseline = baseline, longScores = longScores) +
+            section11(bands = bands, longScores = longScores) +
+            section12(movement = movement) +
+            section13(assignments = assignments, bands = bands)
     }
 
     private fun p4Row(
@@ -864,6 +949,116 @@ class PointsRankingSimulationReport {
         )
     }
 
+    // --- #542: band model, band-scoped metrics & band movement ---
+
+    /** Assign each player an NTRP band index (into [BANDS]) from [BAND_WEIGHTS] (seeded, independent). */
+    private fun assignBands(): IntArray {
+        val rng = Random(seed = SEED + BAND_SEED)
+        return IntArray(size = POPULATION) { pick(rng = rng, items = BANDS.indices.toList(), weights = BAND_WEIGHTS) }
+    }
+
+    private fun bandLabel(index: Int): String = String.format(Locale.US, "%.1f", BANDS[index])
+
+    /** Players tied on an exact integer total with at least one other player. */
+    private fun collidedCount(scores: DoubleArray): Int =
+        scores.asList().groupingBy { it.roundToInt() }.eachCount().values.filter { it > 1 }.sum()
+
+    /**
+     * Recompute spread/collisions PER band cohort (group by band, ties only within a cohort) plus a
+     * population-weighted aggregate collision rate = total within-cohort collided players / population.
+     */
+    private fun bandScoped(
+        scores: DoubleArray,
+        bands: IntArray,
+    ): BandScoped {
+        val cohorts =
+            scores.indices
+                .groupBy { bands[it] }
+                .toSortedMap()
+                .mapValues { (_, idx) -> DoubleArray(size = idx.size) { i -> scores[idx[i]] } }
+        val collided = cohorts.values.sumOf { arr -> collidedCount(scores = arr) }
+        return BandScoped(
+            perBand = cohorts.mapValues { (_, arr) -> spreadStats(scores = arr) },
+            perBandSize = cohorts.mapValues { (_, arr) -> arr.size },
+            aggregateCollisionPct = collided.toDouble() / scores.size * PERCENT,
+        )
+    }
+
+    /** A player's band-move timeline over [0, MAX_HORIZON]: (moveTime, newBandIndex), oldest first. */
+    private fun bandMoves(
+        rng: Random,
+        initialBand: Int,
+    ): List<Pair<Double, Int>> {
+        val moves = ArrayList<Pair<Double, Int>>()
+        var band = initialBand
+        val months = (MAX_HORIZON_DAYS / DAYS_PER_MONTH).toInt()
+        for (m in 1..months) {
+            if (rng.nextDouble() < BAND_MOVE_MONTHLY_PROB) {
+                val step = if (rng.nextDouble() < BAND_STEP_UP_PROB) 1 else -1
+                band = (band + step).coerceIn(minimumValue = 0, maximumValue = BANDS.lastIndex)
+                moves.add(element = (m * DAYS_PER_MONTH) to band)
+            }
+        }
+        return moves
+    }
+
+    /** The most-recent move at-or-before [horizon]: (lastMoveTime, currentBand); 0.0/initial band if none. */
+    private fun stateAt(
+        moves: List<Pair<Double, Int>>,
+        initialBand: Int,
+        horizon: Double,
+    ): Pair<Double, Int> {
+        val last = moves.lastOrNull { it.first <= horizon }
+        return (last?.first ?: 0.0) to (last?.second ?: initialBand)
+    }
+
+    /** Active current-band score: still-valid points earned strictly after the last band move. */
+    private fun currentBandScoreAt(
+        stream: List<Ev>,
+        horizon: Int,
+        lastMoveTime: Double,
+    ): Double =
+        stream
+            .filter { it.time <= horizon && it.time > horizon - it.validity && it.time > lastMoveTime }
+            .sumOf { it.points }
+
+    /**
+     * Per-horizon snapshot of the population under band movement. Each player is streamed once (matched
+     * to the no-movement draw), then band moves cut the current-band race. Both the pooled (no-reset)
+     * and moved (reset-on-move) scores are captured so the two are compared on the same draw.
+     */
+    private fun movementRun(
+        scenario: Scenario,
+        assignments: List<Pair<SkillClass, BehaviorClass>>,
+        bands: IntArray,
+        openFn: (Random, Double) -> Double,
+        seedTag: Int,
+    ): Map<Int, MovementSnapshot> {
+        val snaps =
+            HORIZONS.associate { (days, _) ->
+                days to
+                    MovementSnapshot(
+                        fixedBand = bands.copyOf(),
+                        currentBand = IntArray(size = POPULATION),
+                        pooledScore = DoubleArray(size = POPULATION),
+                        movedScore = DoubleArray(size = POPULATION),
+                    )
+            }
+        assignments.forEachIndexed { idx, (skill, behavior) ->
+            val rng = Random(seed = SEED + seedTag + idx)
+            val stream = playerStream(skill = skill, behavior = behavior, scenario = scenario, rng = rng, openFn = openFn)
+            val moves = bandMoves(rng = rng, initialBand = bands[idx])
+            HORIZONS.forEach { (days, _) ->
+                val snap = snaps.getValue(key = days)
+                val (lastMove, currentBand) = stateAt(moves = moves, initialBand = bands[idx], horizon = days.toDouble())
+                snap.currentBand[idx] = currentBand
+                snap.pooledScore[idx] = activeScoreAt(stream = stream, horizon = days)
+                snap.movedScore[idx] = currentBandScoreAt(stream = stream, horizon = days, lastMoveTime = lastMove)
+            }
+        }
+        return snaps
+    }
+
     private fun section6(baseline: Map<Int, DoubleArray>): String =
         buildString {
             append("\n## 6. Population point-spread & collisions over time (baseline, default policy)\n\n")
@@ -915,6 +1110,212 @@ class PointsRankingSimulationReport {
                                 fmt(value = y3.max),
                                 fmt(value = y3.sd),
                                 "${fmt(value = y3.collisionPct)}%",
+                            ),
+                    ),
+                )
+            }
+        }
+
+    private fun bandMixTable(bands: IntArray): String =
+        buildString {
+            append("Population NTRP-band mix (seeded, weighted toward 3.0–4.5):\n\n")
+            append(row(cells = listOf("NTRP band", "players", "share")))
+            append(row(cells = listOf("---", "---:", "---:")))
+            BANDS.indices.forEach { b ->
+                val n = bands.count { it == b }
+                append(row(cells = listOf(bandLabel(index = b), n.toString(), "${fmt(value = n.toDouble() / POPULATION * PERCENT)}%")))
+            }
+        }
+
+    private fun collisionCompareTable(
+        bands: IntArray,
+        pooledBaseline: Map<Int, DoubleArray>,
+        longScores: Map<Int, DoubleArray>,
+    ): String =
+        buildString {
+            append("\nCollision % — pooled (all players, one race) vs band-scoped (within each band cohort):\n\n")
+            append(
+                row(
+                    cells =
+                        listOf(
+                            "Horizon",
+                            "pooled (current)",
+                            "band-scoped (current)",
+                            "pooled (long)",
+                            "band-scoped (long)",
+                        ),
+                ),
+            )
+            append(row(cells = listOf("---", "---:", "---:", "---:", "---:")))
+            HORIZONS.forEach { (days, label) ->
+                val cp = spreadStats(scores = pooledBaseline.getValue(key = days)).collisionPct
+                val cb = bandScoped(scores = pooledBaseline.getValue(key = days), bands = bands).aggregateCollisionPct
+                val kp = spreadStats(scores = longScores.getValue(key = days)).collisionPct
+                val kb = bandScoped(scores = longScores.getValue(key = days), bands = bands).aggregateCollisionPct
+                append(
+                    row(cells = listOf(label, "${fmt(value = cp)}%", "${fmt(value = cb)}%", "${fmt(value = kp)}%", "${fmt(value = kb)}%")),
+                )
+            }
+        }
+
+    /** #542: same population/draw, collisions counted per band cohort vs pooled across horizons. */
+    private fun section10(
+        bands: IntArray,
+        pooledBaseline: Map<Int, DoubleArray>,
+        longScores: Map<Int, DoubleArray>,
+    ): String =
+        buildString {
+            append("\n## 10. Band-scoped vs pooled collisions (#542)\n\n")
+            append(
+                "_Points are band-tagged (#525): the standings race runs per NTRP band, so a collision only " +
+                    "matters WITHIN a band cohort. Grouping the same $POPULATION-player draw by band and counting ties " +
+                    "only inside each cohort gives the band-scoped rate; the pooled rate treats everyone as one race. " +
+                    "'Current' = the band-difference scheme (×1, 2mo/6mo); 'long' = the legitimate recipe — " +
+                    "Fibonacci-margin + long validity (12mo/36mo), ×1, with no finer increment and no fixed-point " +
+                    "(both disqualified in Part 4)._\n\n",
+            )
+            append(bandMixTable(bands = bands))
+            append(collisionCompareTable(bands = bands, pooledBaseline = pooledBaseline, longScores = longScores))
+        }
+
+    /** #542: per-band cohort detail at the 3-year horizon under the legitimate long-validity recipe. */
+    private fun section11(
+        bands: IntArray,
+        longScores: Map<Int, DoubleArray>,
+    ): String =
+        buildString {
+            append("\n## 11. Per-band cohort detail at 3-yr — Fibonacci-margin, long validity (#542)\n\n")
+            append(
+                "_The legitimate recipe (Fibonacci-margin + long validity, ×1) at the fully-warmed 3-year horizon, " +
+                    "broken out by band cohort. Smaller cohorts have fewer players chasing the same distinct totals, so " +
+                    "within-band collisions run well below the pooled rate for the same recipe._\n\n",
+            )
+            append(row(cells = listOf("NTRP band", "players", "sd", "min–max", "distinct totals", "collision %")))
+            append(row(cells = listOf("---", "---:", "---:", "---:", "---:", "---:")))
+            val bs = bandScoped(scores = longScores.getValue(key = H_3YR), bands = bands)
+            bs.perBand.forEach { (band, s) ->
+                append(
+                    row(
+                        cells =
+                            listOf(
+                                bandLabel(index = band),
+                                bs.perBandSize.getValue(key = band).toString(),
+                                fmt(value = s.sd),
+                                "${fmt(value = s.min)}–${fmt(value = s.max)}",
+                                s.distinctCount.toString(),
+                                "${fmt(value = s.collisionPct)}%",
+                            ),
+                    ),
+                )
+            }
+        }
+
+    /** #542: rare band movement resets the current-band race; band-scoped collisions with vs without moves. */
+    private fun section12(movement: Map<Int, MovementSnapshot>): String =
+        buildString {
+            append("\n## 12. Band movement — resetting the current-band race (#542)\n\n")
+            append(
+                "_Fibonacci-margin, long-validity recipe (×1). " +
+                    "~${fmt(value = BAND_MOVE_MONTHLY_PROB * PERCENT)}% of players move band per " +
+                    "month; on a move the current-band total resets to 0 and the old-band points go dormant (they only " +
+                    "reactivate on a move back). 'Moved players' = share whose band at the horizon differs from their " +
+                    "start. Band-scoped collisions grouped by CURRENT band; means show how much the reset trims the " +
+                    "active total._\n\n",
+            )
+            append(
+                row(
+                    cells =
+                        listOf(
+                            "Horizon",
+                            "moved players",
+                            "band-scoped (no move)",
+                            "band-scoped (with move)",
+                            "mean (with move)",
+                            "mean (no move)",
+                        ),
+                ),
+            )
+            append(row(cells = listOf("---", "---:", "---:", "---:", "---:", "---:")))
+            HORIZONS.forEach { (days, label) ->
+                val snap = movement.getValue(key = days)
+                val moved = snap.currentBand.indices.count { snap.currentBand[it] != snap.fixedBand[it] }.toDouble() / POPULATION * PERCENT
+                val noMove = bandScoped(scores = snap.pooledScore, bands = snap.fixedBand).aggregateCollisionPct
+                val withMove = bandScoped(scores = snap.movedScore, bands = snap.currentBand).aggregateCollisionPct
+                append(
+                    row(
+                        cells =
+                            listOf(
+                                label,
+                                "${fmt(value = moved)}%",
+                                "${fmt(value = noMove)}%",
+                                "${fmt(value = withMove)}%",
+                                fmt(value = snap.movedScore.average()),
+                                fmt(value = snap.pooledScore.average()),
+                            ),
+                    ),
+                )
+            }
+        }
+
+    /**
+     * #542 §13: validity-window recommendation. The legitimate recipe (Fibonacci-margin, ×1, band-scoped)
+     * is run across candidate (open, tournament) validity pairs on the SAME seeded draws (only the
+     * validity window differs), so the comparison isolates validity. Reported at the 3-year horizon:
+     * pooled vs band-scoped collisions, spread, mean active points, and the population point range.
+     */
+    private fun section13(
+        assignments: List<Pair<SkillClass, BehaviorClass>>,
+        bands: IntArray,
+    ): String =
+        buildString {
+            val stances =
+                listOf(
+                    ValidityStance(label = "Current (1mo / 6mo)", openValidity = V_1_MONTH, tourneyValidity = V_6_MONTHS),
+                    ValidityStance(label = "Seasonal (3mo / 12mo)", openValidity = V_3_MONTHS, tourneyValidity = V_12_MONTHS),
+                    ValidityStance(label = "Extended (6mo / 12mo)", openValidity = V_6_MONTHS, tourneyValidity = V_12_MONTHS),
+                    ValidityStance(label = "Long (12mo / 36mo)", openValidity = V_12_MONTHS, tourneyValidity = V_36_MONTHS),
+                )
+            append("\n## 13. Validity-window recommendation (#542)\n\n")
+            append(
+                "_Legitimate recipe (Fibonacci-margin, ×1) at the 3-year horizon, band-scoped. Each stance keeps " +
+                    "tournaments strictly longer than open play; windows map to the existing PointClass tiers " +
+                    "(open-play / SEASONAL_TOURNAMENT_*M / ANNUAL_TOURNAMENT). All stances run on the SAME seeded draws, " +
+                    "so only the validity window differs. Range = min–max player total (pooled)._\n\n",
+            )
+            append(
+                row(
+                    cells = listOf("Stance (open / tourney)", "pooled coll%", "band-scoped coll%", "sd", "mean pts", "range"),
+                ),
+            )
+            append(row(cells = listOf("---", "---:", "---:", "---:", "---:", "---:")))
+            stances.forEach { st ->
+                val scenario =
+                    Scenario(
+                        label = st.label,
+                        scale = 1.0,
+                        openValidity = st.openValidity,
+                        tourneyValidity = st.tourneyValidity,
+                    )
+                val scores =
+                    scenarioScores(
+                        scenario = scenario,
+                        assignments = assignments,
+                        openFn = ::fibMarginOpenPlayPoints,
+                        seedTag = PART5_SEED_TAG,
+                    )
+                val at3 = scores.getValue(key = H_3YR)
+                val pooled = spreadStats(scores = at3)
+                val bs = bandScoped(scores = at3, bands = bands)
+                append(
+                    row(
+                        cells =
+                            listOf(
+                                st.label,
+                                "${fmt(value = pooled.collisionPct)}%",
+                                "${fmt(value = bs.aggregateCollisionPct)}%",
+                                fmt(value = pooled.sd),
+                                fmt(value = pooled.mean),
+                                "${fmt(value = pooled.min)}–${fmt(value = pooled.max)}",
                             ),
                     ),
                 )
