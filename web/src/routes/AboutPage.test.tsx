@@ -2,9 +2,16 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { AboutPage } from "./AboutPage";
+import { webCommit } from "@/lib/version";
 
 // Logged-out visitor — PublicPageNav reads useAuth.
 vi.mock("@/auth/useAuth", () => ({ useAuth: () => ({ user: null }) }));
+
+// Build-version source stubbed so the footer's commit branch is exercisable.
+vi.mock("@/lib/version", () => ({
+  webVersion: vi.fn(() => "dev"),
+  webCommit: vi.fn(() => ""),
+}));
 
 function renderAbout() {
   return render(
@@ -33,8 +40,14 @@ describe("AboutPage", () => {
 
   it("shows the build version", () => {
     renderAbout();
-    // VITE_APP_VERSION is unset in tests → webVersion() falls back to "dev".
+    // webVersion() → "dev" and webCommit() → "" (stubbed), so no commit suffix.
     expect(screen.getByText(/Skopeo build dev/)).toBeInTheDocument();
+  });
+
+  it("appends the short commit sha when present", () => {
+    vi.mocked(webCommit).mockReturnValue("abcdef1234567");
+    renderAbout();
+    expect(screen.getByText(/Skopeo build dev · abcdef1/)).toBeInTheDocument();
   });
 
   it("links to sign-up and log-in", () => {
