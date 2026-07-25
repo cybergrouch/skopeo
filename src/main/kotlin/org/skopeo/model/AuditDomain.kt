@@ -33,9 +33,7 @@ enum class AuditAction {
     EVENT_FINALIZED,
     EVENT_UNFINALIZED,
     EVENT_RATINGS_REVERSED,
-    EVENT_POINTS_CONFIG_SET,
     EVENT_POINTS_AWARDED,
-    FIXTURE_POINTS_DESIGNATED,
     FIXTURE_HANDICAP_SET,
     RATING_CALCULATION_PREVIEWED,
     RATING_CALCULATION_MATCH_RATED,
@@ -61,7 +59,6 @@ enum class AuditAction {
     RANKING_POINTS_REVOKED,
     STANDINGS_RECALCULATED,
     STANDINGS_PUBLISHED,
-    POINTS_BUDGET_ALLOCATED,
     PLACEHOLDER_CREATED,
     PLACEHOLDER_CLAIMED,
     ACCOUNT_DELETED,
@@ -82,7 +79,6 @@ enum class AuditEntityType {
     SETTING,
     RANKING_POINT,
     STANDINGS,
-    POINTS_BUDGET,
 }
 
 /**
@@ -106,7 +102,6 @@ enum class AuditCategory {
     SETTINGS_MANAGEMENT,
     RANKING_POINTS,
     STANDINGS,
-    POINTS_BUDGET,
 }
 
 /** The category an action rolls up into. */
@@ -129,7 +124,6 @@ val AuditAction.category: AuditCategory
             -> AuditCategory.RATING_CHANGE
             AuditAction.INVITE_CREATED, AuditAction.INVITE_REVOKED -> AuditCategory.INVITE
             AuditAction.MATCH_FIXTURE_CREATED,
-            AuditAction.FIXTURE_POINTS_DESIGNATED,
             AuditAction.FIXTURE_HANDICAP_SET,
             -> AuditCategory.MATCH_FIXTURE
             AuditAction.MATCH_RESULT_RECORDED -> AuditCategory.MATCH_RESULT
@@ -140,7 +134,6 @@ val AuditAction.category: AuditCategory
             AuditAction.EVENT_FINALIZED,
             AuditAction.EVENT_UNFINALIZED,
             AuditAction.EVENT_RATINGS_REVERSED,
-            AuditAction.EVENT_POINTS_CONFIG_SET,
             AuditAction.EVENT_POINTS_AWARDED,
             -> AuditCategory.EVENT_MANAGEMENT
             AuditAction.RATING_CALCULATION_PREVIEWED,
@@ -176,8 +169,6 @@ val AuditAction.category: AuditCategory
             AuditAction.STANDINGS_RECALCULATED,
             AuditAction.STANDINGS_PUBLISHED,
             -> AuditCategory.STANDINGS
-            AuditAction.POINTS_BUDGET_ALLOCATED,
-            -> AuditCategory.POINTS_BUDGET
         }
 
 /** The actions that roll up into a category (empty for categories whose events aren't wired yet). */

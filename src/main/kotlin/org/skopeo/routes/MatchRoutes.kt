@@ -20,7 +20,6 @@ import org.skopeo.dto.match.CreateFixtureRequest
 import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.dto.match.MatchStateRequest
 import org.skopeo.dto.match.ReorderMatchesRequest
-import org.skopeo.dto.match.SetDesignationRequest
 import org.skopeo.dto.match.SetHandicapsRequest
 import org.skopeo.dto.match.toResponse
 import org.skopeo.dto.rating.toResponse
@@ -108,8 +107,6 @@ private fun toFixtureInput(request: CreateFixtureRequest): FixtureInput {
     val expected = if (matchFormat == TeamType.SINGLES) 1 else 2
     require(value = team1.size == expected && team2.size == expected) { "$matchFormat needs $expected player(s) per side" }
     (team1 + team2).let { all -> require(value = all.toSet().size == all.size) { "a player cannot appear more than once in a match" } }
-    // Designated points (#403 Phase C) are whole and non-negative (decision #6) — reject at the boundary.
-    request.designatedPoints?.let { require(value = it > 0) { "designatedPoints must be a positive integer" } }
     return FixtureInput(
         matchFormat = matchFormat,
         matchType = parseEnumParam<MatchType>(value = request.matchType, field = "matchType"),
@@ -119,8 +116,6 @@ private fun toFixtureInput(request: CreateFixtureRequest): FixtureInput {
         venue = request.venue,
         tournamentName = request.tournamentName,
         eventId = request.eventId?.let { parseUuid(value = it, field = "event id") },
-        designatedPoints = request.designatedPoints,
-        awardPoints = request.awardPoints,
         // Range (0 < h <= 1.0) is enforced in CreateFixtureRequest.init; here we only parse to BigDecimal.
         team1Handicap = request.team1Handicap?.let { BigDecimal(it) },
         team2Handicap = request.team2Handicap?.let { BigDecimal(it) },
@@ -196,25 +191,10 @@ private fun Route.byId(service: MatchService) {
 }
 
 /**
- * Fixture field-update routes (before the match is rated): designated points (#466) and per-side rating
- * handicaps (#486). Handicap ranges are validated in the DTO init; the service enforces the unrated guard.
+ * Fixture field-update routes (before the match is rated): per-side rating handicaps (#486). Handicap
+ * ranges are validated in the DTO init; the service enforces the unrated guard.
  */
 private fun Route.fixtureUpdateRoutes(service: MatchService) {
-    // Set (or clear) a fixture's designated points (#466 opt-in "award points for this match" checkbox).
-    put(path = "/{id}/designation") {
-        respondMappingErrors {
-            val request = call.receive<SetDesignationRequest>()
-            request.designatedPoints?.let { require(value = it > 0) { "designatedPoints must be a positive integer" } }
-            respondEither(
-                result =
-                    service.setDesignation(
-                        token = verifiedToken(),
-                        matchId = uuidParam(name = "id"),
-                        designatedPoints = request.designatedPoints,
-                    ),
-            ) { match -> call.respond(status = HttpStatusCode.OK, message = match.toResponse()) }
-        }
-    }
     put(path = "/{id}/handicaps") {
         respondMappingErrors {
             val request = call.receive<SetHandicapsRequest>()
