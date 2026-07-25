@@ -3,33 +3,27 @@
 
 package org.skopeo.service.event
 
+import org.skopeo.model.BandRelation
 import org.skopeo.model.MatchSetResult
+import org.skopeo.model.OpenPlayPointsConfig
 import java.util.UUID
 
 /**
- * Computes open-play ranking points (#525, TOURNAMENTS_CIRCUITS_AND_OPEN_PLAY_POINTS.md §Part B).
+ * Computes open-play ranking points (#525/#553, TOURNAMENTS_CIRCUITS_AND_OPEN_PLAY_POINTS.md §Part B).
  *
- * A pure function of the two teams' **entry bands** and the match's set results — no I/O — so it is
- * unit-testable in isolation. Points are scored **per set and summed**; the band **relation** (equal /
- * higher / lower) is fixed for the match, but the **category** is decided per set from that relation
- * and who won that set:
- *  - equal bands → winner 3, loser 0
- *  - unequal, the higher-banded team wins the set → winner 2, loser RLP(1) + ALP
- *  - unequal, the lower-banded team wins the set (upset) → winner 5, loser RLP(-2) + ALP
+ * A pure function of the two teams' **entry bands**, the match's set results, and an admin-configurable
+ * [OpenPlayPointsConfig] — no I/O — so it is unit-testable in isolation. Points are scored **per set and
+ * summed**. Each set is dominance-scored by **game margin** (winner games − loser games; a tiebreak-only
+ * set uses tiebreak points as games) and the band **relation** for that set:
+ *  - equal bands → EQUAL
+ *  - the higher-banded team won the set → FAVORITE
+ *  - the lower-banded team won the set (upset) → UPSET
  *
- * ALP (additional loser point) = 1 when, in an unequal set, the losing side took ≥ 4 games; a set
- * decided by a tiebreak with no recorded games uses the loser's tiebreak points as their games.
- * Loser totals can be negative. The overall match winner is irrelevant — each set stands alone.
+ * The (relation, margin) cell of the config gives the winner's and loser's points. Loser totals can be
+ * negative. The overall match winner is irrelevant — each set stands alone. Replaces the former binary
+ * ALP (≥4 loser games) with configurable margin brackets (#553).
  */
 internal object OpenPlayPointsCalculator {
-    private const val WIN_EQUAL = 3
-    private const val WIN_FAVORITE = 2
-    private const val WIN_UPSET = 5
-    private const val RLP_FAVORITE = 1
-    private const val RLP_UPSET = -2
-    private const val ALP_AWARD = 1
-    private const val ALP_THRESHOLD = 4
-
     /** Each team's summed points for a match. */
     data class TeamPoints(
         val team1: Int,
@@ -39,57 +33,66 @@ internal object OpenPlayPointsCalculator {
     /**
      * @param band1 team1's entry band (e.g. "4.0"); [band2] team2's. Compared numerically.
      * @param team1Id team1's id, matched against each set's winner (team2 is inferred as the other side).
+     * @param config the admin-configurable margin-bracket schedule.
      */
     fun compute(
         band1: String,
         band2: String,
         team1Id: UUID,
         sets: List<MatchSetResult>,
+        config: OpenPlayPointsConfig,
     ): TeamPoints {
         val b1 = band1.toBigDecimal()
         val b2 = band2.toBigDecimal()
-        val equalBands = b1 == b2
+        val equalBands = b1.compareTo(other = b2) == 0
         val team1IsHigher = b1 > b2
         var team1Total = 0
         var team2Total = 0
         sets.forEach { set ->
             val team1WonSet = set.winnerTeamId == team1Id
             val higherWonSet = (team1WonSet && team1IsHigher) || (!team1WonSet && !team1IsHigher)
-            val loserGames = loserGamesInSet(set = set, team1WonSet = team1WonSet)
-            val (winnerDelta, loserDelta) =
-                setDeltas(equalBands = equalBands, higherWonSet = higherWonSet, loserGames = loserGames)
+            val relation =
+                when {
+                    equalBands -> BandRelation.EQUAL
+                    higherWonSet -> BandRelation.FAVORITE
+                    else -> BandRelation.UPSET
+                }
+            val cell = config.cell(relation = relation, margin = marginInSet(set = set, team1WonSet = team1WonSet))
             if (team1WonSet) {
-                team1Total += winnerDelta
-                team2Total += loserDelta
+                team1Total += cell.winnerPoints
+                team2Total += cell.loserPoints
             } else {
-                team2Total += winnerDelta
-                team1Total += loserDelta
+                team2Total += cell.winnerPoints
+                team1Total += cell.loserPoints
             }
         }
         return TeamPoints(team1 = team1Total, team2 = team2Total)
     }
 
-    /** Games the set's loser took; a tiebreak-only set (0 games) uses the loser's tiebreak points. */
-    private fun loserGamesInSet(
+    /** The set's game margin (winner games − loser games); a tiebreak-only set uses tiebreak points as games. */
+    private fun marginInSet(
         set: MatchSetResult,
         team1WonSet: Boolean,
     ): Int {
-        val games = if (team1WonSet) set.team2Games else set.team1Games
-        val tiebreak = if (team1WonSet) set.tiebreakTeam2Points else set.tiebreakTeam1Points
-        return if (games == 0 && tiebreak != null) tiebreak else games
+        val winnerGames =
+            effectiveGames(
+                games = if (team1WonSet) set.team1Games else set.team2Games,
+                tiebreak = if (team1WonSet) set.tiebreakTeam1Points else set.tiebreakTeam2Points,
+                set = set,
+            )
+        val loserGames =
+            effectiveGames(
+                games = if (team1WonSet) set.team2Games else set.team1Games,
+                tiebreak = if (team1WonSet) set.tiebreakTeam2Points else set.tiebreakTeam1Points,
+                set = set,
+            )
+        return winnerGames - loserGames
     }
 
-    /** (winner delta, loser delta) for one set given the band relation and the loser's games. */
-    private fun setDeltas(
-        equalBands: Boolean,
-        higherWonSet: Boolean,
-        loserGames: Int,
-    ): Pair<Int, Int> {
-        val alp = if (loserGames >= ALP_THRESHOLD) ALP_AWARD else 0
-        return when {
-            equalBands -> WIN_EQUAL to 0
-            higherWonSet -> WIN_FAVORITE to (RLP_FAVORITE + alp)
-            else -> WIN_UPSET to (RLP_UPSET + alp)
-        }
-    }
+    /** A side's games in a set; a tiebreak-only set (both sides 0 games) uses that side's tiebreak points. */
+    private fun effectiveGames(
+        games: Int,
+        tiebreak: Int?,
+        set: MatchSetResult,
+    ): Int = if (set.team1Games == 0 && set.team2Games == 0 && tiebreak != null) tiebreak else games
 }

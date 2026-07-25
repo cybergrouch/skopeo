@@ -134,6 +134,22 @@ class OpenAPIIntegrationTest {
             body shouldContain "ClubEventPointsResponse"
         }
 
+    /** Admin-configurable global points schedules (#552/#553): the open-play + tournament config contract. */
+    @Test
+    fun testOpenAPISpecIncludesPointsConfig() =
+        testApplication {
+            application {
+                module(initDatabase = false)
+            }
+            val body = client.get(urlString = "/openapi.yaml").bodyAsText()
+            body shouldContain "/api/v1/settings/points/open-play"
+            body shouldContain "/api/v1/settings/points/tournament"
+            body shouldContain "OpenPlayConfigResponse"
+            body shouldContain "TournamentConfigResponse"
+            body shouldContain "OpenPlayPointsConfig"
+            body shouldContain "TournamentPointsConfig"
+        }
+
     @Test
     fun testOpenAPISpecParsesAsValidYaml() {
         // Substring checks alone let a malformed documentation.yaml through the backend gate and

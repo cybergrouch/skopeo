@@ -10,6 +10,10 @@ import org.jetbrains.exposed.sql.javatime.datetime
 
 private const val NAME_MAX = 255
 private const val TYPE_MAX = 20
+
+// match_type + placement_bracket carry longer enum names (#462/#552): e.g. TOURNAMENT_INITIAL_ROUND (24),
+// SEMI_FINALS_WITH_PLATE (22). Widened past TYPE_MAX (see V29). The DB columns are widened to match.
+private const val WIDE_TYPE_MAX = 32
 private const val ROUND_MAX = 50
 private const val PUBLIC_CODE_MAX = 6
 
@@ -35,7 +39,7 @@ internal object MatchesTable : UUIDTable(name = "matches") {
     val team2Id = reference(name = "team2_id", foreign = TeamsTable, onDelete = ReferenceOption.RESTRICT)
     val winnerTeamId = reference(name = "winner_team_id", foreign = TeamsTable, onDelete = ReferenceOption.RESTRICT).nullable()
     val matchFormat = varchar(name = "match_format", length = TYPE_MAX)
-    val matchType = varchar(name = "match_type", length = TYPE_MAX)
+    val matchType = varchar(name = "match_type", length = WIDE_TYPE_MAX)
     val matchDate = date(name = "match_date")
     val venue = varchar(name = "venue", length = NAME_MAX).nullable()
     val tournamentName = varchar(name = "tournament_name", length = NAME_MAX).nullable()
@@ -62,9 +66,9 @@ internal object MatchesTable : UUIDTable(name = "matches") {
     val team1Handicap = decimal(name = "team1_handicap", precision = HANDICAP_PRECISION, scale = HANDICAP_SCALE).nullable()
     val team2Handicap = decimal(name = "team2_handicap", precision = HANDICAP_PRECISION, scale = HANDICAP_SCALE).nullable()
 
-    // Tournament placement match (#525): flag + which bracket it decides (SUPER_FINALS / PLATE_FINALS).
+    // Tournament placement match (#525): flag + which bracket it decides (CHAMPIONSHIP_FINALS / PLATE_FINALS).
     val isPlacementMatch = bool(name = "is_placement_match").default(defaultValue = false)
-    val placementBracket = varchar(name = "placement_bracket", length = TYPE_MAX).nullable()
+    val placementBracket = varchar(name = "placement_bracket", length = WIDE_TYPE_MAX).nullable()
 }
 
 internal object MatchSetsTable : UUIDTable(name = "match_sets") {

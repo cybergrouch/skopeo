@@ -56,10 +56,14 @@ data class MatchSide(
 )
 
 /**
- * The placement a tournament "placement match" decides (#525). SUPER_FINALS awards 1st to its winner
- * and 2nd to its loser; PLATE_FINALS awards 3rd to its winner and 4th to its loser.
+ * The placement a tournament "placement match" decides (#525/#552).
+ *  - [CHAMPIONSHIP_FINALS] — winner 1st (Champion), loser 2nd (Finalist).
+ *  - [SEMI_FINALS_NO_PLATE] — the losing semi-finalist gets the 3rd rate (flat; both semis' losers, no 4th).
+ *  - [SEMI_FINALS_WITH_PLATE] — the losers proceed to the Plate Finals; the semi awards nothing directly
+ *    (fallback: if no completed Plate Finals exists, the losers get the 3rd rate).
+ *  - [PLATE_FINALS] — winner 3rd, loser 4th.
  */
-enum class PlacementBracket { SUPER_FINALS, PLATE_FINALS }
+enum class PlacementBracket { CHAMPIONSHIP_FINALS, SEMI_FINALS_NO_PLATE, SEMI_FINALS_WITH_PLATE, PLATE_FINALS }
 
 /** A completed set's score, with an optional tiebreak. Winner is derived from the games/tiebreak. */
 data class MatchSetResult(

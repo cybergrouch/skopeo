@@ -224,12 +224,12 @@ class MatchRepositoryTest {
                         team2Name = "T2",
                         createdBy = u1,
                         isPlacementMatch = true,
-                        placementBracket = PlacementBracket.SUPER_FINALS,
+                        placementBracket = PlacementBracket.CHAMPIONSHIP_FINALS,
                     ),
             )
         matches.findById(matchId = placement.id).shouldBeRight().let {
             it.isPlacementMatch shouldBe true
-            it.placementBracket shouldBe PlacementBracket.SUPER_FINALS
+            it.placementBracket shouldBe PlacementBracket.CHAMPIONSHIP_FINALS
         }
         // A regular fixture defaults to non-placement with no bracket.
         fixture(u1 = u1, u2 = u2).let {

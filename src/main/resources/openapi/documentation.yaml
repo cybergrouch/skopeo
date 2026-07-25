@@ -3122,6 +3122,91 @@ paths:
         '403':
           description: Caller is not an ADMINISTRATOR
 
+  /api/v1/settings/points/open-play:
+    get:
+      summary: Get the open-play points schedule (#553)
+      description: >-
+        The admin-configurable open-play margin-bracket point table (winner/loser per band relation ×
+        game margin) and its validity window. Readable by any signed-in user (the Admin tab loads it);
+        falls back to the seeded default when unset.
+      tags:
+        - Settings
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The current open-play points schedule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenPlayConfigResponse'
+    put:
+      summary: Set the open-play points schedule (#553)
+      description: ADMINISTRATOR only. Replaces the open-play margin-bracket schedule; the write is audit-logged.
+      tags:
+        - Settings
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpenPlayPointsConfig'
+      responses:
+        '200':
+          description: The updated open-play points schedule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenPlayConfigResponse'
+        '400':
+          description: Invalid schedule
+        '403':
+          description: Caller is not an ADMINISTRATOR
+
+  /api/v1/settings/points/tournament:
+    get:
+      summary: Get the tournament placement points schedule (#552)
+      description: >-
+        The admin-configurable tournament placement points (sanctioned + unsanctioned, 1st..4th) and
+        validity window. Readable by any signed-in user; falls back to the seeded default when unset.
+      tags:
+        - Settings
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The current tournament placement points schedule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TournamentConfigResponse'
+    put:
+      summary: Set the tournament placement points schedule (#552)
+      description: ADMINISTRATOR only. Replaces the tournament placement schedule; the write is audit-logged.
+      tags:
+        - Settings
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TournamentPointsConfig'
+      responses:
+        '200':
+          description: The updated tournament placement points schedule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TournamentConfigResponse'
+        '400':
+          description: Invalid schedule
+        '403':
+          description: Caller is not an ADMINISTRATOR
+
   /api/v1/invites:
     post:
       summary: Invite an email to onboard (ADMINISTRATOR only)
@@ -5367,8 +5452,8 @@ components:
         placementBracket:
           type: string
           nullable: true
-          enum: [SUPER_FINALS, PLATE_FINALS]
-          description: Which placement the match decides (#525) — SUPER_FINALS (1st/2nd) or PLATE_FINALS (3rd/4th).
+          enum: [CHAMPIONSHIP_FINALS, SEMI_FINALS_NO_PLATE, SEMI_FINALS_WITH_PLATE, PLATE_FINALS]
+          description: Which placement the match decides (#525) — CHAMPIONSHIP_FINALS (1st/2nd), SEMI_FINALS_NO_PLATE/SEMI_FINALS_WITH_PLATE (3rd), or PLATE_FINALS (3rd/4th).
 
     SetScoreRequest:
       type: object
@@ -6478,6 +6563,95 @@ components:
           type: string
           enum: [RATING, POINTS]
           description: The standings serving source to set (#146).
+
+    OpenPlayMarginPoints:
+      type: object
+      required:
+        - relation
+        - margin
+        - winnerPoints
+        - loserPoints
+      properties:
+        relation:
+          type: string
+          enum: [EQUAL, FAVORITE, UPSET]
+          description: The set winner's band relative to the loser (#553).
+        margin:
+          type: integer
+          description: The game-margin bracket (winner games − loser games); the top is treated as ">=".
+        winnerPoints:
+          type: integer
+        loserPoints:
+          type: integer
+
+    OpenPlayPointsConfig:
+      type: object
+      required:
+        - maxMargin
+        - rows
+        - validityDays
+      properties:
+        maxMargin:
+          type: integer
+          description: The highest margin bracket; larger margins clamp to it.
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpenPlayMarginPoints'
+        validityDays:
+          type: integer
+          description: Default open-play award validity window (days) when the event sets no explicit one (#553).
+
+    OpenPlayConfigResponse:
+      type: object
+      required:
+        - config
+      properties:
+        config:
+          $ref: '#/components/schemas/OpenPlayPointsConfig'
+        updatedAt:
+          type: string
+          nullable: true
+        updatedBy:
+          type: string
+          format: uuid
+          nullable: true
+
+    TournamentPointsConfig:
+      type: object
+      required:
+        - sanctioned
+        - unsanctioned
+        - validityDays
+      properties:
+        sanctioned:
+          type: array
+          items:
+            type: integer
+          description: Points for 1st..4th at a sanctioned tournament (#552).
+        unsanctioned:
+          type: array
+          items:
+            type: integer
+          description: Points for 1st..4th at an unsanctioned tournament (#552).
+        validityDays:
+          type: integer
+          description: Default tournament award validity window (days) when the event sets no explicit one.
+
+    TournamentConfigResponse:
+      type: object
+      required:
+        - config
+      properties:
+        config:
+          $ref: '#/components/schemas/TournamentPointsConfig'
+        updatedAt:
+          type: string
+          nullable: true
+        updatedBy:
+          type: string
+          format: uuid
+          nullable: true
 
     ClubBudgetResponse:
       type: object

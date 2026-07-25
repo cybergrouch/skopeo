@@ -919,7 +919,7 @@ class EventServiceTest {
                 p1 = p1,
                 p2 = p2,
                 designated = null,
-                placementBracket = PlacementBracket.SUPER_FINALS,
+                placementBracket = PlacementBracket.CHAMPIONSHIP_FINALS,
             )
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
         // The Administrator has since run the rating-calculation trigger on this match.
@@ -948,7 +948,7 @@ class EventServiceTest {
             p1 = p1,
             p2 = p2,
             designated = null,
-            placementBracket = PlacementBracket.SUPER_FINALS,
+            placementBracket = PlacementBracket.CHAMPIONSHIP_FINALS,
         )
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
         // A Super Finals placement match pays both players → two active awards.
@@ -984,7 +984,7 @@ class EventServiceTest {
             p1 = p1,
             p2 = p2,
             designated = null,
-            placementBracket = PlacementBracket.SUPER_FINALS,
+            placementBracket = PlacementBracket.CHAMPIONSHIP_FINALS,
         )
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
         service.unfinalize(token = token(uid = "host"), id = event.id).shouldBeRight()
@@ -1790,7 +1790,7 @@ class EventServiceTest {
             p1 = p1,
             p2 = p2,
             designated = null,
-            placementBracket = PlacementBracket.SUPER_FINALS,
+            placementBracket = PlacementBracket.CHAMPIONSHIP_FINALS,
         )
 
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
@@ -1809,6 +1809,91 @@ class EventServiceTest {
         // The award summary totals both placements (40 + 30).
         AuditRepository().list(actions = listOf(element = AuditAction.EVENT_POINTS_AWARDED), limit = 10, offset = 0)
             .first.single().details["totalPoints"] shouldBe "70"
+    }
+
+    @Test
+    fun `a no-plate semi-final pays the losing semi-finalist the 3rd rate, winner advances (#552)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        rate(userId = p1.id, level = "4.0")
+        rate(userId = p2.id, level = "4.0")
+        val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id))
+        seedCompletedFixture(
+            eventId = event.id,
+            host = host,
+            p1 = p1,
+            p2 = p2,
+            designated = null,
+            placementBracket = PlacementBracket.SEMI_FINALS_NO_PLATE,
+        )
+
+        service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+
+        // Winner p1 advances to the final (no direct award); loser p2 gets the flat 3rd rate (unsanctioned 20).
+        awardRepo.listByUser(userId = p1.id) shouldHaveSize 0
+        awardRepo.listByUser(userId = p2.id).single().points shouldBe BigDecimal("20.0000")
+    }
+
+    @Test
+    fun `a with-plate semi with no completed plate falls back to the 3rd rate for the loser (#552)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        rate(userId = p1.id, level = "4.0")
+        rate(userId = p2.id, level = "4.0")
+        val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id))
+        seedCompletedFixture(
+            eventId = event.id,
+            host = host,
+            p1 = p1,
+            p2 = p2,
+            designated = null,
+            placementBracket = PlacementBracket.SEMI_FINALS_WITH_PLATE,
+        )
+
+        service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+
+        // No completed Plate Finals exists → the semi loser still gets the 3rd rate (fallback), no one unpaid.
+        awardRepo.listByUser(userId = p1.id) shouldHaveSize 0
+        awardRepo.listByUser(userId = p2.id).single().points shouldBe BigDecimal("20.0000")
+    }
+
+    @Test
+    fun `a plate final decides 3rd and 4th while the with-plate semi awards nothing directly (#552)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        val p3 = provision(uid = "p3")
+        rate(userId = p1.id, level = "4.0")
+        rate(userId = p2.id, level = "4.0")
+        rate(userId = p3.id, level = "4.0")
+        val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id, p3.id))
+        // Semi (with plate): p1 beats p2 → p1 advances, p2 drops to the plate.
+        seedCompletedFixture(
+            eventId = event.id,
+            host = host,
+            p1 = p1,
+            p2 = p2,
+            designated = null,
+            placementBracket = PlacementBracket.SEMI_FINALS_WITH_PLATE,
+        )
+        // Plate Finals: p2 beats p3 → p2 is 3rd, p3 is 4th.
+        seedCompletedFixture(
+            eventId = event.id,
+            host = host,
+            p1 = p2,
+            p2 = p3,
+            designated = null,
+            placementBracket = PlacementBracket.PLATE_FINALS,
+        )
+
+        service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+
+        // p1 advanced (no award); p2 paid once at 3rd (20) via the plate, not also the semi; p3 at 4th (15).
+        awardRepo.listByUser(userId = p1.id) shouldHaveSize 0
+        awardRepo.listByUser(userId = p2.id).single().points shouldBe BigDecimal("20.0000")
+        awardRepo.listByUser(userId = p3.id).single().points shouldBe BigDecimal("15.0000")
     }
 
     @Test
@@ -1844,7 +1929,7 @@ class EventServiceTest {
                 p1 = p1,
                 p2 = p2,
                 designated = null,
-                placementBracket = PlacementBracket.SUPER_FINALS,
+                placementBracket = PlacementBracket.CHAMPIONSHIP_FINALS,
             )
 
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
@@ -1887,7 +1972,7 @@ class EventServiceTest {
                 p1 = p1,
                 p2 = p2,
                 designated = null,
-                placementBracket = PlacementBracket.SUPER_FINALS,
+                placementBracket = PlacementBracket.CHAMPIONSHIP_FINALS,
             )
 
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
@@ -1950,7 +2035,7 @@ class EventServiceTest {
             format = TeamType.DOUBLES,
             team1UserIds = listOf(a.id, b.id),
             team2UserIds = listOf(c.id, d.id),
-            placementBracket = PlacementBracket.SUPER_FINALS,
+            placementBracket = PlacementBracket.CHAMPIONSHIP_FINALS,
         )
 
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
@@ -2066,7 +2151,7 @@ class EventServiceTest {
                 p1 = p1,
                 p2 = p2,
                 designated = null,
-                placementBracket = PlacementBracket.SUPER_FINALS,
+                placementBracket = PlacementBracket.CHAMPIONSHIP_FINALS,
             )
             service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
             return awardRepo.listByUser(userId = p1.id).single().pointClass
@@ -2099,7 +2184,7 @@ class EventServiceTest {
                         createdBy = host.id,
                         eventId = event.id,
                         isPlacementMatch = true,
-                        placementBracket = PlacementBracket.SUPER_FINALS,
+                        placementBracket = PlacementBracket.CHAMPIONSHIP_FINALS,
                     ),
             )
         // team2 (p2) wins the Super Finals → p2 places 1st (40), the team1 loser places 2nd (30).
@@ -2146,7 +2231,7 @@ class EventServiceTest {
             p1 = p1,
             p2 = p2,
             designated = null,
-            placementBracket = PlacementBracket.SUPER_FINALS,
+            placementBracket = PlacementBracket.CHAMPIONSHIP_FINALS,
         )
 
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
