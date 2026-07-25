@@ -63,19 +63,8 @@ data class CreateEventInput(
     val circuitId: UUID? = null,
     // The event's class (#403); defaults to OPEN_PLAY for backward compatibility.
     val type: EventType = EventType.OPEN_PLAY,
-    // Points config (#403 Phase C): required for a club event of any type; optional/deferred when clubless.
-    val minPointsPerMatch: Int? = null,
-    val maxPointsPerMatch: Int? = null,
-    val pointValidityStart: LocalDate? = null,
-    val pointValidityEnd: LocalDate? = null,
-)
-
-/** A budgeted event's points config (#403 Phase C): the per-match reward window + point validity window. */
-data class PointsConfigInput(
-    val minPoints: Int,
-    val maxPoints: Int,
-    val validityStart: LocalDate,
-    val validityEnd: LocalDate,
+    // Whether finalizing this event awards ranking points per the global schedules (#559). Default true.
+    val awardRankingPoints: Boolean = true,
 )
 
 /**
@@ -112,9 +101,6 @@ class EventService(
             }
             // A TOURNAMENT must belong to a circuit (#525); it must exist. Non-tournaments carry none.
             val circuitId = resolveCircuit(type = input.type, circuitId = input.circuitId).bind()
-            // Points config (#403 Phase C): a club event of any type must carry a valid per-match reward +
-            // validity window, validated against the global policy; a clubless event may defer it.
-            val config = resolveCreatePointsConfig(input = input).bind()
             val event =
                 events.create(
                     command =
@@ -127,10 +113,7 @@ class EventService(
                             clubId = input.clubId,
                             circuitId = circuitId,
                             type = input.type,
-                            minPointsPerMatch = config?.minPoints,
-                            maxPointsPerMatch = config?.maxPoints,
-                            pointValidityStart = config?.validityStart,
-                            pointValidityEnd = config?.validityEnd,
+                            awardRankingPoints = input.awardRankingPoints,
                         ),
                 )
             // Activity Log entry for the creation (#334); rename/set-club/delete are follow-ups.

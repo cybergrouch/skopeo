@@ -54,26 +54,11 @@ data class Event(
     val finalizedAt: LocalDateTime? = null,
     // The user who finalized the event (#403); null while open.
     val finalizedBy: UUID? = null,
-    // Points config (#403 Phase C): the per-match reward window a fixture may designate within, and the
-    // validity window an awarded point stays valid for. Set for a club event of any type (OPEN_PLAY
-    // unified), null for a clubless event.
-    val minPointsPerMatch: Int? = null,
-    val maxPointsPerMatch: Int? = null,
-    val pointValidityStart: LocalDate? = null,
-    val pointValidityEnd: LocalDate? = null,
+    // Whether finalizing this event awards ranking points per the global schedules (#559). Default true.
+    val awardRankingPoints: Boolean = true,
 ) {
     /** True once the event has been finalized (#403) — closed to changes; its matches queue for rating. */
     val isFinalized: Boolean get() = finalizedAt != null
-}
-
-/**
- * The event's per-match reward window (#403 Phase C) as a (min, max) pair, or null when the event
- * carries no points config. Config is written atomically (all four fields or none), so the window is
- * present exactly when [Event.minPointsPerMatch] is; [Event.maxPointsPerMatch] then travels with it.
- */
-fun Event.pointsWindow(): Pair<Int, Int>? {
-    val min = minPointsPerMatch ?: return null
-    return min to (maxPointsPerMatch ?: min)
 }
 
 /**
@@ -95,11 +80,8 @@ data class CreateEventCommand(
     val circuitId: UUID? = null,
     // The event's class (#403); defaults to OPEN_PLAY for backward compatibility.
     val type: EventType = EventType.OPEN_PLAY,
-    // Points config (#403 Phase C): set for a club event of any type (OPEN_PLAY unified), null when clubless.
-    val minPointsPerMatch: Int? = null,
-    val maxPointsPerMatch: Int? = null,
-    val pointValidityStart: LocalDate? = null,
-    val pointValidityEnd: LocalDate? = null,
+    // Whether finalizing this event awards ranking points per the global schedules (#559). Default true.
+    val awardRankingPoints: Boolean = true,
 )
 
 /**

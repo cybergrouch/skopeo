@@ -39,12 +39,8 @@ internal object EventsTable : UUIDTable(name = "events") {
     val finalizedAt = datetime(name = "finalized_at").nullable()
     val finalizedBy = reference(name = "finalized_by", foreign = UsersTable, onDelete = ReferenceOption.SET_NULL).nullable()
 
-    // Points config (#403 Phase C): the per-match reward window and the point validity window. Required
-    // for a club event of any type (enforced in the service; OPEN_PLAY unified), null for clubless events.
-    val minPointsPerMatch = integer(name = "min_points_per_match").nullable()
-    val maxPointsPerMatch = integer(name = "max_points_per_match").nullable()
-    val pointValidityStart = date(name = "point_validity_start").nullable()
-    val pointValidityEnd = date(name = "point_validity_end").nullable()
+    // Whether finalizing this event awards ranking points per the global schedules (#559). Default true.
+    val awardRankingPoints = bool(name = "award_ranking_points").default(defaultValue = true)
 }
 
 internal object EventParticipantsTable : UUIDTable(name = "event_participants") {
