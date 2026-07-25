@@ -126,7 +126,10 @@ class StandingsCalculationService(
         val totals = mutableMapOf<GroupKey, MutableMap<UUID, BigDecimal>>()
         countingForActive.forEach { award ->
             if (award.band != ratingsById[award.userId]?.currentLevel) return@forEach
-            val key = GroupKey(band = StandingsBand.requireCode(code = award.band), sex = normalizeSex(sex = award.sex))
+            // The award's band is the player's RAW NTRP level (e.g. "2.0"); bucket it into the standings
+            // race via [StandingsBand.of] (#555) — sub-3.0 → "<3.0", 6.0+ → "6.0+". Using the strict
+            // requireCode here 500s for any tail band whose level isn't an exact StandingsBand code.
+            val key = GroupKey(band = StandingsBand.of(rating = award.band.toBigDecimal()), sex = normalizeSex(sex = award.sex))
             val byUser = totals.getOrPut(key = key) { mutableMapOf() }
             byUser[award.userId] = byUser.getOrElse(key = award.userId) { BigDecimal.ZERO }.add(award.points)
         }
