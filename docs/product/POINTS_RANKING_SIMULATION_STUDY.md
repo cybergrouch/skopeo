@@ -1,6 +1,16 @@
 # Points Ranking — Monte Carlo Simulation Study
 
-> **Status:** Study of record for the ranking-points design ([#525](https://github.com/cybergrouch/skopeo/issues/525)). The points formulas are **design-only** (not yet implemented); this study encodes them standalone — exactly as the rating studies encode the rating algorithm — to answer a policy question **before** we build.
+> **Status:** Study of record for the ranking-points design ([#525](https://github.com/cybergrouch/skopeo/issues/525)). Encodes the points formulas standalone — exactly as the rating studies encode the rating algorithm — to answer policy questions with Monte Carlo simulation.
+
+## Study focus — three questions, in order
+
+This study has evolved through three questions. The first is **settled**; the latter two are the **live focus** and are treated in detail below.
+
+1. **Capping — resolved (yes).** Does a player's score cap, or grow to infinity? It **caps** (points expire → the score plateaus). Estimable in closed form. Covered briefly in [The answer](#the-answer) / §5; not revisited further.
+2. **Variance / spread — live focus.** How widely are player scores spread, and does the spread *grow over time*? Treated in detail in Part 2 (§6–7) and compared across schemes in Part 3 (§8) and Part 4 (§9).
+3. **Collisions — live focus.** How many players are *tied* on the same total (a congested, uninformative leaderboard)? Treated in detail across §6–9, with the combined-levers experiment (Part 4) as the culminating analysis of what actually reduces them.
+
+**One-line takeaway on 2 & 3:** *diverse increments* widen variance and the ceiling but don't fix collisions on their own; **longer validity** is the real, legitimate collision lever (99%→85%). A **finer (sub-integer) increment carried as fixed-point integers** appears to push collisions lower still (→46%), but as implemented it separates players by *random noise*, not merit — so it is **not** a recommended lever (see [Cons of the finer increment](#cons-of-the-finer-increment) in Part 4). Uniform ×N scaling is pure relabeling. Details in Part 4.
 
 ## The question
 
@@ -211,6 +221,8 @@ The condition that makes this reduce collisions (rather than just relabel them):
 
 So the practical path is: design the margin/graduated-band tuning in whatever fractional terms are natural, then **multiply the entire schedule by a common base unit** (e.g. ×100, "centi-points", for headroom) to ship **pure integers**. Storage is unaffected — the ledger `points` column is already a signed `DECIMAL` — and the display can be scaled down for legibility. The ×scale also raises the ceiling as a bonus. This removes the earlier "continuous points" caveat: the hard-no on a fractional *type* does not block the granularity benefit.
 
+> **Caveat — this only holds for a *diverse, performance-tied* increment (see [Part 4 cons](#cons-of-the-finer-increment)).** The granularity benefit materializes only if the finer increments are (a) genuinely diverse (GCD = 1 *after* scaling) and (b) derived from *performance*, not drawn at random. The Part 4 experiment satisfied neither — its ×100 tiers are all multiples of 25 (GCD = 25) and are drawn independently of the match — so its collision drop is injected noise, not the legitimate granularity effect described here. Pick the base unit to just clear the finest tuned increment (e.g. ×4 for quarter-point tuning), not an arbitrary ×100.
+
 # Part 3 — Alternative open-play scheme: game-margin Fibonacci ([#530](https://github.com/cybergrouch/skopeo/issues/530))
 
 An exploration (for discussion, **not** an adopted change to the #525 formula): does awarding open-play points by **game margin** instead of band difference give better spread / fewer collisions?
@@ -253,7 +265,42 @@ Range = min–max player total; distinct = number of distinct integer totals; co
 
 - **Fibonacci-margin wins on variance and ceiling.** SD is higher at every horizon (e.g. +36% at 2 mo, +11% at 1 yr), the max/range is wider (1-yr ceiling ~305 vs ~264), and it yields **more distinct totals** (e.g. 161 vs 124 at 2 mo; 243 vs 204 at 3 yr). It also removes negatives (min is 0, vs −5…−9 for the band scheme). This is exactly the **"diversity of increments"** effect from Parts 1–2: `{2,3,5,8,13,21}` is more varied and larger-magnitude than `{−2,0,1,2,3,5}`, so it spreads the field further.
 - **But it does *not* fix collisions.** Both schemes sit at **~99%** tied throughout. The reason is the same pigeonhole limit as before: with only ~240 distinct reachable totals and 2,000 players, almost everyone shares a total regardless of the increment set. Margin diversity raises the distinct-total count (~15–30%), but nowhere near the thousands needed to separate the field.
-- **Verdict.** The Fibonacci-margin scheme is a **genuine improvement in variance, ceiling, and diversity** and is worth considering for #525 on those merits (and for being simpler — no bands/ALP/negatives). But collisions are governed by *distinct-totals vs population size*, so cutting them still requires the earlier levers — **longer validity** (more accumulated events) and/or **fixed-point scaling** (finer granularity) — on top of a diverse increment set. Fibonacci margin is a strong *ingredient*, not a standalone fix. Recommended next exploration: Fibonacci-margin **combined with** longer validity + a ×100 fixed-point scale.
+- **Verdict.** The Fibonacci-margin scheme is a **genuine improvement in variance, ceiling, and diversity** and is worth considering for #525 on those merits (and for being simpler — no bands/ALP/negatives). But collisions are governed by *distinct-totals vs population size*, so cutting them still requires the earlier levers — **longer validity** (more accumulated events) and/or **fixed-point scaling** (finer granularity) — on top of a diverse increment set. Fibonacci margin is a strong *ingredient*, not a standalone fix. That combination is the subject of Part 4.
+
+# Part 4 — Combined levers: Fibonacci margin + longer validity + fixed-point ([#539](https://github.com/cybergrouch/skopeo/issues/539))
+
+The culminating experiment: apply the three levers **together** and isolate which one actually moves **variance** and **collisions**. All rows use the Fibonacci-margin open-play scheme (diverse increments); they differ only in **validity length**, **scale**, and — the last row — a **finer sub-integer increment** carried as fixed-point integers. Measured on the same 2,000-player population at the **3-year** (fully-warmed) horizon. "Long validity" = open play 12 months / tournaments 36 months (tournaments strictly longer). Range = min–max player total; distinct = number of distinct integer totals; collision % = share of players tied on an exact total.
+
+## 9. Combined-levers comparison (3-year horizon, 2,000 players)
+
+| Scenario | sd (variance) | range (min–max) | distinct totals | collision % |
+| --- | ---: | ---: | ---: | ---: |
+| Fibonacci, short validity (2mo/6mo), ×1 | 56.6 | 0 – 263 | 234 | 98.9% |
+| Fibonacci, **long** validity (12mo/36mo), ×1 | 270.0 | 55 – 1,280 | 804 | **85.1%** |
+| Fibonacci, long validity, **×100** (relabel) | 26,997 | 5,500 – 128,000 | 804 | **85.1%** |
+| Fibonacci + **finer increment**, long, ×100 | 27,338 | 3,000 – 140,275 | 1,432 | **46.1%** |
+
+## Findings (Part 4) — what actually moves variance and collisions
+
+- **Longer validity is the real lever for both.** Going from short (2mo/6mo) to long (12mo/36mo) validity, on the *same* Fibonacci scheme, roughly **5×'s the variance** (sd 56.6 → 270), widens the range from `0–263` to `55–1,280`, more than **3×'s the distinct totals** (234 → 804), and cuts collisions **98.9% → 85.1%**. More un-expired results accumulate before dropping off, so player histories diverge. This is the single biggest mover of collisions — and, notably, it makes the minimum non-zero (55): with a long window even a modest player always holds some points.
+- **Uniform ×100 scaling is pure relabeling — zero effect on collisions.** Scaling the long-validity scheme by ×100 multiplies sd and the range by exactly 100 (ceiling → ~128,000, easily past the ~10,000 target) but leaves **distinct totals (804) and collisions (85.1%) unchanged** — every total is just a multiple of 100. This is the concrete confirmation of the [fixed-point caveat](#fixed-point-keep-integers-without-losing-fractional-granularity): scale changes the axis, never the separation.
+- **A finer increment moves the numbers on paper — but see the cons.** Adding a sub-integer sub-tier (integerized by the ×100 scale) drops distinct totals **804 → 1,432** and collisions **85.1% → 46.1%** in the table above. As *implemented*, though, the sub-tier is an **independent random draw**, not a measure of dominance, so the separation it buys is by *noise*, not merit. This disqualifies it as a legitimate lever — see [Cons of the finer increment](#cons-of-the-finer-increment) below.
+- **The ceiling target (~10k) is trivially met** once you scale — but the study's whole point is that the ceiling was never the interesting variable; **collisions and variance are**, and they are governed by *distinct-totals vs population size*.
+
+## Cons of the finer increment
+
+The 46.1% figure looks like the win of Part 4, but it is **not** a legitimate collision fix. Four cons, in order of severity:
+
+- **It separates players by random noise, not merit.** As implemented (`fibMarginFractionalOpenPlayPoints`), the sub-tier is an **independent uniform draw** from `{0, 0.25, 0.50, 0.75}`, *uncorrelated* with the game margin that drives the Fibonacci award — i.e. `D = fib(margin) + random × 100`. Two players with identical match histories are pulled apart purely by their random draws. The collision drop is genuine entropy, but it is a **coin-flip tie-breaker** dressed up as a rating difference — arguably worse than an honest tie.
+- **If it were instead tied to dominance, it would do nothing.** Make the sub-tier a deterministic function of the margin — `D = fib(margin) + f(margin) × 100` — and it collapses to a single monotonic function of margin: still only 6 reachable per-set values, just relabeled. No new distinct totals, no added variance — the same "pure relabel" as ×N scaling. So the scheme *only* moves the numbers **because** it is random. Either reading disqualifies it: correlated ⇒ relabeling; random ⇒ noise.
+- **The framing oversold it, and the mechanism claim was wrong.** It was described as a "dominance sub-tier," implying finer *performance* measurement, while the code draws it at random — a mismatch between design intent and implementation. And the [fixed-point rationale](#fixed-point-keep-integers-without-losing-fractional-granularity) attributes the gain to increments becoming *diverse (GCD = 1)*; at ×100 the reachable awards are all multiples of 25 (**GCD = 25, not 1**), so the drop comes from **4× more reachable values**, not a coprime set.
+- **The ×100 over-inflates the cap.** The ~140,000 ceiling is driven by the **×100 magnitude**, not the increment (which adds ≤ 75 per award). ×100 was arbitrary "headroom"; merely integerizing quarters needs only **×4** (`{0,.25,.5,.75} × 4 = {0,1,2,3}`, and `fib × 4 = {8,12,20,32,52,84}` — GCD 1, cap ~25× smaller). The cap blow-up is an over-scaling artifact, fully separable from any granularity claim.
+
+**Legitimate alternative:** reduce collisions *structurally*, not by noise — **longer validity** (accumulates genuine performance history) and **per-band-cohort scoping** ([#542](https://github.com/cybergrouch/skopeo/issues/542): the standings race is per NTRP band, so ties only matter *within* a band). Those separate the field on merit; the finer increment does not.
+
+## Recommendation (Part 4)
+
+To get a leaderboard that both **spreads players** and **keeps separating them over time**, the legitimate recipe is: **diverse increments (Fibonacci-margin) + long validity (tournaments > open play)**, with residual collisions reduced *structurally* via **per-band-cohort scoping** ([#542](https://github.com/cybergrouch/skopeo/issues/542)) rather than by injected noise. Longer validity does most of the collision reduction on merit. The **finer sub-integer increment is dropped** from the recipe — see [Cons of the finer increment](#cons-of-the-finer-increment): its reduction is a random tie-breaker, not real separation. Plain ×N scaling is likewise dropped — it buys legibility-of-magnitude at best, never separation. These are tunable knobs for the #525 validity settings and increment table if a well-separated, evolving leaderboard is desired.
 
 ## References
 

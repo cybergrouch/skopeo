@@ -42,7 +42,11 @@ import kotlin.random.Random
  *
  * Output: /tmp/points_ranking.txt and presentations/points_ranking.md (git-ignored). The curated
  * tables live in docs/product/POINTS_RANKING_SIMULATION_STUDY.md.  Run: ./gradlew generatePointsSimulationReport
+ *
+ * A large, self-contained simulation report (test-only), like the sibling *Report classes; the size
+ * and a couple of wide scenario helpers are inherent to the tabulation — hence the class-level suppressions.
  */
+@Suppress("LargeClass", "LongParameterList")
 class PointsRankingSimulationReport {
     companion object {
         private const val SEED = 20_260_724L
@@ -135,6 +139,16 @@ class PointsRankingSimulationReport {
         // Part 3 reuses the baseline scenario (×1, 2mo/6mo) so only the open-play point function differs
         // between the two schemes; the Fibonacci run uses a distinct seed tag for independent draws.
         private const val FIB_SEED_TAG = 4_242
+
+        // --- #539 Part 4: combined levers (Fibonacci margin + longer validity + ×100 fixed-point) ---
+        private const val SCALE_100 = 100.0
+
+        // A finer-grained "dominance sub-tier" bonus added to the Fibonacci-margin award. At ×1 these
+        // fractions round away (2.25 → 2, no new distinct totals); only a ×100 fixed-point scale keeps
+        // them as distinct integers (225/250/275) — the demonstration of what fixed-point actually buys.
+        @Suppress("MagicNumber") // dominance sub-tier fractional bonuses
+        private val FRACTIONAL_TIERS = doubleArrayOf(0.0, 0.25, 0.50, 0.75)
+        private const val PART4_SEED_TAG = 5_252
     }
 
     private enum class SkillClass(val label: String, val winRate: Double, val placementChance: Double) {
@@ -239,6 +253,20 @@ class PointsRankingSimulationReport {
             }
         }
         return FIB_MARGIN_POINTS[margin]
+    }
+
+    /**
+     * #539: the Fibonacci-margin award plus a finer-grained dominance sub-tier bonus in {0,.25,.5,.75}.
+     * These sub-integer increments are lost at ×1 (they round away) and only add distinct totals under a
+     * ×100 fixed-point scale — the demonstration of what fixed-point buys on top of a diverse set.
+     */
+    private fun fibMarginFractionalOpenPlayPoints(
+        rng: Random,
+        winRate: Double,
+    ): Double {
+        val base = fibMarginOpenPlayPoints(rng = rng, winRate = winRate)
+        if (base <= 0.0) return 0.0
+        return base + FRACTIONAL_TIERS[rng.nextInt(until = FRACTIONAL_TIERS.size)]
     }
 
     /** Points to the player from one tournament (0 if they did not place). */
@@ -491,6 +519,94 @@ class PointsRankingSimulationReport {
             append(section6(baseline = baseline))
             append(section7(all = allScenarioScores))
             append(section8(assignments = assignments))
+            append(section9(assignments = assignments))
+        }
+    }
+
+    private fun p4Row(
+        label: String,
+        s: SpreadStats,
+    ): String =
+        row(
+            cells =
+                listOf(
+                    label,
+                    fmt(value = s.sd),
+                    "${fmt(value = s.min)}–${fmt(value = s.max)}",
+                    s.distinctCount.toString(),
+                    "${fmt(value = s.collisionPct)}%",
+                ),
+        )
+
+    /** 3-year spread/collision stats for a Fibonacci-based scenario (the #539 combined-levers building block). */
+    private fun part4At3yr(
+        assignments: List<Pair<SkillClass, BehaviorClass>>,
+        scale: Double,
+        openValidity: Int,
+        tourneyValidity: Int,
+        openFn: (Random, Double) -> Double,
+        seedTag: Int,
+    ): SpreadStats {
+        val scenario = Scenario(label = "part4", scale = scale, openValidity = openValidity, tourneyValidity = tourneyValidity)
+        val scores = scenarioScores(scenario = scenario, assignments = assignments, openFn = openFn, seedTag = seedTag)
+        return spreadStats(scores = scores.getValue(key = H_3YR))
+    }
+
+    /**
+     * #539 Part 4: combine the three recommended levers at the 3-year (fully-warmed) horizon and show,
+     * honestly, which one moves collisions. The ×1-long and ×100-long rows share a seed tag, so ×100 is
+     * a pure relabel; the fractional row adds finer increments that only ×100 can preserve.
+     */
+    private fun section9(assignments: List<Pair<SkillClass, BehaviorClass>>): String {
+        val short =
+            part4At3yr(
+                assignments = assignments,
+                scale = 1.0,
+                openValidity = V_2_MONTHS,
+                tourneyValidity = V_6_MONTHS,
+                openFn = ::fibMarginOpenPlayPoints,
+                seedTag = PART4_SEED_TAG + 1,
+            )
+        val long =
+            part4At3yr(
+                assignments = assignments,
+                scale = 1.0,
+                openValidity = V_12_MONTHS,
+                tourneyValidity = V_36_MONTHS,
+                openFn = ::fibMarginOpenPlayPoints,
+                seedTag = PART4_SEED_TAG + 2,
+            )
+        val long100 =
+            part4At3yr(
+                assignments = assignments,
+                scale = SCALE_100,
+                openValidity = V_12_MONTHS,
+                tourneyValidity = V_36_MONTHS,
+                openFn = ::fibMarginOpenPlayPoints,
+                seedTag = PART4_SEED_TAG + 2,
+            )
+        val frac100 =
+            part4At3yr(
+                assignments = assignments,
+                scale = SCALE_100,
+                openValidity = V_12_MONTHS,
+                tourneyValidity = V_36_MONTHS,
+                openFn = ::fibMarginFractionalOpenPlayPoints,
+                seedTag = PART4_SEED_TAG + 4,
+            )
+        return buildString {
+            append("\n## 9. Combined levers — Fibonacci margin + longer validity + ×100 fixed-point (#539)\n\n")
+            append(
+                "_$POPULATION players, at the 3-year (fully-warmed) horizon. All rows use the Fibonacci-margin " +
+                    "open-play scheme; they differ only in validity, scale, and (last row) a finer increment. " +
+                    "Longer validity = open 12 mo / tourney 36 mo. Range = min–max player total._\n\n",
+            )
+            append(row(cells = listOf("Scenario", "sd", "range", "distinct totals", "collision %")))
+            append(row(cells = listOf("---", "---:", "---:", "---:", "---:")))
+            append(p4Row(label = "Fibonacci, short validity (2mo/6mo), ×1", s = short))
+            append(p4Row(label = "Fibonacci, long validity (12mo/36mo), ×1", s = long))
+            append(p4Row(label = "Fibonacci, long validity, ×100 (relabel)", s = long100))
+            append(p4Row(label = "Fibonacci + finer increment, long, ×100", s = frac100))
         }
     }
 
