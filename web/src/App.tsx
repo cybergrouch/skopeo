@@ -15,6 +15,9 @@ const SignUpPage = lazy(() =>
 const LoginPage = lazy(() =>
   import("@/routes/LoginPage").then((m) => ({ default: m.LoginPage })),
 );
+const AboutPage = lazy(() =>
+  import("@/routes/AboutPage").then((m) => ({ default: m.AboutPage })),
+);
 const InviteAcceptPage = lazy(() =>
   import("@/routes/InviteAcceptPage").then((m) => ({
     default: m.InviteAcceptPage,
@@ -76,6 +79,7 @@ function App() {
               <Routes>
                 <Route path="/signup" element={<SignUpPage />} />
                 <Route path="/login" element={<LoginPage />} />
+                <Route path="/about" element={<AboutPage />} />
                 <Route path="/invite" element={<InviteAcceptPage />} />
                 <Route
                   path="/complete-profile"

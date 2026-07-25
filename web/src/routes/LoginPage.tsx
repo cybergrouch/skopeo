@@ -51,6 +51,12 @@ export function LoginPage() {
           <Link to="/signup" className="font-medium text-primary hover:underline">
             Sign up
           </Link>
+          <span className="mt-1 block text-muted-foreground">
+            New to Skopeo?{' '}
+            <Link to="/about" className="font-medium text-primary hover:underline">
+              What is Skopeo?
+            </Link>
+          </span>
         </>
       }
     >
