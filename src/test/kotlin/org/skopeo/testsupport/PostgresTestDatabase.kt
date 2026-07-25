@@ -52,10 +52,7 @@ object PostgresTestDatabase {
             // settings back to their V11 seed so theme state doesn't leak across tests (#378).
             exec(stmt = "TRUNCATE app_settings")
             exec(stmt = "INSERT INTO app_settings (key, value, updated_at) VALUES ('ui_theme', 'AUTO', now())")
-            // clubs aren't a child of users, so club_point_budgets (which cascades from clubs, not
-            // users) survives the cascade above; wipe it explicitly so budgets don't leak across tests.
-            // (The global points_policies table was removed in #525.)
-            exec(stmt = "TRUNCATE club_point_budgets")
+            // The per-club points-budget table was removed with the budget/designation subsystem (#559).
         }
     }
 }
