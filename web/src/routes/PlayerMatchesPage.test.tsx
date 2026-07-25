@@ -83,6 +83,18 @@ describe('PlayerMatchesPage', () => {
     )
   })
 
+  it('filters by opponent NTRP band server-side and resets to the first page (#563)', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(screen.getByRole('button', { name: 'Next' })) // move off page 0 first
+    await user.selectOptions(screen.getByLabelText('Filter by opponent NTRP band'), '4.0')
+    expect(useGetApiV1PlayersCodeMatchHistory).toHaveBeenLastCalledWith(
+      'K7Q2MX',
+      { limit: 20, offset: 0, search: undefined, opponentBand: '4.0' },
+      { query: { enabled: true } },
+    )
+  })
+
   it('shows a loading state', () => {
     useGetApiV1PlayersCodeMatchHistory.mockReturnValue({ data: undefined, isLoading: true })
     renderPage()
@@ -95,6 +107,6 @@ describe('PlayerMatchesPage', () => {
     renderPage()
     expect(screen.getByText('No matches yet.')).toBeInTheDocument()
     await user.type(screen.getByPlaceholderText('Search opponent…'), 'zzz')
-    expect(screen.getByText('No matches for that search.')).toBeInTheDocument()
+    expect(screen.getByText('No matches for that filter.')).toBeInTheDocument()
   })
 })

@@ -13,6 +13,7 @@ import { MatchHistoryRow } from '@/components/MatchHistoryRow'
 import { NumberedPager } from '@/components/NumberedPager'
 import { PublicPageNav } from '@/components/PublicPageNav'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
+import { NTRP_LEVELS } from '@/lib/ntrp'
 
 const PAGE_SIZE = 20
 
@@ -26,10 +27,16 @@ export function PlayerMatchesPage() {
   const [page, setPage] = useState(0)
   const [searchInput, setSearchInput] = useState('')
   const search = useDebouncedValue(searchInput)
+  const [opponentBand, setOpponentBand] = useState('')
 
   const query = useGetApiV1PlayersCodeMatchHistory(
     code,
-    { limit: PAGE_SIZE, offset: page * PAGE_SIZE, search: search.trim() || undefined },
+    {
+      limit: PAGE_SIZE,
+      offset: page * PAGE_SIZE,
+      search: search.trim() || undefined,
+      opponentBand: opponentBand || undefined,
+    },
     { query: { enabled: Boolean(code) } },
   )
   const items = query.data?.items ?? []
@@ -57,6 +64,22 @@ export function PlayerMatchesPage() {
                 setPage(0)
               }}
             />
+            <select
+              aria-label="Filter by opponent NTRP band"
+              className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+              value={opponentBand}
+              onChange={(e) => {
+                setOpponentBand(e.target.value)
+                setPage(0)
+              }}
+            >
+              <option value="">All opponent bands</option>
+              {NTRP_LEVELS.map((level) => (
+                <option key={level} value={level}>
+                  NTRP {level}
+                </option>
+              ))}
+            </select>
             {query.isLoading ? (
               <p className="text-sm text-muted-foreground">Loading…</p>
             ) : items.length > 0 ? (
@@ -70,7 +93,7 @@ export function PlayerMatchesPage() {
               </>
             ) : (
               <p className="text-sm text-muted-foreground">
-                {search.trim() ? 'No matches for that search.' : 'No matches yet.'}
+                {search.trim() || opponentBand ? 'No matches for that filter.' : 'No matches yet.'}
               </p>
             )}
           </CardContent>

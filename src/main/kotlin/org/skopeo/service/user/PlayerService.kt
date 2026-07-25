@@ -118,6 +118,7 @@ class PlayerService(
         limit: Int = DEFAULT_HISTORY_LIMIT,
         offset: Int = 0,
         search: String? = null,
+        opponentBand: String? = null,
     ): Either<ServiceError, PlayerMatchHistoryPage> =
         either {
             val user = resolve(code = code).bind()
@@ -180,12 +181,21 @@ class PlayerService(
                 } else {
                     entries.filter { rowMatches(row = it, needle = needle) }
                 }
+            // Opponent-band filter (#563): keep rows where an opponent's at-the-time band equals [opponentBand].
+            // Applied before pagination so it is correct across pages. Blank/absent → no filter.
+            val band = opponentBand.orEmpty().trim()
+            val filtered =
+                if (band.isEmpty()) {
+                    matched
+                } else {
+                    matched.filter { row -> row.opponents.any { it.levelAtMatch == band } }
+                }
             PlayerMatchHistoryPage(
                 items =
-                    matched
+                    filtered
                         .drop(n = offset.coerceAtLeast(minimumValue = 0))
                         .take(n = limit.coerceIn(minimumValue = 1, maximumValue = MAX_HISTORY_LIMIT)),
-                total = matched.size,
+                total = filtered.size,
             )
         }
 

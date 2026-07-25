@@ -56,6 +56,7 @@ private fun Route.publicPlayerReads(service: PlayerService) {
                         limit = query["limit"]?.toIntOrNull() ?: DEFAULT_MATCH_HISTORY_PAGE_SIZE,
                         offset = query["offset"]?.toIntOrNull() ?: 0,
                         search = query["search"],
+                        opponentBand = query["opponentBand"],
                     ),
             ) { page ->
                 call.respond(status = HttpStatusCode.OK, message = page)

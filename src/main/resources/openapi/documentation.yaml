@@ -643,6 +643,14 @@ paths:
           schema:
             type: string
           description: Case-insensitive substring over opponent/partner display names and public codes.
+        - name: opponentBand
+          in: query
+          required: false
+          schema:
+            type: string
+          description: >-
+            Keep only matches where an opponent's NTRP band at the time of the match equals this
+            value (e.g. "4.0"). Blank/absent applies no band filter.
       responses:
         '200':
           description: A page of the player's match history
