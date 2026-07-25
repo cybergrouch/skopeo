@@ -193,6 +193,37 @@ So the designation-plus-policy machinery is **obsolete for both**, and two of th
 
 ---
 
+## Part C — Configurable points schedules ([#552](https://github.com/cybergrouch/skopeo/issues/552) / [#553](https://github.com/cybergrouch/skopeo/issues/553))
+
+The rule-based amounts above started as **code constants**. They are now a **global, admin-configurable schedule** — the scoped successor to the removed global policy — stored as JSON in `points_config` (migration V28) and edited by an ADMINISTRATOR via `GET/PUT /api/v1/settings/points/{open-play,tournament}`. The service returns **behaviour-preserving code defaults** when a key is unset, so a fresh/unedited install behaves exactly as before.
+
+### Open-play: game-margin dominance brackets (#553)
+
+The former binary ALP (loser took ≥ 4 games → +1) is replaced by **game-margin brackets**: `margin = winner games − loser games` per set (tiebreak points still count as games). The schedule is an editable table indexed by **band relation (EQUAL / FAVORITE / UPSET) × margin bracket**, giving the **winner** and **loser** points per cell. Arbitrary per-cell values are allowed, so the study's **Fibonacci-margin** winner increments (`{2,3,5,8,13,21}` for margins 1..6) can be entered directly. The default is behaviour-approximating (flat winner 3/2/5, loser 0/1/−2 across margins). **Open-play validity days** is part of this schedule.
+
+### Tournaments: extended placement brackets (#552) + configurable table
+
+Placement matches now carry a richer taxonomy (widening `matches.placement_bracket`, V29 / [#462](https://github.com/cybergrouch/skopeo/issues/462)):
+
+| Placement match | Winner → | Loser(s) → |
+| --- | --- | --- |
+| **Championship Finals** (was Super Finals) | 1st | 2nd |
+| **Semi-Finals (no plate)** | advances | **3rd rate** (flat — both losing semi-finalists, no 4th) |
+| **Semi-Finals (with plate)** | advances | → Plate Finals (semi awards nothing directly) |
+| **Plate Finals** | 3rd | 4th |
+
+Rules: a player earns **exactly one** placement award (their best — enforced by processing best-place-first with a guard); a with-plate semi with **no completed Plate Finals** falls back to paying its loser the 3rd rate (no one unpaid); doubles pay each partner the full amount. The sanctioned/unsanctioned tables (default 80/60/40/30 and 40/30/20/15) and **tournament validity days** are configurable.
+
+### Recommended preset (from the study)
+
+To adopt the [simulation study](./POINTS_RANKING_SIMULATION_STUDY.md)'s recommendation with **config edits only** (no code change):
+
+- **Validity — "Seasonal":** open-play validity **3 months (~91 days)**, tournament validity **12 months (365 days)** — §13's currency-of-form sweet spot.
+- **Open-play increments — Fibonacci margin:** set the FAVORITE/UPSET winner cells to `{2,3,5,8,13,21}` by margin for diverse (non-noise) increments.
+- Do **not** re-introduce the finer-increment sub-tier or ×100 fixed-point — the study rejects them (Part 4 cons: noise, not merit). Band-scoping + the confidence tie-breaker (#547) already handle residual collisions.
+
+---
+
 ## Award creation, audit & trigger — unchanged (awarded at finalize)
 
 Only the **amount** of an award changes (rule-computed for open play, placement-based for tournaments). The **record, audit, and trigger stay exactly as they are today**:

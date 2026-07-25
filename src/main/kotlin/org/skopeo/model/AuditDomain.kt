@@ -56,6 +56,7 @@ enum class AuditAction {
     CIRCUIT_DELETED,
     SETTINGS_THEME_CHANGED,
     SETTINGS_STANDINGS_SOURCE_CHANGED,
+    SETTINGS_POINTS_CONFIG_CHANGED,
     RANKING_POINTS_AWARDED,
     RANKING_POINTS_REVOKED,
     STANDINGS_RECALCULATED,
@@ -167,6 +168,7 @@ val AuditAction.category: AuditCategory
             -> AuditCategory.CIRCUIT_MANAGEMENT
             AuditAction.SETTINGS_THEME_CHANGED,
             AuditAction.SETTINGS_STANDINGS_SOURCE_CHANGED,
+            AuditAction.SETTINGS_POINTS_CONFIG_CHANGED,
             -> AuditCategory.SETTINGS_MANAGEMENT
             AuditAction.RANKING_POINTS_AWARDED,
             AuditAction.RANKING_POINTS_REVOKED,

@@ -153,7 +153,7 @@ class EventReverseRatingsTest {
                         eventId = eventId,
                         designatedPoints = designated,
                         isPlacementMatch = true,
-                        placementBracket = PlacementBracket.SUPER_FINALS,
+                        placementBracket = PlacementBracket.CHAMPIONSHIP_FINALS,
                     ),
             )
         matchRepo.addResult(

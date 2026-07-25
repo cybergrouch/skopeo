@@ -28,6 +28,7 @@ import { formatPoints } from "@/lib/points";
 import type { Capability } from "@/auth/capabilities";
 import { canManagePointsBudget } from "@/auth/capabilities";
 import { StandingsCalculationSection } from "./StandingsCalculationSection";
+import { PointsSchedulesSection } from "./PointsSchedulesSection";
 
 const AWARDS_PAGE_SIZE = 25;
 
@@ -47,6 +48,7 @@ export function PointsManagementSection({
 }) {
   return (
     <div className="grid gap-4">
+      <PointsSchedulesSection />
       <BudgetsCard />
       {canManagePointsBudget(capabilities) ? <AwardedPointsCard /> : null}
       <StandingsCalculationSection capabilities={capabilities} />
