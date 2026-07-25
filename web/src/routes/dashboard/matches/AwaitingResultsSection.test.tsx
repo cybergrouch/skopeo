@@ -281,9 +281,12 @@ describe('AwaitingResultsSection', () => {
   it('adds sets up to the max and removes down to one', async () => {
     const user = userEvent.setup()
     renderSection()
-    expect(screen.queryByText('Set 3')).not.toBeInTheDocument()
+    // A fresh fixture starts with a single set row (#571): Set 2 isn't shown yet.
+    expect(screen.queryByText('Set 2')).not.toBeInTheDocument()
 
-    // Add from the default 2 rows up to the max of 5; then "Add set" disappears.
+    // Add from the default 1 row up to the max of 5; then "Add set" disappears.
+    await user.click(screen.getByRole('button', { name: 'Add set' }))
+    expect(screen.getByText('Set 2')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Add set' }))
     expect(screen.getByText('Set 3')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Add set' }))

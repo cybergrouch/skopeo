@@ -103,13 +103,10 @@ function MatchResultRow({
   const recorded = match.sets.length > 0;
   const rated = match.ratedAt != null;
   const [editing, setEditing] = useState(false);
+  // A fresh fixture starts with a single empty set row (#571) — most results are single-set, so hosts
+  // needn't delete a spare row; the "Add set" control adds more when needed.
   const [rows, setRows] = useState<SetRow[]>(
-    recorded
-      ? rowsFromMatch(match)
-      : [
-          { t1: "", t2: "" },
-          { t1: "", t2: "" },
-        ],
+    recorded ? rowsFromMatch(match) : [{ t1: "", t2: "" }],
   );
   const [error, setError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
