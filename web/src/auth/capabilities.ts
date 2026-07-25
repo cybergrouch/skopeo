@@ -61,7 +61,8 @@ export function canRate(
 
 /**
  * The Points Management tab is for points managers (#403 §5.1): the staff role over the points
- * economy (global policy + club budgets). ADMINISTRATOR is implicitly a points manager.
+ * economy — now the global award schedules (#552/#553) and the ranking-points ledger (#472), after the
+ * per-club budget + per-event designation subsystem was removed (#559). ADMINISTRATOR is implicitly one.
  */
 export function canManagePointsBudget(
   capabilities: readonly Capability[] | undefined,
@@ -69,31 +70,6 @@ export function canManagePointsBudget(
   return (
     hasCapability(capabilities, Capability.POINTS_MANAGER) ||
     hasCapability(capabilities, Capability.ADMINISTRATOR)
-  );
-}
-
-/** True when the user holds the CLUB_OWNER capability (#403 Phase E). */
-export function isClubOwner(
-  capabilities: readonly Capability[] | undefined,
-): boolean {
-  return hasCapability(capabilities, Capability.CLUB_OWNER);
-}
-
-/**
- * Who may view a club's gated points summary (#403 Phase E): an ADMINISTRATOR / POINTS_MANAGER, or a
- * CLUB_OWNER who owns *this* club (their {@link userId} is among {@link clubOwnerIds}). Utilization is
- * never on the anonymous public club page — this gates the extra owner-only section (and its fetch).
- */
-export function canViewClubPointsSummary(
-  capabilities: readonly Capability[] | undefined,
-  clubOwnerIds: readonly string[],
-  userId: string | undefined,
-): boolean {
-  if (canManagePointsBudget(capabilities)) return true;
-  return (
-    isClubOwner(capabilities) &&
-    userId !== undefined &&
-    clubOwnerIds.includes(userId)
   );
 }
 
