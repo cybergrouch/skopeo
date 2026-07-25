@@ -16,8 +16,7 @@ Every match is described by two independent axes:
   (2 players/side). *Only `SINGLES` is exercised by the rating calculator today*; doubles
   fixtures can be recorded but the calculator's scope is singles.
 - **`matchType`** — the competitive context, which scales how much a result moves a rating:
-  `OPEN_PLAY`, `LEAGUE_PLAY`, `TOURNAMENT_INITIAL_ROUND`, `LEAGUE_PLAYOFFS`,
-  `TOURNAMENT_PLAYOFFS` (rising pressure → larger factor; see
+  `OPEN_PLAY`, `LEAGUE_PLAY`, `LEAGUE_PLAYOFFS`, `TOURNAMENT` (rising pressure → larger factor; see
   [`RATING_CALCULATION_ALGORITHM.md`](../../product/RATING_CALCULATION_ALGORITHM.md)).
 
 ## Three-phase lifecycle

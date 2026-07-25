@@ -100,9 +100,8 @@ class RatingConfidenceTest {
     }
 
     @Test
-    fun `the weight-class mapping folds playoffs into their parent class`() {
-        MatchType.TOURNAMENT_INITIAL_ROUND.weightClass() shouldBe WeightClass.TOURNAMENT
-        MatchType.TOURNAMENT_PLAYOFFS.weightClass() shouldBe WeightClass.TOURNAMENT
+    fun `the weight-class mapping folds league playoffs into their parent class`() {
+        MatchType.TOURNAMENT.weightClass() shouldBe WeightClass.TOURNAMENT
         MatchType.LEAGUE_PLAY.weightClass() shouldBe WeightClass.LEAGUE
         MatchType.LEAGUE_PLAYOFFS.weightClass() shouldBe WeightClass.LEAGUE
         MatchType.OPEN_PLAY.weightClass() shouldBe WeightClass.OPEN_PLAY
