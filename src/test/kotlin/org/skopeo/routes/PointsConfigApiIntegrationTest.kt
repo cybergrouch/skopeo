@@ -26,6 +26,7 @@ import org.skopeo.dto.settings.TournamentConfigResponse
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.NameType
+import org.skopeo.model.OpenPlayPointsConfig
 import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.TournamentPointsConfig
 import org.skopeo.model.User
@@ -120,6 +121,41 @@ class PointsConfigApiIntegrationTest {
                 header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
                 contentType(type = ContentType.Application.Json)
                 setBody(body = config)
+            }.status shouldBe HttpStatusCode.Forbidden
+        }
+
+    @Test
+    fun `an admin sets the open-play schedule and the read reflects it (#553)`() =
+        withApp { client ->
+            seedUser(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+            val adminToken = TestFirebaseAuth.mintToken(uid = "admin")
+            // Adopt the study's Seasonal open-play validity (3 months) by editing config.
+            val config = OpenPlayPointsConfig.DEFAULT.copy(validityDays = 91)
+
+            val updated =
+                client.put(urlString = "/api/v1/settings/points/open-play") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = config)
+                }
+            updated.status shouldBe HttpStatusCode.OK
+            updated.body<OpenPlayConfigResponse>().config.validityDays shouldBe 91
+
+            client.get(urlString = "/api/v1/settings/points/open-play") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+            }.body<OpenPlayConfigResponse>().config.validityDays shouldBe 91
+        }
+
+    @Test
+    fun `a plain player cannot set the open-play schedule (#553)`() =
+        withApp { client ->
+            seedUser(uid = "player", roles = setOf(element = Capability.PLAYER))
+            val playerToken = TestFirebaseAuth.mintToken(uid = "player")
+
+            client.put(urlString = "/api/v1/settings/points/open-play") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
+                contentType(type = ContentType.Application.Json)
+                setBody(body = OpenPlayPointsConfig.DEFAULT)
             }.status shouldBe HttpStatusCode.Forbidden
         }
 }

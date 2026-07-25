@@ -49,6 +49,17 @@ vi.mock("@/api/generated/standings/standings", () => ({
   getGetApiV1StandingsQueryKey: () => ["standings"],
 }));
 
+// The embedded points-schedules editor (#552/#553) is unit-tested in its own file; here we just stub
+// its hooks (loading) so PointsManagementSection renders without hitting the network.
+vi.mock("@/api/generated/settings/settings", () => ({
+  useGetApiV1SettingsPointsOpenPlay: () => ({ data: undefined, isLoading: true }),
+  useGetApiV1SettingsPointsTournament: () => ({ data: undefined, isLoading: true }),
+  usePutApiV1SettingsPointsOpenPlay: () => ({ isPending: false, mutate: vi.fn() }),
+  usePutApiV1SettingsPointsTournament: () => ({ isPending: false, mutate: vi.fn() }),
+  getGetApiV1SettingsPointsOpenPlayQueryKey: () => ["open-play"],
+  getGetApiV1SettingsPointsTournamentQueryKey: () => ["tournament"],
+}));
+
 function renderSection() {
   return render(
     <MemoryRouter>

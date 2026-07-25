@@ -146,8 +146,11 @@ export function EventDetail({
   // Tournament placement match (#525): mark a fixture as deciding a placement + which bracket.
   const [isPlacement, setIsPlacement] = useState(false);
   const [placementBracket, setPlacementBracket] = useState<
-    "SUPER_FINALS" | "PLATE_FINALS"
-  >("SUPER_FINALS");
+    | "CHAMPIONSHIP_FINALS"
+    | "SEMI_FINALS_NO_PLATE"
+    | "SEMI_FINALS_WITH_PLATE"
+    | "PLATE_FINALS"
+  >("CHAMPIONSHIP_FINALS");
   const [fixtureError, setFixtureError] = useState<string | null>(null);
   const [rosterError, setRosterError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -1194,13 +1197,21 @@ export function EventDetail({
                             onChange={(e) =>
                               setPlacementBracket(
                                 e.target.value as
-                                  | "SUPER_FINALS"
+                                  | "CHAMPIONSHIP_FINALS"
+                                  | "SEMI_FINALS_NO_PLATE"
+                                  | "SEMI_FINALS_WITH_PLATE"
                                   | "PLATE_FINALS",
                               )
                             }
                           >
-                            <option value="SUPER_FINALS">
-                              Super Finals (1st / 2nd)
+                            <option value="CHAMPIONSHIP_FINALS">
+                              Championship Finals (1st / 2nd)
+                            </option>
+                            <option value="SEMI_FINALS_NO_PLATE">
+                              Semi-Finals — no plate (losers → 3rd)
+                            </option>
+                            <option value="SEMI_FINALS_WITH_PLATE">
+                              Semi-Finals — with plate (→ Plate Finals)
                             </option>
                             <option value="PLATE_FINALS">
                               Plate Finals (3rd / 4th)
