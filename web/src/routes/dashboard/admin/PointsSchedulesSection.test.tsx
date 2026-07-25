@@ -3,18 +3,39 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PointsSchedulesSection } from "./PointsSchedulesSection";
 
-const { useGetOpenPlay, useGetTournament, putOpenPlay, putTournament } = vi.hoisted(() => ({
+const { useGetOpenPlay, useGetTournament, putOpenPlay, putTournament, shouldFail } = vi.hoisted(() => ({
   useGetOpenPlay: vi.fn(),
   useGetTournament: vi.fn(),
   putOpenPlay: vi.fn(),
   putTournament: vi.fn(),
+  shouldFail: { value: false },
 }));
 
+// The PUT mocks drive the real mutation callbacks: on success they record the payload and fire
+// onSuccess (→ "Saved"); when shouldFail is set they fire onError (→ the inline error).
 vi.mock("@/api/generated/settings/settings", () => ({
   useGetApiV1SettingsPointsOpenPlay: useGetOpenPlay,
   useGetApiV1SettingsPointsTournament: useGetTournament,
-  usePutApiV1SettingsPointsOpenPlay: () => ({ mutate: putOpenPlay, isPending: false }),
-  usePutApiV1SettingsPointsTournament: () => ({ mutate: putTournament, isPending: false }),
+  usePutApiV1SettingsPointsOpenPlay: (opts: { mutation: { onSuccess: () => void; onError: () => void } }) => ({
+    isPending: false,
+    mutate: (vars: unknown) => {
+      if (shouldFail.value) opts.mutation.onError();
+      else {
+        putOpenPlay(vars);
+        opts.mutation.onSuccess();
+      }
+    },
+  }),
+  usePutApiV1SettingsPointsTournament: (opts: { mutation: { onSuccess: () => void; onError: () => void } }) => ({
+    isPending: false,
+    mutate: (vars: unknown) => {
+      if (shouldFail.value) opts.mutation.onError();
+      else {
+        putTournament(vars);
+        opts.mutation.onSuccess();
+      }
+    },
+  }),
   getGetApiV1SettingsPointsOpenPlayQueryKey: () => ["open-play"],
   getGetApiV1SettingsPointsTournamentQueryKey: () => ["tournament"],
 }));
@@ -47,45 +68,66 @@ function renderSection() {
   );
 }
 
+// The two Save buttons in DOM order: [0] = open-play card, [1] = tournament card.
+const saveButtons = () => screen.getAllByRole("button", { name: "Save" });
+
 describe("PointsSchedulesSection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    shouldFail.value = false;
     useGetOpenPlay.mockReturnValue({ data: { config: openPlayConfig }, isLoading: false });
     useGetTournament.mockReturnValue({ data: { config: tournamentConfig }, isLoading: false });
   });
 
   it("renders the open-play margin grid and tournament schedule from config", () => {
     renderSection();
-    // Open-play: the upset margin-1 winner cell shows 5, its loser cell −2.
     expect((screen.getByLabelText("Upset margin 1 winner points") as HTMLInputElement).value).toBe("5");
     expect((screen.getByLabelText("Upset margin 1 loser points") as HTMLInputElement).value).toBe("-2");
-    // Tournament: sanctioned 1st = 80, unsanctioned 3rd = 20.
     expect((screen.getByLabelText("sanctioned 1st points") as HTMLInputElement).value).toBe("80");
     expect((screen.getByLabelText("unsanctioned 3rd points") as HTMLInputElement).value).toBe("20");
   });
 
-  it("saves an edited open-play cell (diverse increments allowed)", () => {
+  it("edits open-play winner, loser and validity, saves, and confirms (diverse increments allowed)", () => {
     renderSection();
-    // Enter a Fibonacci-style dominance value on the upset margin-2 winner cell.
-    fireEvent.change(screen.getByLabelText("Upset margin 2 winner points"), {
-      target: { value: "13" },
-    });
-    // The open-play card's Save is the first of the two Save buttons.
-    fireEvent.click(screen.getAllByRole("button", { name: "Save" })[0]);
+    // Fibonacci-style dominance on a winner cell, a loser edit, and the study's 3-month validity.
+    fireEvent.change(screen.getByLabelText("Upset margin 2 winner points"), { target: { value: "13" } });
+    fireEvent.change(screen.getByLabelText("Favorite margin 1 loser points"), { target: { value: "2" } });
+    fireEvent.change(screen.getByLabelText("open-play validity days"), { target: { value: "91" } });
+    fireEvent.click(saveButtons()[0]);
 
     expect(putOpenPlay).toHaveBeenCalledTimes(1);
     const sent = putOpenPlay.mock.calls[0][0].data;
-    expect(sent.rows.find((r: { relation: string; margin: number }) => r.relation === "UPSET" && r.margin === 2).winnerPoints).toBe(13);
+    expect(
+      sent.rows.find((r: { relation: string; margin: number }) => r.relation === "UPSET" && r.margin === 2).winnerPoints,
+    ).toBe(13);
+    expect(
+      sent.rows.find((r: { relation: string; margin: number }) => r.relation === "FAVORITE" && r.margin === 1).loserPoints,
+    ).toBe(2);
+    expect(sent.validityDays).toBe(91);
+    // onSuccess fired → the "Saved" status shows.
+    expect(screen.getAllByRole("status").some((el) => el.textContent === "Saved")).toBe(true);
   });
 
-  it("saves an edited tournament placement value", () => {
+  it("edits tournament sanctioned, unsanctioned and validity, then saves", () => {
     renderSection();
     fireEvent.change(screen.getByLabelText("sanctioned 1st points"), { target: { value: "100" } });
-    // The tournament card's Save is the second Save button.
-    fireEvent.click(screen.getAllByRole("button", { name: "Save" })[1]);
+    fireEvent.change(screen.getByLabelText("unsanctioned 4th points"), { target: { value: "18" } });
+    fireEvent.change(screen.getByLabelText("tournament validity days"), { target: { value: "365" } });
+    fireEvent.click(saveButtons()[1]);
 
     expect(putTournament).toHaveBeenCalledTimes(1);
-    expect(putTournament.mock.calls[0][0].data.sanctioned[0]).toBe(100);
+    const sent = putTournament.mock.calls[0][0].data;
+    expect(sent.sanctioned[0]).toBe(100);
+    expect(sent.unsanctioned[3]).toBe(18);
+    expect(sent.validityDays).toBe(365);
+  });
+
+  it("shows an inline error when a save is unauthorized", () => {
+    shouldFail.value = true;
+    renderSection();
+    fireEvent.click(saveButtons()[0]);
+    expect(screen.getByRole("alert").textContent).toMatch(/administrator access/i);
+    expect(putOpenPlay).not.toHaveBeenCalled();
   });
 
   it("shows a loading state until config arrives", () => {
