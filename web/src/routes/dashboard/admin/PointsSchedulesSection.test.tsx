@@ -112,22 +112,47 @@ describe("PointsSchedulesSection", () => {
     renderSection();
     fireEvent.change(screen.getByLabelText("sanctioned 1st points"), { target: { value: "100" } });
     fireEvent.change(screen.getByLabelText("unsanctioned 4th points"), { target: { value: "18" } });
-    fireEvent.change(screen.getByLabelText("tournament validity days"), { target: { value: "365" } });
+    fireEvent.change(screen.getByLabelText("tournament validity days"), { target: { value: "180" } });
     fireEvent.click(saveButtons()[1]);
 
     expect(putTournament).toHaveBeenCalledTimes(1);
     const sent = putTournament.mock.calls[0][0].data;
     expect(sent.sanctioned[0]).toBe(100);
     expect(sent.unsanctioned[3]).toBe(18);
-    expect(sent.validityDays).toBe(365);
+    expect(sent.validityDays).toBe(180);
   });
 
-  it("shows an inline error when a save is unauthorized", () => {
+  it("shows an inline error when either save is unauthorized", () => {
     shouldFail.value = true;
     renderSection();
-    fireEvent.click(saveButtons()[0]);
-    expect(screen.getByRole("alert").textContent).toMatch(/administrator access/i);
+    fireEvent.click(saveButtons()[0]); // open-play → onError
+    fireEvent.click(saveButtons()[1]); // tournament → onError
+    const alerts = screen.getAllByRole("alert");
+    expect(alerts.length).toBeGreaterThanOrEqual(2);
+    expect(alerts[0].textContent).toMatch(/administrator access/i);
     expect(putOpenPlay).not.toHaveBeenCalled();
+    expect(putTournament).not.toHaveBeenCalled();
+  });
+
+  it("falls back to 0 for a margin cell missing from the config", () => {
+    // maxMargin 2 but only margin-1 rows → the margin-2 cells hit the `?? 0` fallback.
+    useGetOpenPlay.mockReturnValue({
+      data: {
+        config: {
+          maxMargin: 2,
+          validityDays: 61,
+          rows: [
+            { relation: "EQUAL", margin: 1, winnerPoints: 3, loserPoints: 0 },
+            { relation: "FAVORITE", margin: 1, winnerPoints: 2, loserPoints: 1 },
+            { relation: "UPSET", margin: 1, winnerPoints: 5, loserPoints: -2 },
+          ],
+        },
+      },
+      isLoading: false,
+    });
+    renderSection();
+    expect((screen.getByLabelText("Equal margin 2 winner points") as HTMLInputElement).value).toBe("0");
+    expect((screen.getByLabelText("Upset margin 2 loser points") as HTMLInputElement).value).toBe("0");
   });
 
   it("shows a loading state until config arrives", () => {
