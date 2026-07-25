@@ -80,6 +80,18 @@ describe('MatchHistoryCard', () => {
     )
   })
 
+  it('shows a band-specific empty state once a band filter is applied (#563)', async () => {
+    const user = userEvent.setup()
+    useGetApiV1PlayersCodeMatchHistory.mockReturnValue({ data: { items: [], total: 0 }, isLoading: false })
+    renderCard()
+    // With no filter yet, the empty state is the generic one.
+    expect(screen.getByText('No matches yet.')).toBeInTheDocument()
+    // Selecting a band and still finding nothing switches to the band-specific message.
+    await user.selectOptions(screen.getByLabelText('Filter by opponent NTRP band'), '4.0')
+    expect(screen.getByText('No matches vs that band.')).toBeInTheDocument()
+    expect(screen.queryByText('No matches yet.')).not.toBeInTheDocument()
+  })
+
   it('omits the "View all" link when the preview already shows everything', () => {
     useGetApiV1PlayersCodeMatchHistory.mockReturnValue({
       data: { items: [match('a', 'Ben')], total: 1 },
