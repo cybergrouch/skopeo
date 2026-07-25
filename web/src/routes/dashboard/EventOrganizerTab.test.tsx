@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { EventOrganizerTab } from "./EventOrganizerTab";
@@ -322,6 +322,7 @@ describe("EventOrganizerTab", () => {
     expect(screen.getByRole("button", { name: /Ana ✕/ })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Create event" }));
+    // "Award Ranking Points" defaults on (#559), so the payload always carries it as true.
     expect(createMutate).toHaveBeenCalledWith({
       data: {
         name: "Summer Open",
@@ -329,6 +330,7 @@ describe("EventOrganizerTab", () => {
         endDate: "2026-06-02",
         type: "OPEN_PLAY",
         participantIds: ["u1"],
+        awardRankingPoints: true,
       },
     });
   });
@@ -350,6 +352,7 @@ describe("EventOrganizerTab", () => {
         endDate: "2026-06-02",
         type: "LEAGUE",
         participantIds: [],
+        awardRankingPoints: true,
       },
     });
   });
@@ -428,12 +431,6 @@ describe("EventOrganizerTab", () => {
     await user.type(screen.getByLabelText("Start date"), "2026-06-01");
     await user.type(screen.getByLabelText("End date"), "2026-06-02");
     await user.selectOptions(screen.getByLabelText("Club"), "c1");
-    // Points are opt-in (#466): a clubless-or-clubbed event awards points only when the box is ticked.
-    await user.click(screen.getByLabelText("Award ranking points"));
-    await user.type(screen.getByLabelText("Min points"), "2");
-    await user.type(screen.getByLabelText("Max points"), "8");
-    await user.type(screen.getByLabelText("Validity start"), "2026-06-01");
-    await user.type(screen.getByLabelText("Validity end"), "2026-06-20");
     await user.click(screen.getByRole("button", { name: "Create event" }));
 
     expect(createMutate).toHaveBeenCalledWith({
@@ -444,10 +441,7 @@ describe("EventOrganizerTab", () => {
         type: "OPEN_PLAY",
         participantIds: [],
         clubId: "c1",
-        minPointsPerMatch: 2,
-        maxPointsPerMatch: 8,
-        pointValidityStart: "2026-06-01",
-        pointValidityEnd: "2026-06-20",
+        awardRankingPoints: true,
       },
     });
   });
@@ -578,22 +572,18 @@ describe("EventOrganizerTab", () => {
     expect(screen.getByText("Alpha Cup")).toBeInTheDocument();
   });
 
-  // --- "Award ranking points" checkbox on create (#466) ---
+  // --- "Award Ranking Points" checkbox on create (#559) ---
 
-  it("hides the points config until the award-points checkbox is ticked (#466)", async () => {
-    const user = userEvent.setup();
+  it("shows the Award Ranking Points checkbox, checked by default (#559)", () => {
     renderTab();
 
-    // Default off → the config fields are hidden (no club/type gating; opt-in for any event).
-    expect(screen.getByLabelText("Award ranking points")).not.toBeChecked();
+    // The single boolean flag replaces the old points-config UI; there is no min/max/validity input.
+    expect(screen.getByLabelText("Award Ranking Points")).toBeChecked();
     expect(screen.queryByLabelText("Min points")).not.toBeInTheDocument();
-
-    // Ticking it reveals the config fields.
-    await user.click(screen.getByLabelText("Award ranking points"));
-    expect(screen.getByLabelText("Min points")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Validity start")).not.toBeInTheDocument();
   });
 
-  it("creates with no points fields when the award-points checkbox is off (#466)", async () => {
+  it("sends awardRankingPoints:false when the checkbox is unticked (#559)", async () => {
     const user = userEvent.setup();
     renderTab();
     await user.type(screen.getByLabelText("Name"), "Casual Meetup");
@@ -601,7 +591,8 @@ describe("EventOrganizerTab", () => {
     await user.type(screen.getByLabelText("End date"), "2026-06-02");
     await user.selectOptions(screen.getByLabelText("Type"), "LEAGUE");
 
-    // Checkbox left unchecked → the create payload carries no points fields.
+    // The box defaults on; unticking opts the whole event out of awarding points.
+    await user.click(screen.getByLabelText("Award Ranking Points"));
     await user.click(screen.getByRole("button", { name: "Create event" }));
     expect(createMutate).toHaveBeenCalledWith({
       data: {
@@ -610,6 +601,7 @@ describe("EventOrganizerTab", () => {
         endDate: "2026-06-02",
         type: "LEAGUE",
         participantIds: [],
+        awardRankingPoints: false,
       },
     });
   });
@@ -640,186 +632,9 @@ describe("EventOrganizerTab", () => {
         type: "TOURNAMENT",
         participantIds: [],
         circuitId: "cir1",
+        awardRankingPoints: true,
       },
     });
   });
 
-  it("shows and requires points config once the checkbox is ticked, and sends it (#466)", async () => {
-    const user = userEvent.setup();
-    renderTab();
-    await user.type(screen.getByLabelText("Name"), "League Night");
-    await user.type(screen.getByLabelText("Start date"), "2026-06-01");
-    await user.type(screen.getByLabelText("End date"), "2026-06-02");
-    await user.selectOptions(screen.getByLabelText("Type"), "LEAGUE");
-    await user.click(screen.getByLabelText("Award ranking points"));
-
-    // The points-config fields appear once ticked.
-    expect(screen.getByLabelText("Min points")).toBeInTheDocument();
-    // Required until filled: the submit stays disabled with the fields blank.
-    expect(
-      screen.getByRole("button", { name: "Create event" }),
-    ).toBeDisabled();
-
-    await user.type(screen.getByLabelText("Min points"), "10");
-    await user.type(screen.getByLabelText("Max points"), "40");
-    await user.type(screen.getByLabelText("Validity start"), "2026-06-01");
-    await user.type(screen.getByLabelText("Validity end"), "2026-08-01");
-    await user.click(screen.getByRole("button", { name: "Create event" }));
-
-    expect(createMutate).toHaveBeenCalledWith({
-      data: {
-        name: "League Night",
-        startDate: "2026-06-01",
-        endDate: "2026-06-02",
-        type: "LEAGUE",
-        participantIds: [],
-        minPointsPerMatch: 10,
-        maxPointsPerMatch: 40,
-        pointValidityStart: "2026-06-01",
-        pointValidityEnd: "2026-08-01",
-      },
-    });
-  });
-
-  it("awards points on an OPEN_PLAY event when the checkbox is ticked (unify, #466)", async () => {
-    const user = userEvent.setup();
-    renderTab();
-    await user.type(screen.getByLabelText("Name"), "Casual Meetup");
-    await user.type(screen.getByLabelText("Start date"), "2026-06-01");
-    await user.type(screen.getByLabelText("End date"), "2026-06-02");
-
-    // OPEN_PLAY (the default) awards points once ticked (unified with LEAGUE/TOURNAMENT).
-    await user.click(screen.getByLabelText("Award ranking points"));
-    expect(screen.getByLabelText("Min points")).toBeInTheDocument();
-
-    await user.type(screen.getByLabelText("Min points"), "2");
-    await user.type(screen.getByLabelText("Max points"), "8");
-    await user.type(screen.getByLabelText("Validity start"), "2026-06-01");
-    await user.type(screen.getByLabelText("Validity end"), "2026-06-20");
-    await user.click(screen.getByRole("button", { name: "Create event" }));
-
-    expect(createMutate).toHaveBeenCalledWith({
-      data: {
-        name: "Casual Meetup",
-        startDate: "2026-06-01",
-        endDate: "2026-06-02",
-        type: "OPEN_PLAY",
-        participantIds: [],
-        minPointsPerMatch: 2,
-        maxPointsPerMatch: 8,
-        pointValidityStart: "2026-06-01",
-        pointValidityEnd: "2026-06-20",
-      },
-    });
-  });
-
-  // Fill name + dates + type, then tick "Award ranking points" so the config panel is shown/required (#466).
-  async function openBudgetedForm(
-    user: ReturnType<typeof userEvent.setup>,
-    type: "LEAGUE" | "TOURNAMENT" | "OPEN_PLAY" = "OPEN_PLAY",
-  ) {
-    await user.type(screen.getByLabelText("Name"), "Club Cup");
-    await user.type(screen.getByLabelText("Start date"), "2026-06-01");
-    await user.type(screen.getByLabelText("End date"), "2026-06-02");
-    if (type !== "OPEN_PLAY") {
-      await user.selectOptions(screen.getByLabelText("Type"), type);
-    }
-    await user.click(screen.getByLabelText("Award ranking points"));
-  }
-
-  // Submit the <form> directly: an invalid points config disables the Create button, so a click
-  // wouldn't fire; this exercises submit()'s pointsError guard (setError; return) and the error render.
-  function submitForm() {
-    const form = screen
-      .getByRole("button", { name: "Create event" })
-      .closest("form") as HTMLFormElement;
-    fireEvent.submit(form);
-  }
-
-  it("rejects a non-integer or non-positive min/max (#434)", async () => {
-    useGetApiV1Clubs.mockReturnValue({
-      data: [{ id: "c1", name: "Downtown TC", isActive: true, owners: [] }],
-      isLoading: false,
-    });
-    const user = userEvent.setup();
-    renderTab();
-    // OPEN_PLAY policy is 1..10, so 1.5 / 5 is within bounds yet not a whole number.
-    await openBudgetedForm(user);
-    await user.type(screen.getByLabelText("Min points"), "1.5");
-    await user.type(screen.getByLabelText("Max points"), "5");
-    await user.type(screen.getByLabelText("Validity start"), "2026-06-01");
-    await user.type(screen.getByLabelText("Validity end"), "2026-06-20");
-
-    // Submitting surfaces the "positive whole numbers" error and blocks the create.
-    submitForm();
-    expect(
-      screen.getByText("Min and max points must be positive whole numbers."),
-    ).toBeInTheDocument();
-    expect(createMutate).not.toHaveBeenCalled();
-  });
-
-  it("rejects a min greater than the max (#434)", async () => {
-    useGetApiV1Clubs.mockReturnValue({
-      data: [{ id: "c1", name: "Downtown TC", isActive: true, owners: [] }],
-      isLoading: false,
-    });
-    const user = userEvent.setup();
-    renderTab();
-    // Both within OPEN_PLAY's 1..10 bounds, but min > max.
-    await openBudgetedForm(user);
-    await user.type(screen.getByLabelText("Min points"), "8");
-    await user.type(screen.getByLabelText("Max points"), "3");
-    await user.type(screen.getByLabelText("Validity start"), "2026-06-01");
-    await user.type(screen.getByLabelText("Validity end"), "2026-06-20");
-
-    submitForm();
-    expect(
-      screen.getByText("Min points cannot exceed max points."),
-    ).toBeInTheDocument();
-    expect(createMutate).not.toHaveBeenCalled();
-  });
-
-  it("rejects a validity end before its start (#434)", async () => {
-    useGetApiV1Clubs.mockReturnValue({
-      data: [{ id: "c1", name: "Downtown TC", isActive: true, owners: [] }],
-      isLoading: false,
-    });
-    const user = userEvent.setup();
-    renderTab();
-    await openBudgetedForm(user);
-    await user.type(screen.getByLabelText("Min points"), "2");
-    await user.type(screen.getByLabelText("Max points"), "8");
-    // End before start.
-    await user.type(screen.getByLabelText("Validity start"), "2026-06-20");
-    await user.type(screen.getByLabelText("Validity end"), "2026-06-01");
-
-    submitForm();
-    expect(
-      screen.getByText("Validity end cannot be before the start."),
-    ).toBeInTheDocument();
-    expect(createMutate).not.toHaveBeenCalled();
-  });
-
-  it("blocks submit and surfaces the error when the points config is invalid (#434)", async () => {
-    useGetApiV1Clubs.mockReturnValue({
-      data: [{ id: "c1", name: "Downtown TC", isActive: true, owners: [] }],
-      isLoading: false,
-    });
-    const user = userEvent.setup();
-    renderTab();
-    await openBudgetedForm(user);
-    // Max of 0 makes the window invalid (pointsError set), disabling the Create button.
-    await user.type(screen.getByLabelText("Min points"), "2");
-    await user.type(screen.getByLabelText("Max points"), "0");
-    await user.type(screen.getByLabelText("Validity start"), "2026-06-01");
-    await user.type(screen.getByLabelText("Validity end"), "2026-06-20");
-
-    // Submitting exercises submit()'s pointsError guard: it sets the error and returns without create.
-    submitForm();
-
-    expect(
-      screen.getByText("Min and max points must be positive whole numbers."),
-    ).toBeInTheDocument();
-    expect(createMutate).not.toHaveBeenCalled();
-  });
 });
