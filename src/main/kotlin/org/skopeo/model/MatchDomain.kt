@@ -27,13 +27,13 @@ data class WindowMatch(
 enum class WeightClass { TOURNAMENT, LEAGUE, OPEN_PLAY }
 
 /**
- * Which confidence weight class (#459) a match's [MatchType] counts toward: the tournament rounds are
- * TOURNAMENT, the league rounds are LEAGUE, and casual play is OPEN_PLAY. Playoffs share their parent
- * class' weight.
+ * Which confidence weight class (#459) a match's [MatchType] counts toward: tournament play is
+ * TOURNAMENT, the league rounds are LEAGUE, and casual play is OPEN_PLAY. League playoffs share their
+ * parent class' weight.
  */
 fun MatchType.weightClass(): WeightClass =
     when (this) {
-        MatchType.TOURNAMENT_INITIAL_ROUND, MatchType.TOURNAMENT_PLAYOFFS -> WeightClass.TOURNAMENT
+        MatchType.TOURNAMENT -> WeightClass.TOURNAMENT
         MatchType.LEAGUE_PLAY, MatchType.LEAGUE_PLAYOFFS -> WeightClass.LEAGUE
         MatchType.OPEN_PLAY -> WeightClass.OPEN_PLAY
     }

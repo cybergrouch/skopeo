@@ -287,15 +287,15 @@ class RatingCalculationServiceTest {
         val b2 = provisionUser(uid = "b2", rated = true)
         // Two identical matches (equal 4.0 players, same score) differing only by match type.
         playedMatch(admin = "root", winner = a1.id, loser = a2.id, matchType = MatchType.OPEN_PLAY)
-        playedMatch(admin = "root", winner = b1.id, loser = b2.id, matchType = MatchType.TOURNAMENT_PLAYOFFS)
+        playedMatch(admin = "root", winner = b1.id, loser = b2.id, matchType = MatchType.TOURNAMENT)
 
         val changes = calc.calculate(token = token(uid = "root"), dryRun = true).shouldBeRight().matches.flatMap { it.changes }
         val openGain = changes.first { it.userId == a1.id }.let { it.newRating - it.previousRating }
-        val playoffGain = changes.first { it.userId == b1.id }.let { it.newRating - it.previousRating }
+        val tournamentGain = changes.first { it.userId == b1.id }.let { it.newRating - it.previousRating }
 
         (openGain > BigDecimal.ZERO).shouldBeTrue()
-        // TOURNAMENT_PLAYOFFS (1.2) scales the change well above OPEN_PLAY (0.5) for an identical match.
-        (playoffGain > openGain).shouldBeTrue()
+        // TOURNAMENT (1.2) scales the change well above OPEN_PLAY (0.5) for an identical match.
+        (tournamentGain > openGain).shouldBeTrue()
     }
 
     @Test

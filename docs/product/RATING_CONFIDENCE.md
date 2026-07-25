@@ -33,7 +33,7 @@ play widens the gap toward — and past — the 35-day midpoint, dropping confid
 
 | Match type | Weight class | Weight |
 | --- | --- | --- |
-| `TOURNAMENT_INITIAL_ROUND`, `TOURNAMENT_PLAYOFFS` | Tournament | **3.0** |
+| `TOURNAMENT` | Tournament | **3.0** |
 | `LEAGUE_PLAY`, `LEAGUE_PLAYOFFS` | League | **1.5** |
 | `OPEN_PLAY` | Open play | **0.5** |
 

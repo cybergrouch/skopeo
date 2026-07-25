@@ -59,16 +59,14 @@ function participantMeta(p: EventParticipantResponse): string {
 const MATCH_TYPES = [
   "OPEN_PLAY",
   "LEAGUE_PLAY",
-  "TOURNAMENT_INITIAL_ROUND",
   "LEAGUE_PLAYOFFS",
-  "TOURNAMENT_PLAYOFFS",
+  "TOURNAMENT",
 ] as const;
 const MATCH_TYPE_LABELS: Record<(typeof MATCH_TYPES)[number], string> = {
   OPEN_PLAY: "Open play",
   LEAGUE_PLAY: "League play",
-  TOURNAMENT_INITIAL_ROUND: "Tournament — initial round",
   LEAGUE_PLAYOFFS: "League playoffs",
-  TOURNAMENT_PLAYOFFS: "Tournament playoffs",
+  TOURNAMENT: "Tournament",
 };
 
 /** Human labels for the event's class (#403). */

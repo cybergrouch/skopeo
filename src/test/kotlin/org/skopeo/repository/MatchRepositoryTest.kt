@@ -216,7 +216,7 @@ class MatchRepositoryTest {
                 command =
                     CreateFixtureCommand(
                         matchFormat = TeamType.SINGLES,
-                        matchType = MatchType.TOURNAMENT_PLAYOFFS,
+                        matchType = MatchType.TOURNAMENT,
                         matchDate = LocalDate.of(2026, 1, 1),
                         team1UserIds = listOf(element = u1),
                         team2UserIds = listOf(element = u2),
@@ -608,11 +608,11 @@ class MatchRepositoryTest {
         val player = newUser(uid = "wc-p")
         val opponent = newUser(uid = "wc-o")
 
-        // A mix of classes on distinct dates, all in-window: two tournament playoffs → tournament; a
-        // league round → league; open play → open play. (TOURNAMENT_INITIAL_ROUND's name is unit-tested
-        // in RatingConfidenceTest; here it would exceed the pre-existing match_type VARCHAR(20).)
-        completedMatch(u1 = player, u2 = opponent, matchDate = today, matchType = MatchType.TOURNAMENT_PLAYOFFS)
-        completedMatch(u1 = player, u2 = opponent, matchDate = today.minusDays(3), matchType = MatchType.TOURNAMENT_PLAYOFFS)
+        // A mix of classes on distinct dates, all in-window: two tournament matches → tournament; a
+        // league round → league; open play → open play. (The MatchType → weight-class mapping is
+        // unit-tested in RatingConfidenceTest.)
+        completedMatch(u1 = player, u2 = opponent, matchDate = today, matchType = MatchType.TOURNAMENT)
+        completedMatch(u1 = player, u2 = opponent, matchDate = today.minusDays(3), matchType = MatchType.TOURNAMENT)
         completedMatch(u1 = player, u2 = opponent, matchDate = today.minusDays(7), matchType = MatchType.LEAGUE_PLAY)
         completedMatch(u1 = player, u2 = opponent, matchDate = today.minusDays(10), matchType = MatchType.OPEN_PLAY)
 
@@ -659,7 +659,7 @@ class MatchRepositoryTest {
 
         // a as team1, b as team2 (open play); then b as team1, a as team2 (tournament) — both sides count.
         completedMatch(u1 = a, u2 = b, matchDate = today, matchType = MatchType.OPEN_PLAY)
-        completedMatch(u1 = b, u2 = a, matchDate = today.minusDays(2), matchType = MatchType.TOURNAMENT_PLAYOFFS)
+        completedMatch(u1 = b, u2 = a, matchDate = today.minusDays(2), matchType = MatchType.TOURNAMENT)
 
         val rows = matches.windowedMatchesInWindow(userIds = listOf(a, b), asOf = asOf)
         val expected =

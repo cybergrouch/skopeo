@@ -11,8 +11,9 @@ import org.jetbrains.exposed.sql.javatime.datetime
 private const val NAME_MAX = 255
 private const val TYPE_MAX = 20
 
-// match_type + placement_bracket carry longer enum names (#462/#552): e.g. TOURNAMENT_INITIAL_ROUND (24),
-// SEMI_FINALS_WITH_PLATE (22). Widened past TYPE_MAX (see V29). The DB columns are widened to match.
+// placement_bracket carries longer enum names (#552): e.g. SEMI_FINALS_WITH_PLATE (22). Widened past
+// TYPE_MAX (see V29). match_type shares the width; its longest value is now LEAGUE_PLAYOFFS (15) since
+// TOURNAMENT_INITIAL_ROUND was collapsed into TOURNAMENT (#560). The DB columns are widened to match.
 private const val WIDE_TYPE_MAX = 32
 private const val ROUND_MAX = 50
 private const val PUBLIC_CODE_MAX = 6
