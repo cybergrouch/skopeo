@@ -1,6 +1,36 @@
 # Points Ranking — Monte Carlo Simulation Study
 
-> **Status:** Study of record for the ranking-points design ([#525](https://github.com/cybergrouch/skopeo/issues/525)). The points formulas are **design-only** (not yet implemented); this study encodes them standalone — exactly as the rating studies encode the rating algorithm — to answer a policy question **before** we build.
+> **Status:** Study of record for the ranking-points design ([#525](https://github.com/cybergrouch/skopeo/issues/525)). Encodes the points formulas standalone — exactly as the rating studies encode the rating algorithm — to answer policy questions with Monte Carlo simulation.
+
+## The problem — the current implementation congests the leaderboard
+
+Before proposing anything, here is what the **current** ranking-points design produces, simulated on its own (report §0): band-difference open play (per-set increments **{−2, −1, 0, 1, 2, 3, 5}**) + placement tournaments (80/60/40/30) at the default validity (open 2 mo / tournament 6 mo), **no Fibonacci, no finer increment, no fixed-point**. 2,000 players, read at three horizons:
+
+The **−1** increment is the case worth calling out: a **favorite who loses but still clears the ALP ≥4-games threshold** nets **RLP −2 + ALP +1 = −1** (e.g. loses 4–6). So the full current set is `{−2, −1, 0, 1, 2, 3, 5}` — seven small, closely-spaced, partly-negative values, which is exactly why the field compresses.
+
+| Horizon | pooled coll% | band-scoped coll% | sd | mean | range | distinct totals |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 mo | 99.4% | 92.0% | 19.3 | 15.3 | −6 – 108 | 101 |
+| 1 yr | 98.8% | 80.5% | 50.9 | 61.4 | −6 – 264 | 212 |
+| 3 yr | 99.2% | 79.5% | 50.2 | 61.2 | −5 – 257 | 204 |
+
+Three problems fall out, and they motivate the whole study:
+
+1. **The leaderboard is congested to the point of being uninformative.** At steady state **~99% of players share an exact points total** with someone else (pooled); even measured **per NTRP band** — how the standings actually run — **~80% are still tied**. You cannot meaningfully rank the field.
+2. **Too few distinct totals for the population (pigeonhole).** The scheme reaches only **~200 distinct reachable totals**, so 2,000 players pile onto them. Collisions are therefore **structural**, not a tuning artifact — and they only get worse as a band's population grows (quantified in [Part 6](#part-6--collision-saturation--tie-breakers-544)).
+3. **Totals can go negative and the spread is compressed.** The minimum is negative (−5…−9, from upset-loss awards netting in) and the bulk of players cluster in a narrow band (IQR ≈ 16–100 around a mean of ~61).
+
+So the study's job is to reduce **collisions**, widen **variance**, and (secondarily) handle **negatives** — measured against this baseline. The "capping" question below was the *original* motivation; once the score was shown to be bounded, **collisions and variance became the live focus**.
+
+## Study focus — three questions, in order
+
+This study has evolved through three questions. The first is **settled**; the latter two are the **live focus** and are treated in detail below.
+
+1. **Capping — resolved (yes).** Does a player's score cap, or grow to infinity? It **caps** (points expire → the score plateaus). Estimable in closed form. Covered briefly in [The answer](#the-answer) / §5; not revisited further.
+2. **Variance / spread — live focus.** How widely are player scores spread, and does the spread *grow over time*? Treated in detail in Part 2 (§6–7) and compared across schemes in Part 3 (§8) and Part 4 (§9).
+3. **Collisions — live focus.** How many players are *tied* on the same total (a congested, uninformative leaderboard)? Treated in detail across §6–9 (Part 4), then reframed **per NTRP band cohort** in Part 5 (§10–12) — which is how the standings actually run and the single biggest legitimate reducer.
+
+**One-line takeaway on 2 & 3:** *diverse increments* widen variance and the ceiling but don't fix collisions on their own; **longer validity** is the real, legitimate collision lever (pooled 99%→85%). A **finer (sub-integer) increment carried as fixed-point integers** appears to push pooled collisions lower still (→46%), but as implemented it separates players by *random noise*, not merit — so it is **dropped** (see [Cons of the finer increment](#cons-of-the-finer-increment) in Part 4). The real fix is structural: because points are **band-tagged**, measuring collisions **within band cohorts** ([Part 5](#part-5--band-scoped-collisions--band-movement-542)) drops them to **~35% at steady state** — on merit, with legible ~60–1,300-point ranges and no fixed-point. Uniform ×N scaling is pure relabeling.
 
 ## The question
 
@@ -211,6 +241,8 @@ The condition that makes this reduce collisions (rather than just relabel them):
 
 So the practical path is: design the margin/graduated-band tuning in whatever fractional terms are natural, then **multiply the entire schedule by a common base unit** (e.g. ×100, "centi-points", for headroom) to ship **pure integers**. Storage is unaffected — the ledger `points` column is already a signed `DECIMAL` — and the display can be scaled down for legibility. The ×scale also raises the ceiling as a bonus. This removes the earlier "continuous points" caveat: the hard-no on a fractional *type* does not block the granularity benefit.
 
+> **Caveat — this only holds for a *diverse, performance-tied* increment (see [Part 4 cons](#cons-of-the-finer-increment)).** The granularity benefit materializes only if the finer increments are (a) genuinely diverse (GCD = 1 *after* scaling) and (b) derived from *performance*, not drawn at random. The Part 4 experiment satisfied neither — its ×100 tiers are all multiples of 25 (GCD = 25) and are drawn independently of the match — so its collision drop is injected noise, not the legitimate granularity effect described here. Pick the base unit to just clear the finest tuned increment (e.g. ×4 for quarter-point tuning), not an arbitrary ×100.
+
 # Part 3 — Alternative open-play scheme: game-margin Fibonacci ([#530](https://github.com/cybergrouch/skopeo/issues/530))
 
 An exploration (for discussion, **not** an adopted change to the #525 formula): does awarding open-play points by **game margin** instead of band difference give better spread / fewer collisions?
@@ -229,7 +261,7 @@ Per set, the **winner** gets `fib(2 + margin)` where `margin = winnerGames − l
 | ≥6 | 6-0, 7-0, 8-0 | **21** |
 | draw | 6-6, 5-5, … | **0** |
 
-Points are summed per set (same per-set model as the band scheme). So the increment set is **{2, 3, 5, 8, 13, 21}** (Fibonacci) versus the band scheme's **{−2, 0, 1, 2, 3, 5}**.
+Points are summed per set (same per-set model as the band scheme). So the increment set is **{2, 3, 5, 8, 13, 21}** (Fibonacci) versus the band scheme's **{−2, −1, 0, 1, 2, 3, 5}** (the −1 = favorite loses but clears the ≥4-games ALP threshold).
 
 ## Method (Part 3)
 
@@ -251,9 +283,180 @@ Range = min–max player total; distinct = number of distinct integer totals; co
 
 ## Findings & recommendation (Part 3)
 
-- **Fibonacci-margin wins on variance and ceiling.** SD is higher at every horizon (e.g. +36% at 2 mo, +11% at 1 yr), the max/range is wider (1-yr ceiling ~305 vs ~264), and it yields **more distinct totals** (e.g. 161 vs 124 at 2 mo; 243 vs 204 at 3 yr). It also removes negatives (min is 0, vs −5…−9 for the band scheme). This is exactly the **"diversity of increments"** effect from Parts 1–2: `{2,3,5,8,13,21}` is more varied and larger-magnitude than `{−2,0,1,2,3,5}`, so it spreads the field further.
+- **Fibonacci-margin wins on variance and ceiling.** SD is higher at every horizon (e.g. +36% at 2 mo, +11% at 1 yr), the max/range is wider (1-yr ceiling ~305 vs ~264), and it yields **more distinct totals** (e.g. 161 vs 124 at 2 mo; 243 vs 204 at 3 yr). It also removes negatives (min is 0, vs −5…−9 for the band scheme). This is exactly the **"diversity of increments"** effect from Parts 1–2: `{2,3,5,8,13,21}` is more varied and larger-magnitude than `{−2,−1,0,1,2,3,5}`, so it spreads the field further.
 - **But it does *not* fix collisions.** Both schemes sit at **~99%** tied throughout. The reason is the same pigeonhole limit as before: with only ~240 distinct reachable totals and 2,000 players, almost everyone shares a total regardless of the increment set. Margin diversity raises the distinct-total count (~15–30%), but nowhere near the thousands needed to separate the field.
-- **Verdict.** The Fibonacci-margin scheme is a **genuine improvement in variance, ceiling, and diversity** and is worth considering for #525 on those merits (and for being simpler — no bands/ALP/negatives). But collisions are governed by *distinct-totals vs population size*, so cutting them still requires the earlier levers — **longer validity** (more accumulated events) and/or **fixed-point scaling** (finer granularity) — on top of a diverse increment set. Fibonacci margin is a strong *ingredient*, not a standalone fix. Recommended next exploration: Fibonacci-margin **combined with** longer validity + a ×100 fixed-point scale.
+- **Verdict.** The Fibonacci-margin scheme is a **genuine improvement in variance, ceiling, and diversity** and is worth considering for #525 on those merits (and for being simpler — no bands/ALP/negatives). But collisions are governed by *distinct-totals vs population size*, so cutting them still requires the earlier levers — **longer validity** (more accumulated events) and/or **fixed-point scaling** (finer granularity) — on top of a diverse increment set. Fibonacci margin is a strong *ingredient*, not a standalone fix. That combination is the subject of Part 4.
+
+# Part 4 — Combined levers: Fibonacci margin + longer validity + fixed-point ([#539](https://github.com/cybergrouch/skopeo/issues/539))
+
+The culminating experiment: apply the three levers **together** and isolate which one actually moves **variance** and **collisions**. All rows use the Fibonacci-margin open-play scheme (diverse increments); they differ only in **validity length**, **scale**, and — the last row — a **finer sub-integer increment** carried as fixed-point integers. Measured on the same 2,000-player population at the **3-year** (fully-warmed) horizon. "Long validity" = open play 12 months / tournaments 36 months (tournaments strictly longer). Range = min–max player total; distinct = number of distinct integer totals; collision % = share of players tied on an exact total.
+
+## 9. Combined-levers comparison (3-year horizon, 2,000 players)
+
+| Scenario | sd (variance) | range (min–max) | distinct totals | collision % |
+| --- | ---: | ---: | ---: | ---: |
+| Fibonacci, short validity (2mo/6mo), ×1 | 56.6 | 0 – 263 | 234 | 98.9% |
+| Fibonacci, **long** validity (12mo/36mo), ×1 | 270.0 | 55 – 1,280 | 804 | **85.1%** |
+| Fibonacci, long validity, **×100** (relabel) | 26,997 | 5,500 – 128,000 | 804 | **85.1%** |
+| Fibonacci + **finer increment**, long, ×100 | 27,338 | 3,000 – 140,275 | 1,432 | **46.1%** |
+
+## Findings (Part 4) — what actually moves variance and collisions
+
+- **Longer validity is the real lever for both.** Going from short (2mo/6mo) to long (12mo/36mo) validity, on the *same* Fibonacci scheme, roughly **5×'s the variance** (sd 56.6 → 270), widens the range from `0–263` to `55–1,280`, more than **3×'s the distinct totals** (234 → 804), and cuts collisions **98.9% → 85.1%**. More un-expired results accumulate before dropping off, so player histories diverge. This is the single biggest mover of collisions — and, notably, it makes the minimum non-zero (55): with a long window even a modest player always holds some points.
+- **Uniform ×100 scaling is pure relabeling — zero effect on collisions.** Scaling the long-validity scheme by ×100 multiplies sd and the range by exactly 100 (ceiling → ~128,000, easily past the ~10,000 target) but leaves **distinct totals (804) and collisions (85.1%) unchanged** — every total is just a multiple of 100. This is the concrete confirmation of the [fixed-point caveat](#fixed-point-keep-integers-without-losing-fractional-granularity): scale changes the axis, never the separation.
+- **A finer increment moves the numbers on paper — but see the cons.** Adding a sub-integer sub-tier (integerized by the ×100 scale) drops distinct totals **804 → 1,432** and collisions **85.1% → 46.1%** in the table above. As *implemented*, though, the sub-tier is an **independent random draw**, not a measure of dominance, so the separation it buys is by *noise*, not merit. This disqualifies it as a legitimate lever — see [Cons of the finer increment](#cons-of-the-finer-increment) below.
+- **The ceiling target (~10k) is trivially met** once you scale — but the study's whole point is that the ceiling was never the interesting variable; **collisions and variance are**, and they are governed by *distinct-totals vs population size*.
+
+## Cons of the finer increment
+
+The 46.1% figure looks like the win of Part 4, but it is **not** a legitimate collision fix. Four cons, in order of severity:
+
+- **It separates players by random noise, not merit.** As implemented (`fibMarginFractionalOpenPlayPoints`), the sub-tier is an **independent uniform draw** from `{0, 0.25, 0.50, 0.75}`, *uncorrelated* with the game margin that drives the Fibonacci award — i.e. `D = fib(margin) + random × 100`. Two players with identical match histories are pulled apart purely by their random draws. The collision drop is genuine entropy, but it is a **coin-flip tie-breaker** dressed up as a rating difference — arguably worse than an honest tie.
+- **If it were instead tied to dominance, it would do nothing.** Make the sub-tier a deterministic function of the margin — `D = fib(margin) + f(margin) × 100` — and it collapses to a single monotonic function of margin: still only 6 reachable per-set values, just relabeled. No new distinct totals, no added variance — the same "pure relabel" as ×N scaling. So the scheme *only* moves the numbers **because** it is random. Either reading disqualifies it: correlated ⇒ relabeling; random ⇒ noise.
+- **The framing oversold it, and the mechanism claim was wrong.** It was described as a "dominance sub-tier," implying finer *performance* measurement, while the code draws it at random — a mismatch between design intent and implementation. And the [fixed-point rationale](#fixed-point-keep-integers-without-losing-fractional-granularity) attributes the gain to increments becoming *diverse (GCD = 1)*; at ×100 the reachable awards are all multiples of 25 (**GCD = 25, not 1**), so the drop comes from **4× more reachable values**, not a coprime set.
+- **The ×100 over-inflates the cap.** The ~140,000 ceiling is driven by the **×100 magnitude**, not the increment (which adds ≤ 75 per award). ×100 was arbitrary "headroom"; merely integerizing quarters needs only **×4** (`{0,.25,.5,.75} × 4 = {0,1,2,3}`, and `fib × 4 = {8,12,20,32,52,84}` — GCD 1, cap ~25× smaller). The cap blow-up is an over-scaling artifact, fully separable from any granularity claim.
+
+**Legitimate alternative:** reduce collisions *structurally*, not by noise — **longer validity** (accumulates genuine performance history) and **per-band-cohort scoping** ([#542](https://github.com/cybergrouch/skopeo/issues/542): the standings race is per NTRP band, so ties only matter *within* a band). Those separate the field on merit; the finer increment does not.
+
+## Recommendation (Part 4)
+
+To get a leaderboard that both **spreads players** and **keeps separating them over time**, the legitimate recipe is: **diverse increments (Fibonacci-margin) + long validity (tournaments > open play)**, with residual collisions reduced *structurally* via **per-band-cohort scoping** ([#542](https://github.com/cybergrouch/skopeo/issues/542)) rather than by injected noise. Longer validity does most of the collision reduction on merit. The **finer sub-integer increment is dropped** from the recipe — see [Cons of the finer increment](#cons-of-the-finer-increment): its reduction is a random tie-breaker, not real separation. Plain ×N scaling is likewise dropped — it buys legibility-of-magnitude at best, never separation. These are tunable knobs for the #525 validity settings and increment table if a well-separated, evolving leaderboard is desired.
+
+# Part 5 — Band-scoped collisions & band movement ([#542](https://github.com/cybergrouch/skopeo/issues/542))
+
+Every collision figure up to here is **pooled** — it treats all 2,000 players as one race. But ranking points are **band-tagged** ([#525](./TOURNAMENTS_CIRCUITS_AND_OPEN_PLAY_POINTS.md)): the standings run **per NTRP band**, so two players only "collide" if they are tied *and in the same band*. Part 5 recomputes the metrics **within band cohorts**, and then adds a rare **band-movement** model. Per the [Part 4 cons](#cons-of-the-finer-increment), the finer increment and the ×100 fixed-point are **excluded** — this part measures the honest, merit-based recipe only: **Fibonacci-margin open play + long validity (open 12 mo / tournament 36 mo), ×1.**
+
+## Method (Part 5)
+
+Each of the 2,000 players is assigned an NTRP band from a documented recreational mix (seeded, weighted toward the 3.0–4.5 middle). Collisions are then counted *inside* each band cohort and aggregated as a population-weighted rate. The band-movement model moves ~**8% of players per month** (≈ the observed 8-of-100-in-month-1); on a move the player's **current-band total resets to 0** and the old-band points go **dormant** (they reactivate only on a move back), and their active score counts only points earned since the last move. Same seeded population throughout; the exact band split and move rate are tunable and the relative findings are robust to them.
+
+### 10. Band-scoped vs pooled collisions
+
+Population NTRP-band mix (2.5–5.5): 8.0% / 17.8% / 23.5% / 22.4% / 15.2% / 8.4% / 4.8%.
+
+Collision % — pooled (one race) vs band-scoped (within each cohort), for the **current** scheme (band-difference, 2mo/6mo, ×1) and the **long** recipe (Fibonacci-margin, 12mo/36mo, ×1):
+
+| Horizon | pooled (current) | band-scoped (current) | pooled (long) | band-scoped (long) |
+| --- | ---: | ---: | ---: | ---: |
+| 1mo | 99.4% | 92.0% | 99.1% | 91.7% |
+| 2mo | 99.4% | 89.8% | 98.9% | 85.6% |
+| 4mo | 98.8% | 85.0% | 98.0% | 75.4% |
+| 8mo | 99.0% | 81.9% | 94.5% | 59.6% |
+| 1yr | 98.8% | 80.5% | 92.2% | 49.4% |
+| 2yr | 98.7% | 80.5% | 88.8% | 41.3% |
+| 3yr | 99.2% | 79.5% | 84.9% | **35.5%** |
+
+### 11. Per-band cohort detail at 3 years (long recipe)
+
+| NTRP band | players | sd | min–max points | distinct totals | collision % |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 2.5 | 159 | 274.6 | 77 – 1,113 | 142 | 20.8% |
+| 3.0 | 355 | 270.6 | 70 – 1,203 | 286 | 34.1% |
+| 3.5 | 471 | 274.9 | 59 – 1,229 | 342 | 47.3% |
+| 4.0 | 448 | 259.9 | 62 – 1,313 | 340 | 41.7% |
+| 4.5 | 304 | 265.7 | 62 – 1,168 | 248 | 32.9% |
+| 5.0 | 168 | 292.7 | 70 – 1,305 | 150 | 20.2% |
+| 5.5 | 95 | 267.9 | 99 – 1,221 | 89 | 12.6% |
+
+### 12. Band movement (~8% of players move band per month)
+
+| Horizon | moved players | band-scoped (no move) | band-scoped (with move) | mean pts (with move) | mean pts (no move) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 1mo | 6.7% | 91.1% | 91.6% | 22.1 | 23.9 |
+| 2mo | 14.2% | 85.8% | 86.4% | 42.7 | 48.9 |
+| 4mo | 25.7% | 75.1% | 75.8% | 79.1 | 97.6 |
+| 8mo | 42.4% | 58.5% | 62.6% | 132.6 | 193.5 |
+| 1yr | 51.4% | 50.1% | 51.7% | 174.0 | 289.7 |
+| 2yr | 64.4% | 41.4% | 48.3% | 205.0 | 383.7 |
+| 3yr | 70.1% | 34.4% | 47.9% | 215.9 | 471.7 |
+
+### 13. Validity-window recommendation
+
+"Long validity" needs to be **defined and qualified**, not left as "as long as possible." This sweep runs the legitimate recipe (Fibonacci-margin, ×1, band-scoped) across four candidate `(open-play, tournament)` validity stances — tournaments always strictly longer than open play — on the **same seeded draws** (only the window differs), read at the 3-year horizon. Windows map onto the existing `PointClass` tiers (open-play, `SEASONAL_TOURNAMENT_{1,3,6}M`, `ANNUAL_TOURNAMENT` = 12 mo).
+
+| Stance (open / tourney) | pooled coll% | band-scoped coll% | sd | mean pts | range |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Current (1 mo / 6 mo) | 98.9% | 82.8% | 52.5 | 61.8 | 0 – 240 |
+| Seasonal (3 mo / 12 mo) | 97.1% | 64.3% | 94.2 | 140.5 | 0 – 502 |
+| Extended (6 mo / 12 mo) | 95.9% | 57.9% | 113.3 | 191.7 | 0 – 633 |
+| Long (12 mo / 36 mo) | 84.9% | 35.5% | 270.7 | 472.2 | 59 – 1,313 |
+
+**Reading the curve.** Every metric is monotonic in validity — longer windows lower collisions and widen spread — but the marginal gains and the costs are not uniform:
+
+- **The biggest single step is Current → Seasonal** (band-scoped 82.8% → 64.3%, −18.5 pp) for a modest change that stays inside existing tiers: open play 1 → 3 months, tournaments 6 → 12 months (annual).
+- **Extended adds little** (64.3% → 57.9%) for doubling open-play validity (3 → 6 mo) with tournaments unchanged at annual.
+- **Long is the only stance under 50%** (35.5%) — but it requires **36-month tournament validity**, which (a) exceeds every existing `PointClass` tier and (b) means a placement from *three years ago* still counts at full weight, which is hard to defend as "current form."
+
+**Recommendation: `Seasonal` (open play 3 months / tournament 12 months, annual) as the default, with `Extended` (open 6 months) as the tunable upper bound.** Rationale:
+
+1. **Currency of form.** Open play is weekly and low-signal; a **3-month (one-season)** window keeps the leaderboard reflecting recent play while accumulating enough matches to separate. Tournaments are prestige events; a **12-month (annual)** window lets a placement stay meaningful across the competitive cycle and bridges to next year's edition — exactly what `ANNUAL_TOURNAMENT` already encodes.
+2. **Maps onto existing config** — no new `PointClass` tier is needed (unlike Long's 36 mo).
+3. **Collisions are not validity's job to finish.** Validity should be chosen for *meaning*, not pushed to extremes to chase collisions — the residual is the job of a **tie-breaker** ([#544](https://github.com/cybergrouch/skopeo/issues/544): rating confidence). Picking `Long` purely to reach 35% trades away currency-of-form for a number the tie-breaker resolves anyway.
+
+So `long validity` is qualified as **tournaments outliving open play by roughly 4× and spanning the annual cycle** — concretely **open 3 mo / tournament 12 mo** — not "maximal."
+
+## Findings (Part 5)
+
+- **Band-scoping alone is the biggest legitimate collision lever — bigger than any point-formula change.** Even the *current* scheme drops from **~99% pooled to ~80% band-scoped**, purely by measuring the race the way it is actually run. It costs nothing — the points design is unchanged; only the denominator (who competes with whom) changes.
+- **Band-scoping + long validity gets collisions to ~35% with no tricks.** The long recipe falls from 84.9% pooled to **35.5% band-scoped at 3 years** — comparable to the discredited finer-increment result (46% *pooled*), but achieved on merit: diverse Fibonacci increments accumulated over a long window, separated within the cohort that actually competes. No random sub-tier, no fixed-point, no cap inflation.
+- **Reward-points ranges are clean and legible.** Per band at 3 years the totals span roughly **60 – 1,300 points** (sd ≈ 260–290), versus the ~140,000 the discarded ×100 finer-increment scheme produced. This is a leaderboard a human can read.
+- **Smaller cohorts separate better.** Collisions track cohort size: the 5.5 band (95 players) sits at **12.6%**, the crowded 3.5 band (471 players) at **47.3%**. Fewer players chasing the same reachable totals ⇒ fewer ties — the pigeonhole principle working *for* us once the population is partitioned.
+- **Band movement pushes collisions back up modestly and roughly halves the active mean.** With ~8%/month movement, 70% of players have changed band by 3 years; each move resets the active race, so band-scoped collisions rise **35.5% → 47.9%** at 3 years (negligible at ≤1 yr: 50.1% → 51.7%) and the mean active score drops **471.7 → 215.9** (resets keep wiping accumulated points, and freshly-moved players cluster near zero). The dormant-points model means those points are not lost — they reactivate on return — but they do not count toward the current-band race.
+
+## Recommendation (Part 5)
+
+**Measure and display standings per NTRP band cohort** — this is the single most effective, zero-cost collision reducer, and it matches how #525 already tags points. Combined with **qualified validity** (§13: open play 3 mo / tournament 12 mo, annual — *not* maximal), it reaches ~64% band-scoped collisions with **legible point ranges (0–502)** and no reliance on the disqualified finer-increment / fixed-point machinery. Band movement is a real, second-order effect (it re-congests the low end and trims active means as players reset), so the standings UI should expect a meaningful churn of near-zero, freshly-promoted players — but it does not undermine the band-scoping benefit. The residual collisions (which saturate with cohort population — [#544](https://github.com/cybergrouch/skopeo/issues/544)) are the job of a **rating-confidence tie-breaker**, not of pushing validity to extremes. Net: **band-scoping + qualified validity is the recipe; the finer increment and fixed-point are dropped, and a confidence tie-breaker handles the rest.**
+
+# Part 6 — Collision saturation & tie-breakers ([#544](https://github.com/cybergrouch/skopeo/issues/544))
+
+Part 5 showed band-scoping + qualified validity brings collisions down, but they **saturate with cohort population**: §11 already showed the crowded 3.5 band (471 players) tying at ~47% while the sparse 5.5 band (95) sat at ~13%. This part isolates that effect — collisions as a pure function of **cohort size vs distinct reachable totals** — estimates where they become severe, and tests the tie-breaker you fall back on past that point: **rating confidence** (`RatingConfidence.kt`, #343/#459).
+
+## Method (Part 6)
+
+A single-band cohort under the recommended §13 recipe (Fibonacci-margin, Seasonal 3 mo / 12 mo, ×1) is grown from 50 to 1,600 players (cohorts nest — a size-N cohort is the first N of the same seeded stream). Collision % is read at the 3-year horizon. Two tie-break keys are then applied as a secondary sort and the **residual** tie rate measured: **cumulative matches played** (unbounded integer count) and **rating confidence** — modeled per #343/#459 as `recency × sparsity` over a 90-day window (sparsity = `min(1, recent/5)`; recency decays with days since last match), rounded to 2 decimals.
+
+### 14. Collision saturation vs cohort population
+
+The recipe reaches **346 distinct reachable totals**. "Analytic" is the balls-in-bins (birthday) estimate over 346 *uniform* bins — an optimistic lower bound, since real totals are peaked.
+
+| cohort N | N ÷ distinct | MC collision% | analytic (uniform) |
+| ---: | ---: | ---: | ---: |
+| 50 | 0.14 | 20.0% | 6.8% |
+| 100 | 0.29 | 23.0% | 13.0% |
+| 200 | 0.58 | 50.0% | 24.0% |
+| 400 | 1.16 | 71.8% | 40.7% |
+| 800 | 2.31 | 88.3% | 61.0% |
+| 1600 | 4.62 | 96.5% | 78.6% |
+
+### 15. Tie-breaker efficacy — matches played vs rating confidence
+
+Residual collision % after breaking ties on a secondary key.
+
+| cohort N | no tie-break | + matches played | + confidence |
+| ---: | ---: | ---: | ---: |
+| 50 | 20.0% | 12.0% | **0.0%** |
+| 100 | 23.0% | 15.0% | **0.0%** |
+| 200 | 50.0% | 23.5% | 5.0% |
+| 400 | 71.8% | 38.3% | 13.8% |
+| 800 | 88.3% | 53.6% | 28.2% |
+| 1600 | 96.5% | 73.3% | **42.9%** |
+
+## Findings (Part 6)
+
+- **Collisions saturate — and much faster than a uniform model predicts.** MC collisions cross **50% at N ≈ 0.6 × distinct-totals** (~200 players here) and **90% by N ≈ 2.5×** (~850). The uniform birthday model badly *under*-estimates (24% vs the MC 50% at N=200) because real score distributions are **peaked** — most players pile onto the popular middle totals, so ties form far sooner than random-uniform assignment would suggest. **Implication:** any NTRP band with more than a few hundred active players is *structurally* congested; no point-formula change fixes it (you cannot place N players in < N distinct values). This is exactly the case for a tie-breaker.
+- **A tie-breaker is necessary past the knee — and rating confidence is a strong one.** Confidence clears **all** ties at N ≤ 100 and still halves them at the largest cohort (96.5% → **42.9%** at N=1,600). It out-performs a raw match count (→ 73.3%) because cumulative match counts **cluster by behaviour cadence** (weekly players all land near ~170 matches), whereas confidence — via its continuous recency component — is near-unique per player.
+- **Confidence separates on *merit*, not noise.** Unlike the disqualified finer increment (an explicitly random sub-tier — see [Part 4 cons](#cons-of-the-finer-increment)), confidence is a genuine, interpretable attribute: among players tied on points, the one who has played more recently and more regularly (and hasn't just reset via a band jump) ranks higher. That is a defensible ordering, and it is **already computed and stored**.
+- **Caveat — even confidence leaves residual ties at extreme N** (42.9% at 1,600), and its power scales with its *granularity* (the 2-decimal recency component). For a truly enormous single-band cohort a final deterministic key (e.g. head-to-head, then earliest-achieved) may still be wanted as a last resort.
+
+## Recommendation (Part 6)
+
+**Adopt a two-key standings sort: band-race points, then rating confidence as the tie-breaker.** This validates the original instinct — the confidence value (a matches-played / recency proxy we already have) is the right tool, and empirically a *better* tie-breaker than a raw match count. Sequence the levers by what each is for:
+
+1. **Band-scoping** (Part 5) — removes the cross-band false collisions for free.
+2. **Qualified validity** (§13, Seasonal 3 mo / 12 mo) — sets the point spread with currency-of-form in mind, *not* to chase collisions.
+3. **Confidence tie-breaker** (Part 6) — resolves the within-band residual, which is structural and grows with band population.
+
+A band beyond ~0.6× its distinct-total ceiling (a few hundred players) is congested on points alone; the confidence tie-breaker is what keeps its leaderboard readable. This remains a **study recommendation** — implementing the standings sort is a follow-up on #525.
 
 ## References
 
