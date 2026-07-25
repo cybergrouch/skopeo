@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import {
   Card,
   CardContent,
@@ -7,20 +6,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  getGetApiV1PointsBudgetsQueryKey,
-  useGetApiV1PointsBudgets,
-  usePutApiV1ClubsClubIdPointBudgetsEventType,
-} from "@/api/generated/points-budget/points-budget";
-import { useGetApiV1Clubs } from "@/api/generated/clubs/clubs";
 import { useGetApiV1RankingPoints } from "@/api/generated/ranking-points/ranking-points";
-import type {
-  AwardedPointRow,
-  ClubBudgetResponse,
-  ClubBudgetResponseEventType,
-} from "@/api/generated/model";
+import type { AwardedPointRow } from "@/api/generated/model";
 import { NumberedPager } from "@/components/NumberedPager";
 import { ContentLink } from "@/components/ContentLink";
 import { PlaceholderTag } from "@/components/PlaceholderTag";
@@ -33,10 +20,11 @@ import { PointsSchedulesSection } from "./PointsSchedulesSection";
 const AWARDS_PAGE_SIZE = 25;
 
 /**
- * Points Management (#403 Phase B, §5.2): a per club × event-type budget table (Budgeted editable;
- * Allocated + Free shown). The global points policy was removed in #525 (points are now computed /
- * placement-based, so per-type policy caps are obsolete). Points-manager gated (ADMINISTRATOR is
- * implicitly a points manager); the API enforces it.
+ * Points Management (#552/#553): the global award schedules (open-play margin table + tournament
+ * placement table) plus the ranking-points ledger (#472). The per-club budget + per-event designation
+ * subsystem was removed (#559) — awarding is now controlled by each event's single "Award Ranking
+ * Points" flag, paying from the global schedules. Points-manager gated (ADMINISTRATOR is implicitly one);
+ * the API enforces it.
  *
  * It also hosts the admin standings-calculation trigger (#447) — self-gated to ADMINISTRATOR
  * inside {@link StandingsCalculationSection} since the tab itself is visible to POINTS_MANAGER too.
@@ -49,7 +37,6 @@ export function PointsManagementSection({
   return (
     <div className="grid gap-4">
       <PointsSchedulesSection />
-      <BudgetsCard />
       {canManagePointsBudget(capabilities) ? <AwardedPointsCard /> : null}
       <StandingsCalculationSection capabilities={capabilities} />
     </div>
@@ -163,136 +150,4 @@ function awardSource(row: AwardedPointRow) {
 function formatAwardDate(value: string): string {
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString();
-}
-
-function BudgetsCard() {
-  const queryClient = useQueryClient();
-  const budgetsQuery = useGetApiV1PointsBudgets({ query: { retry: false } });
-  const clubsQuery = useGetApiV1Clubs();
-  const budgets = budgetsQuery.data ?? [];
-  const clubs = clubsQuery.data ?? [];
-
-  // Resolve a club id to a readable name for the table; fall back to the id.
-  const clubName = (clubId: string) =>
-    clubs.find((c) => c.id === clubId)?.name ?? clubId;
-
-  function invalidate() {
-    void queryClient.invalidateQueries({
-      queryKey: getGetApiV1PointsBudgetsQueryKey(),
-    });
-  }
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Club budgets</CardTitle>
-        <CardDescription>
-          Each club's per-event-type budget. Allocated is 0 until reservations and awards land
-          (Phase C/D); Free is Budgeted minus Allocated.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {budgetsQuery.isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
-        ) : budgets.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No clubs yet.</p>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs text-muted-foreground">
-                <th className="py-1 pr-2">Club</th>
-                <th className="py-1 pr-2">Type</th>
-                <th className="py-1 pr-2">Budgeted</th>
-                <th className="py-1 pr-2">Allocated</th>
-                <th className="py-1 pr-2">Free</th>
-                <th className="py-1" />
-              </tr>
-            </thead>
-            <tbody>
-              {budgets.map((budget) => (
-                <BudgetRow
-                  key={`${budget.clubId}-${budget.eventType}`}
-                  budget={budget}
-                  clubName={clubName(budget.clubId)}
-                  onChange={invalidate}
-                />
-              ))}
-            </tbody>
-          </table>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function BudgetRow({
-  budget,
-  clubName,
-  onChange,
-}: {
-  budget: ClubBudgetResponse;
-  clubName: string;
-  onChange: () => void;
-}) {
-  const [budgeted, setBudgeted] = useState(String(budget.budgeted));
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const save = usePutApiV1ClubsClubIdPointBudgetsEventType({
-    mutation: {
-      onSuccess: () => {
-        setSaved(true);
-        onChange();
-      },
-      onError: () => setError("Save failed"),
-    },
-  });
-
-  function onSave() {
-    setSaved(false);
-    setError(null);
-    save.mutate({
-      clubId: budget.clubId,
-      eventType: budget.eventType as ClubBudgetResponseEventType,
-      data: { budgetedPoints: Number(budgeted) },
-    });
-  }
-
-  return (
-    <tr className="border-t">
-      <td className="py-1 pr-2">{clubName}</td>
-      <td className="py-1 pr-2">{budget.eventType}</td>
-      <td className="py-1 pr-2">
-        <Input
-          type="number"
-          aria-label={`Budget for ${clubName} ${budget.eventType}`}
-          className="w-24"
-          value={budgeted}
-          onChange={(e) => {
-            setBudgeted(e.target.value);
-            setSaved(false);
-          }}
-        />
-      </td>
-      <td className="py-1 pr-2">{budget.allocated}</td>
-      <td className="py-1 pr-2">{budget.free}</td>
-      <td className="py-1">
-        <div className="flex items-center gap-1">
-          <Button size="sm" onClick={onSave} disabled={save.isPending}>
-            {save.isPending ? "Saving…" : "Save"}
-          </Button>
-          {saved ? (
-            <span className="text-xs text-muted-foreground" role="status">
-              Saved
-            </span>
-          ) : null}
-          {error ? (
-            <span className="text-xs text-destructive" role="alert">
-              {error}
-            </span>
-          ) : null}
-        </div>
-      </td>
-    </tr>
-  );
 }

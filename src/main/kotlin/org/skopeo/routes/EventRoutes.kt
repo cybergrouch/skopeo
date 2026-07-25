@@ -23,14 +23,12 @@ import org.skopeo.dto.event.CreateEventRequest
 import org.skopeo.dto.event.DecideParticipantRequest
 import org.skopeo.dto.event.SetCalcPriorityRequest
 import org.skopeo.dto.event.SetEventClubRequest
-import org.skopeo.dto.event.SetPointsConfigRequest
 import org.skopeo.dto.event.UpdateEventRequest
 import org.skopeo.dto.event.toResponse
 import org.skopeo.model.EventParticipantStatus
 import org.skopeo.model.EventType
 import org.skopeo.service.event.CreateEventInput
 import org.skopeo.service.event.EventService
-import org.skopeo.service.event.PointsConfigInput
 import java.time.LocalDate
 import java.time.format.DateTimeParseException
 import java.util.UUID
@@ -149,34 +147,6 @@ private fun Route.renameEvent(service: EventService) {
             val priority = call.receive<SetCalcPriorityRequest>().priority
             respondEither(
                 result = service.setCalcPriority(token = verifiedToken(), id = uuidParam(name = "id"), priority = priority),
-            ) { event -> call.respond(status = HttpStatusCode.OK, message = event.toResponse()) }
-        }
-    }
-    // Set (all four fields) or clear (all omitted) an event's points config (#466 opt-in checkbox). A
-    // partial body — some but not all fields — is a 400, so a half-filled config is never silently dropped.
-    put(path = "/{id}/points-config") {
-        respondMappingErrors {
-            val body = call.receive<SetPointsConfigRequest>()
-            val supplied =
-                listOfNotNull(body.minPointsPerMatch, body.maxPointsPerMatch, body.pointValidityStart, body.pointValidityEnd)
-            val config =
-                if (supplied.isEmpty()) {
-                    null
-                } else {
-                    val min = requireNotNull(value = body.minPointsPerMatch) { "minPointsPerMatch is required to award points" }
-                    val max = requireNotNull(value = body.maxPointsPerMatch) { "maxPointsPerMatch is required to award points" }
-                    val start = requireNotNull(value = body.pointValidityStart) { "pointValidityStart is required to award points" }
-                    val end = requireNotNull(value = body.pointValidityEnd) { "pointValidityEnd is required to award points" }
-                    require(value = min > 0 && max > 0) { "minPointsPerMatch and maxPointsPerMatch must be positive integers" }
-                    PointsConfigInput(
-                        minPoints = min,
-                        maxPoints = max,
-                        validityStart = parseEventDate(value = start, field = "pointValidityStart"),
-                        validityEnd = parseEventDate(value = end, field = "pointValidityEnd"),
-                    )
-                }
-            respondEither(
-                result = service.setPointsConfig(token = verifiedToken(), id = uuidParam(name = "id"), config = config),
             ) { event -> call.respond(status = HttpStatusCode.OK, message = event.toResponse()) }
         }
     }
@@ -300,10 +270,6 @@ private fun toCreateEventInput(request: CreateEventRequest): CreateEventInput {
                 "Invalid event type '$value'; expected OPEN_PLAY, LEAGUE, or TOURNAMENT"
             }
         }
-    // Designated-points config (#403 Phase C) — whole positive integers (decision #6); the service
-    // validates the window against the global policy and requires all four for a budgeted-type event.
-    request.minPointsPerMatch?.let { require(value = it > 0) { "minPointsPerMatch must be a positive integer" } }
-    request.maxPointsPerMatch?.let { require(value = it > 0) { "maxPointsPerMatch must be a positive integer" } }
     return CreateEventInput(
         name = request.name,
         startDate = parseDate(value = request.startDate, field = "startDate"),
@@ -312,23 +278,10 @@ private fun toCreateEventInput(request: CreateEventRequest): CreateEventInput {
         clubId = request.clubId?.let { parseEventUuid(value = it, field = "club id") },
         circuitId = request.circuitId?.let { parseEventUuid(value = it, field = "circuit id") },
         type = parseType(value = request.type),
-        minPointsPerMatch = request.minPointsPerMatch,
-        maxPointsPerMatch = request.maxPointsPerMatch,
-        pointValidityStart = request.pointValidityStart?.let { parseDate(value = it, field = "pointValidityStart") },
-        pointValidityEnd = request.pointValidityEnd?.let { parseDate(value = it, field = "pointValidityEnd") },
+        // "Award Ranking Points" (#559) defaults to true when the client omits it.
+        awardRankingPoints = request.awardRankingPoints ?: true,
     )
 }
-
-/** Parse an ISO-8601 date at the boundary (#403 Phase C), a 400 for a malformed value. */
-private fun parseEventDate(
-    value: String,
-    field: String,
-): LocalDate =
-    try {
-        LocalDate.parse(value)
-    } catch (e: DateTimeParseException) {
-        throw IllegalArgumentException("Invalid $field '$value'; expected ISO-8601 (yyyy-MM-dd)", e)
-    }
 
 private fun parseEventUuid(
     value: String,

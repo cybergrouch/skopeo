@@ -546,14 +546,6 @@ class MatchRepositoryTest {
     }
 
     @Test
-    fun `setDesignatedPoints on an unknown match is not found (#466)`() {
-        matches
-            .setDesignatedPoints(matchId = UUID.randomUUID(), designatedPoints = 20)
-            .shouldBeLeft()
-            .shouldBeInstanceOf<ServiceError.NotFound>()
-    }
-
-    @Test
     fun `setHandicaps on an unknown match is not found (#486)`() {
         matches
             .setHandicaps(
@@ -563,14 +555,6 @@ class MatchRepositoryTest {
             )
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.NotFound>()
-    }
-
-    @Test
-    fun `setDesignatedPoints sets then clears a fixture designation (#466)`() {
-        val match = fixture(u1 = newUser(uid = "d1"), u2 = newUser(uid = "d2"))
-
-        matches.setDesignatedPoints(matchId = match.id, designatedPoints = 25).shouldBeRight().designatedPoints shouldBe 25
-        matches.setDesignatedPoints(matchId = match.id, designatedPoints = null).shouldBeRight().designatedPoints.shouldBeNull()
     }
 
     @Test

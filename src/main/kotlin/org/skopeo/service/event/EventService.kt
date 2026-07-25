@@ -63,19 +63,8 @@ data class CreateEventInput(
     val circuitId: UUID? = null,
     // The event's class (#403); defaults to OPEN_PLAY for backward compatibility.
     val type: EventType = EventType.OPEN_PLAY,
-    // Points config (#403 Phase C): required for a club event of any type; optional/deferred when clubless.
-    val minPointsPerMatch: Int? = null,
-    val maxPointsPerMatch: Int? = null,
-    val pointValidityStart: LocalDate? = null,
-    val pointValidityEnd: LocalDate? = null,
-)
-
-/** A budgeted event's points config (#403 Phase C): the per-match reward window + point validity window. */
-data class PointsConfigInput(
-    val minPoints: Int,
-    val maxPoints: Int,
-    val validityStart: LocalDate,
-    val validityEnd: LocalDate,
+    // Whether finalizing this event awards ranking points per the global schedules (#559). Default true.
+    val awardRankingPoints: Boolean = true,
 )
 
 /**
@@ -112,9 +101,6 @@ class EventService(
             }
             // A TOURNAMENT must belong to a circuit (#525); it must exist. Non-tournaments carry none.
             val circuitId = resolveCircuit(type = input.type, circuitId = input.circuitId).bind()
-            // Points config (#403 Phase C): a club event of any type must carry a valid per-match reward +
-            // validity window, validated against the global policy; a clubless event may defer it.
-            val config = resolveCreatePointsConfig(input = input).bind()
             val event =
                 events.create(
                     command =
@@ -127,10 +113,7 @@ class EventService(
                             clubId = input.clubId,
                             circuitId = circuitId,
                             type = input.type,
-                            minPointsPerMatch = config?.minPoints,
-                            maxPointsPerMatch = config?.maxPoints,
-                            pointValidityStart = config?.validityStart,
-                            pointValidityEnd = config?.validityEnd,
+                            awardRankingPoints = input.awardRankingPoints,
                         ),
                 )
             // Activity Log entry for the creation (#334); rename/set-club/delete are follow-ups.
@@ -289,143 +272,17 @@ class EventService(
         }
 
     /**
-     * Set (or clear, when [config] is null) an event's points config (#466 opt-in "award points"
-     * checkbox). Staff-only (a HOST owns / an ADMINISTRATOR-CLUB_OWNER any), not on a finalized event.
-     *
-     * **Checked** ([config] non-null): the per-match reward window (min/max) + validity window, validated
-     * against the global policy for the event's type, AND rejected if any existing active fixture's
-     * designation would fall outside the new [min, max]. Audited as EVENT_POINTS_CONFIG_SET.
-     *
-     * **Un-ticked** ([config] null): clear the config so the event awards no points, and cascade — null
-     * out every fixture's designation so nothing stays reserved/awarded (reservation is emergent from
-     * designations). The config is only editable while not finalized, so no awards exist yet.
-     */
-    fun setPointsConfig(
-        token: VerifiedFirebaseToken,
-        id: UUID,
-        config: PointsConfigInput?,
-    ): Either<ServiceError, EventView> =
-        either {
-            val caller = staffCaller(users = users, token = token).bind()
-            val event = ensureNotNull(value = events.findById(id = id)) { ServiceError.NotFound(message = "Event $id not found") }
-            val isAdminOrOwner = caller.capabilities.any { it == Capability.ADMINISTRATOR || it == Capability.CLUB_OWNER }
-            ensure(condition = isAdminOrOwner || event.createdBy == caller.id) { ServiceError.Forbidden() }
-            ensureNotFinalized(event = event).bind()
-            if (config == null) {
-                clearPointsConfig(
-                    caller = caller,
-                    event = event,
-                ).bind()
-            } else {
-                applyPointsConfig(caller = caller, event = event, config = config).bind()
-            }
-        }
-
-    /** Clear an event's config (#466): null the config + cascade to fixture designations; audit the change. */
-    private fun clearPointsConfig(
-        caller: User,
-        event: Event,
-    ): Either<ServiceError, EventView> =
-        either {
-            // Releasing reservations is emergent: nulling every fixture designation frees the budget.
-            matches.clearDesignationsForEvent(eventId = event.id)
-            events.clearPointsConfig(id = event.id)
-            audit.record(
-                write =
-                    AuditWrite(
-                        actorUserId = caller.id,
-                        action = AuditAction.EVENT_POINTS_CONFIG_SET,
-                        entityType = AuditEntityType.EVENT,
-                        entityId = event.id,
-                        summary = "Cleared event ${event.name} points config (awards no points)",
-                        details =
-                            mapOf(
-                                "publicCode" to event.publicCode,
-                                "type" to event.type.name,
-                                "cleared" to true.toString(),
-                            ),
-                    ),
-            )
-            toView(
-                event =
-                    event.copy(
-                        minPointsPerMatch = null,
-                        maxPointsPerMatch = null,
-                        pointValidityStart = null,
-                        pointValidityEnd = null,
-                    ),
-            )
-        }
-
-    /** Apply a non-null config (#466): validate vs the global policy + existing designations; audit + persist. */
-    private fun applyPointsConfig(
-        caller: User,
-        event: Event,
-        config: PointsConfigInput,
-    ): Either<ServiceError, EventView> =
-        either {
-            validatePointsWindow(
-                minPoints = config.minPoints,
-                maxPoints = config.maxPoints,
-                validityStart = config.validityStart,
-                validityEnd = config.validityEnd,
-            ).bind()
-            // A tightened window must still contain every existing active fixture's designation.
-            val designations = matches.listByEvent(eventId = event.id).mapNotNull { it.designatedPoints }
-            ensure(condition = designations.all { it in config.minPoints..config.maxPoints }) {
-                ServiceError.Validation(
-                    message = "An existing fixture's designated points fall outside the new ${config.minPoints}-${config.maxPoints} range",
-                )
-            }
-            events.setPointsConfig(
-                id = event.id,
-                minPoints = config.minPoints,
-                maxPoints = config.maxPoints,
-                validityStart = config.validityStart,
-                validityEnd = config.validityEnd,
-            )
-            audit.record(
-                write =
-                    AuditWrite(
-                        actorUserId = caller.id,
-                        action = AuditAction.EVENT_POINTS_CONFIG_SET,
-                        entityType = AuditEntityType.EVENT,
-                        entityId = event.id,
-                        summary = "Set event ${event.name} points config to ${config.minPoints}-${config.maxPoints}",
-                        details =
-                            mapOf(
-                                "publicCode" to event.publicCode,
-                                "type" to event.type.name,
-                                "minPoints" to config.minPoints.toString(),
-                                "maxPoints" to config.maxPoints.toString(),
-                                "validityStart" to config.validityStart.toString(),
-                                "validityEnd" to config.validityEnd.toString(),
-                            ),
-                    ),
-            )
-            toView(
-                event =
-                    event.copy(
-                        minPointsPerMatch = config.minPoints,
-                        maxPointsPerMatch = config.maxPoints,
-                        pointValidityStart = config.validityStart,
-                        pointValidityEnd = config.validityEnd,
-                    ),
-            )
-        }
-
-    /**
      * Finalize an event (#403), the terminal state that closes it to further changes and moves the
      * event's matches into the rating queue (finalize-time queuing, replacing result-upload-time
      * queuing for evented matches). Staff-only: a HOST may finalize only their own event, an
      * ADMINISTRATOR/CLUB_OWNER any. Idempotency guard: an already-finalized event is a
      * [ServiceError.Validation] (there is no un-finalize). Audited as EVENT_FINALIZED.
      *
-     * Phase D: after finalize, each qualifying fixture's designation is converted to ledger awards
-     * ([EventFinalizeAwarder], §2.5/§3) — one full-designation row per winning-team member (decision
-     * #4). The finalize state change and all awards share one DB transaction for atomicity; a
-     * summary is audited as EVENT_POINTS_AWARDED. The idempotency guard (finalize is terminal) means
-     * awarding runs exactly once per event, so there is no double-award path.
+     * After finalize, when the event's "Award Ranking Points" flag is set (#559), each qualifying
+     * fixture pays ledger awards per the global schedules ([EventFinalizeAwarder]) — one full-amount
+     * row per winning-team member. The finalize state change and all awards share one DB transaction
+     * for atomicity; a summary is audited as EVENT_POINTS_AWARDED. The idempotency guard (finalize is
+     * terminal) means awarding runs exactly once per event, so there is no double-award path.
      */
     fun finalize(
         token: VerifiedFirebaseToken,
@@ -491,7 +348,7 @@ class EventService(
      * history, which un-finalize cannot reverse; those cases need the heavier rating-history correction
      * path (a companion issue). Reversal, in one transaction: revoke every ACTIVE award the finalize
      * produced (via [RankingPointRepository.revoke], leaving the append-only trail intact) then clear the
-     * finalize flag (which implicitly restores the reserved-points budget). Audited as EVENT_UNFINALIZED.
+     * finalize flag. Audited as EVENT_UNFINALIZED.
      */
     fun unfinalize(
         token: VerifiedFirebaseToken,
@@ -777,66 +634,6 @@ class EventService(
         }
 
     /**
-     * Resolve the points config for a create request (#466 opt-in "award points" checkbox). Points are
-     * OPT-IN for every event class, club or clubless: the "award ranking points" checkbox unchecked
-     * means the absence of a config (→ no points), which is valid for any type/club. So:
-     *  - **no config fields** → null → the event awards no points;
-     *  - **all four fields** → validated against the global policy for the type (as today);
-     *  - **partial** (some but not all of min/max/validityStart/validityEnd) → [ServiceError.Validation],
-     *    so a half-filled config is never silently dropped.
-     */
-    private fun resolveCreatePointsConfig(input: CreateEventInput): Either<ServiceError, ValidatedPointsConfig?> =
-        either {
-            val supplied =
-                listOfNotNull(
-                    input.minPointsPerMatch,
-                    input.maxPointsPerMatch,
-                    input.pointValidityStart,
-                    input.pointValidityEnd,
-                )
-            if (supplied.isEmpty()) {
-                // Checkbox off — no points config, valid for any event type/club.
-                null
-            } else {
-                // Any field supplied means all four are required and validated (never a partial config).
-                val min = ensureNotNull(value = input.minPointsPerMatch) { pointsConfigRequired() }
-                val max = ensureNotNull(value = input.maxPointsPerMatch) { pointsConfigRequired() }
-                val start = ensureNotNull(value = input.pointValidityStart) { pointsConfigRequired() }
-                val end = ensureNotNull(value = input.pointValidityEnd) { pointsConfigRequired() }
-                validatePointsWindow(
-                    minPoints = min,
-                    maxPoints = max,
-                    validityStart = start,
-                    validityEnd = end,
-                ).bind()
-                ValidatedPointsConfig(minPoints = min, maxPoints = max, validityStart = start, validityEnd = end)
-            }
-        }
-
-    /**
-     * Validate a points window's basic shape (#403; global policy removed in #525): integers > 0,
-     * min ≤ max, and end ≥ start. There is no longer a global per-type ceiling — the obsolete
-     * points-policy layer was removed, so an event may set any well-formed window.
-     */
-    private fun validatePointsWindow(
-        minPoints: Int,
-        maxPoints: Int,
-        validityStart: LocalDate,
-        validityEnd: LocalDate,
-    ): Either<ServiceError, Unit> =
-        either {
-            ensure(condition = minPoints > 0 && maxPoints > 0) {
-                ServiceError.Validation(message = "Points per match must be greater than zero")
-            }
-            ensure(condition = minPoints <= maxPoints) {
-                ServiceError.Validation(message = "Min points must not exceed max points")
-            }
-            ensure(condition = !validityEnd.isBefore(validityStart)) {
-                ServiceError.Validation(message = "Point validity end cannot be before the start")
-            }
-        }
-
-    /**
      * Resolve ALL of an event's participants — APPROVED roster members and PENDING/HOLD requests
      * (#201) — to names/codes + facets (sex/age/rating) and their status, for the organizer view.
      */
@@ -875,18 +672,6 @@ class EventService(
         return EventView(event = event, participants = participants, creator = creator, club = club)
     }
 }
-
-/** A create request's points config after validation against the global policy (#403 Phase C). */
-private data class ValidatedPointsConfig(
-    val minPoints: Int,
-    val maxPoints: Int,
-    val validityStart: LocalDate,
-    val validityEnd: LocalDate,
-)
-
-/** A partial points config is never accepted (#466): opting in requires all four fields together. */
-private fun pointsConfigRequired(): ServiceError.Validation =
-    ServiceError.Validation(message = "Awarding points requires min/max points and a validity window")
 
 /** Resolve the caller and require HOST/ADMINISTRATOR, else [ServiceError.Forbidden]. */
 private fun staffCaller(

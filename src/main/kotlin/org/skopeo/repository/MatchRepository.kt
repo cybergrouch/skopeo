@@ -66,7 +66,6 @@ class MatchRepository {
                     it[tournamentName] = command.tournamentName
                     it[createdBy] = command.createdBy
                     it[eventId] = command.eventId
-                    it[designatedPoints] = command.designatedPoints
                     it[team1Handicap] = command.team1Handicap
                     it[team2Handicap] = command.team2Handicap
                     it[isPlacementMatch] = command.isPlacementMatch
@@ -138,26 +137,6 @@ class MatchRepository {
         }
 
     /**
-     * Set (or clear, when null) a fixture's designated points (#466). The service has already validated
-     * the amount against the event's window + budget; a missing id is a harmless no-op returning absent.
-     */
-    fun setDesignatedPoints(
-        matchId: UUID,
-        designatedPoints: Int?,
-    ): Either<ServiceError, Match> =
-        transaction {
-            val updated =
-                MatchesTable.update(where = { MatchesTable.id eq matchId }) {
-                    it[MatchesTable.designatedPoints] = designatedPoints
-                }
-            if (updated == 0) {
-                ServiceError.NotFound(message = "Match $matchId not found").left()
-            } else {
-                loadMatchOrThrow(id = matchId).right()
-            }
-        }
-
-    /**
      * Set (or clear, when null) a fixture's per-side handicaps (#486). The service has validated the
      * range and the unrated guard; a missing id returns NotFound.
      */
@@ -177,15 +156,6 @@ class MatchRepository {
             } else {
                 loadMatchOrThrow(id = matchId).right()
             }
-        }
-
-    /**
-     * Clear the designated points of every fixture in an event (#466), releasing their reservations. Used
-     * when an event's points config is un-ticked so no match awards points. Returns the number updated.
-     */
-    fun clearDesignationsForEvent(eventId: UUID): Int =
-        transaction {
-            MatchesTable.update(where = { MatchesTable.eventId eq eventId }) { it[designatedPoints] = null }
         }
 
     /**
@@ -752,7 +722,6 @@ private fun buildMatch(
         recordedBy = row[MatchesTable.recordedBy]?.value,
         eventId = row[MatchesTable.eventId]?.value,
         calcSequence = row[MatchesTable.calcSequence],
-        designatedPoints = row[MatchesTable.designatedPoints],
         team1Handicap = row[MatchesTable.team1Handicap],
         team2Handicap = row[MatchesTable.team2Handicap],
         isPlacementMatch = row[MatchesTable.isPlacementMatch],

@@ -9,7 +9,6 @@ const {
   useGetApiV1EventsId,
   useGetApiV1Clubs,
   useGetApiV1UsersMe,
-  useGetApiV1PointsBudgets,
   addMutate,
   removeMutate,
   decideMutate,
@@ -20,14 +19,12 @@ const {
   finalizeMutate,
   unfinalizeMutate,
   reverseMutate,
-  pointsConfigMutate,
   state,
 } =
   vi.hoisted(() => ({
     useGetApiV1EventsId: vi.fn(),
     useGetApiV1Clubs: vi.fn(),
     useGetApiV1UsersMe: vi.fn(),
-    useGetApiV1PointsBudgets: vi.fn(),
     addMutate: vi.fn(),
     removeMutate: vi.fn(),
     decideMutate: vi.fn(),
@@ -38,7 +35,6 @@ const {
     finalizeMutate: vi.fn(),
     unfinalizeMutate: vi.fn(),
     reverseMutate: vi.fn(),
-    pointsConfigMutate: vi.fn(),
     state: {
       addFail: false,
       fixtureFail: false,
@@ -57,9 +53,6 @@ const {
       reverseFail: false,
       reversePending: false,
       reverseErrorMessage: null as string | null,
-      pointsConfigFail: false,
-      pointsConfigPending: false,
-      pointsConfigErrorMessage: null as string | null,
     },
   }))
 
@@ -150,23 +143,8 @@ vi.mock('@/api/generated/events/events', () => ({
       opts?.mutation?.onSuccess?.()
     },
   }),
-  usePutApiV1EventsIdPointsConfig: (opts?: { mutation?: { onSuccess?: () => void } }) => ({
-    isPending: state.pointsConfigPending,
-    mutateAsync: async (vars: unknown) => {
-      pointsConfigMutate(vars)
-      if (state.pointsConfigFail) {
-        throw state.pointsConfigErrorMessage
-          ? { response: { data: { message: state.pointsConfigErrorMessage } } }
-          : new Error('boom')
-      }
-      opts?.mutation?.onSuccess?.()
-    },
-  }),
 }))
 vi.mock('@/api/generated/clubs/clubs', () => ({ useGetApiV1Clubs }))
-vi.mock('@/api/generated/points-budget/points-budget', () => ({
-  useGetApiV1PointsBudgets,
-}))
 vi.mock('@/api/generated/matches/matches', () => ({
   getGetApiV1MatchesQueryKey: () => ['matches'],
   usePostApiV1Matches: (opts?: { mutation?: { onSuccess?: () => void } }) => ({
@@ -263,12 +241,8 @@ describe('EventDetail', () => {
     state.reverseFail = false
     state.reversePending = false
     state.reverseErrorMessage = null
-    state.pointsConfigFail = false
-    state.pointsConfigPending = false
-    state.pointsConfigErrorMessage = null
     useGetApiV1EventsId.mockReturnValue({ data: event, isLoading: false })
     useGetApiV1Clubs.mockReturnValue({ data: [], isLoading: false })
-    useGetApiV1PointsBudgets.mockReturnValue({ data: [], isLoading: false })
     // Default to an administrator so data-entry controls stay available on the (past-dated) fixture;
     // the #310 tests below override this to a plain HOST.
     useGetApiV1UsersMe.mockReturnValue({ data: { capabilities: ['ADMINISTRATOR'] } })
@@ -1115,356 +1089,30 @@ describe('EventDetail', () => {
     expect(reverseMutate).not.toHaveBeenCalled()
   })
 
-  // ---- Points config + fixture designation (#403 Phase C) ----
+  // ---- Ranking points read-only summary (#559) ----
 
-  const tournamentEvent = {
-    ...event,
-    type: 'TOURNAMENT',
-    clubId: 'c1',
-    endDate: '2999-01-01',
-    minPointsPerMatch: 10,
-    maxPointsPerMatch: 20,
-    pointValidityStart: '2026-03-01',
-    pointValidityEnd: '2026-06-01',
-  }
-
-  it('shows the points config editor for any event, with the award-points checkbox off when no config (#466)', async () => {
-    // Points are opt-in for every event (#466): the default event has no config → the editor is still
-    // shown, but the "Award ranking points" checkbox is unchecked and the config fields are hidden.
-    const user = userEvent.setup()
-    renderDetail()
-    expect(screen.getByText('Points config')).toBeInTheDocument()
-    expect(screen.getByText('This event awards no points.')).toBeInTheDocument()
-    expect(screen.getByLabelText('Award ranking points')).not.toBeChecked()
-    // With the box off, neither the config fields nor the fixture designation show.
-    expect(screen.queryByLabelText('Min points')).not.toBeInTheDocument()
-    expect(screen.queryByLabelText(/Designated points/)).not.toBeInTheDocument()
-
-    // Ticking it reveals the config fields so the organizer can opt in.
-    await user.click(screen.getByLabelText('Award ranking points'))
-    expect(screen.getByLabelText('Min points')).toBeInTheDocument()
-  })
-
-  it('shows a saving label and disables the button while the points config save is pending (#466)', () => {
-    // A points event so the fields are shown, with the save mutation in flight → the button reads
-    // "Saving…" and is disabled (the `setPointsConfig.isPending` arm).
-    useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
-    state.pointsConfigPending = true
-    renderDetail()
-
-    const saving = screen.getByRole('button', { name: 'Saving…' })
-    expect(saving).toBeDisabled()
-  })
-
-  it('shows the points config editor and designation input for an event that awards points (#466)', () => {
-    // OPEN_PLAY now carries points like the other types; with a config the editor + designation appear.
+  it('summarizes an event that awards ranking points on finalize (#559)', () => {
     useGetApiV1EventsId.mockReturnValue({
-      data: {
-        ...event,
-        type: 'OPEN_PLAY',
-        clubId: 'c1',
-        endDate: '2999-01-01',
-        minPointsPerMatch: 2,
-        maxPointsPerMatch: 8,
-        pointValidityStart: '2026-03-01',
-        pointValidityEnd: '2026-03-20',
-      },
+      data: { ...event, awardRankingPoints: true },
       isLoading: false,
     })
     renderDetail()
-    expect(screen.getByText('Points config')).toBeInTheDocument()
-    // The award-points checkbox is seeded checked (the event carries a config).
-    expect(screen.getByLabelText('Award ranking points')).toBeChecked()
-    expect(screen.getByLabelText(/Designated points/)).toBeInTheDocument()
+
+    expect(screen.getByText('Ranking points')).toBeInTheDocument()
+    expect(screen.getByTestId('award-ranking-points-summary')).toHaveTextContent(
+      'This event awards ranking points on finalize.',
+    )
   })
 
-  it('un-ticking award-points and saving clears the event config (#466)', async () => {
-    // A budgeted event with a config: the checkbox is seeded checked. Un-ticking + saving sends an empty
-    // body, which the server treats as "clear the config" (cascading to release its fixtures' points).
-    useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
-    const user = userEvent.setup()
-    renderDetail()
-
-    expect(screen.getByLabelText('Award ranking points')).toBeChecked()
-    await user.click(screen.getByLabelText('Award ranking points'))
-    // The config fields disappear once un-ticked.
-    expect(screen.queryByLabelText('Min points')).not.toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: 'Save points config' }))
-    expect(pointsConfigMutate).toHaveBeenCalledWith({ id: 'e1', data: {} })
-  })
-
-  it('surfaces a server error when clearing the config fails after un-ticking award-points (#466)', async () => {
-    // Un-tick award-points then save, but the clear (empty-body) mutation rejects → the error surfaces
-    // (the catch on the clear path, distinct from the save-a-config path).
-    useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
-    state.pointsConfigFail = true
-    state.pointsConfigErrorMessage = 'A rated fixture still designates points'
-    const user = userEvent.setup()
-    renderDetail()
-
-    await user.click(screen.getByLabelText('Award ranking points'))
-    await user.click(screen.getByRole('button', { name: 'Save points config' }))
-
-    expect(pointsConfigMutate).toHaveBeenCalledWith({ id: 'e1', data: {} })
-    expect(await screen.findByRole('alert')).toHaveTextContent('A rated fixture still designates points')
-  })
-
-  it('shows a generic message when clearing the config fails without server guidance (#466)', async () => {
-    // Same clear path, but the error carries no server message → the generic fallback is shown.
-    useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
-    state.pointsConfigFail = true
-    state.pointsConfigErrorMessage = null
-    const user = userEvent.setup()
-    renderDetail()
-
-    await user.click(screen.getByLabelText('Award ranking points'))
-    await user.click(screen.getByRole('button', { name: 'Save points config' }))
-
-    expect(await screen.findByRole('alert')).toHaveTextContent('Could not clear the points config.')
-  })
-
-  it('shows the points config with current values, and saves an edit (#403 Phase C)', async () => {
-    useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
-    const user = userEvent.setup()
-    renderDetail()
-
-    expect(screen.getByText('Points config')).toBeInTheDocument()
-    // Current config summary.
-    expect(screen.getByTestId('points-config-summary')).toHaveTextContent('Currently 10–20 points')
-    // The editor is pre-seeded from the event's persisted config (#440), not just placeholders.
-    expect(screen.getByLabelText('Min points')).toHaveValue(10)
-    expect(screen.getByLabelText('Max points')).toHaveValue(20)
-    expect(screen.getByLabelText('Validity start')).toHaveValue('2026-03-01')
-    expect(screen.getByLabelText('Validity end')).toHaveValue('2026-06-01')
-
-    // Change every field (clearing the seeded value first) and save.
-    await user.clear(screen.getByLabelText('Min points'))
-    await user.type(screen.getByLabelText('Min points'), '8')
-    await user.clear(screen.getByLabelText('Max points'))
-    await user.type(screen.getByLabelText('Max points'), '30')
-    await user.clear(screen.getByLabelText('Validity start'))
-    await user.type(screen.getByLabelText('Validity start'), '2026-04-01')
-    await user.clear(screen.getByLabelText('Validity end'))
-    await user.type(screen.getByLabelText('Validity end'), '2026-07-01')
-    await user.click(screen.getByRole('button', { name: 'Save points config' }))
-
-    expect(pointsConfigMutate).toHaveBeenCalledWith({
-      id: 'e1',
-      data: {
-        minPointsPerMatch: 8,
-        maxPointsPerMatch: 30,
-        pointValidityStart: '2026-04-01',
-        pointValidityEnd: '2026-07-01',
-      },
-    })
-    expect(await screen.findByRole('status')).toHaveTextContent('Saved')
-  })
-
-  it('saves an edit that leaves min and max untouched, without a false validation error (#440)', async () => {
-    // Regression for #440: the editor is seeded from the persisted config, so changing only the
-    // validity window must submit the existing min/max — not "" coerced to 0 (which used to trip the
-    // "must be positive whole numbers" guard even though the fields showed valid numbers).
-    useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
-    const user = userEvent.setup()
-    renderDetail()
-
-    // Touch only the validity dates; leave the seeded Min (10) / Max (20) as-is.
-    await user.clear(screen.getByLabelText('Validity start'))
-    await user.type(screen.getByLabelText('Validity start'), '2026-05-01')
-    await user.clear(screen.getByLabelText('Validity end'))
-    await user.type(screen.getByLabelText('Validity end'), '2026-08-01')
-    await user.click(screen.getByRole('button', { name: 'Save points config' }))
-
-    // No false "positive whole numbers" error; the persisted min/max are submitted unchanged.
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-    expect(pointsConfigMutate).toHaveBeenCalledWith({
-      id: 'e1',
-      data: {
-        minPointsPerMatch: 10,
-        maxPointsPerMatch: 20,
-        pointValidityStart: '2026-05-01',
-        pointValidityEnd: '2026-08-01',
-      },
-    })
-  })
-
-  it('still rejects an actually-cleared min/max as not positive whole numbers (#440 guard stays live)', async () => {
-    // The seeding fix (#440) pre-fills the fields, but the guard must still fire if the user deliberately
-    // clears one — an empty Min is Number("") === 0, which is not a positive whole number.
-    useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
-    const user = userEvent.setup()
-    renderDetail()
-
-    await user.clear(screen.getByLabelText('Min points'))
-    await user.click(screen.getByRole('button', { name: 'Save points config' }))
-
-    expect(await screen.findByRole('alert')).toHaveTextContent('Min and max points must be positive whole numbers')
-    expect(pointsConfigMutate).not.toHaveBeenCalled()
-  })
-
-  it('requires a validity window when a date is cleared (#440 guard stays live)', async () => {
-    useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
-    const user = userEvent.setup()
-    renderDetail()
-
-    // Valid min/max stay seeded; clearing a validity date trips the validity-required guard.
-    await user.clear(screen.getByLabelText('Validity end'))
-    await user.click(screen.getByRole('button', { name: 'Save points config' }))
-
-    expect(await screen.findByRole('alert')).toHaveTextContent('A validity start and end date are required')
-    expect(pointsConfigMutate).not.toHaveBeenCalled()
-  })
-
-  it('rejects a min greater than max in the points config without calling the API (#403 Phase C)', async () => {
-    useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
-    const user = userEvent.setup()
-    renderDetail()
-
-    await user.clear(screen.getByLabelText('Min points'))
-    await user.type(screen.getByLabelText('Min points'), '30')
-    await user.clear(screen.getByLabelText('Max points'))
-    await user.type(screen.getByLabelText('Max points'), '10')
-    await user.click(screen.getByRole('button', { name: 'Save points config' }))
-
-    expect(await screen.findByRole('alert')).toHaveTextContent('Min points cannot exceed max points')
-    expect(pointsConfigMutate).not.toHaveBeenCalled()
-  })
-
-  it('surfaces a server error when the points config save fails (#403 Phase C)', async () => {
-    useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
-    state.pointsConfigFail = true
-    state.pointsConfigErrorMessage = "An existing fixture's designated points fall outside the new range"
-    const user = userEvent.setup()
-    renderDetail()
-
-    await user.clear(screen.getByLabelText('Min points'))
-    await user.type(screen.getByLabelText('Min points'), '15')
-    await user.clear(screen.getByLabelText('Max points'))
-    await user.type(screen.getByLabelText('Max points'), '25')
-    await user.click(screen.getByRole('button', { name: 'Save points config' }))
-
-    expect(await screen.findByRole('alert')).toHaveTextContent('fall outside the new range')
-  })
-
-  it('defaults the fixture designation to round(avg) and sends it when changed (#403 Phase C)', async () => {
-    useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
-    useGetApiV1PointsBudgets.mockReturnValue({
-      data: [{ clubId: 'c1', eventType: 'TOURNAMENT', budgeted: 500, allocated: 100, free: 400 }],
-      isLoading: false,
-    })
-    const user = userEvent.setup()
-    renderDetail()
-
-    const designated = screen.getByLabelText(/Designated points/)
-    // Default = round(avg(10, 20)) = 15, shown as the placeholder.
-    expect(designated).toHaveAttribute('placeholder', '15')
-    // The free-budget hint reflects the club×type budget.
-    expect(screen.getByText(/400 points free/)).toBeInTheDocument()
-
-    await user.selectOptions(screen.getByLabelText('Player 1'), 'u1')
-    await user.selectOptions(screen.getByLabelText('Player 2'), 'u2')
-    await user.type(screen.getByLabelText('Date'), '2026-03-02')
-    await user.type(designated, '18')
-    await user.click(screen.getByRole('button', { name: 'Schedule fixture' }))
-
-    expect(createFixtureMutate.mock.calls[0][0].data.designatedPoints).toBe(18)
-  })
-
-  it('blocks scheduling when the designation is out of the [min,max] range (#403 Phase C)', async () => {
-    useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
-    const user = userEvent.setup()
-    renderDetail()
-
-    await user.selectOptions(screen.getByLabelText('Player 1'), 'u1')
-    await user.selectOptions(screen.getByLabelText('Player 2'), 'u2')
-    await user.type(screen.getByLabelText('Date'), '2026-03-02')
-    await user.type(screen.getByLabelText(/Designated points/), '99')
-
-    expect(screen.getByText('Designated points must be between 10 and 20.')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Schedule fixture' })).toBeDisabled()
-  })
-
-  it('blocks scheduling when the designation exceeds the club free budget (#403 Phase C)', async () => {
-    useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
-    useGetApiV1PointsBudgets.mockReturnValue({
-      data: [{ clubId: 'c1', eventType: 'TOURNAMENT', budgeted: 20, allocated: 8, free: 12 }],
-      isLoading: false,
-    })
-    const user = userEvent.setup()
-    renderDetail()
-
-    await user.selectOptions(screen.getByLabelText('Player 1'), 'u1')
-    await user.selectOptions(screen.getByLabelText('Player 2'), 'u2')
-    await user.type(screen.getByLabelText('Date'), '2026-03-02')
-    // 20 × 1 = 20 > 12 free → over budget.
-    await user.type(screen.getByLabelText(/Designated points/), '20')
-
-    expect(screen.getByText(/exceeds the club's remaining free budget/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Schedule fixture' })).toBeDisabled()
-  })
-
-  it('renders the doubles designation cost for two players (#466)', async () => {
-    // A points-awarding event with a doubles roster: the cost hint reads "for 2 players", exercising the
-    // doubles arm of the team-size copy.
+  it('summarizes an event that awards no ranking points (#559)', () => {
     useGetApiV1EventsId.mockReturnValue({
-      data: { ...doublesRoster, ...tournamentEvent, participants: doublesRoster.participants },
+      data: { ...event, awardRankingPoints: false },
       isLoading: false,
     })
-    const user = userEvent.setup()
     renderDetail()
 
-    await user.selectOptions(screen.getByLabelText('Format'), 'DOUBLES')
-    // Default designation 15 × 2 players = 30.
-    expect(screen.getByText(/cost = 30 for 2 players/)).toBeInTheDocument()
-  })
-
-  it('notes no budget is reserved when a points event has no club (#466)', () => {
-    // Points-awarding event but clubId absent → the hint states no club/budget is reserved.
-    useGetApiV1EventsId.mockReturnValue({ data: { ...tournamentEvent, clubId: undefined }, isLoading: false })
-    renderDetail()
-
-    expect(screen.getByText(/No club is set, so no budget is reserved/)).toBeInTheDocument()
-    expect(screen.queryByText(/points free/)).not.toBeInTheDocument()
-  })
-
-  it('omits the free-budget hint when the club has no budget row for this event type (#466)', () => {
-    // clubId is set but no matching budget row exists → clubBudget is undefined, so neither the
-    // free-budget hint nor the no-club note shows (the empty middle arm).
-    useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
-    useGetApiV1PointsBudgets.mockReturnValue({ data: [], isLoading: false })
-    renderDetail()
-
-    expect(screen.getByLabelText(/Designated points/)).toBeInTheDocument()
-    expect(screen.queryByText(/points free/)).not.toBeInTheDocument()
-    expect(screen.queryByText(/No club is set/)).not.toBeInTheDocument()
-  })
-
-  it('shows the per-match award-points checkbox (default checked) on a points event (#466)', () => {
-    useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
-    renderDetail()
-    // The event awards points → the per-fixture checkbox is present and checked by default, so the
-    // designation input shows.
-    expect(screen.getByLabelText('Award points for this match')).toBeChecked()
-    expect(screen.getByLabelText(/Designated points/)).toBeInTheDocument()
-  })
-
-  it('un-ticking the per-match checkbox hides the designation and sends awardPoints:false (#466)', async () => {
-    useGetApiV1EventsId.mockReturnValue({ data: tournamentEvent, isLoading: false })
-    const user = userEvent.setup()
-    renderDetail()
-
-    // Opt this fixture out: the designation input disappears.
-    await user.click(screen.getByLabelText('Award points for this match'))
-    expect(screen.queryByLabelText(/Designated points/)).not.toBeInTheDocument()
-
-    await user.selectOptions(screen.getByLabelText('Player 1'), 'u1')
-    await user.selectOptions(screen.getByLabelText('Player 2'), 'u2')
-    await user.type(screen.getByLabelText('Date'), '2026-03-02')
-    await user.click(screen.getByRole('button', { name: 'Schedule fixture' }))
-
-    // Scheduling sends awardPoints:false (no designation) so the match awards no points.
-    expect(createFixtureMutate.mock.calls[0][0].data.awardPoints).toBe(false)
-    expect(createFixtureMutate.mock.calls[0][0].data.designatedPoints).toBeUndefined()
+    expect(screen.getByTestId('award-ranking-points-summary')).toHaveTextContent(
+      'This event awards no ranking points.',
+    )
   })
 })

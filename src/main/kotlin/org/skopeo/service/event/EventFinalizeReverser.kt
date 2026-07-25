@@ -19,9 +19,8 @@ import java.util.UUID
  * [EventService.unfinalize] that undoes a finalize's side effects. In one transaction it revokes every
  * ACTIVE ranking-point award the finalize produced (via [RankingPointRepository.revoke], which keeps
  * the ledger append-only by adding REVOKED markers rather than deleting rows) and clears the event's
- * finalize flag ([EventRepository.unfinalize]) — which also implicitly restores the reserved-points
- * budget, since it only counts fixtures where finalized_at IS NULL. The reversal is audited as
- * EVENT_UNFINALIZED. Kept out of EventService so the awarding/reversal pair stays cohesive and testable.
+ * finalize flag ([EventRepository.unfinalize]). The reversal is audited as EVENT_UNFINALIZED. Kept out
+ * of EventService so the awarding/reversal pair stays cohesive and testable.
  */
 class EventFinalizeReverser(
     private val events: EventRepository = EventRepository(),

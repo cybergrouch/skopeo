@@ -74,14 +74,9 @@ function NewEventForm() {
   // The circuit a TOURNAMENT belongs to (#525); required for tournaments, ignored otherwise.
   const [circuitId, setCircuitId] = useState("");
   const [error, setError] = useState<string | null>(null);
-  // "Award ranking points" checkbox (#466): opt-in, default UNCHECKED → the event awards no points and
-  // the config fields are hidden. Ticking it reveals + requires the per-match reward + validity window.
-  const [awardPoints, setAwardPoints] = useState(false);
-  // Points config (#466): kept as strings so the inputs can be cleared while typing.
-  const [minPoints, setMinPoints] = useState("");
-  const [maxPoints, setMaxPoints] = useState("");
-  const [validityStart, setValidityStart] = useState("");
-  const [validityEnd, setValidityEnd] = useState("");
+  // "Award Ranking Points" checkbox (#559): default ON. When set, finalizing the event awards ranking
+  // points per the global schedules; unticking opts the whole event out of awarding.
+  const [awardRankingPoints, setAwardRankingPoints] = useState(true);
 
   // Clubs to optionally file the event under (#313). Readable by staff; empty when none exist.
   const clubsData = useGetApiV1Clubs().data;
@@ -108,11 +103,7 @@ function NewEventForm() {
         setRoster([]);
         setType("OPEN_PLAY");
         setCircuitId("");
-        setAwardPoints(false);
-        setMinPoints("");
-        setMaxPoints("");
-        setValidityStart("");
-        setValidityEnd("");
+        setAwardRankingPoints(true);
         void queryClient.invalidateQueries({
           queryKey: getGetApiV1EventsQueryKey(),
         });
@@ -120,46 +111,9 @@ function NewEventForm() {
     },
   });
 
-  // Points are opt-in via the "Award ranking points" checkbox (#466), for any event type/club. When
-  // ticked the config fields appear + are required (no global policy bounds since #525).
-  const showPointsConfig = awardPoints;
-
-  // Client-side validation of the points window (#429), mirroring the EventDetail editor.
-  // Returns an error message, or null when the window is valid (or not required).
-  const pointsError = useMemo<string | null>(() => {
-    if (!showPointsConfig) return null;
-    if (
-      minPoints === "" ||
-      maxPoints === "" ||
-      validityStart === "" ||
-      validityEnd === ""
-    ) {
-      return "Min/max points and a validity window are required.";
-    }
-    const min = Number(minPoints);
-    const max = Number(maxPoints);
-    if (
-      !Number.isInteger(min) ||
-      !Number.isInteger(max) ||
-      min <= 0 ||
-      max <= 0
-    ) {
-      return "Min and max points must be positive whole numbers.";
-    }
-    if (min > max) return "Min points cannot exceed max points.";
-    if (validityEnd < validityStart) {
-      return "Validity end cannot be before the start.";
-    }
-    return null;
-  }, [showPointsConfig, minPoints, maxPoints, validityStart, validityEnd]);
-
   function submit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    if (pointsError) {
-      setError(pointsError);
-      return;
-    }
     create.mutate(
       {
         data: {
@@ -170,15 +124,8 @@ function NewEventForm() {
           participantIds: roster.map((u) => u.id),
           ...(clubId ? { clubId } : {}),
           ...(type === "TOURNAMENT" ? { circuitId } : {}),
-          // Only send a points config when "Award ranking points" is ticked (#466); off = no points.
-          ...(showPointsConfig
-            ? {
-                minPointsPerMatch: Number(minPoints),
-                maxPointsPerMatch: Number(maxPoints),
-                pointValidityStart: validityStart,
-                pointValidityEnd: validityEnd,
-              }
-            : {}),
+          // A single "Award Ranking Points" flag (#559) replaces the old per-event points config.
+          awardRankingPoints,
         },
       },
       {
@@ -192,7 +139,6 @@ function NewEventForm() {
     name.trim() !== "" &&
     startDate !== "" &&
     endDate !== "" &&
-    pointsError === null &&
     (type !== "TOURNAMENT" || circuitId !== "");
 
   return (
@@ -298,73 +244,17 @@ function NewEventForm() {
               </select>
             </div>
           ) : null}
-          {/* "Award ranking points" checkbox (#466): opt-in, default off. Ticking reveals + requires
-              the points config below, validated against the global per-type policy. */}
+          {/* "Award Ranking Points" checkbox (#559): default on. When set, finalizing the event awards
+              ranking points per the global schedules; unticking opts the whole event out. */}
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
-              checked={awardPoints}
-              onChange={(e) => setAwardPoints(e.target.checked)}
-              aria-label="Award ranking points"
+              checked={awardRankingPoints}
+              onChange={(e) => setAwardRankingPoints(e.target.checked)}
+              aria-label="Award Ranking Points"
             />
-            Award ranking points
+            Award Ranking Points
           </label>
-          {/* Points config (#466): shown only when the "Award ranking points" checkbox is ticked. */}
-          {showPointsConfig ? (
-            <div className="grid gap-3 rounded-md border border-input p-3">
-              <p className="text-xs font-medium uppercase text-muted-foreground">
-                Points config
-              </p>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <Label htmlFor="event-min-points" className="text-xs">
-                    Min points
-                  </Label>
-                  <Input
-                    id="event-min-points"
-                    type="number"
-                    value={minPoints}
-                    onChange={(e) => setMinPoints(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="event-max-points" className="text-xs">
-                    Max points
-                  </Label>
-                  <Input
-                    id="event-max-points"
-                    type="number"
-                    value={maxPoints}
-                    onChange={(e) => setMaxPoints(e.target.value)}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <Label htmlFor="event-validity-start" className="text-xs">
-                    Validity start
-                  </Label>
-                  <Input
-                    id="event-validity-start"
-                    type="date"
-                    value={validityStart}
-                    onChange={(e) => setValidityStart(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="event-validity-end" className="text-xs">
-                    Validity end
-                  </Label>
-                  <Input
-                    id="event-validity-end"
-                    type="date"
-                    value={validityEnd}
-                    onChange={(e) => setValidityEnd(e.target.value)}
-                  />
-                </div>
-              </div>
-            </div>
-          ) : null}
           <div className="space-y-1">
             <Label className="text-xs">Participants</Label>
             {roster.length > 0 ? (

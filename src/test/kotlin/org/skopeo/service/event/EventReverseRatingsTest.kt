@@ -113,10 +113,6 @@ class EventReverseRatingsTest {
                 type = EventType.TOURNAMENT,
                 // A tournament must reference a circuit (#525).
                 circuitId = seedCircuit(hostUid = hostUid),
-                minPointsPerMatch = 10,
-                maxPointsPerMatch = 50,
-                pointValidityStart = LocalDate.now(),
-                pointValidityEnd = LocalDate.now().plusDays(30),
             ),
     ).shouldBeRight().event
 
@@ -135,7 +131,6 @@ class EventReverseRatingsTest {
         host: User,
         p1: User,
         p2: User,
-        designated: Int? = null,
         date: LocalDate = LocalDate.now(),
     ): Match {
         val match =
@@ -151,7 +146,6 @@ class EventReverseRatingsTest {
                         team2Name = "t2",
                         createdBy = host.id,
                         eventId = eventId,
-                        designatedPoints = designated,
                         isPlacementMatch = true,
                         placementBracket = PlacementBracket.CHAMPIONSHIP_FINALS,
                     ),
@@ -308,10 +302,6 @@ class EventReverseRatingsTest {
                         participantIds = listOf(p1.id, p2.id),
                         type = EventType.TOURNAMENT,
                         circuitId = seedCircuit(hostUid = "host"),
-                        minPointsPerMatch = 10,
-                        maxPointsPerMatch = 50,
-                        pointValidityStart = LocalDate.now(),
-                        pointValidityEnd = LocalDate.now().plusDays(30),
                     ),
             ).shouldBeRight().event
         seedCompletedFixture(eventId = eventB.id, host = host, p1 = p1, p2 = p2, date = LocalDate.now())

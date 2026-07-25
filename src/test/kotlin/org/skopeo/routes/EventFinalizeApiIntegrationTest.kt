@@ -184,10 +184,6 @@ class EventFinalizeApiIntegrationTest {
                         endDate = LocalDate.now().plusDays(7),
                         participantIds = listOf(p1.id, p2.id),
                         type = EventType.LEAGUE,
-                        minPointsPerMatch = 10,
-                        maxPointsPerMatch = 50,
-                        pointValidityStart = LocalDate.now(),
-                        pointValidityEnd = LocalDate.now().plusDays(30),
                     ),
             ).let { requireNotNull(value = it.getOrNull()).event }
         val fixture =
@@ -203,7 +199,6 @@ class EventFinalizeApiIntegrationTest {
                         team2Name = "t2",
                         createdBy = host.id,
                         eventId = event.id,
-                        designatedPoints = 30,
                     ),
             )
         matchRepo.addResult(

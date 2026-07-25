@@ -33,8 +33,6 @@ tags:
     description: Append-only ranking-points ledger; admins grant/revoke awards (manual & ad-hoc)
   - name: Settings
     description: Global app settings; the UI theme is publicly readable and administrator-writable
-  - name: Points Budget
-    description: Global points policy and per-club budgets; points-manager (or administrator) managed
   - name: Circuits
     description: Administrator-defined groupings of tournaments (e.g. NORTH, SOUTH)
 
@@ -1895,48 +1893,6 @@ paths:
         '409':
           description: Cannot disable a match that has already been rated
 
-  /api/v1/matches/{id}/designation:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-    put:
-      summary: Set or clear a fixture's designated points (HOST/ADMINISTRATOR)
-      description: >-
-        Set (or clear) a fixture's designated points via the opt-in "award points for this match"
-        checkbox (#466). A positive integer within the event's [min, max] awards; a null/omitted value
-        clears the designation so the match awards no points (reservation released). Only allowed on an
-        evented, unrated fixture whose event awards points; validated against the event's window only
-        (never the global policy) plus the cumulative club-budget reserve check.
-      tags:
-        - Matches
-      security:
-        - firebaseAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SetDesignationRequest'
-      responses:
-        '200':
-          description: Updated match
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MatchResponse'
-        '400':
-          description: Amount outside the event window, over budget, or the event awards no points
-        '403':
-          description: Caller is not HOST/ADMINISTRATOR
-        '404':
-          description: No such match or event
-        '409':
-          description: The match is disabled or already rated
-
   /api/v1/matches/{id}/handicaps:
     parameters:
       - name: id
@@ -2247,45 +2203,6 @@ paths:
         '404':
           description: No such event
 
-  /api/v1/events/{id}/points-config:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-    put:
-      summary: Set an event's points config (HOST owns / CLUB_OWNER / ADMINISTRATOR)
-      description: >-
-        Set an event's per-match reward window (min/max points) and point validity window (#403 Phase C).
-        Every event class carries a config (OPEN_PLAY unified with TOURNAMENT/LEAGUE). Staff-only and not
-        allowed on a finalized event. The window is validated against the global per-type policy, and a
-        tightened range is rejected if it would exclude an existing active fixture's designation.
-      tags:
-        - Events
-      security:
-        - firebaseAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SetPointsConfigRequest'
-      responses:
-        '200':
-          description: The updated event
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/EventResponse'
-        '400':
-          description: Malformed body, a window outside the global policy, or a fixture designation out of range
-        '403':
-          description: Caller is not staff, or a HOST editing another's event
-        '404':
-          description: No such event
-
   /api/v1/events/{id}/finalize:
     parameters:
       - name: id
@@ -2331,9 +2248,9 @@ paths:
       summary: Un-finalize an event (HOST owns / CLUB_OWNER / ADMINISTRATOR)
       description: >-
         Un-finalize an event (#477) — the reverse of finalize, so an erroneous score can be corrected and
-        the event re-finalized. Clears the finalize flag, revokes every active ranking-point award the
-        finalize produced (append-only: revocation markers are added, nothing is deleted), and implicitly
-        restores the reserved-points budget. A HOST may un-finalize only their own event; an ADMINISTRATOR
+        the event re-finalized. Clears the finalize flag and revokes every active ranking-point award the
+        finalize produced (append-only: revocation markers are added, nothing is deleted). A HOST may
+        un-finalize only their own event; an ADMINISTRATOR
         or CLUB_OWNER any. Refused if the event is not finalized, or if any of its matches are already
         rated (the bad score is already in rating history — a heavier correction path is required).
         Audited as EVENT_UNFINALIZED.
@@ -4033,107 +3950,6 @@ paths:
         '404':
           description: No active award with that id
 
-  /api/v1/points/budgets:
-    get:
-      summary: List every club's per-type points budgets (#403 Phase B)
-      description: >-
-        Points-manager only. For each club and event type, the accounting view — budgeted (real),
-        allocated (0 until reservations/awards land in Phase C/D), and free (budgeted minus allocated).
-      tags:
-        - Points Budget
-      security:
-        - firebaseAuth: []
-      responses:
-        '200':
-          description: The per club and per-type budget accounting
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ClubBudgetResponse'
-        '401':
-          description: Missing or invalid Firebase token
-        '403':
-          description: Caller is not a points manager
-
-  /api/v1/clubs/{clubId}/point-budgets/{eventType}:
-    put:
-      summary: Set a club's per-type points budget (#403 Phase B)
-      description: >-
-        Points-manager only. Sets the club's budgeted points for one event type. The value must be a
-        non-negative whole integer and the club must exist.
-      tags:
-        - Points Budget
-      security:
-        - firebaseAuth: []
-      parameters:
-        - name: clubId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: eventType
-          in: path
-          required: true
-          schema:
-            type: string
-            enum: [OPEN_PLAY, LEAGUE, TOURNAMENT]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SetClubBudgetRequest'
-      responses:
-        '200':
-          description: The updated budget accounting for that club and type
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ClubBudgetResponse'
-        '400':
-          description: Invalid event type or a negative budget
-        '401':
-          description: Missing or invalid Firebase token
-        '403':
-          description: Caller is not a points manager
-        '404':
-          description: No such club
-
-  /api/v1/clubs/{clubId}/points-summary:
-    get:
-      summary: A club's points summary for its owner (#403 Phase E)
-      description: >-
-        Returns the club's per-type utilization (Budgeted/Allocated/Free) plus a per-event breakdown
-        (designated/awarded and whether the event is finalized). Gated to the club's CLUB_OWNER(s) or
-        an ADMINISTRATOR/POINTS_MANAGER. Utilization is never exposed on the anonymous public club page.
-      tags:
-        - Points Budget
-      security:
-        - firebaseAuth: []
-      parameters:
-        - name: clubId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: The club's utilization and per-event points breakdown
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ClubPointsSummaryResponse'
-        '401':
-          description: Missing or invalid Firebase token
-        '403':
-          description: Caller is neither an owner of this club nor a points manager
-        '404':
-          description: No such club
-
 components:
   securitySchemes:
     firebaseAuth:
@@ -5430,19 +5246,6 @@ components:
           format: uuid
           nullable: true
           description: When set, the fixture belongs to this event and both sides must be participants (#138).
-        designatedPoints:
-          type: integer
-          nullable: true
-          description: >-
-            Points designated for the winner (#403 Phase C), for a fixture on an event that has a points
-            config (any type with a club; OPEN_PLAY unified). Omit on such an event to default to
-            round(avg(event min, event max)); ignored for a config-less or event-less fixture.
-        awardPoints:
-          type: boolean
-          nullable: true
-          description: >-
-            The "award points for this match" checkbox (#466). Default (omitted/true) → the fixture awards
-            points on a points-awarding event. Explicit false → the match opts out (no designation, no award).
         team1Handicap:
           type: string
           nullable: true
@@ -5627,10 +5430,6 @@ components:
           format: uuid
           nullable: true
           description: The event this fixture belongs to, if any (#138).
-        designatedPoints:
-          type: integer
-          nullable: true
-          description: Points designated for the winner (#403 Phase C); null for a config-less or event-less fixture.
         team1Handicap:
           type: string
           nullable: true
@@ -5675,65 +5474,12 @@ components:
           nullable: true
           enum: [OPEN_PLAY, LEAGUE, TOURNAMENT]
           description: Event class (#403); omit for the OPEN_PLAY default.
-        minPointsPerMatch:
-          type: integer
+        awardRankingPoints:
+          type: boolean
           nullable: true
           description: >-
-            Min per-match reward (#466). Points are opt-in for every event type/club: supply all four points
-            fields to award points (validated against the global policy), or omit them all for no points.
-        maxPointsPerMatch:
-          type: integer
-          nullable: true
-          description: >-
-            Max per-match reward (#466). Points are opt-in for every event type/club: supply all four points
-            fields to award points (validated against the global policy), or omit them all for no points.
-        pointValidityStart:
-          type: string
-          format: date
-          nullable: true
-          description: First day an awarded point is valid (#466); supplied with all four points fields when awarding points.
-        pointValidityEnd:
-          type: string
-          format: date
-          nullable: true
-          description: Last day an awarded point is valid (#466); supplied with all four points fields when awarding points.
-
-    SetPointsConfigRequest:
-      type: object
-      description: >-
-        Set or clear an event's per-match reward window + point validity window (#466 opt-in "award
-        points" checkbox). All four fields present → the event awards points; all four omitted/null →
-        the config is cleared (the event awards no points, cascading to null out its fixtures'
-        designations). A partial body is rejected.
-      properties:
-        minPointsPerMatch:
-          type: integer
-          nullable: true
-          description: Min per-match reward; validated against the global per-type policy. Omit (with the others) to clear.
-        maxPointsPerMatch:
-          type: integer
-          nullable: true
-          description: Max per-match reward; validated against the global per-type policy. Omit (with the others) to clear.
-        pointValidityStart:
-          type: string
-          format: date
-          nullable: true
-        pointValidityEnd:
-          type: string
-          format: date
-          nullable: true
-
-    SetDesignationRequest:
-      type: object
-      description: >-
-        Set or clear a fixture's designated points (#466 opt-in "award points for this match"
-        checkbox). A positive integer within the event's [min, max] awards; null/omitted clears the
-        designation so the match awards no points.
-      properties:
-        designatedPoints:
-          type: integer
-          nullable: true
-          description: Points designated for the winner; within the event's [min, max]. Omit/null to clear (no award).
+            Whether finalizing this event awards ranking points per the global schedules (#559). Omit for
+            the default (true — "Award Ranking Points" is on unless the organizer unchecks it).
 
     SetHandicapsRequest:
       type: object
@@ -5950,24 +5696,9 @@ components:
         completedMatchCount:
           type: integer
           description: Recorded results (COMPLETED with a decided winner) in the event (#483); the client's has-results signal.
-        minPointsPerMatch:
-          type: integer
-          nullable: true
-          description: Min per-match reward (#403 Phase C); null for a config-less (clubless) event.
-        maxPointsPerMatch:
-          type: integer
-          nullable: true
-          description: Max per-match reward (#403 Phase C); null for a config-less (clubless) event.
-        pointValidityStart:
-          type: string
-          format: date
-          nullable: true
-          description: First day an awarded point is valid (#403 Phase C); null for a config-less (clubless) event.
-        pointValidityEnd:
-          type: string
-          format: date
-          nullable: true
-          description: Last day an awarded point is valid (#403 Phase C); null for a config-less (clubless) event.
+        awardRankingPoints:
+          type: boolean
+          description: Whether finalizing this event awards ranking points per the global schedules (#559); default true.
 
     EventPublicResponse:
       type: object
@@ -6661,40 +6392,6 @@ components:
           format: uuid
           nullable: true
 
-    ClubBudgetResponse:
-      type: object
-      required:
-        - clubId
-        - eventType
-        - budgeted
-        - allocated
-        - free
-      properties:
-        clubId:
-          type: string
-          format: uuid
-        eventType:
-          type: string
-          enum: [OPEN_PLAY, LEAGUE, TOURNAMENT]
-        budgeted:
-          type: integer
-          description: The club's real budget allocation for the type (#403 Phase B).
-        allocated:
-          type: integer
-          description: Points currently in use; 0 until reservations/awards land in Phase C/D (#403).
-        free:
-          type: integer
-          description: Remaining allocable — budgeted minus allocated (#403 Phase B).
-
-    SetClubBudgetRequest:
-      type: object
-      required:
-        - budgetedPoints
-      properties:
-        budgetedPoints:
-          type: integer
-          description: The non-negative whole-number budget to set for the club and type (#403 Phase B).
-
     CreateCircuitRequest:
       type: object
       required:
@@ -6834,18 +6531,13 @@ components:
     ClubPublicEventResponse:
       type: object
       description: >-
-        One of a club's events on its public page (#327) — code, name, date range, plus the public
-        per-event points (#403 Phase E). eventType, and both designatedPoints (planned) and
-        awardedPoints (finalized); the UI shows awarded once the event is finalized, else designated.
-        Club utilization is NOT here — it is served only by the gated points-summary.
+        One of a club's events on its public page (#327) — shareable code, name, date range, and type.
       required:
         - publicCode
         - name
         - startDate
         - endDate
         - eventType
-        - designatedPoints
-        - awardedPoints
       properties:
         publicCode:
           type: string
@@ -6860,59 +6552,6 @@ components:
         eventType:
           type: string
           enum: [OPEN_PLAY, LEAGUE, TOURNAMENT]
-        designatedPoints:
-          type: integer
-          description: The event's planned (designated) points total, times team size (#403 Phase E).
-        awardedPoints:
-          type: integer
-          description: The event's awarded points total from active in-window awards (#403 Phase E).
-
-    ClubEventPointsResponse:
-      type: object
-      description: One event's points figures in the club points summary (#403 Phase E).
-      required:
-        - eventPublicCode
-        - name
-        - eventType
-        - finalized
-        - designated
-        - awarded
-      properties:
-        eventPublicCode:
-          type: string
-        name:
-          type: string
-        eventType:
-          type: string
-          enum: [OPEN_PLAY, LEAGUE, TOURNAMENT]
-        finalized:
-          type: boolean
-        designated:
-          type: integer
-        awarded:
-          type: integer
-
-    ClubPointsSummaryResponse:
-      type: object
-      description: >-
-        A club's points summary for its owner (#403 Phase E) — per-type utilization plus a per-event
-        breakdown. CLUB_OWNER / points-manager only; never exposed anonymously.
-      required:
-        - clubId
-        - utilization
-        - events
-      properties:
-        clubId:
-          type: string
-          format: uuid
-        utilization:
-          type: array
-          items:
-            $ref: '#/components/schemas/ClubBudgetResponse'
-        events:
-          type: array
-          items:
-            $ref: '#/components/schemas/ClubEventPointsResponse'
 
     CreateInviteRequest:
       type: object

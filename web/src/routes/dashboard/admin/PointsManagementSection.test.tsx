@@ -6,36 +6,8 @@ import { MemoryRouter } from "react-router-dom";
 import { PointsManagementSection } from "./PointsManagementSection";
 import { Capability } from "@/auth/capabilities";
 
-const {
-  useGetApiV1PointsBudgets,
-  useGetApiV1Clubs,
-  useGetApiV1RankingPoints,
-  budgetMutate,
-} = vi.hoisted(() => ({
-  useGetApiV1PointsBudgets: vi.fn(),
-  useGetApiV1Clubs: vi.fn(),
+const { useGetApiV1RankingPoints } = vi.hoisted(() => ({
   useGetApiV1RankingPoints: vi.fn(),
-  budgetMutate: vi.fn(),
-}));
-
-type MutationOpts = {
-  mutation: { onSuccess: () => void; onError?: (e: unknown) => void };
-};
-
-vi.mock("@/api/generated/points-budget/points-budget", () => ({
-  useGetApiV1PointsBudgets,
-  getGetApiV1PointsBudgetsQueryKey: () => ["points-budgets"],
-  usePutApiV1ClubsClubIdPointBudgetsEventType: (options: MutationOpts) => ({
-    isPending: false,
-    mutate: (vars: unknown) => {
-      budgetMutate(vars);
-      options.mutation.onSuccess();
-    },
-  }),
-}));
-
-vi.mock("@/api/generated/clubs/clubs", () => ({
-  useGetApiV1Clubs,
 }));
 
 vi.mock("@/api/generated/ranking-points/ranking-points", () => ({
@@ -73,21 +45,6 @@ function renderSection() {
 describe("PointsManagementSection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useGetApiV1PointsBudgets.mockReturnValue({
-      data: [
-        {
-          clubId: "club-1",
-          eventType: "LEAGUE",
-          budgeted: 200,
-          allocated: 0,
-          free: 200,
-        },
-      ],
-      isLoading: false,
-    });
-    useGetApiV1Clubs.mockReturnValue({
-      data: [{ id: "club-1", name: "Downtown TC" }],
-    });
     useGetApiV1RankingPoints.mockReturnValue({
       data: { rows: [], total: 0, limit: 25, offset: 0 },
       isLoading: false,
@@ -117,37 +74,6 @@ describe("PointsManagementSection", () => {
       ...overrides,
     };
   }
-
-  it("renders the budget row with the club name, Allocated 0 and Free", () => {
-    renderSection();
-    expect(screen.getByText("Downtown TC")).toBeInTheDocument();
-    expect(screen.getByText("LEAGUE")).toBeInTheDocument();
-    expect(
-      (screen.getByLabelText("Budget for Downtown TC LEAGUE") as HTMLInputElement)
-        .value,
-    ).toBe("200");
-    // Allocated is 0 for now.
-    const cells = screen.getAllByRole("cell");
-    expect(cells.some((c) => c.textContent === "0")).toBe(true);
-    expect(cells.some((c) => c.textContent === "200")).toBe(true);
-  });
-
-  it("saves a club budget with the entered value", async () => {
-    const user = userEvent.setup();
-    renderSection();
-    const budget = screen.getByLabelText("Budget for Downtown TC LEAGUE");
-    await user.clear(budget);
-    await user.type(budget, "300");
-    // The budget row's Save button is the last one.
-    const saveButtons = screen.getAllByRole("button", { name: "Save" });
-    await user.click(saveButtons[saveButtons.length - 1]);
-
-    expect(budgetMutate).toHaveBeenCalledWith({
-      clubId: "club-1",
-      eventType: "LEAGUE",
-      data: { budgetedPoints: 300 },
-    });
-  });
 
   it("renders an awarded-points row with a player link, signed points and source", () => {
     useGetApiV1RankingPoints.mockReturnValue({
