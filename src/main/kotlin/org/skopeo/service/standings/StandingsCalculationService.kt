@@ -136,7 +136,7 @@ class StandingsCalculationService(
             .sortedWith(comparator = groupOrder())
     }
 
-    /** One (band, sex) group ranked by points desc, then the D8 tie-break (higher rating, then name). */
+    /** One (band, sex) group ranked by points desc, then the tie-break (confidence, then rating, then name). */
     private fun rankGroup(
         key: GroupKey,
         byUser: Map<UUID, BigDecimal>,
@@ -151,16 +151,17 @@ class StandingsCalculationService(
                     // negative, but a rank should never show below-zero points. The ledger stays truthful —
                     // the signed entries are preserved; only this counted total is clamped.
                     val counted = points.max(BigDecimal.ZERO)
-                    Triple(first = user, second = counted, third = ratingsById[userId]?.currentRating)
+                    val rating = ratingsById[userId]
+                    RankInput(user = user, points = counted, rating = rating?.currentRating, confidence = rating?.confidence)
                 }.sortedWith(comparator = entryOrder())
-                .mapIndexed { index, (user, points, rating) ->
+                .mapIndexed { index, input ->
                     RankedEntry(
                         rank = index + 1,
-                        userId = user.id,
-                        displayName = user.displayName(),
-                        publicCode = user.publicCode,
-                        points = points,
-                        currentRating = rating,
+                        userId = input.user.id,
+                        displayName = input.user.displayName(),
+                        publicCode = input.user.publicCode,
+                        points = input.points,
+                        currentRating = input.rating,
                     )
                 }
         return GroupStanding(band = key.band, sex = key.sex, entries = entries)
@@ -228,15 +229,25 @@ class StandingsCalculationService(
             "players" to groups.sumOf { it.entries.size }.toString(),
         )
 
+    /** One player's rank inputs within a group: points, plus the tie-break keys (rating, confidence). */
+    private data class RankInput(
+        val user: User,
+        val points: BigDecimal,
+        val rating: BigDecimal?,
+        val confidence: BigDecimal?,
+    )
+
     /**
-     * Ranking within a group (D8): higher points first, then higher current rating (a rated player
-     * outranks an unrated one via [nullsLast]), then name/publicCode. Rating desc = ascending on the
-     * negated value, so [nullsLast] puts an absent rating last regardless of direction.
+     * Ranking within a group: higher points first, then the tie-breakers — higher rating **confidence**
+     * (#546: the matches-played / recency proxy the Part 6 study endorses, since within-band collisions
+     * saturate with population), then higher current rating (a rated player outranks an unrated one via
+     * [nullsLast]), then name/publicCode. Each desc key uses [nullsLast] so an absent value sorts last.
      */
-    private fun entryOrder(): Comparator<Triple<User, BigDecimal, BigDecimal?>> =
-        compareByDescending<Triple<User, BigDecimal, BigDecimal?>> { it.second }
-            .thenBy(comparator = nullsLast(comparator = compareByDescending { rating: BigDecimal -> rating })) { it.third }
-            .thenBy { standingName(user = it.first) }
+    private fun entryOrder(): Comparator<RankInput> =
+        compareByDescending<RankInput> { it.points }
+            .thenBy(comparator = nullsLast(comparator = compareByDescending { confidence: BigDecimal -> confidence })) { it.confidence }
+            .thenBy(comparator = nullsLast(comparator = compareByDescending { rating: BigDecimal -> rating })) { it.rating }
+            .thenBy { standingName(user = it.user) }
 
     /** Group display order: strongest band first (enum ordinal desc), then Men → Women → Unspecified. */
     private fun groupOrder(): Comparator<GroupStanding> =
