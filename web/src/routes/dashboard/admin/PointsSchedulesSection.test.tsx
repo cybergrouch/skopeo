@@ -3,12 +3,13 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PointsSchedulesSection } from "./PointsSchedulesSection";
 
-const { useGetOpenPlay, useGetTournament, putOpenPlay, putTournament, shouldFail } = vi.hoisted(() => ({
+const { useGetOpenPlay, useGetTournament, putOpenPlay, putTournament, shouldFail, pendingSave } = vi.hoisted(() => ({
   useGetOpenPlay: vi.fn(),
   useGetTournament: vi.fn(),
   putOpenPlay: vi.fn(),
   putTournament: vi.fn(),
   shouldFail: { value: false },
+  pendingSave: { value: false },
 }));
 
 // The PUT mocks drive the real mutation callbacks: on success they record the payload and fire
@@ -17,7 +18,7 @@ vi.mock("@/api/generated/settings/settings", () => ({
   useGetApiV1SettingsPointsOpenPlay: useGetOpenPlay,
   useGetApiV1SettingsPointsTournament: useGetTournament,
   usePutApiV1SettingsPointsOpenPlay: (opts: { mutation: { onSuccess: () => void; onError: () => void } }) => ({
-    isPending: false,
+    isPending: pendingSave.value,
     mutate: (vars: unknown) => {
       if (shouldFail.value) opts.mutation.onError();
       else {
@@ -27,7 +28,7 @@ vi.mock("@/api/generated/settings/settings", () => ({
     },
   }),
   usePutApiV1SettingsPointsTournament: (opts: { mutation: { onSuccess: () => void; onError: () => void } }) => ({
-    isPending: false,
+    isPending: pendingSave.value,
     mutate: (vars: unknown) => {
       if (shouldFail.value) opts.mutation.onError();
       else {
@@ -75,6 +76,7 @@ describe("PointsSchedulesSection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     shouldFail.value = false;
+    pendingSave.value = false;
     useGetOpenPlay.mockReturnValue({ data: { config: openPlayConfig }, isLoading: false });
     useGetTournament.mockReturnValue({ data: { config: tournamentConfig }, isLoading: false });
   });
@@ -153,6 +155,14 @@ describe("PointsSchedulesSection", () => {
     renderSection();
     expect((screen.getByLabelText("Equal margin 2 winner points") as HTMLInputElement).value).toBe("0");
     expect((screen.getByLabelText("Upset margin 2 loser points") as HTMLInputElement).value).toBe("0");
+  });
+
+  it("shows 'Saving…' and disables Save while a save is in flight", () => {
+    pendingSave.value = true;
+    renderSection();
+    const saving = screen.getAllByRole("button", { name: "Saving…" });
+    expect(saving.length).toBe(2);
+    saving.forEach((b) => expect(b).toBeDisabled());
   });
 
   it("shows a loading state until config arrives", () => {

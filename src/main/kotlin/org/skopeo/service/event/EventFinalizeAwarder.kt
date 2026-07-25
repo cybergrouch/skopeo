@@ -117,19 +117,21 @@ class EventFinalizeAwarder(
         var matchCount = 0
         var awardCount = 0
         var total = BigDecimal.ZERO
+        // placementMatches are already awardable (non-null bracket, per isAwardablePlacement); carry the
+        // non-null bracket so the when's are exhaustive without an unreachable null arm.
         placementMatches
-            .sortedBy { match ->
+            .mapNotNull { match -> match.placementBracket?.let { bracket -> match to bracket } }
+            .sortedBy { (_, bracket) ->
                 // Best-place-first, so the ctx.awarded guard keeps a player's best placement.
-                when (match.placementBracket) {
+                when (bracket) {
                     PlacementBracket.CHAMPIONSHIP_FINALS -> PLACE_FIRST
                     PlacementBracket.PLATE_FINALS -> PLACE_SECOND
                     PlacementBracket.SEMI_FINALS_NO_PLATE -> PLACE_THIRD
                     PlacementBracket.SEMI_FINALS_WITH_PLATE -> PLACE_FOURTH
-                    null -> PLACE_FOURTH + 1
                 }
-            }.forEach { match ->
+            }.forEach { (match, bracket) ->
                 var rows = 0
-                placementSides(match = match, hasCompletedPlate = hasCompletedPlate).forEach { (side, placeIndex) ->
+                placementSides(match = match, bracket = bracket, hasCompletedPlate = hasCompletedPlate).forEach { (side, placeIndex) ->
                     val written =
                         awardPlacementSide(event = event, match = match, side = side, placePoints = schedule[placeIndex], ctx = ctx)
                     rows += written
@@ -152,17 +154,17 @@ class EventFinalizeAwarder(
      */
     private fun placementSides(
         match: Match,
+        bracket: PlacementBracket,
         hasCompletedPlate: Boolean,
     ): List<Pair<MatchSide, Int>> {
         val team1Won = match.winnerTeamId == match.team1.teamId
         val winnerSide = if (team1Won) match.team1 else match.team2
         val loserSide = if (team1Won) match.team2 else match.team1
-        return when (match.placementBracket) {
+        return when (bracket) {
             PlacementBracket.CHAMPIONSHIP_FINALS -> listOf(winnerSide to PLACE_FIRST, loserSide to PLACE_SECOND)
             PlacementBracket.PLATE_FINALS -> listOf(winnerSide to PLACE_THIRD, loserSide to PLACE_FOURTH)
             PlacementBracket.SEMI_FINALS_NO_PLATE -> listOf(element = loserSide to PLACE_THIRD)
             PlacementBracket.SEMI_FINALS_WITH_PLATE -> if (hasCompletedPlate) emptyList() else listOf(element = loserSide to PLACE_THIRD)
-            null -> emptyList()
         }
     }
 
