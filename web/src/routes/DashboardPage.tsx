@@ -32,6 +32,7 @@ import { InvitesTab } from "./dashboard/InvitesTab";
 import { ActivityTab } from "./dashboard/ActivityTab";
 import { ReportTab } from "./dashboard/ReportTab";
 import { ClaimTab } from "./dashboard/ClaimTab";
+import { AboutTab } from "./dashboard/AboutTab";
 
 interface Section {
   value: string;
@@ -124,6 +125,9 @@ export function DashboardPage() {
     ...(showAdmin
       ? [{ value: "admin", label: "Admin", element: <AdminTab /> }]
       : []),
+    // About (#573): general info, available to every signed-in user; last so it never displaces the
+    // working tabs. Same content as the public /about page, minus the sign-up / log-in call to action.
+    { value: "about", label: "About", element: <AboutTab /> },
   ];
 
   // `active` comes from the URL, so it may name a section the viewer can't access (a hand-edited or
