@@ -31,7 +31,7 @@ import java.math.RoundingMode
 import java.time.LocalDateTime
 import java.util.UUID
 
-// Only TOURNAMENT (host-designated points) and OPEN_PLAY (computed per-set points, #525) award on
+// Only TOURNAMENT (placement points) and OPEN_PLAY (computed per-set points, #525) award on
 // finalize; LEAGUE is intentionally excluded for now (its points model is deferred to a follow-up
 // issue), so finalizing a league event awards nothing. See the `when` in [awardForFinalizedEvent].
 

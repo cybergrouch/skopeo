@@ -1249,6 +1249,10 @@ class EventServiceTest {
         token = token(uid = hostUid),
         input =
             input(
+                // Ends today, so award validity (#559: from the event end) is active as of now — events
+                // are finalized once they have ended.
+                start = LocalDate.now().toString(),
+                end = LocalDate.now().toString(),
                 type = type,
                 participants = participants,
                 // A TOURNAMENT must belong to a circuit (#525); other types carry none.

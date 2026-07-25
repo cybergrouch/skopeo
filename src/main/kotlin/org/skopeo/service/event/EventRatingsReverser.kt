@@ -95,7 +95,7 @@ class EventRatingsReverser(
                     )
                 }
 
-                // 5. Clear the finalize flag (also implicitly restores the reserved-points budget).
+                // 5. Clear the finalize flag so the event can be corrected and re-finalized.
                 events.unfinalize(id = event.id)
 
                 ReversalSummary(

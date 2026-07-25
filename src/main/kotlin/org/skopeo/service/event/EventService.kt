@@ -278,11 +278,11 @@ class EventService(
      * ADMINISTRATOR/CLUB_OWNER any. Idempotency guard: an already-finalized event is a
      * [ServiceError.Validation] (there is no un-finalize). Audited as EVENT_FINALIZED.
      *
-     * Phase D: after finalize, each qualifying fixture's designation is converted to ledger awards
-     * ([EventFinalizeAwarder], §2.5/§3) — one full-designation row per winning-team member (decision
-     * #4). The finalize state change and all awards share one DB transaction for atomicity; a
-     * summary is audited as EVENT_POINTS_AWARDED. The idempotency guard (finalize is terminal) means
-     * awarding runs exactly once per event, so there is no double-award path.
+     * After finalize, when the event's "Award Ranking Points" flag is set (#559), each qualifying
+     * fixture pays ledger awards per the global schedules ([EventFinalizeAwarder]) — one full-amount
+     * row per winning-team member. The finalize state change and all awards share one DB transaction
+     * for atomicity; a summary is audited as EVENT_POINTS_AWARDED. The idempotency guard (finalize is
+     * terminal) means awarding runs exactly once per event, so there is no double-award path.
      */
     fun finalize(
         token: VerifiedFirebaseToken,
@@ -348,7 +348,7 @@ class EventService(
      * history, which un-finalize cannot reverse; those cases need the heavier rating-history correction
      * path (a companion issue). Reversal, in one transaction: revoke every ACTIVE award the finalize
      * produced (via [RankingPointRepository.revoke], leaving the append-only trail intact) then clear the
-     * finalize flag (which implicitly restores the reserved-points budget). Audited as EVENT_UNFINALIZED.
+     * finalize flag. Audited as EVENT_UNFINALIZED.
      */
     fun unfinalize(
         token: VerifiedFirebaseToken,

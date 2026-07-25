@@ -142,8 +142,7 @@ class EventRepository {
     /**
      * Un-finalize an event (#477): null out finalized_at/finalized_by, reversing [finalize]. The caller
      * (EventService.unfinalize) has already confirmed the event exists and is finalized, so an update
-     * against a missing id is a harmless no-op. Clearing the flag also implicitly restores the
-     * reserved-points budget, since sumReservedPoints only counts fixtures where finalized_at IS NULL.
+     * against a missing id is a harmless no-op.
      */
     fun unfinalize(id: UUID): Unit =
         transaction {
