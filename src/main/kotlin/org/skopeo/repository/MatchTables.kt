@@ -57,10 +57,6 @@ internal object MatchesTable : UUIDTable(name = "matches") {
     // Manual same-date ordering tiebreaker for the rating calculation (#331/#332); null = default.
     val calcSequence = integer(name = "calc_sequence").nullable()
 
-    // Points designated for the winner (#403 Phase C); null for OPEN_PLAY / event-less fixtures. The
-    // club reservation is emergent — summed over active non-finalized fixtures, no reservation table.
-    val designatedPoints = integer(name = "designated_points").nullable()
-
     // Per-side rating handicap (#486) in team-mean NTRP units; null = none. Deducted from the side's
     // rating for the delta calc only; range 0 < h <= 1.0 (CHECK in V21). Editable while unrated.
     val team1Handicap = decimal(name = "team1_handicap", precision = HANDICAP_PRECISION, scale = HANDICAP_SCALE).nullable()

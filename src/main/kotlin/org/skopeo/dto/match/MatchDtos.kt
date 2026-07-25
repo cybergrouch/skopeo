@@ -37,18 +37,6 @@ data class CreateFixtureRequest(
     /** When set, the fixture belongs to this event and both sides must be participants (#138). */
     val eventId: String? = null,
     /**
-     * Points designated for the winner (#403 Phase C), for a fixture on a budgeted-type event. When
-     * omitted on such an event the backend defaults to round(avg(event.min, event.max)); ignored for an
-     * OPEN_PLAY / event-less fixture.
-     */
-    val designatedPoints: Int? = null,
-    /**
-     * The "award points for this match" checkbox (#466). Default (null/true) → the fixture awards points
-     * on a points-awarding event (designation defaults as above). Explicit false → the match opts out:
-     * no designation, so it awards no points.
-     */
-    val awardPoints: Boolean? = null,
-    /**
      * Optional per-side rating handicap (#486) in team-mean NTRP units, `0 < h <= 1.0`; null = none.
      * Deducted from that side's rating for the rating-delta computation only; the delta is applied to the
      * players' true ratings. See RATING_HANDICAP.md.
@@ -104,16 +92,6 @@ data class MatchResultRequest(
 @Serializable
 data class MatchStateRequest(
     val isActive: Boolean,
-)
-
-/**
- * Body for `PUT /api/v1/matches/{id}/designation` — set (or clear) a fixture's designated points
- * (#466 opt-in "award points for this match" checkbox). A positive integer within the event's [min,
- * max] awards; null (or omitted) clears the designation so the match awards no points.
- */
-@Serializable
-data class SetDesignationRequest(
-    val designatedPoints: Int? = null,
 )
 
 /**
@@ -177,8 +155,6 @@ data class MatchResponse(
     val createdBy: String? = null,
     val recordedBy: String? = null,
     val eventId: String? = null,
-    // Points designated for the winner (#403 Phase C); null for OPEN_PLAY / event-less fixtures.
-    val designatedPoints: Int? = null,
     // Per-side rating handicap (#486) in team-mean NTRP units; null = none. Shown for transparency.
     val team1Handicap: String? = null,
     val team2Handicap: String? = null,
@@ -214,7 +190,6 @@ fun Match.toResponse(): MatchResponse =
         createdBy = createdBy?.toString(),
         recordedBy = recordedBy?.toString(),
         eventId = eventId?.toString(),
-        designatedPoints = designatedPoints,
         team1Handicap = team1Handicap?.toPlainString(),
         team2Handicap = team2Handicap?.toPlainString(),
     )
