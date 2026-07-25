@@ -166,6 +166,24 @@ class ReportServiceTest {
     }
 
     @Test
+    fun `soft-deleted accounts are excluded from the report and its counts (#550)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val live = ratedPlayer(uid = "live", currentLevel = "4.0")
+        // A soft-deleted account that jumped a band in-window must NOT appear or be counted.
+        val deleted = ratedPlayer(uid = "deleted", currentLevel = "4.0")
+        change(userId = deleted.id, at = "2026-03-10T00:00", from = "3.0", to = "4.0")
+        users.deactivate(id = deleted.id).shouldBeRight()
+
+        val result = report().shouldBeRight()
+
+        // Only the live stayer remains — the deleted jumper's bucket is gone and the counts exclude it.
+        result.totalPlayers shouldBe 1
+        result.stayedCount shouldBe 1
+        result.jumpedCount shouldBe 0
+        result.buckets.flatMap { it.users }.map { it.publicCode } shouldBe listOf(element = live.publicCode)
+    }
+
+    @Test
     fun `a player whose band cannot be determined is skipped`() {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         ratedPlayer(uid = "banded", currentLevel = "3.0")
