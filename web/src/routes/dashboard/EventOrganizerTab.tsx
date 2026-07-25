@@ -74,9 +74,11 @@ function NewEventForm() {
   // The circuit a TOURNAMENT belongs to (#525); required for tournaments, ignored otherwise.
   const [circuitId, setCircuitId] = useState("");
   const [error, setError] = useState<string | null>(null);
-  // "Award Ranking Points" checkbox (#559): default ON. When set, finalizing the event awards ranking
-  // points per the global schedules; unticking opts the whole event out of awarding.
-  const [awardRankingPoints, setAwardRankingPoints] = useState(true);
+  // "Award Ranking Points" checkbox (#559): when set, finalizing the event awards ranking points per the
+  // global schedules; unticking opts the whole event out of awarding.
+  // TEMPORARY (#567): defaulted OFF during the testing phase so new events don't award points while we
+  // validate finalize behaviour. Revert this default back to `true` once we're ready to go live.
+  const [awardRankingPoints, setAwardRankingPoints] = useState(false);
 
   // Clubs to optionally file the event under (#313). Readable by staff; empty when none exist.
   const clubsData = useGetApiV1Clubs().data;
@@ -244,8 +246,8 @@ function NewEventForm() {
               </select>
             </div>
           ) : null}
-          {/* "Award Ranking Points" checkbox (#559): default on. When set, finalizing the event awards
-              ranking points per the global schedules; unticking opts the whole event out. */}
+          {/* "Award Ranking Points" checkbox (#559): when set, finalizing the event awards ranking points
+              per the global schedules. Defaulted OFF during the testing phase (#567), revert to on later. */}
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"

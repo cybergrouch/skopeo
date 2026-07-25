@@ -322,7 +322,8 @@ describe("EventOrganizerTab", () => {
     expect(screen.getByRole("button", { name: /Ana ✕/ })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Create event" }));
-    // "Award Ranking Points" defaults on (#559), so the payload always carries it as true.
+    // "Award Ranking Points" is defaulted OFF during the testing phase (#567), so an untouched create
+    // sends it as false.
     expect(createMutate).toHaveBeenCalledWith({
       data: {
         name: "Summer Open",
@@ -330,7 +331,7 @@ describe("EventOrganizerTab", () => {
         endDate: "2026-06-02",
         type: "OPEN_PLAY",
         participantIds: ["u1"],
-        awardRankingPoints: true,
+        awardRankingPoints: false,
       },
     });
   });
@@ -352,7 +353,7 @@ describe("EventOrganizerTab", () => {
         endDate: "2026-06-02",
         type: "LEAGUE",
         participantIds: [],
-        awardRankingPoints: true,
+        awardRankingPoints: false,
       },
     });
   });
@@ -441,7 +442,7 @@ describe("EventOrganizerTab", () => {
         type: "OPEN_PLAY",
         participantIds: [],
         clubId: "c1",
-        awardRankingPoints: true,
+        awardRankingPoints: false,
       },
     });
   });
@@ -574,16 +575,17 @@ describe("EventOrganizerTab", () => {
 
   // --- "Award Ranking Points" checkbox on create (#559) ---
 
-  it("shows the Award Ranking Points checkbox, checked by default (#559)", () => {
+  it("shows the Award Ranking Points checkbox, unchecked by default during testing (#567)", () => {
     renderTab();
 
     // The single boolean flag replaces the old points-config UI; there is no min/max/validity input.
-    expect(screen.getByLabelText("Award Ranking Points")).toBeChecked();
+    // Temporarily defaulted OFF while we're in the testing phase (#567).
+    expect(screen.getByLabelText("Award Ranking Points")).not.toBeChecked();
     expect(screen.queryByLabelText("Min points")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Validity start")).not.toBeInTheDocument();
   });
 
-  it("sends awardRankingPoints:false when the checkbox is unticked (#559)", async () => {
+  it("sends awardRankingPoints:true when the checkbox is ticked (#559)", async () => {
     const user = userEvent.setup();
     renderTab();
     await user.type(screen.getByLabelText("Name"), "Casual Meetup");
@@ -591,7 +593,7 @@ describe("EventOrganizerTab", () => {
     await user.type(screen.getByLabelText("End date"), "2026-06-02");
     await user.selectOptions(screen.getByLabelText("Type"), "LEAGUE");
 
-    // The box defaults on; unticking opts the whole event out of awarding points.
+    // The box defaults off (#567); ticking it opts the event into awarding points.
     await user.click(screen.getByLabelText("Award Ranking Points"));
     await user.click(screen.getByRole("button", { name: "Create event" }));
     expect(createMutate).toHaveBeenCalledWith({
@@ -601,7 +603,7 @@ describe("EventOrganizerTab", () => {
         endDate: "2026-06-02",
         type: "LEAGUE",
         participantIds: [],
-        awardRankingPoints: false,
+        awardRankingPoints: true,
       },
     });
   });
@@ -632,7 +634,7 @@ describe("EventOrganizerTab", () => {
         type: "TOURNAMENT",
         participantIds: [],
         circuitId: "cir1",
-        awardRankingPoints: true,
+        awardRankingPoints: false,
       },
     });
   });
