@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 import { PlaceholderPlayersSection } from "./PlaceholderPlayersSection";
 
 const { useGetApiV1UsersPlaceholders, generateMutate, generatePending } = vi.hoisted(() => ({
@@ -21,11 +22,13 @@ vi.mock("@/api/generated/users/users", () => ({
 
 function renderSection(capabilities: string[] = ["ADMINISTRATOR"]) {
   return render(
-    <QueryClientProvider client={new QueryClient()}>
-      <PlaceholderPlayersSection
-        capabilities={capabilities as never}
-      />
-    </QueryClientProvider>,
+    <MemoryRouter>
+      <QueryClientProvider client={new QueryClient()}>
+        <PlaceholderPlayersSection
+          capabilities={capabilities as never}
+        />
+      </QueryClientProvider>
+    </MemoryRouter>,
   );
 }
 
@@ -58,6 +61,14 @@ describe("PlaceholderPlayersSection", () => {
     renderSection();
     expect(screen.getByText("Alex P.")).toBeInTheDocument();
     expect(screen.getByText(/PLH001 · Female · 30/)).toBeInTheDocument();
+  });
+
+  it("links a placeholder's name to its public profile page (#548)", () => {
+    renderSection();
+    // The name is a themed content-link pointing at the public profile route.
+    const link = screen.getByRole("link", { name: "Alex P." });
+    expect(link).toHaveAttribute("href", "/players/PLH001");
+    expect(link).toHaveClass("content-link");
   });
 
   it("omits the meta suffix when a placeholder has no sex or age", () => {
@@ -172,9 +183,11 @@ describe("PlaceholderPlayersSection", () => {
       .mockResolvedValue(undefined);
     const user = userEvent.setup();
     render(
-      <QueryClientProvider client={queryClient}>
-        <PlaceholderPlayersSection capabilities={["ADMINISTRATOR"] as never} />
-      </QueryClientProvider>,
+      <MemoryRouter>
+        <QueryClientProvider client={queryClient}>
+          <PlaceholderPlayersSection capabilities={["ADMINISTRATOR"] as never} />
+        </QueryClientProvider>
+      </MemoryRouter>,
     );
 
     await user.click(screen.getByRole("button", { name: "Refresh" }));

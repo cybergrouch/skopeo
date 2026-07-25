@@ -20,6 +20,7 @@ import type {
 import { isAdministrator, type Capability } from "@/auth/capabilities";
 import { playerLabel } from "@/lib/playerLabel";
 import { PlaceholderTag } from "@/components/PlaceholderTag";
+import { ContentLink } from "@/components/ContentLink";
 
 /** "Female · 34" — a placeholder's sex and age, omitting whatever is missing. */
 function placeholderMeta(user: UserSummaryResponse): string {
@@ -114,7 +115,9 @@ function PlaceholderRow({
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           <div className="truncate font-medium">
-            {playerLabel(user.displayName, user.publicCode, user.id)}
+            <ContentLink to={`/players/${user.publicCode}`}>
+              {playerLabel(user.displayName, user.publicCode, user.id)}
+            </ContentLink>
             <PlaceholderTag show={user.isPlaceholder} deleted={user.isDeleted} />
           </div>
           <div className="text-xs text-muted-foreground">
