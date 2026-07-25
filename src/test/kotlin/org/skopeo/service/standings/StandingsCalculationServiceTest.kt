@@ -17,6 +17,9 @@ import org.junit.jupiter.api.Test
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.AwardStatus
 import org.skopeo.model.Capability
+import org.skopeo.model.CreateFixtureCommand
+import org.skopeo.model.MatchSetResult
+import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
 import org.skopeo.model.PointClass
 import org.skopeo.model.PointSourceType
@@ -24,8 +27,10 @@ import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.RankingPointAwardWrite
 import org.skopeo.model.ServiceError
 import org.skopeo.model.StandingsBand
+import org.skopeo.model.TeamType
 import org.skopeo.model.User
 import org.skopeo.repository.AppSettingsRepository
+import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RankingPointRepository
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.StandingsSnapshotRepository
@@ -33,6 +38,7 @@ import org.skopeo.repository.UserRepository
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.math.BigDecimal
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -47,6 +53,7 @@ class StandingsCalculationServiceTest {
 
     private val users = UserRepository()
     private val ratings = RatingRepository()
+    private val matches = MatchRepository()
     private val awards = RankingPointRepository()
     private val snapshots = StandingsSnapshotRepository()
     private val service =
@@ -127,6 +134,56 @@ class StandingsCalculationServiceTest {
                     awardedAt = LocalDateTime.now(),
                 ),
         )
+    }
+
+    /** Record a COMPLETED in-window match so the player accrues rating confidence (#459). */
+    private fun completedMatch(
+        u1: UUID,
+        u2: UUID,
+        matchDate: LocalDate,
+    ) {
+        val match =
+            matches.createFixture(
+                command =
+                    CreateFixtureCommand(
+                        matchFormat = TeamType.SINGLES,
+                        matchType = MatchType.OPEN_PLAY,
+                        matchDate = matchDate,
+                        team1UserIds = listOf(element = u1),
+                        team2UserIds = listOf(element = u2),
+                        team1Name = "T1",
+                        team2Name = "T2",
+                        createdBy = u1,
+                    ),
+            )
+        matches.addResult(
+            matchId = match.id,
+            sets = listOf(element = MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 0, winnerTeamId = match.team1.teamId)),
+            winnerTeamId = match.team1.teamId,
+            recordedBy = u1,
+            completedAt = LocalDateTime.now(),
+        )
+    }
+
+    @Test
+    fun `ties on points break by rating confidence, higher confidence first (#546)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val established = provision(uid = "established")
+        val provisional = provision(uid = "provisional")
+        val opponent = provision(uid = "opponent")
+
+        // Equal points, same band (4.0) and sex — so the tie-break alone decides the order.
+        grant(userId = established.id, points = "100")
+        grant(userId = provisional.id, points = "100")
+
+        // 'established' plays two recent in-window matches → confidence ≈ 0.595; 'provisional' none → 0.
+        val today = LocalDate.now()
+        repeat(times = 2) { completedMatch(u1 = established.id, u2 = opponent.id, matchDate = today) }
+
+        val group = service.calculate(token = token(uid = "admin"), dryRun = true).shouldBeRight().groups.single()
+        // Same points, so confidence breaks the tie: the established player ranks first.
+        group.entries.map { it.userId } shouldContainExactly listOf(established.id, provisional.id)
+        group.entries.first().rank shouldBe 1
     }
 
     @Test
