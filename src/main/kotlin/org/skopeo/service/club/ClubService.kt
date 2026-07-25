@@ -24,7 +24,6 @@ import org.skopeo.model.displayName
 import org.skopeo.repository.ClubRepository
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
-import org.skopeo.repository.PointsBudgetRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService
 import org.skopeo.service.user.VerifiedFirebaseToken
@@ -50,7 +49,6 @@ class ClubService(
     private val users: UserRepository = UserRepository(),
     private val events: EventRepository = EventRepository(),
     private val matches: MatchRepository = MatchRepository(),
-    private val budgets: PointsBudgetRepository = PointsBudgetRepository(),
     private val audit: AuditService = AuditService(),
 ) {
     fun create(
@@ -227,10 +225,6 @@ class ClubService(
                             startDate = event.startDate,
                             endDate = event.endDate,
                             eventType = event.type,
-                            // Per-event points are public (#403 Phase E): the planned (designated) and awarded totals;
-                            // the UI shows awarded for a finalized event, else designated. Utilization stays gated.
-                            designatedPoints = budgets.sumDesignatedPointsForEvent(eventId = event.id),
-                            awardedPoints = budgets.sumAwardedPointsForEvent(eventId = event.id),
                         )
                     }.partition { !it.endDate.isBefore(today) }
             ClubPublicView(

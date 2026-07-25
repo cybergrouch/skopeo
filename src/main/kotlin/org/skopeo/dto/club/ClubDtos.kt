@@ -65,10 +65,7 @@ fun ClubView.toResponse(): ClubResponse =
     )
 
 /**
- * One of a club's events on its public page (#327): the shareable code, name, and date range, plus
- * the public per-event points (#403 Phase E) — [eventType] and both [designatedPoints] (planned) and
- * [awardedPoints] (finalized). The UI shows awarded once the event is finalized, else designated.
- * Club utilization is deliberately NOT here — it is served only by the gated points-summary.
+ * One of a club's events on its public page (#327): the shareable code, name, date range, and type.
  */
 @Serializable
 data class ClubPublicEventDto(
@@ -77,8 +74,6 @@ data class ClubPublicEventDto(
     val startDate: String,
     val endDate: String,
     val eventType: String,
-    val designatedPoints: Int,
-    val awardedPoints: Int,
 )
 
 /**
@@ -102,8 +97,6 @@ private fun ClubPublicEvent.toDto(): ClubPublicEventDto =
         startDate = startDate.toString(),
         endDate = endDate.toString(),
         eventType = eventType.name,
-        designatedPoints = designatedPoints,
-        awardedPoints = awardedPoints,
     )
 
 fun ClubPublicView.toResponse(): ClubPublicResponse =
