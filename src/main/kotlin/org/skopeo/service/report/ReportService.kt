@@ -74,7 +74,7 @@ class ReportService(
             // Population: every player with a current band on record. A player with none can't be placed
             // on the band scale and is skipped (the only reachable skip). A rated player's rating at each
             // boundary always resolves (their current rating is the ultimate fallback), so no null hops.
-            val hops =
+            val allHops =
                 ratings.allCurrentRatings().mapNotNull { rating ->
                     hopFor(
                         rating = rating,
@@ -84,7 +84,10 @@ class ReportService(
                     )
                 }
 
-            val namesById = users.findAllByIds(ids = hops.map { it.userId }).associateBy { it.id }
+            val namesById = users.findAllByIds(ids = allHops.map { it.userId }).associateBy { it.id }
+            // Exclude soft-deleted accounts (#550) before bucketing/counting, so a deleted account never
+            // appears in the report and the totals/percentages reflect only live accounts.
+            val hops = allHops.filter { namesById[it.userId]?.isDeleted() == false }
             val buckets =
                 hops
                     .groupBy { it.distance }
