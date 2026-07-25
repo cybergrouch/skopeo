@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { MatchHistoryCard } from './MatchHistoryCard'
 import type { PlayerMatchHistoryEntry } from '@/api/generated/model'
@@ -62,6 +63,21 @@ describe('MatchHistoryCard', () => {
     expect(screen.getByText('Ben')).toBeInTheDocument()
     expect(screen.getByText('Cara')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'View all 12 matches' })).toHaveAttribute('href', '/players/K7Q2MX/matches')
+  })
+
+  it('re-queries the preview filtered by opponent NTRP band (#563)', async () => {
+    const user = userEvent.setup()
+    useGetApiV1PlayersCodeMatchHistory.mockReturnValue({
+      data: { items: [match('a', 'Ben')], total: 1 },
+      isLoading: false,
+    })
+    renderCard()
+    await user.selectOptions(screen.getByLabelText('Filter by opponent NTRP band'), '3.5')
+    expect(useGetApiV1PlayersCodeMatchHistory).toHaveBeenLastCalledWith(
+      'K7Q2MX',
+      { limit: 5, opponentBand: '3.5' },
+      { query: { enabled: true } },
+    )
   })
 
   it('omits the "View all" link when the preview already shows everything', () => {

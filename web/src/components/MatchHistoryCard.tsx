@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { ContentLink } from '@/components/ContentLink'
 import { useGetApiV1PlayersCodeMatchHistory } from '@/api/generated/users/users'
 import {
@@ -8,6 +9,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { MatchHistoryRow } from '@/components/MatchHistoryRow'
+import { NTRP_LEVELS } from '@/lib/ntrp'
 
 /** Recent matches shown inline on the profile; the full, searchable history lives on its own page (#284). */
 const PREVIEW_COUNT = 5
@@ -23,9 +25,10 @@ interface MatchHistoryCardProps {
  * paginated + searchable history page (#284). Ratings appear only as the published NTRP band.
  */
 export function MatchHistoryCard({ code }: MatchHistoryCardProps) {
+  const [opponentBand, setOpponentBand] = useState('')
   const query = useGetApiV1PlayersCodeMatchHistory(
     code,
-    { limit: PREVIEW_COUNT },
+    { limit: PREVIEW_COUNT, opponentBand: opponentBand || undefined },
     { query: { enabled: Boolean(code) } },
   )
   const items = query.data?.items ?? []
@@ -41,6 +44,19 @@ export function MatchHistoryCard({ code }: MatchHistoryCardProps) {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
+        <select
+          aria-label="Filter by opponent NTRP band"
+          className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+          value={opponentBand}
+          onChange={(e) => setOpponentBand(e.target.value)}
+        >
+          <option value="">All opponent bands</option>
+          {NTRP_LEVELS.map((level) => (
+            <option key={level} value={level}>
+              NTRP {level}
+            </option>
+          ))}
+        </select>
         {query.isLoading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : items.length > 0 ? (
@@ -60,7 +76,9 @@ export function MatchHistoryCard({ code }: MatchHistoryCardProps) {
             ) : null}
           </>
         ) : (
-          <p className="text-sm text-muted-foreground">No matches yet.</p>
+          <p className="text-sm text-muted-foreground">
+            {opponentBand ? 'No matches vs that band.' : 'No matches yet.'}
+          </p>
         )}
       </CardContent>
     </Card>

@@ -464,6 +464,49 @@ class PlayerServiceTest {
     }
 
     @Test
+    fun `match history filters by the opponent's at-the-time NTRP band (#563)`() {
+        val ana = newUser(uid = "a", names = display(name = "Ana"))
+        val ben = newUser(uid = "b", names = display(name = "Ben"))
+        val cara = newUser(uid = "c", names = display(name = "Cara"))
+
+        // A rated Ana win vs [opponent], parking the opponent's at-the-time band at [oppLevel].
+        fun ratedVs(
+            opponent: UUID,
+            date: LocalDate,
+            oppLevel: String,
+        ) {
+            val m = fixture(u1 = ana.id, u2 = opponent, date = date)
+            matches.addResult(
+                matchId = m.id,
+                sets = listOf(element = MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 4, winnerTeamId = m.team1.teamId)),
+                winnerTeamId = m.team1.teamId,
+                recordedBy = ana.id,
+                completedAt = LocalDateTime.now(),
+            )
+            matches.markRated(matchId = m.id, ratedAt = LocalDateTime.now(), ratedBy = ana.id)
+            history(userId = ana.id, matchId = m.id, previousLevel = "4.0")
+            history(userId = opponent, matchId = m.id, previousLevel = oppLevel)
+        }
+
+        ratedVs(opponent = ben.id, date = LocalDate.of(2026, 1, 1), oppLevel = "3.5")
+        ratedVs(opponent = cara.id, date = LocalDate.of(2026, 2, 1), oppLevel = "4.0")
+
+        // Band 3.5 → only the Ben match; band 4.0 → only Cara; blank → no filter (both).
+        val band35 = service.matchHistory(code = ana.publicCode, opponentBand = "3.5").shouldBeRight()
+        band35.total shouldBe 1
+        band35.items.single().opponents.single().displayName shouldBe "Ben"
+        service
+            .matchHistory(code = ana.publicCode, opponentBand = "4.0")
+            .shouldBeRight()
+            .items
+            .single()
+            .opponents
+            .single()
+            .displayName shouldBe "Cara"
+        service.matchHistory(code = ana.publicCode, opponentBand = "").shouldBeRight().total shouldBe 2
+    }
+
+    @Test
     fun `match history search matches on a public code even when the opponent has no display name`() {
         val ana = newUser(uid = "a", names = display(name = "Ana"))
         // An opponent with only a FIRST name has a null display name (the DISPLAY-only filter yields none).
