@@ -8,6 +8,7 @@ import io.kotest.matchers.maps.shouldContainKey
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
@@ -114,24 +115,27 @@ class OpenAPIIntegrationTest {
             body shouldContain "/api/v1/events/{id}/finalize"
             // Un-finalize (#477): the reverse-finalize path is documented.
             body shouldContain "/api/v1/events/{id}/unfinalize"
-            // Per-club points budget (#403 Phase B): the budget paths and schema (the global policy
-            // layer was removed in #525).
-            body shouldContain "/api/v1/points/budgets"
-            body shouldContain "/api/v1/clubs/{clubId}/point-budgets/{eventType}"
-            body shouldContain "ClubBudgetResponse"
-            // Fixture designation + event points config (#403 Phase C): the config path, its request
-            // schema, and the designatedPoints fixture field are all documented.
-            body shouldContain "/api/v1/events/{id}/points-config"
-            body shouldContain "SetPointsConfigRequest"
-            body shouldContain "designatedPoints"
-            // Opt-in "award points" checkbox (#466): the per-fixture designation set/clear path + schema.
-            body shouldContain "/api/v1/matches/{id}/designation"
-            body shouldContain "SetDesignationRequest"
-            // Club-owner + public per-event points visibility (#403 Phase E): the gated summary path
-            // and its schema, plus the public per-event points schema.
-            body shouldContain "/api/v1/clubs/{clubId}/points-summary"
-            body shouldContain "ClubPointsSummaryResponse"
-            body shouldContain "ClubEventPointsResponse"
+            // Single "Award Ranking Points" flag (#559): the per-event points budget + designation
+            // subsystem was removed; awarding is controlled solely by this event-level flag.
+            body shouldContain "awardRankingPoints"
+        }
+
+    /** The removed points budget + designation subsystem (#559/#561) leaves no trace in the spec. */
+    @Test
+    fun testOpenAPISpecDropsRemovedPointsBudgetSubsystem() =
+        testApplication {
+            application {
+                module(initDatabase = false)
+            }
+            val body = client.get(urlString = "/openapi.yaml").bodyAsText()
+            body shouldNotContain "/api/v1/events/{id}/points-config"
+            body shouldNotContain "SetPointsConfigRequest"
+            body shouldNotContain "/api/v1/matches/{id}/designation"
+            body shouldNotContain "SetDesignationRequest"
+            body shouldNotContain "designatedPoints"
+            body shouldNotContain "/api/v1/points/budgets"
+            body shouldNotContain "ClubBudgetResponse"
+            body shouldNotContain "/api/v1/clubs/{clubId}/points-summary"
         }
 
     /** Admin-configurable global points schedules (#552/#553): the open-play + tournament config contract. */

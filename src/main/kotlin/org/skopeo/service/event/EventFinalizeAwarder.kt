@@ -74,9 +74,11 @@ class EventFinalizeAwarder(
         grantedBy: UUID,
         now: LocalDateTime,
     ): AwardSummary =
-        when (event.type) {
-            EventType.OPEN_PLAY -> awardComputedOpenPlay(event = event, grantedBy = grantedBy, now = now)
-            EventType.TOURNAMENT -> awardPlacement(event = event, grantedBy = grantedBy, now = now)
+        when {
+            // "Award Ranking Points" unchecked (#559): finalizing awards nothing, whatever the type.
+            !event.awardRankingPoints -> AwardSummary(matchCount = 0, awardCount = 0, totalPoints = BigDecimal.ZERO)
+            event.type == EventType.OPEN_PLAY -> awardComputedOpenPlay(event = event, grantedBy = grantedBy, now = now)
+            event.type == EventType.TOURNAMENT -> awardPlacement(event = event, grantedBy = grantedBy, now = now)
             // LEAGUE and any future type: no awarding yet (#525).
             else -> AwardSummary(matchCount = 0, awardCount = 0, totalPoints = BigDecimal.ZERO)
         }
@@ -96,8 +98,9 @@ class EventFinalizeAwarder(
         val tournament = pointsConfig.getTournament().value
         val sanctioned = event.clubId?.let { clubs.findById(id = it)?.tournamentsSanctioned } ?: false
         val schedule = tournament.schedule(sanctioned = sanctioned)
-        val start = event.pointValidityStart ?: event.endDate
-        val end = event.pointValidityEnd ?: event.endDate.plusDays(tournament.validityDays.toLong())
+        // Validity runs from the event end for the configured tournament window (#559: no per-event override).
+        val start = event.endDate
+        val end = event.endDate.plusDays(tournament.validityDays.toLong())
         val placementMatches = matches.listByEvent(eventId = event.id).filter { isAwardablePlacement(match = it) }
         val hasCompletedPlate = placementMatches.any { it.placementBracket == PlacementBracket.PLATE_FINALS }
         val userIds = placementMatches.flatMap { it.team1.userIds + it.team2.userIds }.distinct()
@@ -229,8 +232,9 @@ class EventFinalizeAwarder(
         now: LocalDateTime,
     ): AwardSummary {
         val config: OpenPlayPointsConfig = pointsConfig.getOpenPlay().value
-        val validFrom = (event.pointValidityStart ?: event.endDate).atStartOfDay()
-        val validUntil = (event.pointValidityEnd ?: event.endDate.plusDays(config.validityDays.toLong())).plusDays(1).atStartOfDay()
+        // Validity runs from the event end for the configured open-play window (#559: no per-event override).
+        val validFrom = event.endDate.atStartOfDay()
+        val validUntil = event.endDate.plusDays(config.validityDays.toLong()).plusDays(1).atStartOfDay()
         val completed =
             matches.listByEvent(eventId = event.id).filter { it.status == MatchStatus.COMPLETED && it.winnerTeamId != null }
         val userIds = completed.flatMap { it.team1.userIds + it.team2.userIds }.distinct()

@@ -23,26 +23,9 @@ data class CreateEventRequest(
     val circuitId: String? = null,
     // The event's class (#403): OPEN_PLAY | LEAGUE | TOURNAMENT; omit for the OPEN_PLAY default.
     val type: String? = null,
-    // Points config (#403 Phase C): required for a club event of any type (OPEN_PLAY unified), optional
-    // when clubless. The validity dates are ISO-8601 (yyyy-MM-dd).
-    val minPointsPerMatch: Int? = null,
-    val maxPointsPerMatch: Int? = null,
-    val pointValidityStart: String? = null,
-    val pointValidityEnd: String? = null,
-)
-
-/**
- * Body for `PUT /api/v1/events/{id}/points-config` — set (or clear) an event's per-match reward
- * window and point validity window (#466 opt-in "award points" checkbox). All four fields present →
- * the event awards points; all four omitted/null → the config is cleared (the event awards no points,
- * cascading to its fixtures). A partial body is rejected. Validity dates are ISO-8601 (yyyy-MM-dd).
- */
-@Serializable
-data class SetPointsConfigRequest(
-    val minPointsPerMatch: Int? = null,
-    val maxPointsPerMatch: Int? = null,
-    val pointValidityStart: String? = null,
-    val pointValidityEnd: String? = null,
+    // Whether finalizing this event awards ranking points per the global schedules (#559). Omit for the
+    // default (true — "Award Ranking Points" is on unless the organizer unchecks it).
+    val awardRankingPoints: Boolean? = null,
 )
 
 /**
@@ -149,11 +132,8 @@ data class EventResponse(
     // Number of recorded results (COMPLETED with a decided winner) in this event (#483); the client's
     // "has results" signal for the Unfinalized bucket. Zero when no result has been recorded yet.
     val completedMatchCount: Int = 0,
-    // Points config (#403 Phase C): the per-match reward window and validity dates; null for OPEN_PLAY.
-    val minPointsPerMatch: Int? = null,
-    val maxPointsPerMatch: Int? = null,
-    val pointValidityStart: String? = null,
-    val pointValidityEnd: String? = null,
+    // Whether finalizing this event awards ranking points per the global schedules (#559). Default true.
+    val awardRankingPoints: Boolean = true,
 )
 
 fun MyEvent.toResponse(completedMatchCount: Int = 0): MyEventResponse =
@@ -186,10 +166,7 @@ fun EventView.toResponse(completedMatchCount: Int = 0): EventResponse =
         finalizedAt = event.finalizedAt?.toString(),
         isFinalized = event.isFinalized,
         completedMatchCount = completedMatchCount,
-        minPointsPerMatch = event.minPointsPerMatch,
-        maxPointsPerMatch = event.maxPointsPerMatch,
-        pointValidityStart = event.pointValidityStart?.toString(),
-        pointValidityEnd = event.pointValidityEnd?.toString(),
+        awardRankingPoints = event.awardRankingPoints,
     )
 
 internal fun EventParticipantRef.toResponse(): EventParticipantResponse =
