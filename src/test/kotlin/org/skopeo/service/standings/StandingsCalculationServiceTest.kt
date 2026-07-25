@@ -240,6 +240,29 @@ class StandingsCalculationServiceTest {
     }
 
     @Test
+    fun `sub-3_0 and 6_0-plus bands bucket into their race instead of 500ing (#555)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val twoPointZero = provision(uid = "two")
+        val twoPointFive = provision(uid = "twohalf")
+        val sixPointZero = provision(uid = "six")
+        val sixPointFive = provision(uid = "sixhalf")
+        // Raw NTRP levels in the tails — none of these equals a StandingsBand code ("<3.0"/"6.0+"),
+        // so the old requireCode threw "unknown standings band code: 2.0" (and the same for 6.0/6.5).
+        grant(userId = twoPointZero.id, points = "30", band = "2.0")
+        grant(userId = twoPointFive.id, points = "50", band = "2.5")
+        grant(userId = sixPointZero.id, points = "40", band = "6.0")
+        grant(userId = sixPointFive.id, points = "70", band = "6.5")
+
+        val outcome = service.calculate(token = token(uid = "admin"), dryRun = true).shouldBeRight()
+
+        // Sub-3.0 levels share the "<3.0" race; 6.0 and 6.5 share the "6.0+" race (ranked by points desc).
+        val under = outcome.groups.single { it.band == StandingsBand.UNDER_3_0 }
+        under.entries.map { it.userId } shouldContainExactly listOf(twoPointFive.id, twoPointZero.id)
+        val sixPlus = outcome.groups.single { it.band == StandingsBand.SIX_PLUS }
+        sixPlus.entries.map { it.userId } shouldContainExactly listOf(sixPointFive.id, sixPointZero.id)
+    }
+
+    @Test
     fun `two groups in the same band are ordered Men before Women`() {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val man = provision(uid = "man", sex = "Male")
