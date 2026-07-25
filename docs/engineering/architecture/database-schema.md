@@ -196,7 +196,7 @@ erDiagram
         uuid team2_id FK "not null"
         uuid winner_team_id FK "null for a scheduled fixture"
         string match_format "SINGLES, DOUBLES, MIXED_DOUBLES"
-        string match_type "OPEN_PLAY, LEAGUE_PLAY, TOURNAMENT_INITIAL_ROUND, LEAGUE_PLAYOFFS, TOURNAMENT_PLAYOFFS"
+        string match_type "OPEN_PLAY, LEAGUE_PLAY, LEAGUE_PLAYOFFS, TOURNAMENT"
         date match_date "not null"
         string venue
         string tournament_name
@@ -409,7 +409,7 @@ A user is granted one or more broad **capabilities**: `PLAYER`, `HOST`, `CLUB_OW
 
 - **`teams`** — match participants (SINGLES = 1 user, DOUBLES/MIXED = 2); `is_temporary` distinguishes ad-hoc from established partnerships.
 - **`team_users`** — team membership junction; `position` (1/2) for doubles order; `left_at` tracks roster history.
-- **`matches`** — append-only fixtures & results between two teams; `winner_team_id` is null for a scheduled fixture (`team1 ≠ team2`). Two independent dimensions: `match_format` (`SINGLES`/`DOUBLES`/`MIXED_DOUBLES`) and `match_type` — the competitive context (`OPEN_PLAY`, `LEAGUE_PLAY`, `TOURNAMENT_INITIAL_ROUND`, `LEAGUE_PLAYOFFS`, `TOURNAMENT_PLAYOFFS`) that scales the calculated rating change per type (#108). The old best-of-N format was removed (V3). `public_code` is unique (`uq_matches_public_code`, #136). `event_id` (FK→`events`, nullable, #138) optionally ties the match to an event. `completed_at` (results uploaded) is the calculation-ordering key; `rated_at` null means pending calculation. Partial indexes `idx_matches_pending_calc` (completed, unrated) and `idx_matches_awaiting_results` (scheduled past `match_date`) drive oversight queries.
+- **`matches`** — append-only fixtures & results between two teams; `winner_team_id` is null for a scheduled fixture (`team1 ≠ team2`). Two independent dimensions: `match_format` (`SINGLES`/`DOUBLES`/`MIXED_DOUBLES`) and `match_type` — the competitive context (`OPEN_PLAY`, `LEAGUE_PLAY`, `LEAGUE_PLAYOFFS`, `TOURNAMENT`) that scales the calculated rating change per type (#108). The old best-of-N format was removed (V3). `public_code` is unique (`uq_matches_public_code`, #136). `event_id` (FK→`events`, nullable, #138) optionally ties the match to an event. `completed_at` (results uploaded) is the calculation-ordering key; `rated_at` null means pending calculation. Partial indexes `idx_matches_pending_calc` (completed, unrated) and `idx_matches_awaiting_results` (scheduled past `match_date`) drive oversight queries.
 - **`match_sets`** / **`match_set_tiebreaks`** — set-by-set scoring and optional tiebreak detail.
 
 ### Events

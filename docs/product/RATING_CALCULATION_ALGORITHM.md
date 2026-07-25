@@ -166,18 +166,17 @@ where `baseScale` is the surprise factor from [§2.3](#23-scale--how-surprising)
 |---|---|---|
 | `OPEN_PLAY` | 0.5 | Casual; least indicative of true skill |
 | `LEAGUE_PLAY` | 0.8 | Season-long, lower stakes per match |
-| `TOURNAMENT_INITIAL_ROUND` | 1.0 | Tournament pressure; the neutral baseline |
 | `LEAGUE_PLAYOFFS` | 1.1 | Playoff stakes within a league |
-| `TOURNAMENT_PLAYOFFS` | 1.2 | Highest pressure; most indicative |
+| `TOURNAMENT` | 1.2 | Highest pressure; most indicative (#560: initial-round + playoffs collapsed) |
 
 Worked example — two identical 6-4 wins between equal 4.0 players (`baseScale = 1.0`, `dominance = 0.2`):
 
 ```
-open play:           change = 0.16 × 0.2 × (1.0 × 0.5) × (+1) = +0.016
-tournament playoffs: change = 0.16 × 0.2 × (1.0 × 1.2) × (+1) = +0.0384
+open play:  change = 0.16 × 0.2 × (1.0 × 0.5) × (+1) = +0.016
+tournament: change = 0.16 × 0.2 × (1.0 × 1.2) × (+1) = +0.0384
 ```
 
-The playoff result moves the rating 2.4× as much (`1.2 / 0.5`), purely from the context — the games on court were identical.
+The tournament result moves the rating 2.4× as much (`1.2 / 0.5`), purely from the context — the games on court were identical.
 
 Two implementation notes:
 
