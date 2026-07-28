@@ -3,6 +3,7 @@
 
 package org.skopeo.routes
 
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -137,12 +138,17 @@ class PlayerListApiIntegrationTest {
                 it.position shouldBe 1
                 it.userId shouldBe player.id
                 it.ntrpBand shouldBe "4.0"
+                // Raw rating is ADMINISTRATOR-only (#583): a non-admin HOST gets the band + seed, not the value.
+                it.rating.shouldBeNull()
             }
 
-            // And it reads back.
+            // And it reads back (still band-only for the non-admin host, #583).
             client.get(urlString = "/api/v1/player-lists/${list.id}/seeding") {
                 header(key = HttpHeaders.Authorization, value = "Bearer $host")
-            }.body<SeedingResponse>().entries.single().userId shouldBe player.id
+            }.body<SeedingResponse>().entries.single().let {
+                it.userId shouldBe player.id
+                it.rating.shouldBeNull()
+            }
         }
 
     @Test

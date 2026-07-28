@@ -6968,7 +6968,6 @@ components:
       required:
         - position
         - publicCode
-        - rating
       properties:
         seed:
           type: integer
@@ -6988,6 +6987,8 @@ components:
           nullable: true
         rating:
           type: string
+          nullable: true
+          description: The exact rating — populated for an ADMINISTRATOR viewer only (#583); null otherwise.
         sex:
           type: string
           nullable: true

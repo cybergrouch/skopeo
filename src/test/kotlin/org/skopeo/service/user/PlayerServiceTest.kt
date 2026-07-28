@@ -44,6 +44,7 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
 
+@Suppress("LargeClass") // broad coverage of the public/standing/points/rating-visibility surfaces (#583); size is inherent
 class PlayerServiceTest {
     companion object {
         @BeforeAll

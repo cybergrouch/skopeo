@@ -150,8 +150,10 @@ export function RatingHistoryCard({
                 const prevBand = entry.previousLevel ?? "—";
                 const newBand = entry.newLevel ?? "—";
                 const isOpen = expanded.has(entry.id);
+                // Local const so the null-narrowing sticks through the nested JSX below.
+                const matchId = entry.matchId;
                 // Only admins get the raw value + the clickable calculation breakdown (#583).
-                const canExpand = entry.matchId != null && entry.previousRating != null;
+                const canExpand = matchId != null && entry.previousRating != null;
                 const content = (
                   <>
                     <div className="flex items-center justify-between gap-2">
@@ -197,9 +199,9 @@ export function RatingHistoryCard({
                     ) : (
                       <div className="p-3">{content}</div>
                     )}
-                    {canExpand && isOpen && entry.matchId != null ? (
+                    {canExpand && isOpen && matchId != null ? (
                       <div className="border-t px-3 py-2">
-                        <MatchCalculationDetail matchId={entry.matchId} />
+                        <MatchCalculationDetail matchId={matchId} />
                       </div>
                     ) : null}
                   </li>

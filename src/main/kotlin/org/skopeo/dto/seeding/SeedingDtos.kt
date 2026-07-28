@@ -40,8 +40,10 @@ data class PlayerListResponse(
 )
 
 /**
- * One seeding row (#111). [rating] is the exact rating — this is a staff-only tool
- * (HOST/CLUB_OWNER/ADMINISTRATOR), so the actual value is intentionally surfaced here.
+ * One seeding row (#111). Seeding orders by the exact rating, but the raw [rating] value is surfaced
+ * only to an ADMINISTRATOR (#583) — non-admin staff (HOST/CLUB_OWNER) get the [ntrpBand] and the seed
+ * order, with [rating] null. The seed ordering itself is unaffected (computed server-side from the
+ * exact rating regardless).
  */
 @Serializable
 data class SeedingEntryResponse(
@@ -51,7 +53,7 @@ data class SeedingEntryResponse(
     val displayName: String? = null,
     val publicCode: String,
     val ntrpBand: String? = null,
-    val rating: String,
+    val rating: String? = null,
     val sex: String? = null,
     val age: Int? = null,
     // True for a login-less, not-yet-claimed placeholder ("dummy") player (#496/#505): the seeding view
@@ -76,13 +78,13 @@ fun PlayerList.toSummaryResponse(): PlayerListSummaryResponse =
         memberCount = memberUserIds.size,
     )
 
-fun Seeding.toResponse(): SeedingResponse =
+fun Seeding.toResponse(showRawRating: Boolean = false): SeedingResponse =
     SeedingResponse(
         generatedAt = generatedAt.toString(),
-        entries = entries.map { it.toResponse() },
+        entries = entries.map { it.toResponse(showRawRating = showRawRating) },
     )
 
-fun SeedingEntry.toResponse(): SeedingEntryResponse =
+fun SeedingEntry.toResponse(showRawRating: Boolean = false): SeedingEntryResponse =
     SeedingEntryResponse(
         seed = seed,
         position = position,
@@ -90,7 +92,8 @@ fun SeedingEntry.toResponse(): SeedingEntryResponse =
         displayName = displayName,
         publicCode = publicCode,
         ntrpBand = ntrpBand,
-        rating = rating,
+        // Raw rating value is ADMINISTRATOR-only (#583); non-admin staff see the band + seed order only.
+        rating = if (showRawRating) rating else null,
         sex = sex,
         age = age,
         isPlaceholder = placeholder,

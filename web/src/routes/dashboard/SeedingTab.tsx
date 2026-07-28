@@ -66,7 +66,7 @@ function seedingCsv(entries: SeedingEntryResponse[]): string {
     entry.displayName ?? entry.publicCode,
     entry.publicCode,
     entry.ntrpBand ?? '',
-    entry.rating,
+    entry.rating ?? '',
     entry.sex ?? '',
     entry.age != null ? String(entry.age) : '',
   ])
