@@ -32,10 +32,10 @@ describe("AboutPage", () => {
   it("has the NTRP and Rating-vs-Ranking sections", () => {
     renderAbout();
     expect(screen.getByText("NTRP")).toBeInTheDocument();
-    expect(screen.getByText(/National Tennis Rating Program/)).toBeInTheDocument();
+    expect(screen.getByText(/Why NTRP, and not something else/)).toBeInTheDocument();
     expect(screen.getByText("Rating vs Ranking")).toBeInTheDocument();
-    expect(screen.getByText(/how good you are/i)).toBeInTheDocument();
-    expect(screen.getByText(/how you.re doing in the race/i)).toBeInTheDocument();
+    expect(screen.getByText(/your game.s level/i)).toBeInTheDocument();
+    expect(screen.getByText(/the game within the game/i)).toBeInTheDocument();
   });
 
   it("shows the build version", () => {
