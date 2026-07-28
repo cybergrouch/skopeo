@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import type { FormEvent } from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PlayerPicker } from "./PlayerPicker";
@@ -72,6 +73,33 @@ describe("PlayerPicker", () => {
     expect(onSelect).toHaveBeenCalledWith(
       expect.objectContaining({ id: "u1", publicCode: "AAA111" }),
     );
+  });
+
+  it("does not submit an enclosing form when creating a placeholder (#580)", async () => {
+    // Regression: the placeholder-create UI used to be a nested <form>, which (being invalid HTML)
+    // made its submit button submit the OUTER form — redirecting the host out of event creation.
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    const outerSubmit = vi.fn((e: FormEvent) => e.preventDefault());
+    render(
+      <form onSubmit={outerSubmit}>
+        <PlayerPicker label="Add participant" onSelect={onSelect} />
+        <button type="submit">Create event</button>
+      </form>,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Add placeholder player" }),
+    );
+    await user.type(screen.getByLabelText("Display name"), "New Player");
+    await user.selectOptions(screen.getByLabelText("Sex"), "Female");
+    await user.click(
+      screen.getByRole("button", { name: "Create placeholder" }),
+    );
+
+    await waitFor(() => expect(createMutate).toHaveBeenCalled());
+    // The placeholder was created, but the surrounding event form was NEVER submitted.
+    expect(outerSubmit).not.toHaveBeenCalled();
   });
 
   it("creates a placeholder and emits the created player", async () => {

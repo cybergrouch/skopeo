@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -80,8 +80,10 @@ export function PlayerPicker({
     setError(null);
   }
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
+  // NB: invoked from a type="button" click, NOT a form submit (#580) — nesting this inside the event/
+  // fixture <form> as its own <form> was invalid HTML and made this button submit the OUTER form,
+  // redirecting the host out of event creation. Kept as a plain handler on a non-nested container.
+  async function submit() {
     setError(null);
     const name = displayName.trim();
     if (name === "") {
@@ -130,10 +132,7 @@ export function PlayerPicker({
         onSelect={onSelect}
       />
       {creating ? (
-        <form
-          onSubmit={submit}
-          className="grid gap-3 rounded-md border border-input p-3"
-        >
+        <div className="grid gap-3 rounded-md border border-input p-3">
           <p className="text-xs font-medium uppercase text-muted-foreground">
             New placeholder player
           </p>
@@ -206,7 +205,7 @@ export function PlayerPicker({
             </p>
           ) : null}
           <div className="flex items-center gap-2">
-            <Button type="submit" size="sm" disabled={create.isPending}>
+            <Button type="button" size="sm" onClick={submit} disabled={create.isPending}>
               {create.isPending ? "Creating…" : "Create placeholder"}
             </Button>
             <Button
@@ -222,7 +221,7 @@ export function PlayerPicker({
               Cancel
             </Button>
           </div>
-        </form>
+        </div>
       ) : (
         <Button
           type="button"
