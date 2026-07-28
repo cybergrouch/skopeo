@@ -146,6 +146,19 @@ class UserRepository {
             }
         }
 
+    /** Set the per-admin "preview ratings as non-admin" toggle (#583). Returns [ServiceError.NotFound] on a bad id. */
+    fun setPreviewRatingsAsNonAdmin(
+        id: UUID,
+        preview: Boolean,
+    ): Either<ServiceError, Boolean> =
+        transaction {
+            val updated =
+                UsersTable.update(where = { UsersTable.id eq id }) {
+                    it[previewRatingsAsNonAdmin] = preview
+                }
+            if (updated == 0) ServiceError.NotFound(message = "User $id not found").left() else preview.right()
+        }
+
     /** Resolve multiple ids to their aggregates in one transaction; unknown ids are dropped. */
     fun findAllByIds(ids: List<UUID>): List<User> = transaction { ids.distinct().mapNotNull { loadAggregate(id = it) } }
 
@@ -677,6 +690,7 @@ private fun ResultRow.toUser(
         placeholder = this[UsersTable.placeholder],
         claimedAt = this[UsersTable.claimedAt],
         claimedBy = this[UsersTable.claimedBy]?.value,
+        previewRatingsAsNonAdmin = this[UsersTable.previewRatingsAsNonAdmin],
         names = names,
         contacts = contacts,
         identities = identities,

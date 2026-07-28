@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 package org.skopeo.service.user
-
 import arrow.core.Either
 import arrow.core.left
 import arrow.core.raise.either
@@ -24,6 +23,7 @@ import org.skopeo.model.UserSearchPage
 import org.skopeo.model.UserSearchQuery
 import org.skopeo.model.WinLossRecord
 import org.skopeo.model.ageRangeToDob
+import org.skopeo.model.canSeeRawRatingOrFalse
 import org.skopeo.model.effectivePhotoUrl
 import org.skopeo.model.isDeleted
 import org.skopeo.repository.CapabilityRepository
@@ -79,6 +79,40 @@ class UserService(
 ) {
     /** Current ratings for the given users, keyed by id — enriches search summaries (issue #64). */
     fun currentRatings(ids: List<UUID>): Map<UUID, UserRating> = ratings.findCurrentRatings(userIds = ids)
+
+    /**
+     * Whether the caller may see raw NTRP values (#583): ADMINISTRATOR only, honoring the per-admin
+     * "preview as non-admin" toggle. Anonymous/unresolved ⇒ false. Callers pass the result as
+     * `showRawRating` into [User.toSummary] so the raw `value` is band-only for everyone else.
+     */
+    fun callerCanSeeRawRating(token: VerifiedFirebaseToken): Boolean =
+        repository.findByFirebaseUid(firebaseUid = token.uid).canSeeRawRatingOrFalse()
+
+    /**
+     * Set the caller's own per-admin "preview as non-admin" toggle (#583) — ADMINISTRATOR-only, since it
+     * only affects raw-rating visibility which only admins have. When on, this admin sees the non-admin
+     * (band-only) view of ratings on LIVE, without affecting anyone else. Audited.
+     */
+    fun setRatingPreview(
+        token: VerifiedFirebaseToken,
+        previewAsNonAdmin: Boolean,
+    ): Either<ServiceError, Boolean> =
+        either {
+            val actorId = requireAdmin(token = token).bind()
+            val value = repository.setPreviewRatingsAsNonAdmin(id = actorId, preview = previewAsNonAdmin).bind()
+            audit.record(
+                write =
+                    AuditWrite(
+                        actorUserId = actorId,
+                        action = AuditAction.SETTINGS_RATING_PREVIEW_CHANGED,
+                        entityType = AuditEntityType.USER,
+                        entityId = actorId,
+                        summary = "Set own rating preview to ${if (value) "non-admin (band only)" else "admin (raw)"}",
+                        details = buildMap { put(key = "previewAsNonAdmin", value = value.toString()) },
+                    ),
+            )
+            value
+        }
 
     /** Decided win–loss records (singles + doubles) for the given users, keyed by id — enriches research (#342). */
     fun winLossRecords(ids: List<UUID>): Map<UUID, WinLossRecord> = matches.winLossByUsers(userIds = ids)

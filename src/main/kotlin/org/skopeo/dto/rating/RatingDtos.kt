@@ -39,9 +39,10 @@ data class UserRatingResponse(
 data class RatingHistoryResponse(
     val id: String,
     val matchId: String? = null,
-    val previousRating: String,
-    val newRating: String,
-    val ratingChange: String,
+    // Raw NTRP values — ADMINISTRATOR-only (#583); null for non-admins, who see the band change only.
+    val previousRating: String? = null,
+    val newRating: String? = null,
+    val ratingChange: String? = null,
     val percentChange: String? = null,
     val previousLevel: String? = null,
     val newLevel: String? = null,
@@ -87,21 +88,23 @@ fun UserRating.toResponse(revealRawValue: Boolean): UserRatingResponse =
         lastMatchDate = lastMatchDate?.toString(),
     )
 
-fun RatingHistoryEntry.toResponse(): RatingHistoryResponse =
+fun RatingHistoryEntry.toResponse(revealRawValue: Boolean = false): RatingHistoryResponse =
     RatingHistoryResponse(
         id = id.toString(),
         matchId = matchId?.toString(),
-        previousRating = previousRating.toPlainString(),
-        newRating = newRating.toPlainString(),
-        ratingChange = ratingChange.toPlainString(),
-        percentChange = percentChange?.toPlainString(),
+        // Raw NTRP values + the per-set analysis internals are ADMINISTRATOR-only (#583); non-admins
+        // get the band change (previousLevel/newLevel/levelChanged) only.
+        previousRating = if (revealRawValue) previousRating.toPlainString() else null,
+        newRating = if (revealRawValue) newRating.toPlainString() else null,
+        ratingChange = if (revealRawValue) ratingChange.toPlainString() else null,
+        percentChange = if (revealRawValue) percentChange?.toPlainString() else null,
         previousLevel = previousLevel,
         newLevel = newLevel,
         levelChanged = levelChanged,
-        dominanceFactor = dominanceFactor?.toPlainString(),
+        dominanceFactor = if (revealRawValue) dominanceFactor?.toPlainString() else null,
         smoothingApplied = smoothingApplied,
-        smoothingFactor = smoothingFactor?.toPlainString(),
-        setBreakdown = setBreakdown.map { it.toResponse() },
+        smoothingFactor = if (revealRawValue) smoothingFactor?.toPlainString() else null,
+        setBreakdown = if (revealRawValue) setBreakdown.map { it.toResponse() } else emptyList(),
         calculatedAt = calculatedAt.toString(),
     )
 

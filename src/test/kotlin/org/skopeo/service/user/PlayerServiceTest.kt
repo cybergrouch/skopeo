@@ -637,25 +637,37 @@ class PlayerServiceTest {
     )
 
     @Test
-    fun `standing under RATING reveals the rating to the owner viewing their own profile (#457)`() {
+    fun `standing under RATING reveals the rating only to an ADMINISTRATOR, not the owner (#457, #583)`() {
         // Sex drives the (band, sex) group, so provision the player as Male, then give them a rating.
         val player = newUser(uid = "p", names = display(name = "Ana"), sex = "Male")
         ratings.setRating(userId = player.id, rating = BigDecimal("4.2"), level = "4.0")
+        users.provision(
+            command =
+                ProvisionUserCommand(
+                    firebaseUid = "admin",
+                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "admin", isPrimary = true),
+                    names = display(name = "Admin"),
+                    capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
+                ),
+        )
 
-        val standing =
+        // The owner (a non-admin) sees rank + band, but NOT their own raw rating (#583).
+        val ownerView =
             service.standing(token = token(uid = "p"), code = player.publicCode.lowercase()).shouldBeRight().shouldNotBeNull()
-        standing.band shouldBe "4.0"
-        standing.bandLabel shouldBe "NTRP 4.0 Band Race"
-        standing.sex shouldBe "Male"
-        standing.rank shouldBe 1
-        standing.source shouldBe "RATING"
-        // Owner sees their own precise rating; the public points metric is not the served one under RATING.
-        standing.rating shouldBe "4.200000"
-        standing.points.shouldBeNull()
+        ownerView.band shouldBe "4.0"
+        ownerView.bandLabel shouldBe "NTRP 4.0 Band Race"
+        ownerView.sex shouldBe "Male"
+        ownerView.rank shouldBe 1
+        ownerView.source shouldBe "RATING"
+        ownerView.rating.shouldBeNull()
+        ownerView.points.shouldBeNull()
+        // Only an ADMINISTRATOR sees the precise rating.
+        service.standing(token = token(uid = "admin"), code = player.publicCode)
+            .shouldBeRight().shouldNotBeNull().rating shouldBe "4.200000"
     }
 
     @Test
-    fun `standing under RATING reveals the rating to a RATER but hides it from anonymous and other viewers (#457, #186)`() {
+    fun `standing under RATING hides the raw rating from RATER, owner, anonymous and other viewers (#583)`() {
         val player = newUser(uid = "p", names = display(name = "Ana"), sex = "Male")
         ratings.setRating(userId = player.id, rating = BigDecimal("4.2"), level = "4.0")
         users.provision(
@@ -667,12 +679,24 @@ class PlayerServiceTest {
                     capabilities = setOf(Capability.PLAYER, Capability.RATER),
                 ),
         )
+        users.provision(
+            command =
+                ProvisionUserCommand(
+                    firebaseUid = "admin",
+                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "admin", isPrimary = true),
+                    names = display(name = "Admin"),
+                    capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
+                ),
+        )
         newUser(uid = "other", names = display(name = "Other"))
 
-        // RATER may see the precise rating.
-        service.standing(token = token(uid = "rater"), code = player.publicCode)
+        // Only an ADMINISTRATOR sees the precise rating (#583).
+        service.standing(token = token(uid = "admin"), code = player.publicCode)
             .shouldBeRight().shouldNotBeNull().rating shouldBe "4.200000"
-        // Anonymous (no token) and another plain player see rank + band only — no rating leaked.
+        // A RATER no longer sees it, nor does the owner, anonymous, or another plain player — band only.
+        service.standing(token = token(uid = "rater"), code = player.publicCode)
+            .shouldBeRight().shouldNotBeNull().rating.shouldBeNull()
+        service.standing(token = token(uid = "p"), code = player.publicCode).shouldBeRight().shouldNotBeNull().rating.shouldBeNull()
         service.standing(token = null, code = player.publicCode).shouldBeRight().shouldNotBeNull().rating.shouldBeNull()
         service.standing(token = token(uid = "other"), code = player.publicCode)
             .shouldBeRight().shouldNotBeNull().rating.shouldBeNull()
@@ -682,6 +706,38 @@ class PlayerServiceTest {
     fun `standing is a right-null for an unranked (unrated) player (#448)`() {
         val player = newUser(uid = "p", names = display(name = "Ana"))
         service.standing(token = null, code = player.publicCode).shouldBeRight().shouldBeNull()
+    }
+
+    @Test
+    fun `publicProfile reveals the raw rating only to an ADMINISTRATOR, honoring the preview toggle (#583)`() {
+        val player = newUser(uid = "p", names = display(name = "Ana"))
+        ratings.setRating(userId = player.id, rating = BigDecimal("4.2"), level = "4.0")
+        val admin =
+            users.provision(
+                command =
+                    ProvisionUserCommand(
+                        firebaseUid = "admin",
+                        identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "admin", isPrimary = true),
+                        names = display(name = "Admin"),
+                        capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
+                    ),
+            )
+
+        // Anonymous + the owner (non-admin): band + confidence, but no raw value.
+        service.publicProfile(code = player.publicCode).shouldBeRight().rating.shouldNotBeNull().let {
+            it.value.shouldBeNull()
+            it.level shouldBe "4.0"
+            it.confidence.shouldNotBeNull()
+        }
+        service.publicProfile(code = player.publicCode, token = token(uid = "p"))
+            .shouldBeRight().rating.shouldNotBeNull().value.shouldBeNull()
+        // An ADMINISTRATOR sees the raw value.
+        service.publicProfile(code = player.publicCode, token = token(uid = "admin"))
+            .shouldBeRight().rating.shouldNotBeNull().value shouldBe "4.200000"
+        // With the per-admin preview toggle on, that admin now sees the non-admin (band-only) view.
+        users.setPreviewRatingsAsNonAdmin(id = admin.id, preview = true).shouldBeRight()
+        service.publicProfile(code = player.publicCode, token = token(uid = "admin"))
+            .shouldBeRight().rating.shouldNotBeNull().value.shouldBeNull()
     }
 
     @Test

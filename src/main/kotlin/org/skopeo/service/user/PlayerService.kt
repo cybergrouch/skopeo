@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 package org.skopeo.service.user
-
 import arrow.core.Either
 import arrow.core.left
 import arrow.core.raise.either
@@ -24,6 +23,7 @@ import org.skopeo.model.RatingHistoryEntry
 import org.skopeo.model.ServiceError
 import org.skopeo.model.TeamType
 import org.skopeo.model.User
+import org.skopeo.model.canSeeRawRatingOrFalse
 import org.skopeo.model.displayName
 import org.skopeo.model.isDeleted
 import org.skopeo.repository.EventRepository
@@ -54,13 +54,19 @@ class PlayerService(
     private val awards: RankingPointRepository = RankingPointRepository(),
     private val events: EventRepository = EventRepository(),
 ) {
-    fun publicProfile(code: String): Either<ServiceError, PublicPlayerResponse> =
+    fun publicProfile(
+        code: String,
+        // Optional viewer token (#193/#583): the raw NTRP value is revealed only to an ADMINISTRATOR
+        // viewer; anonymous or non-admin callers see the band + confidence only.
+        token: VerifiedFirebaseToken? = null,
+    ): Either<ServiceError, PublicPlayerResponse> =
         either {
             val located = resolve(code = code, requireActive = false).bind()
             if (!located.isActive) {
                 mergedCard(located = located).bind()
             } else {
                 val rating = ratings.findCurrentRating(userId = located.id)
+                val showRaw = token?.let { users.findByFirebaseUid(firebaseUid = it.uid) }.canSeeRawRatingOrFalse()
                 PublicPlayerResponse(
                     publicCode = located.publicCode,
                     displayName = located.displayName(),
@@ -68,7 +74,7 @@ class PlayerService(
                     rating =
                         rating?.let {
                             PublicRatingDto(
-                                value = it.currentRating.toPlainString(),
+                                value = if (showRaw) it.currentRating.toPlainString() else null,
                                 level = it.currentLevel,
                                 confidence = it.confidence.toPlainString(),
                             )
@@ -275,14 +281,10 @@ class PlayerService(
         either {
             val user = resolve(code = code).bind()
             standings.locatePlayer(userId = user.id)?.let { standing ->
-                // Reveal the precise rating only to a rate-privileged caller or the profile owner (#186).
+                // Reveal the precise rating only to an ADMINISTRATOR (#583) — no longer RATER/owner. The
+                // per-admin "preview as non-admin" toggle further suppresses it. Everyone else: rank + band.
                 val caller = token?.let { users.findByFirebaseUid(firebaseUid = it.uid) }
-                val canSeeRating =
-                    caller != null &&
-                        (
-                            caller.id == user.id ||
-                                caller.capabilities.any { it == Capability.RATER || it == Capability.ADMINISTRATOR }
-                        )
+                val canSeeRating = caller.canSeeRawRatingOrFalse()
                 PlayerStandingResponse(
                     band = standing.band.code,
                     bandLabel = standing.band.label,

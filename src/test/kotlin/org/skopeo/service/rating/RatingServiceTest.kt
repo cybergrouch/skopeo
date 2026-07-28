@@ -85,11 +85,11 @@ class RatingServiceTest {
 
         // Initial assessment — the baseline, no history row.
         service.setRating(token = token(uid = "root"), userId = player.id, value = BigDecimal("4.0")).shouldBeRight()
-        service.getHistory(token = token(uid = "root"), userId = player.id).shouldBeRight() shouldBe emptyList()
+        service.getHistory(token = token(uid = "root"), userId = player.id).shouldBeRight().entries shouldBe emptyList()
 
         // Override — recorded as a manual (matchId = null) history entry.
         service.setRating(token = token(uid = "root"), userId = player.id, value = BigDecimal("4.6")).shouldBeRight()
-        val history = service.getHistory(token = token(uid = "root"), userId = player.id).shouldBeRight()
+        val history = service.getHistory(token = token(uid = "root"), userId = player.id).shouldBeRight().entries
         history shouldHaveSize 1
         history.single().let {
             it.matchId shouldBe null
@@ -99,6 +99,26 @@ class RatingServiceTest {
             it.newLevel shouldBe "4.5"
             it.levelChanged shouldBe true
         }
+    }
+
+    @Test
+    fun `getHistory hides raw values and keeps band-jump entries only for a non-admin owner (#583)`() {
+        admin(uid = "root")
+        val player = provisionUser(uid = "player")
+        // 4.0 baseline (no history) → 4.2 same-band change → 4.6 band jump. Two history rows, one a jump.
+        service.setRating(token = token(uid = "root"), userId = player.id, value = BigDecimal("4.0")).shouldBeRight()
+        service.setRating(token = token(uid = "root"), userId = player.id, value = BigDecimal("4.2")).shouldBeRight()
+        service.setRating(token = token(uid = "root"), userId = player.id, value = BigDecimal("4.6")).shouldBeRight()
+
+        // An ADMINISTRATOR sees the full history with raw values.
+        val adminView = service.getHistory(token = token(uid = "root"), userId = player.id).shouldBeRight()
+        adminView.revealRawValue shouldBe true
+        adminView.entries shouldHaveSize 2
+        // The owner (non-admin) sees only the band-jump entry, and no raw values.
+        val ownerView = service.getHistory(token = token(uid = "player"), userId = player.id).shouldBeRight()
+        ownerView.revealRawValue shouldBe false
+        ownerView.entries shouldHaveSize 1
+        ownerView.entries.single().levelChanged shouldBe true
     }
 
     @Test
@@ -129,7 +149,7 @@ class RatingServiceTest {
         // 4.0 and 4.2 both publish as the "4.0" band, so the override doesn't cross a level.
         service.setRating(token = token(uid = "root"), userId = player.id, value = BigDecimal("4.2")).shouldBeRight()
 
-        service.getHistory(token = token(uid = "root"), userId = player.id).shouldBeRight().single().let {
+        service.getHistory(token = token(uid = "root"), userId = player.id).shouldBeRight().entries.single().let {
             it.previousLevel shouldBe "4.0"
             it.newLevel shouldBe "4.0"
             it.levelChanged shouldBe false
@@ -182,7 +202,7 @@ class RatingServiceTest {
             .single()
             .currentRating
             .toPlainString() shouldBe "4.000000"
-        service.getHistory(token = token(uid = "player"), userId = player.id).shouldBeRight() shouldBe emptyList()
+        service.getHistory(token = token(uid = "player"), userId = player.id).shouldBeRight().entries shouldBe emptyList()
         service.getRatings(token = token(uid = "other"), userId = player.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
         service.getHistory(token = token(uid = "other"), userId = player.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
         // A caller with no provisioned account is forbidden too.
@@ -317,7 +337,7 @@ class RatingServiceTest {
             .single()
             .currentRating
             .toPlainString() shouldBe "5.000000"
-        service.getHistory(token = token(uid = "root"), userId = root.id).shouldBeRight() shouldBe emptyList()
+        service.getHistory(token = token(uid = "root"), userId = root.id).shouldBeRight().entries shouldBe emptyList()
     }
 
     @Test

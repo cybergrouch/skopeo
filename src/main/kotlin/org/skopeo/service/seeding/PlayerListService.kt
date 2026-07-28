@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 package org.skopeo.service.seeding
-
 import arrow.core.Either
 import arrow.core.left
 import arrow.core.raise.either
@@ -13,6 +12,7 @@ import org.skopeo.dto.user.toSummary
 import org.skopeo.model.Capability
 import org.skopeo.model.PlayerList
 import org.skopeo.model.ServiceError
+import org.skopeo.model.canSeeRawRatingOrFalse
 import org.skopeo.repository.PlayerListRepository
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
@@ -69,11 +69,13 @@ class PlayerListService(
             val list = get(token = token, listId = listId).bind()
             val members = users.findAllByIds(ids = list.memberUserIds)
             val currentRatings = ratings.findCurrentRatings(userIds = list.memberUserIds)
+            // Raw NTRP values are ADMINISTRATOR-only (#583); a non-admin seeder sees bands only.
+            val showRaw = users.findByFirebaseUid(firebaseUid = token.uid).canSeeRawRatingOrFalse()
             PlayerListResponse(
                 id = list.id.toString(),
                 name = list.name,
                 createdAt = list.createdAt.toString(),
-                members = members.map { it.toSummary(rating = currentRatings[it.id]) },
+                members = members.map { it.toSummary(rating = currentRatings[it.id], showRawRating = showRaw) },
             )
         }
 

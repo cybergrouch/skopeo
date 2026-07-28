@@ -84,8 +84,11 @@ private fun Route.ratings(service: RatingService) {
     }
     get(path = "/rating-history") {
         respondMappingErrors {
-            respondEither(result = service.getHistory(token = verifiedToken(), userId = uuidParam(name = "userId"))) { history ->
-                call.respond(status = HttpStatusCode.OK, message = history.map { it.toResponse() })
+            respondEither(result = service.getHistory(token = verifiedToken(), userId = uuidParam(name = "userId"))) { view ->
+                call.respond(
+                    status = HttpStatusCode.OK,
+                    message = view.entries.map { it.toResponse(revealRawValue = view.revealRawValue) },
+                )
             }
         }
     }

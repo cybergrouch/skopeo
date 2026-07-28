@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 package org.skopeo.service.event
-
 import arrow.core.Either
 import arrow.core.left
 import arrow.core.raise.either
@@ -31,6 +30,7 @@ import org.skopeo.model.MyEvent
 import org.skopeo.model.ServiceError
 import org.skopeo.model.User
 import org.skopeo.model.ageInYears
+import org.skopeo.model.canSeeRawRatingOrFalse
 import org.skopeo.model.displayName
 import org.skopeo.model.isDeleted
 import org.skopeo.model.isExpired
@@ -84,6 +84,13 @@ class EventService(
     private val ratingsReverser: EventRatingsReverser = EventRatingsReverser(),
     private val audit: AuditService = AuditService(),
 ) {
+    /**
+     * Whether the caller may see raw NTRP values on the event roster (#583): ADMINISTRATOR only,
+     * honoring the per-admin preview toggle. Routes pass the result as `showRawRating` into the DTO.
+     */
+    fun callerCanSeeRawRating(token: VerifiedFirebaseToken): Boolean =
+        users.findByFirebaseUid(firebaseUid = token.uid).canSeeRawRatingOrFalse()
+
     fun create(
         token: VerifiedFirebaseToken,
         input: CreateEventInput,

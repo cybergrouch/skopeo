@@ -147,7 +147,11 @@ fun MyEvent.toResponse(completedMatchCount: Int = 0): MyEventResponse =
         completedMatchCount = completedMatchCount,
     )
 
-fun EventView.toResponse(completedMatchCount: Int = 0): EventResponse =
+fun EventView.toResponse(
+    completedMatchCount: Int = 0,
+    // Raw NTRP values on the roster are ADMINISTRATOR-only (#583); default false = band only.
+    showRawRating: Boolean = false,
+): EventResponse =
     EventResponse(
         id = event.id.toString(),
         publicCode = event.publicCode,
@@ -155,7 +159,7 @@ fun EventView.toResponse(completedMatchCount: Int = 0): EventResponse =
         startDate = event.startDate.toString(),
         endDate = event.endDate.toString(),
         isActive = event.isActive,
-        participants = participants.map { it.toResponse() },
+        participants = participants.map { it.toResponse(showRawRating = showRawRating) },
         creatorDisplayName = creator?.displayName,
         creatorPublicCode = creator?.publicCode,
         clubId = club?.id?.toString(),
@@ -169,7 +173,7 @@ fun EventView.toResponse(completedMatchCount: Int = 0): EventResponse =
         awardRankingPoints = event.awardRankingPoints,
     )
 
-internal fun EventParticipantRef.toResponse(): EventParticipantResponse =
+internal fun EventParticipantRef.toResponse(showRawRating: Boolean = false): EventParticipantResponse =
     EventParticipantResponse(
         userId = userId.toString(),
         displayName = displayName,
@@ -179,7 +183,7 @@ internal fun EventParticipantRef.toResponse(): EventParticipantResponse =
         rating =
             rating?.let {
                 PublicRatingDto(
-                    value = it.currentRating.toPlainString(),
+                    value = if (showRawRating) it.currentRating.toPlainString() else null,
                     level = it.currentLevel,
                     confidence = it.confidence.toPlainString(),
                 )

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 package org.skopeo.service.rating
-
 import arrow.core.Either
 import arrow.core.left
 import arrow.core.raise.either
@@ -21,6 +20,7 @@ import org.skopeo.model.ServiceError
 import org.skopeo.model.User
 import org.skopeo.model.UserRating
 import org.skopeo.model.ageInYears
+import org.skopeo.model.canSeeRawRating
 import org.skopeo.model.displayName
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
@@ -55,6 +55,15 @@ class RatingService(
         val revealRawValue: Boolean,
     )
 
+    /**
+     * A user's rating history plus whether the caller may see raw values (#583). Admins get every entry
+     * with raw numbers; non-admins (incl. the profile owner) get band-jump entries only, no raw.
+     */
+    data class RatingHistoryView(
+        val entries: List<RatingHistoryEntry>,
+        val revealRawValue: Boolean,
+    )
+
     fun getRatings(
         token: VerifiedFirebaseToken,
         userId: UUID,
@@ -62,18 +71,24 @@ class RatingService(
         either {
             requireUserExists(userId = userId).bind()
             val caller = requireSelfOrAdmin(token = token, userId = userId).bind()
-            val revealRawValue = caller.capabilities.contains(element = Capability.ADMINISTRATOR)
+            // Raw NTRP value is ADMINISTRATOR-only (#583), honoring the per-admin preview toggle.
+            val revealRawValue = caller.canSeeRawRating()
             RatingsView(ratings = ratings.findByUser(userId = userId), revealRawValue = revealRawValue)
         }
 
     fun getHistory(
         token: VerifiedFirebaseToken,
         userId: UUID,
-    ): Either<ServiceError, List<RatingHistoryEntry>> =
+    ): Either<ServiceError, RatingHistoryView> =
         either {
             requireUserExists(userId = userId).bind()
-            requireSelfOrAdmin(token = token, userId = userId).bind()
-            ratings.historyByUser(userId = userId)
+            val caller = requireSelfOrAdmin(token = token, userId = userId).bind()
+            val revealRawValue = caller.canSeeRawRating()
+            val all = ratings.historyByUser(userId = userId)
+            // Non-admins (incl. the owner) see band-jump entries only — a same-band change carries no
+            // visible info once the raw values are hidden (#583 corollary).
+            val entries = if (revealRawValue) all else all.filter { it.levelChanged }
+            RatingHistoryView(entries = entries, revealRawValue = revealRawValue)
         }
 
     /**

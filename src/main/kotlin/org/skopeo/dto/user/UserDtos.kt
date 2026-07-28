@@ -108,6 +108,18 @@ data class MarkDuplicatesRequest(
     val duplicateIds: List<String>,
 )
 
+/** Body for `PUT /api/v1/users/me/rating-preview` — the per-admin raw-rating preview toggle (#583). */
+@Serializable
+data class SetRatingPreviewRequest(
+    val previewAsNonAdmin: Boolean,
+)
+
+/** Response echoing the persisted per-admin rating-preview toggle (#583). */
+@Serializable
+data class RatingPreviewResponse(
+    val previewAsNonAdmin: Boolean,
+)
+
 @Serializable
 data class UserResponse(
     val id: String,
@@ -130,6 +142,8 @@ data class UserResponse(
     val contacts: List<ContactDto>,
     val identities: List<IdentityDto>,
     val capabilities: List<String>,
+    // Per-admin "preview ratings as non-admin" toggle state (#583) — backs the Admin-tab control.
+    val previewRatingsAsNonAdmin: Boolean = false,
 )
 
 fun User.toResponse(): UserResponse =
@@ -174,6 +188,7 @@ fun User.toResponse(): UserResponse =
                 IdentityDto(provider = it.provider.name, providerUid = it.providerUid, isPrimary = it.isPrimary)
             },
         capabilities = capabilities.map { it.name }.sorted(),
+        previewRatingsAsNonAdmin = previewRatingsAsNonAdmin,
     )
 
 /**
@@ -211,6 +226,9 @@ data class WinLossDto(
 fun User.toSummary(
     rating: UserRating? = null,
     record: WinLossRecord? = null,
+    // The raw NTRP value is included only for an ADMINISTRATOR viewer (#583); everyone else gets the
+    // band + confidence. Defaults false (the safe/privacy-preserving default) so callers must opt in.
+    showRawRating: Boolean = false,
 ): UserSummaryResponse =
     UserSummaryResponse(
         id = id.toString(),
@@ -222,7 +240,7 @@ fun User.toSummary(
         rating =
             rating?.let {
                 PublicRatingDto(
-                    value = it.currentRating.toPlainString(),
+                    value = if (showRawRating) it.currentRating.toPlainString() else null,
                     level = it.currentLevel,
                     confidence = it.confidence.toPlainString(),
                 )

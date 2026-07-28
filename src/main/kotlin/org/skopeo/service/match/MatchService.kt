@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 package org.skopeo.service.match
-
 import arrow.core.Either
 import arrow.core.left
 import arrow.core.raise.either
@@ -37,6 +36,7 @@ import org.skopeo.model.PlacementBracket
 import org.skopeo.model.ServiceError
 import org.skopeo.model.TeamType
 import org.skopeo.model.User
+import org.skopeo.model.canSeeRawRatingOrFalse
 import org.skopeo.model.displayName
 import org.skopeo.model.isDeleted
 import org.skopeo.model.isExpired
@@ -501,11 +501,10 @@ class MatchService(
             }
     }
 
-    /** Whether the viewer may see precise rates (RATER or ADMINISTRATOR); anonymous (#193) ⇒ false, bands only. */
-    private fun callerCanSeeRates(token: VerifiedFirebaseToken?): Boolean {
-        val caller = token?.let { users.findByFirebaseUid(firebaseUid = it.uid) } ?: return false
-        return caller.capabilities.any { it == Capability.RATER || it == Capability.ADMINISTRATOR }
-    }
+    /** Whether the viewer may see precise rates: ADMINISTRATOR only (#583), honoring the per-admin preview
+     * toggle; anonymous/non-admin (#193) ⇒ false, bands only. */
+    private fun callerCanSeeRates(token: VerifiedFirebaseToken?): Boolean =
+        token?.let { users.findByFirebaseUid(firebaseUid = it.uid) }.canSeeRawRatingOrFalse()
 
     /**
      * The match result plus the stored per-player calculation behind it (#97), for the detail view
@@ -519,6 +518,10 @@ class MatchService(
         matchId: UUID,
     ): Either<ServiceError, MatchCalculationDetail> =
         either {
+            // The calculation breakdown is an ADMINISTRATOR-only analysis tool (#583): it exposes the raw
+            // per-set ratings/dominance/scale. A non-admin — or an admin previewing as non-admin — is denied.
+            val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+            ensure(condition = caller.canSeeRawRatingOrFalse()) { ServiceError.Forbidden() }
             val match = getById(token = token, matchId = matchId).bind()
             val byUser = ratings.historyForMatches(matchIds = listOf(element = matchId)).associateBy { it.userId }
             ensure(condition = byUser.isNotEmpty()) {
