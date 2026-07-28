@@ -29,7 +29,6 @@ import { plural } from "@/lib/plural";
 import { playerLabel } from "@/lib/playerLabel";
 import { PlaceholderTag } from "@/components/PlaceholderTag";
 import { EventDetail } from "./events/EventDetail";
-import { PlaceholderPlayersSection } from "./PlaceholderPlayersSection";
 
 /** The event classes a host can pick at creation (#403); mirrors the backend EventType enum. */
 type EventType = "OPEN_PLAY" | "LEAGUE" | "TOURNAMENT";
@@ -524,7 +523,6 @@ export function EventOrganizerTab() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const eventsQuery = useGetApiV1Events();
   const events = eventsQuery.data ?? [];
-  const me = useGetApiV1UsersMe().data;
   // Today counts as upcoming; the split mirrors the Profile Events history card (#271).
   const today = todayIso();
 
@@ -549,8 +547,6 @@ export function EventOrganizerTab() {
   return (
     <div className="grid gap-4">
       <NewEventForm />
-
-      <PlaceholderPlayersSection capabilities={me?.capabilities} />
 
       <Card>
         <CardHeader>

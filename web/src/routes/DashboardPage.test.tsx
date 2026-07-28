@@ -29,6 +29,9 @@ vi.mock('./dashboard/EventOrganizerTab', () => ({
 vi.mock('./dashboard/SeedingTab', () => ({
   SeedingTab: () => <div>seeding content</div>,
 }))
+vi.mock('./dashboard/PlaceholderPlayersTab', () => ({
+  PlaceholderPlayersTab: () => <div>placeholder players content</div>,
+}))
 vi.mock('./dashboard/RatingsTab', () => ({
   RatingsTab: () => <div>ratings content</div>,
 }))
@@ -99,6 +102,7 @@ describe('DashboardPage', () => {
     expect(screen.getByRole('button', { name: 'Standings' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Event Organizer' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Seeding' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Placeholder Players' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Ratings' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Invites' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Activity Log' })).not.toBeInTheDocument()
@@ -147,12 +151,18 @@ describe('DashboardPage', () => {
     await openMenu(user)
     expect(screen.getByRole('button', { name: 'Event Organizer' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Seeding' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Placeholder Players' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Research' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Standings' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Admin' })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Seeding' }))
     expect(screen.getByText('seeding content')).toBeInTheDocument()
+
+    // Selecting a tab closes the menu, so re-open it before switching tabs again.
+    await openMenu(user)
+    await user.click(screen.getByRole('button', { name: 'Placeholder Players' }))
+    expect(screen.getByText('placeholder players content')).toBeInTheDocument()
   })
 
   it('shows the Matches items for a club owner (same as a host, no Admin)', async () => {

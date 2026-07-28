@@ -57,9 +57,6 @@ vi.mock("@/components/PlayerPicker", () => ({
     </button>
   ),
 }));
-vi.mock("./PlaceholderPlayersSection", () => ({
-  PlaceholderPlayersSection: () => <div>placeholder players content</div>,
-}));
 vi.mock("./events/EventDetail", () => ({
   EventDetail: ({
     eventId,

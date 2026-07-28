@@ -24,6 +24,7 @@ import { ProfileTab } from "./dashboard/ProfileTab";
 import { AdminTab } from "./dashboard/AdminTab";
 import { PointsManagementSection } from "./dashboard/admin/PointsManagementSection";
 import { EventOrganizerTab } from "./dashboard/EventOrganizerTab";
+import { PlaceholderPlayersTab } from "./dashboard/PlaceholderPlayersTab";
 import { SeedingTab } from "./dashboard/SeedingTab";
 import { RatingsTab } from "./dashboard/RatingsTab";
 import { ResearchTab } from "./dashboard/ResearchTab";
@@ -100,6 +101,17 @@ export function DashboardPage() {
       : []),
     ...(showSeeding
       ? [{ value: "seeding", label: "Seeding", element: <SeedingTab /> }]
+      : []),
+    // Placeholder Players (#578): create + manage login-less players; HOST/CLUB_OWNER/ADMIN, like
+    // the other match-management tabs. Promoted out of the Event Organizer tab.
+    ...(showMatches
+      ? [
+          {
+            value: "placeholders",
+            label: "Placeholder Players",
+            element: <PlaceholderPlayersTab capabilities={capabilities} />,
+          },
+        ]
       : []),
     ...(showRatings
       ? [{ value: "ratings", label: "Ratings", element: <RatingsTab /> }]
