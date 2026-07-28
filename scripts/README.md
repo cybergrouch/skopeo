@@ -283,6 +283,24 @@ Health/smoke check against a running API (default `http://localhost:8080`). Doub
 
 ---
 
+### 🧹 One-off data cleanup
+
+#### `cleanup/remove-award-points.sh` (#576)
+One-off: remove the ranking-point awards created by finalizing events during the **testing phase**, when awarding should not yet have counted. Hard-deletes the finalize-generated award rows (`ranking_point_awards` where `source_type = 'INTERNAL' AND event_id IS NOT NULL`) across **all** events; manual admin adjustments (#469 — `EXTERNAL`, event-less) are left untouched. Defaults to a **dry run** (preview counts only); `--apply` deletes (with a typed confirmation). Connection-agnostic — point it at a restored copy first, then prod. ⚠️ Deletes real data: back up first (`backup-db.sh`) and dry-run on a restored copy (`restore-prod-to-local.sh`). After applying on prod, recompute standings.
+
+**Usage:**
+```bash
+# Dry run against the local restored copy (default connection):
+PGPASSWORD=postgres ./scripts/cleanup/remove-award-points.sh
+# Dry run against an explicit connection:
+./scripts/cleanup/remove-award-points.sh "postgresql://postgres@localhost:5432/skopeo_prodcopy"
+# Apply (prompts to confirm; --yes skips the prompt):
+./scripts/cleanup/remove-award-points.sh --apply "postgresql://user@host:5432/dbname"
+```
+The runner is the safe entry point; `cleanup/remove-award-points.sql` is the underlying apply step (markers-first delete, idempotent) if you prefer to run it directly in `psql`.
+
+---
+
 ### 📚 Reference
 
 #### `curl-examples.sh`
