@@ -144,6 +144,36 @@ isUpset = (isWinner && ratingAdvantage < 0) || (!isWinner && ratingAdvantage > 0
 
 Both players always land on the *same* path (one player's upset win is the other's upset loss), so they share the same scale value — preserving the zero-sum property.
 
+#### How `scale` varies with the gap (the two paths together)
+
+Both paths are straight lines in the gap, so it helps to see them together. Substituting `normalizedGap = g / ratingRange` and `threshold = 0.5 / ratingRange` (§3.1–§3.2), the `ratingRange` cancels and the two paths collapse to a clean form in the **raw NTRP gap `g`** (in rating points):
+
+```
+expected (favorite won):  scale = max(0, 1 − 2·g)
+upset    (underdog won):  scale = 4·g
+```
+
+(Both are then multiplied by the match-type factor `m` before use — §2.5.)
+
+So as the gap widens:
+- the **expected** line slopes **down** — full (`1.0`) at `g = 0`, reaching `0` at `g = 0.5` NTRP (a favorite winning by a half-level is fully expected);
+- the **upset** line slopes **up** — `0` at `g = 0`, reaching `2.0` at `g = 0.5` NTRP (a half-level upset counts double).
+
+They cross where `4·g = 1 − 2·g`, i.e. at **`g = 1/6 ≈ 0.167` NTRP** (equivalently `normalizedGap = threshold / 3`), where both equal `≈ 0.67`:
+
+| gap `g` (NTRP) | expected `max(0, 1 − 2·g)` | upset `4·g` | larger |
+|---|---|---|---|
+| 0.00 (equal) | 1.00 | 0.00 | expected |
+| 0.10 | 0.80 | 0.40 | expected |
+| 0.167 (crossover) | 0.67 | 0.67 | equal |
+| 0.30 | 0.40 | 1.20 | upset |
+| 0.50 (threshold) | 0.00 | 2.00 | upset |
+
+- **Below `g ≈ 0.167` NTRP**, the expected line is higher than the upset line: for **near-equal players**, a "chalk" win (the marginally-higher player wins) carries a *larger* scale than an upset — beating someone you're essentially tied with is barely surprising, whereas a competitive win between near-equals is genuinely informative.
+- **Above `g ≈ 0.167` NTRP**, the upset line wins, and by the 0.5-NTRP threshold the upset (`2.0`) towers over the expected result (`0.0`) — the intuitive "upsets move ratings, chalk doesn't" regime.
+
+**Near-zero-gap asymmetry (a known edge).** Because the two lines meet the y-axis at opposite ends (expected → 1, upset → 0), whichever player is even fractionally higher-rated is the "favorite," so at a *tiny* gap their win is scored on the high expected line and the other side's win on the low upset line. Two almost-identical matchups can therefore move ratings by very different amounts based on an epsilon of rating difference, and win/loss magnitudes are **not** symmetric for near-equal players. This is an intended consequence of the piecewise design and it self-corrects as ratings separate — but it is worth being aware of (and a candidate for smoothing the transition near `g = 0`).
+
 ### 2.4 `sign` — who gains, who loses
 
 ```
