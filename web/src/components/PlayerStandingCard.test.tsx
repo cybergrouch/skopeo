@@ -65,4 +65,16 @@ describe('PlayerStandingCard', () => {
     render(<PlayerStandingCard code="ABC123" />)
     expect(screen.getByText('Unranked')).toBeInTheDocument()
   })
+
+  it('renders as a labelled "Ranking" sub-section (no card) when asSection is set (#589)', () => {
+    useGetApiV1PlayersCodeStanding.mockReturnValue({
+      data: { band: '4.0', bandLabel: 'NTRP 4.0 Band Race', sex: 'Male', rank: 4, points: '240.0000', source: 'POINTS' },
+      isLoading: false,
+    })
+    render(<PlayerStandingCard code="ABC123" asSection={true} />)
+    // The "Ranking" label heads the sub-section, and the same standing body is shown.
+    expect(screen.getByText('Ranking')).toBeInTheDocument()
+    expect(screen.getByText('#4')).toBeInTheDocument()
+    expect(screen.getByText(/\+240 pts · 4.0 Men/)).toBeInTheDocument()
+  })
 })
