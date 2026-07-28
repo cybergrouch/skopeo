@@ -303,6 +303,17 @@ The runner is the safe entry point; `cleanup/remove-award-points.sql` is the und
 
 ### 📚 Reference
 
+#### `rating-delta-table.py`
+Explainer/what-if tool that prints a table of rating deltas for a set of scores, given two players' ratings — reproducing the v2 per-set calculation (dominance + gap/scale + K + sign) documented in [`RATING_CALCULATION_ALGORITHM.md`](../docs/product/RATING_CALCULATION_ALGORITHM.md). Floats, not the server's BigDecimal engine, so treat it as illustrative. Supports `independent` (each score its own single-set match from the same start) and `sequential` (scores as consecutive sets of one match → net delta) modes, `--markdown` output, and overridable constants (`--k`, `--threshold`, `--match-type`/`--mtf`, …).
+
+**Usage:**
+```bash
+./scripts/rating-delta-table.py --rating-a 3.243325 --rating-b 3.266000 \
+    --name-a Tin --name-b Razel --match-type OPEN_PLAY --markdown \
+    --scores 6-6,6-4,6-1,6-0,5-6,0-6
+./scripts/rating-delta-table.py --help
+```
+
 #### `curl-examples.sh`
 Collection of useful cURL commands and examples.
 - Basic GET requests
