@@ -527,11 +527,11 @@ export function EventOrganizerTab() {
   const today = todayIso();
 
   const groups = groupByClub(events);
-  // Collapsed-group keys (#367). Default: all expanded — nothing is hidden on first load; the user
-  // opts into collapsing. A group holding the selected event is force-expanded so it stays visible.
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+  // Expanded-group keys (#367). Default: all collapsed (#591) — every club group starts minimized so
+  // the Events list loads as a short set of club headers; the user expands the club they want.
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const toggle = (key: string) =>
-    setCollapsed((prev) => {
+    setExpanded((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
@@ -565,7 +565,7 @@ export function EventOrganizerTab() {
                 key={group.key}
                 group={group}
                 today={today}
-                isOpen={!collapsed.has(group.key)}
+                isOpen={expanded.has(group.key)}
                 onToggle={() => toggle(group.key)}
                 onSelect={setSelectedId}
               />
