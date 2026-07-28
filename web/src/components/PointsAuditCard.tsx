@@ -1,12 +1,6 @@
 import { useGetApiV1PlayersCodePoints } from "@/api/generated/users/users";
 import { ContentLink } from "@/components/ContentLink";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { CollapsibleCard } from "@/components/CollapsibleCard";
 import { Badge } from "@/components/ui/badge";
 import { formatPoints } from "@/lib/points";
 
@@ -18,6 +12,8 @@ interface PointsAuditCardProps {
    * Gates the fetch too, so a non-owner never even requests the (403) endpoint.
    */
   enabled: boolean;
+  /** Start minimized behind a "Show all" toggle (#589) — used on the owner's Profile tab. */
+  collapsible?: boolean;
 }
 
 /**
@@ -25,7 +21,7 @@ interface PointsAuditCardProps {
  * band, expiry (validUntil), and a link to the granting match (or the event, for awards with no match
  * link). Owner-or-admin only: rendered and fetched only when {@link PointsAuditCardProps.enabled}.
  */
-export function PointsAuditCard({ code, enabled }: PointsAuditCardProps) {
+export function PointsAuditCard({ code, enabled, collapsible = false }: PointsAuditCardProps) {
   const { data, isLoading } = useGetApiV1PlayersCodePoints(code, {
     query: { enabled: enabled && Boolean(code) },
   });
@@ -35,15 +31,12 @@ export function PointsAuditCard({ code, enabled }: PointsAuditCardProps) {
   const awards = data ?? [];
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Active points</CardTitle>
-        <CardDescription>
-          Your currently-counting ranking points and where they came from.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
+    <CollapsibleCard
+      title="Active points"
+      description="Your currently-counting ranking points and where they came from."
+      collapsible={collapsible}
+    >
+      {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : awards.length > 0 ? (
           <ul className="space-y-2">
@@ -79,7 +72,6 @@ export function PointsAuditCard({ code, enabled }: PointsAuditCardProps) {
             No active ranking points.
           </p>
         )}
-      </CardContent>
-    </Card>
+    </CollapsibleCard>
   );
 }

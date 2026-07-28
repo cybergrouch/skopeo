@@ -1,13 +1,7 @@
 import { useState } from 'react'
 import { ContentLink } from '@/components/ContentLink'
 import { useGetApiV1PlayersCodeMatchHistory } from '@/api/generated/users/users'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { CollapsibleCard } from '@/components/CollapsibleCard'
 import { MatchHistoryRow } from '@/components/MatchHistoryRow'
 import { NTRP_LEVELS } from '@/lib/ntrp'
 
@@ -17,6 +11,8 @@ const PREVIEW_COUNT = 5
 interface MatchHistoryCardProps {
   /** The player's shareable public code; the same endpoint serves own- and public-profile views. */
   code: string
+  /** Start minimized behind a "Show all" toggle (#589) — used on the owner's Profile tab. */
+  collapsible?: boolean
 }
 
 /**
@@ -24,7 +20,7 @@ interface MatchHistoryCardProps {
  * profile alike. Shows the most recent {@link PREVIEW_COUNT} matches with a link to the full,
  * paginated + searchable history page (#284). Ratings appear only as the published NTRP band.
  */
-export function MatchHistoryCard({ code }: MatchHistoryCardProps) {
+export function MatchHistoryCard({ code, collapsible = false }: MatchHistoryCardProps) {
   const [opponentBand, setOpponentBand] = useState('')
   const query = useGetApiV1PlayersCodeMatchHistory(
     code,
@@ -35,16 +31,13 @@ export function MatchHistoryCard({ code }: MatchHistoryCardProps) {
   const total = query.data?.total ?? 0
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Match history</CardTitle>
-        <CardDescription>
-          Recent matches, with each player's NTRP band at the time. Bands appear once a match has been
-          rated.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <select
+    <CollapsibleCard
+      title="Match history"
+      description="Recent matches, with each player's NTRP band at the time. Bands appear once a match has been rated."
+      contentClassName="space-y-3"
+      collapsible={collapsible}
+    >
+      <select
           aria-label="Filter by opponent NTRP band"
           className="h-9 w-full rounded-md border bg-background px-2 text-sm"
           value={opponentBand}
@@ -80,7 +73,6 @@ export function MatchHistoryCard({ code }: MatchHistoryCardProps) {
             {opponentBand ? 'No matches vs that band.' : 'No matches yet.'}
           </p>
         )}
-      </CardContent>
-    </Card>
+    </CollapsibleCard>
   )
 }
