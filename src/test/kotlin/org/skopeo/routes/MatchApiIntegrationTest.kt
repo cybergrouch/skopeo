@@ -315,7 +315,7 @@ class MatchApiIntegrationTest {
         }
 
     @Test
-    fun `a participant can read a rated match's stored calculation detail`() =
+    fun `the calculation breakdown is an administrator-only tool, a participant is forbidden (#583)`() =
         withApp { client ->
             val adminToken = seedStaff(uid = "admin", roles = setOf(Capability.ADMINISTRATOR))
             val p1 = client.provisionSelf(token = TestFirebaseAuth.mintToken(uid = "p1"))
@@ -340,9 +340,15 @@ class MatchApiIntegrationTest {
                 setBody(body = CalculationRequest(dryRun = false))
             }
 
+            // A participant (non-admin) can no longer read the breakdown — it's an ADMINISTRATOR tool (#583).
+            client.get(urlString = "/api/v1/matches/${match.id}/calculation") {
+                header(key = HttpHeaders.Authorization, value = "Bearer ${TestFirebaseAuth.mintToken(uid = "p1")}")
+            }.status shouldBe HttpStatusCode.Forbidden
+
+            // An ADMINISTRATOR sees the full breakdown (with raw values).
             val detail =
                 client.get(urlString = "/api/v1/matches/${match.id}/calculation") {
-                    header(key = HttpHeaders.Authorization, value = "Bearer ${TestFirebaseAuth.mintToken(uid = "p1")}")
+                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
                 }
             detail.status shouldBe HttpStatusCode.OK
             detail.body<MatchCalculationDetailResponse>().let { body ->

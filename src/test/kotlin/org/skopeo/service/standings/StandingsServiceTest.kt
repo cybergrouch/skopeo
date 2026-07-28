@@ -223,12 +223,16 @@ class StandingsServiceTest {
     }
 
     @Test
-    fun `precise rating is revealed to a rater and hidden from a plain player (#186)`() {
+    fun `precise rating is revealed only to an administrator, hidden from a rater and a plain player (#583)`() {
+        // #583: raw rating values are ADMINISTRATOR-only; a RATER seeing them was a leak.
+        provision(uid = "admin", capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         provision(uid = "rater", capabilities = setOf(Capability.PLAYER, Capability.RATER))
         val player = provision(uid = "p", sex = "Male").also { rate(user = it, value = "4.2") }
 
-        page(band = StandingsBand.FROM_4_0, sex = "Male", token = token(uid = "rater"))
+        page(band = StandingsBand.FROM_4_0, sex = "Male", token = token(uid = "admin"))
             .entries.single { it.userId == player.id }.currentRating shouldBe "4.200000"
+        page(band = StandingsBand.FROM_4_0, sex = "Male", token = token(uid = "rater"))
+            .entries.single { it.userId == player.id }.currentRating.shouldBeNull()
         page(band = StandingsBand.FROM_4_0, sex = "Male", token = token(uid = "p"))
             .entries.single { it.userId == player.id }.currentRating.shouldBeNull()
     }

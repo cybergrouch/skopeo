@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 package org.skopeo.routes
-
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.application.call
@@ -22,6 +21,8 @@ import org.skopeo.dto.user.CreateUserRequest
 import org.skopeo.dto.user.MarkDuplicatesRequest
 import org.skopeo.dto.user.PhotoSettingsRequest
 import org.skopeo.dto.user.ProfileRequest
+import org.skopeo.dto.user.RatingPreviewResponse
+import org.skopeo.dto.user.SetRatingPreviewRequest
 import org.skopeo.dto.user.UserSummaryPageResponse
 import org.skopeo.dto.user.toResponse
 import org.skopeo.dto.user.toSummary
@@ -135,7 +136,11 @@ private fun Route.searchUsers(service: UserService) {
                 }
             respondEither(result = results) { users ->
                 val ratings = service.currentRatings(ids = users.map { it.id })
-                call.respond(status = HttpStatusCode.OK, message = users.map { it.toSummary(rating = ratings[it.id]) })
+                val showRaw = service.callerCanSeeRawRating(token = verifiedToken())
+                call.respond(
+                    status = HttpStatusCode.OK,
+                    message = users.map { it.toSummary(rating = ratings[it.id], showRawRating = showRaw) },
+                )
             }
         }
     }
@@ -173,11 +178,15 @@ private fun Route.searchUsersPaged(service: UserService) {
                 val ratings = service.currentRatings(ids = ids)
                 // Research results also carry each player's win–loss record (#342).
                 val records = service.winLossRecords(ids = ids)
+                val showRaw = service.callerCanSeeRawRating(token = verifiedToken())
                 call.respond(
                     status = HttpStatusCode.OK,
                     message =
                         UserSummaryPageResponse(
-                            items = result.items.map { it.toSummary(rating = ratings[it.id], record = records[it.id]) },
+                            items =
+                                result.items.map {
+                                    it.toSummary(rating = ratings[it.id], record = records[it.id], showRawRating = showRaw)
+                                },
                             total = result.total.toInt(),
                         ),
                 )
@@ -233,6 +242,15 @@ private fun Route.currentUser(service: UserService) {
             } else {
                 call.respond(status = HttpStatusCode.OK, message = user.toResponse())
             }
+        }
+    }
+    // Per-admin "preview ratings as non-admin" toggle (#583): ADMINISTRATOR-only (enforced in the service).
+    put(path = "/me/rating-preview") {
+        respondMappingErrors {
+            val body = call.receive<SetRatingPreviewRequest>()
+            respondEither(
+                result = service.setRatingPreview(token = verifiedToken(), previewAsNonAdmin = body.previewAsNonAdmin),
+            ) { value -> call.respond(status = HttpStatusCode.OK, message = RatingPreviewResponse(previewAsNonAdmin = value)) }
         }
     }
 }

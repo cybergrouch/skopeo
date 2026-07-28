@@ -61,9 +61,10 @@ private fun Route.listAndCreate(service: EventService) {
             respondEither(result = service.list(token = verifiedToken())) { events ->
                 // Batched "has results" counts (#483) in one grouped query — no per-event N+1.
                 val counts = service.completedResultCounts(eventIds = events.map { it.event.id })
+                val showRaw = service.callerCanSeeRawRating(token = verifiedToken())
                 call.respond(
                     status = HttpStatusCode.OK,
-                    message = events.map { it.toResponse(completedMatchCount = counts[it.event.id] ?: 0) },
+                    message = events.map { it.toResponse(completedMatchCount = counts[it.event.id] ?: 0, showRawRating = showRaw) },
                 )
             }
         }
@@ -190,6 +191,8 @@ private fun Route.byIdAndParticipants(service: EventService) {
     get(path = "/{id}") {
         respondMappingErrors {
             respondEither(result = service.get(token = verifiedToken(), id = uuidParam(name = "id"))) { event ->
+                // Raw participant ratings are ADMINISTRATOR-only (#583); band-only on single-event detail
+                // for now (no leak). Admins still see raw on the event list.
                 call.respond(status = HttpStatusCode.OK, message = event.toResponse())
             }
         }

@@ -442,8 +442,8 @@ class MatchServiceTest {
         service.uploadResult(token = token(uid = "root"), matchId = match.id, request = straightSets()).shouldBeRight()
         calc.calculate(token = token(uid = "root"), dryRun = false) // commit, persisting the breakdown
 
-        // A participant can read their own match's calculation detail.
-        val detail = service.calculationDetail(token = token(uid = "p1"), matchId = match.id).shouldBeRight()
+        // The calculation breakdown is an ADMINISTRATOR-only analysis tool (#583).
+        val detail = service.calculationDetail(token = token(uid = "root"), matchId = match.id).shouldBeRight()
         detail.match.id shouldBe match.id
         detail.players.map { it.userId } shouldBe listOf(p1.id, p2.id) // team1-then-team2 order
 
@@ -462,7 +462,7 @@ class MatchServiceTest {
     }
 
     @Test
-    fun `calculationDetail is gated to participants and staff and 404s without a calculation`() {
+    fun `calculationDetail is ADMINISTRATOR-only and 404s without a calculation (#583)`() {
         provisionUser(uid = "root", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val p1 = provisionUser(uid = "p1", rated = true)
         val p2 = provisionUser(uid = "p2", rated = true)
@@ -911,18 +911,24 @@ class MatchServiceTest {
             change.newRating.shouldBeNull()
         }
 
-        // Both a RATER and an ADMINISTRATOR see the precise 6-dp rates.
-        for (uid in listOf("rater", "root")) {
-            val staffChanges =
-                service.publicByCode(token = token(uid = uid), code = match.publicCode).shouldBeRight().ratingChanges.shouldNotBeNull()
-            staffChanges.forEach { change ->
-                change.previousRating.shouldNotBeNull()
-                change.newRating.shouldNotBeNull()
-                change.ratingChange.shouldNotBeNull()
+        // A RATER no longer sees the precise rates (#583) — bands only, like any non-admin viewer.
+        service.publicByCode(token = token(uid = "rater"), code = match.publicCode).shouldBeRight().ratingChanges
+            .shouldNotBeNull().forEach { change ->
+                change.newLevel.shouldNotBeNull()
+                change.newRating.shouldBeNull()
+                change.ratingChange.shouldBeNull()
             }
-            // The fractional part carries 6 digits, matching the NUMERIC(10,6) storage.
-            staffChanges.first().newRating.shouldNotBeNull().substringAfter(delimiter = ".").length shouldBe 6
+
+        // Only an ADMINISTRATOR sees the precise 6-dp rates.
+        val staffChanges =
+            service.publicByCode(token = token(uid = "root"), code = match.publicCode).shouldBeRight().ratingChanges.shouldNotBeNull()
+        staffChanges.forEach { change ->
+            change.previousRating.shouldNotBeNull()
+            change.newRating.shouldNotBeNull()
+            change.ratingChange.shouldNotBeNull()
         }
+        // The fractional part carries 6 digits, matching the NUMERIC(10,6) storage.
+        staffChanges.first().newRating.shouldNotBeNull().substringAfter(delimiter = ".").length shouldBe 6
     }
 
     @Test

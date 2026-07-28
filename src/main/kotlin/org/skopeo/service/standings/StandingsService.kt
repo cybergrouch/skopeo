@@ -3,7 +3,6 @@
 
 package org.skopeo.service.standings
 
-import org.skopeo.model.Capability
 import org.skopeo.model.PlayerStanding
 import org.skopeo.model.SnapshotSource
 import org.skopeo.model.StandingEntry
@@ -12,6 +11,7 @@ import org.skopeo.model.StandingsLocation
 import org.skopeo.model.User
 import org.skopeo.model.UserRating
 import org.skopeo.model.ageInYears
+import org.skopeo.model.canSeeRawRatingOrFalse
 import org.skopeo.model.displayName
 import org.skopeo.model.isDeleted
 import org.skopeo.repository.RatingRepository
@@ -343,10 +343,10 @@ class StandingsService(
         }
 
     /** Whether the viewer may see precise ratings (RATER or ADMINISTRATOR), mirroring the match page (#136/#186). */
-    private fun callerCanSeeRates(token: VerifiedFirebaseToken): Boolean {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid) ?: return false
-        return caller.capabilities.any { it == Capability.RATER || it == Capability.ADMINISTRATOR }
-    }
+    private fun callerCanSeeRates(token: VerifiedFirebaseToken): Boolean =
+        // Raw rating values are ADMINISTRATOR-only (#583); a RATER seeing them was a leak. Honors the
+        // per-admin "preview as non-admin" toggle via [User.canSeeRawRating].
+        users.findByFirebaseUid(firebaseUid = token.uid).canSeeRawRatingOrFalse()
 
     private fun standingsComparator(current: Map<UUID, UserRating>): Comparator<User> =
         Comparator { left, right ->

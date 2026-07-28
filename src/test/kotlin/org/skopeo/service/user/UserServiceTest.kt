@@ -322,6 +322,29 @@ class UserServiceTest {
         )
 
     @Test
+    fun `setRatingPreview toggles the per-admin flag for an admin, and is forbidden for a non-admin (#583)`() {
+        provisionAdmin(uid = "admin")
+        service.provision(token = token(uid = "player"), request = request).shouldBeRight()
+
+        // The admin turns the preview on then off; the stored flag follows and the return echoes it.
+        service.setRatingPreview(token = token(uid = "admin"), previewAsNonAdmin = true).shouldBeRight() shouldBe true
+        repository.findByFirebaseUid(firebaseUid = "admin")!!.previewRatingsAsNonAdmin shouldBe true
+        service.setRatingPreview(token = token(uid = "admin"), previewAsNonAdmin = false).shouldBeRight() shouldBe false
+        repository.findByFirebaseUid(firebaseUid = "admin")!!.previewRatingsAsNonAdmin shouldBe false
+
+        // It's audited as SETTINGS_RATING_PREVIEW_CHANGED.
+        AuditRepository()
+            .list(actions = listOf(element = AuditAction.SETTINGS_RATING_PREVIEW_CHANGED), limit = 10, offset = 0)
+            .first.isNotEmpty() shouldBe true
+
+        // A non-admin (and an unknown caller) cannot set it.
+        service.setRatingPreview(token = token(uid = "player"), previewAsNonAdmin = true)
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service.setRatingPreview(token = token(uid = "ghost"), previewAsNonAdmin = true)
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
+    @Test
     fun `an ADMINISTRATOR soft-deletes another account and it is audited (#518)`() {
         provisionAdmin(uid = "admin-del")
         val target = service.provision(token = token(uid = "victim"), request = request).shouldBeRight().user

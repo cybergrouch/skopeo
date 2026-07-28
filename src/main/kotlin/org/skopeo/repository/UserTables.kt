@@ -49,6 +49,10 @@ internal object UsersTable : UUIDTable(name = "users") {
     val localTheme = varchar(name = "local_theme", length = THEME_MAX).nullable()
     val localThemeSetAt = datetime(name = "local_theme_set_at").nullable()
 
+    // Per-admin "preview as non-admin" toggle (#583): when true, this admin sees the band-only (no raw
+    // NTRP value) view. Default false = an admin sees raw values normally. Only meaningful for admins.
+    val previewRatingsAsNonAdmin = bool(name = "preview_ratings_as_non_admin").default(defaultValue = false)
+
     // When set, this user is a disabled duplicate of the referenced canonical account (#124).
     val canonicalUserId =
         reference(name = "canonical_user_id", foreign = UsersTable, onDelete = ReferenceOption.SET_NULL).nullable()

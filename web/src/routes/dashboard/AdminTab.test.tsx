@@ -29,6 +29,9 @@ vi.mock("./admin/CircuitsSection", () => ({
 vi.mock("./admin/ThemeSection", () => ({
   ThemeSection: () => <div>theme section</div>,
 }));
+vi.mock("./admin/RawRatingsSection", () => ({
+  RawRatingsSection: () => <div>raw ratings section</div>,
+}));
 vi.mock("./admin/StandingsSourceSection", () => ({
   StandingsSourceSection: () => <div>standings source section</div>,
 }));

@@ -131,6 +131,16 @@ class EventServiceTest {
     )
 
     @Test
+    fun `callerCanSeeRawRating is true only for an administrator (#583)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+
+        service.callerCanSeeRawRating(token = token(uid = "admin")).shouldBeTrue()
+        service.callerCanSeeRawRating(token = token(uid = "host")).shouldBeFalse()
+        service.callerCanSeeRawRating(token = token(uid = "ghost")).shouldBeFalse()
+    }
+
+    @Test
     fun `a host creates an event with a resolved participant roster`() {
         provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val p1 = provision(uid = "p1")

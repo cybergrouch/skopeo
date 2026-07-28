@@ -22,6 +22,7 @@ import org.skopeo.dto.seeding.toResponse
 import org.skopeo.dto.seeding.toSummaryResponse
 import org.skopeo.service.seeding.PlayerListService
 import org.skopeo.service.seeding.SeedingService
+import org.skopeo.service.user.UserService
 import java.util.UUID
 
 /**
@@ -31,6 +32,7 @@ import java.util.UUID
 fun Application.configurePlayerListRoutes(
     listService: PlayerListService = PlayerListService(),
     seedingService: SeedingService = SeedingService(),
+    userService: UserService = UserService(),
 ) {
     routing {
         authenticate(FIREBASE_AUTH) {
@@ -38,7 +40,7 @@ fun Application.configurePlayerListRoutes(
                 listsCollection(service = listService)
                 listById(service = listService)
                 members(service = listService)
-                seeding(service = seedingService)
+                seeding(service = seedingService, userService = userService)
             }
         }
     }
@@ -107,18 +109,24 @@ private fun Route.members(service: PlayerListService) {
     }
 }
 
-private fun Route.seeding(service: SeedingService) {
+private fun Route.seeding(
+    service: SeedingService,
+    userService: UserService,
+) {
     post(path = "/{id}/seeding") {
         respondMappingErrors {
+            // Raw rating is ADMINISTRATOR-only (#583): non-admin staff get the band + seed order only.
+            val showRaw = userService.callerCanSeeRawRating(token = verifiedToken())
             respondEither(result = service.generate(token = verifiedToken(), listId = uuidParam(name = "id"))) { seeding ->
-                call.respond(status = HttpStatusCode.OK, message = seeding.toResponse())
+                call.respond(status = HttpStatusCode.OK, message = seeding.toResponse(showRawRating = showRaw))
             }
         }
     }
     get(path = "/{id}/seeding") {
         respondMappingErrors {
+            val showRaw = userService.callerCanSeeRawRating(token = verifiedToken())
             respondEither(result = service.get(token = verifiedToken(), listId = uuidParam(name = "id"))) { seeding ->
-                call.respond(status = HttpStatusCode.OK, message = seeding.toResponse())
+                call.respond(status = HttpStatusCode.OK, message = seeding.toResponse(showRawRating = showRaw))
             }
         }
     }

@@ -28,7 +28,9 @@ data class PublicPlayerResponse(
 
 @Serializable
 data class PublicRatingDto(
-    val value: String,
+    // The raw NTRP rating (full precision) — ADMINISTRATOR-only (#583); null for every other viewer,
+    // who sees only the band [level] + [confidence] (+ the in-band speedometer).
+    val value: String? = null,
     val level: String?,
     // Computed rating confidence as a 0..1 decimal string (#343); the UI shows it as a percentage.
     // 0 when the rating isn't match-derived (self-rating / override).

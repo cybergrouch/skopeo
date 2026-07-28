@@ -104,6 +104,10 @@ export function RatingHistoryCard({
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(0);
   const pageEntries = entries.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  // Raw NTRP values (and the drill-down calculation breakdown) are ADMINISTRATOR-only (#583). The
+  // backend nulls the raw fields and returns band-jump entries only for non-admins, so infer the
+  // viewer's access from whether any entry carries a raw value.
+  const rawVisible = entries.some((e) => e.previousRating != null);
 
   function toggle(id: string) {
     setExpanded((prev) => {
@@ -136,11 +140,20 @@ export function RatingHistoryCard({
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : entries.length > 0 ? (
           <>
+            {!rawVisible ? (
+              <p className="mb-2 text-xs text-muted-foreground">
+                Showing band changes only.
+              </p>
+            ) : null}
             <ul className="space-y-2">
               {pageEntries.map((entry) => {
                 const prevBand = entry.previousLevel ?? "—";
                 const newBand = entry.newLevel ?? "—";
                 const isOpen = expanded.has(entry.id);
+                // Local const so the null-narrowing sticks through the nested JSX below.
+                const matchId = entry.matchId;
+                // Only admins get the raw value + the clickable calculation breakdown (#583).
+                const canExpand = matchId != null && entry.previousRating != null;
                 const content = (
                   <>
                     <div className="flex items-center justify-between gap-2">
@@ -151,7 +164,7 @@ export function RatingHistoryCard({
                         {entry.levelChanged ? (
                           <Badge variant="secondary">{`Band ${prevBand} → ${newBand}`}</Badge>
                         ) : null}
-                        {entry.matchId ? (
+                        {canExpand ? (
                           <span
                             aria-hidden="true"
                             className="text-muted-foreground"
@@ -161,7 +174,9 @@ export function RatingHistoryCard({
                         ) : null}
                       </span>
                     </div>
-                    <div className="mt-1">{`${entry.previousRating} → ${entry.newRating}`}</div>
+                    {entry.previousRating != null ? (
+                      <div className="mt-1">{`${entry.previousRating} → ${entry.newRating}`}</div>
+                    ) : null}
                     <div className="text-muted-foreground">{`NTRP ${prevBand} → ${newBand}`}</div>
                   </>
                 );
@@ -172,7 +187,7 @@ export function RatingHistoryCard({
                       entry.levelChanged ? "border-primary bg-primary/5" : ""
                     }`}
                   >
-                    {entry.matchId ? (
+                    {canExpand ? (
                       <button
                         type="button"
                         className="block w-full p-3 text-left hover:bg-muted/50"
@@ -184,9 +199,9 @@ export function RatingHistoryCard({
                     ) : (
                       <div className="p-3">{content}</div>
                     )}
-                    {entry.matchId && isOpen ? (
+                    {canExpand && isOpen && matchId != null ? (
                       <div className="border-t px-3 py-2">
-                        <MatchCalculationDetail matchId={entry.matchId} />
+                        <MatchCalculationDetail matchId={matchId} />
                       </div>
                     ) : null}
                   </li>

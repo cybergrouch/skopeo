@@ -32,6 +32,19 @@ class OpenAPIIntegrationTest {
             body shouldContain "CreateCircuitRequest"
         }
 
+    /** Per-admin raw-rating preview toggle (#583): the self-service route + its request schema. */
+    @Test
+    fun testOpenAPISpecIncludesRatingPreviewToggle() =
+        testApplication {
+            application {
+                module(initDatabase = false)
+            }
+            val body = client.get(urlString = "/openapi.yaml").bodyAsText()
+            body shouldContain "/api/v1/users/me/rating-preview"
+            body shouldContain "SetRatingPreviewRequest"
+            body shouldContain "previewRatingsAsNonAdmin"
+        }
+
     /** Tournaments (#525): circuit-on-event, club sanction, and placement-match fields are documented. */
     @Test
     fun testOpenAPISpecIncludesTournamentFields() =

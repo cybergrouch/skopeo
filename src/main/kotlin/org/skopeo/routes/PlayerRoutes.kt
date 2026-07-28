@@ -40,7 +40,7 @@ private fun Route.publicPlayerReads(service: PlayerService) {
     get(path = "/{code}") {
         respondMappingErrors {
             val code = call.parameters["code"].orEmpty()
-            respondEither(result = service.publicProfile(code = code)) { profile ->
+            respondEither(result = service.publicProfile(code = code, token = optionalVerifiedToken())) { profile ->
                 call.respond(status = HttpStatusCode.OK, message = profile)
             }
         }

@@ -135,6 +135,9 @@ data class User(
     val placeholder: Boolean = false,
     val claimedAt: LocalDateTime? = null,
     val claimedBy: UUID? = null,
+    // Per-admin "preview as non-admin" toggle (#583): when true, this admin sees the band-only rating
+    // view (no raw NTRP value). Default false; only meaningful for administrators.
+    val previewRatingsAsNonAdmin: Boolean = false,
     val names: List<Name>,
     val contacts: List<Contact>,
     val identities: List<UserIdentity>,
@@ -158,6 +161,16 @@ fun effectivePhotoUrl(
  * qualified as inactive AND canonical-less. Centralized so every "Deleted" flag/list uses the same rule.
  */
 fun User.isDeleted(): Boolean = !isActive && canonicalUserId == null
+
+/**
+ * Whether this viewer may see the raw NTRP rating value (full precision), #583. ADMINISTRATOR only,
+ * and never while that admin has the per-admin "preview as non-admin" toggle on. Everyone else sees
+ * the band + confidence + speedometer only. Anonymous/unresolved viewers get false at the call site.
+ */
+fun User.canSeeRawRating(): Boolean = capabilities.contains(element = Capability.ADMINISTRATOR) && !previewRatingsAsNonAdmin
+
+/** Null-safe [canSeeRawRating] for optional/anonymous callers: no caller ⇒ band only. */
+fun User?.canSeeRawRatingOrFalse(): Boolean = this?.canSeeRawRating() == true
 
 /** The user's single active display name, if any (names include disabled ones). */
 fun User.displayName(): String? = names.firstOrNull { it.type == NameType.DISPLAY && it.isActive }?.value
