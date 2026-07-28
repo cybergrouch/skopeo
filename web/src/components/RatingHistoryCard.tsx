@@ -1,13 +1,7 @@
 import { useState } from "react";
 import type { RatingHistoryResponse } from "@/api/generated/model";
 import { useGetApiV1MatchesIdCalculation } from "@/api/generated/matches/matches";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { CollapsibleCard } from "@/components/CollapsibleCard";
 import { Badge } from "@/components/ui/badge";
 import { CalculationBreakdownDetail } from "@/components/CalculationBreakdownDetail";
 import { NumberedPager } from "@/components/NumberedPager";
@@ -27,6 +21,8 @@ interface RatingHistoryCardProps {
    * header (their current rating's freshness), not repeated per historical row.
    */
   confidence?: string | null;
+  /** Start minimized behind a "Show all" toggle (#589) — used on the owner's Profile tab. */
+  collapsible?: boolean;
 }
 
 /**
@@ -99,6 +95,7 @@ export function RatingHistoryCard({
   isLoading = false,
   description = "Changes from rated matches.",
   confidence,
+  collapsible = false,
 }: RatingHistoryCardProps) {
   const confidencePct = formatConfidence(confidence);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -122,21 +119,21 @@ export function RatingHistoryCard({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>
+    <CollapsibleCard
+      collapsible={collapsible}
+      title={
+        <>
           Rating history
           {confidencePct ? (
             <span className="ml-2 text-sm font-normal text-muted-foreground">
-              Current confidence:{" "}
-              <ConfidenceValue confidence={confidence} />
+              Current confidence: <ConfidenceValue confidence={confidence} />
             </span>
           ) : null}
-        </CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
+        </>
+      }
+      description={description}
+    >
+      {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : entries.length > 0 ? (
           <>
@@ -222,7 +219,6 @@ export function RatingHistoryCard({
             No rating changes yet.
           </p>
         )}
-      </CardContent>
-    </Card>
+    </CollapsibleCard>
   );
 }

@@ -18,10 +18,6 @@ import { RatingBandMeter } from "@/components/RatingBandMeter";
 import { formatConfidence } from "@/lib/confidence";
 import { ConfidenceValue } from "@/components/ConfidenceValue";
 import { ShareCard } from "@/components/ShareCard";
-import { ReRateRequestCard } from "@/components/ReRateRequestCard";
-import { ProfileFieldsForm } from "@/components/ProfileFieldsForm";
-import { PhotoSettingsForm } from "@/components/PhotoSettingsForm";
-import { LocalThemeForm } from "@/components/LocalThemeForm";
 import type { Capability } from "@/auth/capabilities";
 import {
   useGetApiV1UsersUserIdRatingHistory,
@@ -161,50 +157,40 @@ export function ProfileTab({
               </div>
             )}
           </div>
+
+          {/* Ranking sits directly below Rating in the identity card (#589): band+sex rank + the
+              metric backing it (#448), shown here on the owner's own profile. */}
+          {publicCode ? (
+            <PlayerStandingCard code={publicCode} asSection={true} />
+          ) : null}
         </CardContent>
       </Card>
 
-      {/* Band+sex rank + points headline (#448) — public, but shown here on the owner's own profile. */}
-      {publicCode ? <PlayerStandingCard code={publicCode} /> : null}
+      <UpcomingMatchesCard />
+
+      {/* History sections default to a compact preview on the owner's Profile tab (#589). */}
+      <EventsHistoryCard collapsible={true} />
+
+      {publicCode ? (
+        <MatchHistoryCard code={publicCode} collapsible={true} />
+      ) : null}
+
+      {publicCode ? <WinLossCard code={publicCode} /> : null}
+
+      <RatingHistoryCard
+        entries={history}
+        isLoading={historyQuery.isLoading}
+        description="Changes from your rated matches."
+        confidence={ratings[0]?.confidence}
+        collapsible={true}
+      />
 
       {/* Active-points audit (#448) — the owner is always viewing their own profile, so it's enabled. */}
-      {publicCode ? <PointsAuditCard code={publicCode} enabled={true} /> : null}
+      {publicCode ? (
+        <PointsAuditCard code={publicCode} enabled={true} collapsible={true} />
+      ) : null}
 
-      {hasRating ? <ReRateRequestCard /> : null}
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Profile details</CardTitle>
-          <CardDescription>
-            Edit your display name and (private) first/last name, plus your date
-            of birth and sex.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <ProfileFieldsForm userId={userId} />
-          <div className="space-y-1 border-t pt-4">
-            <p className="text-sm font-medium">Photo</p>
-            <p className="text-xs text-muted-foreground">
-              Hide your photo, or show a custom image instead of your
-              Google/Facebook one.
-            </p>
-            <div className="pt-1">
-              <PhotoSettingsForm userId={userId} />
-            </div>
-          </div>
-          {/* Per-user local theme (#514): override the site theme, or follow the global default. */}
-          <div className="space-y-1 border-t pt-4">
-            <p className="text-sm font-medium">Appearance</p>
-            <p className="text-xs text-muted-foreground">
-              Choose your own theme, or follow the site default.
-            </p>
-            <div className="pt-1">
-              <LocalThemeForm />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
+      {/* Share (QR) is the last section (#589). */}
       {publicCode ? (
         <ShareCard
           url={shareUrl}
@@ -212,21 +198,6 @@ export function ProfileTab({
           description="Anyone signed in can scan this code or open the link to view your profile."
         />
       ) : null}
-
-      <RatingHistoryCard
-        entries={history}
-        isLoading={historyQuery.isLoading}
-        description="Changes from your rated matches."
-        confidence={ratings[0]?.confidence}
-      />
-
-      <UpcomingMatchesCard />
-
-      {publicCode ? <MatchHistoryCard code={publicCode} /> : null}
-
-      {publicCode ? <WinLossCard code={publicCode} /> : null}
-
-      <EventsHistoryCard />
     </div>
   );
 }

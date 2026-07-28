@@ -36,10 +36,6 @@ vi.mock("@/auth/useAuth", () => ({ useAuth: useAuthMock }));
 vi.mock("@/components/RatingBandMeter", () => ({
   RatingBandMeter: () => <div>band meter</div>,
 }));
-// The re-rate card has its own API wiring + tests (#140); stub it here.
-vi.mock("@/components/ReRateRequestCard", () => ({
-  ReRateRequestCard: () => <div>re-rate card</div>,
-}));
 // The win–loss card has its own API hook + tests (#276); stub it here.
 vi.mock("@/components/WinLossCard", () => ({
   WinLossCard: ({ code }: { code: string }) => <div>win-loss:{code}</div>,
@@ -52,19 +48,6 @@ vi.mock("@/components/PlayerStandingCard", () => ({
 vi.mock("@/components/PointsAuditCard", () => ({
   PointsAuditCard: ({ code, enabled }: { code: string; enabled: boolean }) =>
     enabled ? <div>points-audit:{code}</div> : null,
-}));
-// The editable name/demographics form has its own tests (#196/#199); stub it here so this test
-// stays focused on the Profile shell.
-vi.mock("@/components/ProfileFieldsForm", () => ({
-  ProfileFieldsForm: () => <div>profile fields form</div>,
-}));
-// The photo-settings form has its own API wiring + tests (#303); stub it here.
-vi.mock("@/components/PhotoSettingsForm", () => ({
-  PhotoSettingsForm: () => <div>photo settings form</div>,
-}));
-// The local-theme selector has its own API wiring + tests (#514); stub it here.
-vi.mock("@/components/LocalThemeForm", () => ({
-  LocalThemeForm: () => <div>local theme form</div>,
 }));
 // The events-history card has its own tests (#202) + its own API hook; stub it here.
 vi.mock("@/components/EventsHistoryCard", () => ({
@@ -222,10 +205,26 @@ describe("ProfileTab", () => {
     expect(screen.getByText("R")).toBeInTheDocument();
   });
 
-  it("renders the editable profile-details form", () => {
-    renderProfile();
-    expect(screen.getByText("Profile details")).toBeInTheDocument();
-    expect(screen.getByText("profile fields form")).toBeInTheDocument();
+  it("no longer hosts the owner actions moved to the Settings tab (#589)", () => {
+    renderProfile([Capability.PLAYER], "K7Q2MX");
+    // Edit-profile-details and rating-reconsideration now live on the Settings tab.
+    expect(screen.queryByText("Profile details")).not.toBeInTheDocument();
+    expect(screen.queryByText("Edit profile details")).not.toBeInTheDocument();
+    expect(screen.queryByText("re-rate card")).not.toBeInTheDocument();
+  });
+
+  it("shows the Ranking sub-section within the identity card, below Rating (#589)", () => {
+    renderProfile([Capability.PLAYER], "K7Q2MX");
+    // Rating label (identity card) precedes the Ranking sub-section (rendered via PlayerStandingCard).
+    const rating = screen.getByText("Rating");
+    const ranking = screen.getByText("standing:K7Q2MX");
+    expect(rating).toBeInTheDocument();
+    expect(ranking).toBeInTheDocument();
+    // The ranking node comes after the rating node in document order.
+    expect(
+      rating.compareDocumentPosition(ranking) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it("shows the pending notice when there is no rating", () => {

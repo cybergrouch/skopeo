@@ -16,6 +16,12 @@ function groupLabel(band: string, sex: string | null | undefined): string {
 interface PlayerStandingCardProps {
   /** The player's shareable public code (#448). */
   code: string;
+  /**
+   * Render as a sub-section of an enclosing card (#589) — a bordered "Ranking" block matching the
+   * Rating sub-section on the owner's Profile identity card — instead of a standalone Card. Default
+   * false keeps the standalone card used on public profiles.
+   */
+  asSection?: boolean;
 }
 
 /**
@@ -26,7 +32,7 @@ interface PlayerStandingCardProps {
  * "#4 · NTRP 4.1 · 4.0 Men"; other viewers see "#4 · 4.0 Men" (rank + band only, no rating leaked).
  * A 204 (unranked: unrated / no points) yields no data, and the card shows "Unranked".
  */
-export function PlayerStandingCard({ code }: PlayerStandingCardProps) {
+export function PlayerStandingCard({ code, asSection = false }: PlayerStandingCardProps) {
   const { data, isLoading } = useGetApiV1PlayersCodeStanding(code, {
     query: { enabled: Boolean(code) },
   });
@@ -42,29 +48,41 @@ export function PlayerStandingCard({ code }: PlayerStandingCardProps) {
     return data.rating ? `NTRP ${data.rating}` : null;
   }
 
+  const body = isLoading ? (
+    <p className="text-sm text-muted-foreground">Loading…</p>
+  ) : data ? (
+    <p className="text-sm">
+      <span className="text-lg font-semibold">#{data.rank}</span>
+      <span className="text-muted-foreground">
+        {" · "}
+        {(() => {
+          const m = metric();
+          return m ? `${m} · ${groupLabel(data.band, data.sex)}` : groupLabel(data.band, data.sex);
+        })()}
+      </span>
+    </p>
+  ) : (
+    <p className="text-sm text-muted-foreground">Unranked</p>
+  );
+
+  // As a sub-section (#589): a bordered "Ranking" block mirroring the Rating sub-section it sits below.
+  if (asSection) {
+    return (
+      <div className="space-y-2 border-t pt-3">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Ranking
+        </p>
+        {body}
+      </div>
+    );
+  }
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Ranking</CardTitle>
       </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
-        ) : data ? (
-          <p className="text-sm">
-            <span className="text-lg font-semibold">#{data.rank}</span>
-            <span className="text-muted-foreground">
-              {" · "}
-              {(() => {
-                const m = metric();
-                return m ? `${m} · ${groupLabel(data.band, data.sex)}` : groupLabel(data.band, data.sex);
-              })()}
-            </span>
-          </p>
-        ) : (
-          <p className="text-sm text-muted-foreground">Unranked</p>
-        )}
-      </CardContent>
+      <CardContent>{body}</CardContent>
     </Card>
   );
 }

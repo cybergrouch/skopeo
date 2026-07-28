@@ -1,11 +1,5 @@
 import { Link } from 'react-router-dom'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { CollapsibleCard } from '@/components/CollapsibleCard'
 import { useGetApiV1EventsMine } from '@/api/generated/events/events'
 import type { MyEventResponse } from '@/api/generated/model'
 
@@ -80,7 +74,7 @@ function hasResults(event: MyEventResponse): boolean {
  * recorded results (activity started, not concluded); Upcoming = future and untouched. Mirrors the
  * Match history card. Pending/held requests are labelled so confirmed participation stands out.
  */
-export function EventsHistoryCard() {
+export function EventsHistoryCard({ collapsible = false }: { collapsible?: boolean } = {}) {
   const query = useGetApiV1EventsMine()
   const events = query.data ?? []
   const today = todayIso()
@@ -100,32 +94,31 @@ export function EventsHistoryCard() {
   const finalizedSorted = [...finalized].sort(byEndDesc)
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Events history</CardTitle>
-        <CardDescription>Events you’ve signed up for.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4 text-sm">
-        {query.isLoading ? (
-          <p className="text-muted-foreground">Loading…</p>
-        ) : events.length === 0 ? (
-          <p className="text-muted-foreground">You haven’t joined any events yet.</p>
-        ) : (
-          <>
-            <EventSection title="Upcoming" events={upcomingSorted} emptyLabel="No upcoming events." />
-            <EventSection
-              title="Unfinalized"
-              events={unfinalizedSorted}
-              emptyLabel="No unfinalized events."
-            />
-            <EventSection
-              title="Finalized"
-              events={finalizedSorted}
-              emptyLabel="No finalized events."
-            />
-          </>
-        )}
-      </CardContent>
-    </Card>
+    <CollapsibleCard
+      title="Events history"
+      description="Events you’ve signed up for."
+      contentClassName="space-y-4 text-sm"
+      collapsible={collapsible}
+    >
+      {query.isLoading ? (
+        <p className="text-muted-foreground">Loading…</p>
+      ) : events.length === 0 ? (
+        <p className="text-muted-foreground">You haven’t joined any events yet.</p>
+      ) : (
+        <>
+          <EventSection title="Upcoming" events={upcomingSorted} emptyLabel="No upcoming events." />
+          <EventSection
+            title="Unfinalized"
+            events={unfinalizedSorted}
+            emptyLabel="No unfinalized events."
+          />
+          <EventSection
+            title="Finalized"
+            events={finalizedSorted}
+            emptyLabel="No finalized events."
+          />
+        </>
+      )}
+    </CollapsibleCard>
   )
 }

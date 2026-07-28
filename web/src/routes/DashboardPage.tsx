@@ -17,10 +17,12 @@ import {
   canManagePointsBudget,
   canRate,
   isAdministrator,
+  isPlayer,
   isResearcher,
 } from "@/auth/capabilities";
 import { useGetApiV1UsersMe } from "@/api/generated/users/users";
 import { ProfileTab } from "./dashboard/ProfileTab";
+import { SettingsTab } from "./dashboard/SettingsTab";
 import { AdminTab } from "./dashboard/AdminTab";
 import { PointsManagementSection } from "./dashboard/admin/PointsManagementSection";
 import { EventOrganizerTab } from "./dashboard/EventOrganizerTab";
@@ -51,6 +53,7 @@ export function DashboardPage() {
   const showMatches = canManageMatches(capabilities);
   const showSeeding = canManageMatches(capabilities);
   const showRatings = canRate(capabilities);
+  const showSettings = isPlayer(capabilities);
   const showResearch = isResearcher(capabilities);
   const showInvites = isAdministrator(capabilities);
   const showActivity = isAdministrator(capabilities);
@@ -83,6 +86,17 @@ export function DashboardPage() {
         />
       ),
     },
+    // Settings (#589): the owner's account actions, split out of Profile. Right after Profile since
+    // they're the two personal tabs. PLAYER-gated → present for every signed-in user.
+    ...(showSettings
+      ? [
+          {
+            value: "settings",
+            label: "Settings",
+            element: <SettingsTab userId={me?.id ?? ""} />,
+          },
+        ]
+      : []),
     ...(showResearch
       ? [{ value: "research", label: "Research", element: <ResearchTab /> }]
       : []),

@@ -20,6 +20,9 @@ vi.mock('react-router-dom', async (importOriginal) => {
 vi.mock('./dashboard/ProfileTab', () => ({
   ProfileTab: () => <div>profile content</div>,
 }))
+vi.mock('./dashboard/SettingsTab', () => ({
+  SettingsTab: () => <div>settings content</div>,
+}))
 vi.mock('./dashboard/AdminTab', () => ({
   AdminTab: () => <div>admin content</div>,
 }))
@@ -98,6 +101,8 @@ describe('DashboardPage', () => {
     renderDashboard()
     await openMenu(user)
     expect(screen.getByRole('button', { name: 'Profile' })).toBeInTheDocument()
+    // Settings (#589) is PLAYER-gated, so it's present for every signed-in user.
+    expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Research' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Standings' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Event Organizer' })).not.toBeInTheDocument()
@@ -109,6 +114,18 @@ describe('DashboardPage', () => {
     expect(screen.queryByRole('button', { name: 'Reports' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Points Management' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Admin' })).not.toBeInTheDocument()
+  })
+
+  it('opens the Settings tab content when selected (#589)', async () => {
+    useGetApiV1UsersMe.mockReturnValue({
+      data: { id: 'u1', capabilities: ['PLAYER'] },
+      isLoading: false,
+    })
+    const user = userEvent.setup()
+    renderDashboard()
+    await openMenu(user)
+    await user.click(screen.getByRole('button', { name: 'Settings' }))
+    expect(screen.getByText('settings content')).toBeInTheDocument()
   })
 
   it('hides the Research item from a player without RESEARCHER (#107)', async () => {

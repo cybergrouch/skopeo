@@ -33,6 +33,16 @@ export function isAdministrator(
 }
 
 /**
+ * The Settings tab is for players managing their own account (#589): every signed-in user is a PLAYER,
+ * so in practice this is always true — it's an explicit gate so the tab reads as player-owned.
+ */
+export function isPlayer(
+  capabilities: readonly Capability[] | undefined,
+): boolean {
+  return hasCapability(capabilities, Capability.PLAYER);
+}
+
+/**
  * Who may still enter data on an event after it has ended (#310, #326): administrators and club
  * owners. A plain HOST is blocked once the event's end date has passed — this mirrors the backend
  * EXPIRY_EXEMPT_ROLES, so the UI just avoids offering an action the server would 409.
