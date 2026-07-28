@@ -59,4 +59,18 @@ describe("RawRatingsSection", () => {
     await waitFor(() => expect(putMutate).toHaveBeenCalledWith({ data: { previewAsNonAdmin: true } }));
     expect(screen.getByRole("status")).toHaveTextContent("Saved");
   });
+
+  it("surfaces an error when the save fails", async () => {
+    // Drive the mutation's onError path.
+    usePut.mockImplementation((options: MutationOpts) => ({
+      isPending: false,
+      mutate: () => options.mutation.onError?.(new Error("boom")),
+    }));
+    const user = userEvent.setup();
+    renderSection();
+    await user.click(screen.getByLabelText("Show raw NTRP ratings"));
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent("Could not update the setting"),
+    );
+  });
 });

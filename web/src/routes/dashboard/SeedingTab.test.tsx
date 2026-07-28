@@ -3,6 +3,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { SeedingTab } from './SeedingTab'
+import { seedingCsv } from '@/lib/seedingCsv'
+import type { SeedingEntryResponse } from '@/api/generated/model'
 
 const {
   useGetApiV1PlayerLists,
@@ -479,5 +481,31 @@ describe('SeedingTab', () => {
     expect(screen.queryByRole('button', { name: 'Download CSV' })).not.toBeInTheDocument()
     expect(createObjectURL).not.toHaveBeenCalled()
     vi.unstubAllGlobals()
+  })
+})
+
+describe('seedingCsv', () => {
+  const base: SeedingEntryResponse = {
+    seed: 1,
+    position: 1,
+    publicCode: 'ABC123',
+    displayName: 'Alex',
+    ntrpBand: '4.0',
+    rating: '4.250000',
+    sex: 'Male',
+    age: 30,
+  }
+
+  it('includes the raw rating column when present (admin, #583)', () => {
+    const csv = seedingCsv([base])
+    const dataRow = csv.split('\r\n')[1]
+    expect(dataRow).toBe('"1","Alex","ABC123","4.0","4.250000","Male","30"')
+  })
+
+  it('leaves the rating cell empty when the raw value is hidden (non-admin, #583)', () => {
+    const csv = seedingCsv([{ ...base, rating: null }])
+    const dataRow = csv.split('\r\n')[1]
+    // NTRP band still present; the Rating cell is blank.
+    expect(dataRow).toBe('"1","Alex","ABC123","4.0","","Male","30"')
   })
 })

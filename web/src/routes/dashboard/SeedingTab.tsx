@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useGetApiV1Users } from '@/api/generated/users/users'
 import { formatConfidence } from '@/lib/confidence'
+import { seedingCsv } from '@/lib/seedingCsv'
 import {
   getGetApiV1PlayerListsIdQueryKey,
   getGetApiV1PlayerListsIdSeedingQueryKey,
@@ -51,26 +52,6 @@ function interval(min: string, max: string): string | undefined {
   const hi = max.trim()
   if (!lo && !hi) return undefined
   return `${lo ? `[${lo}` : '('},${hi ? `${hi}]` : ')'}`
-}
-
-/** Wrap a CSV field in quotes, doubling any embedded quotes (RFC 4180). */
-function csvField(value: string): string {
-  return `"${value.replace(/"/g, '""')}"`
-}
-
-const CSV_HEADER = ['Seed', 'Name', 'Code', 'NTRP', 'Rating', 'Sex', 'Age']
-
-function seedingCsv(entries: SeedingEntryResponse[]): string {
-  const rows = entries.map((entry) => [
-    entry.seed != null ? String(entry.seed) : '',
-    entry.displayName ?? entry.publicCode,
-    entry.publicCode,
-    entry.ntrpBand ?? '',
-    entry.rating ?? '',
-    entry.sex ?? '',
-    entry.age != null ? String(entry.age) : '',
-  ])
-  return [CSV_HEADER, ...rows].map((row) => row.map(csvField).join(',')).join('\r\n')
 }
 
 /** Strip characters that are awkward in filenames; keep it deterministic from the list name. */
