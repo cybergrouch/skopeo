@@ -27,9 +27,9 @@ This is a **performance-based [Elo](#elo-rating-system) system**. Classical Elo 
 
 Every rating change, for both players, is one multiplication:
 
-```
-change = K × dominance × scale × sign
-```
+$$
+\text{change} = K \times \text{dominance} \times \text{scale} \times \text{sign}
+$$
 
 | Factor | Question it answers | Range | Detail |
 |---|---|---|---|
@@ -54,9 +54,9 @@ The raw `change` then passes through a short [post-processing pipeline](#5-the-p
 
 The **[K-factor](#k-factor)** is the classical Elo concept: a constant that converts the abstract outcome of the formula into points on a concrete rating scale. It is the *maximum* rating change a non-upset match can produce — reached only when both other factors hit 1.0 (equal players, shutout score):
 
-```
-max non-upset change = K × 1.0 × 1.0 = K
-```
+$$
+\text{max non-upset change} = K \times 1.0 \times 1.0 = K
+$$
 
 For NTRP, `K = 0.16`, which produces typical changes of ±0.032 (6-4 between equals) up to ±0.160 (6-0 between equals).
 
@@ -66,17 +66,17 @@ A larger K means faster convergence toward true skill but noisier ratings; a sma
 
 The **[dominance factor](#dominance-factor)** measures match closeness. Per set, it is the standard **[efficiency formula](#efficiency-formula)** — *net successes divided by total attempts* — applied to games:
 
-```
-setDominance = (gamesWon − gamesLost) / (gamesWon + gamesLost) = netGamesWon / totalGames
-```
+$$
+\text{setDominance} = \frac{\text{gamesWon} - \text{gamesLost}}{\text{gamesWon} + \text{gamesLost}} = \frac{\text{netGamesWon}}{\text{totalGames}}
+$$
 
 Read it as: **how many games of net advantage the player earned per game played in that set**. Winning exactly half the games yields zero efficiency (a perfectly even set); winning every game yields 1.0 (maximum efficiency, a shutout).
 
 For the match, dominance is the **average of the per-set dominances**:
 
-```
-dominance = (setDominance₁ + setDominance₂ + … + setDominanceₙ) / n
-```
+$$
+\text{dominance} = \frac{\text{setDominance}_1 + \text{setDominance}_2 + \dots + \text{setDominance}_n}{n}
+$$
 
 Why average sets rather than pool game totals across the match? Because **a game's weight depends on whether its set was won or lost** — sets are the structural unit of tennis, and games from different sets are not interchangeable. Pooling totals would let games from a lost set silently offset games from a won set. Averaging keeps each set's efficiency intact, and the base case is exact: a one-set match's dominance is simply that set's efficiency.
 
@@ -94,18 +94,21 @@ The scale factor converts the **[rating gap](#rating-gap)** between the players 
 
 Two preliminary definitions:
 
-```
-normalizedGap = |rating₁ − rating₂| / ratingRange      (gap as a fraction of the scale, see §3.1)
-threshold     = 0.083                                  (the competitive threshold, see §3.2)
-```
+$$
+\text{normalizedGap} = \frac{|\,\text{rating}_1 - \text{rating}_2\,|}{\text{ratingRange}} \quad (\text{gap as a fraction of the scale, see §3.1})
+$$
+
+$$
+\text{threshold} = 0.083 \quad (\text{the competitive threshold, see §3.2})
+$$
 
 The algorithm then takes one of **two paths**:
 
 #### Path A — Expected or competitive (the favorite won, or ratings were equal)
 
-```
-scale = max(0, (threshold − normalizedGap) / threshold)
-```
+$$
+\text{scale} = \max\!\left(0,\ \frac{\text{threshold} - \text{normalizedGap}}{\text{threshold}}\right)
+$$
 
 A straight line from 1.0 down to 0.0:
 
@@ -120,9 +123,9 @@ When the favorite beats a clearly weaker player, the ratings were already right 
 
 #### Path B — Upset (the underdog won)
 
-```
-scale = (normalizedGap / threshold) × upsetMultiplier        where upsetMultiplier = 2.0
-```
+$$
+\text{scale} = \frac{\text{normalizedGap}}{\text{threshold}} \times \text{upsetMultiplier}, \qquad \text{upsetMultiplier} = 2.0
+$$
 
 A straight line growing *with* the gap — the bigger the favorite that fell, the more wrong the ratings were:
 
@@ -143,6 +146,41 @@ isUpset = (isWinner && ratingAdvantage < 0) || (!isWinner && ratingAdvantage > 0
 ```
 
 Both players always land on the *same* path (one player's upset win is the other's upset loss), so they share the same scale value — preserving the zero-sum property.
+
+#### How `scale` varies with the gap (the two paths together)
+
+Both paths are straight lines in the gap, so it helps to see them together. Substituting `normalizedGap = g / ratingRange` and `threshold = 0.5 / ratingRange` (§3.1–§3.2), the `ratingRange` cancels and the two paths collapse to a clean form in the **raw NTRP gap `g`** (in rating points):
+
+$$
+\text{expected (favorite won)}: \quad \text{scale} = \max(0,\ 1 - 2g)
+$$
+
+$$
+\text{upset (underdog won)}: \quad \text{scale} = 4g
+$$
+
+(Both are then multiplied by the match-type factor $m$ before use — §2.5.)
+
+So as the gap widens:
+- the **expected** line slopes **down** — full (`1.0`) at `g = 0`, reaching `0` at `g = 0.5` NTRP (a favorite winning by a half-level is fully expected);
+- the **upset** line slopes **up** — `0` at `g = 0`, reaching `2.0` at `g = 0.5` NTRP (a half-level upset counts double).
+
+They cross where $4g = 1 - 2g$, i.e. at $g = \tfrac{1}{6} \approx 0.167$ NTRP (equivalently $\text{normalizedGap} = \text{threshold}/3$), where both equal $\approx 0.67$:
+
+| gap `g` (NTRP) | expected `max(0, 1 − 2·g)` | upset `4·g` | larger |
+|---|---|---|---|
+| 0.00 (equal) | 1.00 | 0.00 | expected |
+| 0.10 | 0.80 | 0.40 | expected |
+| 0.167 (crossover) | 0.67 | 0.67 | equal |
+| 0.30 | 0.40 | 1.20 | upset |
+| 0.50 (threshold) | 0.00 | 2.00 | upset |
+
+- **Below `g ≈ 0.167` NTRP**, the expected line is higher than the upset line: for **near-equal players**, a "chalk" win (the marginally-higher player wins) carries a *larger* scale than an upset — beating someone you're essentially tied with is barely surprising, whereas a competitive win between near-equals is genuinely informative.
+- **Above `g ≈ 0.167` NTRP**, the upset line wins, and by the 0.5-NTRP threshold the upset (`2.0`) towers over the expected result (`0.0`) — the intuitive "upsets move ratings, chalk doesn't" regime.
+
+**Near-zero-gap asymmetry (a known edge).** Because the two lines meet the y-axis at opposite ends (expected → 1, upset → 0), whichever player is even fractionally higher-rated is the "favorite," so at a *tiny* gap their win is scored on the high expected line and the other side's win on the low upset line. Two almost-identical matchups can therefore move ratings by very different amounts based on an epsilon of rating difference, and win/loss magnitudes are **not** symmetric for near-equal players. This is an intended consequence of the piecewise design and it self-corrects as ratings separate — but it is worth being aware of (and a candidate for smoothing the transition near `g = 0`).
+
+> **Try it:** the companion script [`scripts/rating-delta-table.py`](../../scripts/rating-delta-table.py) reproduces these per-set delta tables for any two ratings and list of scores — e.g. `./scripts/rating-delta-table.py --rating-a 3.29 --rating-b 3.25 --match-type OPEN_PLAY --scores 6-0,6-1,6-2,0-6`. It mirrors this section's math (dominance, gap/scale, K, sign) and can print a Markdown table (`--markdown`) or run the scores as one sequential match (`--mode sequential`).
 
 ### 2.4 `sign` — who gains, who loses
 
@@ -211,23 +249,23 @@ The **[rating range](#rating-range)** is simply *ceiling minus floor* of the NTR
 
 The range is what makes gaps comparable via the [normalized gap](#normalized-gap): expressing a gap as a fraction of the range, rather than as raw points, keeps the threshold and scale factors independent of the scale's absolute width. A 0.5 NTRP gap is 8.3% of the range:
 
-```
-0.5 / 6.0 = 0.0833
-```
+$$
+\frac{0.5}{6.0} = 0.0833
+$$
 
 ### 3.2 The competitive threshold: 8.3% → 0.5 NTRP
 
 The **[competitive threshold](#competitive-threshold)** marks the gap beyond which a favorite's win is considered fully expected. Its anchor is the NTRP system itself: NTRP publishes levels in **0.5-point steps** (3.5, 4.0, 4.5, …), so one half-level — the smallest officially recognized skill difference — is the natural boundary of "still a competitive match":
 
-```
-threshold = half-level / range = 0.5 / 6.0 = 1/12 ≈ 0.083 = 8.3%
-```
+$$
+\text{threshold} = \frac{\text{half-level}}{\text{range}} = \frac{0.5}{6.0} = \frac{1}{12} \approx 0.083 = 8.3\%
+$$
 
 Because the threshold is expressed as a *percentage of range*, it maps back to:
 
-```
-NTRP: 8.3% × 6.0 = 0.5 rating points
-```
+$$
+\text{NTRP: } 8.3\% \times 6.0 = 0.5 \text{ rating points}
+$$
 
 ### 3.3 The K-factor: 0.16
 
