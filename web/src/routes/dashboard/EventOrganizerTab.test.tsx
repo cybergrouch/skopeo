@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { EventOrganizerTab } from "./EventOrganizerTab";
@@ -82,6 +82,16 @@ function renderTab() {
   );
 }
 
+/**
+ * Club groups load collapsed (#591); click a group header to reveal its event rows. Matches the header
+ * by its "Club name (count)" label so tests that assert on event content can expand first.
+ */
+function expandGroup(label: string) {
+  fireEvent.click(
+    screen.getByRole("button", { name: new RegExp(`${label} \\(\\d+\\)`) }),
+  );
+}
+
 const event = {
   id: "e1",
   publicCode: "EV1",
@@ -137,6 +147,7 @@ describe("EventOrganizerTab", () => {
     });
     const user = userEvent.setup();
     renderTab();
+    expandGroup("Open");
     // Both rows render — a singular (1 player) and a plural (2 players) participant count (#307).
     expect(screen.getByText("Spring Open")).toBeInTheDocument();
     expect(screen.getByText("Doubles Day")).toBeInTheDocument();
@@ -165,6 +176,7 @@ describe("EventOrganizerTab", () => {
       isLoading: false,
     });
     renderTab();
+    expandGroup("Open");
 
     expect(screen.getByText("Filed by Hank")).toBeInTheDocument();
     // The creator-less event renders no "Filed by" line — only the one with a known creator does.
@@ -226,6 +238,7 @@ describe("EventOrganizerTab", () => {
       isLoading: false,
     });
     renderTab();
+    expandGroup("Open");
 
     // All three section headings render.
     expect(screen.getByText("Upcoming")).toBeInTheDocument();
@@ -266,6 +279,7 @@ describe("EventOrganizerTab", () => {
       isLoading: false,
     });
     renderTab();
+    expandGroup("Open");
 
     // Only the Unfinalized bucket has an event; the other two show their empty state.
     expect(screen.getByText("No upcoming events.")).toBeInTheDocument();
@@ -294,6 +308,7 @@ describe("EventOrganizerTab", () => {
       isLoading: false,
     });
     renderTab();
+    expandGroup("Open");
 
     // Upcoming: start date shown, end date hidden.
     expect(screen.getByText(/Starts 2999-01-01/)).toBeInTheDocument();
@@ -402,10 +417,15 @@ describe("EventOrganizerTab", () => {
     });
     renderTab();
 
-    // Two club group headers (with per-club counts, #367) + the clubless "Open" group.
+    // Two club group headers (with per-club counts, #367) + the clubless "Open" group — headers are
+    // always visible, even while the groups are collapsed by default (#591).
     expect(screen.getByText("Alpha TC (2)")).toBeInTheDocument();
     expect(screen.getByText("Bravo TC (1)")).toBeInTheDocument();
     expect(screen.getByText("Open (1)")).toBeInTheDocument();
+    // Expand each group to reveal its event rows.
+    expandGroup("Alpha TC");
+    expandGroup("Bravo TC");
+    expandGroup("Open");
     expect(screen.getByText("Alpha Cup")).toBeInTheDocument();
     expect(screen.getByText("Alpha Cup Two")).toBeInTheDocument();
     expect(screen.getByText("Bravo Cup")).toBeInTheDocument();
@@ -542,7 +562,7 @@ describe("EventOrganizerTab", () => {
     expect((screen.getByLabelText("Club") as HTMLSelectElement).value).toBe("");
   });
 
-  it("collapses and expands a club group, showing a per-club count (#367)", async () => {
+  it("expands and collapses a club group, showing a per-club count (#367, #591)", async () => {
     const alpha = {
       ...event,
       id: "a1",
@@ -554,20 +574,53 @@ describe("EventOrganizerTab", () => {
     const user = userEvent.setup();
     renderTab();
 
-    // The header shows the club name with its event count and is expanded by default.
+    // The header shows the club name with its event count and is collapsed by default (#591), so the
+    // event rows are hidden on load.
     const toggle = screen.getByRole("button", { name: /Alpha TC \(1\)/ });
-    expect(toggle).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByText("Alpha Cup")).toBeInTheDocument();
-
-    // Collapsing hides the event rows…
-    await user.click(toggle);
     expect(toggle).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByText("Alpha Cup")).not.toBeInTheDocument();
 
-    // …and re-expanding shows them again.
+    // Expanding reveals the event rows…
     await user.click(toggle);
     expect(toggle).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText("Alpha Cup")).toBeInTheDocument();
+
+    // …and collapsing hides them again.
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("Alpha Cup")).not.toBeInTheDocument();
+  });
+
+  it("loads every club group collapsed (#591)", () => {
+    const alpha = {
+      ...event,
+      id: "a1",
+      name: "Alpha Cup",
+      clubId: "c1",
+      clubName: "Alpha TC",
+    };
+    const bravo = {
+      ...event,
+      id: "b1",
+      name: "Bravo Cup",
+      clubId: "c2",
+      clubName: "Bravo TC",
+    };
+    useGetApiV1Events.mockReturnValue({
+      data: [alpha, bravo],
+      isLoading: false,
+    });
+    renderTab();
+
+    // Headers are present but every group starts collapsed — no event rows are rendered on load.
+    expect(
+      screen.getByRole("button", { name: /Alpha TC \(1\)/ }),
+    ).toHaveAttribute("aria-expanded", "false");
+    expect(
+      screen.getByRole("button", { name: /Bravo TC \(1\)/ }),
+    ).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("Alpha Cup")).not.toBeInTheDocument();
+    expect(screen.queryByText("Bravo Cup")).not.toBeInTheDocument();
   });
 
   // --- "Award Ranking Points" checkbox on create (#559) ---
