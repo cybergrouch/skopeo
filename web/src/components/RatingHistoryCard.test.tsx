@@ -103,6 +103,32 @@ describe("RatingHistoryCard", () => {
     expect(screen.queryByText(/Current confidence:/)).not.toBeInTheDocument();
   });
 
+  it("hides raw values and the drill-down for a non-admin, showing band changes only (#583)", () => {
+    // The backend nulls the raw fields + sends band-jump entries only for non-admins.
+    render(
+      <RatingHistoryCard
+        entries={[
+          entry({
+            id: "h1",
+            matchId: "m1",
+            previousRating: null,
+            newRating: null,
+            ratingChange: null,
+            previousLevel: "3.5",
+            newLevel: "4.0",
+            levelChanged: true,
+          }),
+        ]}
+      />,
+    );
+    // The "band changes only" hint is shown, and the band change is rendered.
+    expect(screen.getByText("Showing band changes only.")).toBeInTheDocument();
+    expect(screen.getByText("NTRP 3.5 → 4.0")).toBeInTheDocument();
+    // No raw "x → y" value line, and the row is not an expandable button (calc breakdown is admin-only).
+    expect(screen.queryByText(/4\.000000/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
   it("shows the full value and the band, and highlights a band change", () => {
     const { container } = render(
       <RatingHistoryCard
