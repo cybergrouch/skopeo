@@ -29,8 +29,9 @@ export function AboutContent({ showAuthActions = true }: AboutContentProps) {
       <header className="space-y-2">
         <h1 className="text-3xl font-bold tracking-tight">Skopeo</h1>
         <p className="text-lg text-muted-foreground">
-          Track your tennis matches. Skopeo turns real results into an honest
-          NTRP rating — and a ranking race within your level.
+          Match logging for recreational tennis players. Skopeo turns real
+          results into an honest NTRP rating — and a ranking race within your
+          level.
         </p>
       </header>
 
@@ -40,9 +41,11 @@ export function AboutContent({ showAuthActions = true }: AboutContentProps) {
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
           <p>
-            At heart, Skopeo is a <strong>match logger</strong> — simply record
-            the players and the scores, and it takes it from there. On top of
-            that: performance-based <strong>NTRP ratings</strong>,{" "}
+            At heart, Skopeo is a{" "}
+            <strong>match logger for recreational tennis players</strong> —
+            simply record the players and the scores, and it takes it from
+            there. On top of that: performance-based{" "}
+            <strong>NTRP ratings</strong>,{" "}
             <strong>rankings</strong> within each rating band, and every
             player&rsquo;s <strong>match history</strong> and{" "}
             <strong>head-to-head</strong> records.
