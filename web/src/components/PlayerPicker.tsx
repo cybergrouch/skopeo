@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { UserSearchSelect } from "@/components/UserSearchSelect";
 import { usePostApiV1UsersPlaceholders } from "@/api/generated/users/users";
+import { NTRP_LEVELS } from "@/lib/ntrp";
 import type {
   CreatePlaceholderRequestSex,
   GetApiV1UsersParams,
@@ -12,10 +13,6 @@ import type {
 } from "@/api/generated/model";
 
 const SEXES = ["Male", "Female"] as const;
-
-/** NTRP bounds for the optional initial rating (#503) — validated only when a value is entered. */
-const NTRP_MIN = 1.0;
-const NTRP_MAX = 7.0;
 
 /**
  * Adapt the full {@link UserResponse} returned by the placeholder-create endpoint into the slim
@@ -94,15 +91,9 @@ export function PlayerPicker({
       setError("Sex is required.");
       return;
     }
-    // The initial rating is optional; validate the NTRP range only when a value is entered.
+    // The initial rating is optional and picked from a band dropdown (#579), so it's always either
+    // blank or a valid NTRP band — no range validation needed here.
     const rating = initialRating.trim();
-    if (canSetRating && rating !== "") {
-      const parsed = Number(rating);
-      if (Number.isNaN(parsed) || parsed < NTRP_MIN || parsed > NTRP_MAX) {
-        setError("Initial rating must be a number between 1.0 and 7.0.");
-        return;
-      }
-    }
     try {
       const user = await create.mutateAsync({
         data: {
@@ -189,14 +180,20 @@ export function PlayerPicker({
               <Label htmlFor="placeholder-rating" className="text-xs">
                 Initial rating (optional)
               </Label>
-              <Input
+              {/* A band dropdown (#579): the backend stores the chosen band at its midpoint. */}
+              <select
                 id="placeholder-rating"
-                type="text"
-                inputMode="decimal"
                 value={initialRating}
                 onChange={(e) => setInitialRating(e.target.value)}
-                placeholder="NTRP 1.0–7.0"
-              />
+                className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+              >
+                <option value="">No initial rating</option>
+                {NTRP_LEVELS.map((level) => (
+                  <option key={level} value={level}>
+                    NTRP {level}
+                  </option>
+                ))}
+              </select>
             </div>
           ) : null}
           {error ? (

@@ -143,7 +143,7 @@ class PlaceholderServiceTest {
     // ---- Create with an optional initial rating (#503) ----
 
     @Test
-    fun `a RATER host creates a placeholder with an initial rating that is set in one flow`() {
+    fun `a RATER host creates a placeholder whose chosen band is stored at its midpoint (#579)`() {
         provisionUser(uid = "rhost", roles = setOf(Capability.PLAYER, Capability.HOST, Capability.RATER))
 
         val created =
@@ -157,8 +157,9 @@ class PlaceholderServiceTest {
                 .shouldBeRight()
 
         val current = ratings.findCurrentRating(userId = created.id).shouldNotBeNull()
-        // Compare by value (scale-insensitive): the stored rating is padded to the money-style scale.
-        current.currentRating shouldBeEqualComparingTo BigDecimal("4.0")
+        // The chosen band 4.0 is stored at its MIDPOINT 4.25 (#579), not the 4.0 floor — mirroring the
+        // rater set-rating route, so a single loss won't immediately drop the player a band.
+        current.currentRating shouldBeEqualComparingTo BigDecimal("4.25")
         // The rating set is audited (initial set, not an override).
         AuditRepository()
             .list(actions = listOf(element = AuditAction.RATING_SET), limit = 10, offset = 0)

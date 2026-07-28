@@ -272,7 +272,8 @@ describe("PlayerPicker", () => {
     );
     await user.type(screen.getByLabelText("Display name"), "New Player");
     await user.selectOptions(screen.getByLabelText("Sex"), "Female");
-    await user.type(
+    // The initial rating is now a band dropdown (#579).
+    await user.selectOptions(
       screen.getByLabelText("Initial rating (optional)"),
       "4.0",
     );
@@ -311,27 +312,18 @@ describe("PlayerPicker", () => {
     );
   });
 
-  it("rejects an out-of-range initial rating before calling create", async () => {
+  it("offers the NTRP bands plus a 'No initial rating' option (#579)", async () => {
     const user = userEvent.setup();
     renderPicker(vi.fn(), true);
 
     await user.click(
       screen.getByRole("button", { name: "Add placeholder player" }),
     );
-    await user.type(screen.getByLabelText("Display name"), "New Player");
-    await user.selectOptions(screen.getByLabelText("Sex"), "Female");
-    await user.type(
-      screen.getByLabelText("Initial rating (optional)"),
-      "9",
-    );
-    await user.click(
-      screen.getByRole("button", { name: "Create placeholder" }),
-    );
-
-    expect(
-      await screen.findByText(/between 1.0 and 7.0/i),
-    ).toBeInTheDocument();
-    expect(createMutate).not.toHaveBeenCalled();
+    const select = screen.getByLabelText("Initial rating (optional)");
+    // The blank option is selected by default; the band options are offered.
+    expect((select as HTMLSelectElement).value).toBe("");
+    expect(screen.getByRole("option", { name: "No initial rating" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "NTRP 4.0" })).toBeInTheDocument();
   });
 
   it("shows an inline error when the create fails", async () => {
