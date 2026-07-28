@@ -30,7 +30,7 @@ export function AboutContent({ showAuthActions = true }: AboutContentProps) {
         <h1 className="text-3xl font-bold tracking-tight">Skopeo</h1>
         <p className="text-lg text-muted-foreground">
           Match logging for recreational tennis players. Skopeo turns real
-          results into an honest NTRP rating — and a ranking race within your
+          results into an honest NTRP estimate — and a ranking race within your
           level.
         </p>
       </header>
@@ -88,9 +88,10 @@ export function AboutContent({ showAuthActions = true }: AboutContentProps) {
         <CardContent className="space-y-3 text-sm text-muted-foreground">
           <p>
             <strong className="text-foreground">Rating — your game&rsquo;s level.</strong>{" "}
-            A performance-based NTRP estimate from your results. Players in the
-            same band are well-matched, so games stay close, competitive, and
-            fun — fewer lopsided blowouts.
+            Skopeo&rsquo;s best <em>estimate</em> of your NTRP level from your
+            results — a good predictor, not the final word. Players in the same
+            band are well-matched, so games stay close, competitive, and fun —
+            fewer lopsided blowouts.
           </p>
           <p>
             <strong className="text-foreground">Ranking — the game within the game.</strong>{" "}
