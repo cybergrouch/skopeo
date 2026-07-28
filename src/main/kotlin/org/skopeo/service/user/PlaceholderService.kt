@@ -15,6 +15,7 @@ import org.skopeo.model.AuditWrite
 import org.skopeo.model.Capability
 import org.skopeo.model.CreatePlaceholderCommand
 import org.skopeo.model.GeneratedClaimCode
+import org.skopeo.model.Level
 import org.skopeo.model.Rating
 import org.skopeo.model.ServiceError
 import org.skopeo.model.User
@@ -102,7 +103,9 @@ class PlaceholderService(
 
     /**
      * Validate an optional initial rating (#503): the caller must hold RATER/ADMINISTRATOR and the value
-     * must be a numeric NTRP rating in 1.0–7.0. Returns the parsed [BigDecimal] to hand to the rating path.
+     * must be a numeric NTRP rating in 1.0–7.0. The chosen band is stored at its **midpoint** (#579),
+     * mirroring the rater set-rating route (`Level.bandMidpoint`) — so a placeholder created at band 3.0
+     * sits at 3.25 (centered), not the 3.0 floor where a single loss would immediately drop a band.
      */
     private fun validatedRating(
         caller: UUID,
@@ -117,7 +120,7 @@ class PlaceholderService(
                 } catch (e: IllegalArgumentException) {
                     raise(r = ServiceError.Validation(message = e.message ?: "Invalid rating '$raw'"))
                 }
-            parsed
+            Level.bandMidpoint(band = parsed)
         }
 
     /** Unclaimed placeholders (#496), for the admin/host management view. Match-management access. */
