@@ -129,7 +129,7 @@ one and keeps the other in-house:
 
 Role-based access control, enforced in the service layer:
 
-- **Roles:** `PLAYER`, `HOST`, `CLUB_OWNER`, `ADMINISTRATOR` (`model/Capability`).
+- **Roles:** `PLAYER`, `HOST`, `CLUB_OWNER`, `ADMINISTRATOR`, `RATER`, `RESEARCHER`, `POINTS_MANAGER` (`model/Capability`).
 - **Storage:** the `user_capabilities` table is **append-only** — a grant is an active row
   (`granted_by`/`granted_at`), a revoke flips it inactive (`revoked_by`/`revoked_at`), and a
   user holds at most one active row per capability. This preserves a full grant/revoke history.

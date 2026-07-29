@@ -1,9 +1,12 @@
 # Skopeo Web
 
-The Skopeo web client — sign-up, sign-in, and the post-signup **pending
-assessment** screen. React + TypeScript (Vite), Tailwind + shadcn/ui, Firebase
-Auth, and a typed TanStack Query client generated from the backend's OpenAPI
-spec with [orval](https://orval.dev).
+The Skopeo web client — sign-up / sign-in plus a **capability-gated dashboard**
+(profile, standings, event organizing, ratings, admin, and more) and public
+share pages. React + TypeScript (Vite), Tailwind + shadcn/ui, Firebase Auth, and
+a typed TanStack Query client generated from the backend's OpenAPI spec with
+[orval](https://orval.dev). See
+[WEB_UI_ARCHITECTURE.md](../docs/engineering/architecture/WEB_UI_ARCHITECTURE.md)
+for the full architecture.
 
 ## Stack
 
@@ -62,22 +65,33 @@ truth, a backend contract change surfaces here as a type error.
 1. The user authenticates with Firebase (email/password or Google) → gets an ID token.
 2. The client calls `POST /api/v1/users` (idempotent) to provision the Skopeo
    profile. Identity/email come from the verified token, not the request body.
-3. The user lands on **`/pending`** — until an administrator assigns an initial
-   rating, the account is *pending assessment* and ineligible for match fixtures.
+3. New users complete their profile at **`/complete-profile`** (required fields),
+   then land on **`/dashboard`**. Until an administrator assigns an initial rating,
+   the account is *pending assessment* and ineligible for match fixtures.
 
 ## Routes
 
-- `/signup` — create account
-- `/login` — sign in
-- `/pending` — authenticated landing; shows pending-assessment state or the
-  assigned rating(s)
+Public / unauthenticated:
+- `/signup`, `/login` — create account / sign in
+- `/about` — product overview
+- `/invite` — accept an admin invite (email-link onboarding)
+- `/players/:code`, `/matches/:code`, `/events/:code`, `/clubs/:code` — public share pages (no login), with QR
+
+Authenticated:
+- `/complete-profile` — finish the required profile (`RequireAuth`)
+- `/dashboard` — the capability-gated dashboard; the active tab is synced to `?tab=` (`RequireAuth` + `RequireProfile`)
+
+See the dashboard tab table in
+[WEB_UI_ARCHITECTURE.md](../docs/engineering/architecture/WEB_UI_ARCHITECTURE.md#dashboard-structure).
 
 ## Deployment (Firebase Hosting)
 
 Hosting config lives in the repo-root `firebase.json` (serves `web/dist`, SPA
 rewrites to `index.html`, immutable caching for hashed assets). The
 `.github/workflows/deploy-web.yml` workflow builds and deploys to the **live**
-channel on every push to `main` that touches `web/`.
+channel. It is **release-driven** — dispatched by the tag-and-ship release flow
+for a release tag (in lockstep with the API), or run manually via
+`workflow_dispatch` — **not** on every push to `main`.
 
 The deploy job is **skipped until configured** (guarded on the
 `VITE_FIREBASE_PROJECT_ID` repo variable), so the workflow is inert until you add:

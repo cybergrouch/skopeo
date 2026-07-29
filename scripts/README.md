@@ -1,13 +1,13 @@
 # Scripts Directory
 
-Utility scripts for running and testing the Tennis Levelr API.
+Utility scripts for running and testing the Skopeo API.
 
 ## Available Scripts
 
 ### 🚀 Server Management
 
 #### `start-server.sh`
-Start the Tennis Levelr API server.
+Start the Skopeo API server.
 - Checks if port 8080 is already in use
 - Offers to kill existing process if needed
 - Starts the server using Gradle
@@ -18,7 +18,7 @@ Start the Tennis Levelr API server.
 ```
 
 #### `stop-server.sh`
-Stop the Tennis Levelr API server.
+Stop the Skopeo API server.
 - Finds processes using port 8080
 - Safely terminates the server
 
@@ -45,13 +45,13 @@ Automated test suite for all API endpoints.
 
 **Sample Output:**
 ```
-🎾 Testing Tennis Levelr API...
+🎾 Testing Skopeo API...
 ================================
 
 ✅ Server is running
 
 1️⃣  Testing ROOT endpoint (GET /):
-   Response: Tennis Levelr API
+   Response: Skopeo API
    Status: 200
    ✅ PASSED
 ...
@@ -62,7 +62,7 @@ Automated test suite for all API endpoints.
 ### 🐳 Docker
 
 #### `docker-build.sh`
-Build and tag Docker images for Tennis Levelr.
+Build and tag Docker images for Skopeo.
 - Builds multi-stage Docker image
 - Tags with specified version
 - Also tags as 'latest'
@@ -83,7 +83,7 @@ Build and tag Docker images for Tennis Levelr.
   Building Docker Image
 ======================================
 
-Image: tennis-levelr:1.0.0
+Image: skopeo:latest
 Dockerfile: ./Dockerfile
 
 Building image...
@@ -95,11 +95,11 @@ Tagging as latest...
   Build Complete!
 ======================================
 
-Image: tennis-levelr:1.0.0
+Image: skopeo:latest
 Size: 215MB
 
 To run the container:
-  docker run -p 8080:8080 tennis-levelr:1.0.0
+  docker run -p 8080:8080 skopeo:latest
 ```
 
 ---
@@ -107,7 +107,10 @@ To run the container:
 ### 🎨 Code Quality
 
 #### `check-coverage.sh`
-Run code coverage analysis and verify 85% threshold.
+Run code coverage analysis and verify the local threshold.
+
+> **Note on thresholds.** This helper applies a stricter **local bar of 85%** to both line and branch coverage as an aspirational target. The **authoritative CI gate** enforced by the build is **75% line / 70% branch** (`./gradlew jacocoTestCoverageVerification`, configured in `build.gradle.kts`). A run can pass CI while this helper still flags room to improve.
+
 - Executes all tests with JaCoCo instrumentation
 - Generates coverage reports (HTML, XML, CSV)
 - Parses coverage metrics for instructions, branches, lines
@@ -127,7 +130,7 @@ Run code coverage analysis and verify 85% threshold.
 ==========================================
 
 Threshold: 85%
-Project: /Users/lange/Repositories/kotlin/tennis_levelr
+Project: <your-repo-root>
 
 Step 1: Running tests with coverage...
 ✓ Tests completed successfully

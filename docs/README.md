@@ -9,6 +9,13 @@ Docs are grouped by audience, then by topic.
 - [USTA_FEATURE_COMPARISON.md](product/USTA_FEATURE_COMPARISON.md) — roadmap study comparing Skopeo to USTA NTRP (adopted / in-pipeline / not-planned).
 - [RATING_SIMULATION_STUDIES.md](product/RATING_SIMULATION_STUDIES.md) — matchup-matrix + Monte Carlo findings, K-factor sensitivity (0.16 vs 0.016), and where a configurable K should reside.
 - [PLACEHOLDER_ACCOUNTS.md](product/PLACEHOLDER_ACCOUNTS.md) — login-less "dummy" players + the secret-code claim/adopt (merge-into-empty) flow (#496).
+- [ROADMAP.md](product/ROADMAP.md) — feature roadmap: shipped ✅, remaining MVP, and post-MVP/aspirational work (extracted from the root README).
+- [STANDINGS_PHASE_2_DESIGN.md](product/STANDINGS_PHASE_2_DESIGN.md) — design of the per-band "Ranking Race" standings.
+- [TOURNAMENTS_CIRCUITS_AND_OPEN_PLAY_POINTS.md](product/TOURNAMENTS_CIRCUITS_AND_OPEN_PLAY_POINTS.md) — tournaments/circuits model + open-play points (design of record, #525).
+- [POINTS_AWARDING_AND_BUDGET.md](product/POINTS_AWARDING_AND_BUDGET.md) — points-awarding design (⚠️ per-club budget premise superseded by #559 — see the banner in-doc).
+- [UI_SEASONAL_THEMING.md](product/UI_SEASONAL_THEMING.md) — admin-selectable seasonal UI themes (#378).
+- [EVENT_PAYMENTS.md](product/EVENT_PAYMENTS.md) — Philippine QR-payment exploration for event fees (design only).
+- Rating studies: [RATING_CONFIDENCE.md](product/RATING_CONFIDENCE.md) · [RATING_CONFIDENCE_SPARSITY.md](product/RATING_CONFIDENCE_SPARSITY.md) · [RATING_HANDICAP.md](product/RATING_HANDICAP.md) · [POINTS_RANKING_SIMULATION_STUDY.md](product/POINTS_RANKING_SIMULATION_STUDY.md) · [DOUBLES_RATING_STUDY.md](product/DOUBLES_RATING_STUDY.md) · [DOUBLES_DOMINANCE_STUDY.md](product/DOUBLES_DOMINANCE_STUDY.md).
 
 ## `engineering/` — how it's built and run
 
@@ -31,7 +38,23 @@ The **canonical, complete API reference is the OpenAPI spec** (`src/main/resourc
 - [AUDIT_TRAIL.md](engineering/architecture/AUDIT_TRAIL.md) — two distinct concepts: the pure-function calculator audit trail, **and** the persisted domain audit/activity log with its admin read API (#100/#102).
 - [WEB_UI_ARCHITECTURE.md](engineering/architecture/WEB_UI_ARCHITECTURE.md) — React/Vite web UI decisions and roadmap.
 - [ORM_EVALUATION.md](engineering/architecture/ORM_EVALUATION.md) — Exposed vs jOOQ vs Jimmer decision record.
-- [database-schema.md](engineering/architecture/database-schema.md) — schema, ER diagram, constraints.
+- [database-schema.md](engineering/architecture/database-schema.md) — schema, ER diagram, constraints, and domain lifecycle state diagrams.
+- [LAYERED_ARCHITECTURE.md](engineering/architecture/LAYERED_ARCHITECTURE.md) — the `routes → service → repository` layering enforced by ArchUnit.
+- [CLIENT_API_AUTH.md](engineering/architecture/CLIENT_API_AUTH.md) — partner application identity: hashed API keys, scopes, per-client rate limits (#225).
+- [BFF_VS_ENGINE.md](engineering/architecture/BFF_VS_ENGINE.md) — proposed backend-for-frontend vs core-engine split.
+- [INPUT_VALIDATION.md](engineering/architecture/INPUT_VALIDATION.md) — the "validate shape at routes, business rules in services" convention (#116).
+
+#### Architecture Decision Records
+
+The design/decision records above, with status:
+
+| Record | Status |
+|---|---|
+| [ORM_EVALUATION.md](engineering/architecture/ORM_EVALUATION.md) | ✅ Accepted — stay on Exposed |
+| [ADMIN_BOOTSTRAP.md](engineering/architecture/ADMIN_BOOTSTRAP.md) | ✅ Accepted — verified-email allowlist (partly implemented) |
+| [CLIENT_API_AUTH.md](engineering/architecture/CLIENT_API_AUTH.md) | ✅ Implemented — API keys/scopes/rate limits shipped (#225) |
+| [INPUT_VALIDATION.md](engineering/architecture/INPUT_VALIDATION.md) | ✅ Accepted — standing convention (#116) |
+| [BFF_VS_ENGINE.md](engineering/architecture/BFF_VS_ENGINE.md) | 🟡 Proposed — not implemented |
 
 ### `operations/` — deploy, run, tooling
 
@@ -43,6 +66,8 @@ The **canonical, complete API reference is the OpenAPI spec** (`src/main/resourc
 - [JVM_COMPATIBILITY.md](engineering/operations/JVM_COMPATIBILITY.md) — Java/Gradle/detekt version strategy.
 - [LOGGING_AND_METRICS.md](engineering/operations/LOGGING_AND_METRICS.md) — logging and Prometheus metrics.
 - [GIT_HOOKS.md](engineering/operations/GIT_HOOKS.md) — pre-commit hook setup.
+- [DEPLOYMENT_RUNBOOK.md](engineering/operations/DEPLOYMENT_RUNBOOK.md) — step-by-step release/deploy runbook.
+- [LOCAL_DEMO_AND_TEST_DATA.md](engineering/operations/LOCAL_DEMO_AND_TEST_DATA.md) — seeding a local demo + test data.
 
 ### `quality/` — testing & code style
 

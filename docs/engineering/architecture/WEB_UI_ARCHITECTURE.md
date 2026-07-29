@@ -45,11 +45,44 @@ SDK and exposes the auth state. A single axios instance (`src/api/axios.ts`, wir
 `mutator`) attaches the current user's Firebase ID token as `Authorization: Bearer <token>` on
 every generated request. Tokens are never persisted by the app — the SDK manages refresh.
 
+```mermaid
+sequenceDiagram
+    actor U as User
+    participant AP as AuthProvider
+    participant C as Component
+    participant H as React Query hook
+    participant AX as axios interceptor
+    participant API as Ktor API
+    U->>AP: sign in (Google / email / email-link)
+    AP-->>C: onAuthStateChanged sets AuthContext.user
+    C->>H: call generated hook (e.g. useGetApiV1UsersMe)
+    H->>AX: request via orval mutator
+    AX->>AP: auth.currentUser.getIdToken()
+    AP-->>AX: Firebase ID token
+    AX->>API: GET /api/v1/... + Authorization Bearer token
+    API->>API: verify token vs Firebase JWKS
+    API-->>H: 200 JSON
+    H-->>C: cache + re-render
+```
+
 ### Route guards
 
 - `RequireAuth` — requires a Firebase session; otherwise redirects to login.
 - `RequireProfile` — requires a provisioned Skopeo profile (`GET /api/v1/users/me`); 404 →
   `/complete-profile`. Nested inside `RequireAuth`.
+
+The public code-addressed pages (`/players|/matches|/events|/clubs/:code`) bypass both guards.
+
+```mermaid
+flowchart TD
+    R[Route request] --> Pub{Public code page?}
+    Pub -->|yes| Public["players / matches / events / clubs /:code (no guard)"]
+    Pub -->|no| A{RequireAuth: Firebase session?}
+    A -->|no| Login[Redirect to /login]
+    A -->|yes| P{RequireProfile: GET /users/me}
+    P -->|404| CP[Redirect to /complete-profile]
+    P -->|200| Dash[DashboardPage]
+```
 
 ### Capability-gated UI
 
@@ -130,17 +163,60 @@ gates above:
 | Tab | Component | Gate |
 |---|---|---|
 | Profile | `ProfileTab` | Always |
+| Settings | `SettingsTab` | `isPlayer` (every signed-in user) |
 | Research | `ResearchTab` | `isResearcher` |
 | Standings | `StandingsTab` | Always |
+| Claim account | `ClaimTab` | Always |
 | Event Organizer | `EventOrganizerTab` | `canManageMatches` |
 | Seeding | `SeedingTab` | `canManageMatches` |
+| Placeholder Players | `PlaceholderPlayersTab` | `canManageMatches` |
 | Ratings | `RatingsTab` | `canRate` |
 | Invites | `InvitesTab` | `isAdministrator` |
 | Activity Log | `ActivityTab` | `isAdministrator` |
+| Reports | `ReportTab` | `isAdministrator` |
+| Points Management | `PointsManagementSection` | `canManagePointsBudget` |
 | Admin | `AdminTab` | `isAdministrator` |
+| About | `AboutTab` | Always |
 
 (The "Event Organizer" tab is keyed `matches` internally and lives under
 `src/routes/dashboard/matches/`.)
+
+`DashboardPage` builds a single `Section[]` from `me.capabilities` — the one source of truth for
+both the nav list and the rendered `activeSection.element`. The active tab lives in the URL
+(`?tab=…`); an unknown or unauthorized value falls back to `sections[0]` (Profile).
+
+```mermaid
+classDiagram
+    class Section {
+      +String value
+      +String label
+      +ReactNode element
+    }
+    class DashboardPage {
+      +List~Section~ sections
+      +Section activeSection
+    }
+    DashboardPage "1" o-- "many" Section : builds (capability-gated)
+```
+
+```mermaid
+flowchart TD
+    Me["me.capabilities (GET /users/me)"] --> Pred["capabilities.ts predicates"]
+    Pred -->|always| Always["Profile, Standings, Claim, About"]
+    Pred -->|isPlayer| Settings[Settings]
+    Pred -->|canManageMatches| Org["Event Organizer, Seeding, Placeholder Players"]
+    Pred -->|canRate| Ratings[Ratings]
+    Pred -->|isResearcher| Research[Research]
+    Pred -->|canManagePointsBudget| Points[Points Management]
+    Pred -->|isAdministrator| Adm["Invites, Activity Log, Reports, Admin"]
+    Always --> Sec["Section array: nav + active content"]
+    Settings --> Sec
+    Org --> Sec
+    Ratings --> Sec
+    Research --> Sec
+    Points --> Sec
+    Adm --> Sec
+```
 
 ### Admin tab sections
 
