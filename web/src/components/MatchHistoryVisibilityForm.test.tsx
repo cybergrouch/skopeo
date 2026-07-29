@@ -72,6 +72,15 @@ describe("MatchHistoryVisibilityForm", () => {
     expect(await screen.findByRole("status")).toHaveTextContent("Saved");
   });
 
+  it("shows a saving indicator while the save is in flight", () => {
+    usePutApiV1UsersIdMatchHistoryVisibility.mockReturnValue({
+      isPending: true,
+      mutateAsync: async (vars: unknown) => saveMutate(vars),
+    });
+    renderForm();
+    expect(screen.getByText("Saving…")).toBeInTheDocument();
+  });
+
   it("surfaces an error and reverts the toggle when the save fails", async () => {
     const user = userEvent.setup();
     usePutApiV1UsersIdMatchHistoryVisibility.mockReturnValue({
