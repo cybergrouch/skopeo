@@ -7,6 +7,8 @@ info:
 servers:
   - url: http://localhost:8080
     description: Local development server
+  - url: https://skopeo.co
+    description: Production (proxied to the API via Firebase Hosting)
 
 tags:
   - name: Rankings

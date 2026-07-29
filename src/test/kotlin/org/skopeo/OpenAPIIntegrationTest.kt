@@ -106,6 +106,8 @@ class OpenAPIIntegrationTest {
             // Verify it contains OpenAPI spec content
             body shouldContain "openapi: 3.0.0"
             body shouldContain "Skopeo API"
+            // The production server target (#225) so Swagger "Try it out" can hit live via skopeo.co.
+            body shouldContain "https://skopeo.co"
             body shouldContain "/api/v1/calculate-ranking"
             body shouldContain "/api/v1/theme"
             // Per-user local theme (#514): the self-service path and its request/response schemas.
