@@ -27,6 +27,7 @@ import java.util.UUID
  * stored; [findKeyByHash] is the hot path on every client-authenticated request. Returns raw domain
  * (the service layer owns the [org.skopeo.model.ServiceError] mapping), mirroring [ClubRepository].
  */
+@Suppress("TooManyFunctions") // Cohesive CRUD over api_clients/api_keys (clients, keys, resolution, rate limit).
 class ApiClientRepository {
     fun createClient(
         name: String,
