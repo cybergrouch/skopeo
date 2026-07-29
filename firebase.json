@@ -28,6 +28,10 @@
         "run": { "serviceId": "skopeo", "region": "asia-southeast1" }
       },
       {
+        "source": "/api/**",
+        "run": { "serviceId": "skopeo", "region": "asia-southeast1" }
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
