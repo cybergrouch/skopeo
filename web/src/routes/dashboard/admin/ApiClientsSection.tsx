@@ -16,6 +16,7 @@ import {
   useGetApiV1ApiClients,
   usePostApiV1ApiClients,
   usePostApiV1ApiClientsIdKeys,
+  usePutApiV1ApiClientsIdRateLimit,
 } from "@/api/generated/client-api/client-api";
 import type {
   ApiClientResponse,
@@ -122,9 +123,11 @@ function ApiClientRow({
 }) {
   const issue = usePostApiV1ApiClientsIdKeys();
   const revoke = useDeleteApiV1ApiClientsClientIdKeysKeyId();
+  const setLimit = usePutApiV1ApiClientsIdRateLimit();
   const [scopes, setScopes] = useState<string[]>([]);
   const [environment, setEnvironment] = useState("LIVE");
   const [expiresInDays, setExpiresInDays] = useState("");
+  const [limitDraft, setLimitDraft] = useState(client.rateLimitPerMin?.toString() ?? "");
   const [issued, setIssued] = useState<IssuedApiKeyResponse | null>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -167,6 +170,19 @@ function ApiClientRow({
     }
   }
 
+  async function saveLimit() {
+    setError(null);
+    const draft = limitDraft.trim();
+    // Empty clears the override (fall back to the default tier); otherwise a positive integer.
+    const rateLimitPerMin = draft === "" ? null : Number(draft);
+    try {
+      await setLimit.mutateAsync({ id: client.id, data: { rateLimitPerMin } });
+      onChange();
+    } catch {
+      setError("Could not update the rate limit.");
+    }
+  }
+
   async function copySecret() {
     if (!issued) return;
     try {
@@ -182,6 +198,32 @@ function ApiClientRow({
       <div className="flex items-center justify-between gap-2">
         <p className="font-medium">{client.name}</p>
         <span className="text-xs text-muted-foreground">{client.status}</span>
+      </div>
+
+      {/* Per-client rate-limit override (#603): blank = the global default tier. */}
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="space-y-1">
+          <Label htmlFor={`limit-${client.id}`} className="text-xs">
+            Rate limit / min (blank = default)
+          </Label>
+          <Input
+            id={`limit-${client.id}`}
+            type="number"
+            min="1"
+            value={limitDraft}
+            onChange={(e) => setLimitDraft(e.target.value)}
+            className="w-48"
+          />
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={saveLimit}
+          disabled={setLimit.isPending}
+        >
+          {setLimit.isPending ? "Saving…" : "Save limit"}
+        </Button>
       </div>
 
       {issued ? (

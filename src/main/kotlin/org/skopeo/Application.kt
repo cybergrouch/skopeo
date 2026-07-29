@@ -19,6 +19,7 @@ import io.ktor.server.plugins.cors.routing.CORS
 import io.ktor.server.plugins.origin
 import io.ktor.server.plugins.ratelimit.RateLimit
 import io.ktor.server.plugins.ratelimit.RateLimitName
+import io.ktor.server.plugins.ratelimit.RateLimiter
 import io.ktor.server.plugins.swagger.swaggerUI
 import io.ktor.server.request.httpMethod
 import io.ktor.server.request.uri
@@ -150,14 +151,19 @@ fun Application.configureRateLimit(
 ) {
     install(plugin = RateLimit) {
         register(name = PARTNER_RATE_LIMIT_NAME) {
-            rateLimiter(limit = partnerRateLimit, refillPeriod = 60.seconds)
             requestKey { call ->
                 val rawKey = call.request.headers["X-Api-Key"].orEmpty()
                 service.resolveClientId(rawKey = rawKey)?.toString() ?: "anon:${call.request.origin.remoteHost}"
             }
+            // Per-client limit (#603): a client's override when present, else the default tier. The
+            // provider is invoked once per distinct key, so the override is read off the hot path.
+            rateLimiter { _, key ->
+                val limit = service.rateLimitForKey(key = key.toString(), default = partnerRateLimit)
+                RateLimiter.default(limit = limit, refillPeriod = 60.seconds)
+            }
         }
     }
-    logger.info { "Partner rate limiting configured ($partnerRateLimit/min per client)" }
+    logger.info { "Partner rate limiting configured (default $partnerRateLimit/min per client)" }
 }
 
 fun Application.configureMonitoring() {

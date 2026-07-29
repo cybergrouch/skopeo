@@ -27,6 +27,7 @@ import java.util.UUID
  * stored; [findKeyByHash] is the hot path on every client-authenticated request. Returns raw domain
  * (the service layer owns the [org.skopeo.model.ServiceError] mapping), mirroring [ClubRepository].
  */
+@Suppress("TooManyFunctions") // Cohesive CRUD over api_clients/api_keys (clients, keys, resolution, rate limit).
 class ApiClientRepository {
     fun createClient(
         name: String,
@@ -44,6 +45,24 @@ class ApiClientRepository {
 
     fun findClientById(id: UUID): ApiClient? =
         transaction { ApiClientsTable.selectAll().where { ApiClientsTable.id eq id }.singleOrNull()?.toClient() }
+
+    /** Set (or clear, when null) a client's per-minute rate-limit override (#603). Returns the refreshed client, or null if missing. */
+    fun setRateLimit(
+        clientId: UUID,
+        rateLimitPerMin: Int?,
+    ): ApiClient? =
+        transaction {
+            val updated =
+                ApiClientsTable.update(where = { ApiClientsTable.id eq clientId }) {
+                    it[ApiClientsTable.rateLimitPerMin] = rateLimitPerMin
+                    it[updatedAt] = LocalDateTime.now()
+                }
+            if (updated > 0) {
+                ApiClientsTable.selectAll().where { ApiClientsTable.id eq clientId }.single().toClient()
+            } else {
+                null
+            }
+        }
 
     /** All clients, newest first, each with its keys. */
     fun listClients(): List<ApiClient> =
@@ -134,6 +153,7 @@ class ApiClientRepository {
             createdAt = this[ApiClientsTable.createdAt],
             updatedAt = this[ApiClientsTable.updatedAt],
             keys = keys,
+            rateLimitPerMin = this[ApiClientsTable.rateLimitPerMin],
         )
     }
 

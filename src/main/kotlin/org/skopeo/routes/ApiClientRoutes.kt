@@ -16,12 +16,14 @@ import io.ktor.server.routing.RoutingContext
 import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
+import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.PARTNER_RATE_LIMIT_NAME
 import org.skopeo.dto.client.CreateApiClientRequest
 import org.skopeo.dto.client.IssueApiKeyRequest
+import org.skopeo.dto.client.SetRateLimitRequest
 import org.skopeo.dto.client.toResponse
 import org.skopeo.model.ApiKeyEnvironment
 import org.skopeo.model.Capability
@@ -79,6 +81,20 @@ private fun Route.manageClients(service: ApiClientService) {
             respondEither(result = service.listClients(token = verifiedToken())) { clients ->
                 call.respond(status = HttpStatusCode.OK, message = clients.map { it.toResponse() })
             }
+        }
+    }
+    // Set/clear a client's per-minute rate-limit override (#603).
+    put(path = "/{id}/rate-limit") {
+        respondMappingErrors {
+            val request = call.receive<SetRateLimitRequest>()
+            respondEither(
+                result =
+                    service.setRateLimit(
+                        token = verifiedToken(),
+                        clientId = uuidParam(name = "id"),
+                        rateLimitPerMin = request.rateLimitPerMin,
+                    ),
+            ) { client -> call.respond(status = HttpStatusCode.OK, message = client.toResponse()) }
         }
     }
 }

@@ -49,6 +49,14 @@ data class ApiClientResponse(
     val status: String,
     val createdAt: String,
     val keys: List<ApiKeyResponse>,
+    // Per-minute rate-limit override (#603); null = the global default tier applies.
+    val rateLimitPerMin: Int? = null,
+)
+
+/** Body for `PUT /api/v1/api-clients/{id}/rate-limit` (#603) — null clears the override (use default). */
+@Serializable
+data class SetRateLimitRequest(
+    val rateLimitPerMin: Int? = null,
 )
 
 /**
@@ -105,6 +113,7 @@ fun ApiClient.toResponse(): ApiClientResponse =
         status = status.name,
         createdAt = createdAt.toString(),
         keys = keys.map { it.toResponse() },
+        rateLimitPerMin = rateLimitPerMin,
     )
 
 fun IssuedApiKey.toResponse(): IssuedApiKeyResponse =

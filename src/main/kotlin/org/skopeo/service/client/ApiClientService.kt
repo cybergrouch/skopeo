@@ -159,6 +159,54 @@ class ApiClientService(
         }
 
     /**
+     * Set (or clear, when [rateLimitPerMin] is null) a client's per-minute rate-limit override (#603).
+     * ADMINISTRATOR-only; a positive value is required when present. Returns the refreshed client.
+     */
+    fun setRateLimit(
+        token: VerifiedFirebaseToken,
+        clientId: UUID,
+        rateLimitPerMin: Int?,
+    ): Either<ServiceError, ApiClient> =
+        either {
+            val adminId = requireAdmin(token = token).bind()
+            ensure(condition = rateLimitPerMin == null || rateLimitPerMin > 0) {
+                ServiceError.Validation(message = "rateLimitPerMin must be positive")
+            }
+            val client =
+                ensureNotNull(value = clients.setRateLimit(clientId = clientId, rateLimitPerMin = rateLimitPerMin)) {
+                    ServiceError.NotFound(message = "API client $clientId not found")
+                }
+            audit.record(
+                write =
+                    AuditWrite(
+                        actorUserId = adminId,
+                        action = AuditAction.API_CLIENT_RATE_LIMIT_SET,
+                        entityType = AuditEntityType.API_CLIENT,
+                        entityId = clientId,
+                        summary = "Set rate limit for ${client.name} to ${rateLimitPerMin ?: "default"}",
+                        details =
+                            mapOf(
+                                "clientId" to clientId.toString(),
+                                "rateLimitPerMin" to rateLimitPerMin?.toString(),
+                            ),
+                    ),
+            )
+            client
+        }
+
+    /**
+     * The effective per-minute limit for a rate-limit bucket [key] (#603): a client's override when the
+     * key is its id, else the [default] (also used for the anonymous per-host buckets). Read-only.
+     */
+    fun rateLimitForKey(
+        key: String,
+        default: Int,
+    ): Int {
+        val clientId = runCatching { UUID.fromString(key) }.getOrNull() ?: return default
+        return clients.findClientById(id = clientId)?.rateLimitPerMin ?: default
+    }
+
+    /**
      * Resolve a raw `X-Api-Key` value to a [ClientPrincipal] (#596). Never throws and never logs the
      * key. An empty value is [ClientAuthResult.Missing]; a malformed or unknown key is
      * [ClientAuthResult.Invalid] (→ 401); a known-but-revoked/expired key, or one whose client is

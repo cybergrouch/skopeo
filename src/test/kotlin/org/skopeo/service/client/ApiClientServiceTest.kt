@@ -249,6 +249,41 @@ class ApiClientServiceTest {
     }
 
     @Test
+    fun `setRateLimit sets and clears a client's override`() {
+        val adminToken = admin()
+        val client = service.createClient(token = adminToken, name = "Partner A").shouldBeRight()
+        service.setRateLimit(token = adminToken, clientId = client.id, rateLimitPerMin = 300)
+            .shouldBeRight().rateLimitPerMin shouldBe 300
+        service.setRateLimit(token = adminToken, clientId = client.id, rateLimitPerMin = null)
+            .shouldBeRight().rateLimitPerMin shouldBe null
+    }
+
+    @Test
+    fun `setRateLimit rejects a non-admin, a non-positive limit, and a missing client`() {
+        val adminToken = admin()
+        val client = service.createClient(token = adminToken, name = "Partner A").shouldBeRight()
+        provision(uid = "plain", roles = setOf(element = Capability.PLAYER))
+        service.setRateLimit(token = token(uid = "plain"), clientId = client.id, rateLimitPerMin = 100)
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service.setRateLimit(token = adminToken, clientId = client.id, rateLimitPerMin = 0)
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+        service.setRateLimit(token = adminToken, clientId = UUID.randomUUID(), rateLimitPerMin = 100)
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
+    fun `rateLimitForKey returns the client override, else the default`() {
+        val adminToken = admin()
+        val client = service.createClient(token = adminToken, name = "Partner A").shouldBeRight()
+        service.rateLimitForKey(key = client.id.toString(), default = 120) shouldBe 120
+        service.setRateLimit(token = adminToken, clientId = client.id, rateLimitPerMin = 5).shouldBeRight()
+        service.rateLimitForKey(key = client.id.toString(), default = 120) shouldBe 5
+        // Anonymous per-host buckets and unknown client ids fall back to the default.
+        service.rateLimitForKey(key = "anon:127.0.0.1", default = 120) shouldBe 120
+        service.rateLimitForKey(key = UUID.randomUUID().toString(), default = 120) shouldBe 120
+    }
+
+    @Test
     fun `authenticate rejects an expired key`() {
         val client = clients.createClient(name = "Partner A", createdBy = null)
         val generated = ApiKeyCrypto.generate(environment = ApiKeyEnvironment.LIVE)

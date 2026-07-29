@@ -14,6 +14,7 @@ import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
+import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
@@ -32,6 +33,7 @@ import org.skopeo.dto.client.CreateApiClientRequest
 import org.skopeo.dto.client.IssueApiKeyRequest
 import org.skopeo.dto.client.IssuedApiKeyResponse
 import org.skopeo.dto.client.PartnerPlayerResponse
+import org.skopeo.dto.client.SetRateLimitRequest
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.NameType
@@ -215,6 +217,74 @@ class ApiClientApiIntegrationTest {
             client.get(urlString = "/api/v1/client/me/capabilities") {
                 header(key = HttpHeaders.Authorization, value = bearer(uid = "researcher"))
             }.status shouldBe HttpStatusCode.Unauthorized
+        }
+
+    @Test
+    fun `an admin sets and clears a client's rate-limit override (#603)`() =
+        withApp { client ->
+            seedUser(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+            val adminAuth = bearer(uid = "admin")
+            val clientId =
+                client.post(urlString = "/api/v1/api-clients") {
+                    header(key = HttpHeaders.Authorization, value = adminAuth)
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = CreateApiClientRequest(name = "Partner A"))
+                }.body<ApiClientResponse>().id
+
+            val set =
+                client.put(urlString = "/api/v1/api-clients/$clientId/rate-limit") {
+                    header(key = HttpHeaders.Authorization, value = adminAuth)
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = SetRateLimitRequest(rateLimitPerMin = 300))
+                }
+            set.status shouldBe HttpStatusCode.OK
+            set.body<ApiClientResponse>().rateLimitPerMin shouldBe 300
+
+            // A non-admin cannot change it.
+            seedUser(uid = "plain", roles = setOf(element = Capability.PLAYER))
+            client.put(urlString = "/api/v1/api-clients/$clientId/rate-limit") {
+                header(key = HttpHeaders.Authorization, value = bearer(uid = "plain"))
+                contentType(type = ContentType.Application.Json)
+                setBody(body = SetRateLimitRequest(rateLimitPerMin = 5))
+            }.status shouldBe HttpStatusCode.Forbidden
+        }
+
+    @Test
+    fun `honors a per-client rate-limit override below the default (#603)`() =
+        testApplication {
+            application {
+                module(initDatabase = false, firebaseAuth = TestFirebaseAuth.settings, partnerRateLimit = 100)
+            }
+            val client = jsonClient()
+            seedUser(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+            val adminAuth = bearer(uid = "admin")
+            val clientId =
+                client.post(urlString = "/api/v1/api-clients") {
+                    header(key = HttpHeaders.Authorization, value = adminAuth)
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = CreateApiClientRequest(name = "Partner A"))
+                }.body<ApiClientResponse>().id
+            // Override this client to 1/min despite the default of 100.
+            client.put(urlString = "/api/v1/api-clients/$clientId/rate-limit") {
+                header(key = HttpHeaders.Authorization, value = adminAuth)
+                contentType(type = ContentType.Application.Json)
+                setBody(body = SetRateLimitRequest(rateLimitPerMin = 1))
+            }
+            // Issue a key under THIS client (so the bucket is keyed to the overridden client).
+            val key =
+                client.post(urlString = "/api/v1/api-clients/$clientId/keys") {
+                    header(key = HttpHeaders.Authorization, value = adminAuth)
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = IssueApiKeyRequest())
+                }.body<IssuedApiKeyResponse>()
+
+            client.get(urlString = "/api/v1/client/me") {
+                header(key = "X-Api-Key", value = key.apiKey)
+            }.status shouldBe HttpStatusCode.OK
+            // The client's own limit (1) is hit on the second request, well below the default.
+            client.get(urlString = "/api/v1/client/me") {
+                header(key = "X-Api-Key", value = key.apiKey)
+            }.status shouldBe HttpStatusCode.TooManyRequests
         }
 
     @Test

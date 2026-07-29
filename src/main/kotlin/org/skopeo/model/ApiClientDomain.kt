@@ -35,6 +35,8 @@ data class ApiClient(
     val createdAt: LocalDateTime,
     val updatedAt: LocalDateTime,
     val keys: List<ApiKey> = emptyList(),
+    // Per-minute rate-limit override (#603); null = the global default tier applies.
+    val rateLimitPerMin: Int? = null,
 )
 
 /**
