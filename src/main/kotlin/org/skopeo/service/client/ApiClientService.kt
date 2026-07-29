@@ -23,7 +23,6 @@ import org.skopeo.model.ClientPrincipal
 import org.skopeo.model.InsertApiKeyCommand
 import org.skopeo.model.IssuedApiKey
 import org.skopeo.model.PublicPlayer
-import org.skopeo.model.ResolvedApiKey
 import org.skopeo.model.ServiceError
 import org.skopeo.model.UserSearchQuery
 import org.skopeo.model.displayName
@@ -45,6 +44,7 @@ private const val CLIENT_NAME_MAX = 120
  *
  * Expected failures are returned as an [Either] left ([ServiceError], #115) rather than thrown.
  */
+@Suppress("TooManyFunctions") // Cohesive: admin CRUD (create/list/issue/revoke) + the key resolver + scope/delegation reads.
 class ApiClientService(
     private val clients: ApiClientRepository = ApiClientRepository(),
     private val users: UserRepository = UserRepository(),
@@ -165,6 +165,21 @@ class ApiClientService(
      * suspended, is [ClientAuthResult.Forbidden] (→ 403).
      */
     fun authenticate(rawKey: String): ClientAuthResult {
+        val result = classifyKey(rawKey = rawKey)
+        if (result is ClientAuthResult.Authenticated) {
+            clients.touchLastUsed(keyId = result.principal.keyId, usedAt = LocalDateTime.now())
+        }
+        return result
+    }
+
+    /**
+     * The client id behind a usable key (#598), for rate-limit keying. Read-only: unlike [authenticate]
+     * it does not record last-used, so it's cheap to call in the rate-limit request-key extractor.
+     */
+    fun resolveClientId(rawKey: String): UUID? = (classifyKey(rawKey = rawKey) as? ClientAuthResult.Authenticated)?.principal?.clientId
+
+    /** Classify a raw key with no side effects: Missing / Invalid / Forbidden, or Authenticated. */
+    private fun classifyKey(rawKey: String): ClientAuthResult {
         val raw = rawKey.trim()
         return when {
             raw.isEmpty() -> ClientAuthResult.Missing
@@ -173,14 +188,12 @@ class ApiClientService(
         }
     }
 
-    /** Look up a well-formed key by hash and classify it (unknown → Invalid; else via [classify]). */
+    /**
+     * Look up a well-formed key by hash and classify it: unknown → Invalid; revoked/expired or a
+     * suspended client → Forbidden; otherwise Authenticated. Side-effect-free.
+     */
     private fun resolve(raw: String): ClientAuthResult {
         val resolved = clients.findKeyByHash(hash = ApiKeyCrypto.hash(plaintext = raw)) ?: return ClientAuthResult.Invalid
-        return classify(resolved = resolved)
-    }
-
-    /** A recognized key: reject if revoked/expired or its client is suspended; else authenticate. */
-    private fun classify(resolved: ResolvedApiKey): ClientAuthResult {
         val key = resolved.key
         val rejected =
             key.status == ApiKeyStatus.REVOKED ||
@@ -189,7 +202,6 @@ class ApiClientService(
         return if (rejected) {
             ClientAuthResult.Forbidden
         } else {
-            clients.touchLastUsed(keyId = key.id, usedAt = LocalDateTime.now())
             ClientAuthResult.Authenticated(
                 principal = ClientPrincipal(clientId = key.clientId, keyId = key.id, scopes = key.scopes),
             )

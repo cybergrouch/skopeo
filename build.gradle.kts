@@ -63,6 +63,9 @@ dependencies {
     implementation("io.ktor:ktor-server-content-negotiation-jvm:$ktorVersion")
     implementation("io.ktor:ktor-server-cors-jvm:$ktorVersion")
 
+    // Per-client rate limiting for partner API traffic (#225/#598)
+    implementation("io.ktor:ktor-server-rate-limit-jvm:$ktorVersion")
+
     // Authentication — verify Firebase-issued JWTs against Google's public keys
     implementation("io.ktor:ktor-server-auth-jvm:$ktorVersion")
     implementation("io.ktor:ktor-server-auth-jwt-jvm:$ktorVersion")
