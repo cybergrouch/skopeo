@@ -133,7 +133,7 @@ internal fun buildProvisionCommand(
             if (isBootstrapAdmin(token = token, adminEmails = adminEmails)) {
                 setOf(Capability.PLAYER, Capability.RESEARCHER, Capability.ADMINISTRATOR)
             } else {
-                setOf(Capability.PLAYER)
+                setOf(element = Capability.PLAYER)
             },
     )
 }
