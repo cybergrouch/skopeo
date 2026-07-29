@@ -32,9 +32,9 @@ Skopeo's evolution from a **stateless rating calculator** to a **comprehensive p
 | 10 | Player Ranking System | ✅ DONE | Implemented | #5, #6, #7 | Per-NTRP-band "Ranking Race" standings / leaderboards (#113) |
 | **NICE-TO-HAVE FEATURES (ENHANCE MVP)** |
 | 11 | Seeding Generation | ✅ DONE | Implemented | #10 | Host-curated player lists → rating-sorted seeding with CSV export (#111) |
-| 12 | Dynamic Rating Confidence | 🟡 NICE-TO-HAVE | Not Started | #10 | Time-based confidence score for ratings (accounts for player inactivity) |
+| 12 | Dynamic Rating Confidence | ✅ DONE | Implemented | #10 | Read-time confidence score for ratings (recency + activity + data sparsity); shown beside every NTRP band (#343 / #459) |
 | **POST-MVP FEATURES (FUTURE ENHANCEMENTS)** |
-| 13 | Doubles Support | 🟢 FUTURE | Not Started | #7, #8 | Support for doubles matches (2v2) with team ratings |
+| 13 | Doubles Support | ✅ DONE | Implemented | #7, #8 | Doubles & mixed-doubles (2v2) via the v2 calculator (`TeamType.DOUBLES`/`MIXED_DOUBLES`) with team-based ratings |
 | 14 | Tournament Management | 🟢 FUTURE | Not Started | #8, #10 | Create and manage tournaments with brackets |
 | 15 | League/Season Support | 🟢 FUTURE | Not Started | #8 | Seasonal ratings with resets and historical tracking |
 | 16 | Mobile Apps | 🟢 FUTURE | Not Started | All APIs | iOS/Android apps for match recording |
@@ -294,8 +294,10 @@ Automated player verification through social media account validation.
 - No posting capabilities requested
 - Clear data usage policy
 
-#### 7. **Dynamic Rating Confidence Value** (PRIORITY: NICE-TO-HAVE)
+#### 7. **Dynamic Rating Confidence Value** (✅ SHIPPED — #343 / #459)
 Time-based confidence scoring for dynamic ratings to account for player inactivity.
+
+> **✅ Shipped — see [RATING_CONFIDENCE.md](RATING_CONFIDENCE.md) and [RATING_CONFIDENCE_SPARSITY.md](RATING_CONFIDENCE_SPARSITY.md) for the built design.** The shipped model computes confidence **on read (never stored)** from recency, activity, and data-sparsity signals — which supersedes the stored-column schema and exact formula sketched below (those were the original proposal, kept for history).
 
 **Core Features**:
 - ✅ **Confidence Score Calculation**
@@ -362,12 +364,14 @@ ALTER TABLE player_statistics ADD COLUMN:
 
 These features will be considered after MVP and nice-to-have features are implemented:
 
-#### 1. **Doubles Support** (#13) 🎾
+#### 1. **Doubles Support** (#13) 🎾 ✅ SHIPPED
 Support for doubles matches (2 vs 2) with team-based rating calculations.
+
+> **✅ Shipped.** Doubles and mixed-doubles are handled by the v2 calculator (`service/calculator/impl/v2/`, `DoublesMatchTypeHandler`) driven by `TeamType.SINGLES`/`DOUBLES`/`MIXED_DOUBLES` on the team model. The team-based request schema (`teams: Map<String, Team>`) was designed for this from day one, so no breaking migration was needed. The design notes below are the original forward-looking sketch (some specifics — e.g. separate stored singles/doubles rating columns — differ from what was built); see [database-schema.md](../engineering/architecture/database-schema.md) for the actual shape.
 
 **⚠️ Design Implications for Current Match Model**
 
-This feature has **critical implications** for how matches are currently represented in the database. To support doubles in the future, the match tracking system (#7) should be designed with flexibility in mind.
+This feature had **critical implications** for how matches are represented in the database; the match tracking system (#7) was designed with this flexibility in mind.
 
 **Core Features**:
 - ✅ **Match Type Support**
@@ -482,10 +486,10 @@ ratings_history
 - Aligns with real-world tennis tournaments
 - Separate skill tracking for different game formats
 
-**Implementation Priority**: Future (after MVP)
-- MVP focuses on singles to validate core rating algorithm
-- Doubles adds complexity that should come after singles is proven
-- However, match model should be designed with doubles in mind
+**Implementation Priority**: ✅ Shipped (delivered after the singles MVP proved the core algorithm)
+- Singles validated the core rating algorithm first
+- Doubles was added afterward via the v2 calculator
+- The team-based match model was designed with doubles in mind from the start
 
 ---
 
