@@ -16,6 +16,18 @@
         "run": { "serviceId": "skopeo", "region": "asia-southeast1" }
       },
       {
+        "source": "/swagger",
+        "run": { "serviceId": "skopeo", "region": "asia-southeast1" }
+      },
+      {
+        "source": "/swagger/**",
+        "run": { "serviceId": "skopeo", "region": "asia-southeast1" }
+      },
+      {
+        "source": "/openapi.yaml",
+        "run": { "serviceId": "skopeo", "region": "asia-southeast1" }
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
