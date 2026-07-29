@@ -64,6 +64,9 @@ enum class AuditAction {
     PLACEHOLDER_CLAIMED,
     ACCOUNT_DELETED,
     ACCOUNT_REACTIVATED,
+    API_CLIENT_CREATED,
+    API_KEY_ISSUED,
+    API_KEY_REVOKED,
 }
 
 /** The kind of entity an [AuditAction] concerns. */
@@ -80,6 +83,8 @@ enum class AuditEntityType {
     SETTING,
     RANKING_POINT,
     STANDINGS,
+    API_CLIENT,
+    API_KEY,
 }
 
 /**
@@ -103,6 +108,7 @@ enum class AuditCategory {
     SETTINGS_MANAGEMENT,
     RANKING_POINTS,
     STANDINGS,
+    API_CLIENT_MANAGEMENT,
 }
 
 /** The category an action rolls up into. */
@@ -171,6 +177,10 @@ val AuditAction.category: AuditCategory
             AuditAction.STANDINGS_RECALCULATED,
             AuditAction.STANDINGS_PUBLISHED,
             -> AuditCategory.STANDINGS
+            AuditAction.API_CLIENT_CREATED,
+            AuditAction.API_KEY_ISSUED,
+            AuditAction.API_KEY_REVOKED,
+            -> AuditCategory.API_CLIENT_MANAGEMENT
         }
 
 /** The actions that roll up into a category (empty for categories whose events aren't wired yet). */

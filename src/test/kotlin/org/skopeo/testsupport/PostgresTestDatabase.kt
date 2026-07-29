@@ -52,6 +52,9 @@ object PostgresTestDatabase {
             // settings back to their V11 seed so theme state doesn't leak across tests (#378).
             exec(stmt = "TRUNCATE app_settings")
             exec(stmt = "INSERT INTO app_settings (key, value, updated_at) VALUES ('ui_theme', 'AUTO', now())")
+            // api_clients only SET NULL on the users FK (not CASCADE), so it survives the users wipe;
+            // truncate it explicitly (cascading to api_keys) so keys from one test don't leak (#225/#596).
+            exec(stmt = "TRUNCATE api_clients CASCADE")
             // The per-club points-budget table was removed with the budget/designation subsystem (#559).
         }
     }
