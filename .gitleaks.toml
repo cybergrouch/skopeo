@@ -26,4 +26,8 @@ commits = [
 # never carry a real secret, so path-allowlisting it is safe.
 paths = [
   '''docs/product/EVENT_PAYMENTS\.md''',
+  # The API-clients admin test uses obviously-fake `skopeo_live_…` key fixtures (#602/#603) that trip
+  # the generic-api-key rule. A test file must never carry a real secret, so path-allowlist it — by
+  # PATH (not commit SHA) so it survives the squash-merge to main, matching the doc precedent above.
+  '''web/src/routes/dashboard/admin/ApiClientsSection\.test\.tsx''',
 ]
