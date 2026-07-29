@@ -1,10 +1,12 @@
 # Skopeo Database Schema
 
-This document describes the Skopeo database schema as composed across migrations `V1`–`V12` and the live Exposed table objects (`src/main/kotlin/org/skopeo/repository/*Tables.kt`).
+This document describes the Skopeo database schema as composed across migrations `V1`–`V35` and the live Exposed table objects (`src/main/kotlin/org/skopeo/repository/*Tables.kt`).
 
-> **Status.** The schema is still spread across incremental migrations on this branch: a consolidated baseline (`V1`) plus `V2`–`V12`. No persistent database has been provisioned yet, so the design is free to evolve, but new changes go in fresh migrations rather than edits to applied ones. The migrations and `*Tables.kt` are the source of truth; if this document conflicts with them, they win.
+> **Status.** The schema is a consolidated baseline (`V1`) plus incremental migrations `V2`–`V35`. New changes go in fresh migrations rather than edits to applied ones. **The migrations and `*Tables.kt` are the source of truth; if this document conflicts with them, they win.**
 >
-> **Migration map.** `V1` baseline (users, names, identities, contacts, capabilities, KYC, ratings, teams, matches, invites) · `V2` `audit_log` · `V3` match-dimension rework (`match_format` = SINGLES/DOUBLES, `match_type` = competitive context) · `V4` `users.canonical_user_id` (duplicate rectification) · `V5` `duplicate_candidates` · `V6` `RATER` capability · `V7` `RESEARCHER` capability · `V8` host-seeding tables (`player_lists`, `player_list_members`, `seedings`, `seeding_entries`) · `V9` `user_rating_history.set_breakdown` · `V10` `matches.public_code` · `V11` `events` / `event_participants` / `matches.event_id` · `V12` `rating_requests`.
+> **Migration map.** `V1` consolidated baseline — users + names + identities + contacts + capabilities, ratings + rating history, teams/matches/sets/tiebreaks, events + participants, invites, duplicate_candidates, rating_requests, audit_log, and host-seeding tables (`player_lists`/`player_list_members`/`seedings`/`seeding_entries`). Then: `V2` event-participant status · `V3` `user_rating_history.completed_at` · `V4` profile-photo control · `V5` `clubs` + `club_owners` · `V6` `events.club_id` · `V7` `matches.calc_sequence` · `V8` `events.calc_priority` · `V9` match rated-confidence · `V10` `clubs.public_code` · `V11` `app_settings` · `V12` `standings_snapshots` + `standings_entries` · `V13` `ranking_point_awards` · `V14` standings-snapshot `source` · `V15` `events.type` + finalize columns · `V16` per-club points budget *(later removed)* · `V17` per-fixture points designation *(later removed)* · `V18` award→event link · `V19` award→match link · `V20` `rating_history.rating_run_id` · `V21` match handicap · `V22` `rating_history.reversed_at` · `V23` placeholder accounts (`placeholder_claim_codes` + `users` claim columns) · `V24` `users.local_theme` · `V25` `circuits` · `V26` tournaments (`events.circuit_id`, placement columns) · `V27` drop points policies · `V28` `points_config` · `V29` widen placement bracket · `V30` remove the points-budget/designation subsystem (#559) · `V31` collapse the tournament `match_type` · `V32` `users.preview_ratings_as_non_admin` · `V33` `api_clients` + `api_keys` · `V34` `audit_log.actor_client_id` · `V35` `api_clients.rate_limit_per_min`.
+>
+> **Not yet built:** the `user_kyc` table below is design-stage — there is no live `*Tables.kt` for it (only `users.kyc_verified` exists). Treat the KYC entity/section as a proposal.
 
 ## Design Principles
 
@@ -53,6 +55,32 @@ erDiagram
     SEEDINGS ||--o{ SEEDING_ENTRIES : "ranked rows"
     USERS ||--o{ PLAYER_LIST_MEMBERS : "member of"
 
+    %% Clubs & circuits (V5/V25)
+    USERS ||--o{ CLUBS : "created by"
+    CLUBS ||--o{ CLUB_OWNERS : "owned by"
+    USERS ||--o{ CLUB_OWNERS : "owns"
+    CLUBS ||--o{ EVENTS : "hosts"
+    CIRCUITS ||--o{ EVENTS : "groups (tournaments)"
+    USERS ||--o{ CIRCUITS : "created by"
+
+    %% Standings snapshots (V12/V14)
+    STANDINGS_SNAPSHOTS ||--o{ STANDINGS_ENTRIES : "contains"
+    USERS ||--o{ STANDINGS_ENTRIES : "ranked in"
+
+    %% Ranking points ledger (V13/V18/V19)
+    USERS ||--o{ RANKING_POINT_AWARDS : "awarded"
+    EVENTS ||--o{ RANKING_POINT_AWARDS : "grants (on finalize)"
+    MATCHES ||--o{ RANKING_POINT_AWARDS : "grants (per fixture)"
+
+    %% Placeholder claim codes (V23)
+    USERS ||--o{ PLACEHOLDER_CLAIM_CODES : "claim code for"
+
+    %% Partner API clients (V33/V35) & settings (V11/V28)
+    API_CLIENTS ||--o{ API_KEYS : "issues"
+    USERS ||--o{ API_CLIENTS : "created by"
+    USERS ||--o{ APP_SETTINGS : "updated by"
+    USERS ||--o{ POINTS_CONFIG : "updated by"
+
     USERS {
         uuid id PK
         string firebase_uid UK "Firebase Auth UID (auth anchor); nullable"
@@ -67,6 +95,11 @@ erDiagram
         string public_code UK "6-char Crockford-base32, not null"
         decimal proposed_rating "self-reported NTRP at sign-up (nullable)"
         uuid canonical_user_id FK "set on a disabled duplicate (nullable)"
+        boolean placeholder "login-less dummy player (V23); default false"
+        timestamp claimed_at "when a placeholder was claimed (nullable)"
+        uuid claimed_by FK "user who claimed it (nullable, V23)"
+        string local_theme "per-user UI theme override (V24, nullable)"
+        boolean preview_ratings_as_non_admin "admin sees non-admin view (V32); default false"
         timestamp created_at
         timestamp updated_at
     }
@@ -137,13 +170,12 @@ erDiagram
     USER_RATINGS {
         uuid id PK
         uuid user_id FK "not null, unique"
-        decimal current_rating "precision 10,6, 1.0-7.0"
-        string current_level
-        decimal confidence_score "0.0-1.0, decays over time"
-        integer matches_played
-        date last_match_date
-        timestamp created_at
-        timestamp updated_at
+        decimal current_rating "precision, 1.0-7.0"
+        string current_level "NTRP band label (nullable)"
+        integer matches_played "default 0"
+        date last_match_date "nullable"
+        timestamp match_rated_at "when the last rating was committed (nullable)"
+        integer matches_since_reset "default 0"
     }
 
     USER_RATING_HISTORY {
@@ -169,6 +201,9 @@ erDiagram
         decimal k_factor
         text set_breakdown "per-set JSON breakdown (#110)"
         timestamp calculated_at
+        timestamp completed_at "match completion time (ordering; nullable)"
+        uuid rating_run_id "groups one calculation run's writes (V20; nullable)"
+        timestamp reversed_at "set when an event unfinalize reverses it (V22; nullable)"
     }
 
     TEAMS {
@@ -211,6 +246,11 @@ erDiagram
         boolean is_active
         timestamp disabled_at
         uuid event_id FK "optional owning event (nullable)"
+        integer calc_sequence "explicit calculation order within an event (V7; nullable)"
+        decimal team1_handicap "per-side NTRP handicap (V21; nullable)"
+        decimal team2_handicap "per-side NTRP handicap (V21; nullable)"
+        boolean is_placement_match "tournament placement match (V26); default false"
+        string placement_bracket "CHAMPIONSHIP_FINALS / PLATE_FINALS (nullable)"
         timestamp created_at
         timestamp updated_at
     }
@@ -249,7 +289,8 @@ erDiagram
     AUDIT_LOG {
         uuid id PK
         timestamp occurred_at "not null"
-        uuid actor_user_id FK "null for SYSTEM actions"
+        uuid actor_user_id "soft FK; null for SYSTEM actions"
+        uuid actor_client_id "soft FK to api_clients (V34); the API client that acted (nullable)"
         string action "not null"
         string entity_type "not null"
         uuid entity_id
@@ -292,6 +333,13 @@ erDiagram
         uuid created_by FK "nullable"
         boolean is_active
         timestamp disabled_at
+        uuid club_id FK "owning club (V6; nullable)"
+        uuid circuit_id FK "circuit for a TOURNAMENT (V26; nullable)"
+        double calc_priority "admin calc-order override (V8; nullable)"
+        string type "OPEN_PLAY / LEAGUE / TOURNAMENT (V15; default OPEN_PLAY)"
+        timestamp finalized_at "finalized iff non-null (V15)"
+        uuid finalized_by FK "actor (nullable)"
+        boolean award_ranking_points "award points on finalize (#559); default true"
         timestamp created_at
     }
 
@@ -299,7 +347,10 @@ erDiagram
         uuid id PK
         uuid event_id FK "not null"
         uuid user_id FK "not null"
-        timestamp added_at
+        string status "PENDING / APPROVED / HOLD (V2); default APPROVED"
+        timestamp requested_at "self-signup time (nullable)"
+        uuid approved_by FK "host who approved (nullable)"
+        timestamp approved_at "nullable"
     }
 
     PLAYER_LISTS {
@@ -335,6 +386,122 @@ erDiagram
         string rating "not null (frozen at generation)"
         string sex
         integer age
+    }
+
+    CLUBS {
+        uuid id PK
+        string name "not null"
+        string public_code UK "6-char shareable code (V10)"
+        boolean is_active "default true"
+        boolean tournaments_sanctioned "default false"
+        uuid created_by FK "nullable"
+        timestamp created_at
+    }
+
+    CLUB_OWNERS {
+        uuid id PK
+        uuid club_id FK "not null"
+        uuid user_id FK "not null"
+        timestamp created_at
+    }
+
+    CIRCUITS {
+        uuid id PK
+        string name "not null"
+        boolean is_active "default true"
+        uuid created_by FK "nullable"
+        timestamp created_at
+    }
+
+    STANDINGS_SNAPSHOTS {
+        uuid id PK
+        long seq "DB-generated monotonic order"
+        timestamp computed_at
+        date as_of
+        string status "PUBLISHED / DRAFT"
+        string source "RATING / POINTS (V14)"
+    }
+
+    STANDINGS_ENTRIES {
+        uuid id PK
+        uuid snapshot_id FK "not null"
+        string band "NTRP band code"
+        string sex
+        integer rank
+        uuid user_id FK "not null"
+        decimal ordering_value "rank key (points or rating)"
+        decimal tiebreak_rating "nullable"
+        timestamp achieved_at "nullable"
+    }
+
+    RANKING_POINT_AWARDS {
+        uuid id PK
+        uuid user_id FK "not null"
+        decimal points
+        string point_class "validity tier"
+        string source_type
+        string source_id "nullable"
+        string band
+        string sex
+        text reason "nullable"
+        timestamp valid_from
+        timestamp valid_until
+        string status "ACTIVE / REVOKED"
+        uuid revokes_award_id "soft self-ref (revocation row); nullable"
+        uuid granted_by FK "nullable"
+        timestamp awarded_at
+        uuid event_id FK "granting event (V18; nullable)"
+        uuid match_id FK "granting fixture (V19; nullable)"
+    }
+
+    API_CLIENTS {
+        uuid id PK
+        string name "not null"
+        string status "ACTIVE / SUSPENDED"
+        integer rate_limit_per_min "per-client override (V35; nullable)"
+        uuid created_by FK "nullable"
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    API_KEYS {
+        uuid id PK
+        uuid client_id FK "not null"
+        string key_prefix "non-secret display prefix"
+        string key_hash "SHA-256 of the key (never the plaintext)"
+        string scopes "CSV of Capability names"
+        string status "ACTIVE / REVOKED"
+        uuid created_by FK "nullable"
+        timestamp created_at
+        timestamp expires_at "nullable"
+        timestamp last_used_at "nullable"
+        timestamp revoked_at "nullable"
+    }
+
+    PLACEHOLDER_CLAIM_CODES {
+        uuid id PK
+        uuid placeholder_user_id FK "not null"
+        string code_hash "SHA-256 of the one-time code"
+        timestamp expires_at
+        string status "ACTIVE / CONSUMED"
+        uuid created_by FK "nullable"
+        timestamp created_at
+        timestamp consumed_at "nullable"
+        uuid consumed_by FK "nullable"
+    }
+
+    POINTS_CONFIG {
+        string key PK "config key"
+        text value "JSON value"
+        uuid updated_by FK "nullable"
+        timestamp updated_at
+    }
+
+    APP_SETTINGS {
+        string key PK "setting key (e.g. ui_theme, standings_source)"
+        string value
+        uuid updated_by FK "nullable"
+        timestamp updated_at
     }
 ```
 
@@ -401,7 +568,7 @@ A user is granted one or more broad **capabilities**: `PLAYER`, `HOST`, `CLUB_OW
 
 ### Rating tables
 
-- **`user_ratings`** — current NTRP rating per user, one row each (`uq_user_rating`, `chk_user_rating_range` keeps `current_rating` between 1.0 and 7.0, `chk_confidence_range` keeps `confidence_score` in 0.0–1.0); `confidence_score` decays with `last_match_date`.
+- **`user_ratings`** — current NTRP rating per user, one row each (`uq_user_rating`, `chk_user_rating_range` keeps `current_rating` between 1.0 and 7.0). Rating **confidence is computed at read time** (#343) from `matches_played` / recency — it is *not* a stored column. `match_rated_at` records when the last rating was committed and `matches_since_reset` supports confidence sparsity handling.
 - **`user_rating_history`** — immutable, append-only audit trail of every rating change. `match_id` is null for an initial admin-set assessment. Beyond `previous_rating`/`new_rating`/`rating_change`/`percent_change`, level fields (`previous_level`, `new_level`, `level_changed`) and `calculated_at`, it persists the full per-match calculation breakdown (#97) — `dominance_factor`, `scale`, `rating_gap`, `normalized_gap`, `competitive_threshold_pct`, `is_upset`, `upset_multiplier`, `k_factor`, plus `smoothing_applied`/`smoothing_factor` — so a committed rating can be explained without recomputation (which would drift if algorithm constants change). All breakdown columns are nullable (initial assessments have none). `set_breakdown` (TEXT, #110) holds the v2 calculator's per-set steps as JSON; null for v1 and initial assessments.
 - **`rating_requests`** (V12, #140) — a player's rating-reconsideration request: `justification` plus resolution. `status IN (PENDING, APPROVED, DENIED)`; on approval a RATER applies `new_rating`, on denial supplies `reason`; `resolved_by`/`resolved_at` record the RATER. Partial unique index `uq_rating_requests_open WHERE status = 'PENDING'` allows at most one open request per player.
 
@@ -430,7 +597,159 @@ A user is granted one or more broad **capabilities**: `PLAYER`, `HOST`, `CLUB_OW
 
 ### Audit log (V2, #100)
 
-- **`audit_log`** — append-only provenance of domain actions: `occurred_at`, `actor_user_id` (null for SYSTEM actions), `action`, `entity_type`/`entity_id`, `summary`, and a JSONB `details` for per-action extras. `comment` is a free-text admin note — the one mutable field (its edits are deliberately not audited). Indexes `idx_audit_occurred_at` and `idx_audit_action_time` serve the newest-first admin trace viewer (#102). Domain tables do not reference it.
+- **`audit_log`** — append-only provenance of domain actions: `occurred_at`, `actor_user_id` (null for SYSTEM actions), `actor_client_id` (V34 — the API client/application that drove the action, distinct from the end user; null for user-/system-driven actions), `action`, `entity_type`/`entity_id`, `summary`, and a JSONB `details` for per-action extras. `comment` is a free-text admin note — the one mutable field (its edits are deliberately not audited). Actor references are **soft** (no hard DB FK) so the log is never mutated by domain deletes. Indexes serve the newest-first admin trace viewer (#102). Domain tables do not reference it.
+
+### Post-baseline subsystems
+
+- **`clubs` / `club_owners`** (V5/V10, #313) — a host organization with a shareable `public_code` and a `tournaments_sanctioned` flag (#525); `club_owners` is the club↔owner junction. Events may belong to a club (`events.club_id`, SET NULL).
+- **`circuits`** (V25, #525) — administrator-defined groupings of TOURNAMENT events (`events.circuit_id`, SET NULL).
+- **`standings_snapshots` / `standings_entries`** (V12/V14, #113/#146) — a published ranking snapshot (`seq` = DB-monotonic order; `status` PUBLISHED/DRAFT; `source` RATING or POINTS) and its per-(band, sex) ranked rows (`rank`, `ordering_value`, tiebreak). Reads pick the latest PUBLISHED generation.
+- **`ranking_point_awards`** (V13/V18/V19, #403/#448) — the append-only ranking-points ledger: `points` in a `point_class` validity tier, `band`/`sex`, a `valid_from`/`valid_until` window, and `status` ACTIVE/REVOKED. A revocation is itself a row (`revokes_award_id`). Awards link to their granting `event_id` and/or `match_id`.
+- **`placeholder_claim_codes`** (V23, #496) — one-time claim codes (stored SHA-256 hashed) that let a real user adopt a login-less `placeholder` account; `status` ACTIVE/CONSUMED with expiry.
+- **`api_clients` / `api_keys`** (V33/V35, #225) — partner applications and their keys. Only the SHA-256 `key_hash` is stored (never the plaintext); `key_prefix` is a non-secret display hint; `scopes` is a CSV of `Capability` names; per-client `rate_limit_per_min` overrides the default tier. `api_clients.status` ACTIVE/SUSPENDED; `api_keys.status` ACTIVE/REVOKED (+ derived expiry).
+- **`points_config`** (V28) / **`app_settings`** (V11) — key/value global settings (`app_settings` holds e.g. `ui_theme`, `standings_source`; `points_config` holds the open-play/tournament points schedules). `updated_by` records the admin.
+
+## Domain Lifecycles
+
+State machines for the entities whose `status` (or derived state) drives behaviour. Each cites its enum in `src/main/kotlin/org/skopeo/model/*Domain.kt`; the DB stores the state as a `VARCHAR` (+ a `CHECK` where enumerated).
+
+### Match (`MatchStatus`, `MatchDomain.kt`)
+
+`rated` is a derived sub-state (`matches.rated_at` set by a committed calculation), not an enum value.
+
+```mermaid
+stateDiagram-v2
+    [*] --> SCHEDULED : fixture created
+    SCHEDULED --> IN_PROGRESS
+    SCHEDULED --> COMPLETED : result uploaded
+    IN_PROGRESS --> COMPLETED : result uploaded
+    SCHEDULED --> CANCELLED
+    IN_PROGRESS --> CANCELLED
+    COMPLETED --> COMPLETED : rated (rated_at set)
+    COMPLETED --> [*]
+    CANCELLED --> [*]
+```
+
+### Event finalization (`events.finalized_at`, `EventDomain.kt`)
+
+An event is *finalized* iff `finalized_at` is non-null; finalizing queues the rating calculation and (optionally) awards ranking points.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Open : created
+    Open --> Finalized : finalize (queue rating calc, award points)
+    Finalized --> Open : unfinalize (reverse ratings, revoke awards)
+```
+
+### Event participant (`EventParticipantStatus`, `EventDomain.kt`)
+
+```mermaid
+stateDiagram-v2
+    [*] --> APPROVED : host adds directly
+    [*] --> PENDING : self-signup request
+    PENDING --> APPROVED : host approves
+    PENDING --> HOLD : host holds (soft deny)
+    HOLD --> APPROVED : host approves
+```
+
+### Invite (`InviteStatus`, `InviteDomain.kt`)
+
+`EXPIRED` is derived from `expires_at`, not stored.
+
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING : admin invites
+    PENDING --> ACCEPTED : sign-up completes
+    PENDING --> REVOKED : admin revokes
+    ACCEPTED --> [*]
+    REVOKED --> [*]
+```
+
+### Rating request (`RatingRequestStatus`, `RatingRequestDomain.kt`)
+
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING : player requests re-rate
+    PENDING --> APPROVED : RATER applies new_rating
+    PENDING --> DENIED : RATER supplies reason
+    APPROVED --> [*]
+    DENIED --> [*]
+```
+
+### Duplicate candidate (`DuplicateCandidateStatus`, `DuplicateDomain.kt`)
+
+```mermaid
+stateDiagram-v2
+    [*] --> OPEN : flagged (signal / manual)
+    OPEN --> DISMISSED : not a duplicate
+    OPEN --> RESOLVED : merged (canonical_user_id set)
+    DISMISSED --> [*]
+    RESOLVED --> [*]
+```
+
+### Placeholder claim code (`ClaimCodeStatus`, `UserDomain.kt`)
+
+`isUsable()` additionally requires the code to be unexpired.
+
+```mermaid
+stateDiagram-v2
+    [*] --> ACTIVE : admin generates code
+    ACTIVE --> CONSUMED : user claims the account
+    CONSUMED --> [*]
+```
+
+### API client & key (`ApiClientStatus` / `ApiKeyStatus`, `ApiClientDomain.kt`)
+
+Key expiry is derived from `expires_at`; the resolver rejects a key that is revoked, expired, or whose client is suspended.
+
+```mermaid
+stateDiagram-v2
+    state "api_clients" as Client {
+        [*] --> ACTIVE
+        ACTIVE --> SUSPENDED : admin suspends
+        SUSPENDED --> ACTIVE : admin reactivates
+    }
+    state "api_keys" as Key {
+        [*] --> KEY_ACTIVE : issued
+        KEY_ACTIVE --> REVOKED : admin revokes
+        REVOKED --> [*]
+    }
+```
+
+### Ranking-point award (`AwardStatus`, `RankingPointDomain.kt`)
+
+Revocation is recorded as a separate ledger row (`revokes_award_id`) rather than an in-place update.
+
+```mermaid
+stateDiagram-v2
+    [*] --> ACTIVE : award granted
+    ACTIVE --> REVOKED : superseded / reversed
+    REVOKED --> [*]
+```
+
+### Account status (derived: `users.is_active` / `canonical_user_id` / `placeholder`)
+
+```mermaid
+stateDiagram-v2
+    [*] --> Placeholder : admin creates login-less player
+    [*] --> Active : sign-up / provision
+    Placeholder --> Active : claim (one-time code)
+    Active --> MergedDuplicate : marked duplicate (canonical_user_id set, is_active=false)
+    Active --> Deleted : admin soft-delete (is_active=false, no canonical)
+    Deleted --> Active : admin re-allows login
+```
+
+### Client-auth resolution outcome (`ClientAuthResult`, `ApiClientDomain.kt`)
+
+A sealed result (not persisted) the route maps to HTTP: `Missing`/`Invalid` → 401, `Forbidden` → 403, `Authenticated` → proceed.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Missing : no X-Api-Key header
+    [*] --> Invalid : malformed or unknown key
+    [*] --> Forbidden : revoked / expired / client suspended
+    [*] --> Authenticated : valid, active key
+```
 
 ## Data Integrity Constraints
 
@@ -533,7 +852,6 @@ SELECT
     n.value AS display_name,
     r.current_rating,
     r.current_level,
-    r.confidence_score,
     r.last_match_date
 FROM users u
 JOIN user_names n   ON n.user_id = u.id AND n.name_type = 'DISPLAY' AND n.is_active
@@ -564,14 +882,13 @@ SELECT capability FROM user_capabilities WHERE user_id = '<user-uuid>';
 SELECT
     n.value AS name,
     r.current_rating,
-    r.confidence_score,
-    ROW_NUMBER() OVER (ORDER BY r.current_rating DESC, r.confidence_score DESC) AS seed
+    ROW_NUMBER() OVER (ORDER BY r.current_rating DESC, r.matches_played DESC) AS seed
 FROM users u
 JOIN user_names n   ON n.user_id = u.id AND n.name_type = 'DISPLAY' AND n.is_active
 JOIN user_ratings r ON r.user_id = u.id
 WHERE u.is_active
   AND r.last_match_date > CURRENT_DATE - INTERVAL '180 days'
-ORDER BY r.current_rating DESC, r.confidence_score DESC
+ORDER BY r.current_rating DESC, r.matches_played DESC
 LIMIT 64;
 ```
 
