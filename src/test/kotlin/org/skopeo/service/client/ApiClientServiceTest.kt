@@ -5,6 +5,7 @@ package org.skopeo.service.client
 
 import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
+import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
@@ -18,6 +19,7 @@ import org.skopeo.model.ApiKeyEnvironment
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.ClientAuthResult
+import org.skopeo.model.ClientPrincipal
 import org.skopeo.model.InsertApiKeyCommand
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
@@ -196,6 +198,35 @@ class ApiClientServiceTest {
         service.revokeKey(token = adminToken, clientId = client.id, keyId = issued.key.id).shouldBeRight()
 
         service.authenticate(rawKey = issued.plaintext) shouldBe ClientAuthResult.Forbidden
+    }
+
+    @Test
+    fun `playerDirectory returns the public projection of players`() {
+        val a = provision(uid = "alice", roles = setOf(element = Capability.PLAYER))
+        val b = provision(uid = "bob", roles = setOf(element = Capability.PLAYER))
+        service.playerDirectory().map { it.publicCode } shouldContainExactlyInAnyOrder listOf(a.publicCode, b.publicCode)
+    }
+
+    @Test
+    fun `effectiveCapabilities returns the intersection of key scopes and the user's capabilities`() {
+        provision(uid = "u1", roles = setOf(Capability.PLAYER, Capability.RESEARCHER))
+        val principal =
+            ClientPrincipal(
+                clientId = UUID.randomUUID(),
+                keyId = UUID.randomUUID(),
+                scopes = setOf(Capability.RESEARCHER, Capability.HOST),
+            )
+        val effective = service.effectiveCapabilities(token = token(uid = "u1"), principal = principal).shouldBeRight()
+        // Only RESEARCHER is in both the key's scopes and the user's capabilities.
+        effective.capabilities shouldBe setOf(element = Capability.RESEARCHER)
+    }
+
+    @Test
+    fun `effectiveCapabilities is Forbidden when the token resolves to no user`() {
+        val principal =
+            ClientPrincipal(clientId = UUID.randomUUID(), keyId = UUID.randomUUID(), scopes = setOf(element = Capability.PLAYER))
+        service.effectiveCapabilities(token = token(uid = "ghost"), principal = principal)
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test

@@ -91,6 +91,28 @@ data class ClientPrincipal(
     val scopes: Set<Capability>,
 )
 
+/** Whether a key is authorized for [capability] (least-privilege scope check, #597). */
+fun ClientPrincipal.hasScope(capability: Capability): Boolean = capability in scopes
+
+/**
+ * The capabilities a partner may exercise **on behalf of a user** (#597): the intersection of the key's
+ * scopes and the acting user's own capabilities. The app can never do more than either party allows.
+ */
+fun ClientPrincipal.effectiveCapabilities(userCapabilities: Set<Capability>): Set<Capability> = scopes intersect userCapabilities
+
+/** A minimal, public projection of a player for a partner directory read (no PII beyond the public name). */
+data class PublicPlayer(
+    val publicCode: String,
+    val displayName: String?,
+)
+
+/** The result of a delegated authorization check (#597): what [clientId] may do for [userId]. */
+data class ClientEffectiveCapabilities(
+    val clientId: UUID,
+    val userId: UUID,
+    val capabilities: Set<Capability>,
+)
+
 /**
  * The outcome of resolving an `X-Api-Key` header. Kept HTTP-free (the route layer maps it to a status):
  * [Missing]/[Invalid] → 401 (no or unusable credential), [Forbidden] → 403 (a known key that is
