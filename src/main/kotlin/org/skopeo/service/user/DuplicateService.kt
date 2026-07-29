@@ -8,6 +8,8 @@ import arrow.core.left
 import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.right
+import org.skopeo.dto.user.UserSummaryResponse
+import org.skopeo.mapper.user.toSummary
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -36,7 +38,7 @@ class DuplicateService(
         token: VerifiedFirebaseToken,
         canonicalId: UUID,
         duplicateIds: List<UUID>,
-    ): Either<ServiceError, List<User>> =
+    ): Either<ServiceError, List<UserSummaryResponse>> =
         either {
             val adminId = requireAdmin(token = token).bind()
             val canonical = users.findById(id = canonicalId).bind()
@@ -70,7 +72,7 @@ class DuplicateService(
                         ),
                 )
             }
-            users.findDuplicatesOf(canonicalId = canonicalId)
+            users.findDuplicatesOf(canonicalId = canonicalId).map { it.toSummary() }
         }
 
     /** Reverse a duplicate marking on [id]: reactivate and clear its canonical pointer. */
@@ -106,11 +108,11 @@ class DuplicateService(
     fun duplicatesOf(
         token: VerifiedFirebaseToken,
         canonicalId: UUID,
-    ): Either<ServiceError, List<User>> =
+    ): Either<ServiceError, List<UserSummaryResponse>> =
         either {
             requireAdmin(token = token).bind()
             users.findById(id = canonicalId).bind()
-            users.findDuplicatesOf(canonicalId = canonicalId)
+            users.findDuplicatesOf(canonicalId = canonicalId).map { it.toSummary() }
         }
 
     /** A target must exist and not itself already be a canonical for other duplicates. */

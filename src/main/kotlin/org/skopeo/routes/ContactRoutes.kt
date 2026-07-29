@@ -19,7 +19,6 @@ import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.contact.ContactCreateRequest
 import org.skopeo.dto.contact.ContactStateRequest
 import org.skopeo.dto.contact.VerificationRequest
-import org.skopeo.mapper.contact.toResponse
 import org.skopeo.model.ContactType
 import org.skopeo.model.VerificationMethod
 import org.skopeo.model.VerificationStatus
@@ -47,7 +46,7 @@ private fun Route.listAndCreate(service: ContactService) {
     get {
         respondMappingErrors {
             respondEither(result = service.list(token = verifiedToken(), userId = uuidParam(name = "userId"))) { list ->
-                call.respond(status = HttpStatusCode.OK, message = list.map { it.toResponse() })
+                call.respond(status = HttpStatusCode.OK, message = list)
             }
         }
     }
@@ -63,7 +62,7 @@ private fun Route.listAndCreate(service: ContactService) {
                         value = request.value,
                         isPrimary = request.isPrimary,
                     ),
-            ) { contact -> call.respond(status = HttpStatusCode.Created, message = contact.toResponse()) }
+            ) { contact -> call.respond(status = HttpStatusCode.Created, message = contact) }
         }
     }
 }
@@ -74,7 +73,7 @@ private fun Route.byId(service: ContactService) {
             respondEither(
                 result =
                     service.get(token = verifiedToken(), userId = uuidParam(name = "userId"), contactId = uuidParam(name = "id")),
-            ) { contact -> call.respond(status = HttpStatusCode.OK, message = contact.toResponse()) }
+            ) { contact -> call.respond(status = HttpStatusCode.OK, message = contact) }
         }
     }
 }
@@ -91,7 +90,7 @@ private fun Route.state(service: ContactService) {
                         contactId = uuidParam(name = "id"),
                         active = request.isActive,
                     ),
-            ) { contact -> call.respond(status = HttpStatusCode.OK, message = contact.toResponse()) }
+            ) { contact -> call.respond(status = HttpStatusCode.OK, message = contact) }
         }
     }
 }
@@ -109,7 +108,7 @@ private fun Route.verification(service: ContactService) {
                         status = parseEnumParam<VerificationStatus>(value = request.status, field = "status"),
                         method = request.method?.let { parseEnumParam<VerificationMethod>(value = it, field = "method") },
                     ),
-            ) { contact -> call.respond(status = HttpStatusCode.OK, message = contact.toResponse()) }
+            ) { contact -> call.respond(status = HttpStatusCode.OK, message = contact) }
         }
     }
 }

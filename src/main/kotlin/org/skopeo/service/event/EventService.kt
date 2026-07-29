@@ -11,7 +11,10 @@ import arrow.core.right
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.skopeo.dto.event.EventParticipantResponse
 import org.skopeo.dto.event.EventPublicResponse
+import org.skopeo.dto.event.EventResponse
+import org.skopeo.dto.event.MyEventResponse
 import org.skopeo.dto.match.MatchPublicPlayer
+import org.skopeo.mapper.event.toResponse
 import org.skopeo.mapper.match.toPublicResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
@@ -26,7 +29,6 @@ import org.skopeo.model.EventParticipantStatus
 import org.skopeo.model.EventType
 import org.skopeo.model.EventView
 import org.skopeo.model.MatchStatus
-import org.skopeo.model.MyEvent
 import org.skopeo.model.ServiceError
 import org.skopeo.model.User
 import org.skopeo.model.ageInYears
@@ -94,7 +96,7 @@ class EventService(
     fun create(
         token: VerifiedFirebaseToken,
         input: CreateEventInput,
-    ): Either<ServiceError, EventView> =
+    ): Either<ServiceError, EventResponse> =
         either {
             val createdBy = staffCaller(users = users, token = token).bind().id
             ensure(condition = input.name.isNotBlank()) { ServiceError.Validation(message = "Event name is required") }
@@ -143,24 +145,32 @@ class EventService(
                             ),
                     ),
             )
-            toView(event = event)
+            toView(event = event).toResponse()
         }
 
-    fun list(token: VerifiedFirebaseToken): Either<ServiceError, List<EventView>> =
+    fun list(token: VerifiedFirebaseToken): Either<ServiceError, List<EventResponse>> =
         either {
             val caller = staffCaller(users = users, token = token).bind()
             val scopedTo = if (caller.capabilities.contains(element = Capability.ADMINISTRATOR)) null else caller.id
-            events.list(createdBy = scopedTo).map { toView(event = it) }
+            val views = events.list(createdBy = scopedTo).map { toView(event = it) }
+            // Batched "has results" counts (#483) + the raw-rating reveal flag, assembled here so the route
+            // stays thin and never touches the mapper: an ADMINISTRATOR sees raw NTRP values on the roster.
+            val counts = completedResultCounts(eventIds = views.map { it.event.id })
+            val showRaw = callerCanSeeRawRating(token = token)
+            views.map { it.toResponse(completedMatchCount = counts[it.event.id] ?: 0, showRawRating = showRaw) }
         }
 
     /**
      * A player's own events (#202) — every event they're on, in any status — for the Profile tab's
      * "Events history". Any authenticated user; an unprovisioned caller simply has none.
      */
-    fun myEvents(token: VerifiedFirebaseToken): Either<ServiceError, List<MyEvent>> =
+    fun myEvents(token: VerifiedFirebaseToken): Either<ServiceError, List<MyEventResponse>> =
         either {
             val caller = users.findByFirebaseUid(firebaseUid = token.uid)
-            caller?.let { events.findForParticipant(userId = it.id) }.orEmpty()
+            val mine = caller?.let { events.findForParticipant(userId = it.id) }.orEmpty()
+            // Batched "has results" counts (#483) assembled here so the route stays thin.
+            val counts = completedResultCounts(eventIds = mine.map { it.event.id })
+            mine.map { it.toResponse(completedMatchCount = counts[it.event.id] ?: 0) }
         }
 
     /**
@@ -174,11 +184,11 @@ class EventService(
     fun get(
         token: VerifiedFirebaseToken,
         id: UUID,
-    ): Either<ServiceError, EventView> =
+    ): Either<ServiceError, EventResponse> =
         either {
             staffCaller(users = users, token = token).bind().id
             val event = ensureNotNull(value = events.findById(id = id)) { ServiceError.NotFound(message = "Event $id not found") }
-            toView(event = event)
+            toView(event = event).toResponse()
         }
 
     /**
@@ -189,7 +199,7 @@ class EventService(
         token: VerifiedFirebaseToken,
         id: UUID,
         name: String,
-    ): Either<ServiceError, EventView> =
+    ): Either<ServiceError, EventResponse> =
         either {
             val caller = staffCaller(users = users, token = token).bind()
             val event = ensureNotNull(value = events.findById(id = id)) { ServiceError.NotFound(message = "Event $id not found") }
@@ -217,7 +227,7 @@ class EventService(
                             ),
                     ),
             )
-            toView(event = event.copy(name = trimmed))
+            toView(event = event.copy(name = trimmed)).toResponse()
         }
 
     /**
@@ -228,7 +238,7 @@ class EventService(
         token: VerifiedFirebaseToken,
         id: UUID,
         clubId: UUID?,
-    ): Either<ServiceError, EventView> =
+    ): Either<ServiceError, EventResponse> =
         either {
             val caller = staffCaller(users = users, token = token).bind()
             val event = ensureNotNull(value = events.findById(id = id)) { ServiceError.NotFound(message = "Event $id not found") }
@@ -257,7 +267,7 @@ class EventService(
                             ),
                     ),
             )
-            toView(event = event.copy(clubId = clubId))
+            toView(event = event.copy(clubId = clubId)).toResponse()
         }
 
     /**
@@ -269,13 +279,13 @@ class EventService(
         token: VerifiedFirebaseToken,
         id: UUID,
         priority: Double,
-    ): Either<ServiceError, EventView> =
+    ): Either<ServiceError, EventResponse> =
         either {
             val caller = staffCaller(users = users, token = token).bind()
             ensure(condition = caller.capabilities.contains(element = Capability.ADMINISTRATOR)) { ServiceError.Forbidden() }
             val event = ensureNotNull(value = events.findById(id = id)) { ServiceError.NotFound(message = "Event $id not found") }
             events.setCalcPriority(id = id, priority = priority)
-            toView(event = event.copy(calcPriority = priority))
+            toView(event = event.copy(calcPriority = priority)).toResponse()
         }
 
     /**
@@ -294,7 +304,7 @@ class EventService(
     fun finalize(
         token: VerifiedFirebaseToken,
         id: UUID,
-    ): Either<ServiceError, EventView> =
+    ): Either<ServiceError, EventResponse> =
         either {
             val caller = staffCaller(users = users, token = token).bind()
             val event = ensureNotNull(value = events.findById(id = id)) { ServiceError.NotFound(message = "Event $id not found") }
@@ -344,7 +354,7 @@ class EventService(
                             ),
                     ),
             )
-            toView(event = event.copy(finalizedAt = now, finalizedBy = caller.id))
+            toView(event = event.copy(finalizedAt = now, finalizedBy = caller.id)).toResponse()
         }
 
     /**
@@ -360,7 +370,7 @@ class EventService(
     fun unfinalize(
         token: VerifiedFirebaseToken,
         id: UUID,
-    ): Either<ServiceError, EventView> =
+    ): Either<ServiceError, EventResponse> =
         either {
             val caller = staffCaller(users = users, token = token).bind()
             val event = ensureNotNull(value = events.findById(id = id)) { ServiceError.NotFound(message = "Event $id not found") }
@@ -376,7 +386,7 @@ class EventService(
             }
             // The reverser revokes the event's active awards + clears the flag in one transaction, then audits.
             reverser.reverse(event = event, revokedBy = caller.id, now = LocalDateTime.now())
-            toView(event = event.copy(finalizedAt = null, finalizedBy = null))
+            toView(event = event.copy(finalizedAt = null, finalizedBy = null)).toResponse()
         }
 
     /**
@@ -399,7 +409,7 @@ class EventService(
     fun reverseRatings(
         token: VerifiedFirebaseToken,
         id: UUID,
-    ): Either<ServiceError, EventView> =
+    ): Either<ServiceError, EventResponse> =
         either {
             val caller = staffCaller(users = users, token = token).bind()
             ensure(condition = caller.capabilities.contains(element = Capability.ADMINISTRATOR)) { ServiceError.Forbidden() }
@@ -420,7 +430,7 @@ class EventService(
             // The reverser restores ratings, supersedes history, revokes awards, resets rated_at, and clears
             // the finalize flag in one transaction, then audits.
             ratingsReverser.reverse(event = event, reversedBy = caller.id, now = LocalDateTime.now())
-            toView(event = event.copy(finalizedAt = null, finalizedBy = null))
+            toView(event = event.copy(finalizedAt = null, finalizedBy = null)).toResponse()
         }
 
     /**
@@ -475,7 +485,7 @@ class EventService(
         token: VerifiedFirebaseToken,
         eventId: UUID,
         userId: UUID,
-    ): Either<ServiceError, EventView> =
+    ): Either<ServiceError, EventResponse> =
         either {
             val caller = staffCaller(users = users, token = token).bind()
             val event =
@@ -487,21 +497,21 @@ class EventService(
                 ensureNotNull(value = events.addParticipant(eventId = eventId, userId = userId, approvedBy = caller.id)) {
                     ServiceError.NotFound(message = "Event $eventId not found")
                 }
-            toView(event = updated)
+            toView(event = updated).toResponse()
         }
 
     fun removeParticipant(
         token: VerifiedFirebaseToken,
         eventId: UUID,
         userId: UUID,
-    ): Either<ServiceError, EventView> =
+    ): Either<ServiceError, EventResponse> =
         either {
             staffCaller(users = users, token = token).bind().id
             val updated =
                 ensureNotNull(value = events.removeParticipant(eventId = eventId, userId = userId)) {
                     ServiceError.NotFound(message = "Event $eventId not found")
                 }
-            toView(event = updated)
+            toView(event = updated).toResponse()
         }
 
     /**
@@ -539,7 +549,7 @@ class EventService(
         eventId: UUID,
         userId: UUID,
         status: EventParticipantStatus,
-    ): Either<ServiceError, EventView> =
+    ): Either<ServiceError, EventResponse> =
         either {
             val actor = staffCaller(users = users, token = token).bind().id
             val event =
@@ -553,7 +563,7 @@ class EventService(
                 ensureNotNull(
                     value = events.setParticipantStatus(eventId = eventId, userId = userId, status = status, approvedBy = approver),
                 ) { ServiceError.NotFound(message = "Event $eventId not found") }
-            toView(event = updated)
+            toView(event = updated).toResponse()
         }
 
     /**

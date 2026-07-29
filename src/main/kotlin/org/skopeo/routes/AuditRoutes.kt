@@ -15,7 +15,6 @@ import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.audit.AuditCommentRequest
-import org.skopeo.mapper.audit.toResponse
 import org.skopeo.model.AuditCategory
 import org.skopeo.service.audit.AuditService
 
@@ -40,7 +39,7 @@ fun Application.configureAuditRoutes(service: AuditService = AuditService()) {
                                     limit = params["limit"]?.toIntOrNull() ?: DEFAULT_AUDIT_PAGE_SIZE,
                                     offset = params["offset"]?.toIntOrNull() ?: 0,
                                 ),
-                        ) { page -> call.respond(status = HttpStatusCode.OK, message = page.toResponse()) }
+                        ) { page -> call.respond(status = HttpStatusCode.OK, message = page) }
                     }
                 }
                 patch(path = "/{id}/comment") {

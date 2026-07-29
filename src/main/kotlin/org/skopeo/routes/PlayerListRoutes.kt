@@ -18,11 +18,8 @@ import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.seeding.AddMemberRequest
 import org.skopeo.dto.seeding.CreatePlayerListRequest
-import org.skopeo.mapper.seeding.toResponse
-import org.skopeo.mapper.seeding.toSummaryResponse
 import org.skopeo.service.seeding.PlayerListService
 import org.skopeo.service.seeding.SeedingService
-import org.skopeo.service.user.UserService
 import java.util.UUID
 
 /**
@@ -32,7 +29,6 @@ import java.util.UUID
 fun Application.configurePlayerListRoutes(
     listService: PlayerListService = PlayerListService(),
     seedingService: SeedingService = SeedingService(),
-    userService: UserService = UserService(),
 ) {
     routing {
         authenticate(FIREBASE_AUTH) {
@@ -40,7 +36,7 @@ fun Application.configurePlayerListRoutes(
                 listsCollection(service = listService)
                 listById(service = listService)
                 members(service = listService)
-                seeding(service = seedingService, userService = userService)
+                seeding(service = seedingService)
             }
         }
     }
@@ -50,7 +46,7 @@ private fun Route.listsCollection(service: PlayerListService) {
     get {
         respondMappingErrors {
             respondEither(result = service.listMine(token = verifiedToken())) { lists ->
-                call.respond(status = HttpStatusCode.OK, message = lists.map { it.toSummaryResponse() })
+                call.respond(status = HttpStatusCode.OK, message = lists)
             }
         }
     }
@@ -58,7 +54,7 @@ private fun Route.listsCollection(service: PlayerListService) {
         respondMappingErrors {
             val request = call.receive<CreatePlayerListRequest>()
             respondEither(result = service.create(token = verifiedToken(), name = request.name)) { list ->
-                call.respond(status = HttpStatusCode.Created, message = list.toSummaryResponse())
+                call.respond(status = HttpStatusCode.Created, message = list)
             }
         }
     }
@@ -109,24 +105,18 @@ private fun Route.members(service: PlayerListService) {
     }
 }
 
-private fun Route.seeding(
-    service: SeedingService,
-    userService: UserService,
-) {
+private fun Route.seeding(service: SeedingService) {
     post(path = "/{id}/seeding") {
         respondMappingErrors {
-            // Raw rating is ADMINISTRATOR-only (#583): non-admin staff get the band + seed order only.
-            val showRaw = userService.callerCanSeeRawRating(token = verifiedToken())
             respondEither(result = service.generate(token = verifiedToken(), listId = uuidParam(name = "id"))) { seeding ->
-                call.respond(status = HttpStatusCode.OK, message = seeding.toResponse(showRawRating = showRaw))
+                call.respond(status = HttpStatusCode.OK, message = seeding)
             }
         }
     }
     get(path = "/{id}/seeding") {
         respondMappingErrors {
-            val showRaw = userService.callerCanSeeRawRating(token = verifiedToken())
             respondEither(result = service.get(token = verifiedToken(), listId = uuidParam(name = "id"))) { seeding ->
-                call.respond(status = HttpStatusCode.OK, message = seeding.toResponse(showRawRating = showRaw))
+                call.respond(status = HttpStatusCode.OK, message = seeding)
             }
         }
     }

@@ -23,9 +23,6 @@ import org.skopeo.dto.user.PhotoSettingsRequest
 import org.skopeo.dto.user.ProfileRequest
 import org.skopeo.dto.user.RatingPreviewResponse
 import org.skopeo.dto.user.SetRatingPreviewRequest
-import org.skopeo.dto.user.UserSummaryPageResponse
-import org.skopeo.mapper.user.toResponse
-import org.skopeo.mapper.user.toSummary
 import org.skopeo.model.Capability
 import org.skopeo.model.NumericRange
 import org.skopeo.service.user.DuplicateService
@@ -72,13 +69,13 @@ private fun Route.duplicateRoutes(service: DuplicateService) {
                         canonicalId = uuidParam(name = "id"),
                         duplicateIds = parseIds(raw = request.duplicateIds.joinToString(separator = ",")),
                     ),
-            ) { duplicates -> call.respond(status = HttpStatusCode.OK, message = duplicates.map { it.toSummary() }) }
+            ) { duplicates -> call.respond(status = HttpStatusCode.OK, message = duplicates) }
         }
     }
     get(path = "/{id}/duplicates") {
         respondMappingErrors {
             respondEither(result = service.duplicatesOf(token = verifiedToken(), canonicalId = uuidParam(name = "id"))) { duplicates ->
-                call.respond(status = HttpStatusCode.OK, message = duplicates.map { it.toSummary() })
+                call.respond(status = HttpStatusCode.OK, message = duplicates)
             }
         }
     }
@@ -135,12 +132,7 @@ private fun Route.searchUsers(service: UserService) {
                     )
                 }
             respondEither(result = results) { users ->
-                val ratings = service.currentRatings(ids = users.map { it.id })
-                val showRaw = service.callerCanSeeRawRating(token = verifiedToken())
-                call.respond(
-                    status = HttpStatusCode.OK,
-                    message = users.map { it.toSummary(rating = ratings[it.id], showRawRating = showRaw) },
-                )
+                call.respond(status = HttpStatusCode.OK, message = users)
             }
         }
     }
@@ -174,22 +166,7 @@ private fun Route.searchUsersPaged(service: UserService) {
                     includeInactive = params["includeInactive"]?.toBoolean() ?: false,
                 )
             respondEither(result = page) { result ->
-                val ids = result.items.map { it.id }
-                val ratings = service.currentRatings(ids = ids)
-                // Research results also carry each player's win–loss record (#342).
-                val records = service.winLossRecords(ids = ids)
-                val showRaw = service.callerCanSeeRawRating(token = verifiedToken())
-                call.respond(
-                    status = HttpStatusCode.OK,
-                    message =
-                        UserSummaryPageResponse(
-                            items =
-                                result.items.map {
-                                    it.toSummary(rating = ratings[it.id], record = records[it.id], showRawRating = showRaw)
-                                },
-                            total = result.total.toInt(),
-                        ),
-                )
+                call.respond(status = HttpStatusCode.OK, message = result)
             }
         }
     }
@@ -224,7 +201,7 @@ private fun Route.createUser(service: UserService) {
             val request = call.receive<CreateUserRequest>()
             respondEither(result = service.provision(token = verifiedToken(), request = request)) { result ->
                 val status = if (result.created) HttpStatusCode.Created else HttpStatusCode.OK
-                call.respond(status = status, message = result.user.toResponse())
+                call.respond(status = status, message = result.user)
             }
         }
     }
@@ -240,7 +217,7 @@ private fun Route.currentUser(service: UserService) {
                     message = errorBody(error = "Not provisioned", message = "POST /api/v1/users to create your profile"),
                 )
             } else {
-                call.respond(status = HttpStatusCode.OK, message = user.toResponse())
+                call.respond(status = HttpStatusCode.OK, message = user)
             }
         }
     }
@@ -259,7 +236,7 @@ private fun Route.userById(service: UserService) {
     get(path = "/{id}") {
         respondMappingErrors {
             respondEither(result = service.getById(token = verifiedToken(), id = uuidParam(name = "id"))) { user ->
-                call.respond(status = HttpStatusCode.OK, message = user.toResponse())
+                call.respond(status = HttpStatusCode.OK, message = user)
             }
         }
     }
@@ -267,7 +244,7 @@ private fun Route.userById(service: UserService) {
         respondMappingErrors {
             val patch = call.receive<ProfileRequest>().toProfilePatch()
             respondEither(result = service.patchProfile(token = verifiedToken(), id = uuidParam(name = "id"), patch = patch)) { user ->
-                call.respond(status = HttpStatusCode.OK, message = user.toResponse())
+                call.respond(status = HttpStatusCode.OK, message = user)
             }
         }
     }
@@ -275,7 +252,7 @@ private fun Route.userById(service: UserService) {
         respondMappingErrors {
             val patch = call.receive<ProfileRequest>().toProfilePatch()
             respondEither(result = service.replaceProfile(token = verifiedToken(), id = uuidParam(name = "id"), patch = patch)) { user ->
-                call.respond(status = HttpStatusCode.OK, message = user.toResponse())
+                call.respond(status = HttpStatusCode.OK, message = user)
             }
         }
     }
@@ -293,7 +270,7 @@ private fun Route.userById(service: UserService) {
                     photoHidden = body.hidden,
                 )
             respondEither(result = result) { user ->
-                call.respond(status = HttpStatusCode.OK, message = user.toResponse())
+                call.respond(status = HttpStatusCode.OK, message = user)
             }
         }
     }

@@ -8,6 +8,9 @@ import arrow.core.left
 import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.right
+import org.skopeo.dto.duplicate.DuplicateCandidatePageResponse
+import org.skopeo.dto.duplicate.DuplicateCandidateResponse
+import org.skopeo.mapper.duplicate.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -45,7 +48,7 @@ class DuplicateCandidateService(
         limit: Int,
         offset: Int,
         status: DuplicateCandidateStatus?,
-    ): Either<ServiceError, DuplicateCandidateViewPage> =
+    ): Either<ServiceError, DuplicateCandidatePageResponse> =
         either {
             requireAdmin(token = token).bind()
             val (items, total) =
@@ -63,7 +66,7 @@ class DuplicateCandidateService(
                         userB = byId.getValue(key = it.userBId),
                     )
                 }
-            DuplicateCandidateViewPage(items = views, total = total.toInt())
+            DuplicateCandidateViewPage(items = views, total = total.toInt()).toResponse()
         }
 
     /** Manually flag a suspected pair — the "complaint → investigation" path. */
@@ -72,7 +75,7 @@ class DuplicateCandidateService(
         userAId: UUID,
         userBId: UUID,
         reason: String?,
-    ): Either<ServiceError, DuplicateCandidateView> =
+    ): Either<ServiceError, DuplicateCandidateResponse> =
         either {
             val adminId = requireAdmin(token = token).bind()
             ensure(condition = userAId != userBId) { ServiceError.Validation(message = "A candidate needs two different users") }
@@ -97,7 +100,7 @@ class DuplicateCandidateService(
                         details = mapOf("userAId" to userAId.toString(), "userBId" to userBId.toString()),
                     ),
             )
-            DuplicateCandidateView(candidate = candidate, userA = userA, userB = userB)
+            DuplicateCandidateView(candidate = candidate, userA = userA, userB = userB).toResponse()
         }
 
     /** Dismiss an open candidate (a false positive). */

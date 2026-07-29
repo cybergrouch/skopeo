@@ -14,7 +14,6 @@ import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
-import org.skopeo.mapper.settings.toResponse
 import org.skopeo.model.OpenPlayPointsConfig
 import org.skopeo.model.TournamentPointsConfig
 import org.skopeo.service.settings.PointsConfigService
@@ -30,14 +29,14 @@ fun Application.configurePointsConfigRoutes(service: PointsConfigService = Point
             route(path = "/api/v1/settings/points/open-play") {
                 get {
                     respondMappingErrors {
-                        call.respond(status = HttpStatusCode.OK, message = service.getOpenPlay().toResponse())
+                        call.respond(status = HttpStatusCode.OK, message = service.getOpenPlayResponse())
                     }
                 }
                 put {
                     respondMappingErrors {
                         val request = call.receive<OpenPlayPointsConfig>()
                         respondEither(result = service.setOpenPlay(token = verifiedToken(), config = request)) { value ->
-                            call.respond(status = HttpStatusCode.OK, message = value.toResponse())
+                            call.respond(status = HttpStatusCode.OK, message = value)
                         }
                     }
                 }
@@ -45,14 +44,14 @@ fun Application.configurePointsConfigRoutes(service: PointsConfigService = Point
             route(path = "/api/v1/settings/points/tournament") {
                 get {
                     respondMappingErrors {
-                        call.respond(status = HttpStatusCode.OK, message = service.getTournament().toResponse())
+                        call.respond(status = HttpStatusCode.OK, message = service.getTournamentResponse())
                     }
                 }
                 put {
                     respondMappingErrors {
                         val request = call.receive<TournamentPointsConfig>()
                         respondEither(result = service.setTournament(token = verifiedToken(), config = request)) { value ->
-                            call.respond(status = HttpStatusCode.OK, message = value.toResponse())
+                            call.respond(status = HttpStatusCode.OK, message = value)
                         }
                     }
                 }

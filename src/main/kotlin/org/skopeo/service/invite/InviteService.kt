@@ -8,11 +8,13 @@ import arrow.core.left
 import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.right
+import org.skopeo.dto.invite.InvitePageResponse
+import org.skopeo.dto.invite.InviteResponse
+import org.skopeo.mapper.invite.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
 import org.skopeo.model.Capability
-import org.skopeo.model.Invite
 import org.skopeo.model.InvitePage
 import org.skopeo.model.InviteStatus
 import org.skopeo.model.ServiceError
@@ -45,7 +47,7 @@ class InviteService(
     fun create(
         token: VerifiedFirebaseToken,
         email: String,
-    ): Either<ServiceError, Invite> =
+    ): Either<ServiceError, InviteResponse> =
         either {
             val adminId = requireAdmin(token = token).bind()
             // Don't invite an address that already belongs to an active account (#132); disabled
@@ -70,7 +72,7 @@ class InviteService(
                         details = mapOf("email" to invite.email, "status" to invite.status.name),
                     ),
             )
-            invite
+            invite.toResponse()
         }
 
     fun list(
@@ -78,7 +80,7 @@ class InviteService(
         limit: Int,
         offset: Int,
         status: InviteStatus? = null,
-    ): Either<ServiceError, InvitePage> =
+    ): Either<ServiceError, InvitePageResponse> =
         either {
             requireAdmin(token = token).bind()
             val (items, total) =
@@ -87,7 +89,7 @@ class InviteService(
                     offset = offset.coerceAtLeast(minimumValue = 0),
                     status = status,
                 )
-            InvitePage(items = items, total = total.toInt())
+            InvitePage(items = items, total = total.toInt()).toResponse()
         }
 
     fun revoke(

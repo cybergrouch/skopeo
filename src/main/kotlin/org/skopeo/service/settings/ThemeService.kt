@@ -8,11 +8,13 @@ import arrow.core.left
 import arrow.core.raise.either
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
+import org.skopeo.dto.settings.LocalThemeResponse
+import org.skopeo.dto.settings.ThemeResponse
+import org.skopeo.mapper.settings.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
 import org.skopeo.model.Capability
-import org.skopeo.model.LocalThemeValue
 import org.skopeo.model.ServiceError
 import org.skopeo.model.ThemeSetting
 import org.skopeo.model.ThemeSettingValue
@@ -39,20 +41,20 @@ class ThemeService(
     private val audit: AuditService = AuditService(),
 ) {
     /** The current global theme, or the [ThemeSetting.AUTO] default when unset/unrecognized. Public — no auth. */
-    fun getTheme(): ThemeSettingValue {
+    fun getTheme(): ThemeResponse {
         val row = settings.get(key = THEME_KEY)
         // Coalesce to AUTO when unset (row null) or when the stored value no longer maps to a theme.
         // Compared directly against row?.value rather than via a nested ?.let, so there is no unreachable
         // safe-call arm (value is non-null once row is) for a test to chase.
         val theme = ThemeSetting.entries.firstOrNull { it.name == row?.value } ?: ThemeSetting.AUTO
-        return ThemeSettingValue(theme = theme, updatedBy = row?.updatedBy, updatedAt = row?.updatedAt)
+        return ThemeSettingValue(theme = theme, updatedBy = row?.updatedBy, updatedAt = row?.updatedAt).toResponse()
     }
 
     /** Set the global theme (ADMINISTRATOR only). Rejects an unknown [theme] as a [ServiceError.Validation]. */
     fun setTheme(
         token: VerifiedFirebaseToken,
         theme: String,
-    ): Either<ServiceError, ThemeSettingValue> =
+    ): Either<ServiceError, ThemeResponse> =
         either {
             val adminId = requireAdmin(token = token).bind()
             val parsed =
@@ -71,17 +73,17 @@ class ThemeService(
                         details = buildMap { put(key = "theme", value = parsed.name) },
                     ),
             )
-            ThemeSettingValue(theme = parsed, updatedBy = row.updatedBy, updatedAt = row.updatedAt)
+            ThemeSettingValue(theme = parsed, updatedBy = row.updatedBy, updatedAt = row.updatedAt).toResponse()
         }
 
     /**
      * The caller's own per-profile local theme (#514). Self-service: resolves the caller from their
      * token; [ServiceError.Forbidden] when the token maps to no provisioned user.
      */
-    fun getLocalTheme(token: VerifiedFirebaseToken): Either<ServiceError, LocalThemeValue> =
+    fun getLocalTheme(token: VerifiedFirebaseToken): Either<ServiceError, LocalThemeResponse> =
         either {
             val caller = requireCaller(token = token).bind()
-            users.getLocalTheme(id = caller).bind()
+            users.getLocalTheme(id = caller).bind().toResponse()
         }
 
     /**
@@ -94,7 +96,7 @@ class ThemeService(
         token: VerifiedFirebaseToken,
         theme: String?,
         now: LocalDateTime = LocalDateTime.now(),
-    ): Either<ServiceError, LocalThemeValue> =
+    ): Either<ServiceError, LocalThemeResponse> =
         either {
             val caller = requireCaller(token = token).bind()
             val parsed =
@@ -103,7 +105,7 @@ class ThemeService(
                         ServiceError.Validation(message = "Unknown theme $raw")
                     }
                 }
-            users.setLocalTheme(id = caller, theme = parsed, setAt = now).bind()
+            users.setLocalTheme(id = caller, theme = parsed, setAt = now).bind().toResponse()
         }
 
     /** Resolve the caller's provisioned user id, or [ServiceError.Forbidden] when the token maps to none. */

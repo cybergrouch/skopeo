@@ -5,7 +5,8 @@ package org.skopeo.service.seeding
 
 import arrow.core.Either
 import arrow.core.raise.either
-import org.skopeo.model.Seeding
+import org.skopeo.dto.seeding.SeedingResponse
+import org.skopeo.mapper.seeding.toResponse
 import org.skopeo.model.SeedingEntry
 import org.skopeo.model.ServiceError
 import org.skopeo.model.User
@@ -15,6 +16,7 @@ import org.skopeo.model.isDeleted
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.SeedingRepository
 import org.skopeo.repository.UserRepository
+import org.skopeo.service.user.UserService
 import org.skopeo.service.user.VerifiedFirebaseToken
 import java.time.LocalDate
 import java.util.UUID
@@ -30,12 +32,15 @@ class SeedingService(
     private val users: UserRepository = UserRepository(),
     private val ratings: RatingRepository = RatingRepository(),
     private val seedings: SeedingRepository = SeedingRepository(),
+    private val userService: UserService = UserService(),
 ) {
     fun generate(
         token: VerifiedFirebaseToken,
         listId: UUID,
-    ): Either<ServiceError, Seeding> =
+    ): Either<ServiceError, SeedingResponse> =
         either {
+            // Raw rating is ADMINISTRATOR-only (#583): non-admin staff get the band + seed order only.
+            val showRaw = userService.callerCanSeeRawRating(token = token)
             val list = lists.get(token = token, listId = listId).bind() // ownership + access
             val members = users.findAllByIds(ids = list.memberUserIds)
             val currentRatings = ratings.findCurrentRatings(userIds = list.memberUserIds)
@@ -74,16 +79,17 @@ class SeedingService(
                         deleted = user.isDeleted(),
                     )
                 }
-            seedings.replace(listId = listId, generatedBy = list.ownerId, entries = entries)
+            seedings.replace(listId = listId, generatedBy = list.ownerId, entries = entries).toResponse(showRawRating = showRaw)
         }
 
     fun get(
         token: VerifiedFirebaseToken,
         listId: UUID,
-    ): Either<ServiceError, Seeding> =
+    ): Either<ServiceError, SeedingResponse> =
         either {
+            val showRaw = userService.callerCanSeeRawRating(token = token)
             lists.get(token = token, listId = listId).bind() // ownership + access
-            seedings.findByListId(listId = listId).bind()
+            seedings.findByListId(listId = listId).bind().toResponse(showRawRating = showRaw)
         }
 
     /** The name to sort and snapshot by: the display name, falling back to the shareable code. */

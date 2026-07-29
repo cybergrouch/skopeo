@@ -17,8 +17,6 @@ import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.user.ClaimRequest
 import org.skopeo.dto.user.CreatePlaceholderRequest
-import org.skopeo.mapper.user.toResponse
-import org.skopeo.mapper.user.toSummary
 import org.skopeo.service.user.PlaceholderService
 import java.time.LocalDate
 
@@ -52,7 +50,7 @@ private fun Route.createPlaceholder(service: PlaceholderService) {
                     dateOfBirth = request.dateOfBirth?.let { LocalDate.parse(it) },
                     initialRating = request.initialRating,
                 )
-            respondEither(result = result) { user -> call.respond(status = HttpStatusCode.Created, message = user.toResponse()) }
+            respondEither(result = result) { user -> call.respond(status = HttpStatusCode.Created, message = user) }
         }
     }
 }
@@ -61,7 +59,7 @@ private fun Route.listPlaceholders(service: PlaceholderService) {
     get(path = "/placeholders") {
         respondMappingErrors {
             respondEither(result = service.listPlaceholders(token = verifiedToken())) { players ->
-                call.respond(status = HttpStatusCode.OK, message = players.map { it.toSummary() })
+                call.respond(status = HttpStatusCode.OK, message = players)
             }
         }
     }
@@ -72,7 +70,7 @@ private fun Route.claimPlaceholder(service: PlaceholderService) {
         respondMappingErrors {
             val request = call.receive<ClaimRequest>()
             respondEither(result = service.claim(token = verifiedToken(), code = request.code)) { user ->
-                call.respond(status = HttpStatusCode.OK, message = user.toResponse())
+                call.respond(status = HttpStatusCode.OK, message = user)
             }
         }
     }
@@ -84,7 +82,7 @@ private fun Route.generateClaimCode(service: PlaceholderService) {
             respondEither(
                 result = service.generateClaimCode(token = verifiedToken(), placeholderId = uuidParam(name = "id")),
             ) { generated ->
-                call.respond(status = HttpStatusCode.Created, message = generated.toResponse())
+                call.respond(status = HttpStatusCode.Created, message = generated)
             }
         }
     }

@@ -13,7 +13,6 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
-import org.skopeo.mapper.rating.toResponse
 import org.skopeo.service.user.PlayerService
 
 // Page size used when a match-history request omits `limit` (#284) — the full-history page default.
@@ -94,7 +93,7 @@ private fun Route.auditedPlayerReads(service: PlayerService) {
         respondMappingErrors {
             val code = call.parameters["code"].orEmpty()
             respondEither(result = service.ratingHistory(token = verifiedToken(), code = code)) { history ->
-                call.respond(status = HttpStatusCode.OK, message = history.map { it.toResponse() })
+                call.respond(status = HttpStatusCode.OK, message = history)
             }
         }
     }

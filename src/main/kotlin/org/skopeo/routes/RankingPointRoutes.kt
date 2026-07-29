@@ -18,8 +18,6 @@ import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.ranking.AdjustRankingPointsRequest
 import org.skopeo.dto.ranking.GrantRankingPointsRequest
 import org.skopeo.dto.ranking.RevokeRankingPointsRequest
-import org.skopeo.mapper.ranking.toCommand
-import org.skopeo.mapper.ranking.toResponse
 import org.skopeo.service.ranking.RankingPointService
 
 /**
@@ -55,7 +53,7 @@ private fun Route.listAllRankingPoints(service: RankingPointService) {
                         limit = params["limit"]?.toIntOrNull(),
                         offset = params["offset"]?.toIntOrNull(),
                     ),
-            ) { page -> call.respond(status = HttpStatusCode.OK, message = page.toResponse()) }
+            ) { page -> call.respond(status = HttpStatusCode.OK, message = page) }
         }
     }
 }
@@ -64,16 +62,16 @@ private fun Route.grantAndListRankingPoints(service: RankingPointService) {
     post {
         respondMappingErrors {
             val userId = uuidParam(name = "userId")
-            val command = call.receive<GrantRankingPointsRequest>().toCommand(userId = userId)
-            respondEither(result = service.grant(token = verifiedToken(), command = command)) { award ->
-                call.respond(status = HttpStatusCode.Created, message = award.toResponse())
+            val request = call.receive<GrantRankingPointsRequest>()
+            respondEither(result = service.grant(token = verifiedToken(), userId = userId, request = request)) { award ->
+                call.respond(status = HttpStatusCode.Created, message = award)
             }
         }
     }
     get {
         respondMappingErrors {
             respondEither(result = service.listForUser(token = verifiedToken(), userId = uuidParam(name = "userId"))) { awards ->
-                call.respond(status = HttpStatusCode.OK, message = awards.map { it.toResponse() })
+                call.respond(status = HttpStatusCode.OK, message = awards)
             }
         }
     }
@@ -84,9 +82,9 @@ private fun Route.adjustRankingPoints(service: RankingPointService) {
     post(path = "/adjustments") {
         respondMappingErrors {
             val userId = uuidParam(name = "userId")
-            val command = call.receive<AdjustRankingPointsRequest>().toCommand(userId = userId)
-            respondEither(result = service.adjust(token = verifiedToken(), command = command)) { award ->
-                call.respond(status = HttpStatusCode.Created, message = award.toResponse())
+            val request = call.receive<AdjustRankingPointsRequest>()
+            respondEither(result = service.adjust(token = verifiedToken(), userId = userId, request = request)) { award ->
+                call.respond(status = HttpStatusCode.Created, message = award)
             }
         }
     }

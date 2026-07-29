@@ -17,7 +17,6 @@ import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.duplicate.ConfirmCandidateRequest
 import org.skopeo.dto.duplicate.FlagCandidateRequest
-import org.skopeo.mapper.duplicate.toResponse
 import org.skopeo.model.DuplicateCandidateStatus
 import org.skopeo.service.user.DuplicateCandidateService
 import java.util.UUID
@@ -56,7 +55,7 @@ fun Application.configureDuplicateCandidateRoutes(service: DuplicateCandidateSer
                                     offset = params["offset"]?.toIntOrNull() ?: 0,
                                     status = params["status"]?.let { parseCandidateStatus(raw = it) },
                                 ),
-                        ) { page -> call.respond(status = HttpStatusCode.OK, message = page.toResponse()) }
+                        ) { page -> call.respond(status = HttpStatusCode.OK, message = page) }
                     }
                 }
                 post {
@@ -70,7 +69,7 @@ fun Application.configureDuplicateCandidateRoutes(service: DuplicateCandidateSer
                                     userBId = parseUserId(raw = request.userBId),
                                     reason = request.reason,
                                 ),
-                        ) { candidate -> call.respond(status = HttpStatusCode.Created, message = candidate.toResponse()) }
+                        ) { candidate -> call.respond(status = HttpStatusCode.Created, message = candidate) }
                     }
                 }
                 post(path = "/{id}/confirm") {

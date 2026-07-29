@@ -9,6 +9,9 @@ import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
+import org.skopeo.dto.club.ClubPublicResponse
+import org.skopeo.dto.club.ClubResponse
+import org.skopeo.mapper.club.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -54,7 +57,7 @@ class ClubService(
     fun create(
         token: VerifiedFirebaseToken,
         name: String,
-    ): Either<ServiceError, ClubView> =
+    ): Either<ServiceError, ClubResponse> =
         either {
             val adminId = requireCapability(token = token, allowed = ADMIN_ONLY).bind()
             ensure(condition = name.isNotBlank()) { ServiceError.Validation(message = "Club name is required") }
@@ -70,14 +73,14 @@ class ClubService(
                         details = mapOf("clubId" to club.id.toString(), "name" to club.name),
                     ),
             )
-            toView(club = club)
+            toView(club = club).toResponse()
         }
 
     /** Readable by staff (HOST/CLUB_OWNER/ADMINISTRATOR) so event creators can pick a club (#313). */
-    fun list(token: VerifiedFirebaseToken): Either<ServiceError, List<ClubView>> =
+    fun list(token: VerifiedFirebaseToken): Either<ServiceError, List<ClubResponse>> =
         either {
             requireCapability(token = token, allowed = CLUB_STAFF_ROLES).bind()
-            clubs.list().map { toView(club = it) }
+            clubs.list().map { toView(club = it).toResponse() }
         }
 
     /** Rename a club (#325). ADMINISTRATOR-only; the name is validated (non-blank) and trimmed. */
@@ -85,7 +88,7 @@ class ClubService(
         token: VerifiedFirebaseToken,
         clubId: UUID,
         name: String,
-    ): Either<ServiceError, ClubView> =
+    ): Either<ServiceError, ClubResponse> =
         either {
             val adminId = requireCapability(token = token, allowed = ADMIN_ONLY).bind()
             ensure(condition = name.isNotBlank()) { ServiceError.Validation(message = "Club name is required") }
@@ -104,7 +107,7 @@ class ClubService(
                         details = mapOf("clubId" to clubId.toString(), "name" to updated.name),
                     ),
             )
-            toView(club = updated)
+            toView(club = updated).toResponse()
         }
 
     /**
@@ -148,7 +151,7 @@ class ClubService(
         token: VerifiedFirebaseToken,
         clubId: UUID,
         userId: UUID,
-    ): Either<ServiceError, ClubView> =
+    ): Either<ServiceError, ClubResponse> =
         either {
             val adminId = requireCapability(token = token, allowed = ADMIN_ONLY).bind()
             val owner = users.findById(id = userId).mapLeft { ServiceError.Validation(message = "Unknown user $userId") }.bind()
@@ -172,14 +175,14 @@ class ClubService(
                         details = mapOf("clubId" to clubId.toString(), "userId" to userId.toString()),
                     ),
             )
-            toView(club = updated)
+            toView(club = updated).toResponse()
         }
 
     fun removeOwner(
         token: VerifiedFirebaseToken,
         clubId: UUID,
         userId: UUID,
-    ): Either<ServiceError, ClubView> =
+    ): Either<ServiceError, ClubResponse> =
         either {
             val adminId = requireCapability(token = token, allowed = ADMIN_ONLY).bind()
             val updated =
@@ -197,7 +200,7 @@ class ClubService(
                         details = mapOf("clubId" to clubId.toString(), "userId" to userId.toString()),
                     ),
             )
-            toView(club = updated)
+            toView(club = updated).toResponse()
         }
 
     /**
@@ -206,7 +209,7 @@ class ClubService(
      * [ClubPublicView.upcoming] (still running or in the future) and [ClubPublicView.past] (already
      * ended), by end date vs today. Only non-sensitive fields are exposed — no owners/roster.
      */
-    fun publicByCode(code: String): Either<ServiceError, ClubPublicView> =
+    fun publicByCode(code: String): Either<ServiceError, ClubPublicResponse> =
         either {
             val club =
                 ensureNotNull(value = clubs.findByPublicCode(code = code)) {
@@ -234,7 +237,7 @@ class ClubService(
                 // Upcoming soonest-first; past most-recent-first.
                 upcoming = upcoming.sortedBy { it.startDate },
                 past = past.sortedByDescending { it.endDate },
-            )
+            ).toResponse()
         }
 
     /** Resolve a club's owner ids to display refs (name + public code); findAllByIds drops any missing user. */
@@ -259,7 +262,7 @@ class ClubService(
         token: VerifiedFirebaseToken,
         clubId: UUID,
         sanctioned: Boolean,
-    ): Either<ServiceError, ClubView> =
+    ): Either<ServiceError, ClubResponse> =
         either {
             val actorId = requireCapability(token = token, allowed = OWNER_OR_ADMIN).bind()
             val updated =
@@ -277,7 +280,7 @@ class ClubService(
                         details = mapOf("clubId" to clubId.toString(), "sanctioned" to sanctioned.toString()),
                     ),
             )
-            toView(club = updated)
+            toView(club = updated).toResponse()
         }
 
     /** Access gate: the caller must hold one of [allowed]. Returns the caller's id (the audit actor). */

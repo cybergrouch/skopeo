@@ -24,7 +24,6 @@ import org.skopeo.PARTNER_RATE_LIMIT_NAME
 import org.skopeo.dto.client.CreateApiClientRequest
 import org.skopeo.dto.client.IssueApiKeyRequest
 import org.skopeo.dto.client.SetRateLimitRequest
-import org.skopeo.mapper.client.toResponse
 import org.skopeo.model.ApiKeyEnvironment
 import org.skopeo.model.Capability
 import org.skopeo.model.ClientAuthResult
@@ -72,14 +71,14 @@ private fun Route.manageClients(service: ApiClientService) {
         respondMappingErrors {
             val request = call.receive<CreateApiClientRequest>()
             respondEither(result = service.createClient(token = verifiedToken(), name = request.name)) { client ->
-                call.respond(status = HttpStatusCode.Created, message = client.toResponse())
+                call.respond(status = HttpStatusCode.Created, message = client)
             }
         }
     }
     get {
         respondMappingErrors {
             respondEither(result = service.listClients(token = verifiedToken())) { clients ->
-                call.respond(status = HttpStatusCode.OK, message = clients.map { it.toResponse() })
+                call.respond(status = HttpStatusCode.OK, message = clients)
             }
         }
     }
@@ -94,7 +93,7 @@ private fun Route.manageClients(service: ApiClientService) {
                         clientId = uuidParam(name = "id"),
                         rateLimitPerMin = request.rateLimitPerMin,
                     ),
-            ) { client -> call.respond(status = HttpStatusCode.OK, message = client.toResponse()) }
+            ) { client -> call.respond(status = HttpStatusCode.OK, message = client) }
         }
     }
 }
@@ -117,7 +116,7 @@ private fun Route.manageKeys(service: ApiClientService) {
                         environment = environment,
                         expiresInDays = body.expiresInDays,
                     ),
-            ) { issued -> call.respond(status = HttpStatusCode.Created, message = issued.toResponse()) }
+            ) { issued -> call.respond(status = HttpStatusCode.Created, message = issued) }
         }
     }
     delete(path = "/{clientId}/keys/{keyId}") {
@@ -139,7 +138,7 @@ private fun Route.clientSelfIdentity(service: ApiClientService) {
     get(path = "/me") {
         respondMappingErrors {
             val principal = resolveClient(service = service) ?: return@respondMappingErrors
-            call.respond(status = HttpStatusCode.OK, message = principal.toResponse())
+            call.respond(status = HttpStatusCode.OK, message = service.describePrincipal(principal = principal))
         }
     }
 }
@@ -153,7 +152,7 @@ private fun Route.clientPlayerDirectory(service: ApiClientService) {
         respondMappingErrors {
             val principal = resolveClient(service = service) ?: return@respondMappingErrors
             if (!requireClientScope(principal = principal, required = Capability.RESEARCHER)) return@respondMappingErrors
-            call.respond(status = HttpStatusCode.OK, message = service.playerDirectory().map { it.toResponse() })
+            call.respond(status = HttpStatusCode.OK, message = service.playerDirectory())
         }
     }
 }
@@ -167,7 +166,7 @@ private fun Route.delegatedCapabilities(service: ApiClientService) {
         respondMappingErrors {
             val principal = resolveClient(service = service) ?: return@respondMappingErrors
             respondEither(result = service.effectiveCapabilities(token = verifiedToken(), principal = principal)) { effective ->
-                call.respond(status = HttpStatusCode.OK, message = effective.toResponse())
+                call.respond(status = HttpStatusCode.OK, message = effective)
             }
         }
     }

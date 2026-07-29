@@ -9,14 +9,18 @@ import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
-import org.skopeo.model.AdjustRankingPointCommand
+import org.skopeo.dto.ranking.AdjustRankingPointsRequest
+import org.skopeo.dto.ranking.AwardedPointsPageResponse
+import org.skopeo.dto.ranking.GrantRankingPointsRequest
+import org.skopeo.dto.ranking.RankingPointAwardResponse
+import org.skopeo.mapper.ranking.toCommand
+import org.skopeo.mapper.ranking.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
 import org.skopeo.model.AwardStatus
 import org.skopeo.model.AwardsPage
 import org.skopeo.model.Capability
-import org.skopeo.model.GrantRankingPointCommand
 import org.skopeo.model.Level
 import org.skopeo.model.PointClass
 import org.skopeo.model.PointSourceType
@@ -61,10 +65,12 @@ class RankingPointService(
     /** Grant an award to a user. ADMINISTRATOR-only; band-tagged, sex from the target, policy validity. */
     fun grant(
         token: VerifiedFirebaseToken,
-        command: GrantRankingPointCommand,
-    ): Either<ServiceError, RankingPointAward> =
+        userId: UUID,
+        request: GrantRankingPointsRequest,
+    ): Either<ServiceError, RankingPointAwardResponse> =
         either {
             val adminId = requireAdmin(token = token).bind()
+            val command = request.toCommand(userId = userId)
             ensure(condition = command.points > BigDecimal.ZERO) {
                 ServiceError.Validation(message = "Points must be greater than zero")
             }
@@ -117,7 +123,7 @@ class RankingPointService(
                         ),
                 )
             audit.record(write = grantAudit(actorId = adminId, award = award))
-            award
+            award.toResponse()
         }
 
     /**
@@ -132,10 +138,12 @@ class RankingPointService(
      */
     fun adjust(
         token: VerifiedFirebaseToken,
-        command: AdjustRankingPointCommand,
-    ): Either<ServiceError, RankingPointAward> =
+        userId: UUID,
+        request: AdjustRankingPointsRequest,
+    ): Either<ServiceError, RankingPointAwardResponse> =
         either {
             val adminId = requireAdmin(token = token).bind()
+            val command = request.toCommand(userId = userId)
             // Signed: a positive value awards, a negative value deducts — but zero is a no-op → reject it.
             ensure(condition = command.points.signum() != 0) {
                 ServiceError.Validation(message = "Points must not be zero")
@@ -186,7 +194,7 @@ class RankingPointService(
                         ),
                 )
             audit.record(write = grantAudit(actorId = adminId, award = award))
-            award
+            award.toResponse()
         }
 
     /**
@@ -258,11 +266,11 @@ class RankingPointService(
     fun listForUser(
         token: VerifiedFirebaseToken,
         userId: UUID,
-    ): Either<ServiceError, List<RankingPointAward>> =
+    ): Either<ServiceError, List<RankingPointAwardResponse>> =
         either {
             requireAdmin(token = token).bind()
             users.findById(id = userId).mapLeft { ServiceError.NotFound(message = "User $userId not found") }.bind()
-            awards.listByUser(userId = userId)
+            awards.listByUser(userId = userId).map { it.toResponse() }
         }
 
     /**
@@ -275,7 +283,7 @@ class RankingPointService(
         token: VerifiedFirebaseToken,
         limit: Int?,
         offset: Int?,
-    ): Either<ServiceError, AwardsPage> =
+    ): Either<ServiceError, AwardedPointsPageResponse> =
         either {
             requirePointsManager(token = token).bind()
             val pageSize = (limit ?: DEFAULT_PAGE_SIZE).coerceIn(minimumValue = 1, maximumValue = MAX_PAGE_SIZE)
@@ -298,7 +306,7 @@ class RankingPointService(
                         playerIsDeleted = user?.isDeleted() ?: false,
                     )
                 }
-            AwardsPage(rows = resolved, total = total.toInt(), limit = pageSize, offset = pageOffset)
+            AwardsPage(rows = resolved, total = total.toInt(), limit = pageSize, offset = pageOffset).toResponse()
         }
 
     /** The target's current NTRP band label (e.g. "4.0"), or null when they have no rating yet. */

@@ -13,7 +13,6 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.standings.StandingsCalculationRequest
-import org.skopeo.mapper.standings.toResponse
 import org.skopeo.service.standings.StandingsCalculationService
 
 /**
@@ -31,7 +30,7 @@ fun Application.configureStandingsCalculationRoutes(service: StandingsCalculatio
                     val request =
                         runCatching { call.receiveNullable<StandingsCalculationRequest>() }.getOrNull() ?: StandingsCalculationRequest()
                     respondEither(result = service.calculate(token = verifiedToken(), dryRun = request.dryRun)) { outcome ->
-                        call.respond(status = HttpStatusCode.OK, message = outcome.toResponse())
+                        call.respond(status = HttpStatusCode.OK, message = outcome)
                     }
                 }
             }

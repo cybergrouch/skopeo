@@ -18,7 +18,6 @@ import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.capability.CapabilityGrantRequest
-import org.skopeo.mapper.capability.toResponse
 import org.skopeo.model.Capability
 import org.skopeo.service.capability.CapabilityService
 
@@ -42,7 +41,7 @@ private fun Route.listAndGrant(service: CapabilityService) {
     get {
         respondMappingErrors {
             respondEither(result = service.list(token = verifiedToken(), userId = uuidParam(name = "userId"))) { grants ->
-                call.respond(status = HttpStatusCode.OK, message = grants.map { it.toResponse() })
+                call.respond(status = HttpStatusCode.OK, message = grants)
             }
         }
     }
@@ -58,7 +57,7 @@ private fun Route.listAndGrant(service: CapabilityService) {
                     ),
             ) { result ->
                 val status = if (result.created) HttpStatusCode.Created else HttpStatusCode.OK
-                call.respond(status = status, message = result.grant.toResponse())
+                call.respond(status = status, message = result.grant)
             }
         }
     }

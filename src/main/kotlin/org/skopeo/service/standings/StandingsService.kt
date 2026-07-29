@@ -3,6 +3,9 @@
 
 package org.skopeo.service.standings
 
+import org.skopeo.dto.standings.StandingsLocateResponse
+import org.skopeo.dto.standings.StandingsPageResponse
+import org.skopeo.mapper.standings.toResponse
 import org.skopeo.model.GroupRef
 import org.skopeo.model.LocateView
 import org.skopeo.model.PlayerStanding
@@ -64,24 +67,26 @@ class StandingsService(
         sex: String?,
         limit: Int?,
         offset: Int?,
-    ): StandingsView {
+    ): StandingsPageResponse {
         val revealRates = callerCanSeeRates(token = token)
         val pageSize = (limit ?: DEFAULT_PAGE_SIZE).coerceIn(minimumValue = 1, maximumValue = MAX_PAGE_SIZE)
         val pageOffset = (offset ?: 0).coerceAtLeast(minimumValue = 0)
         val request = PageRequest(band = band, sex = sex, limit = pageSize, offset = pageOffset, revealRates = revealRates)
         val source = settings.standingsSource()
-        return if (source == SnapshotSource.POINTS) {
-            // POINTS serves the latest published snapshot only; no snapshot → an explicit empty POINTS view
-            // (never the live rating leaderboard, #428).
-            val pointsSnapshotId = snapshots.latestPublished(source = SnapshotSource.POINTS)
-            if (pointsSnapshotId != null) {
-                servePage(snapshotId = pointsSnapshotId, request = request)
+        val view =
+            if (source == SnapshotSource.POINTS) {
+                // POINTS serves the latest published snapshot only; no snapshot → an explicit empty POINTS view
+                // (never the live rating leaderboard, #428).
+                val pointsSnapshotId = snapshots.latestPublished(source = SnapshotSource.POINTS)
+                if (pointsSnapshotId != null) {
+                    servePage(snapshotId = pointsSnapshotId, request = request)
+                } else {
+                    emptyView(request = request, groups = emptyList(), source = SnapshotSource.POINTS)
+                }
             } else {
-                emptyView(request = request, groups = emptyList(), source = SnapshotSource.POINTS)
+                serveLive(request = request)
             }
-        } else {
-            serveLive(request = request)
-        }
+        return view.toResponse()
     }
 
     /** The resolved page request + privacy flag — bundled so serving stays under the parameter limit. */
@@ -247,7 +252,7 @@ class StandingsService(
     fun locateMe(
         token: VerifiedFirebaseToken,
         limit: Int?,
-    ): LocateView? {
+    ): StandingsLocateResponse? {
         val caller = users.findByFirebaseUid(firebaseUid = token.uid) ?: return null
         val location =
             if (settings.standingsSource() == SnapshotSource.POINTS) {
@@ -269,7 +274,7 @@ class StandingsService(
             val pageSize = (limit ?: DEFAULT_PAGE_SIZE).coerceIn(minimumValue = 1, maximumValue = MAX_PAGE_SIZE)
             // rank is 1-based; the containing page starts at floor((rank - 1) / pageSize) * pageSize.
             val pageOffset = ((it.rank - 1) / pageSize) * pageSize
-            LocateView(location = it, offset = pageOffset, limit = pageSize)
+            LocateView(location = it, offset = pageOffset, limit = pageSize).toResponse()
         }
     }
 

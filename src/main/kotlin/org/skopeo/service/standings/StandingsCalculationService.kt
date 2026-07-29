@@ -7,6 +7,8 @@ import arrow.core.Either
 import arrow.core.left
 import arrow.core.raise.either
 import arrow.core.right
+import org.skopeo.dto.standings.StandingsCalculationResponse
+import org.skopeo.mapper.standings.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -60,7 +62,7 @@ class StandingsCalculationService(
     fun calculate(
         token: VerifiedFirebaseToken,
         dryRun: Boolean,
-    ): Either<ServiceError, StandingsCalculationOutcome> =
+    ): Either<ServiceError, StandingsCalculationResponse> =
         either {
             val adminId = requireAdmin(token = token).bind()
             val now = LocalDateTime.now()
@@ -81,7 +83,7 @@ class StandingsCalculationService(
                         ),
                 )
             }
-            StandingsCalculationOutcome(dryRun = dryRun, groups = groups)
+            StandingsCalculationOutcome(dryRun = dryRun, groups = groups).toResponse()
         }
 
     /**
