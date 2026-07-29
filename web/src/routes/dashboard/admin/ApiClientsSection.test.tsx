@@ -110,6 +110,19 @@ describe("ApiClientsSection", () => {
     );
   });
 
+  it("issues a TEST-environment key when selected", async () => {
+    const user = userEvent.setup();
+    renderSection();
+    await user.selectOptions(screen.getByLabelText("Environment"), "TEST");
+    await user.click(screen.getByRole("button", { name: "Issue key" }));
+    await waitFor(() =>
+      expect(issueMutate).toHaveBeenCalledWith({
+        id: "c1",
+        data: { environment: "TEST" },
+      }),
+    );
+  });
+
   it("includes an expiry when provided", async () => {
     const user = userEvent.setup();
     renderSection();
