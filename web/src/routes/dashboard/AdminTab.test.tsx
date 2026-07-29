@@ -35,6 +35,9 @@ vi.mock("./admin/RawRatingsSection", () => ({
 vi.mock("./admin/StandingsSourceSection", () => ({
   StandingsSourceSection: () => <div>standings source section</div>,
 }));
+vi.mock("./admin/ApiClientsSection", () => ({
+  ApiClientsSection: () => <div>api clients section</div>,
+}));
 
 describe("AdminTab", () => {
   it("renders the admin sections (invites #135 and activity log #134 now live in their own tabs)", () => {
@@ -50,6 +53,7 @@ describe("AdminTab", () => {
     expect(screen.getByText("pending calculation section")).toBeInTheDocument();
     expect(screen.getByText("theme section")).toBeInTheDocument();
     expect(screen.getByText("standings source section")).toBeInTheDocument();
+    expect(screen.getByText("api clients section")).toBeInTheDocument();
     expect(screen.getByText("build info section")).toBeInTheDocument();
     expect(screen.queryByText("invites section")).not.toBeInTheDocument();
     expect(screen.queryByText("activity log section")).not.toBeInTheDocument();

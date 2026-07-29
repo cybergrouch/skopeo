@@ -1,3 +1,4 @@
+import { ApiClientsSection } from "./admin/ApiClientsSection";
 import { BuildInfoSection } from "./admin/BuildInfoSection";
 import { CircuitsSection } from "./admin/CircuitsSection";
 import { ClubsSection } from "./admin/ClubsSection";
@@ -23,6 +24,7 @@ export function AdminTab() {
       <StandingsSourceSection />
       <RawRatingsSection />
       <ThemeSection />
+      <ApiClientsSection />
       <BuildInfoSection />
     </div>
   );
