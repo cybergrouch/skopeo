@@ -10,6 +10,7 @@ import arrow.core.raise.ensure
 import arrow.core.right
 import org.skopeo.dto.duplicate.DuplicateCandidatePageResponse
 import org.skopeo.dto.duplicate.DuplicateCandidateResponse
+import org.skopeo.error.ServiceError
 import org.skopeo.mapper.duplicate.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
@@ -20,7 +21,6 @@ import org.skopeo.model.DuplicateCandidateStatus
 import org.skopeo.model.DuplicateCandidateView
 import org.skopeo.model.DuplicateCandidateViewPage
 import org.skopeo.model.DuplicateSignal
-import org.skopeo.model.ServiceError
 import org.skopeo.repository.DuplicateCandidateRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService

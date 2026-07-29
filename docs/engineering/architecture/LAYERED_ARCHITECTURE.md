@@ -11,6 +11,7 @@ routes ──► { service, dto }                    (routes never touch mapper 
 service ──► { repository, mapper, dto, model }
 mapper ──► { dto, model }                       (mapper: dto↔model translation)
 repository ──► model                            (model is pure domain — depends up on nothing)
+{ routes, service, repository } ──► error       (error: transport-free ServiceError taxonomy — a leaf)
 ```
 
 Enforced invariants (each is true in the codebase today):
@@ -20,6 +21,9 @@ Enforced invariants (each is true in the codebase today):
 - **`model`** is pure domain — it depends on no other app layer
   (`routes`/`service`/`repository`/`dto`/`mapper`). Generic numeric helpers it needs live in `model`
   (`BigDecimalUtils.kt`).
+- **`error`** is a transport-free error taxonomy (`ServiceError`, #115) in its own `org.skopeo.error`
+  package — a foundation leaf that depends on nothing. Any layer may return it, so it lives outside
+  `model` and returning it never pulls the domain up into `routes`.
 - **`dto`** is a **pure serializable boundary record**: it never depends on `routes`, `repository`,
   `service`, or `model` — with one sanctioned exception (below).
 - **`mapper`** owns the dto↔model translation (the `toResponse`/`toCommand` extension functions). It
@@ -28,7 +32,7 @@ Enforced invariants (each is true in the codebase today):
   the graph stays acyclic). Services return response DTOs and accept request DTOs.
 - **`routes`** never depend on `mapper`: dto↔model translation is hidden behind the service, so a route
   calls `service.*` and responds with the DTO it receives. (Routes still reference a thin slice of
-  `model` — enums parsed from query/path params, `ServiceError`, auth principals, and the wire-contract
+  `model` — enums parsed from query/path params, auth principals, and the wire-contract
   request bodies below — so there is deliberately no `routes ↛ model` rule yet.)
 
 ## The one sanctioned `dto → model` dependency

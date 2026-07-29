@@ -11,6 +11,7 @@ import arrow.core.raise.ensureNotNull
 import arrow.core.right
 import org.skopeo.dto.club.ClubPublicResponse
 import org.skopeo.dto.club.ClubResponse
+import org.skopeo.error.ServiceError
 import org.skopeo.mapper.club.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
@@ -22,7 +23,6 @@ import org.skopeo.model.ClubPublicEvent
 import org.skopeo.model.ClubPublicView
 import org.skopeo.model.ClubView
 import org.skopeo.model.CreateClubCommand
-import org.skopeo.model.ServiceError
 import org.skopeo.model.displayName
 import org.skopeo.repository.ClubRepository
 import org.skopeo.repository.EventRepository

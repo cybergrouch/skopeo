@@ -12,6 +12,7 @@ import arrow.core.right
 import org.skopeo.dto.user.ClaimCodeResponse
 import org.skopeo.dto.user.UserResponse
 import org.skopeo.dto.user.UserSummaryResponse
+import org.skopeo.error.ServiceError
 import org.skopeo.mapper.user.toResponse
 import org.skopeo.mapper.user.toSummary
 import org.skopeo.model.AuditAction
@@ -22,7 +23,6 @@ import org.skopeo.model.CreatePlaceholderCommand
 import org.skopeo.model.GeneratedClaimCode
 import org.skopeo.model.Level
 import org.skopeo.model.Rating
-import org.skopeo.model.ServiceError
 import org.skopeo.model.displayName
 import org.skopeo.repository.PlaceholderClaimCodeRepository
 import org.skopeo.repository.UserRepository

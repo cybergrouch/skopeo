@@ -9,6 +9,7 @@ import arrow.core.right
 import org.skopeo.dto.rating.PendingAssessmentPageResponse
 import org.skopeo.dto.rating.RatingHistoryResponse
 import org.skopeo.dto.rating.UserRatingResponse
+import org.skopeo.error.ServiceError
 import org.skopeo.mapper.rating.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
@@ -20,7 +21,6 @@ import org.skopeo.model.PendingAssessmentPage
 import org.skopeo.model.Rating
 import org.skopeo.model.RatingHistoryEntry
 import org.skopeo.model.RatingHistoryWrite
-import org.skopeo.model.ServiceError
 import org.skopeo.model.User
 import org.skopeo.model.UserRating
 import org.skopeo.model.ageInYears

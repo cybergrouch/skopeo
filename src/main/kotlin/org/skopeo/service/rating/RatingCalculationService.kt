@@ -11,6 +11,7 @@ import arrow.core.right
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.skopeo.dto.RankingCalculationRequest
 import org.skopeo.dto.rating.CalculationResponse
+import org.skopeo.error.ServiceError
 import org.skopeo.mapper.rating.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
@@ -28,7 +29,6 @@ import org.skopeo.model.Rating
 import org.skopeo.model.RatingCalculationOptions
 import org.skopeo.model.RatingCalculationOutcome
 import org.skopeo.model.RatingHistoryWrite
-import org.skopeo.model.ServiceError
 import org.skopeo.model.SetCalculationBreakdown
 import org.skopeo.model.SetScore
 import org.skopeo.model.Team

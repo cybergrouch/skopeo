@@ -6,9 +6,9 @@ package org.skopeo.service.seeding
 import arrow.core.Either
 import arrow.core.raise.either
 import org.skopeo.dto.seeding.SeedingResponse
+import org.skopeo.error.ServiceError
 import org.skopeo.mapper.seeding.toResponse
 import org.skopeo.model.SeedingEntry
-import org.skopeo.model.ServiceError
 import org.skopeo.model.User
 import org.skopeo.model.ageInYears
 import org.skopeo.model.displayName

@@ -107,8 +107,10 @@ wire-contract value types), and `mapper` owns the dto↔model translation (`toRe
 extensions), depending on `dto` + `model` only. `service` may call `mapper` (one-way, acyclic). The
 dto↔model translation is **hidden behind the service**: services return response DTOs (and accept
 request DTOs), so `routes` depend on `service` + `dto` and never on `mapper`. (Routes still touch a
-thin slice of `model` — enums parsed from query/path params, `ServiceError`, auth principals, and the
-wire-contract request bodies — so there is deliberately no `routes ↛ model` rule yet.)
+thin slice of `model` — enums parsed from query/path params, auth principals, and the
+wire-contract request bodies — so there is deliberately no `routes ↛ model` rule yet. `ServiceError`
+now lives in its own foundation package `org.skopeo.error`, so returning it no longer counts as a
+`model` dependency.)
 
 ```mermaid
 classDiagram
@@ -136,7 +138,7 @@ classDiagram
 
 Services and repositories return **`Either<ServiceError, T>`** for *expected* failures (issue #115);
 truly exceptional faults (bugs, IO) are still thrown and surface as `500`. `ServiceError`
-(`model/ServiceError.kt`) is a sealed, HTTP-free taxonomy. The route layer is the single place that
+(`error/ServiceError.kt`, package `org.skopeo.error`) is a sealed, HTTP-free taxonomy. The route layer is the single place that
 maps it, via helpers in `routes/RouteSupport.kt`:
 
 - `verifiedToken()` / `optionalVerifiedToken()` — lift the `JWTPrincipal` to a `VerifiedFirebaseToken`.

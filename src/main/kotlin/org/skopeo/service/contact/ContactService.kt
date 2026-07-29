@@ -9,6 +9,7 @@ import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.right
 import org.skopeo.dto.contact.ContactResponse
+import org.skopeo.error.ServiceError
 import org.skopeo.mapper.contact.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
@@ -17,7 +18,6 @@ import org.skopeo.model.Capability
 import org.skopeo.model.Contact
 import org.skopeo.model.ContactType
 import org.skopeo.model.DuplicateSignal
-import org.skopeo.model.ServiceError
 import org.skopeo.model.VerificationMethod
 import org.skopeo.model.VerificationStatus
 import org.skopeo.repository.ContactRepository

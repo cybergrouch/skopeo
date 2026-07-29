@@ -11,10 +11,10 @@ import arrow.core.right
 import org.skopeo.dto.report.BandHopBucket
 import org.skopeo.dto.report.BandHopReportResponse
 import org.skopeo.dto.report.BandHopUserRow
+import org.skopeo.error.ServiceError
 import org.skopeo.model.Capability
 import org.skopeo.model.Level
 import org.skopeo.model.RatingHistoryEntry
-import org.skopeo.model.ServiceError
 import org.skopeo.model.UserRating
 import org.skopeo.model.displayName
 import org.skopeo.model.isDeleted

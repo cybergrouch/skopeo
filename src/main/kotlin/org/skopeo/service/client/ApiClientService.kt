@@ -14,6 +14,7 @@ import org.skopeo.dto.client.ClientEffectiveCapabilitiesResponse
 import org.skopeo.dto.client.ClientIdentityResponse
 import org.skopeo.dto.client.IssuedApiKeyResponse
 import org.skopeo.dto.client.PartnerPlayerResponse
+import org.skopeo.error.ServiceError
 import org.skopeo.mapper.client.toResponse
 import org.skopeo.model.ApiClientStatus
 import org.skopeo.model.ApiKeyEnvironment
@@ -28,7 +29,6 @@ import org.skopeo.model.ClientPrincipal
 import org.skopeo.model.InsertApiKeyCommand
 import org.skopeo.model.IssuedApiKey
 import org.skopeo.model.PublicPlayer
-import org.skopeo.model.ServiceError
 import org.skopeo.model.UserSearchQuery
 import org.skopeo.model.displayName
 import org.skopeo.model.effectiveCapabilities

@@ -13,6 +13,7 @@ import org.skopeo.dto.ranking.AdjustRankingPointsRequest
 import org.skopeo.dto.ranking.AwardedPointsPageResponse
 import org.skopeo.dto.ranking.GrantRankingPointsRequest
 import org.skopeo.dto.ranking.RankingPointAwardResponse
+import org.skopeo.error.ServiceError
 import org.skopeo.mapper.ranking.toCommand
 import org.skopeo.mapper.ranking.toResponse
 import org.skopeo.model.AuditAction
@@ -27,7 +28,6 @@ import org.skopeo.model.PointSourceType
 import org.skopeo.model.RankingPointAward
 import org.skopeo.model.RankingPointAwardWrite
 import org.skopeo.model.ResolvedAward
-import org.skopeo.model.ServiceError
 import org.skopeo.model.displayName
 import org.skopeo.model.isDeleted
 import org.skopeo.repository.EventRepository

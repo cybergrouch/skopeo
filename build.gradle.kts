@@ -277,6 +277,8 @@ tasks.jacocoTestReport {
                         // Mappers are pure dto↔model translation (like dto/), exercised via route/service tests.
                         "**/mapper/**",
                         "**/model/**",
+                        // ServiceError is a pure error taxonomy (relocated out of model/), like dto/.
+                        "**/error/**",
                         "**/*Application*.*",
                         // Database wiring requires a live PostgreSQL instance
                         "**/config/**",
@@ -363,6 +365,8 @@ tasks.jacocoTestCoverageVerification {
                         // Mappers are pure dto↔model translation (like dto/), exercised via route/service tests.
                         "**/mapper/**",
                         "**/model/**",
+                        // ServiceError is a pure error taxonomy (relocated out of model/), like dto/.
+                        "**/error/**",
                         "**/*Application*.*",
                         "**/config/**",
                         "**/*Kt.class",

@@ -11,9 +11,9 @@ import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
+import org.skopeo.error.ServiceError
 import org.skopeo.model.RatingRequest
 import org.skopeo.model.RatingRequestStatus
-import org.skopeo.model.ServiceError
 import java.math.BigDecimal
 import java.time.LocalDateTime
 import java.util.UUID

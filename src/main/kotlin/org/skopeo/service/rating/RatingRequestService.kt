@@ -11,6 +11,7 @@ import arrow.core.raise.ensureNotNull
 import arrow.core.right
 import org.skopeo.dto.rating.RatingRequestPageResponse
 import org.skopeo.dto.rating.RatingRequestResponse
+import org.skopeo.error.ServiceError
 import org.skopeo.mapper.rating.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
@@ -21,7 +22,6 @@ import org.skopeo.model.RatingRequest
 import org.skopeo.model.RatingRequestPage
 import org.skopeo.model.RatingRequestStatus
 import org.skopeo.model.RatingRequestView
-import org.skopeo.model.ServiceError
 import org.skopeo.model.displayName
 import org.skopeo.model.isDeleted
 import org.skopeo.repository.RatingRepository

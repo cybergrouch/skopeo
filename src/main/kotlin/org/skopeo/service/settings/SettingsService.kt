@@ -9,12 +9,12 @@ import arrow.core.raise.either
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
 import org.skopeo.dto.settings.StandingsSourceResponse
+import org.skopeo.error.ServiceError
 import org.skopeo.mapper.settings.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
 import org.skopeo.model.Capability
-import org.skopeo.model.ServiceError
 import org.skopeo.model.SnapshotSource
 import org.skopeo.model.StandingsSourceValue
 import org.skopeo.repository.AppSettingsRepository

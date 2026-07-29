@@ -9,6 +9,7 @@ import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.right
 import org.skopeo.dto.name.NameResponse
+import org.skopeo.error.ServiceError
 import org.skopeo.mapper.name.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
@@ -16,7 +17,6 @@ import org.skopeo.model.AuditWrite
 import org.skopeo.model.Capability
 import org.skopeo.model.Name
 import org.skopeo.model.NameType
-import org.skopeo.model.ServiceError
 import org.skopeo.repository.NameRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService

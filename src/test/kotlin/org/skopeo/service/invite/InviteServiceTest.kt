@@ -11,6 +11,7 @@ import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.error.ServiceError
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
@@ -20,7 +21,6 @@ import org.skopeo.model.ContactType
 import org.skopeo.model.InviteStatus
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
-import org.skopeo.model.ServiceError
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName

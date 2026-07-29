@@ -13,8 +13,8 @@ import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.error.ServiceError
 import org.skopeo.model.InviteStatus
-import org.skopeo.model.ServiceError
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.time.LocalDateTime
 import java.util.UUID

@@ -16,11 +16,11 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.dto.user.CreateUserRequest
+import org.skopeo.error.ServiceError
 import org.skopeo.model.AuditAction
 import org.skopeo.model.Capability
 import org.skopeo.model.ProfilePatch
 import org.skopeo.model.ProvisionUserCommand
-import org.skopeo.model.ServiceError
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.repository.AuditRepository
