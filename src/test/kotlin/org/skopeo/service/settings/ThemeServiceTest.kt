@@ -65,7 +65,7 @@ class ThemeServiceTest {
 
     @Test
     fun `the default theme is AUTO (#378)`() {
-        service.getTheme().theme shouldBe ThemeSetting.AUTO
+        service.getTheme().theme shouldBe ThemeSetting.AUTO.name
     }
 
     @Test
@@ -73,9 +73,9 @@ class ThemeServiceTest {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
 
         val set = service.setTheme(token = token(uid = "admin"), theme = "GRASS").shouldBeRight()
-        set.theme shouldBe ThemeSetting.GRASS
+        set.theme shouldBe ThemeSetting.GRASS.name
 
-        service.getTheme().theme shouldBe ThemeSetting.GRASS
+        service.getTheme().theme shouldBe ThemeSetting.GRASS.name
     }
 
     @Test
@@ -91,15 +91,15 @@ class ThemeServiceTest {
                 ThemeSetting.SKOPEO_OG,
             )
         newThemes.forEach { theme ->
-            service.setTheme(token = token(uid = "admin"), theme = theme.name).shouldBeRight().theme shouldBe theme
-            service.getTheme().theme shouldBe theme
+            service.setTheme(token = token(uid = "admin"), theme = theme.name).shouldBeRight().theme shouldBe theme.name
+            service.getTheme().theme shouldBe theme.name
         }
     }
 
     @Test
     fun `theme parsing is case-insensitive (#378)`() {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
-        service.setTheme(token = token(uid = "admin"), theme = "clay").shouldBeRight().theme shouldBe ThemeSetting.CLAY
+        service.setTheme(token = token(uid = "admin"), theme = "clay").shouldBeRight().theme shouldBe ThemeSetting.CLAY.name
     }
 
     @Test
@@ -130,14 +130,14 @@ class ThemeServiceTest {
         val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         // A value that no longer maps to a known theme (e.g. a renamed/removed theme) reads back as AUTO.
         settings.upsert(key = "ui_theme", value = "RETIRED_THEME", updatedBy = admin.id)
-        service.getTheme().theme shouldBe ThemeSetting.AUTO
+        service.getTheme().theme shouldBe ThemeSetting.AUTO.name
     }
 
     @Test
     fun `getTheme falls back to AUTO when no setting row exists (#378)`() {
         transaction { AppSettingsTable.deleteAll() }
         val current = service.getTheme()
-        current.theme shouldBe ThemeSetting.AUTO
+        current.theme shouldBe ThemeSetting.AUTO.name
         current.updatedBy.shouldBeNull()
     }
 
@@ -155,11 +155,11 @@ class ThemeServiceTest {
         val at = LocalDateTime.of(2026, 1, 15, 10, 0)
 
         val set = service.setLocalTheme(token = token(uid = "u"), theme = "GRASS", now = at).shouldBeRight()
-        set.theme shouldBe ThemeSetting.GRASS
+        set.theme shouldBe ThemeSetting.GRASS.name
         set.setAt shouldBe at
 
         val read = service.getLocalTheme(token = token(uid = "u")).shouldBeRight()
-        read.theme shouldBe ThemeSetting.GRASS
+        read.theme shouldBe ThemeSetting.GRASS.name
         read.setAt shouldBe at
     }
 
@@ -180,7 +180,7 @@ class ThemeServiceTest {
     @Test
     fun `local theme parsing is case-insensitive (#514)`() {
         provision(uid = "u")
-        service.setLocalTheme(token = token(uid = "u"), theme = "clay").shouldBeRight().theme shouldBe ThemeSetting.CLAY
+        service.setLocalTheme(token = token(uid = "u"), theme = "clay").shouldBeRight().theme shouldBe ThemeSetting.CLAY.name
     }
 
     @Test
@@ -213,7 +213,7 @@ class ThemeServiceTest {
         service.setLocalTheme(token = token(uid = "u"), theme = "GRASS", now = first).shouldBeRight()
 
         val second = service.setLocalTheme(token = token(uid = "u"), theme = "CLAY", now = later).shouldBeRight()
-        second.theme shouldBe ThemeSetting.CLAY
+        second.theme shouldBe ThemeSetting.CLAY.name
         second.setAt shouldBe later
     }
 

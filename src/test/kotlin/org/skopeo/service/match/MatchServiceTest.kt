@@ -169,7 +169,7 @@ class MatchServiceTest {
             service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
 
         match.status shouldBe MatchStatus.SCHEDULED.name
-        match.team1.userIds shouldBe listOf(p1.id.toString())
+        match.team1.userIds shouldBe listOf(element = p1.id.toString())
     }
 
     @Test

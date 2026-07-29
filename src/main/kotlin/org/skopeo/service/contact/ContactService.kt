@@ -68,7 +68,7 @@ class ContactService(
         type: ContactType,
         value: String,
         isPrimary: Boolean,
-    ): Either<ServiceError, Contact> =
+    ): Either<ServiceError, ContactResponse> =
         either {
             requireUserExists(userId = userId).bind()
             val actor = requireUserAccess(token = token, userId = userId).bind()
@@ -92,7 +92,7 @@ class ContactService(
                     ),
             )
             if (type == ContactType.PHONE) flagPhoneDuplicates(newUserId = userId, value = value)
-            contact
+            contact.toResponse()
         }
 
     /**

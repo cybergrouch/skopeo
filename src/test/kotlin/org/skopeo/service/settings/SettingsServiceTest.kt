@@ -97,16 +97,16 @@ class SettingsServiceTest {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
 
         val set = service.setStandingsSource(token = token(uid = "admin"), source = "POINTS").shouldBeRight()
-        set.source shouldBe SnapshotSource.POINTS
+        set.source shouldBe SnapshotSource.POINTS.name
 
-        service.getStandingsSource().source shouldBe SnapshotSource.POINTS
+        service.getStandingsSource().source shouldBe SnapshotSource.POINTS.name
     }
 
     @Test
     fun `setting the standings source is case-insensitive and records an audit row (#146)`() {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         service.setStandingsSource(token = token(uid = "admin"), source = "points").shouldBeRight().source shouldBe
-            SnapshotSource.POINTS
+            SnapshotSource.POINTS.name
 
         val audit = AuditRepository()
         audit.list(actions = listOf(element = AuditAction.SETTINGS_STANDINGS_SOURCE_CHANGED), limit = 10, offset = 0)
