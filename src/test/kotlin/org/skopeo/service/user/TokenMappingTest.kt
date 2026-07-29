@@ -224,7 +224,7 @@ class TokenMappingTest {
                 token = token(name = "Ana"),
                 request = CreateUserRequest(proposedRating = "4.0", dateOfBirth = "2000-01-01", sex = "Male"),
             )
-        command.capabilities shouldBe setOf(Capability.PLAYER)
+        command.capabilities shouldBe setOf(element = Capability.PLAYER)
     }
 
     @Test
@@ -246,7 +246,7 @@ class TokenMappingTest {
                 request = CreateUserRequest(proposedRating = "4.0", dateOfBirth = "2000-01-01", sex = "Male"),
                 adminEmails = setOf(element = "admin@example.com"),
             )
-        command.capabilities shouldBe setOf(Capability.PLAYER)
+        command.capabilities shouldBe setOf(element = Capability.PLAYER)
     }
 
     @Test
@@ -257,6 +257,6 @@ class TokenMappingTest {
                 request = CreateUserRequest(proposedRating = "4.0", dateOfBirth = "2000-01-01", sex = "Male"),
                 adminEmails = setOf(element = "admin@example.com"),
             )
-        command.capabilities shouldBe setOf(Capability.PLAYER)
+        command.capabilities shouldBe setOf(element = Capability.PLAYER)
     }
 }

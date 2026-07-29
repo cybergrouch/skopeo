@@ -89,7 +89,7 @@ class UserApiIntegrationTest {
             val body = created.body<UserResponse>()
             body.firebaseUid shouldBe "fb-1"
             // Every sign-up is a PLAYER only (#622); RESEARCHER is no longer granted by default.
-            body.capabilities.toSet() shouldBe setOf("PLAYER")
+            body.capabilities.toSet() shouldBe setOf(element = "PLAYER")
 
             val again = client.createUser(token = token)
             again.status shouldBe HttpStatusCode.OK

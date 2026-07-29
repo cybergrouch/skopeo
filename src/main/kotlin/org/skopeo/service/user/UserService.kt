@@ -319,11 +319,11 @@ class UserService(
         token: VerifiedFirebaseToken,
         id: UUID,
         hidden: Boolean,
-    ): Either<ServiceError, User> =
+    ): Either<ServiceError, UserResponse> =
         either {
             val target = repository.findById(id = id).bind()
             requireAccess(token = token, target = target).bind()
-            repository.setMatchHistoryHidden(id = id, hidden = hidden).bind()
+            repository.setMatchHistoryHidden(id = id, hidden = hidden).bind().toResponse()
         }
 
     /** First-time sign-up: enforce the invite gate, write the aggregate, and audit the creation. */

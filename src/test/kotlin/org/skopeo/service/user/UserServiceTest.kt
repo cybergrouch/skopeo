@@ -149,7 +149,7 @@ class UserServiceTest {
                 token = token(uid = "g", email = "g@example.com", emailVerified = true, signInProvider = "google.com"),
                 request = request,
             ).shouldBeRight().user
-        user.capabilities shouldBe listOf("PLAYER")
+        user.capabilities shouldBe listOf(element = "PLAYER")
     }
 
     @Test
@@ -161,7 +161,7 @@ class UserServiceTest {
             ).shouldBeRight()
 
         first.created.shouldBeTrue()
-        first.user.capabilities shouldBe listOf("PLAYER")
+        first.user.capabilities shouldBe listOf(element = "PLAYER")
         first.user.names.single().value shouldBe "U One" // token display name fallback
         first.user.contacts.single().status shouldBe "VERIFIED"
 
@@ -507,7 +507,7 @@ class UserServiceTest {
                 token = token(uid = "later", email = "admin@example.com", emailVerified = false, name = "Later"),
                 request = CreateUserRequest(proposedRating = "4.0", dateOfBirth = "2000-01-01", sex = "Male"),
             ).shouldBeRight()
-        created.user.capabilities shouldBe listOf("PLAYER")
+        created.user.capabilities shouldBe listOf(element = "PLAYER")
 
         // Logs in with a verified email -> promoted.
         bootstrapService.currentUser(token = token(uid = "later", email = "admin@example.com", emailVerified = true))!!
@@ -529,7 +529,7 @@ class UserServiceTest {
         ).shouldBeRight()
 
         bootstrapService.currentUser(token = token(uid = "unv", email = "admin@example.com", emailVerified = false))!!
-            .capabilities shouldBe listOf("PLAYER")
+            .capabilities shouldBe listOf(element = "PLAYER")
     }
 
     @Test

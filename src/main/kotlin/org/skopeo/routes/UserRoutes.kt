@@ -302,7 +302,7 @@ private fun Route.matchHistoryVisibility(service: UserService) {
             val body = call.receive<MatchHistoryVisibilityRequest>()
             respondEither(
                 result = service.setMatchHistoryHidden(token = verifiedToken(), id = uuidParam(name = "id"), hidden = body.hidden),
-            ) { user -> call.respond(status = HttpStatusCode.OK, message = user.toResponse()) }
+            ) { user -> call.respond(status = HttpStatusCode.OK, message = user) }
         }
     }
 }
