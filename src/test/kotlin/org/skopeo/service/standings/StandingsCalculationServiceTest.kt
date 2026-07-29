@@ -182,7 +182,7 @@ class StandingsCalculationServiceTest {
 
         val group = service.calculate(token = token(uid = "admin"), dryRun = true).shouldBeRight().groups.single()
         // Same points, so confidence breaks the tie: the established player ranks first.
-        group.entries.map { it.userId } shouldContainExactly listOf(established.id, provisional.id)
+        group.entries.map { it.userId } shouldContainExactly listOf(established.id.toString(), provisional.id.toString())
         group.entries.first().rank shouldBe 1
     }
 
@@ -195,7 +195,7 @@ class StandingsCalculationServiceTest {
         val outcome = service.calculate(token = token(uid = "admin"), dryRun = true).shouldBeRight()
         outcome.dryRun shouldBe true
         outcome.groups shouldHaveSize 1
-        outcome.groups.single().entries.single().points shouldBe BigDecimal("100.0000")
+        outcome.groups.single().entries.single().points shouldBe "100.0000"
         // Nothing was published — the preferring-points read has no snapshot.
         snapshots.latestPublishedPreferringPoints().shouldBeNull()
     }
@@ -231,12 +231,12 @@ class StandingsCalculationServiceTest {
         grant(userId = fiver.id, points = "999", band = "5.0")
 
         val outcome = service.calculate(token = token(uid = "admin"), dryRun = true).shouldBeRight()
-        val fourOh = outcome.groups.single { it.band == StandingsBand.FROM_4_0 && it.sex == "Male" }
-        fourOh.entries.map { it.userId } shouldContainExactly listOf(leader.id, runnerUp.id)
-        fourOh.entries.first().points shouldBe BigDecimal("150.0000")
+        val fourOh = outcome.groups.single { it.band == StandingsBand.FROM_4_0.code && it.sex == "Male" }
+        fourOh.entries.map { it.userId } shouldContainExactly listOf(leader.id.toString(), runnerUp.id.toString())
+        fourOh.entries.first().points shouldBe "150.0000"
         // The 5.0 award formed a separate group counting only its own band's points.
-        val fiveOh = outcome.groups.single { it.band == StandingsBand.FROM_5_0 }
-        fiveOh.entries.single().points shouldBe BigDecimal("999.0000")
+        val fiveOh = outcome.groups.single { it.band == StandingsBand.FROM_5_0.code }
+        fiveOh.entries.single().points shouldBe "999.0000"
     }
 
     @Test
@@ -256,10 +256,10 @@ class StandingsCalculationServiceTest {
         val outcome = service.calculate(token = token(uid = "admin"), dryRun = true).shouldBeRight()
 
         // Sub-3.0 levels share the "<3.0" race; 6.0 and 6.5 share the "6.0+" race (ranked by points desc).
-        val under = outcome.groups.single { it.band == StandingsBand.UNDER_3_0 }
-        under.entries.map { it.userId } shouldContainExactly listOf(twoPointFive.id, twoPointZero.id)
-        val sixPlus = outcome.groups.single { it.band == StandingsBand.SIX_PLUS }
-        sixPlus.entries.map { it.userId } shouldContainExactly listOf(sixPointFive.id, sixPointZero.id)
+        val under = outcome.groups.single { it.band == StandingsBand.UNDER_3_0.code }
+        under.entries.map { it.userId } shouldContainExactly listOf(twoPointFive.id.toString(), twoPointZero.id.toString())
+        val sixPlus = outcome.groups.single { it.band == StandingsBand.SIX_PLUS.code }
+        sixPlus.entries.map { it.userId } shouldContainExactly listOf(sixPointFive.id.toString(), sixPointZero.id.toString())
     }
 
     @Test
@@ -272,7 +272,7 @@ class StandingsCalculationServiceTest {
         grant(userId = woman.id, points = "100", band = "4.0", sex = "Female")
 
         val outcome = service.calculate(token = token(uid = "admin"), dryRun = true).shouldBeRight()
-        outcome.groups.filter { it.band == StandingsBand.FROM_4_0 }.map { it.sex } shouldContainExactly listOf("Male", "Female")
+        outcome.groups.filter { it.band == StandingsBand.FROM_4_0.code }.map { it.sex } shouldContainExactly listOf("Male", "Female")
     }
 
     @Test
@@ -292,7 +292,7 @@ class StandingsCalculationServiceTest {
         grant(userId = player.id, points = "30")
 
         val outcome = service.calculate(token = token(uid = "admin"), dryRun = true).shouldBeRight()
-        outcome.groups.single().entries.single().points shouldBe BigDecimal("30.0000")
+        outcome.groups.single().entries.single().points shouldBe "30.0000"
     }
 
     @Test
@@ -304,7 +304,7 @@ class StandingsCalculationServiceTest {
         grant(userId = player.id, points = "-100")
 
         val entry = service.calculate(token = token(uid = "admin"), dryRun = true).shouldBeRight().groups.single().entries.single()
-        entry.points shouldBe BigDecimal.ZERO
+        entry.points shouldBe "0"
     }
 
     @Test
@@ -321,7 +321,8 @@ class StandingsCalculationServiceTest {
 
         val entries = service.calculate(token = token(uid = "admin"), dryRun = true).shouldBeRight().groups.single().entries
         // Higher rating first, then lower rating, then the two unrated by display name (a-, b-).
-        entries.map { it.userId } shouldContainExactly listOf(higherRated.id, lowerRated.id, unratedAlpha.id, unratedBeta.id)
+        entries.map { it.userId } shouldContainExactly
+            listOf(higherRated.id.toString(), lowerRated.id.toString(), unratedAlpha.id.toString(), unratedBeta.id.toString())
     }
 
     @Test
@@ -350,7 +351,7 @@ class StandingsCalculationServiceTest {
         users.deactivate(id = gone.id).shouldBeRight()
 
         val entries = service.calculate(token = token(uid = "admin"), dryRun = true).shouldBeRight().groups.single().entries
-        entries.map { it.userId } shouldContainExactly listOf(element = active.id)
+        entries.map { it.userId } shouldContainExactly listOf(element = active.id.toString())
     }
 
     @Test
@@ -361,7 +362,7 @@ class StandingsCalculationServiceTest {
 
         val group = service.calculate(token = token(uid = "admin"), dryRun = true).shouldBeRight().groups.single()
         group.sex.shouldBeNull()
-        group.entries.single().userId shouldBe player.id
+        group.entries.single().userId shouldBe player.id.toString()
     }
 
     @Test
@@ -387,20 +388,20 @@ class StandingsCalculationServiceTest {
 
         // Rating-derived source serves live off the current ratings — ordered by rating.
         val ratingView = standings.page(token = token(uid = "admin"), band = StandingsBand.FROM_4_0, sex = "Male", limit = 25, offset = 0)
-        ratingView.entries.first().userId shouldBe ratingLeader.id
+        ratingView.entries.first().userId shouldBe ratingLeader.id.toString()
 
         // Committing the points calculation NO LONGER auto-flips reads (#146): the source is config-gated,
         // so with standings_source unset (default RATING) reads still serve the rating-derived snapshot.
         service.calculate(token = token(uid = "admin"), dryRun = false).shouldBeRight()
         val stillRating =
             standings.page(token = token(uid = "admin"), band = StandingsBand.FROM_4_0, sex = "Male", limit = 25, offset = 0)
-        stillRating.entries.first().userId shouldBe ratingLeader.id
+        stillRating.entries.first().userId shouldBe ratingLeader.id.toString()
 
         // Flip the app-setting to POINTS → reads now serve the committed points snapshot, inverting the top spot.
         AppSettingsRepository().upsert(key = "standings_source", value = "POINTS", updatedBy = admin.id)
         val pointsView =
             standings.page(token = token(uid = "admin"), band = StandingsBand.FROM_4_0, sex = "Male", limit = 25, offset = 0)
-        pointsView.entries.first().userId shouldBe pointsLeader.id
+        pointsView.entries.first().userId shouldBe pointsLeader.id.toString()
     }
 
     @Test
@@ -448,7 +449,7 @@ class StandingsCalculationServiceTest {
 
         val outcome = service.calculate(token = token(uid = "admin"), dryRun = true).shouldBeRight()
         val group = outcome.groups.single()
-        group.entries.map { it.userId } shouldContainExactly listOf(element = returner.id)
-        group.entries.single().points shouldBe BigDecimal("100.0000")
+        group.entries.map { it.userId } shouldContainExactly listOf(element = returner.id.toString())
+        group.entries.single().points shouldBe "100.0000"
     }
 }

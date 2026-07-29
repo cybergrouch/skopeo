@@ -29,7 +29,6 @@ import org.skopeo.model.ServiceError
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
-import org.skopeo.model.displayName
 import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.PlaceholderClaimCodeRepository
 import org.skopeo.repository.PlaceholderClaimCodesTable
@@ -101,11 +100,12 @@ class PlaceholderServiceTest {
                 )
                 .shouldBeRight()
 
-        created.placeholder.shouldBeTrue()
+        // UserResponse carries no placeholder flag; confirm placeholder-ness via the persisted row.
+        users.findById(id = UUID.fromString(created.id)).shouldBeRight().placeholder.shouldBeTrue()
         created.firebaseUid shouldBe null
-        created.capabilities shouldBe setOf(element = Capability.PLAYER)
-        created.displayName() shouldBe "Backlog Player"
-        created.dateOfBirth shouldBe LocalDate.of(1990, 1, 2)
+        created.capabilities shouldBe listOf(element = "PLAYER")
+        created.names.firstOrNull { it.type == "DISPLAY" && it.isActive }?.value shouldBe "Backlog Player"
+        created.dateOfBirth shouldBe "1990-01-02"
         // Surfaces in the management list.
         service.listPlaceholders(token = token(uid = "host")).shouldBeRight().map { it.id } shouldContain created.id
     }
@@ -156,7 +156,7 @@ class PlaceholderServiceTest {
                 )
                 .shouldBeRight()
 
-        val current = ratings.findCurrentRating(userId = created.id).shouldNotBeNull()
+        val current = ratings.findCurrentRating(userId = UUID.fromString(created.id)).shouldNotBeNull()
         // The chosen band 4.0 is stored at its MIDPOINT 4.25 (#579), not the 4.0 floor — mirroring the
         // rater set-rating route, so a single loss won't immediately drop the player a band.
         current.currentRating shouldBeEqualComparingTo BigDecimal("4.25")
@@ -164,7 +164,7 @@ class PlaceholderServiceTest {
         AuditRepository()
             .list(actions = listOf(element = AuditAction.RATING_SET), limit = 10, offset = 0)
             .first
-            .map { it.entityId } shouldContain created.id
+            .map { it.entityId } shouldContain UUID.fromString(created.id)
     }
 
     @Test
@@ -176,7 +176,7 @@ class PlaceholderServiceTest {
                 .createPlaceholder(token = token(uid = "host"), displayName = "Rating-less", sex = "Male")
                 .shouldBeRight()
 
-        ratings.findCurrentRating(userId = created.id) shouldBe null
+        ratings.findCurrentRating(userId = UUID.fromString(created.id)) shouldBe null
     }
 
     @Test
@@ -201,8 +201,8 @@ class PlaceholderServiceTest {
                 .createPlaceholder(token = token(uid = "host"), displayName = "Fine", sex = "Male")
                 .shouldBeRight()
 
-        created.placeholder.shouldBeTrue()
-        ratings.findCurrentRating(userId = created.id) shouldBe null
+        users.findById(id = UUID.fromString(created.id)).shouldBeRight().placeholder.shouldBeTrue()
+        ratings.findCurrentRating(userId = UUID.fromString(created.id)) shouldBe null
     }
 
     @Test
@@ -225,13 +225,16 @@ class PlaceholderServiceTest {
         admin(uid = "root")
         val placeholder = service.createPlaceholder(token = token(uid = "root"), displayName = "Dummy", sex = "Male").shouldBeRight()
 
-        val generated = service.generateClaimCode(token = token(uid = "root"), placeholderId = placeholder.id).shouldBeRight()
+        val generated =
+            service.generateClaimCode(token = token(uid = "root"), placeholderId = UUID.fromString(placeholder.id)).shouldBeRight()
 
-        generated.plaintext.shouldNotBeNull()
+        generated.code.shouldNotBeNull()
         generated.placeholderPublicCode shouldBe placeholder.publicCode
-        // The stored hash is the SHA-256 of the plaintext (not the plaintext itself).
-        generated.code.codeHash shouldBe ClaimCodeCrypto.hash(plaintext = generated.plaintext)
-        generated.code.codeHash shouldNotBe generated.plaintext
+        // The stored hash is the SHA-256 of the plaintext (not the plaintext itself): hashing the returned
+        // plaintext must resolve the stored ACTIVE row, and the hash must differ from the plaintext.
+        val generatedHash = ClaimCodeCrypto.hash(plaintext = generated.code)
+        claimCodes.findActiveByHash(codeHash = generatedHash).shouldNotBeNull()
+        generatedHash shouldNotBe generated.code
     }
 
     @Test
@@ -239,11 +242,12 @@ class PlaceholderServiceTest {
         admin(uid = "root")
         val placeholder = service.createPlaceholder(token = token(uid = "root"), displayName = "Dummy", sex = "Male").shouldBeRight()
 
-        val first = service.generateClaimCode(token = token(uid = "root"), placeholderId = placeholder.id).shouldBeRight()
-        service.generateClaimCode(token = token(uid = "root"), placeholderId = placeholder.id).shouldBeRight()
+        val first =
+            service.generateClaimCode(token = token(uid = "root"), placeholderId = UUID.fromString(placeholder.id)).shouldBeRight()
+        service.generateClaimCode(token = token(uid = "root"), placeholderId = UUID.fromString(placeholder.id)).shouldBeRight()
 
         // The first code no longer resolves as ACTIVE (superseded on re-issue).
-        claimCodes.findActiveByHash(codeHash = first.code.codeHash) shouldBe null
+        claimCodes.findActiveByHash(codeHash = ClaimCodeCrypto.hash(plaintext = first.code)) shouldBe null
     }
 
     @Test
@@ -253,7 +257,7 @@ class PlaceholderServiceTest {
         val placeholder = service.createPlaceholder(token = token(uid = "host"), displayName = "Dummy", sex = "Male").shouldBeRight()
 
         service
-            .generateClaimCode(token = token(uid = "host"), placeholderId = placeholder.id)
+            .generateClaimCode(token = token(uid = "host"), placeholderId = UUID.fromString(placeholder.id))
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
@@ -275,12 +279,12 @@ class PlaceholderServiceTest {
         host(uid = "host")
         val placeholder = service.createPlaceholder(token = token(uid = "host"), displayName = "Dummy", sex = "Male").shouldBeRight()
         val claimant = provisionUser(uid = "claimant")
-        val code = service.generateClaimCode(token = token(uid = "root"), placeholderId = placeholder.id).shouldBeRight()
-        service.claim(token = token(uid = "claimant"), code = code.plaintext).shouldBeRight()
-        claimant.id shouldNotBe placeholder.id
+        val code = service.generateClaimCode(token = token(uid = "root"), placeholderId = UUID.fromString(placeholder.id)).shouldBeRight()
+        service.claim(token = token(uid = "claimant"), code = code.code).shouldBeRight()
+        claimant.id shouldNotBe UUID.fromString(placeholder.id)
 
         service
-            .generateClaimCode(token = token(uid = "root"), placeholderId = placeholder.id)
+            .generateClaimCode(token = token(uid = "root"), placeholderId = UUID.fromString(placeholder.id))
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Conflict>()
     }
@@ -293,26 +297,26 @@ class PlaceholderServiceTest {
         host(uid = "host")
         val placeholder = service.createPlaceholder(token = token(uid = "host"), displayName = "Dummy", sex = "Male").shouldBeRight()
         // The placeholder accrued a rating history row.
-        ratings.setRating(userId = placeholder.id, rating = BigDecimal("3.500000"), level = "3.5")
-        appendRatingHistory(userId = placeholder.id)
+        ratings.setRating(userId = UUID.fromString(placeholder.id), rating = BigDecimal("3.500000"), level = "3.5")
+        appendRatingHistory(userId = UUID.fromString(placeholder.id))
         val claimant = provisionUser(uid = "claimant")
 
-        val code = service.generateClaimCode(token = token(uid = "root"), placeholderId = placeholder.id).shouldBeRight()
+        val code = service.generateClaimCode(token = token(uid = "root"), placeholderId = UUID.fromString(placeholder.id)).shouldBeRight()
 
-        val merged = service.claim(token = token(uid = "claimant"), code = code.plaintext).shouldBeRight()
+        val merged = service.claim(token = token(uid = "claimant"), code = code.code).shouldBeRight()
 
-        merged.id shouldBe claimant.id
+        merged.id shouldBe claimant.id.toString()
         // History moved to the claimant.
         users.hasRatingHistory(userId = claimant.id).shouldBeTrue()
-        users.hasRatingHistory(userId = placeholder.id).shouldBeFalse()
+        users.hasRatingHistory(userId = UUID.fromString(placeholder.id)).shouldBeFalse()
         // Placeholder retired via the canonical-link pattern.
-        val retired = users.findById(id = placeholder.id).shouldBeRight()
+        val retired = users.findById(id = UUID.fromString(placeholder.id)).shouldBeRight()
         retired.isActive.shouldBeFalse()
         retired.canonicalUserId shouldBe claimant.id
         retired.claimedBy shouldBe claimant.id
         retired.claimedAt.shouldNotBeNull()
         // Code consumed — a second attempt fails.
-        service.claim(token = token(uid = "claimant"), code = code.plaintext).shouldBeLeft()
+        service.claim(token = token(uid = "claimant"), code = code.code).shouldBeLeft()
         // Audited against the claiming user.
         AuditRepository()
             .list(actions = listOf(element = AuditAction.PLACEHOLDER_CLAIMED), limit = 10, offset = 0)
@@ -357,12 +361,12 @@ class PlaceholderServiceTest {
         host(uid = "host")
         val placeholder = service.createPlaceholder(token = token(uid = "host"), displayName = "Dummy", sex = "Male").shouldBeRight()
         provisionUser(uid = "claimant")
-        val code = service.generateClaimCode(token = token(uid = "root"), placeholderId = placeholder.id).shouldBeRight()
+        val code = service.generateClaimCode(token = token(uid = "root"), placeholderId = UUID.fromString(placeholder.id)).shouldBeRight()
         // Backdate the code's expiry so it is ACTIVE but no longer usable.
-        expireCode(codeHash = code.code.codeHash)
+        expireCode(codeHash = ClaimCodeCrypto.hash(plaintext = code.code))
 
         service
-            .claim(token = token(uid = "claimant"), code = code.plaintext)
+            .claim(token = token(uid = "claimant"), code = code.code)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Validation>()
     }
@@ -375,10 +379,10 @@ class PlaceholderServiceTest {
         val claimant = provisionUser(uid = "claimant")
         // The claimant already has rating history → not empty.
         appendRatingHistory(userId = claimant.id)
-        val code = service.generateClaimCode(token = token(uid = "root"), placeholderId = placeholder.id).shouldBeRight()
+        val code = service.generateClaimCode(token = token(uid = "root"), placeholderId = UUID.fromString(placeholder.id)).shouldBeRight()
 
         service
-            .claim(token = token(uid = "claimant"), code = code.plaintext)
+            .claim(token = token(uid = "claimant"), code = code.code)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Conflict>()
     }
@@ -390,12 +394,12 @@ class PlaceholderServiceTest {
         val placeholder = service.createPlaceholder(token = token(uid = "host"), displayName = "Dummy", sex = "Male").shouldBeRight()
         val first = provisionUser(uid = "first")
         val second = provisionUser(uid = "second")
-        val code = service.generateClaimCode(token = token(uid = "root"), placeholderId = placeholder.id).shouldBeRight()
+        val code = service.generateClaimCode(token = token(uid = "root"), placeholderId = UUID.fromString(placeholder.id)).shouldBeRight()
 
-        service.claim(token = token(uid = "first"), code = code.plaintext).shouldBeRight()
+        service.claim(token = token(uid = "first"), code = code.code).shouldBeRight()
 
         // The code is spent; a different empty account cannot reuse it.
-        service.claim(token = token(uid = "second"), code = code.plaintext).shouldBeLeft()
+        service.claim(token = token(uid = "second"), code = code.code).shouldBeLeft()
         second.id shouldNotBe first.id
     }
 
@@ -406,13 +410,13 @@ class PlaceholderServiceTest {
         val placeholder = service.createPlaceholder(token = token(uid = "host"), displayName = "Dummy", sex = "Male").shouldBeRight()
         provisionUser(uid = "claimant")
         val other = provisionUser(uid = "other")
-        val code = service.generateClaimCode(token = token(uid = "root"), placeholderId = placeholder.id).shouldBeRight()
+        val code = service.generateClaimCode(token = token(uid = "root"), placeholderId = UUID.fromString(placeholder.id)).shouldBeRight()
         // Construct the (normally-unreachable) already-claimed state — a canonical link set while the code is
         // still active — so the claim hits the already-claimed guard.
-        markClaimed(userId = placeholder.id, canonicalId = other.id)
+        markClaimed(userId = UUID.fromString(placeholder.id), canonicalId = other.id)
 
         service
-            .claim(token = token(uid = "claimant"), code = code.plaintext)
+            .claim(token = token(uid = "claimant"), code = code.code)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Conflict>()
     }
@@ -422,14 +426,14 @@ class PlaceholderServiceTest {
         admin(uid = "root")
         host(uid = "host")
         val target = service.createPlaceholder(token = token(uid = "host"), displayName = "Target", sex = "Male").shouldBeRight()
-        val code = service.generateClaimCode(token = token(uid = "root"), placeholderId = target.id).shouldBeRight()
+        val code = service.generateClaimCode(token = token(uid = "root"), placeholderId = UUID.fromString(target.id)).shouldBeRight()
         // A placeholder has no firebase_uid, so it can never present a token — assert the guard holds even
         // if one somehow did by making the caller a placeholder-typed account with a uid.
         val placeholderCaller = provisionUser(uid = "phcaller")
         markAsPlaceholder(userId = placeholderCaller.id)
 
         service
-            .claim(token = token(uid = "phcaller"), code = code.plaintext)
+            .claim(token = token(uid = "phcaller"), code = code.code)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Conflict>()
     }

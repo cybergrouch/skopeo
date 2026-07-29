@@ -14,10 +14,10 @@ import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.dto.contact.ContactResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
-import org.skopeo.model.Contact
 import org.skopeo.model.ContactType
 import org.skopeo.model.DuplicateCandidateStatus
 import org.skopeo.model.NameType
@@ -76,7 +76,7 @@ class ContactServiceTest {
         userId: UUID,
         contactId: UUID,
         status: VerificationStatus = VerificationStatus.VERIFIED,
-    ): Either<ServiceError, Contact> =
+    ): Either<ServiceError, ContactResponse> =
         service.setVerification(
             token = token(uid = adminUid),
             userId = userId,
@@ -125,8 +125,10 @@ class ContactServiceTest {
                     value = "a@example.com",
                     isPrimary = true,
                 ).shouldBeRight()
-        service.list(token = token(uid = "owner"), userId = owner.id).shouldBeRight().single().id shouldBe created.id
-        service.get(token = token(uid = "owner"), userId = owner.id, contactId = created.id).shouldBeRight().id shouldBe created.id
+        service.list(token = token(uid = "owner"), userId = owner.id).shouldBeRight().single().id shouldBe created.id.toString()
+        service
+            .get(token = token(uid = "owner"), userId = owner.id, contactId = created.id)
+            .shouldBeRight().id shouldBe created.id.toString()
 
         val disabled =
             service.setActive(token = token(uid = "owner"), userId = owner.id, contactId = created.id, active = false).shouldBeRight()
@@ -229,9 +231,9 @@ class ContactServiceTest {
                     status = VerificationStatus.VERIFIED,
                     method = null,
                 ).shouldBeRight()
-        verified.status shouldBe VerificationStatus.VERIFIED
-        verified.method shouldBe VerificationMethod.ADMIN_OVERRIDE
-        verified.verifiedBy shouldBe admin.id
+        verified.status shouldBe VerificationStatus.VERIFIED.name
+        verified.method shouldBe VerificationMethod.ADMIN_OVERRIDE.name
+        verified.verifiedBy shouldBe admin.id.toString()
     }
 
     @Test
@@ -248,8 +250,10 @@ class ContactServiceTest {
                     isPrimary = true,
                 ).shouldBeRight()
 
-        service.list(token = token(uid = "root"), userId = owner.id).shouldBeRight().single().id shouldBe created.id
-        service.get(token = token(uid = "root"), userId = owner.id, contactId = created.id).shouldBeRight().id shouldBe created.id
+        service.list(token = token(uid = "root"), userId = owner.id).shouldBeRight().single().id shouldBe created.id.toString()
+        service
+            .get(token = token(uid = "root"), userId = owner.id, contactId = created.id)
+            .shouldBeRight().id shouldBe created.id.toString()
     }
 
     @Test
@@ -298,7 +302,7 @@ class ContactServiceTest {
         val revoked =
             verify(adminUid = "root", userId = owner.id, contactId = contact.id, status = VerificationStatus.PENDING).shouldBeRight()
 
-        revoked.status shouldBe VerificationStatus.PENDING
+        revoked.status shouldBe VerificationStatus.PENDING.name
         revoked.method.shouldBe(expected = null)
     }
 
@@ -425,8 +429,8 @@ class ContactServiceTest {
                     method = VerificationMethod.EMAIL_LINK,
                 ).shouldBeRight()
 
-        verified.status shouldBe VerificationStatus.VERIFIED
-        verified.method shouldBe VerificationMethod.EMAIL_LINK
+        verified.status shouldBe VerificationStatus.VERIFIED.name
+        verified.method shouldBe VerificationMethod.EMAIL_LINK.name
     }
 
     @Test

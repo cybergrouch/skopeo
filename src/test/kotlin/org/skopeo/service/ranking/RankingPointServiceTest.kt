@@ -11,13 +11,13 @@ import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.skopeo.model.AdjustRankingPointCommand
+import org.skopeo.dto.ranking.AdjustRankingPointsRequest
+import org.skopeo.dto.ranking.GrantRankingPointsRequest
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.AwardStatus
 import org.skopeo.model.Capability
-import org.skopeo.model.GrantRankingPointCommand
 import org.skopeo.model.NameType
 import org.skopeo.model.PointClass
 import org.skopeo.model.PointSourceType
@@ -73,8 +73,7 @@ class RankingPointServiceTest {
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
-    private fun grantCommand(
-        userId: UUID,
+    private fun grantRequest(
         points: String = "100",
         pointClass: PointClass = PointClass.ANNUAL_TOURNAMENT,
         sourceType: PointSourceType = PointSourceType.INTERNAL,
@@ -83,16 +82,15 @@ class RankingPointServiceTest {
         reason: String? = null,
         validFrom: LocalDateTime? = null,
         validUntil: LocalDateTime? = null,
-    ) = GrantRankingPointCommand(
-        userId = userId,
-        points = BigDecimal(points),
-        pointClass = pointClass,
-        sourceType = sourceType,
+    ) = GrantRankingPointsRequest(
+        points = points,
+        pointClass = pointClass.name,
+        sourceType = sourceType.name,
         sourceId = sourceId,
         band = band,
         reason = reason,
-        validFrom = validFrom,
-        validUntil = validUntil,
+        validFrom = validFrom?.toString(),
+        validUntil = validUntil?.toString(),
     )
 
     @Test
@@ -101,13 +99,13 @@ class RankingPointServiceTest {
         val player = provision(uid = "player", sex = "Female")
         ratings.setRating(userId = player.id, rating = BigDecimal("4.3"), level = "4.0")
 
-        val award = service.grant(token = token(uid = "admin"), command = grantCommand(userId = player.id)).shouldBeRight()
+        val award = service.grant(token = token(uid = "admin"), userId = player.id, request = grantRequest()).shouldBeRight()
         // Band tagged from the current rating (4.3 → 4.0 band); sex from the target user.
         award.band shouldBe "4.0"
         award.sex shouldBe "Female"
-        award.status shouldBe AwardStatus.ACTIVE
+        award.status shouldBe AwardStatus.ACTIVE.name
         // Validity from the ANNUAL_TOURNAMENT policy (12 months).
-        award.validUntil shouldBe award.validFrom.plusMonths(12)
+        LocalDateTime.parse(award.validUntil) shouldBe LocalDateTime.parse(award.validFrom).plusMonths(12)
     }
 
     @Test
@@ -116,7 +114,7 @@ class RankingPointServiceTest {
         val player = provision(uid = "player", sex = "Female")
         ratings.setRating(userId = player.id, rating = BigDecimal("4.3"), level = "4.0")
 
-        val award = service.grant(token = token(uid = "admin"), command = grantCommand(userId = player.id)).shouldBeRight()
+        val award = service.grant(token = token(uid = "admin"), userId = player.id, request = grantRequest()).shouldBeRight()
 
         // Target = the player (USER), not the ledger row, so the Activity Log links to the player (#471).
         val entry =
@@ -126,7 +124,7 @@ class RankingPointServiceTest {
         entry.entityType shouldBe AuditEntityType.USER
         entry.entityId shouldBe player.id
         entry.actorUserId shouldBe admin.id
-        entry.details["awardId"] shouldBe award.id.toString()
+        entry.details["awardId"] shouldBe award.id
         entry.details["userId"] shouldBe player.id.toString()
     }
 
@@ -140,11 +138,12 @@ class RankingPointServiceTest {
         val award =
             service.grant(
                 token = token(uid = "admin"),
-                command = grantCommand(userId = player.id, band = "5.5", validFrom = from, validUntil = until),
+                userId = player.id,
+                request = grantRequest(band = "5.5", validFrom = from, validUntil = until),
             ).shouldBeRight()
         award.band shouldBe "5.5"
-        award.validFrom shouldBe from
-        award.validUntil shouldBe until
+        LocalDateTime.parse(award.validFrom) shouldBe from
+        LocalDateTime.parse(award.validUntil) shouldBe until
     }
 
     @Test
@@ -156,15 +155,16 @@ class RankingPointServiceTest {
         // No reason on an external grant → Validation.
         service.grant(
             token = token(uid = "admin"),
-            command = grantCommand(userId = player.id, pointClass = PointClass.EXTERNAL, sourceType = PointSourceType.EXTERNAL),
+            userId = player.id,
+            request = grantRequest(pointClass = PointClass.EXTERNAL, sourceType = PointSourceType.EXTERNAL),
         ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
 
         // With a reason it succeeds.
         service.grant(
             token = token(uid = "admin"),
-            command =
-                grantCommand(
-                    userId = player.id,
+            userId = player.id,
+            request =
+                grantRequest(
                     pointClass = PointClass.EXTERNAL,
                     sourceType = PointSourceType.EXTERNAL,
                     reason = "credited by partner league",
@@ -178,9 +178,9 @@ class RankingPointServiceTest {
         val player = provision(uid = "player")
         ratings.setRating(userId = player.id, rating = BigDecimal("4.0"), level = "4.0")
 
-        service.grant(token = token(uid = "admin"), command = grantCommand(userId = player.id, points = "0"))
+        service.grant(token = token(uid = "admin"), userId = player.id, request = grantRequest(points = "0"))
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
-        service.grant(token = token(uid = "admin"), command = grantCommand(userId = player.id, points = "-5"))
+        service.grant(token = token(uid = "admin"), userId = player.id, request = grantRequest(points = "-5"))
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
     }
 
@@ -191,11 +191,11 @@ class RankingPointServiceTest {
         ratings.setRating(userId = player.id, rating = BigDecimal("4.0"), level = "4.0")
 
         // A fractional grant (100.5) is rejected per Decision #6 (#403).
-        service.grant(token = token(uid = "admin"), command = grantCommand(userId = player.id, points = "100.5"))
+        service.grant(token = token(uid = "admin"), userId = player.id, request = grantRequest(points = "100.5"))
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
 
         // An integral value with trailing zeros (100.0000) is still accepted.
-        service.grant(token = token(uid = "admin"), command = grantCommand(userId = player.id, points = "100.0000"))
+        service.grant(token = token(uid = "admin"), userId = player.id, request = grantRequest(points = "100.0000"))
             .shouldBeRight()
     }
 
@@ -204,7 +204,7 @@ class RankingPointServiceTest {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val player = provision(uid = "player")
 
-        service.grant(token = token(uid = "admin"), command = grantCommand(userId = player.id))
+        service.grant(token = token(uid = "admin"), userId = player.id, request = grantRequest())
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
     }
 
@@ -214,10 +214,10 @@ class RankingPointServiceTest {
         val player = provision(uid = "player")
         ratings.setRating(userId = player.id, rating = BigDecimal("4.0"), level = "4.0")
 
-        service.grant(token = token(uid = "rater"), command = grantCommand(userId = player.id))
+        service.grant(token = token(uid = "rater"), userId = player.id, request = grantRequest())
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
         // An unprovisioned caller is also forbidden (null-caller arm).
-        service.grant(token = token(uid = "ghost"), command = grantCommand(userId = player.id))
+        service.grant(token = token(uid = "ghost"), userId = player.id, request = grantRequest())
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
@@ -226,14 +226,14 @@ class RankingPointServiceTest {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val player = provision(uid = "player")
         ratings.setRating(userId = player.id, rating = BigDecimal("4.0"), level = "4.0")
-        val award = service.grant(token = token(uid = "admin"), command = grantCommand(userId = player.id)).shouldBeRight()
+        val award = service.grant(token = token(uid = "admin"), userId = player.id, request = grantRequest()).shouldBeRight()
 
-        service.revoke(token = token(uid = "admin"), awardId = award.id, reason = "duplicate").shouldBeRight()
+        service.revoke(token = token(uid = "admin"), awardId = UUID.fromString(award.id), reason = "duplicate").shouldBeRight()
         // The ledger now has the original (revoked) + the marker.
         service.listForUser(token = token(uid = "admin"), userId = player.id).shouldBeRight() shouldHaveSize 2
 
         // A second revoke is a not-found.
-        service.revoke(token = token(uid = "admin"), awardId = award.id, reason = null)
+        service.revoke(token = token(uid = "admin"), awardId = UUID.fromString(award.id), reason = null)
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
         service.revoke(token = token(uid = "admin"), awardId = UUID.randomUUID(), reason = null)
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
@@ -245,9 +245,9 @@ class RankingPointServiceTest {
         provision(uid = "player-user")
         val player = provision(uid = "player")
         ratings.setRating(userId = player.id, rating = BigDecimal("4.0"), level = "4.0")
-        val award = service.grant(token = token(uid = "admin"), command = grantCommand(userId = player.id)).shouldBeRight()
+        val award = service.grant(token = token(uid = "admin"), userId = player.id, request = grantRequest()).shouldBeRight()
 
-        service.revoke(token = token(uid = "player-user"), awardId = award.id, reason = null)
+        service.revoke(token = token(uid = "player-user"), awardId = UUID.fromString(award.id), reason = null)
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
         service.listForUser(token = token(uid = "player-user"), userId = player.id)
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
@@ -263,7 +263,7 @@ class RankingPointServiceTest {
     @Test
     fun `granting to an unknown user is a validation error`() {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
-        service.grant(token = token(uid = "admin"), command = grantCommand(userId = UUID.randomUUID(), band = "4.0"))
+        service.grant(token = token(uid = "admin"), userId = UUID.randomUUID(), request = grantRequest(band = "4.0"))
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
     }
 
@@ -273,7 +273,7 @@ class RankingPointServiceTest {
         val player = provision(uid = "player")
         users.deactivate(id = player.id).shouldBeRight()
 
-        service.grant(token = token(uid = "admin"), command = grantCommand(userId = player.id, band = "4.0"))
+        service.grant(token = token(uid = "admin"), userId = player.id, request = grantRequest(band = "4.0"))
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
     }
 
@@ -285,7 +285,8 @@ class RankingPointServiceTest {
 
         service.grant(
             token = token(uid = "admin"),
-            command = grantCommand(userId = player.id, band = "4.0", validFrom = now, validUntil = now.minusDays(1)),
+            userId = player.id,
+            request = grantRequest(band = "4.0", validFrom = now, validUntil = now.minusDays(1)),
         ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
     }
 
@@ -296,7 +297,7 @@ class RankingPointServiceTest {
         ratings.setRating(userId = player.id, rating = BigDecimal("4.3"), level = "4.0")
 
         val award =
-            service.grant(token = token(uid = "admin"), command = grantCommand(userId = player.id, band = "  ")).shouldBeRight()
+            service.grant(token = token(uid = "admin"), userId = player.id, request = grantRequest(band = "  ")).shouldBeRight()
         award.band shouldBe "4.0"
     }
 
@@ -309,14 +310,15 @@ class RankingPointServiceTest {
         val award =
             service.grant(
                 token = token(uid = "admin"),
-                command = grantCommand(userId = player.id, sourceId = "event-42"),
+                userId = player.id,
+                request = grantRequest(sourceId = "event-42"),
             ).shouldBeRight()
         award.sourceId shouldBe "event-42"
         award.sex shouldBe "Unspecified"
 
         // A blank sourceId normalizes to null (the ifBlank arm).
         val blankSource =
-            service.grant(token = token(uid = "admin"), command = grantCommand(userId = player.id, sourceId = "  ")).shouldBeRight()
+            service.grant(token = token(uid = "admin"), userId = player.id, request = grantRequest(sourceId = "  ")).shouldBeRight()
         blankSource.sourceId shouldBe null
     }
 
@@ -327,7 +329,7 @@ class RankingPointServiceTest {
         ratings.setRating(userId = player.id, rating = BigDecimal("4.0"), level = "4.0")
 
         val award =
-            service.grant(token = token(uid = "admin"), command = grantCommand(userId = player.id, reason = "   ")).shouldBeRight()
+            service.grant(token = token(uid = "admin"), userId = player.id, request = grantRequest(reason = "   ")).shouldBeRight()
         award.reason shouldBe null
     }
 
@@ -336,9 +338,9 @@ class RankingPointServiceTest {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val player = provision(uid = "player")
         ratings.setRating(userId = player.id, rating = BigDecimal("4.0"), level = "4.0")
-        val award = service.grant(token = token(uid = "admin"), command = grantCommand(userId = player.id)).shouldBeRight()
+        val award = service.grant(token = token(uid = "admin"), userId = player.id, request = grantRequest()).shouldBeRight()
 
-        service.revoke(token = token(uid = "admin"), awardId = award.id, reason = "   ").shouldBeRight()
+        service.revoke(token = token(uid = "admin"), awardId = UUID.fromString(award.id), reason = "   ").shouldBeRight()
     }
 
     @Test
@@ -352,17 +354,18 @@ class RankingPointServiceTest {
         val alicePoints =
             service.grant(
                 token = token(uid = "admin"),
-                command = grantCommand(userId = alice.id, points = "10"),
+                userId = alice.id,
+                request = grantRequest(points = "10"),
             ).shouldBeRight()
-        val bobPoints = service.grant(token = token(uid = "admin"), command = grantCommand(userId = bob.id, points = "20")).shouldBeRight()
+        val bobPoints = service.grant(token = token(uid = "admin"), userId = bob.id, request = grantRequest(points = "20")).shouldBeRight()
 
         val page = service.listAwards(token = token(uid = "admin"), limit = 25, offset = 0).shouldBeRight()
         page.total shouldBe 2
         // The whole ledger is returned across users (both grants, no strict-time ordering assumed here —
         // the newest-first order is asserted precisely in the repository test with distinct awarded_at).
-        page.rows.map { it.award.id }.toSet() shouldBe setOf(alicePoints.id, bobPoints.id)
+        page.rows.map { it.id }.toSet() shouldBe setOf(alicePoints.id, bobPoints.id)
         // The player identity is resolved (display name + public code); a manual grant's source is "manual".
-        val bobRow = page.rows.single { it.award.userId == bob.id }
+        val bobRow = page.rows.single { it.userId == bob.id.toString() }
         bobRow.playerDisplayName shouldBe "bob"
         bobRow.playerPublicCode shouldBe bob.publicCode
         bobRow.matchPublicCode shouldBe null
@@ -374,7 +377,7 @@ class RankingPointServiceTest {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val player = provision(uid = "player")
         ratings.setRating(userId = player.id, rating = BigDecimal("4.0"), level = "4.0")
-        repeat(times = 3) { service.grant(token = token(uid = "admin"), command = grantCommand(userId = player.id)).shouldBeRight() }
+        repeat(times = 3) { service.grant(token = token(uid = "admin"), userId = player.id, request = grantRequest()).shouldBeRight() }
 
         val windowed = service.listAwards(token = token(uid = "admin"), limit = 1, offset = 1).shouldBeRight()
         windowed.total shouldBe 3
@@ -405,9 +408,9 @@ class RankingPointServiceTest {
 
         service.grant(
             token = token(uid = "admin"),
-            command =
-                grantCommand(
-                    userId = player.id,
+            userId = player.id,
+            request =
+                grantRequest(
                     band = "4.0",
                     pointClass = PointClass.EXTERNAL,
                     sourceType = PointSourceType.EXTERNAL,
@@ -416,18 +419,16 @@ class RankingPointServiceTest {
         ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
     }
 
-    private fun adjustCommand(
-        userId: UUID,
+    private fun adjustRequest(
         points: String = "50",
         reason: String = "manual correction",
         validFrom: LocalDateTime = LocalDateTime.of(2026, 1, 1, 0, 0),
         validUntil: LocalDateTime = LocalDateTime.of(2026, 6, 1, 0, 0),
-    ) = AdjustRankingPointCommand(
-        userId = userId,
-        points = BigDecimal(points),
+    ) = AdjustRankingPointsRequest(
+        points = points,
         reason = reason,
-        validFrom = validFrom,
-        validUntil = validUntil,
+        validFrom = validFrom.toString(),
+        validUntil = validUntil.toString(),
     )
 
     @Test
@@ -441,17 +442,18 @@ class RankingPointServiceTest {
         val award =
             service.adjust(
                 token = token(uid = "admin"),
-                command = adjustCommand(userId = player.id, points = "75", reason = "bonus", validFrom = from, validUntil = until),
+                userId = player.id,
+                request = adjustRequest(points = "75", reason = "bonus", validFrom = from, validUntil = until),
             ).shouldBeRight()
-        award.points shouldBe BigDecimal("75.0000")
-        award.pointClass shouldBe PointClass.EXTERNAL
-        award.sourceType shouldBe PointSourceType.EXTERNAL
+        award.points shouldBe BigDecimal("75.0000").toPlainString()
+        award.pointClass shouldBe PointClass.EXTERNAL.name
+        award.sourceType shouldBe PointSourceType.EXTERNAL.name
         award.band shouldBe "4.0"
         award.sex shouldBe "Female"
         award.reason shouldBe "bonus"
-        award.status shouldBe AwardStatus.ACTIVE
-        award.validFrom shouldBe from
-        award.validUntil shouldBe until
+        award.status shouldBe AwardStatus.ACTIVE.name
+        LocalDateTime.parse(award.validFrom) shouldBe from
+        LocalDateTime.parse(award.validUntil) shouldBe until
     }
 
     @Test
@@ -463,9 +465,10 @@ class RankingPointServiceTest {
         val award =
             service.adjust(
                 token = token(uid = "admin"),
-                command = adjustCommand(userId = player.id, points = "-40", reason = "  penalty  "),
+                userId = player.id,
+                request = adjustRequest(points = "-40", reason = "  penalty  "),
             ).shouldBeRight()
-        award.points shouldBe BigDecimal("-40.0000")
+        award.points shouldBe BigDecimal("-40.0000").toPlainString()
         award.reason shouldBe "penalty"
     }
 
@@ -475,7 +478,7 @@ class RankingPointServiceTest {
         val player = provision(uid = "player")
         ratings.setRating(userId = player.id, rating = BigDecimal("4.0"), level = "4.0")
 
-        val award = service.adjust(token = token(uid = "admin"), command = adjustCommand(userId = player.id)).shouldBeRight()
+        val award = service.adjust(token = token(uid = "admin"), userId = player.id, request = adjustRequest()).shouldBeRight()
 
         val entry =
             AuditRepository()
@@ -484,8 +487,8 @@ class RankingPointServiceTest {
         entry.entityType shouldBe AuditEntityType.USER
         entry.entityId shouldBe player.id
         entry.actorUserId shouldBe admin.id
-        entry.details["awardId"] shouldBe award.id.toString()
-        entry.details["points"] shouldBe award.points.toPlainString()
+        entry.details["awardId"] shouldBe award.id
+        entry.details["points"] shouldBe award.points
     }
 
     @Test
@@ -494,16 +497,16 @@ class RankingPointServiceTest {
         val player = provision(uid = "player")
         ratings.setRating(userId = player.id, rating = BigDecimal("4.0"), level = "4.0")
 
-        service.adjust(token = token(uid = "admin"), command = adjustCommand(userId = player.id, points = "0"))
+        service.adjust(token = token(uid = "admin"), userId = player.id, request = adjustRequest(points = "0"))
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
-        service.adjust(token = token(uid = "admin"), command = adjustCommand(userId = player.id, points = "10.5"))
+        service.adjust(token = token(uid = "admin"), userId = player.id, request = adjustRequest(points = "10.5"))
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
-        service.adjust(token = token(uid = "admin"), command = adjustCommand(userId = player.id, points = "-10.5"))
+        service.adjust(token = token(uid = "admin"), userId = player.id, request = adjustRequest(points = "-10.5"))
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
-        service.adjust(token = token(uid = "admin"), command = adjustCommand(userId = player.id, reason = "   "))
+        service.adjust(token = token(uid = "admin"), userId = player.id, request = adjustRequest(reason = "   "))
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
         // A signed integer with trailing zeros is still whole → accepted.
-        service.adjust(token = token(uid = "admin"), command = adjustCommand(userId = player.id, points = "-50.0000"))
+        service.adjust(token = token(uid = "admin"), userId = player.id, request = adjustRequest(points = "-50.0000"))
             .shouldBeRight()
     }
 
@@ -516,7 +519,8 @@ class RankingPointServiceTest {
 
         service.adjust(
             token = token(uid = "admin"),
-            command = adjustCommand(userId = player.id, validFrom = from, validUntil = from.minusDays(1)),
+            userId = player.id,
+            request = adjustRequest(validFrom = from, validUntil = from.minusDays(1)),
         ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
     }
 
@@ -525,7 +529,7 @@ class RankingPointServiceTest {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val player = provision(uid = "player")
 
-        service.adjust(token = token(uid = "admin"), command = adjustCommand(userId = player.id))
+        service.adjust(token = token(uid = "admin"), userId = player.id, request = adjustRequest())
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
     }
 
@@ -535,23 +539,23 @@ class RankingPointServiceTest {
         val player = provision(uid = "player")
         ratings.setRating(userId = player.id, rating = BigDecimal("4.0"), level = "4.0")
 
-        service.adjust(token = token(uid = "rater"), command = adjustCommand(userId = player.id))
+        service.adjust(token = token(uid = "rater"), userId = player.id, request = adjustRequest())
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
         // An unprovisioned caller is also forbidden (null-caller arm).
-        service.adjust(token = token(uid = "ghost"), command = adjustCommand(userId = player.id))
+        service.adjust(token = token(uid = "ghost"), userId = player.id, request = adjustRequest())
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
     fun `adjusting an unknown or deactivated user is a validation error (#469)`() {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
-        service.adjust(token = token(uid = "admin"), command = adjustCommand(userId = UUID.randomUUID()))
+        service.adjust(token = token(uid = "admin"), userId = UUID.randomUUID(), request = adjustRequest())
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
 
         val player = provision(uid = "player")
         ratings.setRating(userId = player.id, rating = BigDecimal("4.0"), level = "4.0")
         users.deactivate(id = player.id).shouldBeRight()
-        service.adjust(token = token(uid = "admin"), command = adjustCommand(userId = player.id))
+        service.adjust(token = token(uid = "admin"), userId = player.id, request = adjustRequest())
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
     }
 }

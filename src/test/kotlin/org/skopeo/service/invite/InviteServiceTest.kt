@@ -97,8 +97,8 @@ class InviteServiceTest {
         // The route normalizes the email before the service sees it (#116); here it arrives normalized.
         val invite = service.create(token = token(uid = "admin"), email = "new@example.com").shouldBeRight()
         invite.email shouldBe "new@example.com"
-        invite.status shouldBe InviteStatus.PENDING
-        invite.invitedBy shouldBe admin.id
+        invite.status shouldBe InviteStatus.PENDING.name
+        invite.invitedBy shouldBe admin.id.toString()
 
         service.create(token = token(uid = "admin"), email = "new@example.com").shouldBeRight() // resend → rotate
         service.list(token = token(uid = "admin"), limit = 50, offset = 0).shouldBeRight().items shouldHaveSize 1
@@ -143,12 +143,12 @@ class InviteServiceTest {
     fun `creating and revoking an invite write audit-log entries (#100)`() {
         val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val invite = service.create(token = token(uid = "admin"), email = "newbie@example.com").shouldBeRight()
-        service.revoke(token = token(uid = "admin"), id = invite.id).shouldBeRight()
+        service.revoke(token = token(uid = "admin"), id = UUID.fromString(invite.id)).shouldBeRight()
 
         val audit = AuditRepository()
         audit.list(actions = listOf(element = AuditAction.INVITE_CREATED), limit = 10, offset = 0).first.single().let {
             it.actorUserId shouldBe admin.id
-            it.entityId shouldBe invite.id
+            it.entityId shouldBe UUID.fromString(invite.id)
             it.summary shouldBe "Invited newbie@example.com"
             it.details["email"] shouldBe "newbie@example.com"
         }
@@ -163,7 +163,10 @@ class InviteServiceTest {
 
         service.create(token = token(uid = "player"), email = "y@example.com").shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
         service.list(token = token(uid = "player"), limit = 50, offset = 0).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
-        service.revoke(token = token(uid = "player"), id = invite.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service.revoke(
+            token = token(uid = "player"),
+            id = UUID.fromString(invite.id),
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
@@ -174,7 +177,10 @@ class InviteServiceTest {
         // The token's uid maps to no user (caller == null) -> the admin gate denies before any work.
         service.create(token = token(uid = "ghost"), email = "y@example.com").shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
         service.list(token = token(uid = "ghost"), limit = 50, offset = 0).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
-        service.revoke(token = token(uid = "ghost"), id = invite.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service.revoke(
+            token = token(uid = "ghost"),
+            id = UUID.fromString(invite.id),
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
@@ -182,7 +188,7 @@ class InviteServiceTest {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val invite = service.create(token = token(uid = "admin"), email = "z@example.com").shouldBeRight()
 
-        service.revoke(token = token(uid = "admin"), id = invite.id).shouldBeRight()
+        service.revoke(token = token(uid = "admin"), id = UUID.fromString(invite.id)).shouldBeRight()
         invites.findOpenByEmail(email = "z@example.com", asOf = java.time.LocalDateTime.now()) shouldBe null
 
         service

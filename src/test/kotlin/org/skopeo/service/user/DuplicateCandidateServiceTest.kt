@@ -80,7 +80,7 @@ class DuplicateCandidateServiceTest {
         val page =
             service.list(token = token(uid = "root"), limit = 50, offset = 0, status = DuplicateCandidateStatus.OPEN).shouldBeRight()
         page.items shouldHaveSize 1
-        setOf(page.items.single().userA.id, page.items.single().userB.id) shouldBe setOf(a.id, b.id)
+        setOf(page.items.single().userA.id, page.items.single().userB.id) shouldBe setOf(a.id.toString(), b.id.toString())
     }
 
     @Test
@@ -109,16 +109,20 @@ class DuplicateCandidateServiceTest {
         val a = provisionUser(uid = "a")
         val b = provisionUser(uid = "b")
         val candidate =
-            service.flagManual(token = token(uid = "root"), userAId = a.id, userBId = b.id, reason = null).shouldBeRight().candidate
+            service.flagManual(token = token(uid = "root"), userAId = a.id, userBId = b.id, reason = null).shouldBeRight()
 
         // Keep the userB side → the userA side is the one disabled (the inverse confirm branch).
-        service.confirm(token = token(uid = "root"), id = candidate.id, canonicalId = candidate.userBId).shouldBeRight()
+        service.confirm(
+            token = token(uid = "root"),
+            id = UUID.fromString(candidate.id),
+            canonicalId = UUID.fromString(candidate.userB.id),
+        ).shouldBeRight()
 
-        users.findById(id = candidate.userAId).shouldBeRight().let {
+        users.findById(id = UUID.fromString(candidate.userA.id)).shouldBeRight().let {
             it.isActive.shouldBeFalse()
-            it.canonicalUserId shouldBe candidate.userBId
+            it.canonicalUserId shouldBe UUID.fromString(candidate.userB.id)
         }
-        candidates.findById(id = candidate.id).shouldBeRight().status shouldBe DuplicateCandidateStatus.RESOLVED
+        candidates.findById(id = UUID.fromString(candidate.id)).shouldBeRight().status shouldBe DuplicateCandidateStatus.RESOLVED
     }
 
     @Test
@@ -127,13 +131,16 @@ class DuplicateCandidateServiceTest {
         val a = provisionUser(uid = "a")
         val b = provisionUser(uid = "b")
         val candidate =
-            service.flagManual(token = token(uid = "root"), userAId = a.id, userBId = b.id, reason = null).shouldBeRight().candidate
+            service.flagManual(token = token(uid = "root"), userAId = a.id, userBId = b.id, reason = null).shouldBeRight()
 
-        service.dismiss(token = token(uid = "root"), id = candidate.id).shouldBeRight()
+        service.dismiss(token = token(uid = "root"), id = UUID.fromString(candidate.id)).shouldBeRight()
 
-        candidates.findById(id = candidate.id).shouldBeRight().status shouldBe DuplicateCandidateStatus.DISMISSED
+        candidates.findById(id = UUID.fromString(candidate.id)).shouldBeRight().status shouldBe DuplicateCandidateStatus.DISMISSED
         // A second action on a non-open candidate conflicts.
-        service.dismiss(token = token(uid = "root"), id = candidate.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Conflict>()
+        service.dismiss(
+            token = token(uid = "root"),
+            id = UUID.fromString(candidate.id),
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Conflict>()
         val audit = AuditRepository()
         audit.list(actions = listOf(element = AuditAction.DUPLICATE_CANDIDATE_DISMISSED), limit = 10, offset = 0).second shouldBe 1L
     }
@@ -144,15 +151,15 @@ class DuplicateCandidateServiceTest {
         val keep = provisionUser(uid = "keep")
         val dupe = provisionUser(uid = "dupe")
         val candidate =
-            service.flagManual(token = token(uid = "root"), userAId = keep.id, userBId = dupe.id, reason = null).shouldBeRight().candidate
+            service.flagManual(token = token(uid = "root"), userAId = keep.id, userBId = dupe.id, reason = null).shouldBeRight()
 
-        service.confirm(token = token(uid = "root"), id = candidate.id, canonicalId = keep.id).shouldBeRight()
+        service.confirm(token = token(uid = "root"), id = UUID.fromString(candidate.id), canonicalId = keep.id).shouldBeRight()
 
         users.findById(id = dupe.id).shouldBeRight().let {
             it.isActive.shouldBeFalse()
             it.canonicalUserId shouldBe keep.id
         }
-        candidates.findById(id = candidate.id).shouldBeRight().status shouldBe DuplicateCandidateStatus.RESOLVED
+        candidates.findById(id = UUID.fromString(candidate.id)).shouldBeRight().status shouldBe DuplicateCandidateStatus.RESOLVED
         val audit = AuditRepository()
         audit.list(actions = listOf(element = AuditAction.DUPLICATE_CANDIDATE_CONFIRMED), limit = 10, offset = 0).second shouldBe 1L
         audit.list(actions = listOf(element = AuditAction.USER_MARKED_DUPLICATE), limit = 10, offset = 0).second shouldBe 1L
@@ -165,10 +172,10 @@ class DuplicateCandidateServiceTest {
         val b = provisionUser(uid = "b")
         val outsider = provisionUser(uid = "c")
         val candidate =
-            service.flagManual(token = token(uid = "root"), userAId = a.id, userBId = b.id, reason = null).shouldBeRight().candidate
+            service.flagManual(token = token(uid = "root"), userAId = a.id, userBId = b.id, reason = null).shouldBeRight()
 
         service
-            .confirm(token = token(uid = "root"), id = candidate.id, canonicalId = outsider.id)
+            .confirm(token = token(uid = "root"), id = UUID.fromString(candidate.id), canonicalId = outsider.id)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Validation>()
     }
@@ -191,7 +198,7 @@ class DuplicateCandidateServiceTest {
         val a = provisionUser(uid = "a")
         val b = provisionUser(uid = "b")
         val candidate =
-            service.flagManual(token = token(uid = "root"), userAId = a.id, userBId = b.id, reason = null).shouldBeRight().candidate
+            service.flagManual(token = token(uid = "root"), userAId = a.id, userBId = b.id, reason = null).shouldBeRight()
 
         service
             .list(token = token(uid = "a"), limit = 50, offset = 0, status = null)
@@ -206,9 +213,12 @@ class DuplicateCandidateServiceTest {
             .flagManual(token = token(uid = "a"), userAId = a.id, userBId = b.id, reason = null)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
-        service.dismiss(token = token(uid = "a"), id = candidate.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service.dismiss(
+            token = token(uid = "a"),
+            id = UUID.fromString(candidate.id),
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
         service
-            .confirm(token = token(uid = "a"), id = candidate.id, canonicalId = a.id)
+            .confirm(token = token(uid = "a"), id = UUID.fromString(candidate.id), canonicalId = a.id)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
     }

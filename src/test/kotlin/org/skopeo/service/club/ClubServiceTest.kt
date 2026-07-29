@@ -94,22 +94,36 @@ class ClubServiceTest {
         val owner2 = provision(uid = "owner2", roles = setOf(Capability.PLAYER, Capability.CLUB_OWNER))
         val club = service.create(token = token(uid = "admin"), name = "West End").shouldBeRight()
 
-        val withOne = service.assignOwner(token = token(uid = "admin"), clubId = club.id, userId = owner1.id).shouldBeRight()
+        val withOne =
+            service.assignOwner(
+                token = token(uid = "admin"),
+                clubId = UUID.fromString(club.id),
+                userId = owner1.id,
+            ).shouldBeRight()
         withOne.owners shouldHaveSize 1
         withOne.owners.single().let {
-            it.userId shouldBe owner1.id
+            it.userId shouldBe owner1.id.toString()
             it.displayName shouldBe "owner1"
             it.publicCode shouldBe owner1.publicCode
         }
 
         // Re-assigning the same owner is idempotent.
-        service.assignOwner(token = token(uid = "admin"), clubId = club.id, userId = owner1.id).shouldBeRight().owners shouldHaveSize 1
+        service
+            .assignOwner(token = token(uid = "admin"), clubId = UUID.fromString(club.id), userId = owner1.id)
+            .shouldBeRight().owners shouldHaveSize 1
 
-        service.assignOwner(token = token(uid = "admin"), clubId = club.id, userId = owner2.id).shouldBeRight().owners shouldHaveSize 2
+        service
+            .assignOwner(token = token(uid = "admin"), clubId = UUID.fromString(club.id), userId = owner2.id)
+            .shouldBeRight().owners shouldHaveSize 2
 
-        val afterRemove = service.removeOwner(token = token(uid = "admin"), clubId = club.id, userId = owner1.id).shouldBeRight()
+        val afterRemove =
+            service.removeOwner(
+                token = token(uid = "admin"),
+                clubId = UUID.fromString(club.id),
+                userId = owner1.id,
+            ).shouldBeRight()
         afterRemove.owners shouldHaveSize 1
-        afterRemove.owners.single().userId shouldBe owner2.id
+        afterRemove.owners.single().userId shouldBe owner2.id.toString()
     }
 
     @Test
@@ -150,7 +164,7 @@ class ClubServiceTest {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val club = service.create(token = token(uid = "admin"), name = "Old Name").shouldBeRight()
 
-        val renamed = service.rename(token = token(uid = "admin"), clubId = club.id, name = "  New Name  ").shouldBeRight()
+        val renamed = service.rename(token = token(uid = "admin"), clubId = UUID.fromString(club.id), name = "  New Name  ").shouldBeRight()
         renamed.name shouldBe "New Name"
         service.list(token = token(uid = "admin")).shouldBeRight().single().name shouldBe "New Name"
     }
@@ -162,13 +176,13 @@ class ClubServiceTest {
         val club = service.create(token = token(uid = "admin"), name = "Club").shouldBeRight()
 
         // Blank name → Validation.
-        service.rename(token = token(uid = "admin"), clubId = club.id, name = "   ")
+        service.rename(token = token(uid = "admin"), clubId = UUID.fromString(club.id), name = "   ")
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
         // Unknown club → NotFound.
         service.rename(token = token(uid = "admin"), clubId = UUID.randomUUID(), name = "X")
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
         // Non-admin → Forbidden.
-        service.rename(token = token(uid = "host"), clubId = club.id, name = "X")
+        service.rename(token = token(uid = "host"), clubId = UUID.fromString(club.id), name = "X")
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
@@ -177,10 +191,10 @@ class ClubServiceTest {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val club = service.create(token = token(uid = "admin"), name = "Doomed").shouldBeRight()
 
-        service.delete(token = token(uid = "admin"), clubId = club.id).shouldBeRight()
+        service.delete(token = token(uid = "admin"), clubId = UUID.fromString(club.id)).shouldBeRight()
         service.list(token = token(uid = "admin")).shouldBeRight() shouldHaveSize 0
         // Idempotent guard: deleting again (now inactive) is a not-found.
-        service.delete(token = token(uid = "admin"), clubId = club.id)
+        service.delete(token = token(uid = "admin"), clubId = UUID.fromString(club.id))
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
@@ -199,7 +213,7 @@ class ClubServiceTest {
                         endDate = LocalDate.now().plusDays(1),
                         participantIds = listOf(p1.id, p2.id),
                         createdBy = admin.id,
-                        clubId = club.id,
+                        clubId = UUID.fromString(club.id),
                     ),
             )
         val match =
@@ -218,7 +232,7 @@ class ClubServiceTest {
                     ),
             )
 
-        service.delete(token = token(uid = "admin"), clubId = club.id).shouldBeRight()
+        service.delete(token = token(uid = "admin"), clubId = UUID.fromString(club.id)).shouldBeRight()
 
         // The event and its match drop out of active lists…
         events.findById(id = event.id)!!.isActive shouldBe false
@@ -242,7 +256,7 @@ class ClubServiceTest {
                         endDate = LocalDate.now().plusDays(1),
                         participantIds = listOf(p1.id, p2.id),
                         createdBy = admin.id,
-                        clubId = club.id,
+                        clubId = UUID.fromString(club.id),
                     ),
             )
         val underClub =
@@ -284,7 +298,7 @@ class ClubServiceTest {
             )
 
         // Deleting the club cascades is_active=false down through its event onto the match.
-        service.delete(token = token(uid = "admin"), clubId = club.id).shouldBeRight()
+        service.delete(token = token(uid = "admin"), clubId = UUID.fromString(club.id)).shouldBeRight()
 
         val history = matchRepo.listByUser(userId = p1.id).map { it.id }
         history shouldContain standalone.id
@@ -302,7 +316,7 @@ class ClubServiceTest {
 
         service.delete(token = token(uid = "admin"), clubId = UUID.randomUUID())
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
-        service.delete(token = token(uid = "host"), clubId = club.id)
+        service.delete(token = token(uid = "host"), clubId = UUID.fromString(club.id))
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
@@ -315,7 +329,7 @@ class ClubServiceTest {
         service.assignOwner(token = token(uid = "admin"), clubId = UUID.randomUUID(), userId = owner.id)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.NotFound>()
-        service.assignOwner(token = token(uid = "admin"), clubId = club.id, userId = UUID.randomUUID())
+        service.assignOwner(token = token(uid = "admin"), clubId = UUID.fromString(club.id), userId = UUID.randomUUID())
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Validation>()
     }
@@ -336,7 +350,7 @@ class ClubServiceTest {
         users.deactivate(id = owner.id).shouldBeRight()
         val club = service.create(token = token(uid = "admin"), name = "Club").shouldBeRight()
 
-        service.assignOwner(token = token(uid = "admin"), clubId = club.id, userId = owner.id)
+        service.assignOwner(token = token(uid = "admin"), clubId = UUID.fromString(club.id), userId = owner.id)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Validation>()
     }
@@ -347,7 +361,7 @@ class ClubServiceTest {
         val plain = provision(uid = "plain", roles = setOf(element = Capability.PLAYER))
         val club = service.create(token = token(uid = "admin"), name = "Club").shouldBeRight()
 
-        service.assignOwner(token = token(uid = "admin"), clubId = club.id, userId = plain.id)
+        service.assignOwner(token = token(uid = "admin"), clubId = UUID.fromString(club.id), userId = plain.id)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Validation>()
     }
@@ -368,7 +382,7 @@ class ClubServiceTest {
                     endDate = today.minusDays(1),
                     participantIds = listOf(element = p1.id),
                     createdBy = admin.id,
-                    clubId = club.id,
+                    clubId = UUID.fromString(club.id),
                 ),
         )
         events.create(
@@ -379,7 +393,7 @@ class ClubServiceTest {
                     endDate = today,
                     participantIds = listOf(element = p1.id),
                     createdBy = admin.id,
-                    clubId = club.id,
+                    clubId = UUID.fromString(club.id),
                 ),
         )
         events.create(
@@ -390,7 +404,7 @@ class ClubServiceTest {
                     endDate = today.plusDays(31),
                     participantIds = listOf(element = p1.id),
                     createdBy = admin.id,
-                    clubId = club.id,
+                    clubId = UUID.fromString(club.id),
                 ),
         )
 
@@ -430,7 +444,7 @@ class ClubServiceTest {
             )
         val club = service.create(token = token(uid = "admin"), name = "Club").shouldBeRight()
 
-        service.assignOwner(token = token(uid = "admin"), clubId = club.id, userId = owner.id)
+        service.assignOwner(token = token(uid = "admin"), clubId = UUID.fromString(club.id), userId = owner.id)
             .shouldBeRight()
             .owners
             .single()
@@ -449,13 +463,13 @@ class ClubServiceTest {
         club.tournamentsSanctioned shouldBe false
 
         // An admin sanctions the club; the flag flips and round-trips.
-        service.setSanction(token = token(uid = "admin"), clubId = club.id, sanctioned = true).shouldBeRight()
+        service.setSanction(token = token(uid = "admin"), clubId = UUID.fromString(club.id), sanctioned = true).shouldBeRight()
             .tournamentsSanctioned shouldBe true
         // A club owner may toggle it back.
-        service.setSanction(token = token(uid = "owner"), clubId = club.id, sanctioned = false).shouldBeRight()
+        service.setSanction(token = token(uid = "owner"), clubId = UUID.fromString(club.id), sanctioned = false).shouldBeRight()
             .tournamentsSanctioned shouldBe false
         // A plain host may not.
-        service.setSanction(token = token(uid = "host"), clubId = club.id, sanctioned = true)
+        service.setSanction(token = token(uid = "host"), clubId = UUID.fromString(club.id), sanctioned = true)
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
         // Sanctioning a missing club is a not-found.
         service.setSanction(token = token(uid = "admin"), clubId = java.util.UUID.randomUUID(), sanctioned = true)

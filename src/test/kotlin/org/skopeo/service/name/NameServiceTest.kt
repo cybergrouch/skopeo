@@ -64,15 +64,25 @@ class NameServiceTest {
     private fun displayNameOf(
         uid: String,
         userId: UUID,
-    ) = service.list(token = token(uid = uid), userId = userId).shouldBeRight().single { it.type == NameType.DISPLAY && it.isActive }
+    ) = service.list(token = token(uid = uid), userId = userId).shouldBeRight().single { it.type == NameType.DISPLAY.name && it.isActive }
 
     @Test
     fun `adding and disabling a name write audit-log entries (#100)`() {
         val owner = provisionUser(uid = "owner")
         val added =
             service.create(token = token(uid = "owner"), userId = owner.id, type = NameType.NICKNAME, value = "JB").shouldBeRight()
-        service.setActive(token = token(uid = "owner"), userId = owner.id, nameId = added.id, active = false).shouldBeRight()
-        service.setActive(token = token(uid = "owner"), userId = owner.id, nameId = added.id, active = true).shouldBeRight()
+        service.setActive(
+            token = token(uid = "owner"),
+            userId = owner.id,
+            nameId = UUID.fromString(added.id),
+            active = false,
+        ).shouldBeRight()
+        service.setActive(
+            token = token(uid = "owner"),
+            userId = owner.id,
+            nameId = UUID.fromString(added.id),
+            active = true,
+        ).shouldBeRight()
 
         val audit = AuditRepository()
         audit.list(actions = listOf(element = AuditAction.NAME_ADDED), limit = 10, offset = 0).first.single().let {
@@ -92,7 +102,7 @@ class NameServiceTest {
         service.create(token = token(uid = "owner"), userId = owner.id, type = NameType.NICKNAME, value = "JB").shouldBeRight()
         service.create(token = token(uid = "owner"), userId = owner.id, type = NameType.NICKNAME, value = "Boy").shouldBeRight()
 
-        service.list(token = token(uid = "owner"), userId = owner.id).shouldBeRight().count { it.type == NameType.NICKNAME } shouldBe 2
+        service.list(token = token(uid = "owner"), userId = owner.id).shouldBeRight().count { it.type == NameType.NICKNAME.name } shouldBe 2
     }
 
     @Test
@@ -112,7 +122,11 @@ class NameServiceTest {
         replacement.value shouldBe "Johnny"
         // exactly one active display, and the old one is retained as disabled history
         displayNameOf(uid = "owner", userId = owner.id).id shouldBe replacement.id
-        service.get(token = token(uid = "owner"), userId = owner.id, nameId = original.id).shouldBeRight().isActive.shouldBeFalse()
+        service.get(
+            token = token(uid = "owner"),
+            userId = owner.id,
+            nameId = UUID.fromString(original.id),
+        ).shouldBeRight().isActive.shouldBeFalse()
     }
 
     @Test
@@ -121,7 +135,7 @@ class NameServiceTest {
         val display = displayNameOf(uid = "owner", userId = owner.id)
 
         service
-            .setActive(token = token(uid = "owner"), userId = owner.id, nameId = display.id, active = false)
+            .setActive(token = token(uid = "owner"), userId = owner.id, nameId = UUID.fromString(display.id), active = false)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Validation>()
     }
@@ -134,7 +148,7 @@ class NameServiceTest {
 
         // `original` is now disabled history; re-enabling it collides with the active display.
         service
-            .setActive(token = token(uid = "owner"), userId = owner.id, nameId = original.id, active = true)
+            .setActive(token = token(uid = "owner"), userId = owner.id, nameId = UUID.fromString(original.id), active = true)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Conflict>()
     }
@@ -146,7 +160,7 @@ class NameServiceTest {
             service.create(token = token(uid = "owner"), userId = owner.id, type = NameType.NICKNAME, value = "JB").shouldBeRight()
 
         service
-            .setActive(token = token(uid = "owner"), userId = owner.id, nameId = name.id, active = false)
+            .setActive(token = token(uid = "owner"), userId = owner.id, nameId = UUID.fromString(name.id), active = false)
             .shouldBeRight()
             .isActive
             .shouldBeFalse()
@@ -162,7 +176,7 @@ class NameServiceTest {
 
         service.list(token = token(uid = "intruder"), userId = owner.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
         service.list(token = token(uid = "ghost"), userId = owner.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
-        service.get(token = token(uid = "root"), userId = owner.id, nameId = name.id).shouldBeRight().id shouldBe name.id
+        service.get(token = token(uid = "root"), userId = owner.id, nameId = UUID.fromString(name.id)).shouldBeRight().id shouldBe name.id
     }
 
     @Test
@@ -177,7 +191,7 @@ class NameServiceTest {
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.NotFound>()
         service
-            .get(token = token(uid = "owner"), userId = owner.id, nameId = name.id)
+            .get(token = token(uid = "owner"), userId = owner.id, nameId = UUID.fromString(name.id))
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.NotFound>()
     }
@@ -208,6 +222,6 @@ class NameServiceTest {
         provisionUser(uid = "root", capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         service.create(token = token(uid = "owner"), userId = owner.id, type = NameType.NICKNAME, value = "JB").shouldBeRight()
 
-        service.list(token = token(uid = "root"), userId = owner.id).shouldBeRight().count { it.type == NameType.NICKNAME } shouldBe 1
+        service.list(token = token(uid = "root"), userId = owner.id).shouldBeRight().count { it.type == NameType.NICKNAME.name } shouldBe 1
     }
 }

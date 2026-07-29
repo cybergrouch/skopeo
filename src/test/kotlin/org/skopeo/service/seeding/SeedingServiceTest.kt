@@ -6,6 +6,7 @@ package org.skopeo.service.seeding
 import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
@@ -122,13 +123,14 @@ class SeedingServiceTest {
     /** A HOST with a list containing [members]; returns the list id. */
     private fun listWith(members: List<User>): UUID {
         val list = lists.create(token = token(uid = "host"), name = "Seeded").shouldBeRight()
-        members.forEach { lists.addMember(token = token(uid = "host"), listId = list.id, userId = it.id).shouldBeRight() }
-        return list.id
+        members.forEach { lists.addMember(token = token(uid = "host"), listId = UUID.fromString(list.id), userId = it.id).shouldBeRight() }
+        return UUID.fromString(list.id)
     }
 
     @Test
     fun `generate sorts by rating descending and seeds the top half (round up)`() {
-        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        // ADMINISTRATOR so the raw rating is surfaced in the DTO (#583) for the exact-rating assertion below.
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST, Capability.ADMINISTRATOR))
         val a = provision(uid = "alice").also { rate(user = it, value = "4.5") }
         val b = provision(uid = "bob").also { rate(user = it, value = "3.5") }
         val c = provision(uid = "carol").also { rate(user = it, value = "4.0") }
@@ -137,12 +139,12 @@ class SeedingServiceTest {
         val seeding = service.generate(token = token(uid = "host"), listId = listId).shouldBeRight()
         seeding.entries shouldHaveSize 3
         // Order is rating-desc: alice (4.5), carol (4.0), bob (3.5).
-        seeding.entries.map { it.userId } shouldBe listOf(a.id, c.id, b.id)
+        seeding.entries.map { it.userId } shouldBe listOf(a.id.toString(), c.id.toString(), b.id.toString())
         seeding.entries.map { it.position } shouldBe listOf(1, 2, 3)
         // Top ⌈3/2⌉ = 2 are seeded; the rest blank.
         seeding.entries.map { it.seed } shouldBe listOf(1, 2, null)
         // The exact rating is captured (stored at scale 6, so compare numerically).
-        seeding.entries.first().rating.toBigDecimal().compareTo(other = BigDecimal("4.5")) shouldBe 0
+        seeding.entries.first().rating.shouldNotBeNull().toBigDecimal().compareTo(other = BigDecimal("4.5")) shouldBe 0
     }
 
     @Test
@@ -154,7 +156,7 @@ class SeedingServiceTest {
 
         val seeding = service.generate(token = token(uid = "host"), listId = listId).shouldBeRight()
         // Same rating → higher confidence first.
-        seeding.entries.map { it.userId } shouldBe listOf(high.id, low.id)
+        seeding.entries.map { it.userId } shouldBe listOf(high.id.toString(), low.id.toString())
     }
 
     @Test
@@ -169,8 +171,8 @@ class SeedingServiceTest {
         val ids = service.generate(token = token(uid = "host"), listId = listId).shouldBeRight().entries.map { it.userId }
         ids shouldHaveSize 3
         // "Alpha" sorts before "Bravo"; the unnamed player is ordered by its public code (position not asserted).
-        (ids.indexOf(element = alpha.id) < ids.indexOf(element = bravo.id)) shouldBe true
-        (unnamed.id in ids) shouldBe true
+        (ids.indexOf(element = alpha.id.toString()) < ids.indexOf(element = bravo.id.toString())) shouldBe true
+        (unnamed.id.toString() in ids) shouldBe true
     }
 
     @Test
@@ -181,7 +183,7 @@ class SeedingServiceTest {
         val listId = listWith(members = listOf(rated, unrated))
 
         val seeding = service.generate(token = token(uid = "host"), listId = listId).shouldBeRight()
-        seeding.entries.map { it.userId } shouldBe listOf(element = rated.id)
+        seeding.entries.map { it.userId } shouldBe listOf(element = rated.id.toString())
     }
 
     @Test
@@ -195,7 +197,7 @@ class SeedingServiceTest {
         // Bump bob above alice, then regenerate.
         rate(user = b, value = "5.0")
         val regenerated = service.generate(token = token(uid = "host"), listId = listId).shouldBeRight()
-        regenerated.entries.map { it.userId } shouldBe listOf(b.id, a.id)
+        regenerated.entries.map { it.userId } shouldBe listOf(b.id.toString(), a.id.toString())
         // Still a single current seeding.
         service.get(token = token(uid = "host"), listId = listId).shouldBeRight().entries shouldHaveSize 2
     }

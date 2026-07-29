@@ -6,6 +6,8 @@ package org.skopeo.service.rating
 import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
@@ -72,10 +74,10 @@ class RatingServiceTest {
         val rating =
             service.setRating(token = token(uid = "root"), userId = player.id, value = BigDecimal("4.3")).shouldBeRight()
 
-        rating.currentRating.toPlainString() shouldBe "4.300000" // stored as NUMERIC(10,6)
-        rating.currentLevel shouldBe "4.0" // NTRP rounds down to the 0.5 level
+        rating.value shouldBe "4.300000" // stored as NUMERIC(10,6); setRating reveals the raw value
+        rating.level shouldBe "4.0" // NTRP rounds down to the 0.5 level
         // The player has no in-window matches, so confidence computes to 0 (#459).
-        rating.confidence.toPlainString() shouldBe "0.000000"
+        rating.confidence shouldBe "0.000000"
     }
 
     @Test
@@ -85,16 +87,16 @@ class RatingServiceTest {
 
         // Initial assessment — the baseline, no history row.
         service.setRating(token = token(uid = "root"), userId = player.id, value = BigDecimal("4.0")).shouldBeRight()
-        service.getHistory(token = token(uid = "root"), userId = player.id).shouldBeRight().entries shouldBe emptyList()
+        service.getHistory(token = token(uid = "root"), userId = player.id).shouldBeRight() shouldBe emptyList()
 
         // Override — recorded as a manual (matchId = null) history entry.
         service.setRating(token = token(uid = "root"), userId = player.id, value = BigDecimal("4.6")).shouldBeRight()
-        val history = service.getHistory(token = token(uid = "root"), userId = player.id).shouldBeRight().entries
+        val history = service.getHistory(token = token(uid = "root"), userId = player.id).shouldBeRight()
         history shouldHaveSize 1
         history.single().let {
             it.matchId shouldBe null
-            it.previousRating.toPlainString() shouldBe "4.000000"
-            it.newRating.toPlainString() shouldBe "4.600000"
+            it.previousRating shouldBe "4.000000"
+            it.newRating shouldBe "4.600000"
             it.previousLevel shouldBe "4.0"
             it.newLevel shouldBe "4.5"
             it.levelChanged shouldBe true
@@ -110,15 +112,15 @@ class RatingServiceTest {
         service.setRating(token = token(uid = "root"), userId = player.id, value = BigDecimal("4.2")).shouldBeRight()
         service.setRating(token = token(uid = "root"), userId = player.id, value = BigDecimal("4.6")).shouldBeRight()
 
-        // An ADMINISTRATOR sees the full history with raw values.
+        // An ADMINISTRATOR sees the full history with raw values (reveal now folded into the DTO fields).
         val adminView = service.getHistory(token = token(uid = "root"), userId = player.id).shouldBeRight()
-        adminView.revealRawValue shouldBe true
-        adminView.entries shouldHaveSize 2
+        adminView shouldHaveSize 2
+        adminView.forEach { it.previousRating.shouldNotBeNull() } // raw values revealed for an admin
         // The owner (non-admin) sees only the band-jump entry, and no raw values.
         val ownerView = service.getHistory(token = token(uid = "player"), userId = player.id).shouldBeRight()
-        ownerView.revealRawValue shouldBe false
-        ownerView.entries shouldHaveSize 1
-        ownerView.entries.single().levelChanged shouldBe true
+        ownerView shouldHaveSize 1
+        ownerView.single().previousRating.shouldBeNull() // raw values withheld from a non-admin
+        ownerView.single().levelChanged shouldBe true
     }
 
     @Test
@@ -149,7 +151,7 @@ class RatingServiceTest {
         // 4.0 and 4.2 both publish as the "4.0" band, so the override doesn't cross a level.
         service.setRating(token = token(uid = "root"), userId = player.id, value = BigDecimal("4.2")).shouldBeRight()
 
-        service.getHistory(token = token(uid = "root"), userId = player.id).shouldBeRight().entries.single().let {
+        service.getHistory(token = token(uid = "root"), userId = player.id).shouldBeRight().single().let {
             it.previousLevel shouldBe "4.0"
             it.newLevel shouldBe "4.0"
             it.levelChanged shouldBe false
@@ -188,21 +190,18 @@ class RatingServiceTest {
         provisionUser(uid = "other")
         service.setRating(token = token(uid = "root"), userId = player.id, value = BigDecimal("4.0")).shouldBeRight()
 
+        // The owning player may read, but the raw value is withheld — assert the published band instead.
         service
             .getRatings(token = token(uid = "player"), userId = player.id)
             .shouldBeRight()
-            .ratings
             .single()
-            .currentRating
-            .toPlainString() shouldBe "4.000000"
+            .level shouldBe "4.0"
         service
             .getRatings(token = token(uid = "root"), userId = player.id)
             .shouldBeRight()
-            .ratings
             .single()
-            .currentRating
-            .toPlainString() shouldBe "4.000000"
-        service.getHistory(token = token(uid = "player"), userId = player.id).shouldBeRight().entries shouldBe emptyList()
+            .value shouldBe "4.000000"
+        service.getHistory(token = token(uid = "player"), userId = player.id).shouldBeRight() shouldBe emptyList()
         service.getRatings(token = token(uid = "other"), userId = player.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
         service.getHistory(token = token(uid = "other"), userId = player.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
         // A caller with no provisioned account is forbidden too.
@@ -220,8 +219,8 @@ class RatingServiceTest {
         // A RATER sees the same pending queue as an admin.
         val pending =
             service.pendingAssessment(token = token(uid = "rater"), limit = 50, offset = 0).shouldBeRight().items.map { it.userId }
-        (unrated.id in pending) shouldBe true
-        (rated.id in pending) shouldBe false
+        (unrated.id.toString() in pending) shouldBe true
+        (rated.id.toString() in pending) shouldBe false
 
         service
             .pendingAssessment(token = token(uid = "unrated"), limit = 50, offset = 0)
@@ -247,11 +246,11 @@ class RatingServiceTest {
             )
 
         val page = service.pendingAssessment(token = token(uid = "root"), limit = 50, offset = 0).shouldBeRight()
-        val entry = page.items.single { it.userId == player.id }
+        val entry = page.items.single { it.userId == player.id.toString() }
         entry.publicCode shouldBe player.publicCode
         entry.displayName shouldBe "Rich"
         entry.sex shouldBe "Female"
-        entry.dateOfBirth shouldBe dob
+        entry.dateOfBirth shouldBe dob.toString()
         entry.age shouldBe 30
         page.total shouldBe 2 // the new player plus the unrated admin
     }
@@ -273,8 +272,8 @@ class RatingServiceTest {
         val plain = provisionUser(uid = "plain")
 
         val items = service.pendingAssessment(token = token(uid = "root"), limit = 50, offset = 0).shouldBeRight().items
-        items.single { it.userId == selfRated.id }.proposedRating shouldBe "3.5"
-        items.single { it.userId == plain.id }.proposedRating shouldBe null
+        items.single { it.userId == selfRated.id.toString() }.proposedRating shouldBe "3.5"
+        items.single { it.userId == plain.id.toString() }.proposedRating shouldBe null
     }
 
     @Test
@@ -321,7 +320,7 @@ class RatingServiceTest {
                 .pendingAssessment(token = token(uid = "root"), limit = 50, offset = 0)
                 .shouldBeRight()
                 .items
-                .single { it.userId == nameless.id }
+                .single { it.userId == nameless.id.toString() }
         entry.displayName shouldBe null
     }
 
@@ -333,11 +332,9 @@ class RatingServiceTest {
         service
             .getRatings(token = token(uid = "root"), userId = root.id)
             .shouldBeRight()
-            .ratings
             .single()
-            .currentRating
-            .toPlainString() shouldBe "5.000000"
-        service.getHistory(token = token(uid = "root"), userId = root.id).shouldBeRight().entries shouldBe emptyList()
+            .value shouldBe "5.000000"
+        service.getHistory(token = token(uid = "root"), userId = root.id).shouldBeRight() shouldBe emptyList()
     }
 
     @Test
@@ -346,9 +343,9 @@ class RatingServiceTest {
         val player = provisionUser(uid = "player")
         service.setRating(token = token(uid = "root"), userId = player.id, value = BigDecimal("4.3")).shouldBeRight()
 
-        // The owner (a plain player) may read their ratings but the reveal flag stays off.
-        service.getRatings(token = token(uid = "player"), userId = player.id).shouldBeRight().revealRawValue shouldBe false
-        // An ADMINISTRATOR (rating manager) gets the reveal flag.
-        service.getRatings(token = token(uid = "root"), userId = player.id).shouldBeRight().revealRawValue shouldBe true
+        // The owner (a plain player) may read their ratings but the raw value stays withheld (reveal folded into the DTO).
+        service.getRatings(token = token(uid = "player"), userId = player.id).shouldBeRight().single().value.shouldBeNull()
+        // An ADMINISTRATOR (rating manager) sees the raw value.
+        service.getRatings(token = token(uid = "root"), userId = player.id).shouldBeRight().single().value.shouldNotBeNull()
     }
 }

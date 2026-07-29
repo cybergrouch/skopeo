@@ -23,6 +23,7 @@ import org.skopeo.dto.RankingCalculationRequest
 import org.skopeo.dto.RankingCalculationResponse
 import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.dto.match.SetScoreRequest
+import org.skopeo.mapper.rating.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
@@ -122,7 +123,7 @@ class RatingCalculationServiceTest {
             ).shouldBeRight()
         matchService.uploadResult(
             token = token(uid = admin),
-            matchId = match.id,
+            matchId = UUID.fromString(match.id),
             request =
                 MatchResultRequest(
                     sets =
@@ -132,7 +133,7 @@ class RatingCalculationServiceTest {
                         ),
                 ),
         ).shouldBeRight()
-        return match.id
+        return UUID.fromString(match.id)
     }
 
     /** Schedule a singles fixture on [date]; returns the match id (no result yet). */
@@ -142,17 +143,19 @@ class RatingCalculationServiceTest {
         b: UUID,
         date: LocalDate,
     ): UUID =
-        matchService.createFixture(
-            token = token(uid = admin),
-            request =
-                FixtureInput(
-                    matchFormat = TeamType.SINGLES,
-                    matchType = MatchType.OPEN_PLAY,
-                    matchDate = date,
-                    team1 = listOf(element = a),
-                    team2 = listOf(element = b),
-                ),
-        ).shouldBeRight().id
+        UUID.fromString(
+            matchService.createFixture(
+                token = token(uid = admin),
+                request =
+                    FixtureInput(
+                        matchFormat = TeamType.SINGLES,
+                        matchType = MatchType.OPEN_PLAY,
+                        matchDate = date,
+                        team1 = listOf(element = a),
+                        team2 = listOf(element = b),
+                    ),
+            ).shouldBeRight().id,
+        )
 
     private fun recordResult(
         admin: String,
@@ -185,7 +188,7 @@ class RatingCalculationServiceTest {
         recordResult(admin = "root", matchId = later)
         recordResult(admin = "root", matchId = earlier)
 
-        val order = calc.calculate(token = token(uid = "root"), dryRun = true).shouldBeRight().matches.map { it.matchId }
+        val order = calc.calculate(token = token(uid = "root"), dryRun = true).shouldBeRight().matches.map { UUID.fromString(it.matchId) }
 
         // Match date wins over result-entry (completed_at) order.
         order shouldBe listOf(earlier, later)
@@ -206,10 +209,14 @@ class RatingCalculationServiceTest {
 
         // A manual drag sets the exact same-date processing order (no reliance on the completed_at tiebreak).
         matchService.reorder(token = token(uid = "root"), matchIds = listOf(m2, m1)).shouldBeRight()
-        calc.calculate(token = token(uid = "root"), dryRun = true).shouldBeRight().matches.map { it.matchId } shouldBe listOf(m2, m1)
+        calc.calculate(token = token(uid = "root"), dryRun = true).shouldBeRight().matches.map {
+            UUID.fromString(it.matchId)
+        } shouldBe listOf(m2, m1)
 
         matchService.reorder(token = token(uid = "root"), matchIds = listOf(m1, m2)).shouldBeRight()
-        calc.calculate(token = token(uid = "root"), dryRun = true).shouldBeRight().matches.map { it.matchId } shouldBe listOf(m1, m2)
+        calc.calculate(token = token(uid = "root"), dryRun = true).shouldBeRight().matches.map {
+            UUID.fromString(it.matchId)
+        } shouldBe listOf(m1, m2)
     }
 
     @Test
@@ -233,7 +240,7 @@ class RatingCalculationServiceTest {
             ).shouldBeRight()
         matchService.uploadResult(
             token = token(uid = "root"),
-            matchId = match.id,
+            matchId = UUID.fromString(match.id),
             // 6-5 (won by one) — previously rejected by SetScore's win-by-2 rule during the rebuild.
             request = MatchResultRequest(sets = listOf(element = SetScoreRequest(team1Games = 6, team2Games = 5))),
         ).shouldBeRight()
@@ -254,9 +261,9 @@ class RatingCalculationServiceTest {
 
         dry.dryRun.shouldBeTrue()
         dry.matches.single().changes.size shouldBe 2
-        dry.matches.single().changes.first { it.userId == p1.id }.let {
-            it.previousRating shouldBe BigDecimal("4.000000")
-            (it.newRating > BigDecimal("4.000000")).shouldBeTrue() // winner gains
+        dry.matches.single().changes.first { it.userId == p1.id.toString() }.let {
+            it.previousRating shouldBe "4.000000"
+            (BigDecimal(it.newRating) > BigDecimal("4.000000")).shouldBeTrue() // winner gains
             // The v2 calculator (default) reports per-set steps; the net fields are null (#110).
             it.breakdown.kFactor.shouldBeNull()
             it.breakdown.dominance.shouldBeNull()
@@ -290,8 +297,10 @@ class RatingCalculationServiceTest {
         playedMatch(admin = "root", winner = b1.id, loser = b2.id, matchType = MatchType.TOURNAMENT)
 
         val changes = calc.calculate(token = token(uid = "root"), dryRun = true).shouldBeRight().matches.flatMap { it.changes }
-        val openGain = changes.first { it.userId == a1.id }.let { it.newRating - it.previousRating }
-        val tournamentGain = changes.first { it.userId == b1.id }.let { it.newRating - it.previousRating }
+        val openGain = changes.first { it.userId == a1.id.toString() }.let { BigDecimal(it.newRating) - BigDecimal(it.previousRating) }
+        val tournamentGain =
+            changes.first { it.userId == b1.id.toString() }
+                .let { BigDecimal(it.newRating) - BigDecimal(it.previousRating) }
 
         (openGain > BigDecimal.ZERO).shouldBeTrue()
         // TOURNAMENT (1.2) scales the change well above OPEN_PLAY (0.5) for an identical match.
@@ -320,17 +329,19 @@ class RatingCalculationServiceTest {
                         team2Handicap = BigDecimal("0.300"),
                     ),
             ).shouldBeRight()
-        recordResult(admin = "root", matchId = handicapped.id)
+        recordResult(admin = "root", matchId = UUID.fromString(handicapped.id))
 
         val changes = calc.calculate(token = token(uid = "root"), dryRun = true).shouldBeRight().matches.flatMap { it.changes }
-        val plainLoss = changes.first { it.userId == a2.id }.let { it.newRating - it.previousRating }
-        val handicappedLoss = changes.first { it.userId == b2.id }.let { it.newRating - it.previousRating }
+        val plainLoss = changes.first { it.userId == a2.id.toString() }.let { BigDecimal(it.newRating) - BigDecimal(it.previousRating) }
+        val handicappedLoss =
+            changes.first { it.userId == b2.id.toString() }
+                .let { BigDecimal(it.newRating) - BigDecimal(it.previousRating) }
 
         // Both are losses; the handicapped side loses strictly less (closer to zero).
         (plainLoss < BigDecimal.ZERO).shouldBeTrue()
         (handicappedLoss > plainLoss).shouldBeTrue()
         // The delta is applied to the TRUE 4.0 baseline — previous is the true rating, not 3.7.
-        changes.first { it.userId == b2.id }.previousRating shouldBe BigDecimal("4.000000")
+        changes.first { it.userId == b2.id.toString() }.previousRating shouldBe "4.000000"
     }
 
     @Test
@@ -442,19 +453,19 @@ class RatingCalculationServiceTest {
                         eventId = event.id,
                     ),
             ).shouldBeRight()
-        recordResult(admin = "root", matchId = eventedFixture.id)
+        recordResult(admin = "root", matchId = UUID.fromString(eventedFixture.id))
         val eventless = playedMatch(admin = "root", winner = p3.id, loser = p4.id)
 
         // Commit while the event is still open: the event-less match is rated, the evented one is not.
         calc.calculate(token = token(uid = "root"), dryRun = false).shouldBeRight()
         matchRepo.findById(matchId = eventless).shouldBeRight().ratedAt.shouldNotBeNull()
-        matchRepo.findById(matchId = eventedFixture.id).shouldBeRight().ratedAt.shouldBeNull()
+        matchRepo.findById(matchId = UUID.fromString(eventedFixture.id)).shouldBeRight().ratedAt.shouldBeNull()
 
         // After finalizing the event, its match becomes eligible and a commit rates it.
         val root = users.findByFirebaseUid(firebaseUid = "root")!!.id
         eventRepo.finalize(id = event.id, finalizedAt = LocalDateTime.now(), finalizedBy = root)
         calc.calculate(token = token(uid = "root"), dryRun = false).shouldBeRight()
-        matchRepo.findById(matchId = eventedFixture.id).shouldBeRight().ratedAt.shouldNotBeNull()
+        matchRepo.findById(matchId = UUID.fromString(eventedFixture.id)).shouldBeRight().ratedAt.shouldNotBeNull()
     }
 
     @Test
@@ -509,14 +520,15 @@ class RatingCalculationServiceTest {
                 .matches
                 .single()
                 .changes
-                .first { it.userId == p1.id }
+                .first { it.userId == p1.id.toString() }
                 .breakdown
                 .sets
         previewSets.size shouldBe 2
 
         // Committing persists them; reading the history back returns the same per-set breakdown.
         calc.calculate(token = token(uid = "root"), dryRun = false).shouldBeRight()
-        val persistedSets = ratings.historyByUser(userId = p1.id).single().setBreakdown
+        // The persisted domain breakdown maps to the same response shape as the preview (#110).
+        val persistedSets = ratings.historyByUser(userId = p1.id).single().setBreakdown.map { it.toResponse() }
         persistedSets shouldBe previewSets
     }
 
@@ -531,8 +543,8 @@ class RatingCalculationServiceTest {
         val outcome = calc.calculate(token = token(uid = "root"), dryRun = true).shouldBeRight()
 
         outcome.matches.size shouldBe 2
-        val firstP1 = outcome.matches[0].changes.first { it.userId == p1.id }
-        val secondP1 = outcome.matches[1].changes.first { it.userId == p1.id }
+        val firstP1 = outcome.matches[0].changes.first { it.userId == p1.id.toString() }
+        val secondP1 = outcome.matches[1].changes.first { it.userId == p1.id.toString() }
         // the second match starts from where the first left off
         secondP1.previousRating shouldBe firstP1.newRating
     }
@@ -567,7 +579,7 @@ class RatingCalculationServiceTest {
             ).shouldBeRight()
         matchService.uploadResult(
             token = token(uid = admin),
-            matchId = match.id,
+            matchId = UUID.fromString(match.id),
             request =
                 MatchResultRequest(
                     sets =
@@ -577,7 +589,7 @@ class RatingCalculationServiceTest {
                         ),
                 ),
         ).shouldBeRight()
-        return match.id
+        return UUID.fromString(match.id)
     }
 
     @Test
@@ -593,8 +605,8 @@ class RatingCalculationServiceTest {
         val changes = dry.matches.single().changes
         changes.size shouldBe 4
         // Equal 4.0 partners: winners gain, losers lose; each carries a per-set breakdown.
-        changes.first { it.userId == a1.id }.let { (it.newRating > it.previousRating).shouldBeTrue() }
-        changes.first { it.userId == b1.id }.let { (it.newRating < it.previousRating).shouldBeTrue() }
+        changes.first { it.userId == a1.id.toString() }.let { (BigDecimal(it.newRating) > BigDecimal(it.previousRating)).shouldBeTrue() }
+        changes.first { it.userId == b1.id.toString() }.let { (BigDecimal(it.newRating) < BigDecimal(it.previousRating)).shouldBeTrue() }
         changes.forEach { it.breakdown.sets.size shouldBe 2 }
 
         calc.calculate(token = token(uid = "root"), dryRun = false).shouldBeRight()
@@ -621,13 +633,13 @@ class RatingCalculationServiceTest {
         playedDoubles(admin = "root", team1 = listOf(a1.id, a2.id), team2 = listOf(b1.id, b2.id))
 
         val changes = calc.calculate(token = token(uid = "root"), dryRun = true).shouldBeRight().matches.single().changes
-        val stronger = changes.first { it.userId == a1.id }.let { it.newRating - it.previousRating }
-        val weaker = changes.first { it.userId == a2.id }.let { it.newRating - it.previousRating }
+        val stronger = changes.first { it.userId == a1.id.toString() }.let { BigDecimal(it.newRating) - BigDecimal(it.previousRating) }
+        val weaker = changes.first { it.userId == a2.id.toString() }.let { BigDecimal(it.newRating) - BigDecimal(it.previousRating) }
 
         // Ratio split: 5.0-partner gains more than the 3.0-partner (δ ∝ rᵢ / mean).
         (stronger > weaker).shouldBeTrue()
         // Conservation across the four players.
-        changes.sumOf { it.newRating - it.previousRating }.toDouble() shouldBe (0.0 plusOrMinus 0.000001)
+        changes.sumOf { BigDecimal(it.newRating) - BigDecimal(it.previousRating) }.toDouble() shouldBe (0.0 plusOrMinus 0.000001)
     }
 
     @Test
@@ -732,7 +744,7 @@ class RatingCalculationServiceTest {
                         eventId = event.id,
                     ),
             ).shouldBeRight()
-        recordResult(admin = "root", matchId = fixture.id)
+        recordResult(admin = "root", matchId = UUID.fromString(fixture.id))
         eventRepo.finalize(id = event.id, finalizedAt = LocalDateTime.now(), finalizedBy = root)
         return event.id
     }

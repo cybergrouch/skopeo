@@ -92,8 +92,8 @@ class CapabilityServiceTest {
 
         val first = service.grant(token = token(uid = "root"), userId = player.id, capability = Capability.HOST).shouldBeRight()
         first.created.shouldBeTrue()
-        first.grant.capability shouldBe Capability.HOST
-        first.grant.grantedBy shouldBe root.id
+        first.grant.capability shouldBe Capability.HOST.name
+        first.grant.grantedBy shouldBe root.id.toString()
 
         val again = service.grant(token = token(uid = "root"), userId = player.id, capability = Capability.HOST).shouldBeRight()
         again.created.shouldBeFalse()
@@ -130,7 +130,7 @@ class CapabilityServiceTest {
         service
             .list(token = token(uid = "root"), userId = player.id)
             .shouldBeRight()
-            .none { it.capability == Capability.HOST && it.isActive }
+            .none { it.capability == Capability.HOST.name && it.isActive }
             .shouldBeTrue()
     }
 
@@ -212,7 +212,7 @@ class CapabilityServiceTest {
         gated
             .list(token = token(uid = "root"), userId = boss.id)
             .shouldBeRight()
-            .any { it.capability == Capability.ADMINISTRATOR && it.isActive }
+            .any { it.capability == Capability.ADMINISTRATOR.name && it.isActive }
             .shouldBeTrue()
     }
 

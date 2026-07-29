@@ -64,10 +64,10 @@ class PlayerListServiceTest {
         host(uid = "host")
         val created = service.create(token = token(uid = "host"), name = "Club Open 2026").shouldBeRight()
         created.name shouldBe "Club Open 2026"
-        created.memberUserIds shouldHaveSize 0
+        created.memberCount shouldBe 0
 
         service.listMine(token = token(uid = "host")).shouldBeRight().single().id shouldBe created.id
-        service.get(token = token(uid = "host"), listId = created.id).shouldBeRight().name shouldBe "Club Open 2026"
+        service.get(token = token(uid = "host"), listId = UUID.fromString(created.id)).shouldBeRight().name shouldBe "Club Open 2026"
     }
 
     @Test
@@ -98,9 +98,18 @@ class PlayerListServiceTest {
         provision(uid = "host2", roles = setOf(Capability.PLAYER, Capability.HOST))
         val list = service.create(token = token(uid = "host1"), name = "Mine").shouldBeRight()
 
-        service.get(token = token(uid = "host2"), listId = list.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
-        service.detail(token = token(uid = "host2"), listId = list.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
-        service.delete(token = token(uid = "host2"), listId = list.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service.get(
+            token = token(uid = "host2"),
+            listId = UUID.fromString(list.id),
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service.detail(
+            token = token(uid = "host2"),
+            listId = UUID.fromString(list.id),
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service.delete(
+            token = token(uid = "host2"),
+            listId = UUID.fromString(list.id),
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
@@ -109,20 +118,20 @@ class PlayerListServiceTest {
         val p1 = provision(uid = "p1")
         val list = service.create(token = token(uid = "host"), name = "Roster").shouldBeRight()
 
-        service.addMember(token = token(uid = "host"), listId = list.id, userId = p1.id).shouldBeRight()
-        val detail = service.detail(token = token(uid = "host"), listId = list.id).shouldBeRight()
+        service.addMember(token = token(uid = "host"), listId = UUID.fromString(list.id), userId = p1.id).shouldBeRight()
+        val detail = service.detail(token = token(uid = "host"), listId = UUID.fromString(list.id)).shouldBeRight()
         detail.members.single().id shouldBe p1.id.toString()
 
         // Adding the same player again conflicts; an unknown user is not found.
-        service.addMember(token = token(uid = "host"), listId = list.id, userId = p1.id)
+        service.addMember(token = token(uid = "host"), listId = UUID.fromString(list.id), userId = p1.id)
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Conflict>()
-        service.addMember(token = token(uid = "host"), listId = list.id, userId = UUID.randomUUID())
+        service.addMember(token = token(uid = "host"), listId = UUID.fromString(list.id), userId = UUID.randomUUID())
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
 
         // Removing works; removing a non-member is not found.
-        service.removeMember(token = token(uid = "host"), listId = list.id, userId = p1.id).shouldBeRight()
-        service.detail(token = token(uid = "host"), listId = list.id).shouldBeRight().members shouldHaveSize 0
-        service.removeMember(token = token(uid = "host"), listId = list.id, userId = p1.id)
+        service.removeMember(token = token(uid = "host"), listId = UUID.fromString(list.id), userId = p1.id).shouldBeRight()
+        service.detail(token = token(uid = "host"), listId = UUID.fromString(list.id)).shouldBeRight().members shouldHaveSize 0
+        service.removeMember(token = token(uid = "host"), listId = UUID.fromString(list.id), userId = p1.id)
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
@@ -132,7 +141,7 @@ class PlayerListServiceTest {
         val staffOnly = provision(uid = "staff", roles = setOf(element = Capability.HOST)) // no PLAYER
         val list = service.create(token = token(uid = "host"), name = "Roster").shouldBeRight()
 
-        service.addMember(token = token(uid = "host"), listId = list.id, userId = staffOnly.id)
+        service.addMember(token = token(uid = "host"), listId = UUID.fromString(list.id), userId = staffOnly.id)
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
     }
 
@@ -141,7 +150,10 @@ class PlayerListServiceTest {
         host(uid = "host")
         val list = service.create(token = token(uid = "host"), name = "Temp").shouldBeRight()
 
-        service.delete(token = token(uid = "host"), listId = list.id).shouldBeRight()
-        service.get(token = token(uid = "host"), listId = list.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+        service.delete(token = token(uid = "host"), listId = UUID.fromString(list.id)).shouldBeRight()
+        service.get(
+            token = token(uid = "host"),
+            listId = UUID.fromString(list.id),
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
     }
 }
