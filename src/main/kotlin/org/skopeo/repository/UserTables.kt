@@ -35,6 +35,7 @@ internal object UsersTable : UUIDTable(name = "users") {
     val providerPhotoUrl = text(name = "provider_photo_url").nullable()
     val customPhotoUrl = text(name = "custom_photo_url").nullable()
     val photoHidden = bool(name = "photo_hidden").default(defaultValue = false)
+    val matchHistoryHidden = bool(name = "match_history_hidden").default(defaultValue = false)
     val dateOfBirth = date(name = "date_of_birth").nullable()
     val sex = varchar(name = "sex", length = SEX_MAX).nullable()
     val city = varchar(name = "city", length = CITY_MAX).nullable()

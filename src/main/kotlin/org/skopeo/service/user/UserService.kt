@@ -311,6 +311,21 @@ class UserService(
             repository.updatePhotoSettings(id = id, customPhotoUrl = customPhotoUrl, photoHidden = photoHidden).bind().toResponse()
         }
 
+    /**
+     * Set the caller's "hide match history from other players" flag (#622). Authorized self-or-
+     * ADMINISTRATOR, like the rest of profile editing.
+     */
+    fun setMatchHistoryHidden(
+        token: VerifiedFirebaseToken,
+        id: UUID,
+        hidden: Boolean,
+    ): Either<ServiceError, UserResponse> =
+        either {
+            val target = repository.findById(id = id).bind()
+            requireAccess(token = token, target = target).bind()
+            repository.setMatchHistoryHidden(id = id, hidden = hidden).bind().toResponse()
+        }
+
     /** First-time sign-up: enforce the invite gate, write the aggregate, and audit the creation. */
     private fun provisionNew(
         token: VerifiedFirebaseToken,
@@ -472,9 +487,17 @@ private fun promoteIfBootstrapAdmin(
     if (Capability.ADMINISTRATOR in user.capabilities || !isBootstrapAdmin(token = token, adminEmails = adminEmails)) {
         return user
     }
+    // Grant ADMINISTRATOR and RESEARCHER together (#622): RESEARCHER is no longer a default sign-up
+    // grant, so the bootstrap admin gets it explicitly here — matching the sign-up bootstrap path and
+    // keeping a promoted operator's capabilities identical to a seeded one (PLAYER+RESEARCHER+ADMIN).
     capabilities.grant(userId = user.id, capability = Capability.ADMINISTRATOR)
-    logger.info { "Bootstrap allowlist: granted ADMINISTRATOR to user ${user.id}" }
-    return user.copy(capabilities = user.capabilities + Capability.ADMINISTRATOR)
+    val granted = mutableSetOf(Capability.ADMINISTRATOR)
+    if (Capability.RESEARCHER !in user.capabilities) {
+        capabilities.grant(userId = user.id, capability = Capability.RESEARCHER)
+        granted += Capability.RESEARCHER
+    }
+    logger.info { "Bootstrap allowlist: granted $granted to user ${user.id}" }
+    return user.copy(capabilities = user.capabilities + granted)
 }
 
 /** Allow only HOST or ADMINISTRATOR callers. */

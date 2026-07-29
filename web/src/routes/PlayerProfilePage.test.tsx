@@ -242,6 +242,42 @@ describe('PlayerProfilePage', () => {
     expect(screen.queryByText('points-audit:ABC234')).not.toBeInTheDocument()
   })
 
+  it('warns the owner when their own match history is hidden (#622)', () => {
+    useGetApiV1PlayersCode.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: { publicCode: 'ABC234', displayName: 'Ana', photoUrl: null, rating: undefined, matchHistoryHidden: true },
+    })
+    // The viewer's own public code matches the profile → owner.
+    useGetApiV1UsersMe.mockReturnValue({ data: { publicCode: 'ABC234', capabilities: ['PLAYER'] } })
+    renderAt()
+    const banner = screen.getByRole('status')
+    expect(banner).toHaveTextContent('Your match history is hidden from other players.')
+  })
+
+  it('does not warn a non-owner viewer even when the history is hidden (#622)', () => {
+    useGetApiV1PlayersCode.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: { publicCode: 'ABC234', displayName: 'Ana', photoUrl: null, rating: undefined, matchHistoryHidden: true },
+    })
+    // A different viewer (not the owner, not an admin).
+    useGetApiV1UsersMe.mockReturnValue({ data: { publicCode: 'ZZZ999', capabilities: ['PLAYER'] } })
+    renderAt()
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+
+  it('does not warn the owner when their match history is not hidden (#622)', () => {
+    useGetApiV1PlayersCode.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: { publicCode: 'ABC234', displayName: 'Ana', photoUrl: null, rating: undefined, matchHistoryHidden: false },
+    })
+    useGetApiV1UsersMe.mockReturnValue({ data: { publicCode: 'ABC234', capabilities: ['PLAYER'] } })
+    renderAt()
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+
   it('shows an unclaimed indicator and a claim entry point for a placeholder (#496)', () => {
     useGetApiV1PlayersCode.mockReturnValue({
       isLoading: false,

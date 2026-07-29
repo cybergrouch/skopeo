@@ -149,7 +149,7 @@ class UserServiceTest {
                 token = token(uid = "g", email = "g@example.com", emailVerified = true, signInProvider = "google.com"),
                 request = request,
             ).shouldBeRight().user
-        user.capabilities shouldBe listOf("PLAYER", "RESEARCHER")
+        user.capabilities shouldBe listOf(element = "PLAYER")
     }
 
     @Test
@@ -161,7 +161,7 @@ class UserServiceTest {
             ).shouldBeRight()
 
         first.created.shouldBeTrue()
-        first.user.capabilities shouldBe listOf("PLAYER", "RESEARCHER")
+        first.user.capabilities shouldBe listOf(element = "PLAYER")
         first.user.names.single().value shouldBe "U One" // token display name fallback
         first.user.contacts.single().status shouldBe "VERIFIED"
 
@@ -254,6 +254,27 @@ class UserServiceTest {
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
         service.updatePhotoSettings(token = token(uid = "ph-alice"), id = UUID.randomUUID(), customPhotoUrl = null, photoHidden = true)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
+    fun `setMatchHistoryHidden toggles the flag and is self-or-admin (#622)`() {
+        val alice = service.provision(token = token(uid = "mh-alice"), request = request).shouldBeRight().user
+        service.provision(token = token(uid = "mh-bob"), request = request).shouldBeRight()
+
+        // The owner hides their own match history.
+        service.setMatchHistoryHidden(token = token(uid = "mh-alice"), id = UUID.fromString(alice.id), hidden = true)
+            .shouldBeRight()
+            .matchHistoryHidden shouldBe true
+
+        // Another player cannot toggle someone else's flag.
+        service.setMatchHistoryHidden(token = token(uid = "mh-bob"), id = UUID.fromString(alice.id), hidden = true)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+
+        // An unknown id is a 404.
+        service.setMatchHistoryHidden(token = token(uid = "mh-alice"), id = UUID.randomUUID(), hidden = true)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.NotFound>()
     }
@@ -507,7 +528,7 @@ class UserServiceTest {
                 token = token(uid = "later", email = "admin@example.com", emailVerified = false, name = "Later"),
                 request = CreateUserRequest(proposedRating = "4.0", dateOfBirth = "2000-01-01", sex = "Male"),
             ).shouldBeRight()
-        created.user.capabilities shouldBe listOf("PLAYER", "RESEARCHER")
+        created.user.capabilities shouldBe listOf(element = "PLAYER")
 
         // Logs in with a verified email -> promoted.
         bootstrapService.currentUser(token = token(uid = "later", email = "admin@example.com", emailVerified = true))!!
@@ -529,7 +550,7 @@ class UserServiceTest {
         ).shouldBeRight()
 
         bootstrapService.currentUser(token = token(uid = "unv", email = "admin@example.com", emailVerified = false))!!
-            .capabilities shouldBe listOf("PLAYER", "RESEARCHER")
+            .capabilities shouldBe listOf(element = "PLAYER")
     }
 
     @Test
@@ -701,8 +722,17 @@ class UserServiceTest {
 
     @Test
     fun `search is allowed for a RESEARCHER but forbidden without RESEARCHER or staff (#107)`() {
-        // A plain RESEARCHER (the default for every sign-up) may run player research.
-        service.provision(token = token(uid = "res"), request = request).shouldBeRight()
+        // A RESEARCHER (a separately-granted capability since #622) may run player research.
+        repository.provision(
+            command =
+                ProvisionUserCommand(
+                    firebaseUid = "res",
+                    identity =
+                        UserIdentity(provider = org.skopeo.model.AuthProvider.GOOGLE, providerUid = "res", isPrimary = true),
+                    names = listOf(element = UserName(type = org.skopeo.model.NameType.DISPLAY, value = "Res")),
+                    capabilities = setOf(Capability.PLAYER, Capability.RESEARCHER),
+                ),
+        )
         service
             .search(token = token(uid = "res"), filters = UserSearchFilters(name = "Juan"))
             .shouldBeRight()

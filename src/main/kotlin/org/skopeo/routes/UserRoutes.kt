@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Lange Pantoja
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+@file:Suppress("TooManyFunctions") // Many small, cohesive route-registration helpers; splitting the file adds no clarity.
+
 package org.skopeo.routes
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
@@ -19,6 +21,7 @@ import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.user.CreateUserRequest
 import org.skopeo.dto.user.MarkDuplicatesRequest
+import org.skopeo.dto.user.MatchHistoryVisibilityRequest
 import org.skopeo.dto.user.PhotoSettingsRequest
 import org.skopeo.dto.user.ProfileRequest
 import org.skopeo.dto.user.RatingPreviewResponse
@@ -274,6 +277,7 @@ private fun Route.userById(service: UserService) {
             }
         }
     }
+    matchHistoryVisibility(service = service)
     delete(path = "/{id}") {
         respondMappingErrors {
             respondEither(result = service.deactivate(token = verifiedToken(), id = uuidParam(name = "id"))) {
@@ -287,6 +291,18 @@ private fun Route.userById(service: UserService) {
             respondEither(result = service.reactivate(token = verifiedToken(), id = uuidParam(name = "id"))) {
                 call.respond(status = HttpStatusCode.NoContent, message = "")
             }
+        }
+    }
+}
+
+/** Self-or-ADMINISTRATOR toggle of the match-history privacy flag (#622). */
+private fun Route.matchHistoryVisibility(service: UserService) {
+    put(path = "/{id}/match-history-visibility") {
+        respondMappingErrors {
+            val body = call.receive<MatchHistoryVisibilityRequest>()
+            respondEither(
+                result = service.setMatchHistoryHidden(token = verifiedToken(), id = uuidParam(name = "id"), hidden = body.hidden),
+            ) { user -> call.respond(status = HttpStatusCode.OK, message = user) }
         }
     }
 }

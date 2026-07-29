@@ -47,6 +47,7 @@ private const val MAX_HISTORY_LIMIT = 100
  *
  * Expected failures are returned as an [Either] left ([ServiceError], issue #115) rather than thrown.
  */
+@Suppress("TooManyFunctions") // Cohesive public-read surface (profile/history/results/standing/points) + #622 gate.
 class PlayerService(
     private val users: UserRepository = UserRepository(),
     private val ratings: RatingRepository = RatingRepository(),
@@ -82,6 +83,8 @@ class PlayerService(
                         },
                     // A login-less, unclaimed placeholder renders an "unclaimed" indicator + claim entry (#496).
                     isPlaceholder = located.placeholder,
+                    // #622: surfaced so the owner's own profile view can warn that history is hidden from others.
+                    matchHistoryHidden = located.matchHistoryHidden,
                 )
             }
         }
@@ -126,9 +129,14 @@ class PlayerService(
         offset: Int = 0,
         search: String? = null,
         opponentBand: String? = null,
+        // #622: the optional viewer decides whether a hidden history is revealed (owner / elevated role).
+        token: VerifiedFirebaseToken? = null,
     ): Either<ServiceError, PlayerMatchHistoryPage> =
         either {
             val user = resolve(code = code).bind()
+            // #622: unprivileged viewers of a hidden history get an empty, `hidden`-flagged page (enforced
+            // here so the API never leaks the rows); the owner and elevated roles fall through to the real one.
+            hiddenMatchHistoryPageOrNull(target = user, token = token)?.let { return@either it }
             // A canonical account's history also surfaces its disabled duplicates' matches (#124,
             // display-only — ratings are never consolidated). Each match is oriented from whichever of
             // these "self" ids actually played it.
@@ -205,6 +213,19 @@ class PlayerService(
                 total = filtered.size,
             )
         }
+
+    // #622: for a hidden history, the empty `hidden`-flagged page unless the viewer is the owner or holds
+    // an elevated capability (anything beyond plain PLAYER); an anonymous (null) viewer never qualifies.
+    // Returns null when the history is visible to this viewer, so the caller falls through to the real page.
+    private fun hiddenMatchHistoryPageOrNull(
+        target: User,
+        token: VerifiedFirebaseToken?,
+    ): PlayerMatchHistoryPage? {
+        if (!target.matchHistoryHidden) return null
+        val viewer = token?.let { users.findByFirebaseUid(firebaseUid = it.uid) }
+        val privileged = viewer != null && (viewer.id == target.id || viewer.capabilities.any { it != Capability.PLAYER })
+        return if (privileged) null else PlayerMatchHistoryPage(items = emptyList(), total = 0, hidden = true)
+    }
 
     /**
      * A player's win–loss record over time (#276): every decided match (with a recorded winner) they

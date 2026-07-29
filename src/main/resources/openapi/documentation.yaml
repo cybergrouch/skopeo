@@ -966,6 +966,44 @@ paths:
         '404':
           description: No such user
 
+  /api/v1/users/{id}/match-history-visibility:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    put:
+      summary: Set a user's match-history visibility
+      description: >-
+        Sets the per-player "hide match history from other players" flag (#622). When true, the
+        public profile withholds the player's match history from unprivileged viewers (plain players
+        and anonymous callers); the owner and elevated roles still see it. Self-or-ADMINISTRATOR only.
+      tags:
+        - Users
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MatchHistoryVisibilityRequest'
+      responses:
+        '200':
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          description: Missing or invalid Firebase token
+        '403':
+          description: Caller is neither the target user nor an ADMINISTRATOR
+        '404':
+          description: No such user
+
   /api/v1/users/{id}/duplicates:
     parameters:
       - name: id
@@ -4709,6 +4747,17 @@ components:
           default: false
           description: When true, the profile photo is suppressed everywhere.
 
+    MatchHistoryVisibilityRequest:
+      type: object
+      description: >-
+        Per-player match-history privacy control (#622). hidden = true withholds the player's match
+        history from unprivileged viewers on the public profile.
+      properties:
+        hidden:
+          type: boolean
+          default: false
+          description: When true, hide match history from other (non-elevated) players.
+
     PublicPlayerResponse:
       type: object
       description: Privacy-conscious player card resolved from a public code (auth-gated deep link).
@@ -4748,6 +4797,10 @@ components:
         isDeleted:
           type: boolean
           description: True for an admin-soft-deleted account (#518); rendered as a dominant "Deleted" chip wherever the name appears.
+        matchHistoryHidden:
+          type: boolean
+          default: false
+          description: True when the owner hid their match history from other players (#622); lets the owner's own profile warn that it is hidden.
         canonical:
           nullable: true
           description: When disabled, the canonical ("true") account to link to.
@@ -4889,6 +4942,10 @@ components:
         total:
           type: integer
           description: Count of matches matching the (optional) search, for numbered pagination.
+        hidden:
+          type: boolean
+          default: false
+          description: True when the owner hid their history and the viewer is unprivileged — the list is intentionally empty (#622).
 
     MatchHistoryParticipant:
       type: object
@@ -5149,6 +5206,10 @@ components:
           type: boolean
           default: false
           description: When true, the profile photo is suppressed everywhere (#303).
+        matchHistoryHidden:
+          type: boolean
+          default: false
+          description: When true, the player's match history is hidden from other players on the public profile (#622).
         dateOfBirth:
           type: string
           format: date

@@ -23,6 +23,9 @@ vi.mock("@/components/PhotoSettingsForm", () => ({
 vi.mock("@/components/LocalThemeForm", () => ({
   LocalThemeForm: () => <div>local theme form</div>,
 }));
+vi.mock("@/components/MatchHistoryVisibilityForm", () => ({
+  MatchHistoryVisibilityForm: () => <div>match history visibility form</div>,
+}));
 
 describe("SettingsTab", () => {
   beforeEach(() => {

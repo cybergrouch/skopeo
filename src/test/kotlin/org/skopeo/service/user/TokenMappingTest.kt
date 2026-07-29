@@ -218,13 +218,13 @@ class TokenMappingTest {
     }
 
     @Test
-    fun `default capabilities are PLAYER and RESEARCHER (#107)`() {
+    fun `default capabilities are PLAYER only (#622)`() {
         val command =
             buildProvisionCommand(
                 token = token(name = "Ana"),
                 request = CreateUserRequest(proposedRating = "4.0", dateOfBirth = "2000-01-01", sex = "Male"),
             )
-        command.capabilities shouldBe setOf(Capability.PLAYER, Capability.RESEARCHER)
+        command.capabilities shouldBe setOf(element = Capability.PLAYER)
     }
 
     @Test
@@ -246,7 +246,7 @@ class TokenMappingTest {
                 request = CreateUserRequest(proposedRating = "4.0", dateOfBirth = "2000-01-01", sex = "Male"),
                 adminEmails = setOf(element = "admin@example.com"),
             )
-        command.capabilities shouldBe setOf(Capability.PLAYER, Capability.RESEARCHER)
+        command.capabilities shouldBe setOf(element = Capability.PLAYER)
     }
 
     @Test
@@ -257,6 +257,6 @@ class TokenMappingTest {
                 request = CreateUserRequest(proposedRating = "4.0", dateOfBirth = "2000-01-01", sex = "Male"),
                 adminEmails = setOf(element = "admin@example.com"),
             )
-        command.capabilities shouldBe setOf(Capability.PLAYER, Capability.RESEARCHER)
+        command.capabilities shouldBe setOf(element = Capability.PLAYER)
     }
 }

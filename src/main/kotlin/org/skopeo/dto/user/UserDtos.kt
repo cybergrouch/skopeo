@@ -90,6 +90,15 @@ data class PhotoSettingsRequest(
     }
 }
 
+/**
+ * Body for `PUT /api/v1/users/{id}/match-history-visibility` (#622). [hidden] = true withholds the
+ * player's match history from unprivileged viewers on the public profile. Authorized self-or-ADMIN.
+ */
+@Serializable
+data class MatchHistoryVisibilityRequest(
+    val hidden: Boolean = false,
+)
+
 /** True when [value] parses as an absolute http(s) URL — the only image sources we allow (#303). */
 private fun isHttpUrl(value: String): Boolean =
     (value.startsWith(prefix = "http://") || value.startsWith(prefix = "https://")) &&
@@ -123,6 +132,7 @@ data class UserResponse(
     // Raw photo controls, so the owner/admin can prefill the edit form (#303).
     val customPhotoUrl: String? = null,
     val photoHidden: Boolean = false,
+    val matchHistoryHidden: Boolean = false,
     val dateOfBirth: String?,
     val sex: String?,
     val city: String?,

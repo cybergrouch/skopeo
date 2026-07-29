@@ -39,6 +39,7 @@ import org.skopeo.model.TeamType
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.module
+import org.skopeo.repository.CapabilityRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
@@ -248,13 +249,15 @@ class UserSearchApiIntegrationTest {
         }
 
     @Test
-    fun `a default player can search but cannot resolve ids (#107)`() =
+    fun `a RESEARCHER can search but cannot resolve ids (#622)`() =
         withApp { client ->
             seedStaff(uid = "admin", roles = setOf(Capability.ADMINISTRATOR))
             val player = TestFirebaseAuth.mintToken(uid = "p1")
             val p1 = client.provisionNamed(uid = "p1", displayName = "Player One")
+            // RESEARCHER is a separately-granted capability since #622 (no longer a default sign-up grant).
+            CapabilityRepository().grant(userId = UUID.fromString(p1.id), capability = Capability.RESEARCHER)
 
-            // A default sign-up is a RESEARCHER, so player research (search) is allowed (#107)...
+            // A RESEARCHER may run player research (search)...
             client.lookup(token = player, params = "name=player").status shouldBe HttpStatusCode.OK
             // ...but id-resolution stays HOST/ADMINISTRATOR only.
             client.lookup(token = player, params = "ids=${p1.id}").status shouldBe HttpStatusCode.Forbidden

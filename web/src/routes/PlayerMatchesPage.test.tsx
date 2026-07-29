@@ -109,4 +109,17 @@ describe('PlayerMatchesPage', () => {
     await user.type(screen.getByPlaceholderText('Search opponent…'), 'zzz')
     expect(screen.getByText('No matches for that filter.')).toBeInTheDocument()
   })
+
+  it('shows a privacy notice when the owner has hidden their match history (#622)', () => {
+    useGetApiV1PlayersCodeMatchHistory.mockReturnValue({
+      data: { items: [match('a', 'Ben'), match('b', 'Cara')], total: 45, hidden: true },
+      isLoading: false,
+    })
+    renderPage()
+    expect(screen.getByText('This player has hidden their match history.')).toBeInTheDocument()
+    // The match rows and pager are suppressed even though items are present.
+    expect(screen.queryByText('Ben')).not.toBeInTheDocument()
+    expect(screen.queryByText('Cara')).not.toBeInTheDocument()
+    expect(screen.queryByText('Showing 1–20 of 45')).not.toBeInTheDocument()
+  })
 })

@@ -126,13 +126,14 @@ internal fun buildProvisionCommand(
         city = request.city,
         country = request.country,
         proposedRating = parseProposedRating(value = request.proposedRating),
-        // Every sign-up is a PLAYER and a RESEARCHER (#107) — RESEARCHER gates the Research tab and is
-        // granted to all by default for now, so a future paywall is a matter of withholding the grant.
+        // Every sign-up is a PLAYER (#622). RESEARCHER is no longer granted by default — it now gates
+        // the Research tab as a real, separately-granted capability (an ADMINISTRATOR implies it). The
+        // bootstrap admin keeps its explicit RESEARCHER grant so the seeded operator retains full access.
         capabilities =
             if (isBootstrapAdmin(token = token, adminEmails = adminEmails)) {
                 setOf(Capability.PLAYER, Capability.RESEARCHER, Capability.ADMINISTRATOR)
             } else {
-                setOf(Capability.PLAYER, Capability.RESEARCHER)
+                setOf(element = Capability.PLAYER)
             },
     )
 }

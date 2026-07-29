@@ -74,6 +74,19 @@ class OpenAPIIntegrationTest {
             body shouldContain "previewRatingsAsNonAdmin"
         }
 
+    /** Match-history privacy flag (#622): the self-service route, its request schema, and the response field. */
+    @Test
+    fun testOpenAPISpecIncludesMatchHistoryVisibility() =
+        testApplication {
+            application {
+                module(initDatabase = false)
+            }
+            val body = client.get(urlString = "/openapi.yaml").bodyAsText()
+            body shouldContain "/api/v1/users/{id}/match-history-visibility"
+            body shouldContain "MatchHistoryVisibilityRequest"
+            body shouldContain "matchHistoryHidden"
+        }
+
     /** Tournaments (#525): circuit-on-event, club sanction, and placement-match fields are documented. */
     @Test
     fun testOpenAPISpecIncludesTournamentFields() =

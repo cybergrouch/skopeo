@@ -180,6 +180,17 @@ export function PlayerProfilePage() {
           />
         ) : null}
 
+        {/* #622: when the owner has hidden their history, warn them (on their OWN profile) that other
+            players don't see it. Other viewers just get an empty history, enforced server-side. */}
+        {player && !player.isDisabled && isOwner && player.matchHistoryHidden ? (
+          <p
+            role="status"
+            className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
+          >
+            Your match history is hidden from other players. You can change this in Settings → Privacy.
+          </p>
+        ) : null}
+
         {player && !player.isDisabled ? (
           <MatchHistoryCard code={player.publicCode} />
         ) : null}
