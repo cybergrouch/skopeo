@@ -99,7 +99,7 @@ class SettingsServiceTest {
         val set = service.setStandingsSource(token = token(uid = "admin"), source = "POINTS").shouldBeRight()
         set.source shouldBe SnapshotSource.POINTS.name
 
-        service.getStandingsSource().source shouldBe SnapshotSource.POINTS.name
+        service.getStandingsSource().source shouldBe SnapshotSource.POINTS
     }
 
     @Test

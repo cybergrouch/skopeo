@@ -156,11 +156,11 @@ class ThemeServiceTest {
 
         val set = service.setLocalTheme(token = token(uid = "u"), theme = "GRASS", now = at).shouldBeRight()
         set.theme shouldBe ThemeSetting.GRASS.name
-        set.setAt shouldBe at
+        set.setAt shouldBe at.toString()
 
         val read = service.getLocalTheme(token = token(uid = "u")).shouldBeRight()
         read.theme shouldBe ThemeSetting.GRASS.name
-        read.setAt shouldBe at
+        read.setAt shouldBe at.toString()
     }
 
     @Test
@@ -214,7 +214,7 @@ class ThemeServiceTest {
 
         val second = service.setLocalTheme(token = token(uid = "u"), theme = "CLAY", now = later).shouldBeRight()
         second.theme shouldBe ThemeSetting.CLAY.name
-        second.setAt shouldBe later
+        second.setAt shouldBe later.toString()
     }
 
     @Test

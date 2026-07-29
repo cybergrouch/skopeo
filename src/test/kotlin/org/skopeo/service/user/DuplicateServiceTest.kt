@@ -80,7 +80,7 @@ class DuplicateServiceTest {
         listOf(dup1.id, dup2.id).forEach { id ->
             users.findById(id = id).shouldBeRight().let {
                 it.isActive.shouldBeFalse()
-                it.canonicalUserId shouldBe canonical.id.toString()
+                it.canonicalUserId shouldBe canonical.id
             }
         }
         // The canonical itself is untouched.
@@ -227,6 +227,6 @@ class DuplicateServiceTest {
             .markDuplicates(token = token(uid = "root"), canonicalId = canonical.id, duplicateIds = listOf(element = dup.id))
             .shouldBeRight()
 
-        service.duplicatesOf(token = token(uid = "root"), canonicalId = canonical.id).shouldBeRight().single().id shouldBe dup.id
+        service.duplicatesOf(token = token(uid = "root"), canonicalId = canonical.id).shouldBeRight().single().id shouldBe dup.id.toString()
     }
 }
