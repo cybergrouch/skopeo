@@ -23,7 +23,6 @@ import org.skopeo.model.ClientPrincipal
 import org.skopeo.model.InsertApiKeyCommand
 import org.skopeo.model.IssuedApiKey
 import org.skopeo.model.PublicPlayer
-import org.skopeo.model.ResolvedApiKey
 import org.skopeo.model.ServiceError
 import org.skopeo.model.UserSearchQuery
 import org.skopeo.model.displayName
@@ -45,6 +44,7 @@ private const val CLIENT_NAME_MAX = 120
  *
  * Expected failures are returned as an [Either] left ([ServiceError], #115) rather than thrown.
  */
+@Suppress("TooManyFunctions") // Cohesive: admin CRUD (create/list/issue/revoke) + the key resolver + scope/delegation reads.
 class ApiClientService(
     private val clients: ApiClientRepository = ApiClientRepository(),
     private val users: UserRepository = UserRepository(),
@@ -188,14 +188,12 @@ class ApiClientService(
         }
     }
 
-    /** Look up a well-formed key by hash and classify it (unknown → Invalid; else via [classify]). */
+    /**
+     * Look up a well-formed key by hash and classify it: unknown → Invalid; revoked/expired or a
+     * suspended client → Forbidden; otherwise Authenticated. Side-effect-free.
+     */
     private fun resolve(raw: String): ClientAuthResult {
         val resolved = clients.findKeyByHash(hash = ApiKeyCrypto.hash(plaintext = raw)) ?: return ClientAuthResult.Invalid
-        return classify(resolved = resolved)
-    }
-
-    /** A recognized key: reject if revoked/expired or its client is suspended; else authenticated. */
-    private fun classify(resolved: ResolvedApiKey): ClientAuthResult {
         val key = resolved.key
         val rejected =
             key.status == ApiKeyStatus.REVOKED ||

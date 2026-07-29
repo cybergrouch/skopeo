@@ -230,6 +230,25 @@ class ApiClientServiceTest {
     }
 
     @Test
+    fun `resolveClientId returns the client for a valid key and null otherwise`() {
+        val adminToken = admin()
+        val client = service.createClient(token = adminToken, name = "Partner A").shouldBeRight()
+        val issued =
+            service.issueKey(
+                token = adminToken,
+                clientId = client.id,
+                scopes = emptySet(),
+                environment = ApiKeyEnvironment.LIVE,
+                expiresInDays = null,
+            ).shouldBeRight()
+
+        service.resolveClientId(rawKey = issued.plaintext) shouldBe client.id
+        service.resolveClientId(rawKey = "") shouldBe null
+        service.resolveClientId(rawKey = "garbage") shouldBe null
+        service.resolveClientId(rawKey = ApiKeyCrypto.generate(environment = ApiKeyEnvironment.LIVE).plaintext) shouldBe null
+    }
+
+    @Test
     fun `authenticate rejects an expired key`() {
         val client = clients.createClient(name = "Partner A", createdBy = null)
         val generated = ApiKeyCrypto.generate(environment = ApiKeyEnvironment.LIVE)
