@@ -1,0 +1,238 @@
+// SPDX-FileCopyrightText: 2026 Lange Pantoja
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+package org.skopeo.service.client
+
+import io.kotest.assertions.arrow.core.shouldBeLeft
+import io.kotest.assertions.arrow.core.shouldBeRight
+import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeInstanceOf
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.update
+import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.skopeo.model.ApiClientStatus
+import org.skopeo.model.ApiKeyEnvironment
+import org.skopeo.model.AuthProvider
+import org.skopeo.model.Capability
+import org.skopeo.model.ClientAuthResult
+import org.skopeo.model.InsertApiKeyCommand
+import org.skopeo.model.NameType
+import org.skopeo.model.ProvisionUserCommand
+import org.skopeo.model.ServiceError
+import org.skopeo.model.User
+import org.skopeo.model.UserIdentity
+import org.skopeo.model.UserName
+import org.skopeo.repository.ApiClientRepository
+import org.skopeo.repository.ApiClientsTable
+import org.skopeo.repository.UserRepository
+import org.skopeo.service.user.VerifiedFirebaseToken
+import org.skopeo.testsupport.PostgresTestDatabase
+import java.time.LocalDateTime
+import java.util.UUID
+
+class ApiClientServiceTest {
+    companion object {
+        @BeforeAll
+        @JvmStatic
+        fun connect() {
+            PostgresTestDatabase.start()
+        }
+    }
+
+    private val users = UserRepository()
+    private val clients = ApiClientRepository()
+    private val service = ApiClientService(clients = clients, users = users)
+
+    @BeforeEach
+    fun reset() {
+        PostgresTestDatabase.truncate()
+    }
+
+    private fun provision(
+        uid: String,
+        roles: Set<Capability> = setOf(element = Capability.PLAYER),
+    ): User =
+        users.provision(
+            command =
+                ProvisionUserCommand(
+                    firebaseUid = uid,
+                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                    names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
+                    capabilities = roles,
+                ),
+        )
+
+    private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
+
+    private fun admin(uid: String = "admin"): VerifiedFirebaseToken {
+        provision(uid = uid, roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        return token(uid = uid)
+    }
+
+    @Test
+    fun `an admin creates a client, a non-admin cannot, and a blank name is rejected`() {
+        service.createClient(token = admin(), name = "Partner A").shouldBeRight().name shouldBe "Partner A"
+
+        provision(uid = "plain", roles = setOf(element = Capability.PLAYER))
+        service.createClient(token = token(uid = "plain"), name = "X").shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+
+        service.createClient(token = admin(uid = "admin2"), name = "   ").shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+
+        // An over-long name is rejected.
+        service.createClient(token = admin(uid = "admin3"), name = "a".repeat(n = 121)).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+
+        // A token for a user that was never provisioned resolves to no caller → Forbidden.
+        service.createClient(token = token(uid = "ghost"), name = "X").shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
+    @Test
+    fun `lists clients for an admin only`() {
+        val adminToken = admin()
+        service.createClient(token = adminToken, name = "Partner A").shouldBeRight()
+        service.listClients(token = adminToken).shouldBeRight().map { it.name } shouldBe listOf(element = "Partner A")
+
+        provision(uid = "plain", roles = setOf(element = Capability.PLAYER))
+        service.listClients(token = token(uid = "plain")).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
+    @Test
+    fun `issues a key returning the plaintext once, and rejects an unknown client or bad expiry`() {
+        val adminToken = admin()
+        val client = service.createClient(token = adminToken, name = "Partner A").shouldBeRight()
+
+        val issued =
+            service.issueKey(
+                token = adminToken,
+                clientId = client.id,
+                scopes = setOf(element = Capability.PLAYER),
+                environment = ApiKeyEnvironment.LIVE,
+                expiresInDays = null,
+            ).shouldBeRight()
+        ApiKeyCrypto.looksValid(raw = issued.plaintext) shouldBe true
+        issued.key.scopes shouldBe setOf(element = Capability.PLAYER)
+
+        service.issueKey(
+            token = adminToken,
+            clientId = UUID.randomUUID(),
+            scopes = emptySet(),
+            environment = ApiKeyEnvironment.LIVE,
+            expiresInDays = null,
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+
+        service.issueKey(
+            token = adminToken,
+            clientId = client.id,
+            scopes = emptySet(),
+            environment = ApiKeyEnvironment.LIVE,
+            expiresInDays = 0,
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `revokes a key, and a missing key is NotFound`() {
+        val adminToken = admin()
+        val client = service.createClient(token = adminToken, name = "Partner A").shouldBeRight()
+        val issued =
+            service.issueKey(
+                token = adminToken,
+                clientId = client.id,
+                scopes = emptySet(),
+                environment = ApiKeyEnvironment.LIVE,
+                expiresInDays = null,
+            ).shouldBeRight()
+
+        service.revokeKey(token = adminToken, clientId = client.id, keyId = issued.key.id).shouldBeRight()
+        service.revokeKey(token = adminToken, clientId = client.id, keyId = issued.key.id)
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
+    fun `authenticate resolves a valid key to its client and scopes`() {
+        val adminToken = admin()
+        val client = service.createClient(token = adminToken, name = "Partner A").shouldBeRight()
+        val issued =
+            service.issueKey(
+                token = adminToken,
+                clientId = client.id,
+                scopes = setOf(Capability.PLAYER, Capability.HOST),
+                environment = ApiKeyEnvironment.LIVE,
+                expiresInDays = 30,
+            ).shouldBeRight()
+
+        val result = service.authenticate(rawKey = issued.plaintext).shouldBeInstanceOf<ClientAuthResult.Authenticated>()
+        result.principal.clientId shouldBe client.id
+        result.principal.keyId shouldBe issued.key.id
+        result.principal.scopes shouldBe setOf(Capability.PLAYER, Capability.HOST)
+    }
+
+    @Test
+    fun `authenticate classifies missing, malformed, and unknown keys`() {
+        service.authenticate(rawKey = "") shouldBe ClientAuthResult.Missing
+        service.authenticate(rawKey = "   ") shouldBe ClientAuthResult.Missing
+        service.authenticate(rawKey = "not-a-key") shouldBe ClientAuthResult.Invalid
+        // Well-formed but never issued → unknown → Invalid.
+        val orphan = ApiKeyCrypto.generate(environment = ApiKeyEnvironment.LIVE)
+        service.authenticate(rawKey = orphan.plaintext) shouldBe ClientAuthResult.Invalid
+    }
+
+    @Test
+    fun `authenticate rejects a revoked key`() {
+        val adminToken = admin()
+        val client = service.createClient(token = adminToken, name = "Partner A").shouldBeRight()
+        val issued =
+            service.issueKey(
+                token = adminToken,
+                clientId = client.id,
+                scopes = emptySet(),
+                environment = ApiKeyEnvironment.LIVE,
+                expiresInDays = null,
+            ).shouldBeRight()
+        service.revokeKey(token = adminToken, clientId = client.id, keyId = issued.key.id).shouldBeRight()
+
+        service.authenticate(rawKey = issued.plaintext) shouldBe ClientAuthResult.Forbidden
+    }
+
+    @Test
+    fun `authenticate rejects an expired key`() {
+        val client = clients.createClient(name = "Partner A", createdBy = null)
+        val generated = ApiKeyCrypto.generate(environment = ApiKeyEnvironment.LIVE)
+        clients.insertKey(
+            command =
+                InsertApiKeyCommand(
+                    clientId = client.id,
+                    keyPrefix = generated.displayPrefix,
+                    keyHash = generated.hash,
+                    scopes = emptySet(),
+                    createdBy = null,
+                    expiresAt = LocalDateTime.now().minusDays(1),
+                ),
+        )
+        service.authenticate(rawKey = generated.plaintext) shouldBe ClientAuthResult.Forbidden
+    }
+
+    @Test
+    fun `authenticate rejects a key whose client is suspended`() {
+        val adminToken = admin()
+        val client = service.createClient(token = adminToken, name = "Partner A").shouldBeRight()
+        val issued =
+            service.issueKey(
+                token = adminToken,
+                clientId = client.id,
+                scopes = emptySet(),
+                environment = ApiKeyEnvironment.LIVE,
+                expiresInDays = null,
+            ).shouldBeRight()
+        transaction {
+            ApiClientsTable.update(where = { ApiClientsTable.id eq client.id }) {
+                it[status] = ApiClientStatus.SUSPENDED.name
+            }
+        }
+        service.authenticate(rawKey = issued.plaintext) shouldBe ClientAuthResult.Forbidden
+    }
+}
