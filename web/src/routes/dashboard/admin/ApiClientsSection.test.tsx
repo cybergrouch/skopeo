@@ -4,14 +4,21 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ApiClientsSection } from "./ApiClientsSection";
 
-const { useGetApiV1ApiClients, createMutate, issueMutate, revokeMutate, pending } =
-  vi.hoisted(() => ({
-    useGetApiV1ApiClients: vi.fn(),
-    createMutate: vi.fn(),
-    issueMutate: vi.fn(),
-    revokeMutate: vi.fn(),
-    pending: { value: false },
-  }));
+const {
+  useGetApiV1ApiClients,
+  createMutate,
+  issueMutate,
+  revokeMutate,
+  setLimitMutate,
+  pending,
+} = vi.hoisted(() => ({
+  useGetApiV1ApiClients: vi.fn(),
+  createMutate: vi.fn(),
+  issueMutate: vi.fn(),
+  revokeMutate: vi.fn(),
+  setLimitMutate: vi.fn(),
+  pending: { value: false },
+}));
 
 vi.mock("@/api/generated/client-api/client-api", () => ({
   useGetApiV1ApiClients,
@@ -22,6 +29,7 @@ vi.mock("@/api/generated/client-api/client-api", () => ({
     mutateAsync: revokeMutate,
     isPending: pending.value,
   }),
+  usePutApiV1ApiClientsIdRateLimit: () => ({ mutateAsync: setLimitMutate, isPending: pending.value }),
 }));
 
 const client = {
@@ -59,6 +67,7 @@ describe("ApiClientsSection", () => {
     });
     createMutate.mockResolvedValue({ id: "c2" });
     revokeMutate.mockResolvedValue(undefined);
+    setLimitMutate.mockResolvedValue({ ...client });
   });
 
   it("lists clients with their keys", () => {
@@ -153,6 +162,53 @@ describe("ApiClientsSection", () => {
     expect(writeText).toHaveBeenCalledWith("skopeo_live_SECRETVALUE");
     expect(
       await screen.findByRole("button", { name: "Copied" }),
+    ).toBeInTheDocument();
+  });
+
+  it("sets a per-client rate-limit override (#603)", async () => {
+    const user = userEvent.setup();
+    renderSection();
+    await user.type(
+      screen.getByLabelText("Rate limit / min (blank = default)"),
+      "300",
+    );
+    await user.click(screen.getByRole("button", { name: "Save limit" }));
+    await waitFor(() =>
+      expect(setLimitMutate).toHaveBeenCalledWith({
+        id: "c1",
+        data: { rateLimitPerMin: 300 },
+      }),
+    );
+  });
+
+  it("clears the rate-limit override when left blank (#603)", async () => {
+    useGetApiV1ApiClients.mockReturnValue({
+      data: [{ ...client, rateLimitPerMin: 300 }],
+      isLoading: false,
+    });
+    const user = userEvent.setup();
+    renderSection();
+    await user.clear(screen.getByLabelText("Rate limit / min (blank = default)"));
+    await user.click(screen.getByRole("button", { name: "Save limit" }));
+    await waitFor(() =>
+      expect(setLimitMutate).toHaveBeenCalledWith({
+        id: "c1",
+        data: { rateLimitPerMin: null },
+      }),
+    );
+  });
+
+  it("surfaces an error when updating the rate limit fails (#603)", async () => {
+    setLimitMutate.mockRejectedValue(new Error("boom"));
+    const user = userEvent.setup();
+    renderSection();
+    await user.type(
+      screen.getByLabelText("Rate limit / min (blank = default)"),
+      "50",
+    );
+    await user.click(screen.getByRole("button", { name: "Save limit" }));
+    expect(
+      await screen.findByText(/could not update the rate limit/i),
     ).toBeInTheDocument();
   });
 
