@@ -232,6 +232,15 @@ fun Application.configureCORS() {
 }
 
 fun Application.configureOpenAPI() {
+    // The interactive docs (Swagger UI + raw spec) are unauthenticated. They default to exposed, but can
+    // be turned off in a hardened deployment via `docs.exposed=false` (env DOCS_EXPOSED) before opening
+    // the API to external clients (#599). The Prometheus /metrics scrape endpoint stays open — it's an
+    // infra-internal concern on Cloud Run — and is not governed by this flag.
+    val docsExposed = environment.config.propertyOrNull(path = "docs.exposed")?.getString()?.toBoolean() ?: true
+    if (!docsExposed) {
+        logger.info { "API documentation endpoints are disabled (docs.exposed=false)" }
+        return
+    }
     routing {
         // Serve raw OpenAPI specification file
         get(path = "/openapi.yaml") {

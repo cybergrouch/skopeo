@@ -81,6 +81,40 @@ class AuditRepositoryTest {
     }
 
     @Test
+    fun `records the API client behind a client-driven action (#599)`() {
+        val client = ApiClientRepository().createClient(name = "Partner A", createdBy = null)
+        audit.record(
+            write =
+                AuditWrite(
+                    actorUserId = null,
+                    action = AuditAction.API_KEY_ISSUED,
+                    entityType = AuditEntityType.API_KEY,
+                    entityId = UUID.randomUUID(),
+                    summary = "Client-driven action",
+                    actorClientId = client.id,
+                ),
+        )
+        val entry = audit.list(actions = null, limit = 10, offset = 0).first.single()
+        entry.actorClientId shouldBe client.id
+        entry.actorUserId.shouldBeNull()
+    }
+
+    @Test
+    fun `a client id is null for an ordinary user action`() {
+        audit.record(
+            write =
+                AuditWrite(
+                    actorUserId = provisionAdmin(),
+                    action = AuditAction.RATING_SET,
+                    entityType = AuditEntityType.RATING,
+                    entityId = UUID.randomUUID(),
+                    summary = "Set rating",
+                ),
+        )
+        audit.list(actions = null, limit = 10, offset = 0).first.single().actorClientId.shouldBeNull()
+    }
+
+    @Test
     fun `a system action has a null actor and empty details`() {
         audit.record(
             write =

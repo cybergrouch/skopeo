@@ -32,6 +32,31 @@ class OpenAPIIntegrationTest {
             body shouldContain "CreateCircuitRequest"
         }
 
+    /** Client API (#225/#599): the admin client/key routes, the client-key reads, and their schemas. */
+    @Test
+    fun testOpenAPISpecIncludesClientApi() =
+        testApplication {
+            application {
+                module(initDatabase = false)
+            }
+            val body = client.get(urlString = "/openapi.yaml").bodyAsText()
+            // The X-Api-Key security scheme and the admin + client-key paths.
+            body shouldContain "X-Api-Key"
+            body shouldContain "/api/v1/api-clients"
+            body shouldContain "/api/v1/api-clients/{clientId}/keys/{keyId}"
+            body shouldContain "/api/v1/client/me"
+            body shouldContain "/api/v1/client/players"
+            body shouldContain "/api/v1/client/me/capabilities"
+            // The request/response schemas the web client generates from.
+            body shouldContain "CreateApiClientRequest"
+            body shouldContain "IssueApiKeyRequest"
+            body shouldContain "ApiClientResponse"
+            body shouldContain "IssuedApiKeyResponse"
+            body shouldContain "ClientIdentityResponse"
+            body shouldContain "PartnerPlayerResponse"
+            body shouldContain "ClientEffectiveCapabilitiesResponse"
+        }
+
     /** Per-admin raw-rating preview toggle (#583): the self-service route + its request schema. */
     @Test
     fun testOpenAPISpecIncludesRatingPreviewToggle() =

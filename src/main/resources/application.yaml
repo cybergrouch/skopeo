@@ -25,6 +25,12 @@ web:
   # WEB_SITE_ORIGIN; unset falls back to the production default (https://skopeo.co).
   origin: "$WEB_SITE_ORIGIN:https://skopeo.co"
 
+docs:
+  # Whether the unauthenticated interactive API docs (Swagger UI at /swagger + raw spec at
+  # /openapi.yaml) are served (#599). Defaults to true; set DOCS_EXPOSED=false to disable them in a
+  # hardened/externally-exposed deployment. Does not affect the Prometheus /metrics endpoint.
+  exposed: "$DOCS_EXPOSED:true"
+
 admin:
   # Comma-separated allowlist of emails auto-granted ADMINISTRATOR on sign-up/login, but ONLY when
   # the email is provider-verified (the verified-email gate). Bootstrap / break-glass only — everyday
