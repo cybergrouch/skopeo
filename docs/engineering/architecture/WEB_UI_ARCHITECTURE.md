@@ -130,14 +130,20 @@ gates above:
 | Tab | Component | Gate |
 |---|---|---|
 | Profile | `ProfileTab` | Always |
+| Settings | `SettingsTab` | `isPlayer` (every signed-in user) |
 | Research | `ResearchTab` | `isResearcher` |
 | Standings | `StandingsTab` | Always |
+| Claim account | `ClaimTab` | Always |
 | Event Organizer | `EventOrganizerTab` | `canManageMatches` |
 | Seeding | `SeedingTab` | `canManageMatches` |
+| Placeholder Players | `PlaceholderPlayersTab` | `canManageMatches` |
 | Ratings | `RatingsTab` | `canRate` |
 | Invites | `InvitesTab` | `isAdministrator` |
 | Activity Log | `ActivityTab` | `isAdministrator` |
+| Reports | `ReportTab` | `isAdministrator` |
+| Points Management | `PointsManagementSection` | `canManagePointsBudget` |
 | Admin | `AdminTab` | `isAdministrator` |
+| About | `AboutTab` | Always |
 
 (The "Event Organizer" tab is keyed `matches` internally and lives under
 `src/routes/dashboard/matches/`.)

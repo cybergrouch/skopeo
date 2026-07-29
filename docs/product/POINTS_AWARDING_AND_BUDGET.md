@@ -1,5 +1,7 @@
 # Points Awarding & Budget — Design Discussion
 
+> **⚠️ Superseded in part (#559).** The per-club **points budget** and per-event **point-config / designation** this doc is built around were **removed** (migrations `V16__points_budget` → `V30__remove_points_budget_designation`; issue #559). The shipped points model is now: global admin-configurable **points schedules** — the open-play margin-bracket table and the tournament placement table — at `/api/v1/settings/points/*` (`routes/PointsConfigRoutes.kt`, #552/#553), plus the append-only **`ranking_point_awards` ledger** (`routes/RankingPointRoutes.kt`). Read the budget sections below as historical design context, not current behavior.
+
 **Status:** 🟢 Decisions locked (agreed on [#403](https://github.com/cybergrouch/skopeo/issues/403)); implementation proceeds by the A–E phases (§8). Phase A in progress.
 **Issue:** [#403](https://github.com/cybergrouch/skopeo/issues/403). Builds on [#146](https://github.com/cybergrouch/skopeo/issues/146)/[#392](https://github.com/cybergrouch/skopeo/issues/392) (points ledger), [#393](https://github.com/cybergrouch/skopeo/issues/393) (serving layer) and [#400](https://github.com/cybergrouch/skopeo/issues/400) (recompute). Subsumes the ATP stage-table sketch and reshapes [#390](https://github.com/cybergrouch/skopeo/issues/390) (tournaments). Sequenced **before** [#389](https://github.com/cybergrouch/skopeo/issues/389) (scheduler).
 

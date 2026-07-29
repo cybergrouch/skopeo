@@ -6,7 +6,7 @@ A Ktor API for dynamic calculation of tennis rankings based on match results.
 
 Skopeo provides real-time ranking calculations for tennis players using the NTRP (National Tennis Rating Program) system. The API calculates updated rankings for both players based on match outcomes, deriving expected results from the difference in their current rankings. NTRP is the only supported rating system by design — UTR support was intentionally removed.
 
-Beyond the stateless calculator, Skopeo persists players, matches, and ratings: admins set each player's initial rating, hosts create match fixtures and upload results, an admin-triggered calculation turns those results into rating changes (dry-run by default, explicit commit to write), and every change is recorded in rating history. A capability-gated React web UI (`web/`) wraps it all — sign-up plus a dashboard with Profile, Matches, Research, and Admin tabs.
+Beyond the stateless calculator, Skopeo persists players, matches, and ratings: admins set each player's initial rating, hosts create match fixtures and upload results, an admin-triggered calculation turns those results into rating changes (dry-run by default, explicit commit to write), and every change is recorded in rating history. A capability-gated React web UI (`web/`) wraps it all — sign-up plus a dashboard whose tabs (Profile, Settings, Standings, Event Organizer, Ratings, Admin, and more) are shown according to each user's capabilities.
 
 ## Features
 
@@ -57,14 +57,14 @@ Interactive and machine-readable API documentation.
 #### 4. **Quality Assurance**
 Comprehensive testing and code quality infrastructure.
 
-- **Test Suite**: 123 automated tests
+- **Test Suite**: an extensive automated suite (JUnit 5 + Kotest)
   - Unit tests for business logic
   - Integration tests for API contracts
   - Edge case tests for algorithm validation
   - Kotest DSL assertions (enforced by Detekt)
-- **Code Coverage**: ~79% line coverage, ~75% branch coverage
+- **Code Coverage**: JaCoCo, enforced at **75% line / 70% branch**
   - JaCoCo reports (HTML/XML)
-  - Threshold enforcement (75% minimum)
+  - Threshold enforcement in the build (`jacocoTestCoverageVerification`)
 - **Code Quality**: ktlint + Detekt
   - Automatic formatting via Git hooks
   - Style enforcement
@@ -74,7 +74,7 @@ Comprehensive testing and code quality infrastructure.
 Built on top of the stateless calculator (PostgreSQL + Flyway + Exposed).
 
 - **Player profiles**: Sign-up provisions a profile from the verified Firebase token; `sex` (Male/Female) and date of birth are required. Names and contacts are append-only sub-resources.
-- **Capability-based authorization**: PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR grants gate every operation.
+- **Capability-based authorization**: PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, and POINTS_MANAGER grants gate every operation.
 - **Admin-set initial ratings**: Admins assign each player's starting rating; a pending-assessment list surfaces players without one.
 - **Match fixtures + results**: Hosts/admins create fixtures and upload results. Recording a result does not itself change ratings.
 - **Rating-calculation trigger**: Admins run the calculation (`POST /api/v1/ratings/calculations`) over matches pending calculation. **Dry-run is the default** (full preview, no writes); an explicit `{"dryRun": false}` commits ratings, history, and `rated_at`.
@@ -84,7 +84,7 @@ Built on top of the stateless calculator (PostgreSQL + Flyway + Exposed).
 A capability-gated React + Vite single-page app over the API.
 
 - **Authentication**: Firebase-auth sign-up and login.
-- **Dashboard**: Profile / Matches / Research / Admin tabs, shown according to the signed-in user's capabilities (Matches/Research need match-management capability; Admin needs ADMINISTRATOR).
+- **Dashboard**: a capability-gated set of tabs (Profile, Settings, Standings, Event Organizer, Seeding, Ratings, Invites, Activity Log, Reports, Admin, and more), shown according to the signed-in user's capabilities (e.g. Event Organizer/Seeding need match-management; Ratings needs RATER; Invites/Activity Log/Reports/Admin need ADMINISTRATOR).
 - **Generated API client**: Typed client generated from the OpenAPI spec under `web/src/api/generated/`.
 
 ### Input/Output
@@ -147,511 +147,13 @@ Skopeo persists its core data (PostgreSQL + Flyway + Exposed):
 - ✅ Event Organizer (events/meets with participants and matches) + host seeding generation
 - ✅ Governance: domain audit/activity log, duplicate detection + rectification, admin invites
 - ✅ Public pages by shareable code (player / match / event) with QR sharing
-- ✅ Web UI: sign-up + capability-gated dashboard (Profile / Research / Standings / Event Organizer / Seeding / Ratings / Invites / Activity Log / Admin)
+- ✅ Web UI: sign-up + capability-gated dashboard (Profile / Settings / Research / Standings / Claim / Event Organizer / Seeding / Placeholder Players / Ratings / Invites / Activity Log / Reports / Points Management / Admin / About — each gated by capability)
 
 The `POST /api/v1/calculate-ranking` endpoint remains a stateless "what-if" calculator that writes nothing.
 
 ## Product Roadmap
 
-Skopeo's evolution from a **stateless rating calculator** to a **comprehensive player ranking platform** with advanced features for the Philippine tennis community.
-
-### Feature Overview Table
-
-| # | Feature | Priority | Status | Dependencies | Description |
-|---|---------|----------|--------|--------------|-------------|
-| **CORE SYSTEM (IMPLEMENTED)** |
-| 1 | Rating Calculation Engine | ✅ DONE | Implemented | None | Performance-based Elo calculator (NTRP only; UTR removed) |
-| 2 | REST API | ✅ DONE | Implemented | #1 | HTTP API with JSON serialization |
-| 3 | API Documentation | ✅ DONE | Implemented | #2 | Swagger UI + OpenAPI 3.0 spec |
-| 4 | Quality Assurance | ✅ DONE | Implemented | All | 123 tests, coverage, code quality tools |
-| 5 | Player Profile Management | ✅ DONE | Implemented | Database | Capability-gated profiles; sex + date of birth required at sign-up |
-| 6 | Match Tracking System | ✅ DONE | Implemented | #5, Database | Match fixtures + result upload with score validation |
-| 7 | Rating Persistence | ✅ DONE | Implemented | #5, #6, #1 | Admin-set initial ratings, calculation trigger (dry-run/commit), rating history |
-| 8 | Web UI | ✅ DONE | Implemented | #5-#7 | Sign-up + capability-gated dashboard (Profile / Research / Standings / Event Organizer / Seeding / Ratings / Invites / Activity Log / Admin) |
-| **PLATFORM & GOVERNANCE (IMPLEMENTED)** |
-| 24 | Capability-Based Authorization | ✅ DONE | Implemented | #5 | Role gates: PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER (#106), RESEARCHER (#107) |
-| 25 | Event Organizer | ✅ DONE | Implemented | #6, #8 | Host-run events/meets: participants + participant-scoped fixtures; results editable until rated, then read-only (#138) |
-| 26 | Public Pages + QR Sharing | ✅ DONE | Implemented | #5, #6 | Shareable code pages for players / matches / events, with QR (#56 / #136 / #137 / #138) |
-| 27 | Player Search & Research | ✅ DONE | Implemented | #5 | Accent-insensitive name/code search with sex/age/rating filters; Research tab (#86 / #87 / #107) |
-| 28 | Audit / Activity Log | ✅ DONE | Implemented | #5 | Append-only provenance of domain actions + admin activity viewer (#100 / #102) |
-| 29 | Duplicate Detection & Rectification | ✅ DONE | Implemented | #5 | Auto/manual duplicate-candidate flagging + reversible canonical merge (#124 / #126) |
-| 30 | Admin Invitations | ✅ DONE | Implemented | #5 | Invite-gated manual onboarding (email/password & email-link) (#74) |
-| 31 | Re-rate Requests | ✅ DONE | Implemented | #7 | Players request a rating reconsideration; a RATER approves (new rating) or denies (#140) |
-| **MVP REQUIREMENTS (REMAINING)** |
-| 9 | Player Identity Verification (KYC) 🇵🇭 | 🔴 CRITICAL | Not Started | #5 | Philippine government ID validation (Passport, DL, UMID, SSS, GSIS, National ID) |
-| 9a | Social Media Verification | 🟡 NICE-TO-HAVE | Not Started | #9 | Automated verification via social media accounts (Facebook, Instagram, Twitter) |
-| 10 | Player Ranking System | ✅ DONE | Implemented | #5, #6, #7 | Per-NTRP-band "Ranking Race" standings / leaderboards (#113) |
-| **NICE-TO-HAVE FEATURES (ENHANCE MVP)** |
-| 11 | Seeding Generation | ✅ DONE | Implemented | #10 | Host-curated player lists → rating-sorted seeding with CSV export (#111) |
-| 12 | Dynamic Rating Confidence | 🟡 NICE-TO-HAVE | Not Started | #10 | Time-based confidence score for ratings (accounts for player inactivity) |
-| **POST-MVP FEATURES (FUTURE ENHANCEMENTS)** |
-| 13 | Doubles Support | 🟢 FUTURE | Not Started | #7, #8 | Support for doubles matches (2v2) with team ratings |
-| 14 | Tournament Management | 🟢 FUTURE | Not Started | #8, #10 | Create and manage tournaments with brackets |
-| 15 | League/Season Support | 🟢 FUTURE | Not Started | #8 | Seasonal ratings with resets and historical tracking |
-| 16 | Mobile Apps | 🟢 FUTURE | Not Started | All APIs | iOS/Android apps for match recording |
-| 17 | Social Features | 🟢 FUTURE | Not Started | #5 | Friend lists, challenge system, activity feed |
-| 18 | Advanced Analytics | 🟢 FUTURE | Not Started | #8 | Predictive modeling, strength of schedule, trend analysis |
-| 19 | Admin Dashboard | ✅ DONE | Implemented | All | Capability-gated Admin tab: manage players, duplicate detection/rectification, pending assessment/calculation, audit/activity log |
-| 20 | Email Notifications | 🟢 FUTURE | Not Started | #7, #14 | Match confirmations, rating changes, tournament invites |
-| 21 | Multi-language Support | 🟢 FUTURE | Not Started | All | Tagalog, English, other Philippine languages |
-| 22 | Payment Integration 🇵🇭 | 🟢 FUTURE | Not Started | #14 | GCash, PayMaya for tournament fees and membership |
-| 23 | SMS Verification 🇵🇭 | 🟢 FUTURE | Not Started | #5 | Phone number verification for Philippine users |
-
-**Priority Legend:**
-- 🔴 **CRITICAL**: Required for MVP launch
-- 🟡 **NICE-TO-HAVE**: Enhances MVP, recommended before full production
-- 🟢 **FUTURE**: Post-MVP enhancements
-
-### 🎯 MVP Feature Set (Detailed)
-
-#### 1. **Player Profile Management** (PRIORITY: HIGH)
-Complete player lifecycle management with identity verification.
-
-**Core Features**:
-- ✅ Create new player profiles
-  - Name, contact information, birthdate
-  - Initial rating assignment (self-assessment or default)
-  - Profile photo upload
-- ✅ Update player information
-  - Contact details, preferences
-- ✅ View player profile
-  - Current rating and published level
-  - Match history summary
-  - Win/loss record
-- ✅ Archive/deactivate players
-  - Soft delete for historical data integrity
-
-**Sub-Feature: Player Identity Verification (KYC)** 🇵🇭
-Philippine-specific identity verification for tournament play eligibility.
-
-- ✅ **Philippine Government ID Validation**
-  - Passport number verification
-  - Driver's License validation
-  - UMID (Unified Multi-Purpose ID) support
-  - SSS/GSIS ID validation
-  - National ID (PhilSys) integration
-- ✅ **Automatic Verification Flow**
-  - OCR for ID document scanning
-  - API integration with government databases (if available)
-  - Manual verification fallback for admin review
-- ✅ **Verification Status Tracking**
-  - Pending, Verified, Rejected states
-  - Verification expiry dates
-  - Re-verification workflows
-
-**Database Schema (Proposed)**:
-```
-players
-  - id (UUID)
-  - name (String)
-  - email (String, unique)
-  - phone (String)
-  - birthdate (Date)
-  - current_rating_ntrp (Decimal)
-  - photo_url (String)
-  - status (Enum: ACTIVE|INACTIVE|SUSPENDED)
-  - created_at (Timestamp)
-  - updated_at (Timestamp)
-
-player_verifications (Philippine KYC)
-  - id (UUID)
-  - player_id (FK → players.id)
-  - id_type (Enum: PASSPORT|DRIVERS_LICENSE|UMID|SSS|GSIS|NATIONAL_ID)
-  - id_number (String, encrypted)
-  - verification_status (Enum: PENDING|VERIFIED|REJECTED)
-  - verified_at (Timestamp)
-  - verified_by (FK → admins.id)
-  - expiry_date (Date)
-  - document_url (String, encrypted)
-```
-
-#### 2. **Match Tracking System** (PRIORITY: HIGH)
-Complete CRUD operations for match management.
-
-**Core Features**:
-- ✅ **Create Match**
-  - Select two players from database
-  - Record match scores (sets, games, tiebreaks)
-  - Match metadata (date, location, tournament/casual)
-  - Surface type (hard, clay, grass)
-- ✅ **Read/View Matches**
-  - Match details with player names and ratings
-  - Historical match lookup
-  - Filter by player, date range, tournament
-- ✅ **Update Match**
-  - Correct score errors
-  - Add missing metadata
-  - Admin override for disputes
-- ✅ **Delete Match**
-  - Soft delete with audit trail
-  - Rating recalculation on deletion
-  - Admin-only operation
-
-**Match Validation**:
-- Both players must exist in database
-- Both players must use same rating system for the match
-- Score validation (legal tennis scores)
-- Duplicate match prevention (same players, same date)
-
-**Database Schema (Proposed)**:
-```
-matches
-  - id (UUID)
-  - player1_id (FK → players.id)
-  - player2_id (FK → players.id)
-  - match_date (Date)
-  - location (String)
-  - surface (Enum: HARD|CLAY|GRASS|INDOOR)
-  - tournament_id (FK → tournaments.id, nullable)
-  - match_type (Enum: CASUAL|TOURNAMENT|LEAGUE)
-  - status (Enum: PENDING|CONFIRMED|DISPUTED|DELETED)
-  - created_at (Timestamp)
-  - updated_at (Timestamp)
-
-match_scores
-  - id (UUID)
-  - match_id (FK → matches.id)
-  - set_number (Integer)
-  - player1_games (Integer)
-  - player2_games (Integer)
-  - tiebreak_player1 (Integer, nullable)
-  - tiebreak_player2 (Integer, nullable)
-  - winner_id (FK → players.id)
-```
-
-#### 3. **Player Ranking System** (PRIORITY: HIGH)
-Dynamic ranking table with historical tracking.
-
-**Core Features**:
-- ✅ **Dynamic Rating Updates**
-  - Automatic rating recalculation on match confirmation
-  - Published level updates (immediate in v1, scheduled in v2)
-  - Rating history tracking
-- ✅ **Leaderboard/Rankings Table**
-  - Current rankings for all active players
-  - Filter by published level (e.g., all 4.5 NTRP players)
-  - Sort by rating, win percentage, recent activity
-- ✅ **Player Statistics**
-  - Win/loss record
-  - Winning percentage
-  - Average match dominance
-  - Upset wins/losses
-  - Rating trend (gaining/losing points)
-- ✅ **Rating History**
-  - Historical ratings over time
-  - Rating graph visualization
-  - Milestone tracking (level changes)
-
-**Database Schema (Proposed)**:
-```
-ratings_history
-  - id (UUID)
-  - player_id (FK → players.id)
-  - match_id (FK → matches.id, nullable for manual adjustments)
-  - previous_rating (Decimal)
-  - new_rating (Decimal)
-  - rating_change (Decimal)
-  - previous_published_level (String)
-  - new_published_level (String)
-  - level_changed (Boolean)
-  - reason (Enum: MATCH_WIN|MATCH_LOSS|ADMIN_ADJUSTMENT|SEASON_RESET)
-  - created_at (Timestamp)
-
-player_statistics
-  - player_id (FK → players.id)
-  - matches_played (Integer)
-  - wins (Integer)
-  - losses (Integer)
-  - win_percentage (Decimal)
-  - upset_wins (Integer)
-  - upset_losses (Integer)
-  - average_dominance (Decimal)
-  - current_streak (Integer, can be negative)
-  - updated_at (Timestamp)
-```
-
-#### 4. **System Integration** (PRIORITY: CRITICAL)
-All MVP components working together.
-
-**Key Integration Points**:
-- Match creation triggers rating recalculation
-- Rating updates automatically update rankings
-- Player verification status affects tournament eligibility
-- Statistics update in real-time with match results
-
-### 🟡 Nice-to-Have Features (Recommended Before Full Production)
-
-#### 5. **Seeding Generation** (PRIORITY: NICE-TO-HAVE)
-Automated tournament seeding based on current dynamic rankings.
-
-**Core Features**:
-- ✅ **Automatic Seeding Lists**
-  - Generate ordered seeding list from player rankings
-  - Support for different tournament formats (single elimination, round-robin, etc.)
-  - Configurable seeding rules (strict rating order, geographic distribution, etc.)
-- ✅ **Real-time Updates**
-  - Seedings reflect latest rating changes
-  - Re-seeding capabilities for late registrations
-  - Handle tie-breaking scenarios (equal ratings)
-- ✅ **Export Capabilities**
-  - PDF export for tournament directors
-  - CSV export for tournament software integration
-  - Bracket visualization with seeded positions
-
-**Use Cases**:
-- Tournament directors can instantly generate fair seedings
-- Eliminates manual ranking lookups and calculations
-- Ensures competitive balance in tournament draws
-- Reduces seeding disputes with transparent algorithm
-
-**Algorithm Considerations**:
-```
-Seeding Order:
-1. Sort by dynamic rating (descending)
-2. For ties: use confidence value (higher confidence = better seed)
-3. For still tied: use total matches played (more matches = better seed)
-4. For still tied: use win percentage
-5. Last resort: random assignment
-```
-
-#### 6a. **Social Media Verification** (Sub-feature of KYC)
-Automated player verification through social media account validation.
-
-**Core Features**:
-- ✅ **Supported Platforms**
-  - Facebook (most popular in Philippines)
-  - Instagram (photo verification)
-  - Twitter/X (identity confirmation)
-  - LinkedIn (professional players)
-- ✅ **Verification Methods**
-  - OAuth integration for account ownership proof
-  - Profile data matching (name, photo, location)
-  - Account age and activity verification
-  - Friend/follower count thresholds (anti-fake account)
-- ✅ **Verification Levels**
-  - Basic: Account ownership confirmed
-  - Standard: Profile data matches player profile
-  - Enhanced: Multiple platforms verified + high activity
-
-**Benefits**:
-- Complements government ID verification
-- Faster verification for casual players
-- Additional fraud prevention layer
-- Community trust building
-
-**Privacy Considerations**:
-- Players opt-in to social media verification
-- Only public profile data accessed
-- No posting capabilities requested
-- Clear data usage policy
-
-#### 7. **Dynamic Rating Confidence Value** (PRIORITY: NICE-TO-HAVE)
-Time-based confidence scoring for dynamic ratings to account for player inactivity.
-
-**Core Features**:
-- ✅ **Confidence Score Calculation**
-  - Formula: `confidence = base_confidence × activity_factor × recency_factor`
-  - Base confidence: Based on number of matches (minimum 10 for 100%)
-  - Activity factor: Matches in last 90 days vs total matches
-  - Recency factor: Time since last match (decays over time)
-- ✅ **Confidence Levels**
-  - 🟢 **HIGH** (90-100%): Active player, rating is reliable
-    - 10+ matches, last match within 30 days
-  - 🟡 **MEDIUM** (70-89%): Moderately active, rating mostly reliable
-    - 5-9 matches or last match 31-90 days ago
-  - 🟠 **LOW** (50-69%): Inactive player, rating uncertain
-    - <5 matches or last match 91-180 days ago
-  - 🔴 **VERY LOW** (<50%): Highly inactive, rating unreliable
-    - Last match >180 days ago
-- ✅ **Confidence Decay Algorithm**
-  ```
-  recency_factor = 1.0 - (days_since_last_match / 365)
-  min_recency_factor = 0.3  // Never goes below 30%
-
-  activity_factor = min(matches_last_90_days / 5, 1.0)
-  // 5+ matches in 90 days = 100% activity factor
-
-  base_confidence = min(total_matches / 10, 1.0)
-  // 10+ lifetime matches = 100% base confidence
-
-  final_confidence = base_confidence × activity_factor × max(recency_factor, 0.3)
-  ```
-
-**Visual Indicators**:
-- Display confidence badge next to rating
-- Color-coded confidence levels in leaderboards
-- Tooltip with last match date and match count
-- Warning for low-confidence ratings in seeding
-
-**Use Cases**:
-- Tournament directors can see which ratings are current
-- Returning players after long absence have lower confidence
-- Helps identify players who need re-rating matches
-- Fairer seeding by considering rating reliability
-
-**Impact on Seeding**:
-- In tie-breaking scenarios, higher confidence wins
-- Low confidence ratings can trigger "provisional" status
-- Suggested: require 1-2 re-rating matches for <50% confidence
-
-**Database Schema Addition**:
-```
-ALTER TABLE player_statistics ADD COLUMN:
-  - rating_confidence (Decimal) // 0.0 to 1.0
-  - confidence_level (Enum: VERY_LOW|LOW|MEDIUM|HIGH)
-  - last_confidence_update (Timestamp)
-  - matches_last_90_days (Integer)
-```
-
-**Benefits**:
-- More accurate tournament seedings
-- Identifies stale ratings
-- Encourages player activity
-- Transparent rating reliability
-
-### 🔮 Post-MVP Features (Future Enhancements)
-
-These features will be considered after MVP and nice-to-have features are implemented:
-
-#### 1. **Doubles Support** (#13) 🎾
-Support for doubles matches (2 vs 2) with team-based rating calculations.
-
-**⚠️ Design Implications for Current Match Model**
-
-This feature has **critical implications** for how matches are currently represented in the database. To support doubles in the future, the match tracking system (#7) should be designed with flexibility in mind.
-
-**Core Features**:
-- ✅ **Match Type Support**
-  - Singles (1v1) - current implementation
-  - Doubles (2v2) - future support
-  - Mixed Doubles (male + female pairs)
-- ✅ **Team Formation**
-  - Two players form a team
-  - Team selection during match creation
-  - Partner history tracking
-- ✅ **Doubles Rating System**
-  - Separate doubles rating per player (distinct from singles)
-  - Team rating calculation (average of partners or combined formula)
-  - Partner chemistry factor (optional enhancement)
-- ✅ **Match Results**
-  - Team 1 vs Team 2 scoring
-  - Individual player statistics within team context
-  - Win/loss records for both individual and team
-
-**Rating Calculation Approaches**:
-
-*Option 1: Individual Doubles Ratings*
-```
-Each player has:
-- Singles rating (independent)
-- Doubles rating (independent)
-
-Match outcome affects each player's doubles rating individually
-Team rating = average of both partners' doubles ratings
-```
-
-*Option 2: Team-Based Ratings*
-```
-Rating assigned to player pairs (teams)
-Players can have different ratings with different partners
-More complex but accounts for partner chemistry
-```
-
-**Recommended Approach**: Option 1 (Individual Doubles Ratings)
-- Simpler to implement and understand
-- Players maintain consistent doubles rating regardless of partner
-- Similar to how USTA handles doubles
-- Easier migration path from singles-only system
-
-**Database Schema Implications** (Design Considerations for #7):
-
-**Current Match Model** (Singles-focused):
-```sql
-matches
-  - player1_id (FK)
-  - player2_id (FK)
-  - winner_id (FK)
-```
-
-**Recommended Future-Proof Design**:
-```sql
-matches
-  - id (UUID)
-  - match_type (Enum: SINGLES|DOUBLES|MIXED_DOUBLES)
-  - match_date (Date)
-  - location, surface, etc.
-
-match_participants
-  - match_id (FK → matches.id)
-  - player_id (FK → players.id)
-  - team_number (Integer: 1 or 2)
-  - position (Integer: 1 or 2, for doubles only)
-  - is_winner (Boolean)
-
--- This design supports:
--- Singles: 2 participants (team_number = 1 or 2, position = 1)
--- Doubles: 4 participants (team_number = 1 or 2, position = 1 or 2)
-```
-
-**Rating Storage Implications**:
-```sql
-players
-  - current_rating_ntrp_singles (Decimal)
-  - current_rating_ntrp_doubles (Decimal)
-
-ratings_history
-  - rating_type (Enum: SINGLES|DOUBLES)
-  -- existing columns
-```
-
-**Migration Path**:
-1. **Phase 1** (MVP): Build singles-only with flexible schema
-2. **Phase 2** (Future): Add doubles support without breaking changes
-3. Existing singles matches remain valid
-4. New match_type field defaults to SINGLES for backward compatibility
-
-**UI/UX Considerations**:
-- Match creation: Select "Singles" or "Doubles"
-- For doubles: Select 4 players instead of 2
-- Leaderboards: Separate tabs for Singles and Doubles rankings
-- Player profiles: Show both singles and doubles ratings
-
-**Statistics Tracking**:
-- Separate win/loss records for singles and doubles
-- Partner statistics (most common partners, win rate with each)
-- Performance comparison (singles vs doubles rating differential)
-
-**Use Cases**:
-- Tournament directors can run both singles and doubles events
-- Players track their performance in both formats
-- Clubs can organize doubles leagues
-- Partner matching based on compatible ratings
-
-**Benefits**:
-- Complete tennis experience (singles + doubles)
-- More engagement opportunities for players
-- Aligns with real-world tennis tournaments
-- Separate skill tracking for different game formats
-
-**Implementation Priority**: Future (after MVP)
-- MVP focuses on singles to validate core rating algorithm
-- Doubles adds complexity that should come after singles is proven
-- However, match model should be designed with doubles in mind
-
----
-
-**Other Post-MVP Features**:
-
-- **Tournament Management** (#14): Create and manage tournaments with brackets
-- **League/Season Support** (#15): Seasonal ratings with resets
-- **Mobile Apps** (#16): iOS/Android apps for match recording
-- **Social Features** (#17): Friend lists, challenge system, activity feed
-- **Advanced Analytics** (#18): Predictive modeling, strength of schedule, trend analysis
-- **Admin Dashboard** (#19): Management interface for verification, disputes, data cleanup
-- **Email Notifications** (#20): Match confirmations, rating changes, tournament invites
-- **Multi-language Support** (#21): Tagalog, English, other Philippine languages
-- **Payment Integration** (#22) 🇵🇭: Tournament fees, membership dues (GCash, PayMaya)
-- **SMS Verification** (#23) 🇵🇭: Phone number verification for Philippine users
+Skopeo has grown from a stateless rating calculator into a capability-gated ranking platform. The core engine, persistence, web UI, standings, Event Organizer, governance (audit / duplicate rectification / invites), and partner API access are **shipped** (see [Implemented Features](#-implemented-features) above). Remaining and aspirational work — Philippine KYC identity verification, dynamic rating confidence, doubles, tournaments / leagues, mobile apps, payments — lives in **[docs/product/ROADMAP.md](docs/product/ROADMAP.md)**.
 
 ## Technology Stack
 
@@ -795,7 +297,7 @@ All utility scripts are located in the `scripts/` directory:
 | `curl-examples.sh` | Display cURL command examples and usage |
 | `docker-build.sh` | Build and tag Docker images for deployment |
 | `format-code.sh` | Auto-format all Kotlin code with ktlint |
-| `check-coverage.sh` | Run tests and verify 85% coverage threshold |
+| `check-coverage.sh` | Run tests and verify the coverage thresholds (75% line / 70% branch) |
 
 See `scripts/README.md` for detailed documentation.
 
@@ -820,7 +322,7 @@ See `scripts/README.md` for detailed documentation.
 | POST | `/api/v1/matches/{id}/result` | Upload a match result | Match |
 | POST | `/api/v1/ratings/calculations` | Admin: run rating calculation (dry-run default; `{"dryRun": false}` commits) | Calculation preview/outcome |
 
-(Plus name, contact, and capability sub-resource endpoints. See the OpenAPI spec for the full surface.)
+The table above is a representative slice. The full surface spans ~27 route groups (users, matches, ratings, events, clubs, circuits, standings, ranking points, invites, reports, placeholders, seeding, API clients, audit, and more). For the complete, authoritative list use the **Swagger UI (`/swagger`)** / **OpenAPI spec (`/openapi.yaml`)**, and see **[BACKEND_ARCHITECTURE.md](docs/engineering/architecture/BACKEND_ARCHITECTURE.md)** for the route-group catalog and request pipeline.
 
 ### API Documentation
 
@@ -930,7 +432,7 @@ With 0.7 factor:   +0.112 / -0.112  (70% applied)
 **Usage:**
 ```json
 {
-  "players": { ... },
+  "teams": { ... },
   "matchScore": { ... },
   "options": {
     "smoothingEnabled": true,
@@ -987,7 +489,7 @@ Comprehensive documentation is available in the `docs/` directory:
 - **[CODE_COVERAGE.md](docs/engineering/quality/CODE_COVERAGE.md)** - Code coverage guide
   - JaCoCo configuration
   - Coverage reports (HTML/XML)
-  - Current metrics (~79% lines, ~75% branches)
+  - Enforced thresholds (75% lines / 70% branches)
   - CI/CD integration
 
 - **[JVM_COMPATIBILITY.md](docs/engineering/operations/JVM_COMPATIBILITY.md)** - JVM version strategy
@@ -1013,14 +515,13 @@ Comprehensive documentation is available in the `docs/` directory:
 
 ## Testing
 
-Skopeo uses a comprehensive testing strategy with **123 tests** across unit and integration layers:
+Skopeo uses a comprehensive testing strategy across unit and integration layers:
 
 ### Test Distribution
 
 ```
-Unit Tests (107):       87% - Fast, isolated, pure function testing
-Integration Tests (16): 13% - API contracts, HTTP layer
-Total:                  123 tests in ~6 seconds
+Unit Tests:        Fast, isolated, pure-function testing (business logic + algorithm)
+Integration Tests: API contracts, HTTP layer (Ktor testApplication + Testcontainers Postgres)
 ```
 
 **Test Quality**:
@@ -1041,7 +542,7 @@ Total:                  123 tests in ~6 seconds
 # Run specific test class
 ./gradlew test --tests "*.PerformanceBasedRankingCalculatorImplTest"
 
-# Check coverage against 85% threshold
+# Check coverage against the thresholds (75% line / 70% branch)
 ./scripts/check-coverage.sh
 
 # Verify coverage thresholds (Gradle task)
@@ -1056,7 +557,7 @@ open build/reports/jacoco/test/html/index.html
 - **Pure Function Testing**: No mocking required for business logic
 - **Audit Trail Testing**: Can verify audit information directly
 - **Fast Feedback**: Unit tests run in ~500ms
-- **High Coverage**: ~85% line coverage, ~80% branch coverage
+- **Enforced Coverage**: 75% line / 70% branch (JaCoCo `jacocoTestCoverageVerification`)
 
 See [TESTING_STRATEGY.md](docs/engineering/quality/TESTING_STRATEGY.md) for complete details.
 
