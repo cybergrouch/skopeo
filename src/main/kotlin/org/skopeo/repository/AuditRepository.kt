@@ -29,6 +29,7 @@ class AuditRepository {
             AuditLogTable.insert {
                 it[occurredAt] = LocalDateTime.now()
                 it[actorUserId] = write.actorUserId
+                it[actorClientId] = write.actorClientId
                 it[action] = write.action.name
                 it[entityType] = write.entityType.name
                 it[entityId] = write.entityId
@@ -85,6 +86,7 @@ internal fun ResultRow.toAuditEntry(): AuditEntry =
         id = this[AuditLogTable.id].value,
         occurredAt = this[AuditLogTable.occurredAt],
         actorUserId = this[AuditLogTable.actorUserId]?.value,
+        actorClientId = this[AuditLogTable.actorClientId]?.value,
         action = AuditAction.valueOf(value = this[AuditLogTable.action]),
         entityType = AuditEntityType.valueOf(value = this[AuditLogTable.entityType]),
         entityId = this[AuditLogTable.entityId],

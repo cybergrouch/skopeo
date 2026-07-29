@@ -35,6 +35,8 @@ tags:
     description: Global app settings; the UI theme is publicly readable and administrator-writable
   - name: Circuits
     description: Administrator-defined groupings of tournaments (e.g. NORTH, SOUTH)
+  - name: Client API
+    description: Partner application identity — admin-managed API clients/keys, and client-key-authenticated reads
 
 paths:
   /api/v1/calculate-ranking:
@@ -3980,6 +3982,173 @@ paths:
         '404':
           description: No active award with that id
 
+  /api/v1/api-clients:
+    post:
+      summary: Register a partner API client
+      description: ADMINISTRATOR only (#596). Registers a partner application that can be issued API keys.
+      tags:
+        - Client API
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateApiClientRequest'
+      responses:
+        '201':
+          description: The created client
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiClientResponse'
+        '400':
+          description: Invalid body (e.g. blank name)
+        '403':
+          description: Caller is not an ADMINISTRATOR
+    get:
+      summary: List partner API clients
+      description: ADMINISTRATOR only (#596). Lists partner clients with their keys (never the plaintext secret).
+      tags:
+        - Client API
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The clients
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApiClientResponse'
+        '403':
+          description: Caller is not an ADMINISTRATOR
+
+  /api/v1/api-clients/{id}/keys:
+    post:
+      summary: Issue an API key
+      description: ADMINISTRATOR only (#596). Issues a key for the client; the plaintext secret is returned once and never again.
+      tags:
+        - Client API
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IssueApiKeyRequest'
+      responses:
+        '201':
+          description: The issued key, including its one-time plaintext secret
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssuedApiKeyResponse'
+        '403':
+          description: Caller is not an ADMINISTRATOR
+        '404':
+          description: No such client
+
+  /api/v1/api-clients/{clientId}/keys/{keyId}:
+    delete:
+      summary: Revoke an API key
+      description: ADMINISTRATOR only (#596). Revokes an active key belonging to the client.
+      tags:
+        - Client API
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: keyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Revoked
+        '403':
+          description: Caller is not an ADMINISTRATOR
+        '404':
+          description: No active key with that id for the client
+
+  /api/v1/client/me:
+    get:
+      summary: Resolve the calling API key
+      description: Machine-to-machine (#596). Returns the client identity and scopes behind the X-Api-Key.
+      tags:
+        - Client API
+      security:
+        - apiKey: []
+      responses:
+        '200':
+          description: The resolved client identity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientIdentityResponse'
+        '401':
+          description: Missing or invalid API key
+        '403':
+          description: The key is revoked or expired, or its client is suspended
+
+  /api/v1/client/players:
+    get:
+      summary: Partner player directory
+      description: Machine-to-machine (#597), requires the RESEARCHER scope. A public directory of players (public code and display name only).
+      tags:
+        - Client API
+      security:
+        - apiKey: []
+      responses:
+        '200':
+          description: The player directory
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PublicPlayerResponse'
+        '401':
+          description: Missing or invalid API key
+        '403':
+          description: The key is not scoped for RESEARCHER
+
+  /api/v1/client/me/capabilities:
+    get:
+      summary: Effective capabilities for a delegated call
+      description: Delegated (#597), requires BOTH a Firebase user token and an X-Api-Key. Returns the intersection of the key's scopes and the user's capabilities.
+      tags:
+        - Client API
+      security:
+        - firebaseAuth: []
+          apiKey: []
+      responses:
+        '200':
+          description: The effective (intersected) capabilities
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientEffectiveCapabilitiesResponse'
+        '401':
+          description: Missing user token or API key
+
 components:
   securitySchemes:
     firebaseAuth:
@@ -3987,7 +4156,139 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: Firebase-issued ID token (RS256), verified against Google's public keys.
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+      description: A partner client's API key (#596), sent in the X-Api-Key header.
   schemas:
+    CreateApiClientRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+    IssueApiKeyRequest:
+      type: object
+      properties:
+        scopes:
+          type: array
+          items:
+            type: string
+          description: Capability names the key is authorized for (least privilege).
+        environment:
+          type: string
+          description: LIVE (default) or TEST; selects the key prefix.
+        expiresInDays:
+          type: integer
+          format: int64
+          description: Optional key lifetime in days.
+    ApiKeyResponse:
+      type: object
+      required:
+        - id
+        - keyPrefix
+        - scopes
+        - status
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        keyPrefix:
+          type: string
+          description: The non-secret leading segment, shown for identification.
+        scopes:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+        createdAt:
+          type: string
+        expiresAt:
+          type: string
+          nullable: true
+        lastUsedAt:
+          type: string
+          nullable: true
+        revokedAt:
+          type: string
+          nullable: true
+    ApiClientResponse:
+      type: object
+      required:
+        - id
+        - name
+        - status
+        - createdAt
+        - keys
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          type: string
+        createdAt:
+          type: string
+        keys:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApiKeyResponse'
+    IssuedApiKeyResponse:
+      type: object
+      required:
+        - apiKey
+        - key
+      properties:
+        apiKey:
+          type: string
+          description: The plaintext secret, shown once and never retrievable again.
+        key:
+          $ref: '#/components/schemas/ApiKeyResponse'
+    ClientIdentityResponse:
+      type: object
+      required:
+        - clientId
+        - scopes
+      properties:
+        clientId:
+          type: string
+          format: uuid
+        scopes:
+          type: array
+          items:
+            type: string
+    PublicPlayerResponse:
+      type: object
+      required:
+        - publicCode
+      properties:
+        publicCode:
+          type: string
+        displayName:
+          type: string
+          nullable: true
+    ClientEffectiveCapabilitiesResponse:
+      type: object
+      required:
+        - clientId
+        - userId
+        - capabilities
+      properties:
+        clientId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        capabilities:
+          type: array
+          items:
+            type: string
     RankingCalculationRequest:
       type: object
       required:

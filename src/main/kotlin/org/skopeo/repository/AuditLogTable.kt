@@ -23,6 +23,11 @@ internal object AuditLogTable : UUIDTable(name = "audit_log") {
     val occurredAt = datetime(name = "occurred_at")
     val actorUserId =
         reference(name = "actor_user_id", foreign = UsersTable, onDelete = ReferenceOption.SET_NULL).nullable()
+
+    // The API client (application) that drove the action, distinct from the end user (#599). Null for
+    // ordinary user- or system-driven actions.
+    val actorClientId =
+        reference(name = "actor_client_id", foreign = ApiClientsTable, onDelete = ReferenceOption.SET_NULL).nullable()
     val action = varchar(name = "action", length = ACTION_MAX)
     val entityType = varchar(name = "entity_type", length = ENTITY_TYPE_MAX)
     val entityId = uuid(name = "entity_id").nullable()

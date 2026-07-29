@@ -198,6 +198,9 @@ data class AuditWrite(
     val entityId: UUID?,
     val summary: String,
     val details: Map<String, String?> = emptyMap(),
+    // The API client (application) behind the action (#599), distinct from [actorUserId]. Null for
+    // ordinary user- or system-driven actions; set when a partner integration drives the call.
+    val actorClientId: UUID? = null,
 )
 
 /**
@@ -214,6 +217,8 @@ data class AuditEntry(
     val summary: String,
     val details: Map<String, String?>,
     val comment: String?,
+    // The API client (application) behind the action (#599), or null for user-/system-driven actions.
+    val actorClientId: UUID? = null,
 )
 
 /** A page of audit entries (newest first) plus the total matching the filter (for pagination). */
