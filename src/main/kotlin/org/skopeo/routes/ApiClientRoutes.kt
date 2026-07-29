@@ -7,6 +7,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.application.call
 import io.ktor.server.auth.authenticate
+import io.ktor.server.plugins.ratelimit.rateLimit
 import io.ktor.server.request.header
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
@@ -18,6 +19,7 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
+import org.skopeo.PARTNER_RATE_LIMIT_NAME
 import org.skopeo.dto.client.CreateApiClientRequest
 import org.skopeo.dto.client.IssueApiKeyRequest
 import org.skopeo.dto.client.toResponse
@@ -44,15 +46,21 @@ fun Application.configureApiClientRoutes(service: ApiClientService = ApiClientSe
                 manageKeys(service = service)
             }
             // Delegated (#597): a partner acting on behalf of a signed-in user — needs BOTH a user token
-            // (this Firebase block) and a valid API key (resolved in the handler).
-            route(path = "/api/v1/client") {
-                delegatedCapabilities(service = service)
+            // (this Firebase block) and a valid API key (resolved in the handler). Rate-limited per
+            // client id (#598).
+            rateLimit(configuration = PARTNER_RATE_LIMIT_NAME) {
+                route(path = "/api/v1/client") {
+                    delegatedCapabilities(service = service)
+                }
             }
         }
-        // Machine-to-machine (#596/#597): authenticated by the API key alone, no user token.
-        route(path = "/api/v1/client") {
-            clientSelfIdentity(service = service)
-            clientPlayerDirectory(service = service)
+        // Machine-to-machine (#596/#597): authenticated by the API key alone, no user token. Rate-limited
+        // per client id (#598).
+        rateLimit(configuration = PARTNER_RATE_LIMIT_NAME) {
+            route(path = "/api/v1/client") {
+                clientSelfIdentity(service = service)
+                clientPlayerDirectory(service = service)
+            }
         }
     }
 }

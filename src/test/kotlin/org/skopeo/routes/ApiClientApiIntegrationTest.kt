@@ -4,6 +4,7 @@
 package org.skopeo.routes
 
 import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldStartWith
 import io.ktor.client.HttpClient
@@ -214,6 +215,29 @@ class ApiClientApiIntegrationTest {
             client.get(urlString = "/api/v1/client/me/capabilities") {
                 header(key = HttpHeaders.Authorization, value = bearer(uid = "researcher"))
             }.status shouldBe HttpStatusCode.Unauthorized
+        }
+
+    @Test
+    fun `throttles a client past its per-minute limit with 429 and Retry-After (#598)`() =
+        testApplication {
+            application { module(initDatabase = false, firebaseAuth = TestFirebaseAuth.settings, partnerRateLimit = 2) }
+            val client = jsonClient()
+            seedUser(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+            val key = client.issueKeyFor(adminAuth = bearer(uid = "admin"), scopes = emptyList())
+
+            // The first two requests for this client are allowed…
+            repeat(times = 2) {
+                client.get(urlString = "/api/v1/client/me") {
+                    header(key = "X-Api-Key", value = key.apiKey)
+                }.status shouldBe HttpStatusCode.OK
+            }
+            // …the third exceeds the per-client bucket → 429 with a Retry-After hint.
+            val throttled =
+                client.get(urlString = "/api/v1/client/me") {
+                    header(key = "X-Api-Key", value = key.apiKey)
+                }
+            throttled.status shouldBe HttpStatusCode.TooManyRequests
+            throttled.headers["Retry-After"].shouldNotBeNull()
         }
 
     @Test

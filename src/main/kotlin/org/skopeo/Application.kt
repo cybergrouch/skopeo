@@ -16,6 +16,9 @@ import io.ktor.server.netty.EngineMain
 import io.ktor.server.plugins.calllogging.CallLogging
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.cors.routing.CORS
+import io.ktor.server.plugins.origin
+import io.ktor.server.plugins.ratelimit.RateLimit
+import io.ktor.server.plugins.ratelimit.RateLimitName
 import io.ktor.server.plugins.swagger.swaggerUI
 import io.ktor.server.request.httpMethod
 import io.ktor.server.request.uri
@@ -54,8 +57,10 @@ import org.skopeo.routes.configureStandingsSourceRoutes
 import org.skopeo.routes.configureThemeRoutes
 import org.skopeo.routes.configureUserRoutes
 import org.skopeo.service.capability.CapabilityService
+import org.skopeo.service.client.ApiClientService
 import org.skopeo.service.user.UserService
 import org.slf4j.event.Level
+import kotlin.time.Duration.Companion.seconds
 
 private val logger = KotlinLogging.logger {}
 
@@ -75,9 +80,16 @@ fun main(args: Array<String>) {
     EngineMain.main(args = args)
 }
 
+/** Default partner (per-client) rate limit — requests per minute per client id (#598). */
+const val DEFAULT_PARTNER_RATE_LIMIT: Int = 120
+
+/** The named token-bucket limiter applied to the partner client routes, keyed by client id (#598). */
+val PARTNER_RATE_LIMIT_NAME: RateLimitName = RateLimitName(name = "partner")
+
 fun Application.module(
     initDatabase: Boolean = true,
     firebaseAuth: FirebaseAuthSettings? = null,
+    partnerRateLimit: Int = DEFAULT_PARTNER_RATE_LIMIT,
 ) {
     if (initDatabase) {
         // Initialize database connection and run migrations
@@ -94,6 +106,7 @@ fun Application.module(
     configurePlugins()
     configureCORS()
     configureSecurity(settings = firebaseAuth)
+    configureRateLimit(partnerRateLimit = partnerRateLimit)
     configureOpenAPI()
     configureRouting()
     configureRankingRoutes()
@@ -123,6 +136,28 @@ fun Application.module(
     configureThemeRoutes()
     configureStandingsSourceRoutes()
     logger.info { "Skopeo API started successfully on port 8080" }
+}
+
+/**
+ * Per-client rate limiting for partner traffic (#225/#598). A single token-bucket tier keyed by the
+ * client id behind the `X-Api-Key` (unauthenticated callers fall back to a per-remote-host bucket, so a
+ * flood of bad keys can't exhaust a real client's quota). Applied only to the client routes via
+ * `rateLimit(PARTNER_RATE_LIMIT_NAME)`; nothing else is throttled.
+ */
+fun Application.configureRateLimit(
+    partnerRateLimit: Int,
+    service: ApiClientService = ApiClientService(),
+) {
+    install(plugin = RateLimit) {
+        register(name = PARTNER_RATE_LIMIT_NAME) {
+            rateLimiter(limit = partnerRateLimit, refillPeriod = 60.seconds)
+            requestKey { call ->
+                val rawKey = call.request.headers["X-Api-Key"].orEmpty()
+                service.resolveClientId(rawKey = rawKey)?.toString() ?: "anon:${call.request.origin.remoteHost}"
+            }
+        }
+    }
+    logger.info { "Partner rate limiting configured ($partnerRateLimit/min per client)" }
 }
 
 fun Application.configureMonitoring() {

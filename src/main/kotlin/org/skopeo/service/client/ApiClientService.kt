@@ -165,6 +165,21 @@ class ApiClientService(
      * suspended, is [ClientAuthResult.Forbidden] (→ 403).
      */
     fun authenticate(rawKey: String): ClientAuthResult {
+        val result = classifyKey(rawKey = rawKey)
+        if (result is ClientAuthResult.Authenticated) {
+            clients.touchLastUsed(keyId = result.principal.keyId, usedAt = LocalDateTime.now())
+        }
+        return result
+    }
+
+    /**
+     * The client id behind a usable key (#598), for rate-limit keying. Read-only: unlike [authenticate]
+     * it does not record last-used, so it's cheap to call in the rate-limit request-key extractor.
+     */
+    fun resolveClientId(rawKey: String): UUID? = (classifyKey(rawKey = rawKey) as? ClientAuthResult.Authenticated)?.principal?.clientId
+
+    /** Classify a raw key with no side effects: Missing / Invalid / Forbidden, or Authenticated. */
+    private fun classifyKey(rawKey: String): ClientAuthResult {
         val raw = rawKey.trim()
         return when {
             raw.isEmpty() -> ClientAuthResult.Missing
@@ -179,7 +194,7 @@ class ApiClientService(
         return classify(resolved = resolved)
     }
 
-    /** A recognized key: reject if revoked/expired or its client is suspended; else authenticate. */
+    /** A recognized key: reject if revoked/expired or its client is suspended; else authenticated. */
     private fun classify(resolved: ResolvedApiKey): ClientAuthResult {
         val key = resolved.key
         val rejected =
@@ -189,7 +204,6 @@ class ApiClientService(
         return if (rejected) {
             ClientAuthResult.Forbidden
         } else {
-            clients.touchLastUsed(keyId = key.id, usedAt = LocalDateTime.now())
             ClientAuthResult.Authenticated(
                 principal = ClientPrincipal(clientId = key.clientId, keyId = key.id, scopes = key.scopes),
             )
