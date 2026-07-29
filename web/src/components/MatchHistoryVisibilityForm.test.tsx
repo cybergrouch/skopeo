@@ -71,4 +71,46 @@ describe("MatchHistoryVisibilityForm", () => {
     );
     expect(await screen.findByRole("status")).toHaveTextContent("Saved");
   });
+
+  it("surfaces an error and reverts the toggle when the save fails", async () => {
+    const user = userEvent.setup();
+    usePutApiV1UsersIdMatchHistoryVisibility.mockReturnValue({
+      isPending: false,
+      mutateAsync: async () => {
+        throw new Error("network down");
+      },
+    });
+    renderForm();
+    await user.click(screen.getByRole("checkbox"));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not save. Please try again.",
+    );
+    expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(
+      false,
+    );
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("renders the toggle once the user query resolves with data", () => {
+    useGetApiV1UsersId.mockReturnValue({
+      data: { id: "u1", matchHistoryHidden: true },
+      isLoading: false,
+    });
+    renderForm();
+    expect(screen.getByRole("checkbox")).toBeInTheDocument();
+    expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(
+      true,
+    );
+  });
+
+  it("defaults to visible when matchHistoryHidden is undefined", () => {
+    useGetApiV1UsersId.mockReturnValue({
+      data: { id: "u1" },
+      isLoading: false,
+    });
+    renderForm();
+    expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(
+      false,
+    );
+  });
 });

@@ -259,6 +259,27 @@ class UserServiceTest {
     }
 
     @Test
+    fun `setMatchHistoryHidden toggles the flag and is self-or-admin (#622)`() {
+        val alice = service.provision(token = token(uid = "mh-alice"), request = request).shouldBeRight().user
+        service.provision(token = token(uid = "mh-bob"), request = request).shouldBeRight()
+
+        // The owner hides their own match history.
+        service.setMatchHistoryHidden(token = token(uid = "mh-alice"), id = UUID.fromString(alice.id), hidden = true)
+            .shouldBeRight()
+            .matchHistoryHidden shouldBe true
+
+        // Another player cannot toggle someone else's flag.
+        service.setMatchHistoryHidden(token = token(uid = "mh-bob"), id = UUID.fromString(alice.id), hidden = true)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+
+        // An unknown id is a 404.
+        service.setMatchHistoryHidden(token = token(uid = "mh-alice"), id = UUID.randomUUID(), hidden = true)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
     fun `getById allows self, forbids others, 404s on unknown`() {
         val alice = service.provision(token = token(uid = "alice"), request = request).shouldBeRight().user
         service.provision(token = token(uid = "bob"), request = request).shouldBeRight()
