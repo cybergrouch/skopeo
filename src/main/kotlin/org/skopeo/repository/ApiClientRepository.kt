@@ -46,16 +46,22 @@ class ApiClientRepository {
     fun findClientById(id: UUID): ApiClient? =
         transaction { ApiClientsTable.selectAll().where { ApiClientsTable.id eq id }.singleOrNull()?.toClient() }
 
-    /** Set (or clear, when null) a client's per-minute rate-limit override (#603). Returns false if missing. */
+    /** Set (or clear, when null) a client's per-minute rate-limit override (#603). Returns the refreshed client, or null if missing. */
     fun setRateLimit(
         clientId: UUID,
         rateLimitPerMin: Int?,
-    ): Boolean =
+    ): ApiClient? =
         transaction {
-            ApiClientsTable.update(where = { ApiClientsTable.id eq clientId }) {
-                it[ApiClientsTable.rateLimitPerMin] = rateLimitPerMin
-                it[updatedAt] = LocalDateTime.now()
-            } > 0
+            val updated =
+                ApiClientsTable.update(where = { ApiClientsTable.id eq clientId }) {
+                    it[ApiClientsTable.rateLimitPerMin] = rateLimitPerMin
+                    it[updatedAt] = LocalDateTime.now()
+                }
+            if (updated > 0) {
+                ApiClientsTable.selectAll().where { ApiClientsTable.id eq clientId }.single().toClient()
+            } else {
+                null
+            }
         }
 
     /** All clients, newest first, each with its keys. */

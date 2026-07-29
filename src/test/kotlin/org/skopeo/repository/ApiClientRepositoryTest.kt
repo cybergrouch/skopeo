@@ -119,14 +119,13 @@ class ApiClientRepositoryTest {
         val client = repo.createClient(name = "Partner A", createdBy = null)
         client.rateLimitPerMin.shouldBeNull()
 
-        repo.setRateLimit(clientId = client.id, rateLimitPerMin = 250) shouldBe true
-        repo.findClientById(id = client.id)!!.rateLimitPerMin shouldBe 250
+        repo.setRateLimit(clientId = client.id, rateLimitPerMin = 250).shouldNotBeNull().rateLimitPerMin shouldBe 250
+        repo.findClientById(id = client.id).shouldNotBeNull().rateLimitPerMin shouldBe 250
 
-        repo.setRateLimit(clientId = client.id, rateLimitPerMin = null) shouldBe true
-        repo.findClientById(id = client.id)!!.rateLimitPerMin.shouldBeNull()
+        repo.setRateLimit(clientId = client.id, rateLimitPerMin = null).shouldNotBeNull().rateLimitPerMin.shouldBeNull()
 
-        // A missing client reports false.
-        repo.setRateLimit(clientId = UUID.randomUUID(), rateLimitPerMin = 10) shouldBe false
+        // A missing client returns null.
+        repo.setRateLimit(clientId = UUID.randomUUID(), rateLimitPerMin = 10).shouldBeNull()
     }
 
     @Test

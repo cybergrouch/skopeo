@@ -172,11 +172,8 @@ class ApiClientService(
             ensure(condition = rateLimitPerMin == null || rateLimitPerMin > 0) {
                 ServiceError.Validation(message = "rateLimitPerMin must be positive")
             }
-            ensure(condition = clients.setRateLimit(clientId = clientId, rateLimitPerMin = rateLimitPerMin)) {
-                ServiceError.NotFound(message = "API client $clientId not found")
-            }
             val client =
-                ensureNotNull(value = clients.findClientById(id = clientId)) {
+                ensureNotNull(value = clients.setRateLimit(clientId = clientId, rateLimitPerMin = rateLimitPerMin)) {
                     ServiceError.NotFound(message = "API client $clientId not found")
                 }
             audit.record(
