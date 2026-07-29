@@ -4124,7 +4124,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/PublicPlayerResponse'
+                  $ref: '#/components/schemas/PartnerPlayerResponse'
         '401':
           description: Missing or invalid API key
         '403':
@@ -4262,8 +4262,9 @@ components:
           type: array
           items:
             type: string
-    PublicPlayerResponse:
+    PartnerPlayerResponse:
       type: object
+      description: A player in the partner directory read (#597) — public fields only.
       required:
         - publicCode
       properties:

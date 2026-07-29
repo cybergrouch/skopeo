@@ -70,7 +70,7 @@ data class ClientIdentityResponse(
 
 /** A player in the partner directory read (`GET /api/v1/client/players`, #597) — public fields only. */
 @Serializable
-data class PublicPlayerResponse(
+data class PartnerPlayerResponse(
     val publicCode: String,
     val displayName: String? = null,
 )
@@ -119,8 +119,8 @@ fun ClientPrincipal.toResponse(): ClientIdentityResponse =
         scopes = scopes.map { it.name },
     )
 
-fun PublicPlayer.toResponse(): PublicPlayerResponse =
-    PublicPlayerResponse(
+fun PublicPlayer.toResponse(): PartnerPlayerResponse =
+    PartnerPlayerResponse(
         publicCode = publicCode,
         displayName = displayName,
     )

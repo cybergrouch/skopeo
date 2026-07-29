@@ -31,7 +31,7 @@ import org.skopeo.dto.client.ClientIdentityResponse
 import org.skopeo.dto.client.CreateApiClientRequest
 import org.skopeo.dto.client.IssueApiKeyRequest
 import org.skopeo.dto.client.IssuedApiKeyResponse
-import org.skopeo.dto.client.PublicPlayerResponse
+import org.skopeo.dto.client.PartnerPlayerResponse
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.NameType
@@ -186,7 +186,7 @@ class ApiClientApiIntegrationTest {
                     header(key = "X-Api-Key", value = scoped.apiKey)
                 }
             res.status shouldBe HttpStatusCode.OK
-            res.body<List<PublicPlayerResponse>>().map { it.publicCode }.size shouldBe 2
+            res.body<List<PartnerPlayerResponse>>().map { it.publicCode }.size shouldBe 2
         }
 
     @Test

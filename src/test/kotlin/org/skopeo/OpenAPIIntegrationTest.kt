@@ -53,7 +53,7 @@ class OpenAPIIntegrationTest {
             body shouldContain "ApiClientResponse"
             body shouldContain "IssuedApiKeyResponse"
             body shouldContain "ClientIdentityResponse"
-            body shouldContain "PublicPlayerResponse"
+            body shouldContain "PartnerPlayerResponse"
             body shouldContain "ClientEffectiveCapabilitiesResponse"
         }
 
