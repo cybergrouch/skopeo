@@ -96,8 +96,9 @@ export function canViewPointsAudit(
 }
 
 /**
- * The Research tab is for researchers (#107) — gated so it can later be monetized. Every sign-up
- * gets RESEARCHER for now, so behaviour is unchanged. ADMINISTRATOR implicitly has RESEARCHER.
+ * The Research tab is for researchers (#107) — gated so it can later be monetized. RESEARCHER is a
+ * separately-granted capability (no longer given to every sign-up, #622); a plain player without it
+ * does not see the Research tab. ADMINISTRATOR implicitly has RESEARCHER.
  */
 export function isResearcher(
   capabilities: readonly Capability[] | undefined,

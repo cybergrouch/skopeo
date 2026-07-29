@@ -472,9 +472,17 @@ private fun promoteIfBootstrapAdmin(
     if (Capability.ADMINISTRATOR in user.capabilities || !isBootstrapAdmin(token = token, adminEmails = adminEmails)) {
         return user
     }
+    // Grant ADMINISTRATOR and RESEARCHER together (#622): RESEARCHER is no longer a default sign-up
+    // grant, so the bootstrap admin gets it explicitly here — matching the sign-up bootstrap path and
+    // keeping a promoted operator's capabilities identical to a seeded one (PLAYER+RESEARCHER+ADMIN).
     capabilities.grant(userId = user.id, capability = Capability.ADMINISTRATOR)
-    logger.info { "Bootstrap allowlist: granted ADMINISTRATOR to user ${user.id}" }
-    return user.copy(capabilities = user.capabilities + Capability.ADMINISTRATOR)
+    val granted = mutableSetOf(Capability.ADMINISTRATOR)
+    if (Capability.RESEARCHER !in user.capabilities) {
+        capabilities.grant(userId = user.id, capability = Capability.RESEARCHER)
+        granted += Capability.RESEARCHER
+    }
+    logger.info { "Bootstrap allowlist: granted $granted to user ${user.id}" }
+    return user.copy(capabilities = user.capabilities + granted)
 }
 
 /** Allow only HOST or ADMINISTRATOR callers. */
