@@ -81,6 +81,14 @@ class ApiClientServiceTest {
 
         service.createClient(token = admin(uid = "admin2"), name = "   ").shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Validation>()
+
+        // An over-long name is rejected.
+        service.createClient(token = admin(uid = "admin3"), name = "a".repeat(n = 121)).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+
+        // A token for a user that was never provisioned resolves to no caller → Forbidden.
+        service.createClient(token = token(uid = "ghost"), name = "X").shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test

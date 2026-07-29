@@ -294,6 +294,9 @@ tasks.jacocoTestReport {
                         "**/routes/PointsBudgetRoutes*.*",
                         "**/routes/InviteRoutes*.*",
                         "**/routes/AuditRoutes*.*",
+                        // Handlers ARE tested (ApiClientApiIntegrationTest), but JaCoCo can't attribute
+                        // coverage to the Ktor suspend route lambdas run in testApplication (see RankingRoutes).
+                        "**/routes/ApiClientRoutes*.*",
                         "**/routes/DuplicateCandidateRoutes*.*",
                         "**/routes/PlayerListRoutes*.*",
                         // Handlers ARE tested (PlaceholderApiIntegrationTest), but JaCoCo can't attribute
@@ -371,6 +374,9 @@ tasks.jacocoTestCoverageVerification {
                         "**/routes/PointsBudgetRoutes*.*",
                         "**/routes/InviteRoutes*.*",
                         "**/routes/AuditRoutes*.*",
+                        // Handlers ARE tested (ApiClientApiIntegrationTest), but JaCoCo can't attribute
+                        // coverage to the Ktor suspend route lambdas run in testApplication (see RankingRoutes).
+                        "**/routes/ApiClientRoutes*.*",
                         "**/routes/DuplicateCandidateRoutes*.*",
                         "**/routes/PlayerListRoutes*.*",
                         // Handlers ARE tested (PlaceholderApiIntegrationTest), but JaCoCo can't attribute
