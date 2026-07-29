@@ -311,6 +311,21 @@ class UserService(
             repository.updatePhotoSettings(id = id, customPhotoUrl = customPhotoUrl, photoHidden = photoHidden).bind().toResponse()
         }
 
+    /**
+     * Set the caller's "hide match history from other players" flag (#622). Authorized self-or-
+     * ADMINISTRATOR, like the rest of profile editing.
+     */
+    fun setMatchHistoryHidden(
+        token: VerifiedFirebaseToken,
+        id: UUID,
+        hidden: Boolean,
+    ): Either<ServiceError, User> =
+        either {
+            val target = repository.findById(id = id).bind()
+            requireAccess(token = token, target = target).bind()
+            repository.setMatchHistoryHidden(id = id, hidden = hidden).bind()
+        }
+
     /** First-time sign-up: enforce the invite gate, write the aggregate, and audit the creation. */
     private fun provisionNew(
         token: VerifiedFirebaseToken,

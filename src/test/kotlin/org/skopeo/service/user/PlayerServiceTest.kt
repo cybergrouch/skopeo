@@ -277,6 +277,52 @@ class PlayerServiceTest {
     private var sparringCounter = 0
 
     /** Give [userId] a current rating plus [matchCount] in-window completed open-play matches (#459 confidence). */
+    @Test
+    fun `hidden match history is withheld from unprivileged viewers but shown to owner and elevated roles (#622)`() {
+        val ana = newUser(uid = "ana", names = display(name = "Ana"))
+        val ben = newUser(uid = "ben", names = display(name = "Ben"))
+        fixture(u1 = ana.id, u2 = ben.id, date = LocalDate.of(2026, 1, 1))
+
+        // Default OFF: the history is visible to everyone, including an anonymous viewer.
+        service.matchHistory(code = ana.publicCode).shouldBeRight().let { page ->
+            page.items.size shouldBe 1
+            page.hidden shouldBe false
+        }
+
+        users.setMatchHistoryHidden(id = ana.id, hidden = true).shouldBeRight()
+
+        // The owner still sees their own history.
+        service.matchHistory(code = ana.publicCode, token = token(uid = "ana")).shouldBeRight().let { page ->
+            page.items.size shouldBe 1
+            page.hidden shouldBe false
+        }
+        // An elevated role (RESEARCHER) still sees it.
+        users.provision(
+            command =
+                ProvisionUserCommand(
+                    firebaseUid = "res",
+                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = "res", isPrimary = true),
+                    names = display(name = "Res"),
+                    capabilities = setOf(Capability.PLAYER, Capability.RESEARCHER),
+                ),
+        )
+        service.matchHistory(code = ana.publicCode, token = token(uid = "res")).shouldBeRight().let { page ->
+            page.items.size shouldBe 1
+            page.hidden shouldBe false
+        }
+        // A plain player gets a deliberately-empty, hidden-flagged page.
+        newUser(uid = "plain", names = display(name = "Plain"))
+        service.matchHistory(code = ana.publicCode, token = token(uid = "plain")).shouldBeRight().let { page ->
+            page.items.shouldBeEmpty()
+            page.hidden shouldBe true
+        }
+        // An anonymous viewer likewise.
+        service.matchHistory(code = ana.publicCode).shouldBeRight().let { page ->
+            page.items.shouldBeEmpty()
+            page.hidden shouldBe true
+        }
+    }
+
     private fun rampCurrentRating(
         userId: UUID,
         matchCount: Int,

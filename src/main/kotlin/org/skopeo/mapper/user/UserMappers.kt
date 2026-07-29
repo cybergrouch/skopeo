@@ -26,6 +26,7 @@ fun User.toResponse(): UserResponse =
         photoUrl = photoUrl,
         customPhotoUrl = customPhotoUrl,
         photoHidden = photoHidden,
+        matchHistoryHidden = matchHistoryHidden,
         dateOfBirth = dateOfBirth?.toString(),
         sex = sex,
         city = city,

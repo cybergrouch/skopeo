@@ -19,6 +19,7 @@ import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.user.CreateUserRequest
 import org.skopeo.dto.user.MarkDuplicatesRequest
+import org.skopeo.dto.user.MatchHistoryVisibilityRequest
 import org.skopeo.dto.user.PhotoSettingsRequest
 import org.skopeo.dto.user.ProfileRequest
 import org.skopeo.dto.user.RatingPreviewResponse
@@ -272,6 +273,14 @@ private fun Route.userById(service: UserService) {
             respondEither(result = result) { user ->
                 call.respond(status = HttpStatusCode.OK, message = user)
             }
+        }
+    }
+    put(path = "/{id}/match-history-visibility") {
+        respondMappingErrors {
+            val body = call.receive<MatchHistoryVisibilityRequest>()
+            respondEither(
+                result = service.setMatchHistoryHidden(token = verifiedToken(), id = uuidParam(name = "id"), hidden = body.hidden),
+            ) { user -> call.respond(status = HttpStatusCode.OK, message = user.toResponse()) }
         }
     }
     delete(path = "/{id}") {

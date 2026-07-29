@@ -276,6 +276,19 @@ class UserRepository {
             if (updated == 0) ServiceError.NotFound(message = "User $id not found").left() else aggregateOrNotFound(id = id)
         }
 
+    /** Set the per-player "hide match history from other players" flag (#622). */
+    fun setMatchHistoryHidden(
+        id: UUID,
+        hidden: Boolean,
+    ): Either<ServiceError, User> =
+        transaction {
+            val updated =
+                UsersTable.update(where = { UsersTable.id eq id }) {
+                    it[UsersTable.matchHistoryHidden] = hidden
+                }
+            if (updated == 0) ServiceError.NotFound(message = "User $id not found").left() else aggregateOrNotFound(id = id)
+        }
+
     fun updateProfile(
         id: UUID,
         patch: ProfilePatch,
@@ -679,6 +692,7 @@ private fun ResultRow.toUser(
         providerPhotoUrl = this[UsersTable.providerPhotoUrl],
         customPhotoUrl = this[UsersTable.customPhotoUrl],
         photoHidden = this[UsersTable.photoHidden],
+        matchHistoryHidden = this[UsersTable.matchHistoryHidden],
         dateOfBirth = this[UsersTable.dateOfBirth],
         sex = this[UsersTable.sex],
         city = this[UsersTable.city],

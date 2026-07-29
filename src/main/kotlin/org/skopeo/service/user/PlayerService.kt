@@ -82,6 +82,8 @@ class PlayerService(
                         },
                     // A login-less, unclaimed placeholder renders an "unclaimed" indicator + claim entry (#496).
                     isPlaceholder = located.placeholder,
+                    // #622: surfaced so the owner's own profile view can warn that history is hidden from others.
+                    matchHistoryHidden = located.matchHistoryHidden,
                 )
             }
         }
@@ -126,9 +128,17 @@ class PlayerService(
         offset: Int = 0,
         search: String? = null,
         opponentBand: String? = null,
+        // #622: the optional viewer decides whether a hidden history is revealed (owner / elevated role).
+        token: VerifiedFirebaseToken? = null,
     ): Either<ServiceError, PlayerMatchHistoryPage> =
         either {
             val user = resolve(code = code).bind()
+            // #622: when the owner has hidden their history, unprivileged viewers (plain players + anonymous)
+            // get a deliberately-empty, `hidden`-flagged page — enforced here so the API never leaks the rows.
+            val viewer = token?.let { users.findByFirebaseUid(firebaseUid = it.uid) }
+            if (user.matchHistoryHidden && !canSeeHiddenHistory(target = user, viewer = viewer)) {
+                return@either PlayerMatchHistoryPage(items = emptyList(), total = 0, hidden = true)
+            }
             // A canonical account's history also surfaces its disabled duplicates' matches (#124,
             // display-only — ratings are never consolidated). Each match is oriented from whichever of
             // these "self" ids actually played it.
@@ -205,6 +215,14 @@ class PlayerService(
                 total = filtered.size,
             )
         }
+
+    // #622: who may still see a hidden match history — the owner, or any viewer holding an elevated
+    // capability (anything beyond plain PLAYER: HOST/RESEARCHER/CLUB_OWNER/RATER/POINTS_MANAGER/ADMIN).
+    // An anonymous (null) viewer never qualifies.
+    private fun canSeeHiddenHistory(
+        target: User,
+        viewer: User?,
+    ): Boolean = viewer != null && (viewer.id == target.id || viewer.capabilities.any { it != Capability.PLAYER })
 
     /**
      * A player's win–loss record over time (#276): every decided match (with a recorded winner) they

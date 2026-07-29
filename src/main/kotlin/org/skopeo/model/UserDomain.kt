@@ -119,6 +119,9 @@ data class User(
     val providerPhotoUrl: String? = null,
     val customPhotoUrl: String? = null,
     val photoHidden: Boolean = false,
+    // When true, the player's match history is withheld from unprivileged viewers on the public
+    // profile (#622); the owner and elevated roles still see it. Default false = visible to all.
+    val matchHistoryHidden: Boolean = false,
     val dateOfBirth: LocalDate?,
     val sex: String?,
     val city: String?,

@@ -24,6 +24,9 @@ data class PublicPlayerResponse(
     val isPlaceholder: Boolean = false,
     // True for an admin-soft-deleted account (#518): the public page shows a dominant "Deleted" chip.
     val isDeleted: Boolean = false,
+    // #622: the owner has opted to hide their match history from other players. Lets the owner's own
+    // profile view show a "hidden from others" banner; unprivileged viewers get an empty history.
+    val matchHistoryHidden: Boolean = false,
 )
 
 @Serializable
@@ -71,6 +74,9 @@ data class PlayerMatchHistoryEntry(
 data class PlayerMatchHistoryPage(
     val items: List<PlayerMatchHistoryEntry>,
     val total: Int,
+    // #622: true when the owner hid their match history and the viewer is not privileged — the list is
+    // deliberately empty (not "no matches"), so the UI can render a "hidden by this player" notice.
+    val hidden: Boolean = false,
 )
 
 /**

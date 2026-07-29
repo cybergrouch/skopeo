@@ -56,6 +56,7 @@ private fun Route.publicPlayerReads(service: PlayerService) {
                         offset = query["offset"]?.toIntOrNull() ?: 0,
                         search = query["search"],
                         opponentBand = query["opponentBand"],
+                        token = optionalVerifiedToken(),
                     ),
             ) { page ->
                 call.respond(status = HttpStatusCode.OK, message = page)
