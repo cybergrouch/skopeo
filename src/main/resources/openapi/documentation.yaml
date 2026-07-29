@@ -4026,6 +4026,41 @@ paths:
         '403':
           description: Caller is not an ADMINISTRATOR
 
+  /api/v1/api-clients/{id}/rate-limit:
+    put:
+      summary: Set a client's rate-limit override
+      description: ADMINISTRATOR only (#603). Sets a per-minute limit for the client; a null value clears it (use the default tier).
+      tags:
+        - Client API
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetRateLimitRequest'
+      responses:
+        '200':
+          description: The updated client
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiClientResponse'
+        '400':
+          description: Invalid limit (must be positive)
+        '403':
+          description: Caller is not an ADMINISTRATOR
+        '404':
+          description: No such client
+
   /api/v1/api-clients/{id}/keys:
     post:
       summary: Issue an API key
@@ -4238,6 +4273,17 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ApiKeyResponse'
+        rateLimitPerMin:
+          type: integer
+          nullable: true
+          description: Per-minute rate-limit override (#603); null = the global default tier applies.
+    SetRateLimitRequest:
+      type: object
+      properties:
+        rateLimitPerMin:
+          type: integer
+          nullable: true
+          description: The per-minute limit; null clears the override (use the default tier).
     IssuedApiKeyResponse:
       type: object
       required:

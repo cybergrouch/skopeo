@@ -55,6 +55,10 @@ class OpenAPIIntegrationTest {
             body shouldContain "ClientIdentityResponse"
             body shouldContain "PartnerPlayerResponse"
             body shouldContain "ClientEffectiveCapabilitiesResponse"
+            // Per-client rate-limit override (#603).
+            body shouldContain "/api/v1/api-clients/{id}/rate-limit"
+            body shouldContain "SetRateLimitRequest"
+            body shouldContain "rateLimitPerMin"
         }
 
     /** Per-admin raw-rating preview toggle (#583): the self-service route + its request schema. */

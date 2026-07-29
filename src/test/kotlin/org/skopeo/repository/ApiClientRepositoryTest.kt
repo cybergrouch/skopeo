@@ -115,6 +115,21 @@ class ApiClientRepositoryTest {
     }
 
     @Test
+    fun `sets and clears a client's rate-limit override`() {
+        val client = repo.createClient(name = "Partner A", createdBy = null)
+        client.rateLimitPerMin.shouldBeNull()
+
+        repo.setRateLimit(clientId = client.id, rateLimitPerMin = 250) shouldBe true
+        repo.findClientById(id = client.id)!!.rateLimitPerMin shouldBe 250
+
+        repo.setRateLimit(clientId = client.id, rateLimitPerMin = null) shouldBe true
+        repo.findClientById(id = client.id)!!.rateLimitPerMin.shouldBeNull()
+
+        // A missing client reports false.
+        repo.setRateLimit(clientId = UUID.randomUUID(), rateLimitPerMin = 10) shouldBe false
+    }
+
+    @Test
     fun `lists clients newest first`() {
         val first = repo.createClient(name = "First", createdBy = null)
         val second = repo.createClient(name = "Second", createdBy = null)

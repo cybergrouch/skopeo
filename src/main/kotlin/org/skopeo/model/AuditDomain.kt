@@ -67,6 +67,7 @@ enum class AuditAction {
     API_CLIENT_CREATED,
     API_KEY_ISSUED,
     API_KEY_REVOKED,
+    API_CLIENT_RATE_LIMIT_SET,
 }
 
 /** The kind of entity an [AuditAction] concerns. */
@@ -180,6 +181,7 @@ val AuditAction.category: AuditCategory
             AuditAction.API_CLIENT_CREATED,
             AuditAction.API_KEY_ISSUED,
             AuditAction.API_KEY_REVOKED,
+            AuditAction.API_CLIENT_RATE_LIMIT_SET,
             -> AuditCategory.API_CLIENT_MANAGEMENT
         }
 

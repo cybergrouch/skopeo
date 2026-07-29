@@ -21,6 +21,9 @@ private const val SCOPES_MAX = 600
 internal object ApiClientsTable : UUIDTable(name = "api_clients") {
     val name = varchar(name = "name", length = CLIENT_NAME_MAX)
     val status = varchar(name = "status", length = STATUS_MAX)
+
+    // Optional per-minute rate-limit override (#603); null = use the global default tier.
+    val rateLimitPerMin = integer(name = "rate_limit_per_min").nullable()
     val createdBy = reference(name = "created_by", foreign = UsersTable, onDelete = ReferenceOption.SET_NULL).nullable()
     val createdAt = datetime(name = "created_at")
     val updatedAt = datetime(name = "updated_at")
