@@ -10,6 +10,8 @@ import arrow.core.raise.ensureNotNull
 import arrow.core.right
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.skopeo.dto.RankingCalculationRequest
+import org.skopeo.dto.rating.CalculationResponse
+import org.skopeo.mapper.rating.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -64,7 +66,7 @@ class RatingCalculationService(
         token: VerifiedFirebaseToken,
         dryRun: Boolean,
         eventIds: List<String>? = null,
-    ): Either<ServiceError, RatingCalculationOutcome> =
+    ): Either<ServiceError, CalculationResponse> =
         either {
             val adminId = requireAdmin(token = token).bind()
             val snapshot = mutableMapOf<UUID, BigDecimal>()
@@ -92,7 +94,7 @@ class RatingCalculationService(
                         ),
                 )
             }
-            RatingCalculationOutcome(dryRun = dryRun, matches = processed)
+            RatingCalculationOutcome(dryRun = dryRun, matches = processed).toResponse()
         }
 
     /**

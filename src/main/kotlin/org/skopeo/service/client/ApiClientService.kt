@@ -9,7 +9,12 @@ import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
-import org.skopeo.model.ApiClient
+import org.skopeo.dto.client.ApiClientResponse
+import org.skopeo.dto.client.ClientEffectiveCapabilitiesResponse
+import org.skopeo.dto.client.ClientIdentityResponse
+import org.skopeo.dto.client.IssuedApiKeyResponse
+import org.skopeo.dto.client.PartnerPlayerResponse
+import org.skopeo.mapper.client.toResponse
 import org.skopeo.model.ApiClientStatus
 import org.skopeo.model.ApiKeyEnvironment
 import org.skopeo.model.ApiKeyStatus
@@ -53,7 +58,7 @@ class ApiClientService(
     fun createClient(
         token: VerifiedFirebaseToken,
         name: String,
-    ): Either<ServiceError, ApiClient> =
+    ): Either<ServiceError, ApiClientResponse> =
         either {
             val adminId = requireAdmin(token = token).bind()
             val trimmed = name.trim()
@@ -73,13 +78,13 @@ class ApiClientService(
                         details = mapOf("clientId" to client.id.toString(), "name" to client.name),
                     ),
             )
-            client
+            client.toResponse()
         }
 
-    fun listClients(token: VerifiedFirebaseToken): Either<ServiceError, List<ApiClient>> =
+    fun listClients(token: VerifiedFirebaseToken): Either<ServiceError, List<ApiClientResponse>> =
         either {
             requireAdmin(token = token).bind()
-            clients.listClients()
+            clients.listClients().map { it.toResponse() }
         }
 
     /**
@@ -92,7 +97,7 @@ class ApiClientService(
         scopes: Set<Capability>,
         environment: ApiKeyEnvironment,
         expiresInDays: Long?,
-    ): Either<ServiceError, IssuedApiKey> =
+    ): Either<ServiceError, IssuedApiKeyResponse> =
         either {
             val adminId = requireAdmin(token = token).bind()
             ensure(condition = expiresInDays == null || expiresInDays > 0) {
@@ -131,7 +136,7 @@ class ApiClientService(
                             ),
                     ),
             )
-            IssuedApiKey(client = client, key = key, plaintext = generated.plaintext)
+            IssuedApiKey(client = client, key = key, plaintext = generated.plaintext).toResponse()
         }
 
     /** Revoke a key. ADMINISTRATOR-only; a missing/already-revoked key is a [ServiceError.NotFound]. */
@@ -166,7 +171,7 @@ class ApiClientService(
         token: VerifiedFirebaseToken,
         clientId: UUID,
         rateLimitPerMin: Int?,
-    ): Either<ServiceError, ApiClient> =
+    ): Either<ServiceError, ApiClientResponse> =
         either {
             val adminId = requireAdmin(token = token).bind()
             ensure(condition = rateLimitPerMin == null || rateLimitPerMin > 0) {
@@ -191,7 +196,7 @@ class ApiClientService(
                             ),
                     ),
             )
-            client
+            client.toResponse()
         }
 
     /**
@@ -260,7 +265,7 @@ class ApiClientService(
      * A public player directory (#597) for a machine-to-machine partner read. Only public fields
      * (public code + display name) are exposed. The caller's scope is enforced at the route.
      */
-    fun playerDirectory(): List<PublicPlayer> =
+    fun playerDirectory(): List<PartnerPlayerResponse> =
         users
             .search(
                 query =
@@ -273,7 +278,7 @@ class ApiClientService(
                         dobMax = null,
                         rating = null,
                     ),
-            ).map { PublicPlayer(publicCode = it.publicCode, displayName = it.displayName()) }
+            ).map { PublicPlayer(publicCode = it.publicCode, displayName = it.displayName()).toResponse() }
 
     /**
      * The capabilities [principal] may exercise on behalf of the user behind [token] (#597) — the
@@ -283,15 +288,18 @@ class ApiClientService(
     fun effectiveCapabilities(
         token: VerifiedFirebaseToken,
         principal: ClientPrincipal,
-    ): Either<ServiceError, ClientEffectiveCapabilities> =
+    ): Either<ServiceError, ClientEffectiveCapabilitiesResponse> =
         either {
             val user = ensureNotNull(value = users.findByFirebaseUid(firebaseUid = token.uid)) { ServiceError.Forbidden() }
             ClientEffectiveCapabilities(
                 clientId = principal.clientId,
                 userId = user.id,
                 capabilities = principal.effectiveCapabilities(userCapabilities = user.capabilities),
-            )
+            ).toResponse()
         }
+
+    /** The client-identity DTO for a resolved [principal] (#597), so the route maps nothing itself. */
+    fun describePrincipal(principal: ClientPrincipal): ClientIdentityResponse = principal.toResponse()
 
     /** Access gate: the caller must be an ADMINISTRATOR. Returns the caller's id (the audit actor). */
     private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {

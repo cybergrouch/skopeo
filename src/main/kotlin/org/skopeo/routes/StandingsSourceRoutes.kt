@@ -15,7 +15,6 @@ import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.settings.SetStandingsSourceRequest
-import org.skopeo.mapper.settings.toResponse
 import org.skopeo.service.settings.SettingsService
 
 /**
@@ -29,7 +28,7 @@ fun Application.configureStandingsSourceRoutes(service: SettingsService = Settin
             authenticate(FIREBASE_AUTH, optional = true) {
                 get {
                     respondMappingErrors {
-                        call.respond(status = HttpStatusCode.OK, message = service.getStandingsSource().toResponse())
+                        call.respond(status = HttpStatusCode.OK, message = service.getStandingsSourceResponse())
                     }
                 }
             }
@@ -40,7 +39,7 @@ fun Application.configureStandingsSourceRoutes(service: SettingsService = Settin
                         respondEither(
                             result = service.setStandingsSource(token = verifiedToken(), source = request.source),
                         ) { value ->
-                            call.respond(status = HttpStatusCode.OK, message = value.toResponse())
+                            call.respond(status = HttpStatusCode.OK, message = value)
                         }
                     }
                 }

@@ -9,6 +9,9 @@ import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.right
 import kotlinx.serialization.json.Json
+import org.skopeo.dto.settings.OpenPlayConfigResponse
+import org.skopeo.dto.settings.TournamentConfigResponse
+import org.skopeo.mapper.settings.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -62,6 +65,9 @@ class PointsConfigService(
         }
     }
 
+    /** The open-play schedule as its response DTO — the route-facing form of [getOpenPlay]. */
+    fun getOpenPlayResponse(): OpenPlayConfigResponse = getOpenPlay().toResponse()
+
     /** The current tournament placement schedule, or the seeded default when unset/corrupt. Public — no auth. */
     fun getTournament(): StoredConfig<TournamentPointsConfig> {
         val row = configs.get(key = TOURNAMENT_KEY)
@@ -81,11 +87,14 @@ class PointsConfigService(
         }
     }
 
+    /** The tournament schedule as its response DTO — the route-facing form of [getTournament]. */
+    fun getTournamentResponse(): TournamentConfigResponse = getTournament().toResponse()
+
     /** Set the open-play schedule (ADMINISTRATOR only). Rejects an invalid schedule as a [ServiceError.Validation]. */
     fun setOpenPlay(
         token: VerifiedFirebaseToken,
         config: OpenPlayPointsConfig,
-    ): Either<ServiceError, StoredConfig<OpenPlayPointsConfig>> =
+    ): Either<ServiceError, OpenPlayConfigResponse> =
         either {
             val adminId = requireAdmin(token = token).bind()
             ensure(condition = config.maxMargin >= 1 && config.rows.isNotEmpty() && config.validityDays > 0) {
@@ -98,14 +107,14 @@ class PointsConfigService(
                     updatedBy = adminId,
                 )
             recordChange(adminId = adminId, key = OPEN_PLAY_KEY)
-            StoredConfig(value = config, updatedBy = row.updatedBy, updatedAt = row.updatedAt)
+            StoredConfig(value = config, updatedBy = row.updatedBy, updatedAt = row.updatedAt).toResponse()
         }
 
     /** Set the tournament placement schedule (ADMINISTRATOR only). Rejects an invalid schedule as [ServiceError.Validation]. */
     fun setTournament(
         token: VerifiedFirebaseToken,
         config: TournamentPointsConfig,
-    ): Either<ServiceError, StoredConfig<TournamentPointsConfig>> =
+    ): Either<ServiceError, TournamentConfigResponse> =
         either {
             val adminId = requireAdmin(token = token).bind()
             ensure(
@@ -123,7 +132,7 @@ class PointsConfigService(
                     updatedBy = adminId,
                 )
             recordChange(adminId = adminId, key = TOURNAMENT_KEY)
-            StoredConfig(value = config, updatedBy = row.updatedBy, updatedAt = row.updatedAt)
+            StoredConfig(value = config, updatedBy = row.updatedBy, updatedAt = row.updatedAt).toResponse()
         }
 
     private fun recordChange(

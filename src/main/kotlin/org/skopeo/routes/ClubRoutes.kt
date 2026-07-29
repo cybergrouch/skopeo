@@ -21,7 +21,6 @@ import org.skopeo.dto.club.AssignOwnerRequest
 import org.skopeo.dto.club.CreateClubRequest
 import org.skopeo.dto.club.SetSanctionRequest
 import org.skopeo.dto.club.UpdateClubRequest
-import org.skopeo.mapper.club.toResponse
 import org.skopeo.service.club.ClubService
 import java.util.UUID
 
@@ -55,7 +54,7 @@ private fun Route.publicClubByCode(service: ClubService) {
         respondMappingErrors {
             val code = call.parameters["code"].orEmpty()
             respondEither(result = service.publicByCode(code = code)) { club ->
-                call.respond(status = HttpStatusCode.OK, message = club.toResponse())
+                call.respond(status = HttpStatusCode.OK, message = club)
             }
         }
     }
@@ -66,14 +65,14 @@ private fun Route.listAndCreateClubs(service: ClubService) {
         respondMappingErrors {
             val request = call.receive<CreateClubRequest>()
             respondEither(result = service.create(token = verifiedToken(), name = request.name)) { club ->
-                call.respond(status = HttpStatusCode.Created, message = club.toResponse())
+                call.respond(status = HttpStatusCode.Created, message = club)
             }
         }
     }
     get {
         respondMappingErrors {
             respondEither(result = service.list(token = verifiedToken())) { clubs ->
-                call.respond(status = HttpStatusCode.OK, message = clubs.map { it.toResponse() })
+                call.respond(status = HttpStatusCode.OK, message = clubs)
             }
         }
     }
@@ -86,7 +85,7 @@ private fun Route.clubMutations(service: ClubService) {
             val name = call.receive<UpdateClubRequest>().name
             respondEither(
                 result = service.rename(token = verifiedToken(), clubId = uuidParam(name = "id"), name = name),
-            ) { club -> call.respond(status = HttpStatusCode.OK, message = club.toResponse()) }
+            ) { club -> call.respond(status = HttpStatusCode.OK, message = club) }
         }
     }
     delete(path = "/{id}") {
@@ -102,7 +101,7 @@ private fun Route.clubMutations(service: ClubService) {
             val sanctioned = call.receive<SetSanctionRequest>().sanctioned
             respondEither(
                 result = service.setSanction(token = verifiedToken(), clubId = uuidParam(name = "id"), sanctioned = sanctioned),
-            ) { club -> call.respond(status = HttpStatusCode.OK, message = club.toResponse()) }
+            ) { club -> call.respond(status = HttpStatusCode.OK, message = club) }
         }
     }
 }
@@ -114,7 +113,7 @@ private fun Route.clubOwners(service: ClubService) {
             val userId = UUID.fromString(call.receive<AssignOwnerRequest>().userId)
             respondEither(
                 result = service.assignOwner(token = verifiedToken(), clubId = uuidParam(name = "id"), userId = userId),
-            ) { club -> call.respond(status = HttpStatusCode.OK, message = club.toResponse()) }
+            ) { club -> call.respond(status = HttpStatusCode.OK, message = club) }
         }
     }
     delete(path = "/{id}/owners/{userId}") {
@@ -126,7 +125,7 @@ private fun Route.clubOwners(service: ClubService) {
                         clubId = uuidParam(name = "id"),
                         userId = uuidParam(name = "userId"),
                     ),
-            ) { club -> call.respond(status = HttpStatusCode.OK, message = club.toResponse()) }
+            ) { club -> call.respond(status = HttpStatusCode.OK, message = club) }
         }
     }
 }

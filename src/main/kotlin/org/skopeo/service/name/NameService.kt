@@ -8,6 +8,8 @@ import arrow.core.left
 import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.right
+import org.skopeo.dto.name.NameResponse
+import org.skopeo.mapper.name.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -38,22 +40,22 @@ class NameService(
     fun list(
         token: VerifiedFirebaseToken,
         userId: UUID,
-    ): Either<ServiceError, List<Name>> =
+    ): Either<ServiceError, List<NameResponse>> =
         either {
             requireUserExists(userId = userId).bind()
             requireUserAccess(token = token, userId = userId).bind()
-            names.listByUser(userId = userId)
+            names.listByUser(userId = userId).map { it.toResponse() }
         }
 
     fun get(
         token: VerifiedFirebaseToken,
         userId: UUID,
         nameId: UUID,
-    ): Either<ServiceError, Name> =
+    ): Either<ServiceError, NameResponse> =
         either {
             val name = locate(userId = userId, nameId = nameId).bind()
             requireUserAccess(token = token, userId = userId).bind()
-            name
+            name.toResponse()
         }
 
     /** Add a name. A DISPLAY name replaces the current display name (the old becomes history). */
@@ -62,7 +64,7 @@ class NameService(
         userId: UUID,
         type: NameType,
         value: String,
-    ): Either<ServiceError, Name> =
+    ): Either<ServiceError, NameResponse> =
         either {
             requireUserExists(userId = userId).bind()
             val actor = requireUserAccess(token = token, userId = userId).bind()
@@ -78,7 +80,7 @@ class NameService(
                         details = mapOf("nameType" to type.name, "value" to value),
                     ),
             )
-            name
+            name.toResponse()
         }
 
     /**
@@ -90,7 +92,7 @@ class NameService(
         userId: UUID,
         nameId: UUID,
         active: Boolean,
-    ): Either<ServiceError, Name> =
+    ): Either<ServiceError, NameResponse> =
         either {
             val target = locate(userId = userId, nameId = nameId).bind()
             val actor = requireUserAccess(token = token, userId = userId).bind()
@@ -112,7 +114,7 @@ class NameService(
                         details = mapOf("nameId" to nameId.toString(), "active" to active.toString()),
                     ),
             )
-            target.copy(isActive = active, disabledAt = disabledAt)
+            target.copy(isActive = active, disabledAt = disabledAt).toResponse()
         }
 
     private fun locate(

@@ -8,11 +8,12 @@ import arrow.core.left
 import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.right
+import org.skopeo.dto.capability.CapabilityResponse
+import org.skopeo.mapper.capability.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
 import org.skopeo.model.Capability
-import org.skopeo.model.CapabilityGrant
 import org.skopeo.model.ContactType
 import org.skopeo.model.ServiceError
 import org.skopeo.model.User
@@ -42,18 +43,18 @@ class CapabilityService(
 ) {
     /** Outcome of a grant: [created] distinguishes a fresh grant (201) from an idempotent hit (200). */
     data class Granted(
-        val grant: CapabilityGrant,
+        val grant: CapabilityResponse,
         val created: Boolean,
     )
 
     fun list(
         token: VerifiedFirebaseToken,
         userId: UUID,
-    ): Either<ServiceError, List<CapabilityGrant>> =
+    ): Either<ServiceError, List<CapabilityResponse>> =
         either {
             requireAdmin(token = token).bind()
             requireUserExists(userId = userId).bind()
-            capabilities.listByUser(userId = userId)
+            capabilities.listByUser(userId = userId).map { it.toResponse() }
         }
 
     fun grant(
@@ -66,7 +67,7 @@ class CapabilityService(
             requireUserExists(userId = userId).bind()
             val existing = capabilities.findActive(userId = userId, capability = capability)
             if (existing != null) {
-                Granted(grant = existing, created = false)
+                Granted(grant = existing.toResponse(), created = false)
             } else {
                 val grant = capabilities.grant(userId = userId, capability = capability, grantedBy = adminId)
                 audit.record(
@@ -80,7 +81,7 @@ class CapabilityService(
                             details = mapOf("userId" to userId.toString(), "capability" to capability.name),
                         ),
                 )
-                Granted(grant = grant, created = true)
+                Granted(grant = grant.toResponse(), created = true)
             }
         }
 

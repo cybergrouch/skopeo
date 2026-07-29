@@ -79,8 +79,8 @@ class RatingRequestServiceTest {
         val player = provision(uid = "player", rated = true)
 
         val created = service.create(token = token(uid = "player"), justification = "I won a tough league").shouldBeRight()
-        created.status shouldBe RatingRequestStatus.PENDING
-        created.userId shouldBe player.id
+        created.status shouldBe RatingRequestStatus.PENDING.name
+        created.userId shouldBe player.id.toString()
 
         service.create(token = token(uid = "player"), justification = "again").shouldBeLeft().shouldBeInstanceOf<ServiceError.Conflict>()
 
@@ -145,7 +145,7 @@ class RatingRequestServiceTest {
 
         // status = null lists every request; ADMINISTRATOR implicitly rates.
         service.list(token = token(uid = "admin"), limit = 50, offset = 0, status = null).shouldBeRight().total shouldBe 1
-        service.approve(token = token(uid = "admin"), id = request.id, newRating = BigDecimal("4.5")).shouldBeRight()
+        service.approve(token = token(uid = "admin"), id = UUID.fromString(request.id), newRating = BigDecimal("4.5")).shouldBeRight()
 
         service.list(token = token(uid = "ghost"), limit = 50, offset = 0, status = null)
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
@@ -158,17 +158,18 @@ class RatingRequestServiceTest {
         val request = service.create(token = token(uid = "player"), justification = "promote me").shouldBeRight()
 
         val resolved =
-            service.approve(token = token(uid = "rater"), id = request.id, newRating = BigDecimal("4.5")).shouldBeRight()
-        resolved.status shouldBe RatingRequestStatus.APPROVED
-        resolved.resolvedBy shouldBe rater.id
+            service.approve(token = token(uid = "rater"), id = UUID.fromString(request.id), newRating = BigDecimal("4.5")).shouldBeRight()
+        resolved.status shouldBe RatingRequestStatus.APPROVED.name
+        // resolvedBy is not surfaced on the response DTO; verify the persisted resolver instead.
+        requests.findById(id = UUID.fromString(request.id))!!.resolvedBy shouldBe rater.id
         ratings.findCurrentRating(userId = player.id)!!.currentRating shouldBe BigDecimal("4.500000")
         // The override is recorded in the rating history + audited.
         AuditRepository().list(actions = listOf(element = AuditAction.RATING_OVERRIDDEN), limit = 10, offset = 0).second shouldBe 1L
 
-        service.approve(token = token(uid = "rater"), id = request.id, newRating = BigDecimal("5.0"))
+        service.approve(token = token(uid = "rater"), id = UUID.fromString(request.id), newRating = BigDecimal("5.0"))
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Conflict>()
         // Denying an already-resolved request is likewise a conflict.
-        service.deny(token = token(uid = "rater"), id = request.id, reason = "too late")
+        service.deny(token = token(uid = "rater"), id = UUID.fromString(request.id), reason = "too late")
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Conflict>()
     }
 
@@ -178,11 +179,16 @@ class RatingRequestServiceTest {
         val player = provision(uid = "player", rated = true)
         val request = service.create(token = token(uid = "player"), justification = "review").shouldBeRight()
 
-        service.deny(token = token(uid = "rater"), id = request.id, reason = "  ")
+        service.deny(token = token(uid = "rater"), id = UUID.fromString(request.id), reason = "  ")
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
 
-        val denied = service.deny(token = token(uid = "rater"), id = request.id, reason = "Not enough evidence").shouldBeRight()
-        denied.status shouldBe RatingRequestStatus.DENIED
+        val denied =
+            service.deny(
+                token = token(uid = "rater"),
+                id = UUID.fromString(request.id),
+                reason = "Not enough evidence",
+            ).shouldBeRight()
+        denied.status shouldBe RatingRequestStatus.DENIED.name
         denied.reason shouldBe "Not enough evidence"
         ratings.findCurrentRating(userId = player.id)!!.currentRating shouldBe BigDecimal("4.000000") // unchanged
         AuditRepository().list(actions = listOf(element = AuditAction.RATING_REQUEST_DENIED), limit = 10, offset = 0).second shouldBe 1L
@@ -198,9 +204,9 @@ class RatingRequestServiceTest {
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
         service.deny(token = token(uid = "rater"), id = UUID.randomUUID(), reason = "no")
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
-        service.approve(token = token(uid = "player"), id = request.id, newRating = BigDecimal("4.5"))
+        service.approve(token = token(uid = "player"), id = UUID.fromString(request.id), newRating = BigDecimal("4.5"))
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
-        service.deny(token = token(uid = "player"), id = request.id, reason = "no")
+        service.deny(token = token(uid = "player"), id = UUID.fromString(request.id), reason = "no")
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 }

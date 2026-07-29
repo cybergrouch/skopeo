@@ -167,16 +167,16 @@ class StandingsServiceTest {
         provision(uid = "f1", sex = "Female").also { rate(user = it, value = "4.4") }
 
         val men = page(band = StandingsBand.FROM_4_0, sex = "Male")
-        men.band shouldBe StandingsBand.FROM_4_0
+        men.band shouldBe StandingsBand.FROM_4_0.code
         men.sex shouldBe "Male"
-        men.source shouldBe SnapshotSource.RATING
+        men.source shouldBe SnapshotSource.RATING.name
         men.total shouldBe 2
-        men.entries.map { it.userId } shouldContainExactly listOf(m1.id, m2.id) // 4.3 ahead of 4.1
+        men.entries.map { it.userId } shouldContainExactly listOf(m1.id.toString(), m2.id.toString()) // 4.3 ahead of 4.1
         men.entries.map { it.rank } shouldContainExactly listOf(1, 2)
 
         // The selectors list both the Men and Women groups of the 4.0 band.
         men.groups.map { it.band to it.sex } shouldContainExactly
-            listOf(StandingsBand.FROM_4_0 to "Male", StandingsBand.FROM_4_0 to "Female")
+            listOf(StandingsBand.FROM_4_0.code to "Male", StandingsBand.FROM_4_0.code to "Female")
     }
 
     @Test
@@ -185,8 +185,8 @@ class StandingsServiceTest {
         val dummy = placeholder(displayName = "Dummy").also { rate(user = it, value = "4.1") }
 
         val men = page(band = StandingsBand.FROM_4_0, sex = "Male")
-        men.entries.single { it.userId == dummy.id }.placeholder.shouldBeTrue()
-        men.entries.single { it.userId == real.id }.placeholder.shouldBeFalse()
+        men.entries.single { it.userId == dummy.id.toString() }.isPlaceholder.shouldBeTrue()
+        men.entries.single { it.userId == real.id.toString() }.isPlaceholder.shouldBeFalse()
     }
 
     @Test
@@ -195,8 +195,8 @@ class StandingsServiceTest {
         val hi = provision(uid = "hi", sex = "Male").also { rate(user = it, value = "6.5") } // SIX_PLUS
 
         val view = page(band = null, sex = null)
-        view.band shouldBe StandingsBand.SIX_PLUS
-        view.entries.single().userId shouldBe hi.id
+        view.band shouldBe StandingsBand.SIX_PLUS.code
+        view.entries.single().userId shouldBe hi.id.toString()
     }
 
     @Test
@@ -205,21 +205,21 @@ class StandingsServiceTest {
 
         val first = page(band = StandingsBand.FROM_4_0, sex = "Male", limit = 2, offset = 0)
         first.total shouldBe 3
-        first.entries.map { it.userId } shouldContainExactly listOf(ranked[0].id, ranked[1].id)
+        first.entries.map { it.userId } shouldContainExactly listOf(ranked[0].id.toString(), ranked[1].id.toString())
 
         val second = page(band = StandingsBand.FROM_4_0, sex = "Male", limit = 2, offset = 2)
-        second.entries.map { it.userId } shouldContainExactly listOf(element = ranked[2].id)
+        second.entries.map { it.userId } shouldContainExactly listOf(element = ranked[2].id.toString())
     }
 
     @Test
     fun `a rating change is reflected live on the next page read (#146)`() {
         val player = provision(uid = "p", sex = "Male").also { rate(user = it, value = "4.2") }
-        page(band = StandingsBand.FROM_4_0, sex = "Male").entries.single().userId shouldBe player.id
+        page(band = StandingsBand.FROM_4_0, sex = "Male").entries.single().userId shouldBe player.id.toString()
 
         // A promotion into a higher band; the live read moves the player there with no rebuild.
         rate(user = player, value = "4.7")
         page(band = StandingsBand.FROM_4_0, sex = "Male").total shouldBe 0
-        page(band = StandingsBand.FROM_4_5, sex = "Male").entries.single().userId shouldBe player.id
+        page(band = StandingsBand.FROM_4_5, sex = "Male").entries.single().userId shouldBe player.id.toString()
     }
 
     @Test
@@ -230,11 +230,11 @@ class StandingsServiceTest {
         val player = provision(uid = "p", sex = "Male").also { rate(user = it, value = "4.2") }
 
         page(band = StandingsBand.FROM_4_0, sex = "Male", token = token(uid = "admin"))
-            .entries.single { it.userId == player.id }.currentRating shouldBe "4.200000"
+            .entries.single { it.userId == player.id.toString() }.currentRating shouldBe "4.200000"
         page(band = StandingsBand.FROM_4_0, sex = "Male", token = token(uid = "rater"))
-            .entries.single { it.userId == player.id }.currentRating.shouldBeNull()
+            .entries.single { it.userId == player.id.toString() }.currentRating.shouldBeNull()
         page(band = StandingsBand.FROM_4_0, sex = "Male", token = token(uid = "p"))
-            .entries.single { it.userId == player.id }.currentRating.shouldBeNull()
+            .entries.single { it.userId == player.id.toString() }.currentRating.shouldBeNull()
     }
 
     @Test
@@ -245,7 +245,7 @@ class StandingsServiceTest {
 
         page(band = StandingsBand.FROM_4_0, sex = "Male").entries.let {
             it shouldHaveSize 1
-            it.single().userId shouldBe active.id
+            it.single().userId shouldBe active.id.toString()
         }
     }
 
@@ -258,10 +258,10 @@ class StandingsServiceTest {
         provision(uid = "me", sex = "Male").also { rate(user = it, value = "4.001") }
 
         val located = service.locateMe(token = token(uid = "me"), limit = 25).shouldNotBeNull()
-        located.location.band shouldBe StandingsBand.FROM_4_0
-        located.location.sex shouldBe "Male"
+        located.band shouldBe StandingsBand.FROM_4_0.code
+        located.sex shouldBe "Male"
         // rank is 1-based; with 31 players the weakest is rank 31 → offset 25 (page 2).
-        located.location.rank shouldBe 31
+        located.rank shouldBe 31
         located.offset shouldBe 25
         located.limit shouldBe 25
     }
@@ -292,7 +292,7 @@ class StandingsServiceTest {
         view.entries shouldHaveSize 0
         view.total shouldBe 0
         // The selectors still advertise the group that does exist.
-        view.groups.map { it.band to it.sex } shouldContainExactly listOf(element = StandingsBand.FROM_4_0 to "Male")
+        view.groups.map { it.band to it.sex } shouldContainExactly listOf(element = StandingsBand.FROM_4_0.code to "Male")
     }
 
     @Test
@@ -305,8 +305,8 @@ class StandingsServiceTest {
                 .also { rate(user = it, value = "4.1") }
 
         val entries = page(band = StandingsBand.FROM_4_0, sex = "Male").entries.associateBy { it.userId }
-        entries.getValue(key = withDob.id).age.shouldNotBeNull()
-        entries.getValue(key = noDob.id).age.shouldBeNull()
+        entries.getValue(key = withDob.id.toString()).age.shouldNotBeNull()
+        entries.getValue(key = noDob.id.toString()).age.shouldBeNull()
     }
 
     @Test
@@ -318,8 +318,8 @@ class StandingsServiceTest {
 
         val entries = page(band = StandingsBand.FROM_4_0, sex = "Male").entries
         entries shouldHaveSize 2
-        entries.map { it.userId }.toSet() shouldBe setOf(named.id, unnamed.id)
-        entries.single { it.userId == unnamed.id }.displayName.shouldBeNull()
+        entries.map { it.userId }.toSet() shouldBe setOf(named.id.toString(), unnamed.id.toString())
+        entries.single { it.userId == unnamed.id.toString() }.displayName.shouldBeNull()
     }
 
     @Test
@@ -330,8 +330,8 @@ class StandingsServiceTest {
         publishSnapshot(source = SnapshotSource.POINTS, user = u, band = StandingsBand.SIX_PLUS, rating = "6.5")
 
         val view = page(band = null, sex = null)
-        view.band shouldBe StandingsBand.FROM_4_0 // the live rating band, not the POINTS snapshot's SIX_PLUS
-        view.source shouldBe SnapshotSource.RATING
+        view.band shouldBe StandingsBand.FROM_4_0.code // the live rating band, not the POINTS snapshot's SIX_PLUS
+        view.source shouldBe SnapshotSource.RATING.name
     }
 
     @Test
@@ -343,9 +343,9 @@ class StandingsServiceTest {
         setSource(value = "POINTS")
 
         val view = page(band = null, sex = null)
-        view.band shouldBe StandingsBand.SIX_PLUS // the POINTS snapshot's group
-        view.entries.single().userId shouldBe u.id
-        view.source shouldBe SnapshotSource.POINTS
+        view.band shouldBe StandingsBand.SIX_PLUS.code // the POINTS snapshot's group
+        view.entries.single().userId shouldBe u.id.toString()
+        view.source shouldBe SnapshotSource.POINTS.name
     }
 
     @Test
@@ -362,12 +362,12 @@ class StandingsServiceTest {
         setSource(value = "POINTS")
 
         val view = page(band = null, sex = null)
-        view.source shouldBe SnapshotSource.POINTS
+        view.source shouldBe SnapshotSource.POINTS.name
         view.band.shouldBeNull() // no rating fallback: no live 4.0 band leaks through
         view.entries shouldHaveSize 0
         view.total shouldBe 0
         view.groups shouldHaveSize 0
-        view.allBands shouldContainExactly StandingsBand.entries.reversed()
+        view.bands.map { it.code } shouldContainExactly StandingsBand.entries.reversed().map { it.code }
     }
 
     @Test
@@ -389,8 +389,8 @@ class StandingsServiceTest {
         view.entries shouldHaveSize 0
         view.total shouldBe 0
         view.groups shouldHaveSize 0
-        view.allBands shouldContainExactly StandingsBand.entries.reversed()
-        view.source shouldBe SnapshotSource.POINTS
+        view.bands.map { it.code } shouldContainExactly StandingsBand.entries.reversed().map { it.code }
+        view.source shouldBe SnapshotSource.POINTS.name
     }
 
     @Test
@@ -409,8 +409,8 @@ class StandingsServiceTest {
         setSource(value = "POINTS")
 
         val located = service.locateMe(token = token(uid = "u"), limit = 25).shouldNotBeNull()
-        located.location.band shouldBe StandingsBand.SIX_PLUS // the POINTS snapshot's group, not the live 4.0
-        located.location.rank shouldBe 1
+        located.band shouldBe StandingsBand.SIX_PLUS.code // the POINTS snapshot's group, not the live 4.0
+        located.rank shouldBe 1
     }
 
     @Test
@@ -452,10 +452,10 @@ class StandingsServiceTest {
             page(band = StandingsBand.FROM_4_0, sex = "Male", token = token(uid = "viewer")).entries.associateBy { it.userId }
         // Points are the served metric and public (persisted at the snapshot's NUMERIC scale); the precise
         // rating is never on a POINTS row.
-        entries.getValue(key = top.id).points shouldBe "240.0000"
-        entries.getValue(key = top.id).currentRating.shouldBeNull()
-        entries.getValue(key = low.id).points shouldBe "180.0000"
-        entries.getValue(key = low.id).currentRating.shouldBeNull()
+        entries.getValue(key = top.id.toString()).points shouldBe "240.0000"
+        entries.getValue(key = top.id.toString()).currentRating.shouldBeNull()
+        entries.getValue(key = low.id.toString()).points shouldBe "180.0000"
+        entries.getValue(key = low.id.toString()).currentRating.shouldBeNull()
     }
 
     @Test
@@ -495,8 +495,8 @@ class StandingsServiceTest {
         provision(uid = "m", sex = "Male").also { rate(user = it, value = "4.0") }
 
         val view = page(band = StandingsBand.FROM_4_0, sex = "Male")
-        view.allBands shouldContainExactly StandingsBand.entries.reversed()
-        view.allBands.first() shouldBe StandingsBand.SIX_PLUS // strongest first
+        view.bands.map { it.code } shouldContainExactly StandingsBand.entries.reversed().map { it.code }
+        view.bands.first().code shouldBe StandingsBand.SIX_PLUS.code // strongest first
         view.groups shouldHaveSize 1 // only the populated group carries data
     }
 
@@ -504,7 +504,7 @@ class StandingsServiceTest {
     fun `an empty leaderboard still advertises every NTRP band (#113)`() {
         val view = page(band = null, sex = null)
         view.groups shouldHaveSize 0
-        view.allBands shouldContainExactly StandingsBand.entries.reversed()
+        view.bands.map { it.code } shouldContainExactly StandingsBand.entries.reversed().map { it.code }
     }
 
     @Test

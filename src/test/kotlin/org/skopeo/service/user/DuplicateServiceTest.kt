@@ -76,7 +76,7 @@ class DuplicateServiceTest {
                 duplicateIds = listOf(dup1.id, dup2.id),
             ).shouldBeRight()
 
-        result.map { it.id }.toSet() shouldBe setOf(dup1.id, dup2.id)
+        result.map { it.id }.toSet() shouldBe setOf(dup1.id.toString(), dup2.id.toString())
         listOf(dup1.id, dup2.id).forEach { id ->
             users.findById(id = id).shouldBeRight().let {
                 it.isActive.shouldBeFalse()
@@ -227,6 +227,6 @@ class DuplicateServiceTest {
             .markDuplicates(token = token(uid = "root"), canonicalId = canonical.id, duplicateIds = listOf(element = dup.id))
             .shouldBeRight()
 
-        service.duplicatesOf(token = token(uid = "root"), canonicalId = canonical.id).shouldBeRight().single().id shouldBe dup.id
+        service.duplicatesOf(token = token(uid = "root"), canonicalId = canonical.id).shouldBeRight().single().id shouldBe dup.id.toString()
     }
 }

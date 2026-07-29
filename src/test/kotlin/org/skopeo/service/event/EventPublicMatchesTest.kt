@@ -122,20 +122,20 @@ class EventPublicMatchesTest {
         val p2 = provision(uid = "p2")
         val created = service.create(token = token(uid = "host"), input = input(participants = listOf(p1.id, p2.id))).shouldBeRight()
 
-        fun publicMatches() = service.publicByCode(token = null, code = created.event.publicCode).shouldBeRight().matches
+        fun publicMatches() = service.publicByCode(token = null, code = created.publicCode).shouldBeRight().matches
 
         // An event with no fixtures reports an empty match list.
         publicMatches().shouldHaveSize(size = 0)
 
         // A plain fixture (Scheduled), a recorded-but-unrated one (Awaiting rating), and a rated one.
-        val scheduled = seedFixture(eventId = created.event.id, host = host, p1 = p1, p2 = p2)
+        val scheduled = seedFixture(eventId = UUID.fromString(created.id), host = host, p1 = p1, p2 = p2)
         val awaiting =
-            seedFixture(eventId = created.event.id, host = host, p1 = p1, p2 = p2).also {
+            seedFixture(eventId = UUID.fromString(created.id), host = host, p1 = p1, p2 = p2).also {
                 recordResult(match = it, recordedBy = host.id)
             }
         val rated =
             seedFixture(
-                eventId = created.event.id,
+                eventId = UUID.fromString(created.id),
                 host = host,
                 p1 = p1,
                 p2 = p2,

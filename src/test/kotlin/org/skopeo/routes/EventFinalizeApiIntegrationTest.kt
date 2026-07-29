@@ -50,6 +50,7 @@ import org.skopeo.testsupport.TestFirebaseAuth
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.util.UUID
 
 /** End-to-end exercise of the events finalize/un-finalize routes (#403, #477). */
 class EventFinalizeApiIntegrationTest {
@@ -174,7 +175,7 @@ class EventFinalizeApiIntegrationTest {
         val matchRepo = MatchRepository()
         val eventService = EventService()
         val hostToken = VerifiedFirebaseToken(uid = "host", providerUid = "host")
-        val event =
+        val eventId =
             eventService.create(
                 token = hostToken,
                 input =
@@ -185,7 +186,7 @@ class EventFinalizeApiIntegrationTest {
                         participantIds = listOf(p1.id, p2.id),
                         type = EventType.LEAGUE,
                     ),
-            ).let { requireNotNull(value = it.getOrNull()).event }
+            ).let { UUID.fromString(requireNotNull(value = it.getOrNull()).id) }
         val fixture =
             matchRepo.createFixture(
                 command =
@@ -198,7 +199,7 @@ class EventFinalizeApiIntegrationTest {
                         team1Name = "t1",
                         team2Name = "t2",
                         createdBy = host.id,
-                        eventId = event.id,
+                        eventId = eventId,
                     ),
             )
         matchRepo.addResult(
@@ -208,11 +209,11 @@ class EventFinalizeApiIntegrationTest {
             recordedBy = host.id,
             completedAt = LocalDateTime.now(),
         )
-        eventService.finalize(token = hostToken, id = event.id).getOrNull().shouldNotBeNull()
+        eventService.finalize(token = hostToken, id = eventId).getOrNull().shouldNotBeNull()
         RatingCalculationService()
             .calculate(token = VerifiedFirebaseToken(uid = "admin", providerUid = "admin"), dryRun = false)
             .getOrNull().shouldNotBeNull()
-        return event.id.toString()
+        return eventId.toString()
     }
 
     @Test

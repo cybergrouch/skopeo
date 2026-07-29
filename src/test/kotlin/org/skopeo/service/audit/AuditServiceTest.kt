@@ -134,11 +134,11 @@ class AuditServiceTest {
             service.list(token = token(uid = "admin"), category = AuditCategory.CAPABILITY_CHANGE, limit = 10, offset = 0).shouldBeRight()
         caps.total shouldBe 1
         caps.items.single().let {
-            it.entry.action shouldBe AuditAction.CAPABILITY_GRANTED
+            it.action shouldBe AuditAction.CAPABILITY_GRANTED.name
             it.actor.shouldNotBeNull()
             it.actor.displayName shouldBe "admin"
             it.target.shouldNotBeNull()
-            it.target.userId shouldBe target.id // CAPABILITY entityId resolves to a user
+            it.target.userId shouldBe target.id.toString() // CAPABILITY entityId resolves to a user
             it.target.displayName shouldBe "target"
         }
 
@@ -186,7 +186,7 @@ class AuditServiceTest {
                 it.target.shouldBeNull() // a match is not a user target
                 it.matchTarget.shouldNotBeNull()
                 it.matchTarget.publicCode shouldBe match.publicCode
-                it.matchTarget.matchDate shouldBe LocalDate.parse("2026-02-03")
+                it.matchTarget.matchDate shouldBe "2026-02-03"
             }
     }
 
@@ -214,19 +214,21 @@ class AuditServiceTest {
         provision(uid = "player", roles = setOf(element = Capability.PLAYER))
         seedEntry(actor = admin.id)
         val id =
-            service.list(token = token(uid = "admin"), category = null, limit = 1, offset = 0).shouldBeRight().items.single().entry.id
+            UUID.fromString(
+                service.list(token = token(uid = "admin"), category = null, limit = 1, offset = 0).shouldBeRight().items.single().id,
+            )
 
         service.setComment(token = token(uid = "admin"), id = id, comment = "Looks intentional").shouldBeRight()
         service.list(token = token(uid = "admin"), category = null, limit = 1, offset = 0)
-            .shouldBeRight().items.single().entry.comment shouldBe "Looks intentional"
+            .shouldBeRight().items.single().comment shouldBe "Looks intentional"
 
         // A blank comment clears the note; a null comment likewise leaves none.
         service.setComment(token = token(uid = "admin"), id = id, comment = "   ").shouldBeRight()
         service.list(token = token(uid = "admin"), category = null, limit = 1, offset = 0)
-            .shouldBeRight().items.single().entry.comment.shouldBeNull()
+            .shouldBeRight().items.single().comment.shouldBeNull()
         service.setComment(token = token(uid = "admin"), id = id, comment = null).shouldBeRight()
         service.list(token = token(uid = "admin"), category = null, limit = 1, offset = 0)
-            .shouldBeRight().items.single().entry.comment.shouldBeNull()
+            .shouldBeRight().items.single().comment.shouldBeNull()
 
         service
             .setComment(token = token(uid = "player"), id = id, comment = "x")
@@ -266,6 +268,6 @@ class AuditServiceTest {
         val views = service.list(token = token(uid = "admin"), category = null, limit = 10, offset = 0).shouldBeRight()
         views.items.all { it.actor == null }.shouldBeTrue() // null actor → no resolved actor
         // A RATING entry with no entityId resolves to no target.
-        views.items.first { it.entry.action == AuditAction.RATING_SET }.target.shouldBeNull()
+        views.items.first { it.action == AuditAction.RATING_SET.name }.target.shouldBeNull()
     }
 }

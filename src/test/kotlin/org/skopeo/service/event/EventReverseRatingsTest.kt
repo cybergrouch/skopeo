@@ -16,6 +16,7 @@ import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.dto.event.EventResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuthProvider
@@ -23,6 +24,7 @@ import org.skopeo.model.AwardStatus
 import org.skopeo.model.Capability
 import org.skopeo.model.CreateCircuitCommand
 import org.skopeo.model.CreateFixtureCommand
+import org.skopeo.model.Event
 import org.skopeo.model.EventType
 import org.skopeo.model.Match
 import org.skopeo.model.MatchSetResult
@@ -72,6 +74,10 @@ class EventReverseRatingsTest {
     private val service = EventService(events = events, users = users)
     private val calc = RatingCalculationService()
 
+    // The service now returns EventResponse DTOs; re-fetch the persisted domain Event for fixtures/
+    // assertions that need domain-typed fields absent from the DTO (id as UUID, createdBy, etc.).
+    private fun EventResponse.domain(): Event = events.findById(id = UUID.fromString(id))!!
+
     @BeforeEach
     fun reset() {
         PostgresTestDatabase.truncate()
@@ -114,7 +120,7 @@ class EventReverseRatingsTest {
                 // A tournament must reference a circuit (#525).
                 circuitId = seedCircuit(hostUid = hostUid),
             ),
-    ).shouldBeRight().event
+    ).shouldBeRight().domain()
 
     /** Seed a circuit (#525) attributed to [hostUid]; a tournament must reference one. */
     private fun seedCircuit(hostUid: String): UUID {
@@ -243,7 +249,7 @@ class EventReverseRatingsTest {
 
         val view = service.reverseRatings(token = token(uid = "admin"), id = re.eventId).shouldBeRight()
 
-        view.event.isFinalized.shouldBeFalse()
+        view.isFinalized.shouldBeFalse()
         val persisted = events.findById(id = re.eventId).shouldNotBeNull()
         persisted.finalizedAt.shouldBeNull()
         persisted.finalizedBy.shouldBeNull()
@@ -274,7 +280,7 @@ class EventReverseRatingsTest {
         service.reverseRatings(token = token(uid = "admin"), id = re.eventId).shouldBeRight()
 
         // The matches re-enter the pending-calculation queue (once re-finalized) and the event re-finalizes.
-        service.finalize(token = token(uid = "host"), id = re.eventId).shouldBeRight().event.isFinalized.shouldBeTrue()
+        service.finalize(token = token(uid = "host"), id = re.eventId).shouldBeRight().domain().isFinalized.shouldBeTrue()
         calc.calculate(token = token(uid = "admin"), dryRun = true).shouldBeRight().matches shouldHaveSize 1
     }
 
@@ -303,7 +309,7 @@ class EventReverseRatingsTest {
                         type = EventType.TOURNAMENT,
                         circuitId = seedCircuit(hostUid = "host"),
                     ),
-            ).shouldBeRight().event
+            ).shouldBeRight().domain()
         seedCompletedFixture(eventId = eventB.id, host = host, p1 = p1, p2 = p2, date = LocalDate.now())
         service.finalize(token = token(uid = "host"), id = eventB.id).shouldBeRight()
         // Rate both events together: A then B in one batch, so B is dated on top of A for p1/p2.

@@ -14,10 +14,10 @@ import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.dto.contact.ContactResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
-import org.skopeo.model.Contact
 import org.skopeo.model.ContactType
 import org.skopeo.model.DuplicateCandidateStatus
 import org.skopeo.model.NameType
@@ -76,7 +76,7 @@ class ContactServiceTest {
         userId: UUID,
         contactId: UUID,
         status: VerificationStatus = VerificationStatus.VERIFIED,
-    ): Either<ServiceError, Contact> =
+    ): Either<ServiceError, ContactResponse> =
         service.setVerification(
             token = token(uid = adminUid),
             userId = userId,
@@ -97,8 +97,12 @@ class ContactServiceTest {
                     value = "a@b.dev",
                     isPrimary = true,
                 ).shouldBeRight()
-        service.setActive(token = token(uid = "owner"), userId = owner.id, contactId = created.id, active = false).shouldBeRight()
-        service.setActive(token = token(uid = "owner"), userId = owner.id, contactId = created.id, active = true).shouldBeRight()
+        service
+            .setActive(token = token(uid = "owner"), userId = owner.id, contactId = UUID.fromString(created.id), active = false)
+            .shouldBeRight()
+        service
+            .setActive(token = token(uid = "owner"), userId = owner.id, contactId = UUID.fromString(created.id), active = true)
+            .shouldBeRight()
 
         val audit = AuditRepository()
         audit.list(actions = listOf(element = AuditAction.CONTACT_ADDED), limit = 10, offset = 0).first.single().let {
@@ -126,10 +130,14 @@ class ContactServiceTest {
                     isPrimary = true,
                 ).shouldBeRight()
         service.list(token = token(uid = "owner"), userId = owner.id).shouldBeRight().single().id shouldBe created.id
-        service.get(token = token(uid = "owner"), userId = owner.id, contactId = created.id).shouldBeRight().id shouldBe created.id
+        service
+            .get(token = token(uid = "owner"), userId = owner.id, contactId = UUID.fromString(created.id))
+            .shouldBeRight().id shouldBe created.id
 
         val disabled =
-            service.setActive(token = token(uid = "owner"), userId = owner.id, contactId = created.id, active = false).shouldBeRight()
+            service
+                .setActive(token = token(uid = "owner"), userId = owner.id, contactId = UUID.fromString(created.id), active = false)
+                .shouldBeRight()
         disabled.isActive.shouldBeFalse()
     }
 
@@ -146,7 +154,9 @@ class ContactServiceTest {
                     isPrimary = true,
                 ).shouldBeRight()
 
-        service.setActive(token = token(uid = "owner"), userId = owner.id, contactId = first.id, active = false).shouldBeRight()
+        service
+            .setActive(token = token(uid = "owner"), userId = owner.id, contactId = UUID.fromString(first.id), active = false)
+            .shouldBeRight()
         val second =
             service
                 .create(
@@ -159,7 +169,7 @@ class ContactServiceTest {
 
         // Re-enabling the first now collides with the active second.
         service
-            .setActive(token = token(uid = "owner"), userId = owner.id, contactId = first.id, active = true)
+            .setActive(token = token(uid = "owner"), userId = owner.id, contactId = UUID.fromString(first.id), active = true)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Conflict>()
         second.isActive.shouldBeTrue()
@@ -178,9 +188,11 @@ class ContactServiceTest {
                     value = "a@example.com",
                     isPrimary = true,
                 ).shouldBeRight()
-        service.setActive(token = token(uid = "owner"), userId = owner.id, contactId = contact.id, active = false).shouldBeRight()
+        service
+            .setActive(token = token(uid = "owner"), userId = owner.id, contactId = UUID.fromString(contact.id), active = false)
+            .shouldBeRight()
 
-        verify(adminUid = "root", userId = owner.id, contactId = contact.id)
+        verify(adminUid = "root", userId = owner.id, contactId = UUID.fromString(contact.id))
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Validation>()
     }
@@ -214,7 +226,7 @@ class ContactServiceTest {
             .setVerification(
                 token = token(uid = "owner"),
                 userId = owner.id,
-                contactId = contact.id,
+                contactId = UUID.fromString(contact.id),
                 status = VerificationStatus.VERIFIED,
                 method = null,
             ).shouldBeLeft()
@@ -225,13 +237,13 @@ class ContactServiceTest {
                 .setVerification(
                     token = token(uid = "root"),
                     userId = owner.id,
-                    contactId = contact.id,
+                    contactId = UUID.fromString(contact.id),
                     status = VerificationStatus.VERIFIED,
                     method = null,
                 ).shouldBeRight()
-        verified.status shouldBe VerificationStatus.VERIFIED
-        verified.method shouldBe VerificationMethod.ADMIN_OVERRIDE
-        verified.verifiedBy shouldBe admin.id
+        verified.status shouldBe VerificationStatus.VERIFIED.name
+        verified.method shouldBe VerificationMethod.ADMIN_OVERRIDE.name
+        verified.verifiedBy shouldBe admin.id.toString()
     }
 
     @Test
@@ -249,7 +261,9 @@ class ContactServiceTest {
                 ).shouldBeRight()
 
         service.list(token = token(uid = "root"), userId = owner.id).shouldBeRight().single().id shouldBe created.id
-        service.get(token = token(uid = "root"), userId = owner.id, contactId = created.id).shouldBeRight().id shouldBe created.id
+        service
+            .get(token = token(uid = "root"), userId = owner.id, contactId = UUID.fromString(created.id))
+            .shouldBeRight().id shouldBe created.id
     }
 
     @Test
@@ -275,7 +289,7 @@ class ContactServiceTest {
                     isPrimary = true,
                 ).shouldBeRight()
 
-        verify(adminUid = "ghost", userId = owner.id, contactId = contact.id)
+        verify(adminUid = "ghost", userId = owner.id, contactId = UUID.fromString(contact.id))
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
@@ -293,12 +307,17 @@ class ContactServiceTest {
                     value = "a@example.com",
                     isPrimary = true,
                 ).shouldBeRight()
-        verify(adminUid = "root", userId = owner.id, contactId = contact.id).shouldBeRight()
+        verify(adminUid = "root", userId = owner.id, contactId = UUID.fromString(contact.id)).shouldBeRight()
 
         val revoked =
-            verify(adminUid = "root", userId = owner.id, contactId = contact.id, status = VerificationStatus.PENDING).shouldBeRight()
+            verify(
+                adminUid = "root",
+                userId = owner.id,
+                contactId = UUID.fromString(contact.id),
+                status = VerificationStatus.PENDING,
+            ).shouldBeRight()
 
-        revoked.status shouldBe VerificationStatus.PENDING
+        revoked.status shouldBe VerificationStatus.PENDING.name
         revoked.method.shouldBe(expected = null)
     }
 
@@ -339,7 +358,7 @@ class ContactServiceTest {
                     value = "dup@example.com",
                     isPrimary = true,
                 ).shouldBeRight()
-        verify(adminUid = "root", userId = userA.id, contactId = cA.id).shouldBeRight()
+        verify(adminUid = "root", userId = userA.id, contactId = UUID.fromString(cA.id)).shouldBeRight()
         val cB =
             service
                 .create(
@@ -350,7 +369,7 @@ class ContactServiceTest {
                     isPrimary = true,
                 ).shouldBeRight()
 
-        verify(adminUid = "root", userId = userB.id, contactId = cB.id)
+        verify(adminUid = "root", userId = userB.id, contactId = UUID.fromString(cB.id))
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Conflict>()
     }
@@ -375,7 +394,7 @@ class ContactServiceTest {
             .shouldBeInstanceOf<ServiceError.NotFound>()
         // contact exists but belongs to a different user than the path
         service
-            .get(token = token(uid = "owner"), userId = owner.id, contactId = contact.id)
+            .get(token = token(uid = "owner"), userId = owner.id, contactId = UUID.fromString(contact.id))
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.NotFound>()
     }
@@ -392,10 +411,14 @@ class ContactServiceTest {
                     value = "a@example.com",
                     isPrimary = true,
                 ).shouldBeRight()
-        service.setActive(token = token(uid = "owner"), userId = owner.id, contactId = contact.id, active = false).shouldBeRight()
+        service
+            .setActive(token = token(uid = "owner"), userId = owner.id, contactId = UUID.fromString(contact.id), active = false)
+            .shouldBeRight()
 
         val reenabled =
-            service.setActive(token = token(uid = "owner"), userId = owner.id, contactId = contact.id, active = true).shouldBeRight()
+            service
+                .setActive(token = token(uid = "owner"), userId = owner.id, contactId = UUID.fromString(contact.id), active = true)
+                .shouldBeRight()
 
         reenabled.isActive.shouldBeTrue()
         reenabled.disabledAt.shouldBe(expected = null)
@@ -420,13 +443,13 @@ class ContactServiceTest {
                 .setVerification(
                     token = token(uid = "root"),
                     userId = owner.id,
-                    contactId = contact.id,
+                    contactId = UUID.fromString(contact.id),
                     status = VerificationStatus.VERIFIED,
                     method = VerificationMethod.EMAIL_LINK,
                 ).shouldBeRight()
 
-        verified.status shouldBe VerificationStatus.VERIFIED
-        verified.method shouldBe VerificationMethod.EMAIL_LINK
+        verified.status shouldBe VerificationStatus.VERIFIED.name
+        verified.method shouldBe VerificationMethod.EMAIL_LINK.name
     }
 
     @Test
@@ -468,7 +491,7 @@ class ContactServiceTest {
                 ).shouldBeRight()
 
         // The caller is provisioned (non-null) but lacks ADMINISTRATOR -> capability branch is false.
-        verify(adminUid = "owner", userId = owner.id, contactId = contact.id)
+        verify(adminUid = "owner", userId = owner.id, contactId = UUID.fromString(contact.id))
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
     }

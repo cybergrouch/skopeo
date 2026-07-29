@@ -8,6 +8,8 @@ import arrow.core.left
 import arrow.core.raise.either
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
+import org.skopeo.dto.settings.StandingsSourceResponse
+import org.skopeo.mapper.settings.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -50,6 +52,9 @@ class SettingsService(
         return StandingsSourceValue(source = source, updatedBy = row?.updatedBy, updatedAt = row?.updatedAt)
     }
 
+    /** The current standings source as its response DTO — the route-facing form of [getStandingsSource]. */
+    fun getStandingsSourceResponse(): StandingsSourceResponse = getStandingsSource().toResponse()
+
     /**
      * Set the standings source (ADMINISTRATOR only). Rejects an unknown [source] as a [ServiceError.Validation].
      * Accepts RATING/POINTS case-insensitively, upserts the app-setting, and records a provenance row.
@@ -57,7 +62,7 @@ class SettingsService(
     fun setStandingsSource(
         token: VerifiedFirebaseToken,
         source: String,
-    ): Either<ServiceError, StandingsSourceValue> =
+    ): Either<ServiceError, StandingsSourceResponse> =
         either {
             val adminId = requireAdmin(token = token).bind()
             val parsed =
@@ -76,7 +81,7 @@ class SettingsService(
                         details = buildMap { put(key = "standingsSource", value = parsed.name) },
                     ),
             )
-            StandingsSourceValue(source = parsed, updatedBy = row.updatedBy, updatedAt = row.updatedAt)
+            StandingsSourceValue(source = parsed, updatedBy = row.updatedBy, updatedAt = row.updatedAt).toResponse()
         }
 
     /** ADMINISTRATOR-only access; returns the caller's id (the audit actor). */

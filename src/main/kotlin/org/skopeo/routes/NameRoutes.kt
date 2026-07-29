@@ -18,7 +18,6 @@ import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.name.NameCreateRequest
 import org.skopeo.dto.name.NameStateRequest
-import org.skopeo.mapper.name.toResponse
 import org.skopeo.model.NameType
 import org.skopeo.service.name.NameService
 
@@ -43,7 +42,7 @@ private fun Route.listAndCreate(service: NameService) {
     get {
         respondMappingErrors {
             respondEither(result = service.list(token = verifiedToken(), userId = uuidParam(name = "userId"))) { list ->
-                call.respond(status = HttpStatusCode.OK, message = list.map { it.toResponse() })
+                call.respond(status = HttpStatusCode.OK, message = list)
             }
         }
     }
@@ -58,7 +57,7 @@ private fun Route.listAndCreate(service: NameService) {
                         type = parseEnumParam<NameType>(value = request.type, field = "type"),
                         value = request.value,
                     ),
-            ) { name -> call.respond(status = HttpStatusCode.Created, message = name.toResponse()) }
+            ) { name -> call.respond(status = HttpStatusCode.Created, message = name) }
         }
     }
 }
@@ -68,7 +67,7 @@ private fun Route.byId(service: NameService) {
         respondMappingErrors {
             respondEither(
                 result = service.get(token = verifiedToken(), userId = uuidParam(name = "userId"), nameId = uuidParam(name = "id")),
-            ) { name -> call.respond(status = HttpStatusCode.OK, message = name.toResponse()) }
+            ) { name -> call.respond(status = HttpStatusCode.OK, message = name) }
         }
     }
 }
@@ -85,7 +84,7 @@ private fun Route.state(service: NameService) {
                         nameId = uuidParam(name = "id"),
                         active = request.isActive,
                     ),
-            ) { name -> call.respond(status = HttpStatusCode.OK, message = name.toResponse()) }
+            ) { name -> call.respond(status = HttpStatusCode.OK, message = name) }
         }
     }
 }

@@ -16,7 +16,6 @@ import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.settings.SetLocalThemeRequest
 import org.skopeo.dto.settings.SetThemeRequest
-import org.skopeo.mapper.settings.toResponse
 import org.skopeo.service.settings.ThemeService
 
 /**
@@ -30,7 +29,7 @@ fun Application.configureThemeRoutes(service: ThemeService = ThemeService()) {
             authenticate(FIREBASE_AUTH, optional = true) {
                 get {
                     respondMappingErrors {
-                        call.respond(status = HttpStatusCode.OK, message = service.getTheme().toResponse())
+                        call.respond(status = HttpStatusCode.OK, message = service.getTheme())
                     }
                 }
             }
@@ -39,7 +38,7 @@ fun Application.configureThemeRoutes(service: ThemeService = ThemeService()) {
                     respondMappingErrors {
                         val request = call.receive<SetThemeRequest>()
                         respondEither(result = service.setTheme(token = verifiedToken(), theme = request.theme)) { value ->
-                            call.respond(status = HttpStatusCode.OK, message = value.toResponse())
+                            call.respond(status = HttpStatusCode.OK, message = value)
                         }
                     }
                 }
@@ -54,7 +53,7 @@ fun Application.configureThemeRoutes(service: ThemeService = ThemeService()) {
                 get {
                     respondMappingErrors {
                         respondEither(result = service.getLocalTheme(token = verifiedToken())) { value ->
-                            call.respond(status = HttpStatusCode.OK, message = value.toResponse())
+                            call.respond(status = HttpStatusCode.OK, message = value)
                         }
                     }
                 }
@@ -62,7 +61,7 @@ fun Application.configureThemeRoutes(service: ThemeService = ThemeService()) {
                     respondMappingErrors {
                         val request = call.receive<SetLocalThemeRequest>()
                         respondEither(result = service.setLocalTheme(token = verifiedToken(), theme = request.theme)) { value ->
-                            call.respond(status = HttpStatusCode.OK, message = value.toResponse())
+                            call.respond(status = HttpStatusCode.OK, message = value)
                         }
                     }
                 }

@@ -8,6 +8,8 @@ import arrow.core.left
 import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.right
+import org.skopeo.dto.contact.ContactResponse
+import org.skopeo.mapper.contact.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -42,22 +44,22 @@ class ContactService(
     fun list(
         token: VerifiedFirebaseToken,
         userId: UUID,
-    ): Either<ServiceError, List<Contact>> =
+    ): Either<ServiceError, List<ContactResponse>> =
         either {
             requireUserExists(userId = userId).bind()
             requireUserAccess(token = token, userId = userId).bind()
-            contacts.listByUser(userId = userId)
+            contacts.listByUser(userId = userId).map { it.toResponse() }
         }
 
     fun get(
         token: VerifiedFirebaseToken,
         userId: UUID,
         contactId: UUID,
-    ): Either<ServiceError, Contact> =
+    ): Either<ServiceError, ContactResponse> =
         either {
             val contact = locate(userId = userId, contactId = contactId).bind()
             requireUserAccess(token = token, userId = userId).bind()
-            contact
+            contact.toResponse()
         }
 
     fun create(
@@ -66,7 +68,7 @@ class ContactService(
         type: ContactType,
         value: String,
         isPrimary: Boolean,
-    ): Either<ServiceError, Contact> =
+    ): Either<ServiceError, ContactResponse> =
         either {
             requireUserExists(userId = userId).bind()
             val actor = requireUserAccess(token = token, userId = userId).bind()
@@ -90,7 +92,7 @@ class ContactService(
                     ),
             )
             if (type == ContactType.PHONE) flagPhoneDuplicates(newUserId = userId, value = value)
-            contact
+            contact.toResponse()
         }
 
     /**
@@ -128,7 +130,7 @@ class ContactService(
         userId: UUID,
         contactId: UUID,
         active: Boolean,
-    ): Either<ServiceError, Contact> =
+    ): Either<ServiceError, ContactResponse> =
         either {
             val contact = locate(userId = userId, contactId = contactId).bind()
             val actor = requireUserAccess(token = token, userId = userId).bind()
@@ -152,7 +154,7 @@ class ContactService(
                         details = mapOf("contactId" to contactId.toString(), "active" to active.toString()),
                     ),
             )
-            contact.copy(isActive = active, disabledAt = disabledAt)
+            contact.copy(isActive = active, disabledAt = disabledAt).toResponse()
         }
 
     /** The ADMINISTRATOR-only verification action; records who verified and when. */
@@ -162,7 +164,7 @@ class ContactService(
         contactId: UUID,
         status: VerificationStatus,
         method: VerificationMethod?,
-    ): Either<ServiceError, Contact> =
+    ): Either<ServiceError, ContactResponse> =
         either {
             val contact = locate(userId = userId, contactId = contactId).bind()
             val adminId = requireAdmin(token = token).bind()
@@ -179,6 +181,7 @@ class ContactService(
                     verifiedBy = adminId,
                     verifiedAt = LocalDateTime.now(),
                 ).bind()
+                .toResponse()
         }
 
     private fun locate(

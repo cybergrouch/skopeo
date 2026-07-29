@@ -156,7 +156,7 @@ class OpenGraphApiIntegrationTest {
                 ).shouldBeRight()
 
         stubbedApp { client ->
-            val body = client.get(urlString = "/events/${event.event.publicCode}").bodyAsText()
+            val body = client.get(urlString = "/events/${event.publicCode}").bodyAsText()
 
             body shouldContain "<meta property=\"og:title\" content=\"Club Open on Skopeo\" />"
         }

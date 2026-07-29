@@ -19,7 +19,6 @@ import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.rating.CalculationRequest
 import org.skopeo.dto.rating.SetRatingRequest
-import org.skopeo.mapper.rating.toResponse
 import org.skopeo.model.Level
 import org.skopeo.model.Rating
 import org.skopeo.service.rating.RatingCalculationService
@@ -49,7 +48,7 @@ fun Application.configureRatingRoutes(
                                 limit = params["limit"]?.toIntOrNull() ?: DEFAULT_PENDING_PAGE_SIZE,
                                 offset = params["offset"]?.toIntOrNull() ?: 0,
                             ),
-                    ) { page -> call.respond(status = HttpStatusCode.OK, message = page.toResponse()) }
+                    ) { page -> call.respond(status = HttpStatusCode.OK, message = page) }
                 }
             }
             // Calculation trigger (ADMINISTRATOR). dryRun defaults true; an empty body is a dry run.
@@ -63,7 +62,7 @@ fun Application.configureRatingRoutes(
                         // null/empty keeps the all-pending behaviour.
                         result = calculation.calculate(token = verifiedToken(), dryRun = request.dryRun, eventIds = request.eventIds),
                     ) { outcome ->
-                        call.respond(status = HttpStatusCode.OK, message = outcome.toResponse())
+                        call.respond(status = HttpStatusCode.OK, message = outcome)
                     }
                 }
             }
@@ -77,18 +76,15 @@ fun Application.configureRatingRoutes(
 private fun Route.ratings(service: RatingService) {
     get(path = "/ratings") {
         respondMappingErrors {
-            respondEither(result = service.getRatings(token = verifiedToken(), userId = uuidParam(name = "userId"))) { view ->
-                call.respond(status = HttpStatusCode.OK, message = view.ratings.map { it.toResponse(revealRawValue = view.revealRawValue) })
+            respondEither(result = service.getRatings(token = verifiedToken(), userId = uuidParam(name = "userId"))) { ratings ->
+                call.respond(status = HttpStatusCode.OK, message = ratings)
             }
         }
     }
     get(path = "/rating-history") {
         respondMappingErrors {
-            respondEither(result = service.getHistory(token = verifiedToken(), userId = uuidParam(name = "userId"))) { view ->
-                call.respond(
-                    status = HttpStatusCode.OK,
-                    message = view.entries.map { it.toResponse(revealRawValue = view.revealRawValue) },
-                )
+            respondEither(result = service.getHistory(token = verifiedToken(), userId = uuidParam(name = "userId"))) { history ->
+                call.respond(status = HttpStatusCode.OK, message = history)
             }
         }
     }
@@ -103,7 +99,7 @@ private fun Route.ratings(service: RatingService) {
                         value = resolvedRating(request = request),
                     ),
                 // The setter is a RATER/ADMINISTRATOR, so echo back the exact value they just set.
-            ) { rating -> call.respond(status = HttpStatusCode.OK, message = rating.toResponse(revealRawValue = true)) }
+            ) { rating -> call.respond(status = HttpStatusCode.OK, message = rating) }
         }
     }
 }

@@ -16,7 +16,10 @@ import org.junit.jupiter.api.Test
  *  - dto is a pure boundary record — it never reaches routes/repository/service, and never model
  *    (save for a small allowlist of shared `@Serializable` value types used as a wire contract, below);
  *  - mapper owns the dto↔model translation — it depends on dto + model only, never routes/repository/service;
- *  - service never depends on the transport (routes); it MAY call mapper (one-way, acyclic).
+ *  - service never depends on the transport (routes); it MAY call mapper (one-way, acyclic);
+ *  - routes never depend on mapper — translation is hidden behind the service (services return/accept DTOs),
+ *    so a route calls service.* and responds with the DTO. (routes still touch a thin model slice — param
+ *    enums, ServiceError, auth principals, wire-contract bodies — so there is deliberately no routes↛model rule.)
  *
  * dto↔model exemption: three v1 stateless-calculator contract DTOs (`RankingCalculationRequest`/`Response`,
  * `RatingChange`) and the two points-config responses (`OpenPlayConfigResponse`, `TournamentConfigResponse`)
@@ -95,6 +98,19 @@ class LayeredArchitectureTest {
         noClasses()
             .that().resideInAPackage("..service..")
             .should().dependOnClassesThat().resideInAnyPackage("..routes..")
+            .check(classes)
+    }
+
+    @Test
+    fun `routes do not depend on mapper`() {
+        // dto↔model translation is hidden behind the service layer: services return response DTOs (and
+        // accept request DTOs), so a route calls service.* and responds with the DTO it gets back — it
+        // never invokes a mapper. (routes still reference a thin slice of model — enums parsed from
+        // query/path params, ServiceError, auth principals, the wire-contract request bodies — which is a
+        // separate, later concern; there is intentionally no routes↛model rule yet.)
+        noClasses()
+            .that().resideInAPackage("..routes..")
+            .should().dependOnClassesThat().resideInAPackage("..mapper..")
             .check(classes)
     }
 }

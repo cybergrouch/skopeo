@@ -19,7 +19,6 @@ import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.circuit.CreateCircuitRequest
 import org.skopeo.dto.circuit.UpdateCircuitRequest
-import org.skopeo.mapper.circuit.toResponse
 import org.skopeo.service.circuit.CircuitService
 
 /**
@@ -43,14 +42,14 @@ private fun Route.listAndCreateCircuits(service: CircuitService) {
         respondMappingErrors {
             val request = call.receive<CreateCircuitRequest>()
             respondEither(result = service.create(token = verifiedToken(), name = request.name)) { circuit ->
-                call.respond(status = HttpStatusCode.Created, message = circuit.toResponse())
+                call.respond(status = HttpStatusCode.Created, message = circuit)
             }
         }
     }
     get {
         respondMappingErrors {
             respondEither(result = service.list(token = verifiedToken())) { circuits ->
-                call.respond(status = HttpStatusCode.OK, message = circuits.map { it.toResponse() })
+                call.respond(status = HttpStatusCode.OK, message = circuits)
             }
         }
     }
@@ -63,7 +62,7 @@ private fun Route.circuitMutations(service: CircuitService) {
             val name = call.receive<UpdateCircuitRequest>().name
             respondEither(
                 result = service.rename(token = verifiedToken(), circuitId = uuidParam(name = "id"), name = name),
-            ) { circuit -> call.respond(status = HttpStatusCode.OK, message = circuit.toResponse()) }
+            ) { circuit -> call.respond(status = HttpStatusCode.OK, message = circuit) }
         }
     }
     delete(path = "/{id}") {

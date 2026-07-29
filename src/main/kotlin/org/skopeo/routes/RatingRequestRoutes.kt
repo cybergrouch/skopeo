@@ -18,7 +18,6 @@ import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.rating.ApproveRatingRequestRequest
 import org.skopeo.dto.rating.CreateRatingRequestRequest
 import org.skopeo.dto.rating.DenyRatingRequestRequest
-import org.skopeo.mapper.rating.toResponse
 import org.skopeo.model.Rating
 import org.skopeo.model.RatingRequestStatus
 import org.skopeo.service.rating.RatingRequestService
@@ -44,7 +43,7 @@ private fun Route.playerEndpoints(service: RatingRequestService) {
         respondMappingErrors {
             val request = call.receive<CreateRatingRequestRequest>()
             respondEither(result = service.create(token = verifiedToken(), justification = request.justification)) { created ->
-                call.respond(status = HttpStatusCode.Created, message = created.toResponse())
+                call.respond(status = HttpStatusCode.Created, message = created)
             }
         }
     }
@@ -54,7 +53,7 @@ private fun Route.playerEndpoints(service: RatingRequestService) {
                 if (mine == null) {
                     call.respond(status = HttpStatusCode.NoContent, message = "")
                 } else {
-                    call.respond(status = HttpStatusCode.OK, message = mine.toResponse())
+                    call.respond(status = HttpStatusCode.OK, message = mine)
                 }
             }
         }
@@ -73,7 +72,7 @@ private fun Route.raterEndpoints(service: RatingRequestService) {
                         offset = params["offset"]?.toIntOrNull() ?: 0,
                         status = params["status"]?.let { parseRequestStatus(raw = it) },
                     ),
-            ) { page -> call.respond(status = HttpStatusCode.OK, message = page.toResponse()) }
+            ) { page -> call.respond(status = HttpStatusCode.OK, message = page) }
         }
     }
     post(path = "/{id}/approve") {
@@ -82,7 +81,7 @@ private fun Route.raterEndpoints(service: RatingRequestService) {
             respondEither(
                 result =
                     service.approve(token = verifiedToken(), id = uuidParam(name = "id"), newRating = validatedRating(raw = body.rating)),
-            ) { request -> call.respond(status = HttpStatusCode.OK, message = request.toResponse()) }
+            ) { request -> call.respond(status = HttpStatusCode.OK, message = request) }
         }
     }
     post(path = "/{id}/deny") {
@@ -90,7 +89,7 @@ private fun Route.raterEndpoints(service: RatingRequestService) {
             val body = call.receive<DenyRatingRequestRequest>()
             respondEither(
                 result = service.deny(token = verifiedToken(), id = uuidParam(name = "id"), reason = body.reason),
-            ) { request -> call.respond(status = HttpStatusCode.OK, message = request.toResponse()) }
+            ) { request -> call.respond(status = HttpStatusCode.OK, message = request) }
         }
     }
 }

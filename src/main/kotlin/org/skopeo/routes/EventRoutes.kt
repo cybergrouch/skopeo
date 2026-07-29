@@ -24,7 +24,6 @@ import org.skopeo.dto.event.DecideParticipantRequest
 import org.skopeo.dto.event.SetCalcPriorityRequest
 import org.skopeo.dto.event.SetEventClubRequest
 import org.skopeo.dto.event.UpdateEventRequest
-import org.skopeo.mapper.event.toResponse
 import org.skopeo.model.EventParticipantStatus
 import org.skopeo.model.EventType
 import org.skopeo.service.event.CreateEventInput
@@ -59,13 +58,7 @@ private fun Route.listAndCreate(service: EventService) {
     get {
         respondMappingErrors {
             respondEither(result = service.list(token = verifiedToken())) { events ->
-                // Batched "has results" counts (#483) in one grouped query — no per-event N+1.
-                val counts = service.completedResultCounts(eventIds = events.map { it.event.id })
-                val showRaw = service.callerCanSeeRawRating(token = verifiedToken())
-                call.respond(
-                    status = HttpStatusCode.OK,
-                    message = events.map { it.toResponse(completedMatchCount = counts[it.event.id] ?: 0, showRawRating = showRaw) },
-                )
+                call.respond(status = HttpStatusCode.OK, message = events)
             }
         }
     }
@@ -73,7 +66,7 @@ private fun Route.listAndCreate(service: EventService) {
         respondMappingErrors {
             val request = call.receive<CreateEventRequest>()
             respondEither(result = service.create(token = verifiedToken(), input = toCreateEventInput(request = request))) { event ->
-                call.respond(status = HttpStatusCode.Created, message = event.toResponse())
+                call.respond(status = HttpStatusCode.Created, message = event)
             }
         }
     }
@@ -82,12 +75,7 @@ private fun Route.listAndCreate(service: EventService) {
     get(path = "/mine") {
         respondMappingErrors {
             respondEither(result = service.myEvents(token = verifiedToken())) { events ->
-                // Batched "has results" counts (#483) in one grouped query — no per-event N+1.
-                val counts = service.completedResultCounts(eventIds = events.map { it.event.id })
-                call.respond(
-                    status = HttpStatusCode.OK,
-                    message = events.map { it.toResponse(completedMatchCount = counts[it.event.id] ?: 0) },
-                )
+                call.respond(status = HttpStatusCode.OK, message = events)
             }
         }
     }
@@ -131,7 +119,7 @@ private fun Route.renameEvent(service: EventService) {
             val name = requireNotNull(value = call.receive<UpdateEventRequest>().name) { "A name is required to update the event" }
             respondEither(
                 result = service.rename(token = verifiedToken(), id = uuidParam(name = "id"), name = name),
-            ) { event -> call.respond(status = HttpStatusCode.OK, message = event.toResponse()) }
+            ) { event -> call.respond(status = HttpStatusCode.OK, message = event) }
         }
     }
     put(path = "/{id}/club") {
@@ -140,7 +128,7 @@ private fun Route.renameEvent(service: EventService) {
             val clubId = call.receive<SetEventClubRequest>().clubId?.let { parseEventUuid(value = it, field = "club id") }
             respondEither(
                 result = service.setClub(token = verifiedToken(), id = uuidParam(name = "id"), clubId = clubId),
-            ) { event -> call.respond(status = HttpStatusCode.OK, message = event.toResponse()) }
+            ) { event -> call.respond(status = HttpStatusCode.OK, message = event) }
         }
     }
     put(path = "/{id}/calculation-priority") {
@@ -148,7 +136,7 @@ private fun Route.renameEvent(service: EventService) {
             val priority = call.receive<SetCalcPriorityRequest>().priority
             respondEither(
                 result = service.setCalcPriority(token = verifiedToken(), id = uuidParam(name = "id"), priority = priority),
-            ) { event -> call.respond(status = HttpStatusCode.OK, message = event.toResponse()) }
+            ) { event -> call.respond(status = HttpStatusCode.OK, message = event) }
         }
     }
 }
@@ -165,7 +153,7 @@ private fun Route.finalizeEvent(service: EventService) {
         respondMappingErrors {
             respondEither(
                 result = service.finalize(token = verifiedToken(), id = uuidParam(name = "id")),
-            ) { event -> call.respond(status = HttpStatusCode.OK, message = event.toResponse()) }
+            ) { event -> call.respond(status = HttpStatusCode.OK, message = event) }
         }
     }
     // Rejected if the event is not finalized, or if any of its matches are already rated.
@@ -173,7 +161,7 @@ private fun Route.finalizeEvent(service: EventService) {
         respondMappingErrors {
             respondEither(
                 result = service.unfinalize(token = verifiedToken(), id = uuidParam(name = "id")),
-            ) { event -> call.respond(status = HttpStatusCode.OK, message = event.toResponse()) }
+            ) { event -> call.respond(status = HttpStatusCode.OK, message = event) }
         }
     }
     // Reverse an already-rated event's ratings (#478), ADMINISTRATOR-only. Rejected if the event is not
@@ -182,7 +170,7 @@ private fun Route.finalizeEvent(service: EventService) {
         respondMappingErrors {
             respondEither(
                 result = service.reverseRatings(token = verifiedToken(), id = uuidParam(name = "id")),
-            ) { event -> call.respond(status = HttpStatusCode.OK, message = event.toResponse()) }
+            ) { event -> call.respond(status = HttpStatusCode.OK, message = event) }
         }
     }
 }
@@ -193,7 +181,7 @@ private fun Route.byIdAndParticipants(service: EventService) {
             respondEither(result = service.get(token = verifiedToken(), id = uuidParam(name = "id"))) { event ->
                 // Raw participant ratings are ADMINISTRATOR-only (#583); band-only on single-event detail
                 // for now (no leak). Admins still see raw on the event list.
-                call.respond(status = HttpStatusCode.OK, message = event.toResponse())
+                call.respond(status = HttpStatusCode.OK, message = event)
             }
         }
     }
@@ -207,7 +195,7 @@ private fun Route.byIdAndParticipants(service: EventService) {
                         eventId = uuidParam(name = "id"),
                         userId = parseEventUuid(value = request.userId),
                     ),
-            ) { event -> call.respond(status = HttpStatusCode.OK, message = event.toResponse()) }
+            ) { event -> call.respond(status = HttpStatusCode.OK, message = event) }
         }
     }
     // Approve or hold a participant request (#201). Staff-only (enforced in the service).
@@ -227,7 +215,7 @@ private fun Route.byIdAndParticipants(service: EventService) {
                         userId = uuidParam(name = "userId"),
                         status = status,
                     ),
-            ) { event -> call.respond(status = HttpStatusCode.OK, message = event.toResponse()) }
+            ) { event -> call.respond(status = HttpStatusCode.OK, message = event) }
         }
     }
     // Delete an event (#243). Soft-delete, gated by the event's matches (see EventService.delete).
@@ -247,7 +235,7 @@ private fun Route.byIdAndParticipants(service: EventService) {
                         eventId = uuidParam(name = "id"),
                         userId = uuidParam(name = "userId"),
                     ),
-            ) { event -> call.respond(status = HttpStatusCode.OK, message = event.toResponse()) }
+            ) { event -> call.respond(status = HttpStatusCode.OK, message = event) }
         }
     }
 }

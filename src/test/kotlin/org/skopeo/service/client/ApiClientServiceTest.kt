@@ -111,13 +111,13 @@ class ApiClientServiceTest {
         val issued =
             service.issueKey(
                 token = adminToken,
-                clientId = client.id,
+                clientId = UUID.fromString(client.id),
                 scopes = setOf(element = Capability.PLAYER),
                 environment = ApiKeyEnvironment.LIVE,
                 expiresInDays = null,
             ).shouldBeRight()
-        ApiKeyCrypto.looksValid(raw = issued.plaintext) shouldBe true
-        issued.key.scopes shouldBe setOf(element = Capability.PLAYER)
+        ApiKeyCrypto.looksValid(raw = issued.apiKey) shouldBe true
+        issued.key.scopes shouldBe listOf(element = Capability.PLAYER.name)
 
         service.issueKey(
             token = adminToken,
@@ -129,7 +129,7 @@ class ApiClientServiceTest {
 
         service.issueKey(
             token = adminToken,
-            clientId = client.id,
+            clientId = UUID.fromString(client.id),
             scopes = emptySet(),
             environment = ApiKeyEnvironment.LIVE,
             expiresInDays = 0,
@@ -143,14 +143,14 @@ class ApiClientServiceTest {
         val issued =
             service.issueKey(
                 token = adminToken,
-                clientId = client.id,
+                clientId = UUID.fromString(client.id),
                 scopes = emptySet(),
                 environment = ApiKeyEnvironment.LIVE,
                 expiresInDays = null,
             ).shouldBeRight()
 
-        service.revokeKey(token = adminToken, clientId = client.id, keyId = issued.key.id).shouldBeRight()
-        service.revokeKey(token = adminToken, clientId = client.id, keyId = issued.key.id)
+        service.revokeKey(token = adminToken, clientId = UUID.fromString(client.id), keyId = UUID.fromString(issued.key.id)).shouldBeRight()
+        service.revokeKey(token = adminToken, clientId = UUID.fromString(client.id), keyId = UUID.fromString(issued.key.id))
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
@@ -161,15 +161,15 @@ class ApiClientServiceTest {
         val issued =
             service.issueKey(
                 token = adminToken,
-                clientId = client.id,
+                clientId = UUID.fromString(client.id),
                 scopes = setOf(Capability.PLAYER, Capability.HOST),
                 environment = ApiKeyEnvironment.LIVE,
                 expiresInDays = 30,
             ).shouldBeRight()
 
-        val result = service.authenticate(rawKey = issued.plaintext).shouldBeInstanceOf<ClientAuthResult.Authenticated>()
-        result.principal.clientId shouldBe client.id
-        result.principal.keyId shouldBe issued.key.id
+        val result = service.authenticate(rawKey = issued.apiKey).shouldBeInstanceOf<ClientAuthResult.Authenticated>()
+        result.principal.clientId shouldBe UUID.fromString(client.id)
+        result.principal.keyId shouldBe UUID.fromString(issued.key.id)
         result.principal.scopes shouldBe setOf(Capability.PLAYER, Capability.HOST)
     }
 
@@ -190,14 +190,14 @@ class ApiClientServiceTest {
         val issued =
             service.issueKey(
                 token = adminToken,
-                clientId = client.id,
+                clientId = UUID.fromString(client.id),
                 scopes = emptySet(),
                 environment = ApiKeyEnvironment.LIVE,
                 expiresInDays = null,
             ).shouldBeRight()
-        service.revokeKey(token = adminToken, clientId = client.id, keyId = issued.key.id).shouldBeRight()
+        service.revokeKey(token = adminToken, clientId = UUID.fromString(client.id), keyId = UUID.fromString(issued.key.id)).shouldBeRight()
 
-        service.authenticate(rawKey = issued.plaintext) shouldBe ClientAuthResult.Forbidden
+        service.authenticate(rawKey = issued.apiKey) shouldBe ClientAuthResult.Forbidden
     }
 
     @Test
@@ -218,7 +218,7 @@ class ApiClientServiceTest {
             )
         val effective = service.effectiveCapabilities(token = token(uid = "u1"), principal = principal).shouldBeRight()
         // Only RESEARCHER is in both the key's scopes and the user's capabilities.
-        effective.capabilities shouldBe setOf(element = Capability.RESEARCHER)
+        effective.capabilities shouldBe listOf(element = Capability.RESEARCHER.name)
     }
 
     @Test
@@ -236,13 +236,13 @@ class ApiClientServiceTest {
         val issued =
             service.issueKey(
                 token = adminToken,
-                clientId = client.id,
+                clientId = UUID.fromString(client.id),
                 scopes = emptySet(),
                 environment = ApiKeyEnvironment.LIVE,
                 expiresInDays = null,
             ).shouldBeRight()
 
-        service.resolveClientId(rawKey = issued.plaintext) shouldBe client.id
+        service.resolveClientId(rawKey = issued.apiKey) shouldBe UUID.fromString(client.id)
         service.resolveClientId(rawKey = "") shouldBe null
         service.resolveClientId(rawKey = "garbage") shouldBe null
         service.resolveClientId(rawKey = ApiKeyCrypto.generate(environment = ApiKeyEnvironment.LIVE).plaintext) shouldBe null
@@ -252,9 +252,9 @@ class ApiClientServiceTest {
     fun `setRateLimit sets and clears a client's override`() {
         val adminToken = admin()
         val client = service.createClient(token = adminToken, name = "Partner A").shouldBeRight()
-        service.setRateLimit(token = adminToken, clientId = client.id, rateLimitPerMin = 300)
+        service.setRateLimit(token = adminToken, clientId = UUID.fromString(client.id), rateLimitPerMin = 300)
             .shouldBeRight().rateLimitPerMin shouldBe 300
-        service.setRateLimit(token = adminToken, clientId = client.id, rateLimitPerMin = null)
+        service.setRateLimit(token = adminToken, clientId = UUID.fromString(client.id), rateLimitPerMin = null)
             .shouldBeRight().rateLimitPerMin shouldBe null
     }
 
@@ -263,9 +263,9 @@ class ApiClientServiceTest {
         val adminToken = admin()
         val client = service.createClient(token = adminToken, name = "Partner A").shouldBeRight()
         provision(uid = "plain", roles = setOf(element = Capability.PLAYER))
-        service.setRateLimit(token = token(uid = "plain"), clientId = client.id, rateLimitPerMin = 100)
+        service.setRateLimit(token = token(uid = "plain"), clientId = UUID.fromString(client.id), rateLimitPerMin = 100)
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
-        service.setRateLimit(token = adminToken, clientId = client.id, rateLimitPerMin = 0)
+        service.setRateLimit(token = adminToken, clientId = UUID.fromString(client.id), rateLimitPerMin = 0)
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
         service.setRateLimit(token = adminToken, clientId = UUID.randomUUID(), rateLimitPerMin = 100)
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
@@ -276,7 +276,7 @@ class ApiClientServiceTest {
         val adminToken = admin()
         val client = service.createClient(token = adminToken, name = "Partner A").shouldBeRight()
         service.rateLimitForKey(key = client.id.toString(), default = 120) shouldBe 120
-        service.setRateLimit(token = adminToken, clientId = client.id, rateLimitPerMin = 5).shouldBeRight()
+        service.setRateLimit(token = adminToken, clientId = UUID.fromString(client.id), rateLimitPerMin = 5).shouldBeRight()
         service.rateLimitForKey(key = client.id.toString(), default = 120) shouldBe 5
         // Anonymous per-host buckets and unknown client ids fall back to the default.
         service.rateLimitForKey(key = "anon:127.0.0.1", default = 120) shouldBe 120
@@ -308,16 +308,16 @@ class ApiClientServiceTest {
         val issued =
             service.issueKey(
                 token = adminToken,
-                clientId = client.id,
+                clientId = UUID.fromString(client.id),
                 scopes = emptySet(),
                 environment = ApiKeyEnvironment.LIVE,
                 expiresInDays = null,
             ).shouldBeRight()
         transaction {
-            ApiClientsTable.update(where = { ApiClientsTable.id eq client.id }) {
+            ApiClientsTable.update(where = { ApiClientsTable.id eq UUID.fromString(client.id) }) {
                 it[status] = ApiClientStatus.SUSPENDED.name
             }
         }
-        service.authenticate(rawKey = issued.plaintext) shouldBe ClientAuthResult.Forbidden
+        service.authenticate(rawKey = issued.apiKey) shouldBe ClientAuthResult.Forbidden
     }
 }

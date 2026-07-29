@@ -101,9 +101,10 @@ class CircuitServiceTest {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val created = service.create(token = token(uid = "admin"), name = "NORTH").shouldBeRight()
 
-        service.rename(token = token(uid = "admin"), circuitId = created.id, name = "NORTH REGION").shouldBeRight().name shouldBe
-            "NORTH REGION"
-        service.delete(token = token(uid = "admin"), circuitId = created.id).shouldBeRight()
+        service
+            .rename(token = token(uid = "admin"), circuitId = java.util.UUID.fromString(created.id), name = "NORTH REGION")
+            .shouldBeRight().name shouldBe "NORTH REGION"
+        service.delete(token = token(uid = "admin"), circuitId = java.util.UUID.fromString(created.id)).shouldBeRight()
         service.list(token = token(uid = "admin")).shouldBeRight() shouldHaveSize 0
     }
 
@@ -127,7 +128,7 @@ class CircuitServiceTest {
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.NotFound>()
         service
-            .rename(token = token(uid = "admin"), circuitId = created.id, name = "   ")
+            .rename(token = token(uid = "admin"), circuitId = java.util.UUID.fromString(created.id), name = "   ")
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Validation>()
     }

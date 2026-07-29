@@ -23,7 +23,6 @@ import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.ServiceError
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
-import org.skopeo.model.VerificationStatus
 import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.InviteRepository
 import org.skopeo.repository.RatingRepository
@@ -80,8 +79,8 @@ class UserServiceTest {
         val provisioned = service.provision(token = token(uid = "newbie"), request = request).shouldBeRight()
 
         AuditRepository().list(actions = listOf(element = AuditAction.USER_CREATED), limit = 10, offset = 0).first.single().let {
-            it.actorUserId shouldBe provisioned.user.id
-            it.entityId shouldBe provisioned.user.id
+            it.actorUserId shouldBe UUID.fromString(provisioned.user.id)
+            it.entityId shouldBe UUID.fromString(provisioned.user.id)
             it.summary shouldBe "Signed up"
         }
     }
@@ -90,7 +89,10 @@ class UserServiceTest {
     fun `re-provisioning a disabled duplicate is rejected as merged (#124)`() {
         val canonical = service.provision(token = token(uid = "keep"), request = request).shouldBeRight().user
         val dup = service.provision(token = token(uid = "dup"), request = request).shouldBeRight().user
-        repository.markDuplicates(canonicalId = canonical.id, duplicateIds = listOf(element = dup.id))
+        repository.markDuplicates(
+            canonicalId = UUID.fromString(canonical.id),
+            duplicateIds = listOf(element = UUID.fromString(dup.id)),
+        )
 
         val merged =
             service
@@ -104,12 +106,13 @@ class UserServiceTest {
     fun `currentRatings returns the current rating per user, omitting the unrated`() {
         val rated = service.provision(token = token(uid = "r"), request = request).shouldBeRight().user
         val unrated = service.provision(token = token(uid = "u"), request = request).shouldBeRight().user
-        RatingRepository().setRating(userId = rated.id, rating = BigDecimal("4.0"), level = "4.0")
+        val ratedId = UUID.fromString(rated.id)
+        RatingRepository().setRating(userId = ratedId, rating = BigDecimal("4.0"), level = "4.0")
 
-        val map = service.currentRatings(ids = listOf(rated.id, unrated.id))
+        val map = service.currentRatings(ids = listOf(ratedId, UUID.fromString(unrated.id)))
 
-        map.keys shouldBe setOf(element = rated.id)
-        map[rated.id]?.currentLevel shouldBe "4.0"
+        map.keys shouldBe setOf(element = ratedId)
+        map[ratedId]?.currentLevel shouldBe "4.0"
     }
 
     @Test
@@ -146,7 +149,7 @@ class UserServiceTest {
                 token = token(uid = "g", email = "g@example.com", emailVerified = true, signInProvider = "google.com"),
                 request = request,
             ).shouldBeRight().user
-        user.capabilities shouldBe setOf(Capability.PLAYER, Capability.RESEARCHER)
+        user.capabilities shouldBe listOf("PLAYER", "RESEARCHER")
     }
 
     @Test
@@ -158,9 +161,9 @@ class UserServiceTest {
             ).shouldBeRight()
 
         first.created.shouldBeTrue()
-        first.user.capabilities shouldBe setOf(Capability.PLAYER, Capability.RESEARCHER)
+        first.user.capabilities shouldBe listOf("PLAYER", "RESEARCHER")
         first.user.names.single().value shouldBe "U One" // token display name fallback
-        first.user.contacts.single().status shouldBe VerificationStatus.VERIFIED
+        first.user.contacts.single().status shouldBe "VERIFIED"
 
         val again =
             service
@@ -202,7 +205,12 @@ class UserServiceTest {
         val user = service.provision(token = token(uid = "u4", picture = "https://p/old.jpg"), request = request).shouldBeRight().user
 
         // A custom photo becomes the effective photo.
-        service.updatePhotoSettings(token = token(uid = "u4"), id = user.id, customPhotoUrl = "https://c/me.png", photoHidden = false)
+        service.updatePhotoSettings(
+            token = token(uid = "u4"),
+            id = UUID.fromString(user.id),
+            customPhotoUrl = "https://c/me.png",
+            photoHidden = false,
+        )
             .shouldBeRight()
             .photoUrl shouldBe "https://c/me.png"
 
@@ -210,10 +218,11 @@ class UserServiceTest {
         // NOT override the custom one.
         val afterLogin = service.currentUser(token = token(uid = "u4", picture = "https://p/new.jpg"))!!
         afterLogin.photoUrl shouldBe "https://c/me.png"
-        afterLogin.providerPhotoUrl shouldBe "https://p/new.jpg"
+        // UserResponse omits the raw provider photo; verify the underlying sync via the persisted row.
+        repository.findByFirebaseUid(firebaseUid = "u4")!!.providerPhotoUrl shouldBe "https://p/new.jpg"
 
         // Clearing the custom photo reverts to the (freshly synced) provider photo.
-        service.updatePhotoSettings(token = token(uid = "u4"), id = user.id, customPhotoUrl = null, photoHidden = false)
+        service.updatePhotoSettings(token = token(uid = "u4"), id = UUID.fromString(user.id), customPhotoUrl = null, photoHidden = false)
             .shouldBeRight()
             .photoUrl shouldBe "https://p/new.jpg"
     }
@@ -222,7 +231,7 @@ class UserServiceTest {
     fun `a hidden photo is suppressed and login sync never re-enables it (#303)`() {
         val user = service.provision(token = token(uid = "u5", picture = "https://p/old.jpg"), request = request).shouldBeRight().user
 
-        service.updatePhotoSettings(token = token(uid = "u5"), id = user.id, customPhotoUrl = null, photoHidden = true)
+        service.updatePhotoSettings(token = token(uid = "u5"), id = UUID.fromString(user.id), customPhotoUrl = null, photoHidden = true)
             .shouldBeRight()
             .photoUrl
             .shouldBeNull()
@@ -236,7 +245,12 @@ class UserServiceTest {
         val alice = service.provision(token = token(uid = "ph-alice"), request = request).shouldBeRight().user
         service.provision(token = token(uid = "ph-bob"), request = request).shouldBeRight()
 
-        service.updatePhotoSettings(token = token(uid = "ph-bob"), id = alice.id, customPhotoUrl = null, photoHidden = true)
+        service.updatePhotoSettings(
+            token = token(uid = "ph-bob"),
+            id = UUID.fromString(alice.id),
+            customPhotoUrl = null,
+            photoHidden = true,
+        )
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
         service.updatePhotoSettings(token = token(uid = "ph-alice"), id = UUID.randomUUID(), customPhotoUrl = null, photoHidden = true)
@@ -249,8 +263,11 @@ class UserServiceTest {
         val alice = service.provision(token = token(uid = "alice"), request = request).shouldBeRight().user
         service.provision(token = token(uid = "bob"), request = request).shouldBeRight()
 
-        service.getById(token = token(uid = "alice"), id = alice.id).shouldBeRight().id shouldBe alice.id
-        service.getById(token = token(uid = "bob"), id = alice.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service.getById(token = token(uid = "alice"), id = UUID.fromString(alice.id)).shouldBeRight().id shouldBe alice.id
+        service.getById(
+            token = token(uid = "bob"),
+            id = UUID.fromString(alice.id),
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
         service.getById(token = token(uid = "alice"), id = UUID.randomUUID()).shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
@@ -267,7 +284,7 @@ class UserServiceTest {
         )
         val target = service.provision(token = token(uid = "member"), request = request).shouldBeRight().user
 
-        service.getById(token = token(uid = "root"), id = target.id).shouldBeRight().id shouldBe target.id
+        service.getById(token = token(uid = "root"), id = UUID.fromString(target.id)).shouldBeRight().id shouldBe target.id
     }
 
     @Test
@@ -285,12 +302,18 @@ class UserServiceTest {
                     ),
             ).shouldBeRight().user
 
-        val patched = service.patchProfile(token = token(uid = "p1"), id = user.id, patch = ProfilePatch(city = "Cebu")).shouldBeRight()
+        val patched =
+            service.patchProfile(
+                token = token(uid = "p1"),
+                id = UUID.fromString(user.id),
+                patch = ProfilePatch(city = "Cebu"),
+            ).shouldBeRight()
         patched.city shouldBe "Cebu"
         patched.sex shouldBe "Male" // untouched by PATCH
 
         val replaced =
-            service.replaceProfile(token = token(uid = "p1"), id = user.id, patch = ProfilePatch(city = "Davao")).shouldBeRight()
+            service.replaceProfile(token = token(uid = "p1"), id = UUID.fromString(user.id), patch = ProfilePatch(city = "Davao"))
+                .shouldBeRight()
         replaced.city shouldBe "Davao"
         replaced.sex.shouldBeNull() // cleared by PUT
     }
@@ -300,7 +323,7 @@ class UserServiceTest {
         val user = service.provision(token = token(uid = "owner"), request = request).shouldBeRight().user
 
         service
-            .patchProfile(token = token(uid = "intruder"), id = user.id, patch = ProfilePatch(city = "X"))
+            .patchProfile(token = token(uid = "intruder"), id = UUID.fromString(user.id), patch = ProfilePatch(city = "X"))
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
         service
@@ -349,14 +372,14 @@ class UserServiceTest {
         provisionAdmin(uid = "admin-del")
         val target = service.provision(token = token(uid = "victim"), request = request).shouldBeRight().user
 
-        service.deactivate(token = token(uid = "admin-del"), id = target.id).shouldBeRight()
+        service.deactivate(token = token(uid = "admin-del"), id = UUID.fromString(target.id)).shouldBeRight()
 
         // The row is retained but inactive; and it is a "deleted" (no canonical) account, not a merge.
-        val reloaded = repository.findById(id = target.id).shouldBeRight()
+        val reloaded = repository.findById(id = UUID.fromString(target.id)).shouldBeRight()
         reloaded.isActive.shouldBeFalse()
         reloaded.canonicalUserId.shouldBeNull()
         AuditRepository().list(actions = listOf(element = AuditAction.ACCOUNT_DELETED), limit = 10, offset = 0).first.single().let {
-            it.entityId shouldBe target.id
+            it.entityId shouldBe UUID.fromString(target.id)
         }
     }
 
@@ -366,8 +389,14 @@ class UserServiceTest {
         service.provision(token = token(uid = "stranger"), request = request).shouldBeRight()
 
         // Self is no longer allowed (tightened from self-or-admin to admin-only).
-        service.deactivate(token = token(uid = "self-del"), id = user.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
-        service.deactivate(token = token(uid = "stranger"), id = user.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service.deactivate(
+            token = token(uid = "self-del"),
+            id = UUID.fromString(user.id),
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service.deactivate(
+            token = token(uid = "stranger"),
+            id = UUID.fromString(user.id),
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
 
         provisionAdmin(uid = "admin-404")
         service.deactivate(
@@ -394,7 +423,7 @@ class UserServiceTest {
     fun `a deleted account is blocked from signing in as AccountDeleted, but a merged duplicate stays AccountMerged (#518)`() {
         provisionAdmin(uid = "admin-login")
         val deleted = service.provision(token = token(uid = "gone"), request = request).shouldBeRight().user
-        service.deactivate(token = token(uid = "admin-login"), id = deleted.id).shouldBeRight()
+        service.deactivate(token = token(uid = "admin-login"), id = UUID.fromString(deleted.id)).shouldBeRight()
 
         // A still-valid Firebase login for the deleted account is refused.
         service.provision(token = token(uid = "gone"), request = request).shouldBeLeft() shouldBe ServiceError.AccountDeleted
@@ -402,7 +431,10 @@ class UserServiceTest {
         // A merged duplicate keeps its distinct "merged" treatment (unchanged).
         val canonical = service.provision(token = token(uid = "keep2"), request = request).shouldBeRight().user
         val dup = service.provision(token = token(uid = "dup2"), request = request).shouldBeRight().user
-        repository.markDuplicates(canonicalId = canonical.id, duplicateIds = listOf(element = dup.id))
+        repository.markDuplicates(
+            canonicalId = UUID.fromString(canonical.id),
+            duplicateIds = listOf(element = UUID.fromString(dup.id)),
+        )
         service.provision(token = token(uid = "dup2"), request = request).shouldBeLeft().shouldBeInstanceOf<ServiceError.AccountMerged>()
     }
 
@@ -410,18 +442,21 @@ class UserServiceTest {
     fun `reactivate re-allows a deleted account to sign in, admin-only and audited (#518)`() {
         provisionAdmin(uid = "admin-re")
         val target = service.provision(token = token(uid = "back"), request = request).shouldBeRight().user
-        service.deactivate(token = token(uid = "admin-re"), id = target.id).shouldBeRight()
+        service.deactivate(token = token(uid = "admin-re"), id = UUID.fromString(target.id)).shouldBeRight()
 
         // A non-admin cannot reactivate.
         service.provision(token = token(uid = "nobody"), request = request).shouldBeRight()
-        service.reactivate(token = token(uid = "nobody"), id = target.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service.reactivate(
+            token = token(uid = "nobody"),
+            id = UUID.fromString(target.id),
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
 
-        service.reactivate(token = token(uid = "admin-re"), id = target.id).shouldBeRight()
-        repository.findById(id = target.id).shouldBeRight().isActive.shouldBeTrue()
+        service.reactivate(token = token(uid = "admin-re"), id = UUID.fromString(target.id)).shouldBeRight()
+        repository.findById(id = UUID.fromString(target.id)).shouldBeRight().isActive.shouldBeTrue()
         // Login works again.
         service.provision(token = token(uid = "back"), request = request).shouldBeRight()
         AuditRepository().list(actions = listOf(element = AuditAction.ACCOUNT_REACTIVATED), limit = 10, offset = 0).first.single().let {
-            it.entityId shouldBe target.id
+            it.entityId shouldBe UUID.fromString(target.id)
         }
     }
 
@@ -431,7 +466,7 @@ class UserServiceTest {
         service.provision(token = token(uid = "outsider"), request = request).shouldBeRight()
 
         service
-            .replaceProfile(token = token(uid = "outsider"), id = user.id, patch = ProfilePatch(city = "X"))
+            .replaceProfile(token = token(uid = "outsider"), id = UUID.fromString(user.id), patch = ProfilePatch(city = "X"))
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
         service
@@ -445,7 +480,10 @@ class UserServiceTest {
         val user = service.provision(token = token(uid = "victim"), request = request).shouldBeRight().user
 
         // The caller's token has no user row, so requireAccess sees caller == null (isAdmin == false).
-        service.getById(token = token(uid = "no-such-user"), id = user.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        service.getById(
+            token = token(uid = "no-such-user"),
+            id = UUID.fromString(user.id),
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
@@ -457,7 +495,7 @@ class UserServiceTest {
                 request = CreateUserRequest(proposedRating = "4.0", dateOfBirth = "2000-01-01", sex = "Male"),
             ).shouldBeRight()
 
-        result.user.capabilities shouldBe setOf(Capability.PLAYER, Capability.RESEARCHER, Capability.ADMINISTRATOR)
+        result.user.capabilities shouldBe listOf("ADMINISTRATOR", "PLAYER", "RESEARCHER")
     }
 
     @Test
@@ -469,15 +507,15 @@ class UserServiceTest {
                 token = token(uid = "later", email = "admin@example.com", emailVerified = false, name = "Later"),
                 request = CreateUserRequest(proposedRating = "4.0", dateOfBirth = "2000-01-01", sex = "Male"),
             ).shouldBeRight()
-        created.user.capabilities shouldBe setOf(Capability.PLAYER, Capability.RESEARCHER)
+        created.user.capabilities shouldBe listOf("PLAYER", "RESEARCHER")
 
         // Logs in with a verified email -> promoted.
         bootstrapService.currentUser(token = token(uid = "later", email = "admin@example.com", emailVerified = true))!!
-            .capabilities shouldBe setOf(Capability.PLAYER, Capability.RESEARCHER, Capability.ADMINISTRATOR)
+            .capabilities shouldBe listOf("ADMINISTRATOR", "PLAYER", "RESEARCHER")
 
         // A second login does not double-grant.
         bootstrapService.currentUser(token = token(uid = "later", email = "admin@example.com", emailVerified = true))!!
-            .capabilities shouldBe setOf(Capability.PLAYER, Capability.RESEARCHER, Capability.ADMINISTRATOR)
+            .capabilities shouldBe listOf("ADMINISTRATOR", "PLAYER", "RESEARCHER")
         repository.findByFirebaseUid(firebaseUid = "later")!!
             .capabilities shouldBe setOf(Capability.PLAYER, Capability.RESEARCHER, Capability.ADMINISTRATOR)
     }
@@ -491,7 +529,7 @@ class UserServiceTest {
         ).shouldBeRight()
 
         bootstrapService.currentUser(token = token(uid = "unv", email = "admin@example.com", emailVerified = false))!!
-            .capabilities shouldBe setOf(Capability.PLAYER, Capability.RESEARCHER)
+            .capabilities shouldBe listOf("PLAYER", "RESEARCHER")
     }
 
     @Test
@@ -520,7 +558,7 @@ class UserServiceTest {
     fun `search excludes a deleted account by default but includeInactive surfaces it (#518)`() {
         provisionAdmin(uid = "staff-inc")
         val member = service.provision(token = token(uid = "inc1"), request = request).shouldBeRight().user
-        service.deactivate(token = token(uid = "staff-inc"), id = member.id).shouldBeRight()
+        service.deactivate(token = token(uid = "staff-inc"), id = UUID.fromString(member.id)).shouldBeRight()
 
         // Default (pickers/normal search) excludes the now-deleted account.
         service
@@ -540,7 +578,7 @@ class UserServiceTest {
     fun `searchPage total and items honour includeInactive for a deleted account (#518)`() {
         provisionAdmin(uid = "staff-pg")
         val member = service.provision(token = token(uid = "pg1"), request = request).shouldBeRight().user
-        service.deactivate(token = token(uid = "staff-pg"), id = member.id).shouldBeRight()
+        service.deactivate(token = token(uid = "staff-pg"), id = UUID.fromString(member.id)).shouldBeRight()
 
         // Default (pickers) excludes the deleted account — empty page and zero total.
         val default =

@@ -19,6 +19,7 @@ import org.jetbrains.exposed.sql.update
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.dto.match.MatchResponse
 import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.dto.match.SetScoreRequest
 import org.skopeo.model.AuditAction
@@ -26,7 +27,6 @@ import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.CreateEventCommand
 import org.skopeo.model.CreatePlaceholderCommand
-import org.skopeo.model.Match
 import org.skopeo.model.MatchQuery
 import org.skopeo.model.MatchStatus
 import org.skopeo.model.MatchType
@@ -145,7 +145,7 @@ class MatchServiceTest {
         // Excluded: a past scheduled fixture, and a future fixture that's already completed.
         create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p2.id, date = today.minusDays(2)))
         val done = create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p3.id, date = today.plusDays(1)))
-        service.uploadResult(token = token(uid = "host"), matchId = done.id, request = straightSets()).shouldBeRight()
+        service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(done.id), request = straightSets()).shouldBeRight()
 
         val upcoming = service.upcomingForCaller(token = token(uid = "p1")).shouldBeRight()
 
@@ -168,8 +168,8 @@ class MatchServiceTest {
         val match =
             service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
 
-        match.status shouldBe MatchStatus.SCHEDULED
-        match.team1.userIds shouldBe listOf(p1.id)
+        match.status shouldBe MatchStatus.SCHEDULED.name
+        match.team1.userIds shouldBe listOf(element = p1.id.toString())
     }
 
     @Test
@@ -209,9 +209,14 @@ class MatchServiceTest {
         val match =
             service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
 
-        val completed = service.uploadResult(token = token(uid = "host"), matchId = match.id, request = straightSets()).shouldBeRight()
+        val completed =
+            service.uploadResult(
+                token = token(uid = "host"),
+                matchId = UUID.fromString(match.id),
+                request = straightSets(),
+            ).shouldBeRight()
 
-        completed.status shouldBe MatchStatus.COMPLETED
+        completed.status shouldBe MatchStatus.COMPLETED.name
         completed.winnerTeamId shouldBe match.team1.teamId // won both sets
     }
 
@@ -228,11 +233,11 @@ class MatchServiceTest {
             service
                 .uploadResult(
                     token = token(uid = "host"),
-                    matchId = match.id,
+                    matchId = UUID.fromString(match.id),
                     request = MatchResultRequest(sets = listOf(element = SetScoreRequest(team1Games = 4, team2Games = 3))),
                 ).shouldBeRight()
 
-        completed.status shouldBe MatchStatus.COMPLETED
+        completed.status shouldBe MatchStatus.COMPLETED.name
         completed.winnerTeamId shouldBe match.team1.teamId
     }
 
@@ -243,12 +248,12 @@ class MatchServiceTest {
         val p2 = provisionUser(uid = "p2", rated = true)
         val match =
             service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
-        service.uploadResult(token = token(uid = "host"), matchId = match.id, request = straightSets()).shouldBeRight()
+        service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(match.id), request = straightSets()).shouldBeRight()
 
         // A second upload while unrated is an edit, not a conflict; the sets are overwritten (not appended).
         val edited =
-            service.uploadResult(token = token(uid = "host"), matchId = match.id, request = straightSets()).shouldBeRight()
-        edited.status shouldBe MatchStatus.COMPLETED
+            service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(match.id), request = straightSets()).shouldBeRight()
+        edited.status shouldBe MatchStatus.COMPLETED.name
         edited.sets shouldHaveSize 2
     }
 
@@ -260,18 +265,18 @@ class MatchServiceTest {
 
         val disabled =
             service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
-        service.setActive(token = token(uid = "host"), matchId = disabled.id, active = false).shouldBeRight()
+        service.setActive(token = token(uid = "host"), matchId = UUID.fromString(disabled.id), active = false).shouldBeRight()
         service
-            .uploadResult(token = token(uid = "host"), matchId = disabled.id, request = straightSets())
+            .uploadResult(token = token(uid = "host"), matchId = UUID.fromString(disabled.id), request = straightSets())
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Conflict>()
 
         val rated =
             service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
-        service.uploadResult(token = token(uid = "host"), matchId = rated.id, request = straightSets()).shouldBeRight()
-        matchRepo.markRated(matchId = rated.id, ratedAt = LocalDateTime.now(), ratedBy = host.id)
+        service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(rated.id), request = straightSets()).shouldBeRight()
+        matchRepo.markRated(matchId = UUID.fromString(rated.id), ratedAt = LocalDateTime.now(), ratedBy = host.id)
         service
-            .uploadResult(token = token(uid = "host"), matchId = rated.id, request = straightSets())
+            .uploadResult(token = token(uid = "host"), matchId = UUID.fromString(rated.id), request = straightSets())
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Conflict>()
     }
@@ -288,7 +293,7 @@ class MatchServiceTest {
         service
             .uploadResult(
                 token = token(uid = "host"),
-                matchId = match.id,
+                matchId = UUID.fromString(match.id),
                 request =
                     MatchResultRequest(
                         sets =
@@ -308,16 +313,16 @@ class MatchServiceTest {
         val p2 = provisionUser(uid = "p2", rated = true)
         val match =
             service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
-        service.uploadResult(token = token(uid = "host"), matchId = match.id, request = straightSets()).shouldBeRight()
+        service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(match.id), request = straightSets()).shouldBeRight()
         // simulate the calculation trigger having rated it
         transaction {
-            MatchesTable.update(where = { MatchesTable.id eq match.id }) {
+            MatchesTable.update(where = { MatchesTable.id eq UUID.fromString(match.id) }) {
                 it[MatchesTable.ratedAt] = java.time.LocalDateTime.now()
             }
         }
 
         service
-            .setActive(token = token(uid = "host"), matchId = match.id, active = false)
+            .setActive(token = token(uid = "host"), matchId = UUID.fromString(match.id), active = false)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Conflict>()
     }
@@ -332,14 +337,19 @@ class MatchServiceTest {
 
         val set =
             service
-                .setHandicaps(token = token(uid = "host"), matchId = match.id, team1Handicap = null, team2Handicap = BigDecimal("0.300"))
+                .setHandicaps(
+                    token = token(uid = "host"),
+                    matchId = UUID.fromString(match.id),
+                    team1Handicap = null,
+                    team2Handicap = BigDecimal("0.300"),
+                )
                 .shouldBeRight()
-        set.team2Handicap?.compareTo(other = BigDecimal("0.300")) shouldBe 0
+        set.team2Handicap?.let { BigDecimal(it) }?.compareTo(other = BigDecimal("0.300")) shouldBe 0
         set.team1Handicap shouldBe null
 
         val cleared =
             service
-                .setHandicaps(token = token(uid = "host"), matchId = match.id, team1Handicap = null, team2Handicap = null)
+                .setHandicaps(token = token(uid = "host"), matchId = UUID.fromString(match.id), team1Handicap = null, team2Handicap = null)
                 .shouldBeRight()
         cleared.team2Handicap shouldBe null
     }
@@ -353,7 +363,7 @@ class MatchServiceTest {
 
         val match = service.createFixture(token = token(uid = "host"), request = request).shouldBeRight()
 
-        match.team1Handicap?.compareTo(other = BigDecimal("0.500")) shouldBe 0
+        match.team1Handicap?.let { BigDecimal(it) }?.compareTo(other = BigDecimal("0.500")) shouldBe 0
     }
 
     @Test
@@ -363,15 +373,20 @@ class MatchServiceTest {
         val p2 = provisionUser(uid = "p2", rated = true)
         val match =
             service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
-        service.uploadResult(token = token(uid = "host"), matchId = match.id, request = straightSets()).shouldBeRight()
+        service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(match.id), request = straightSets()).shouldBeRight()
         transaction {
-            MatchesTable.update(where = { MatchesTable.id eq match.id }) {
+            MatchesTable.update(where = { MatchesTable.id eq UUID.fromString(match.id) }) {
                 it[MatchesTable.ratedAt] = java.time.LocalDateTime.now()
             }
         }
 
         service
-            .setHandicaps(token = token(uid = "host"), matchId = match.id, team1Handicap = BigDecimal("0.200"), team2Handicap = null)
+            .setHandicaps(
+                token = token(uid = "host"),
+                matchId = UUID.fromString(match.id),
+                team1Handicap = BigDecimal("0.200"),
+                team2Handicap = null,
+            )
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Conflict>()
     }
@@ -385,7 +400,12 @@ class MatchServiceTest {
             service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
 
         service
-            .setHandicaps(token = token(uid = "p1"), matchId = match.id, team1Handicap = BigDecimal("0.200"), team2Handicap = null)
+            .setHandicaps(
+                token = token(uid = "p1"),
+                matchId = UUID.fromString(match.id),
+                team1Handicap = BigDecimal("0.200"),
+                team2Handicap = null,
+            )
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
@@ -399,10 +419,10 @@ class MatchServiceTest {
         val match =
             service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
 
-        service.getById(token = token(uid = "p1"), matchId = match.id).shouldBeRight().id shouldBe match.id // participant
-        service.getById(token = token(uid = "host"), matchId = match.id).shouldBeRight().id shouldBe match.id // staff
+        service.getById(token = token(uid = "p1"), matchId = UUID.fromString(match.id)).shouldBeRight().id shouldBe match.id // participant
+        service.getById(token = token(uid = "host"), matchId = UUID.fromString(match.id)).shouldBeRight().id shouldBe match.id // staff
         service
-            .getById(token = token(uid = "outsider"), matchId = match.id)
+            .getById(token = token(uid = "outsider"), matchId = UUID.fromString(match.id))
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
         service
@@ -418,17 +438,17 @@ class MatchServiceTest {
         val p2 = provisionUser(uid = "p2", rated = true)
         val match =
             service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
-        service.uploadResult(token = token(uid = "host"), matchId = match.id, request = straightSets()).shouldBeRight()
+        service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(match.id), request = straightSets()).shouldBeRight()
 
         val audit = AuditRepository()
         audit.list(actions = listOf(element = AuditAction.MATCH_FIXTURE_CREATED), limit = 10, offset = 0).first.single().let {
             it.actorUserId shouldBe host.id
-            it.entityId shouldBe match.id
+            it.entityId shouldBe UUID.fromString(match.id)
             it.summary shouldBe "Created a SINGLES fixture on 2026-01-01"
         }
         audit.list(actions = listOf(element = AuditAction.MATCH_RESULT_RECORDED), limit = 10, offset = 0).first.single().let {
             it.actorUserId shouldBe host.id
-            it.entityId shouldBe match.id
+            it.entityId shouldBe UUID.fromString(match.id)
         }
     }
 
@@ -439,26 +459,27 @@ class MatchServiceTest {
         val p2 = provisionUser(uid = "p2", rated = true)
         val match =
             service.createFixture(token = token(uid = "root"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
-        service.uploadResult(token = token(uid = "root"), matchId = match.id, request = straightSets()).shouldBeRight()
+        service.uploadResult(token = token(uid = "root"), matchId = UUID.fromString(match.id), request = straightSets()).shouldBeRight()
         calc.calculate(token = token(uid = "root"), dryRun = false) // commit, persisting the breakdown
 
         // The calculation breakdown is an ADMINISTRATOR-only analysis tool (#583).
-        val detail = service.calculationDetail(token = token(uid = "root"), matchId = match.id).shouldBeRight()
+        val detail = service.calculationDetail(token = token(uid = "root"), matchId = UUID.fromString(match.id)).shouldBeRight()
         detail.match.id shouldBe match.id
-        detail.players.map { it.userId } shouldBe listOf(p1.id, p2.id) // team1-then-team2 order
+        detail.changes.map { it.userId } shouldBe listOf(p1.id.toString(), p2.id.toString()) // team1-then-team2 order
 
-        val winner = detail.players.first { it.userId == p1.id }
+        val winner = detail.changes.first { it.userId == p1.id.toString() }
         winner.displayName shouldBe "p1"
         // v2 (default) persists per-set steps; the net breakdown fields stay null (#110).
-        winner.history.kFactor.shouldBeNull()
-        winner.history.setBreakdown.size shouldBe 2
-        winner.history.setBreakdown.first().let { set ->
+        val breakdown = winner.breakdown.shouldNotBeNull()
+        breakdown.kFactor.shouldBeNull()
+        breakdown.sets.size shouldBe 2
+        breakdown.sets.first().let { set ->
             set.kFactor shouldBe "0.160000"
             set.competitiveThresholdPct shouldBe "0.083000"
             set.isUpset shouldBe false
         }
         // The persisted new rating matches the committed history (faithful, not recomputed).
-        winner.history.newRating shouldBe ratings.findCurrentRating(userId = p1.id)!!.currentRating
+        winner.newRating shouldBe ratings.findCurrentRating(userId = p1.id)!!.currentRating.toPlainString()
     }
 
     @Test
@@ -469,18 +490,18 @@ class MatchServiceTest {
         provisionUser(uid = "outsider")
         val match =
             service.createFixture(token = token(uid = "root"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
-        service.uploadResult(token = token(uid = "root"), matchId = match.id, request = straightSets()).shouldBeRight()
+        service.uploadResult(token = token(uid = "root"), matchId = UUID.fromString(match.id), request = straightSets()).shouldBeRight()
 
         // Completed but not yet calculated → no stored calculation to show.
         service
-            .calculationDetail(token = token(uid = "root"), matchId = match.id)
+            .calculationDetail(token = token(uid = "root"), matchId = UUID.fromString(match.id))
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.NotFound>()
 
         calc.calculate(token = token(uid = "root"), dryRun = false)
         // A non-participant, non-staff caller is refused.
         service
-            .calculationDetail(token = token(uid = "outsider"), matchId = match.id)
+            .calculationDetail(token = token(uid = "outsider"), matchId = UUID.fromString(match.id))
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
@@ -538,8 +559,12 @@ class MatchServiceTest {
         val match =
             service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
 
-        service.setActive(token = token(uid = "host"), matchId = match.id, active = false).shouldBeRight().isActive shouldBe false
-        service.setActive(token = token(uid = "host"), matchId = match.id, active = true).shouldBeRight().isActive shouldBe true
+        service
+            .setActive(token = token(uid = "host"), matchId = UUID.fromString(match.id), active = false)
+            .shouldBeRight().isActive shouldBe false
+        service
+            .setActive(token = token(uid = "host"), matchId = UUID.fromString(match.id), active = true)
+            .shouldBeRight().isActive shouldBe true
     }
 
     @Test
@@ -551,7 +576,7 @@ class MatchServiceTest {
             service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
 
         service
-            .getById(token = token(uid = "ghost"), matchId = match.id)
+            .getById(token = token(uid = "ghost"), matchId = UUID.fromString(match.id))
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
@@ -564,7 +589,7 @@ class MatchServiceTest {
         val p2 = provisionUser(uid = "p2", rated = true)
         val completed =
             service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
-        service.uploadResult(token = token(uid = "host"), matchId = completed.id, request = straightSets()).shouldBeRight()
+        service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(completed.id), request = straightSets()).shouldBeRight()
         val overdue =
             service
                 .createFixture(
@@ -615,7 +640,7 @@ class MatchServiceTest {
         val p2 = provisionUser(uid = "p2", rated = true)
         val match =
             service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
-        service.uploadResult(token = token(uid = "host"), matchId = match.id, request = straightSets()).shouldBeRight()
+        service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(match.id), request = straightSets()).shouldBeRight()
 
         val public = service.publicByCode(token = token(uid = "host"), code = match.publicCode).shouldBeRight()
         public.publicCode shouldBe match.publicCode
@@ -699,14 +724,14 @@ class MatchServiceTest {
             team2: UUID,
             date: String,
             result: MatchResultRequest,
-        ): Match {
+        ): MatchResponse {
             val m =
                 service
                     .createFixture(
                         token = token(uid = "host"),
                         request = fixtureRequest(p1 = team1, p2 = team2, date = LocalDate.parse(date)),
                     ).shouldBeRight()
-            service.uploadResult(token = token(uid = "host"), matchId = m.id, request = result).shouldBeRight()
+            service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(m.id), request = result).shouldBeRight()
             return m
         }
         val p2Wins =
@@ -773,7 +798,7 @@ class MatchServiceTest {
                             team2 = listOf(p2.id, p4.id),
                         ),
                 ).shouldBeRight()
-        service.uploadResult(token = token(uid = "host"), matchId = dbl.id, request = straightSets()).shouldBeRight()
+        service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(dbl.id), request = straightSets()).shouldBeRight()
 
         // A prior SINGLES meeting p2 won (team1 = p2), then the current singles match p1 vs p2.
         val singlesMeeting =
@@ -783,7 +808,11 @@ class MatchServiceTest {
                     request = fixtureRequest(p1 = p2.id, p2 = p1.id, date = LocalDate.parse("2026-02-01")),
                 )
                 .shouldBeRight()
-        service.uploadResult(token = token(uid = "host"), matchId = singlesMeeting.id, request = straightSets()).shouldBeRight()
+        service.uploadResult(
+            token = token(uid = "host"),
+            matchId = UUID.fromString(singlesMeeting.id),
+            request = straightSets(),
+        ).shouldBeRight()
         val current =
             service
                 .createFixture(
@@ -791,7 +820,7 @@ class MatchServiceTest {
                     request = fixtureRequest(p1 = p1.id, p2 = p2.id, date = LocalDate.parse("2026-03-01")),
                 )
                 .shouldBeRight()
-        service.uploadResult(token = token(uid = "host"), matchId = current.id, request = straightSets()).shouldBeRight()
+        service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(current.id), request = straightSets()).shouldBeRight()
 
         val h2h = service.publicByCode(token = token(uid = "host"), code = current.publicCode).shouldBeRight().headToHead.shouldNotBeNull()
 
@@ -812,7 +841,7 @@ class MatchServiceTest {
         val p2 = provisionUser(uid = "p2", rated = true)
         val match =
             service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
-        service.uploadResult(token = token(uid = "host"), matchId = match.id, request = straightSets()).shouldBeRight()
+        service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(match.id), request = straightSets()).shouldBeRight()
 
         // A first-ever meeting still shows head-to-head (#366): no prior meetings listed, but the tally
         // reflects the match being viewed (#339) — p1 (team1) won the straight-sets result.
@@ -877,7 +906,7 @@ class MatchServiceTest {
         val p2 = provisionUser(uid = "p2", rated = true)
         val match =
             service.createFixture(token = token(uid = "root"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
-        service.uploadResult(token = token(uid = "root"), matchId = match.id, request = straightSets()).shouldBeRight()
+        service.uploadResult(token = token(uid = "root"), matchId = UUID.fromString(match.id), request = straightSets()).shouldBeRight()
         calc.calculate(token = token(uid = "root"), dryRun = false) // commit ratings + history
 
         // A non-rater viewer sees the NTRP bands only — the precise rates are withheld.
@@ -954,7 +983,7 @@ class MatchServiceTest {
             service
                 .createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id))
                 .shouldBeRight()
-        ok.eventId shouldBe event.id
+        ok.eventId shouldBe event.id.toString()
 
         // A non-participant → rejected.
         service
@@ -999,7 +1028,7 @@ class MatchServiceTest {
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Validation>()
         // Nor may a result be recorded on its fixture.
-        service.uploadResult(token = token(uid = "host"), matchId = match.id, request = straightSets())
+        service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(match.id), request = straightSets())
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Validation>()
     }
@@ -1036,17 +1065,21 @@ class MatchServiceTest {
                 .shouldBeRight()
 
         // HOST blocked from recording the result; ADMINISTRATOR may.
-        service.uploadResult(token = token(uid = "host"), matchId = match.id, request = straightSets())
+        service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(match.id), request = straightSets())
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Conflict>()
-        service.uploadResult(token = token(uid = "admin"), matchId = match.id, request = straightSets()).shouldBeRight()
+        service.uploadResult(token = token(uid = "admin"), matchId = UUID.fromString(match.id), request = straightSets()).shouldBeRight()
 
         // A CLUB_OWNER is exempt from the expiry gate too (#310 follow-up): it may create + record.
         val ownerMatch =
             service
                 .createFixture(token = token(uid = "owner"), request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id))
                 .shouldBeRight()
-        service.uploadResult(token = token(uid = "owner"), matchId = ownerMatch.id, request = straightSets()).shouldBeRight()
+        service.uploadResult(
+            token = token(uid = "owner"),
+            matchId = UUID.fromString(ownerMatch.id),
+            request = straightSets(),
+        ).shouldBeRight()
     }
 
     @Test
@@ -1096,11 +1129,11 @@ class MatchServiceTest {
             service
                 .createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id))
                 .shouldBeRight()
-        service.uploadResult(token = token(uid = "host"), matchId = inEvent.id, request = straightSets()).shouldBeRight()
+        service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(inEvent.id), request = straightSets()).shouldBeRight()
         // A recorded fixture outside the event must not leak into the event-scoped view.
         val outside =
             service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
-        service.uploadResult(token = token(uid = "host"), matchId = outside.id, request = straightSets()).shouldBeRight()
+        service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(outside.id), request = straightSets()).shouldBeRight()
 
         val scoped =
             service.query(token = token(uid = "host"), view = MatchQuery.PENDING_CALCULATION, eventId = event.id).shouldBeRight()
@@ -1127,13 +1160,13 @@ class MatchServiceTest {
             service
                 .createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id))
                 .shouldBeRight()
-        service.uploadResult(token = token(uid = "host"), matchId = recorded.id, request = straightSets()).shouldBeRight()
+        service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(recorded.id), request = straightSets()).shouldBeRight()
         val rated =
             service
                 .createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id))
                 .shouldBeRight()
-        service.uploadResult(token = token(uid = "host"), matchId = rated.id, request = straightSets()).shouldBeRight()
-        matchRepo.markRated(matchId = rated.id, ratedAt = LocalDateTime.now(), ratedBy = host.id)
+        service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(rated.id), request = straightSets()).shouldBeRight()
+        matchRepo.markRated(matchId = UUID.fromString(rated.id), ratedAt = LocalDateTime.now(), ratedBy = host.id)
 
         // RESULTS keeps the rated match on view alongside the recorded one...
         val results = service.query(token = token(uid = "host"), view = MatchQuery.RESULTS, eventId = event.id).shouldBeRight()
@@ -1157,7 +1190,7 @@ class MatchServiceTest {
         val p2 = provisionUser(uid = "p2", rated = true)
         val match =
             service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
-        service.setActive(token = token(uid = "host"), matchId = match.id, active = false).shouldBeRight()
+        service.setActive(token = token(uid = "host"), matchId = UUID.fromString(match.id), active = false).shouldBeRight()
 
         // Soft-deleted matches stay traceable (#325): the link resolves and is flagged not-active.
         val public = service.publicByCode(token = token(uid = "host"), code = match.publicCode).shouldBeRight()
@@ -1172,10 +1205,10 @@ class MatchServiceTest {
         val p2 = provisionUser(uid = "p2", rated = true)
         val match =
             service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
-        service.setActive(token = token(uid = "host"), matchId = match.id, active = false).shouldBeRight()
+        service.setActive(token = token(uid = "host"), matchId = UUID.fromString(match.id), active = false).shouldBeRight()
 
         // #502: a directly soft-deleted match drops out of the history listing on both profiles...
-        matchRepo.listByUser(userId = p1.id).map { it.id } shouldNotContain match.id
+        matchRepo.listByUser(userId = p1.id).map { it.id } shouldNotContain UUID.fromString(match.id)
         // ...yet its shared link still resolves (#325), flagged as deleted.
         service.publicByCode(token = token(uid = "host"), code = match.publicCode).shouldBeRight().isActive shouldBe false
     }
@@ -1190,10 +1223,10 @@ class MatchServiceTest {
         val m1 = create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p2.id, date = date))
         val m2 = create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p3.id, date = date))
 
-        service.reorder(token = token(uid = "host"), matchIds = listOf(m2.id, m1.id)).shouldBeRight()
+        service.reorder(token = token(uid = "host"), matchIds = listOf(UUID.fromString(m2.id), UUID.fromString(m1.id))).shouldBeRight()
 
-        matchRepo.findById(matchId = m2.id).shouldBeRight().calcSequence shouldBe 0
-        matchRepo.findById(matchId = m1.id).shouldBeRight().calcSequence shouldBe 1
+        matchRepo.findById(matchId = UUID.fromString(m2.id)).shouldBeRight().calcSequence shouldBe 0
+        matchRepo.findById(matchId = UUID.fromString(m1.id)).shouldBeRight().calcSequence shouldBe 1
     }
 
     @Test
@@ -1205,13 +1238,13 @@ class MatchServiceTest {
         val m1 = create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p2.id, date = LocalDate.parse("2026-02-01")))
         val m2 = create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p2.id, date = LocalDate.parse("2026-02-02")))
 
-        service.reorder(token = token(uid = "player"), matchIds = listOf(element = m1.id))
+        service.reorder(token = token(uid = "player"), matchIds = listOf(element = UUID.fromString(m1.id)))
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
         service.reorder(token = token(uid = "host"), matchIds = emptyList())
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
-        service.reorder(token = token(uid = "host"), matchIds = listOf(m1.id, m1.id))
+        service.reorder(token = token(uid = "host"), matchIds = listOf(UUID.fromString(m1.id), UUID.fromString(m1.id)))
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
-        service.reorder(token = token(uid = "host"), matchIds = listOf(m1.id, m2.id))
+        service.reorder(token = token(uid = "host"), matchIds = listOf(UUID.fromString(m1.id), UUID.fromString(m2.id)))
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
         service.reorder(token = token(uid = "host"), matchIds = listOf(element = UUID.randomUUID()))
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
@@ -1223,10 +1256,10 @@ class MatchServiceTest {
         val p1 = provisionUser(uid = "p1", rated = true)
         val p2 = provisionUser(uid = "p2", rated = true)
         val match = create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p2.id))
-        service.uploadResult(token = token(uid = "host"), matchId = match.id, request = straightSets()).shouldBeRight()
-        matchRepo.markRated(matchId = match.id, ratedAt = LocalDateTime.now(), ratedBy = host.id)
+        service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(match.id), request = straightSets()).shouldBeRight()
+        matchRepo.markRated(matchId = UUID.fromString(match.id), ratedAt = LocalDateTime.now(), ratedBy = host.id)
 
-        service.reorder(token = token(uid = "host"), matchIds = listOf(element = match.id))
+        service.reorder(token = token(uid = "host"), matchIds = listOf(element = UUID.fromString(match.id)))
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Conflict>()
     }
 
@@ -1238,9 +1271,9 @@ class MatchServiceTest {
         val date = LocalDate.parse("2026-02-01")
         val active = create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p2.id, date = date))
         val disabled = create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p2.id, date = date))
-        service.setActive(token = token(uid = "host"), matchId = disabled.id, active = false).shouldBeRight()
+        service.setActive(token = token(uid = "host"), matchId = UUID.fromString(disabled.id), active = false).shouldBeRight()
 
-        service.reorder(token = token(uid = "host"), matchIds = listOf(disabled.id, active.id))
+        service.reorder(token = token(uid = "host"), matchIds = listOf(UUID.fromString(disabled.id), UUID.fromString(active.id)))
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
     }
 
@@ -1267,12 +1300,12 @@ class MatchServiceTest {
                             team2 = listOf(p1.id, p4.id),
                         ),
                 ).shouldBeRight()
-        service.uploadResult(token = token(uid = "host"), matchId = reversed.id, request = straightSets()).shouldBeRight()
+        service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(reversed.id), request = straightSets()).shouldBeRight()
 
         // The current singles match p1 (team1) vs p2 (team2), so the current view's team1Id = p1, team2Id = p2.
         val current =
             create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p2.id, date = LocalDate.parse("2026-03-01")))
-        service.uploadResult(token = token(uid = "host"), matchId = current.id, request = straightSets()).shouldBeRight()
+        service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(current.id), request = straightSets()).shouldBeRight()
 
         val h2h = service.publicByCode(token = token(uid = "host"), code = current.publicCode).shouldBeRight().headToHead.shouldNotBeNull()
 
@@ -1307,11 +1340,11 @@ class MatchServiceTest {
                             team2 = listOf(p3.id, p4.id),
                         ),
                 ).shouldBeRight()
-        service.uploadResult(token = token(uid = "host"), matchId = partners.id, request = straightSets()).shouldBeRight()
+        service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(partners.id), request = straightSets()).shouldBeRight()
 
         val current =
             create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p2.id, date = LocalDate.parse("2026-03-01")))
-        service.uploadResult(token = token(uid = "host"), matchId = current.id, request = straightSets()).shouldBeRight()
+        service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(current.id), request = straightSets()).shouldBeRight()
 
         val h2h = service.publicByCode(token = token(uid = "host"), code = current.publicCode).shouldBeRight().headToHead.shouldNotBeNull()
 
@@ -1345,11 +1378,11 @@ class MatchServiceTest {
                             team2 = listOf(p1.id, p2.id),
                         ),
                 ).shouldBeRight()
-        service.uploadResult(token = token(uid = "host"), matchId = partners.id, request = straightSets()).shouldBeRight()
+        service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(partners.id), request = straightSets()).shouldBeRight()
 
         val current =
             create(host = "host", request = fixtureRequest(p1 = p1.id, p2 = p2.id, date = LocalDate.parse("2026-03-01")))
-        service.uploadResult(token = token(uid = "host"), matchId = current.id, request = straightSets()).shouldBeRight()
+        service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(current.id), request = straightSets()).shouldBeRight()
 
         val h2h = service.publicByCode(token = token(uid = "host"), code = current.publicCode).shouldBeRight().headToHead.shouldNotBeNull()
 

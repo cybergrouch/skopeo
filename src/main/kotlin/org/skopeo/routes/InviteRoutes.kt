@@ -16,7 +16,6 @@ import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.invite.CreateInviteRequest
-import org.skopeo.mapper.invite.toResponse
 import org.skopeo.model.InviteStatus
 import org.skopeo.service.invite.InviteService
 
@@ -53,7 +52,7 @@ fun Application.configureInviteRoutes(service: InviteService = InviteService()) 
                         val request = call.receive<CreateInviteRequest>()
                         respondEither(
                             result = service.create(token = verifiedToken(), email = validatedEmail(raw = request.email)),
-                        ) { invite -> call.respond(status = HttpStatusCode.Created, message = invite.toResponse()) }
+                        ) { invite -> call.respond(status = HttpStatusCode.Created, message = invite) }
                     }
                 }
                 get {
@@ -67,7 +66,7 @@ fun Application.configureInviteRoutes(service: InviteService = InviteService()) 
                                     offset = params["offset"]?.toIntOrNull() ?: 0,
                                     status = params["status"]?.let { parseInviteStatus(raw = it) },
                                 ),
-                        ) { page -> call.respond(status = HttpStatusCode.OK, message = page.toResponse()) }
+                        ) { page -> call.respond(status = HttpStatusCode.OK, message = page) }
                     }
                 }
                 delete(path = "/{id}") {

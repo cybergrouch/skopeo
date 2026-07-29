@@ -8,6 +8,8 @@ import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.right
 import org.skopeo.dto.seeding.PlayerListResponse
+import org.skopeo.dto.seeding.PlayerListSummaryResponse
+import org.skopeo.mapper.seeding.toSummaryResponse
 import org.skopeo.mapper.user.toSummary
 import org.skopeo.model.Capability
 import org.skopeo.model.PlayerList
@@ -35,17 +37,17 @@ class PlayerListService(
     fun create(
         token: VerifiedFirebaseToken,
         name: String,
-    ): Either<ServiceError, PlayerList> =
+    ): Either<ServiceError, PlayerListSummaryResponse> =
         either {
             val ownerId = requireSeeder(token = token).bind()
             ensure(condition = name.isNotBlank()) { ServiceError.Validation(message = "A list name is required") }
-            lists.create(ownerId = ownerId, name = name.trim())
+            lists.create(ownerId = ownerId, name = name.trim()).toSummaryResponse()
         }
 
-    fun listMine(token: VerifiedFirebaseToken): Either<ServiceError, List<PlayerList>> =
+    fun listMine(token: VerifiedFirebaseToken): Either<ServiceError, List<PlayerListSummaryResponse>> =
         either {
             val ownerId = requireSeeder(token = token).bind()
-            lists.listByOwner(ownerId = ownerId)
+            lists.listByOwner(ownerId = ownerId).map { it.toSummaryResponse() }
         }
 
     /** A single owned list (with members). Surfaces [ServiceError.Forbidden] for someone else's list. */

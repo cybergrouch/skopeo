@@ -9,6 +9,9 @@ import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
+import org.skopeo.dto.rating.RatingRequestPageResponse
+import org.skopeo.dto.rating.RatingRequestResponse
+import org.skopeo.mapper.rating.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditPersonRef
@@ -49,7 +52,7 @@ class RatingRequestService(
     fun create(
         token: VerifiedFirebaseToken,
         justification: String,
-    ): Either<ServiceError, RatingRequest> =
+    ): Either<ServiceError, RatingRequestResponse> =
         either {
             val caller = ensureNotNull(value = users.findByFirebaseUid(firebaseUid = token.uid)) { ServiceError.Forbidden() }
             ensure(condition = justification.isNotBlank()) { ServiceError.Validation(message = "A justification is required") }
@@ -68,14 +71,14 @@ class RatingRequestService(
                         details = mapOf("requestId" to request.id.toString(), "justification" to request.justification),
                     ),
             )
-            request
+            request.toResponse()
         }
 
     /** The caller's most recent re-rate request (or null) — for the Profile tab. */
-    fun mine(token: VerifiedFirebaseToken): Either<ServiceError, RatingRequest?> =
+    fun mine(token: VerifiedFirebaseToken): Either<ServiceError, RatingRequestResponse?> =
         either {
             val caller = ensureNotNull(value = users.findByFirebaseUid(firebaseUid = token.uid)) { ServiceError.Forbidden() }
-            requests.findLatestByUser(userId = caller.id)
+            requests.findLatestByUser(userId = caller.id)?.toResponse()
         }
 
     /** The re-rate triage list (RATER/ADMINISTRATOR), newest first, optionally filtered by status. */
@@ -84,7 +87,7 @@ class RatingRequestService(
         limit: Int,
         offset: Int,
         status: RatingRequestStatus?,
-    ): Either<ServiceError, RatingRequestPage> =
+    ): Either<ServiceError, RatingRequestPageResponse> =
         either {
             requireRater(token = token).bind()
             val (items, total) =
@@ -95,6 +98,7 @@ class RatingRequestService(
                 )
             val refs = resolveRequesters(requests = items)
             RatingRequestPage(items = items.map { RatingRequestView(request = it, requester = refs[it.userId]) }, total = total.toInt())
+                .toResponse()
         }
 
     /** Approve a pending request: apply [newRating] (RATING_OVERRIDDEN + history via RatingService), mark APPROVED. */
@@ -102,7 +106,7 @@ class RatingRequestService(
         token: VerifiedFirebaseToken,
         id: UUID,
         newRating: BigDecimal,
-    ): Either<ServiceError, RatingRequest> =
+    ): Either<ServiceError, RatingRequestResponse> =
         either {
             val raterId = requireRater(token = token).bind()
             val request = ensureNotNull(value = requests.findById(id = id)) { ServiceError.NotFound(message = "Request $id not found") }
@@ -120,7 +124,7 @@ class RatingRequestService(
                 ) { ServiceError.Conflict(message = "This request has already been resolved") }
             // Apply the new rating now that the resolution is ours (records the override + history).
             ratingService.setRating(token = token, userId = request.userId, value = newRating).bind()
-            resolved
+            resolved.toResponse()
         }
 
     /** Deny a pending request with a reason (audited as RATING_REQUEST_DENIED). */
@@ -128,7 +132,7 @@ class RatingRequestService(
         token: VerifiedFirebaseToken,
         id: UUID,
         reason: String,
-    ): Either<ServiceError, RatingRequest> =
+    ): Either<ServiceError, RatingRequestResponse> =
         either {
             val raterId = requireRater(token = token).bind()
             ensure(condition = reason.isNotBlank()) { ServiceError.Validation(message = "A reason is required to deny a request") }
@@ -156,7 +160,7 @@ class RatingRequestService(
                         details = mapOf("requestId" to id.toString(), "reason" to reason.trim()),
                     ),
             )
-            resolved
+            resolved.toResponse()
         }
 
     private fun resolveRequesters(requests: List<RatingRequest>): Map<UUID, AuditPersonRef> =

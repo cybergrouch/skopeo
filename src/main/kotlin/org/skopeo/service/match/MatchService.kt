@@ -15,9 +15,13 @@ import org.skopeo.dto.match.MatchPublicPlayer
 import org.skopeo.dto.match.MatchPublicRatingChange
 import org.skopeo.dto.match.MatchPublicResponse
 import org.skopeo.dto.match.MatchPublicSet
+import org.skopeo.dto.match.MatchResponse
 import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.dto.match.UpcomingMatchResponse
+import org.skopeo.dto.rating.MatchCalculationDetailResponse
 import org.skopeo.mapper.match.toPublicResponse
+import org.skopeo.mapper.match.toResponse
+import org.skopeo.mapper.rating.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -108,7 +112,7 @@ class MatchService(
     fun createFixture(
         token: VerifiedFirebaseToken,
         request: FixtureInput,
-    ): Either<ServiceError, Match> =
+    ): Either<ServiceError, MatchResponse> =
         either {
             val caller = staffCaller(token = token).bind()
             val createdBy = caller.id
@@ -152,7 +156,7 @@ class MatchService(
                             ),
                     ),
             )
-            match
+            match.toResponse()
         }
 
     /** Build the persistence command for a fixture from its validated [request] (#525 placement fields included). */
@@ -184,7 +188,7 @@ class MatchService(
         token: VerifiedFirebaseToken,
         matchId: UUID,
         request: MatchResultRequest,
-    ): Either<ServiceError, Match> =
+    ): Either<ServiceError, MatchResponse> =
         either {
             val caller = staffCaller(token = token).bind()
             val recordedBy = caller.id
@@ -229,6 +233,7 @@ class MatchService(
                     recordedBy = recordedBy,
                     completedAt = LocalDateTime.now(),
                 ).bind()
+                .toResponse()
         }
 
     /**
@@ -241,7 +246,7 @@ class MatchService(
         matchId: UUID,
         team1Handicap: BigDecimal?,
         team2Handicap: BigDecimal?,
-    ): Either<ServiceError, Match> =
+    ): Either<ServiceError, MatchResponse> =
         either {
             val caller = staffCaller(token = token).bind()
             val match = matches.findById(matchId = matchId).bind()
@@ -266,14 +271,14 @@ class MatchService(
                             ),
                     ),
             )
-            updated
+            updated.toResponse()
         }
 
     fun setActive(
         token: VerifiedFirebaseToken,
         matchId: UUID,
         active: Boolean,
-    ): Either<ServiceError, Match> =
+    ): Either<ServiceError, MatchResponse> =
         either {
             requireStaff(token = token).bind()
             val match = matches.findById(matchId = matchId).bind()
@@ -281,7 +286,7 @@ class MatchService(
                 ServiceError.Conflict(message = "Cannot disable a match that has already been rated")
             }
             val disabledAt = if (active) null else LocalDateTime.now()
-            matches.setActive(matchId = matchId, active = active, disabledAt = disabledAt).bind()
+            matches.setActive(matchId = matchId, active = active, disabledAt = disabledAt).bind().toResponse()
         }
 
     /**
@@ -314,6 +319,12 @@ class MatchService(
         }
 
     fun getById(
+        token: VerifiedFirebaseToken,
+        matchId: UUID,
+    ): Either<ServiceError, MatchResponse> = either { accessibleMatch(token = token, matchId = matchId).bind().toResponse() }
+
+    /** The access-checked domain match (staff or a participant may view it) — the internal form of [getById]. */
+    private fun accessibleMatch(
         token: VerifiedFirebaseToken,
         matchId: UUID,
     ): Either<ServiceError, Match> =
@@ -516,13 +527,13 @@ class MatchService(
     fun calculationDetail(
         token: VerifiedFirebaseToken,
         matchId: UUID,
-    ): Either<ServiceError, MatchCalculationDetail> =
+    ): Either<ServiceError, MatchCalculationDetailResponse> =
         either {
             // The calculation breakdown is an ADMINISTRATOR-only analysis tool (#583): it exposes the raw
             // per-set ratings/dominance/scale. A non-admin — or an admin previewing as non-admin — is denied.
             val caller = users.findByFirebaseUid(firebaseUid = token.uid)
             ensure(condition = caller.canSeeRawRatingOrFalse()) { ServiceError.Forbidden() }
-            val match = getById(token = token, matchId = matchId).bind()
+            val match = accessibleMatch(token = token, matchId = matchId).bind()
             val byUser = ratings.historyForMatches(matchIds = listOf(element = matchId)).associateBy { it.userId }
             ensure(condition = byUser.isNotEmpty()) {
                 ServiceError.NotFound(message = "No rating calculation has been recorded for match $matchId")
@@ -534,7 +545,7 @@ class MatchService(
                 byUser.values
                     .sortedBy { order.indexOf(element = it.userId) }
                     .map { entry -> MatchPlayerCalculation(userId = entry.userId, displayName = names[entry.userId], history = entry) }
-            MatchCalculationDetail(match = match, players = players)
+            MatchCalculationDetail(match = match, players = players).toResponse()
         }
 
     private fun displayNames(userIds: List<UUID>): Map<UUID, String?> =
@@ -548,7 +559,7 @@ class MatchService(
         token: VerifiedFirebaseToken,
         view: MatchQuery,
         eventId: UUID? = null,
-    ): Either<ServiceError, List<Match>> =
+    ): Either<ServiceError, List<MatchResponse>> =
         either {
             val caller = staffCaller(token = token).bind()
             val scopedTo = if (caller.capabilities.contains(element = Capability.ADMINISTRATOR)) null else caller.id
@@ -571,7 +582,7 @@ class MatchService(
                 // All of an event's completed fixtures (rated or not), so a rated match stays on view as
                 // a read-only record (#138). Event-scoped only.
                 MatchQuery.RESULTS -> eventId?.let { matches.listResultsByEvent(eventId = it) }.orEmpty()
-            }
+            }.map { it.toResponse() }
         }
 
     /**

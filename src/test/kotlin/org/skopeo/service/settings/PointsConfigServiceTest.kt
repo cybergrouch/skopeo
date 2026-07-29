@@ -92,8 +92,8 @@ class PointsConfigServiceTest {
         // First write inserts; second write updates (exercises the repository upsert's both arms).
         service.setOpenPlay(token = token(uid = "admin"), config = sampleOpenPlay(validityDays = 90)).shouldBeRight()
         val updated = service.setOpenPlay(token = token(uid = "admin"), config = sampleOpenPlay(validityDays = 120)).shouldBeRight()
-        updated.value.validityDays shouldBe 120
-        updated.updatedBy shouldBe admin.id
+        updated.config.validityDays shouldBe 120
+        updated.updatedBy shouldBe admin.id.toString()
 
         val read = service.getOpenPlay()
         read.value.validityDays shouldBe 120
@@ -133,8 +133,8 @@ class PointsConfigServiceTest {
 
         val config = TournamentPointsConfig(sanctioned = listOf(100, 70, 50, 35), unsanctioned = listOf(50, 35, 25, 18), validityDays = 365)
         val saved = service.setTournament(token = token(uid = "admin"), config = config).shouldBeRight()
-        saved.value.sanctioned shouldBe listOf(100, 70, 50, 35)
-        saved.updatedBy shouldBe admin.id
+        saved.config.sanctioned shouldBe listOf(100, 70, 50, 35)
+        saved.updatedBy shouldBe admin.id.toString()
         service.getTournament().value.unsanctioned shouldBe listOf(50, 35, 25, 18)
 
         service.setTournament(token = token(uid = "player"), config = config)

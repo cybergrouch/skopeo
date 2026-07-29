@@ -6,6 +6,10 @@ import arrow.core.Either
 import arrow.core.left
 import arrow.core.raise.either
 import arrow.core.right
+import org.skopeo.dto.rating.PendingAssessmentPageResponse
+import org.skopeo.dto.rating.RatingHistoryResponse
+import org.skopeo.dto.rating.UserRatingResponse
+import org.skopeo.mapper.rating.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -67,19 +71,19 @@ class RatingService(
     fun getRatings(
         token: VerifiedFirebaseToken,
         userId: UUID,
-    ): Either<ServiceError, RatingsView> =
+    ): Either<ServiceError, List<UserRatingResponse>> =
         either {
             requireUserExists(userId = userId).bind()
             val caller = requireSelfOrAdmin(token = token, userId = userId).bind()
             // Raw NTRP value is ADMINISTRATOR-only (#583), honoring the per-admin preview toggle.
             val revealRawValue = caller.canSeeRawRating()
-            RatingsView(ratings = ratings.findByUser(userId = userId), revealRawValue = revealRawValue)
+            ratings.findByUser(userId = userId).map { it.toResponse(revealRawValue = revealRawValue) }
         }
 
     fun getHistory(
         token: VerifiedFirebaseToken,
         userId: UUID,
-    ): Either<ServiceError, RatingHistoryView> =
+    ): Either<ServiceError, List<RatingHistoryResponse>> =
         either {
             requireUserExists(userId = userId).bind()
             val caller = requireSelfOrAdmin(token = token, userId = userId).bind()
@@ -88,7 +92,7 @@ class RatingService(
             // Non-admins (incl. the owner) see band-jump entries only — a same-band change carries no
             // visible info once the raw values are hidden (#583 corollary).
             val entries = if (revealRawValue) all else all.filter { it.levelChanged }
-            RatingHistoryView(entries = entries, revealRawValue = revealRawValue)
+            entries.map { it.toResponse(revealRawValue = revealRawValue) }
         }
 
     /**
@@ -99,7 +103,7 @@ class RatingService(
         token: VerifiedFirebaseToken,
         userId: UUID,
         value: BigDecimal,
-    ): Either<ServiceError, UserRating> =
+    ): Either<ServiceError, UserRatingResponse> =
         either {
             val adminId = requireRater(token = token).bind()
             requireUserExists(userId = userId).bind()
@@ -139,7 +143,7 @@ class RatingService(
             audit.record(write = ratingAudit(actorId = adminId, userId = userId, previous = previous, updated = updated))
             // The RATING standings are computed live from current ratings (#146), so a set/override needs
             // no snapshot rebuild — the change is reflected on the next read.
-            updated
+            updated.toResponse(revealRawValue = true)
         }
 
     private fun ratingAudit(
@@ -175,7 +179,7 @@ class RatingService(
         token: VerifiedFirebaseToken,
         limit: Int,
         offset: Int,
-    ): Either<ServiceError, PendingAssessmentPage> =
+    ): Either<ServiceError, PendingAssessmentPageResponse> =
         either {
             requireRater(token = token).bind()
             val (ids, total) =
@@ -186,7 +190,7 @@ class RatingService(
             val today = LocalDate.now()
             // findAllByIds preserves the id order, so the page order is the repository's stable order.
             val items = users.findAllByIds(ids = ids).map { it.toPendingAssessment(today = today) }
-            PendingAssessmentPage(items = items, total = total.toInt())
+            PendingAssessmentPage(items = items, total = total.toInt()).toResponse()
         }
 
     private fun User.toPendingAssessment(today: LocalDate): PendingAssessment =

@@ -9,6 +9,11 @@ import arrow.core.raise.ensure
 import arrow.core.right
 import mu.KotlinLogging
 import org.skopeo.dto.user.CreateUserRequest
+import org.skopeo.dto.user.UserResponse
+import org.skopeo.dto.user.UserSummaryPageResponse
+import org.skopeo.dto.user.UserSummaryResponse
+import org.skopeo.mapper.user.toResponse
+import org.skopeo.mapper.user.toSummary
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -19,7 +24,6 @@ import org.skopeo.model.ProfilePatch
 import org.skopeo.model.ServiceError
 import org.skopeo.model.User
 import org.skopeo.model.UserRating
-import org.skopeo.model.UserSearchPage
 import org.skopeo.model.UserSearchQuery
 import org.skopeo.model.WinLossRecord
 import org.skopeo.model.ageRangeToDob
@@ -132,16 +136,22 @@ class UserService(
         offset: Int = 0,
         // Include soft-deleted/inactive accounts (Research; #518). Default false keeps pickers active-only.
         includeInactive: Boolean = false,
-    ): Either<ServiceError, List<User>> =
+    ): Either<ServiceError, List<UserSummaryResponse>> =
         either {
             requireResearchAccess(repository = repository, token = token).bind()
             val query = validatedQuery(filters = filters).bind()
-            repository.search(
-                query = query,
-                limit = limit.coerceIn(minimumValue = 1, maximumValue = MAX_SEARCH_LIMIT),
-                offset = offset.coerceAtLeast(minimumValue = 0),
-                includeInactive = includeInactive,
-            )
+            val users =
+                repository.search(
+                    query = query,
+                    limit = limit.coerceIn(minimumValue = 1, maximumValue = MAX_SEARCH_LIMIT),
+                    offset = offset.coerceAtLeast(minimumValue = 0),
+                    includeInactive = includeInactive,
+                )
+            // Enrich each summary with the current rating + the raw-reveal flag here (was assembled in the
+            // route), so the route stays thin and never touches the mapper.
+            val ratingsById = currentRatings(ids = users.map { it.id })
+            val showRaw = callerCanSeeRawRating(token = token)
+            users.map { it.toSummary(rating = ratingsById[it.id], showRawRating = showRaw) }
         }
 
     /** Like [search] but returns a page with the total match count, for numbered pagination (#232). */
@@ -152,19 +162,27 @@ class UserService(
         offset: Int,
         // Include soft-deleted/inactive accounts (Research; #518). Default false keeps pickers active-only.
         includeInactive: Boolean = false,
-    ): Either<ServiceError, UserSearchPage> =
+    ): Either<ServiceError, UserSummaryPageResponse> =
         either {
             requireResearchAccess(repository = repository, token = token).bind()
             val query = validatedQuery(filters = filters).bind()
-            UserSearchPage(
-                items =
-                    repository.search(
-                        query = query,
-                        limit = limit.coerceIn(minimumValue = 1, maximumValue = MAX_SEARCH_LIMIT),
-                        offset = offset.coerceAtLeast(minimumValue = 0),
-                        includeInactive = includeInactive,
-                    ),
-                total = repository.countSearch(query = query, includeInactive = includeInactive),
+            val items =
+                repository.search(
+                    query = query,
+                    limit = limit.coerceIn(minimumValue = 1, maximumValue = MAX_SEARCH_LIMIT),
+                    offset = offset.coerceAtLeast(minimumValue = 0),
+                    includeInactive = includeInactive,
+                )
+            val total = repository.countSearch(query = query, includeInactive = includeInactive)
+            // Enrich with current ratings + win–loss records (#342) + the raw-reveal flag here (was in the
+            // route), returning the finished page DTO so the route stays thin.
+            val ids = items.map { it.id }
+            val ratingsById = currentRatings(ids = ids)
+            val records = winLossRecords(ids = ids)
+            val showRaw = callerCanSeeRawRating(token = token)
+            UserSummaryPageResponse(
+                items = items.map { it.toSummary(rating = ratingsById[it.id], record = records[it.id], showRawRating = showRaw) },
+                total = total.toInt(),
             )
         }
 
@@ -202,16 +220,19 @@ class UserService(
     fun findByIds(
         token: VerifiedFirebaseToken,
         ids: List<UUID>,
-    ): Either<ServiceError, List<User>> =
+    ): Either<ServiceError, List<UserSummaryResponse>> =
         either {
             requireStaff(repository = repository, token = token).bind()
             ensure(condition = ids.isNotEmpty()) { ServiceError.Validation(message = "ids must not be empty") }
-            repository.findAllByIds(ids = ids)
+            val users = repository.findAllByIds(ids = ids)
+            val ratingsById = currentRatings(ids = users.map { it.id })
+            val showRaw = callerCanSeeRawRating(token = token)
+            users.map { it.toSummary(rating = ratingsById[it.id], showRawRating = showRaw) }
         }
 
     /** Outcome of provisioning: [created] distinguishes a fresh user (201) from an idempotent hit (200). */
     data class Provisioned(
-        val user: User,
+        val user: UserResponse,
         val created: Boolean,
     )
 
@@ -250,7 +271,7 @@ class UserService(
             else -> {
                 val promoted =
                     promoteIfBootstrapAdmin(token = token, user = existing, adminEmails = adminEmails, capabilities = capabilities)
-                Provisioned(user = refreshPhoto(token = token, user = promoted), created = false).right()
+                Provisioned(user = refreshPhoto(token = token, user = promoted).toResponse(), created = false).right()
             }
         }
     }
@@ -283,11 +304,11 @@ class UserService(
         id: UUID,
         customPhotoUrl: String?,
         photoHidden: Boolean,
-    ): Either<ServiceError, User> =
+    ): Either<ServiceError, UserResponse> =
         either {
             val target = repository.findById(id = id).bind()
             requireAccess(token = token, target = target).bind()
-            repository.updatePhotoSettings(id = id, customPhotoUrl = customPhotoUrl, photoHidden = photoHidden).bind()
+            repository.updatePhotoSettings(id = id, customPhotoUrl = customPhotoUrl, photoHidden = photoHidden).bind().toResponse()
         }
 
     /** First-time sign-up: enforce the invite gate, write the aggregate, and audit the creation. */
@@ -313,46 +334,46 @@ class UserService(
                         summary = "Signed up",
                     ),
             )
-            Provisioned(user = user, created = true)
+            Provisioned(user = user.toResponse(), created = true)
         }
 
     /** The caller's own profile, or null if they have not been provisioned yet. Refreshes the photo (#219). */
-    fun currentUser(token: VerifiedFirebaseToken): User? {
+    fun currentUser(token: VerifiedFirebaseToken): UserResponse? {
         val user = repository.findByFirebaseUid(firebaseUid = token.uid) ?: return null
         val promoted = promoteIfBootstrapAdmin(token = token, user = user, adminEmails = adminEmails, capabilities = capabilities)
-        return refreshPhoto(token = token, user = promoted)
+        return refreshPhoto(token = token, user = promoted).toResponse()
     }
 
     fun getById(
         token: VerifiedFirebaseToken,
         id: UUID,
-    ): Either<ServiceError, User> =
+    ): Either<ServiceError, UserResponse> =
         either {
             val target = repository.findById(id = id).bind()
             requireAccess(token = token, target = target).bind()
-            target
+            target.toResponse()
         }
 
     fun patchProfile(
         token: VerifiedFirebaseToken,
         id: UUID,
         patch: ProfilePatch,
-    ): Either<ServiceError, User> =
+    ): Either<ServiceError, UserResponse> =
         either {
             val target = repository.findById(id = id).bind()
             requireAccess(token = token, target = target).bind()
-            repository.updateProfile(id = id, patch = patch).bind()
+            repository.updateProfile(id = id, patch = patch).bind().toResponse()
         }
 
     fun replaceProfile(
         token: VerifiedFirebaseToken,
         id: UUID,
         patch: ProfilePatch,
-    ): Either<ServiceError, User> =
+    ): Either<ServiceError, UserResponse> =
         either {
             val target = repository.findById(id = id).bind()
             requireAccess(token = token, target = target).bind()
-            repository.replaceProfile(id = id, patch = patch).bind()
+            repository.replaceProfile(id = id, patch = patch).bind().toResponse()
         }
 
     /**

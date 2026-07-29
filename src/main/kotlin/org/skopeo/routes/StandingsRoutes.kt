@@ -12,7 +12,6 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
-import org.skopeo.mapper.standings.toResponse
 import org.skopeo.model.StandingsBand
 import org.skopeo.service.standings.StandingsService
 
@@ -36,7 +35,7 @@ fun Application.configureStandingsRoutes(service: StandingsService = StandingsSe
                             limit = params["limit"]?.toIntOrNull(),
                             offset = params["offset"]?.toIntOrNull(),
                         )
-                    call.respond(status = HttpStatusCode.OK, message = page.toResponse())
+                    call.respond(status = HttpStatusCode.OK, message = page)
                 }
             }
             get(path = "/api/v1/standings/me") {
@@ -49,7 +48,7 @@ fun Application.configureStandingsRoutes(service: StandingsService = StandingsSe
                             message = errorBody(error = "Not found", message = "You are not in the current standings"),
                         )
                     } else {
-                        call.respond(status = HttpStatusCode.OK, message = located.toResponse())
+                        call.respond(status = HttpStatusCode.OK, message = located)
                     }
                 }
             }

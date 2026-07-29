@@ -9,11 +9,12 @@ import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
+import org.skopeo.dto.circuit.CircuitResponse
+import org.skopeo.mapper.circuit.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
 import org.skopeo.model.Capability
-import org.skopeo.model.Circuit
 import org.skopeo.model.CreateCircuitCommand
 import org.skopeo.model.ServiceError
 import org.skopeo.repository.CircuitRepository
@@ -39,7 +40,7 @@ class CircuitService(
     fun create(
         token: VerifiedFirebaseToken,
         name: String,
-    ): Either<ServiceError, Circuit> =
+    ): Either<ServiceError, CircuitResponse> =
         either {
             val adminId = requireAdmin(token = token).bind()
             ensure(condition = name.isNotBlank()) { ServiceError.Validation(message = "Circuit name is required") }
@@ -55,14 +56,14 @@ class CircuitService(
                         details = mapOf("circuitId" to circuit.id.toString(), "name" to circuit.name),
                     ),
             )
-            circuit
+            circuit.toResponse()
         }
 
     /** Readable by staff (HOST/CLUB_OWNER/ADMINISTRATOR) so tournament organizers can pick a circuit (#525). */
-    fun list(token: VerifiedFirebaseToken): Either<ServiceError, List<Circuit>> =
+    fun list(token: VerifiedFirebaseToken): Either<ServiceError, List<CircuitResponse>> =
         either {
             requireStaff(token = token).bind()
-            circuits.list()
+            circuits.list().map { it.toResponse() }
         }
 
     /** Rename a circuit (#525). ADMINISTRATOR-only; the name is validated (non-blank) and trimmed. */
@@ -70,7 +71,7 @@ class CircuitService(
         token: VerifiedFirebaseToken,
         circuitId: UUID,
         name: String,
-    ): Either<ServiceError, Circuit> =
+    ): Either<ServiceError, CircuitResponse> =
         either {
             val adminId = requireAdmin(token = token).bind()
             ensure(condition = name.isNotBlank()) { ServiceError.Validation(message = "Circuit name is required") }
@@ -89,7 +90,7 @@ class CircuitService(
                         details = mapOf("circuitId" to circuitId.toString(), "name" to updated.name),
                     ),
             )
-            updated
+            updated.toResponse()
         }
 
     /**

@@ -21,8 +21,6 @@ import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.dto.match.MatchStateRequest
 import org.skopeo.dto.match.ReorderMatchesRequest
 import org.skopeo.dto.match.SetHandicapsRequest
-import org.skopeo.mapper.match.toResponse
-import org.skopeo.mapper.rating.toResponse
 import org.skopeo.model.MatchQuery
 import org.skopeo.model.MatchType
 import org.skopeo.model.PlacementBracket
@@ -74,7 +72,7 @@ private fun Route.listAndCreate(service: MatchService) {
             val view = matchQueryOf(value = call.request.queryParameters["filter"])
             val eventId = call.request.queryParameters["eventId"]?.let { parseUuid(value = it) }
             respondEither(result = service.query(token = verifiedToken(), view = view, eventId = eventId)) { list ->
-                call.respond(status = HttpStatusCode.OK, message = list.map { it.toResponse() })
+                call.respond(status = HttpStatusCode.OK, message = list)
             }
         }
     }
@@ -83,7 +81,7 @@ private fun Route.listAndCreate(service: MatchService) {
             val request = call.receive<CreateFixtureRequest>()
             respondEither(
                 result = service.createFixture(token = verifiedToken(), request = toFixtureInput(request = request)),
-            ) { match -> call.respond(status = HttpStatusCode.Created, message = match.toResponse()) }
+            ) { match -> call.respond(status = HttpStatusCode.Created, message = match) }
         }
     }
     // Set the manual calculation order for a group of same-date matches (#331/#332). A collection-level
@@ -161,14 +159,14 @@ private fun Route.byId(service: MatchService) {
         respondMappingErrors {
             respondEither(
                 result = service.getById(token = verifiedToken(), matchId = uuidParam(name = "id")),
-            ) { match -> call.respond(status = HttpStatusCode.OK, message = match.toResponse()) }
+            ) { match -> call.respond(status = HttpStatusCode.OK, message = match) }
         }
     }
     get(path = "/{id}/calculation") {
         respondMappingErrors {
             respondEither(
                 result = service.calculationDetail(token = verifiedToken(), matchId = uuidParam(name = "id")),
-            ) { detail -> call.respond(status = HttpStatusCode.OK, message = detail.toResponse()) }
+            ) { detail -> call.respond(status = HttpStatusCode.OK, message = detail) }
         }
     }
     post(path = "/{id}/result") {
@@ -176,7 +174,7 @@ private fun Route.byId(service: MatchService) {
             val request = call.receive<MatchResultRequest>()
             respondEither(
                 result = service.uploadResult(token = verifiedToken(), matchId = uuidParam(name = "id"), request = request),
-            ) { match -> call.respond(status = HttpStatusCode.OK, message = match.toResponse()) }
+            ) { match -> call.respond(status = HttpStatusCode.OK, message = match) }
         }
     }
     put(path = "/{id}/state") {
@@ -184,7 +182,7 @@ private fun Route.byId(service: MatchService) {
             val request = call.receive<MatchStateRequest>()
             respondEither(
                 result = service.setActive(token = verifiedToken(), matchId = uuidParam(name = "id"), active = request.isActive),
-            ) { match -> call.respond(status = HttpStatusCode.OK, message = match.toResponse()) }
+            ) { match -> call.respond(status = HttpStatusCode.OK, message = match) }
         }
     }
     fixtureUpdateRoutes(service = service)
@@ -206,7 +204,7 @@ private fun Route.fixtureUpdateRoutes(service: MatchService) {
                         team1Handicap = request.team1Handicap?.let { BigDecimal(it) },
                         team2Handicap = request.team2Handicap?.let { BigDecimal(it) },
                     ),
-            ) { match -> call.respond(status = HttpStatusCode.OK, message = match.toResponse()) }
+            ) { match -> call.respond(status = HttpStatusCode.OK, message = match) }
         }
     }
 }

@@ -9,6 +9,11 @@ import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
+import org.skopeo.dto.user.ClaimCodeResponse
+import org.skopeo.dto.user.UserResponse
+import org.skopeo.dto.user.UserSummaryResponse
+import org.skopeo.mapper.user.toResponse
+import org.skopeo.mapper.user.toSummary
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -18,7 +23,6 @@ import org.skopeo.model.GeneratedClaimCode
 import org.skopeo.model.Level
 import org.skopeo.model.Rating
 import org.skopeo.model.ServiceError
-import org.skopeo.model.User
 import org.skopeo.model.displayName
 import org.skopeo.repository.PlaceholderClaimCodeRepository
 import org.skopeo.repository.UserRepository
@@ -69,7 +73,7 @@ class PlaceholderService(
         sex: String,
         dateOfBirth: LocalDate? = null,
         initialRating: String? = null,
-    ): Either<ServiceError, User> =
+    ): Either<ServiceError, UserResponse> =
         either {
             val actorId = requireMatchManager(token = token).bind()
             val name = displayName.trim()
@@ -98,7 +102,7 @@ class PlaceholderService(
             if (ratingValue != null) {
                 ratings.setRating(token = token, userId = created.id, value = ratingValue).bind()
             }
-            created
+            created.toResponse()
         }
 
     /**
@@ -124,10 +128,10 @@ class PlaceholderService(
         }
 
     /** Unclaimed placeholders (#496), for the admin/host management view. Match-management access. */
-    fun listPlaceholders(token: VerifiedFirebaseToken): Either<ServiceError, List<User>> =
+    fun listPlaceholders(token: VerifiedFirebaseToken): Either<ServiceError, List<UserSummaryResponse>> =
         either {
             requireMatchManager(token = token).bind()
-            users.listPlaceholders()
+            users.listPlaceholders().map { it.toSummary() }
         }
 
     /**
@@ -138,7 +142,7 @@ class PlaceholderService(
     fun generateClaimCode(
         token: VerifiedFirebaseToken,
         placeholderId: UUID,
-    ): Either<ServiceError, GeneratedClaimCode> =
+    ): Either<ServiceError, ClaimCodeResponse> =
         either {
             val adminId = requireAdmin(token = token).bind()
             val target = users.findById(id = placeholderId).bind()
@@ -154,7 +158,7 @@ class PlaceholderService(
                     expiresAt = LocalDateTime.now().plusDays(CLAIM_CODE_TTL_DAYS),
                     createdBy = adminId,
                 )
-            GeneratedClaimCode(plaintext = plaintext, code = stored, placeholderPublicCode = target.publicCode)
+            GeneratedClaimCode(plaintext = plaintext, code = stored, placeholderPublicCode = target.publicCode).toResponse()
         }
 
     /**
@@ -167,7 +171,7 @@ class PlaceholderService(
     fun claim(
         token: VerifiedFirebaseToken,
         code: String,
-    ): Either<ServiceError, User> =
+    ): Either<ServiceError, UserResponse> =
         either {
             val caller =
                 ensureNotNull(value = users.findByFirebaseUid(firebaseUid = token.uid)) {
@@ -217,7 +221,7 @@ class PlaceholderService(
                             ),
                     ),
             )
-            users.findById(id = caller.id).bind()
+            users.findById(id = caller.id).bind().toResponse()
         }
 
     /** ADMINISTRATOR-only; returns the caller's id (the audit actor). */
