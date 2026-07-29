@@ -16,7 +16,7 @@ import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.invite.CreateInviteRequest
-import org.skopeo.dto.invite.toResponse
+import org.skopeo.mapper.invite.toResponse
 import org.skopeo.model.InviteStatus
 import org.skopeo.service.invite.InviteService
 

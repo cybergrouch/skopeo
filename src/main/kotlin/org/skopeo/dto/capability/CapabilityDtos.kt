@@ -4,7 +4,6 @@
 package org.skopeo.dto.capability
 
 import kotlinx.serialization.Serializable
-import org.skopeo.model.CapabilityGrant
 
 /** Body for `POST /api/v1/users/{userId}/capabilities` — grant a role. */
 @Serializable
@@ -21,13 +20,3 @@ data class CapabilityResponse(
     val revokedBy: String? = null,
     val revokedAt: String? = null,
 )
-
-fun CapabilityGrant.toResponse(): CapabilityResponse =
-    CapabilityResponse(
-        capability = capability.name,
-        isActive = isActive,
-        grantedBy = grantedBy?.toString(),
-        grantedAt = grantedAt?.toString(),
-        revokedBy = revokedBy?.toString(),
-        revokedAt = revokedAt?.toString(),
-    )

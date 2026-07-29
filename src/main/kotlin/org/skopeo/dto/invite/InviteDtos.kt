@@ -4,10 +4,6 @@
 package org.skopeo.dto.invite
 
 import kotlinx.serialization.Serializable
-import org.skopeo.model.Invite
-import org.skopeo.model.InvitePage
-import org.skopeo.model.InviteStatus
-import java.time.LocalDateTime
 
 /** Body for `POST /api/v1/invites` — an administrator invites an email to onboard. */
 @Serializable
@@ -32,16 +28,3 @@ data class InvitePageResponse(
     val items: List<InviteResponse>,
     val total: Int,
 )
-
-fun Invite.toResponse(): InviteResponse =
-    InviteResponse(
-        id = id.toString(),
-        email = email,
-        status = if (status == InviteStatus.PENDING && !isOpen(asOf = LocalDateTime.now())) "EXPIRED" else status.name,
-        invitedBy = invitedBy?.toString(),
-        expiresAt = expiresAt.toString(),
-        acceptedAt = acceptedAt?.toString(),
-        createdAt = createdAt.toString(),
-    )
-
-fun InvitePage.toResponse(): InvitePageResponse = InvitePageResponse(items = items.map { it.toResponse() }, total = total)

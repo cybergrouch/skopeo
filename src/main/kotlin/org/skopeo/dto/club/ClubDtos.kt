@@ -4,9 +4,6 @@
 package org.skopeo.dto.club
 
 import kotlinx.serialization.Serializable
-import org.skopeo.model.ClubPublicEvent
-import org.skopeo.model.ClubPublicView
-import org.skopeo.model.ClubView
 
 /** Body for `POST /api/v1/clubs` — an administrator creates a club. */
 @Serializable
@@ -51,19 +48,6 @@ data class ClubResponse(
     val owners: List<ClubOwnerDto>,
 )
 
-fun ClubView.toResponse(): ClubResponse =
-    ClubResponse(
-        id = id.toString(),
-        name = name,
-        publicCode = publicCode,
-        isActive = isActive,
-        tournamentsSanctioned = tournamentsSanctioned,
-        owners =
-            owners.map {
-                ClubOwnerDto(userId = it.userId.toString(), displayName = it.displayName, publicCode = it.publicCode)
-            },
-    )
-
 /**
  * One of a club's events on its public page (#327): the shareable code, name, date range, and type.
  */
@@ -89,21 +73,3 @@ data class ClubPublicResponse(
     val upcoming: List<ClubPublicEventDto>,
     val past: List<ClubPublicEventDto>,
 )
-
-private fun ClubPublicEvent.toDto(): ClubPublicEventDto =
-    ClubPublicEventDto(
-        publicCode = publicCode,
-        name = name,
-        startDate = startDate.toString(),
-        endDate = endDate.toString(),
-        eventType = eventType.name,
-    )
-
-fun ClubPublicView.toResponse(): ClubPublicResponse =
-    ClubPublicResponse(
-        publicCode = publicCode,
-        name = name,
-        isActive = isActive,
-        upcoming = upcoming.map { it.toDto() },
-        past = past.map { it.toDto() },
-    )

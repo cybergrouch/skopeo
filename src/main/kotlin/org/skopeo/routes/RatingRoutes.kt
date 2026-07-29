@@ -19,7 +19,7 @@ import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.rating.CalculationRequest
 import org.skopeo.dto.rating.SetRatingRequest
-import org.skopeo.dto.rating.toResponse
+import org.skopeo.mapper.rating.toResponse
 import org.skopeo.model.Level
 import org.skopeo.model.Rating
 import org.skopeo.service.rating.RatingCalculationService

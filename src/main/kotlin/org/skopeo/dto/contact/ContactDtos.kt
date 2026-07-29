@@ -4,7 +4,6 @@
 package org.skopeo.dto.contact
 
 import kotlinx.serialization.Serializable
-import org.skopeo.model.Contact
 
 /** Body for `POST /api/v1/users/{userId}/contacts` — add an EMAIL or PHONE. */
 @Serializable
@@ -45,19 +44,3 @@ data class ContactResponse(
     val verifiedBy: String? = null,
     val disabledAt: String? = null,
 )
-
-fun Contact.toResponse(): ContactResponse =
-    ContactResponse(
-        id = id.toString(),
-        userId = userId.toString(),
-        type = type.name,
-        value = value,
-        source = source.name,
-        status = status.name,
-        method = method?.name,
-        isPrimary = isPrimary,
-        isActive = isActive,
-        verifiedAt = verifiedAt?.toString(),
-        verifiedBy = verifiedBy?.toString(),
-        disabledAt = disabledAt?.toString(),
-    )

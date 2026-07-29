@@ -16,7 +16,7 @@ import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.settings.SetLocalThemeRequest
 import org.skopeo.dto.settings.SetThemeRequest
-import org.skopeo.dto.settings.toResponse
+import org.skopeo.mapper.settings.toResponse
 import org.skopeo.service.settings.ThemeService
 
 /**

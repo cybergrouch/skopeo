@@ -17,7 +17,7 @@ import org.skopeo.dto.match.MatchPublicResponse
 import org.skopeo.dto.match.MatchPublicSet
 import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.dto.match.UpcomingMatchResponse
-import org.skopeo.dto.match.toPublicResponse
+import org.skopeo.mapper.match.toPublicResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite

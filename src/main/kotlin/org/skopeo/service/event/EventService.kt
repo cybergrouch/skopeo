@@ -12,7 +12,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.skopeo.dto.event.EventParticipantResponse
 import org.skopeo.dto.event.EventPublicResponse
 import org.skopeo.dto.match.MatchPublicPlayer
-import org.skopeo.dto.match.toPublicResponse
+import org.skopeo.mapper.match.toPublicResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite

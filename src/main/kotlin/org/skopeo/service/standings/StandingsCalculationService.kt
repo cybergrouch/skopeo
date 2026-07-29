@@ -11,10 +11,13 @@ import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
 import org.skopeo.model.Capability
+import org.skopeo.model.GroupStanding
+import org.skopeo.model.RankedEntry
 import org.skopeo.model.ServiceError
 import org.skopeo.model.SnapshotSource
 import org.skopeo.model.SnapshotStatus
 import org.skopeo.model.StandingsBand
+import org.skopeo.model.StandingsCalculationOutcome
 import org.skopeo.model.StandingsEntryWrite
 import org.skopeo.model.User
 import org.skopeo.model.UserRating
@@ -50,29 +53,6 @@ class StandingsCalculationService(
     private val ratings: RatingRepository = RatingRepository(),
     private val audit: AuditService = AuditService(),
 ) {
-    /** One ranked player within a (band, sex) group of the recompute: their points total and current rating. */
-    data class RankedEntry(
-        val rank: Int,
-        val userId: UUID,
-        val displayName: String?,
-        val publicCode: String,
-        val points: BigDecimal,
-        val currentRating: BigDecimal?,
-    )
-
-    /** One (band, sex) race of the recompute, ranked by points descending. */
-    data class GroupStanding(
-        val band: StandingsBand,
-        val sex: String?,
-        val entries: List<RankedEntry>,
-    )
-
-    /** The recompute outcome: the ranked groups plus whether this was a dry run (no persist) or a commit. */
-    data class CalculationOutcome(
-        val dryRun: Boolean,
-        val groups: List<GroupStanding>,
-    )
-
     /**
      * Recompute the points-based standings as of now. When [dryRun] (the default at the route) returns a
      * preview and persists nothing; otherwise publishes a PUBLISHED POINTS snapshot and audits the run.
@@ -80,7 +60,7 @@ class StandingsCalculationService(
     fun calculate(
         token: VerifiedFirebaseToken,
         dryRun: Boolean,
-    ): Either<ServiceError, CalculationOutcome> =
+    ): Either<ServiceError, StandingsCalculationOutcome> =
         either {
             val adminId = requireAdmin(token = token).bind()
             val now = LocalDateTime.now()
@@ -101,7 +81,7 @@ class StandingsCalculationService(
                         ),
                 )
             }
-            CalculationOutcome(dryRun = dryRun, groups = groups)
+            StandingsCalculationOutcome(dryRun = dryRun, groups = groups)
         }
 
     /**

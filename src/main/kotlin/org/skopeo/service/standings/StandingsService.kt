@@ -3,11 +3,14 @@
 
 package org.skopeo.service.standings
 
+import org.skopeo.model.GroupRef
+import org.skopeo.model.LocateView
 import org.skopeo.model.PlayerStanding
 import org.skopeo.model.SnapshotSource
 import org.skopeo.model.StandingEntry
 import org.skopeo.model.StandingsBand
 import org.skopeo.model.StandingsLocation
+import org.skopeo.model.StandingsView
 import org.skopeo.model.User
 import org.skopeo.model.UserRating
 import org.skopeo.model.ageInYears
@@ -45,37 +48,6 @@ class StandingsService(
     private val snapshots: StandingsSnapshotRepository = StandingsSnapshotRepository(),
     private val settings: SettingsService = SettingsService(),
 ) {
-    /** A page of one (band, sex) group plus its selectors: the group's total, the groups on offer, all bands. */
-    data class StandingsView(
-        val band: StandingsBand?,
-        val sex: String?,
-        val entries: List<StandingEntry>,
-        val total: Int,
-        val limit: Int,
-        val offset: Int,
-        val groups: List<GroupRef>,
-        // Every NTRP band (strongest-first), so the UI dropdown lists empty bands too (#113); picking an
-        // empty band yields an empty page still queryable by sex. Independent of which groups have data.
-        val allBands: List<StandingsBand>,
-        val revealRates: Boolean,
-        // The effective serving source (#428): RATING = live calculation, POINTS = the POINTS snapshot (or an
-        // explicit empty view when none exists). Lets the UI distinguish "POINTS, no data yet" from ratings.
-        val source: SnapshotSource,
-    )
-
-    /** A selectable (band, sex) group present in the leaderboard — powers the UI band dropdown + sex toggle. */
-    data class GroupRef(
-        val band: StandingsBand,
-        val sex: String?,
-    )
-
-    /** Jump-to-me (#220): the caller's (band, sex, rank) plus the page offset that contains their row. */
-    data class LocateView(
-        val location: StandingsLocation,
-        val offset: Int,
-        val limit: Int,
-    )
-
     /**
      * One page of a (band, sex) group (#220). When no [band] is given, defaults to the first available
      * group (strongest band, Men first) so a bare call still returns a page. An empty leaderboard yields

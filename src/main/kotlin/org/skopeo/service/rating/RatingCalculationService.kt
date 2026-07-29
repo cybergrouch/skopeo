@@ -13,14 +13,18 @@ import org.skopeo.dto.RankingCalculationRequest
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
+import org.skopeo.model.CalculationBreakdown
 import org.skopeo.model.CalculationBreakdownSnapshot
 import org.skopeo.model.Capability
 import org.skopeo.model.Match
+import org.skopeo.model.MatchCalculation
 import org.skopeo.model.MatchRatingWrite
 import org.skopeo.model.MatchScore
+import org.skopeo.model.PlayerChange
 import org.skopeo.model.PlayerProfile
 import org.skopeo.model.Rating
 import org.skopeo.model.RatingCalculationOptions
+import org.skopeo.model.RatingCalculationOutcome
 import org.skopeo.model.RatingHistoryWrite
 import org.skopeo.model.ServiceError
 import org.skopeo.model.SetCalculationBreakdown
@@ -37,7 +41,6 @@ import org.skopeo.service.calculator.RankingCalculator
 import org.skopeo.service.calculator.impl.v2.PerformanceBasedRankingCalculatorImpl
 import org.skopeo.service.user.VerifiedFirebaseToken
 import java.math.BigDecimal
-import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -57,54 +60,11 @@ class RatingCalculationService(
     private val calculator: RankingCalculator = PerformanceBasedRankingCalculatorImpl(),
     private val audit: AuditService = AuditService(),
 ) {
-    /**
-     * The internal calculator derivatives behind one player's change (issue #89), as precise strings.
-     * v1 fills the net fields and leaves [sets] empty; v2 leaves the net fields null and fills [sets] (#110).
-     */
-    data class CalculationBreakdown(
-        val dominance: String?,
-        val scale: String?,
-        val ratingGap: String?,
-        val normalizedGap: String?,
-        val competitiveThresholdPct: String?,
-        val isUpset: Boolean?,
-        val upsetMultiplier: String?,
-        val kFactor: String?,
-        val sets: List<SetCalculationBreakdown> = emptyList(),
-    )
-
-    /** One player's computed change within a processed match. */
-    data class PlayerChange(
-        val userId: UUID,
-        val previousRating: BigDecimal,
-        val newRating: BigDecimal,
-        val change: BigDecimal,
-        val percentChange: BigDecimal,
-        val previousLevel: String?,
-        val newLevel: String?,
-        val levelChanged: Boolean,
-        val breakdown: CalculationBreakdown,
-    )
-
-    data class MatchCalculation(
-        val matchId: UUID,
-        val matchDate: LocalDate,
-        // The match's result-upload time — snapshotted onto each history row as the ordering
-        // tiebreaker (#301). Non-null in practice (only COMPLETED matches are processed).
-        val completedAt: LocalDateTime?,
-        val changes: List<PlayerChange>,
-    )
-
-    data class CalculationOutcome(
-        val dryRun: Boolean,
-        val matches: List<MatchCalculation>,
-    )
-
     fun calculate(
         token: VerifiedFirebaseToken,
         dryRun: Boolean,
         eventIds: List<String>? = null,
-    ): Either<ServiceError, CalculationOutcome> =
+    ): Either<ServiceError, RatingCalculationOutcome> =
         either {
             val adminId = requireAdmin(token = token).bind()
             val snapshot = mutableMapOf<UUID, BigDecimal>()
@@ -132,7 +92,7 @@ class RatingCalculationService(
                         ),
                 )
             }
-            CalculationOutcome(dryRun = dryRun, matches = processed)
+            RatingCalculationOutcome(dryRun = dryRun, matches = processed)
         }
 
     /**
@@ -422,7 +382,7 @@ private fun Map<String, Any>.toSetBreakdown(): SetCalculationBreakdown =
     )
 
 /** Persist-ready form of the in-memory breakdown (#97/#110): net strings become [BigDecimal] columns, sets carry through. */
-private fun RatingCalculationService.CalculationBreakdown.toSnapshot(): CalculationBreakdownSnapshot =
+private fun CalculationBreakdown.toSnapshot(): CalculationBreakdownSnapshot =
     CalculationBreakdownSnapshot(
         dominance = dominance?.let { BigDecimal(it) },
         scale = scale?.let { BigDecimal(it) },

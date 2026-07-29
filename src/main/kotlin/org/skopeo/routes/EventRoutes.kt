@@ -24,7 +24,7 @@ import org.skopeo.dto.event.DecideParticipantRequest
 import org.skopeo.dto.event.SetCalcPriorityRequest
 import org.skopeo.dto.event.SetEventClubRequest
 import org.skopeo.dto.event.UpdateEventRequest
-import org.skopeo.dto.event.toResponse
+import org.skopeo.mapper.event.toResponse
 import org.skopeo.model.EventParticipantStatus
 import org.skopeo.model.EventType
 import org.skopeo.service.event.CreateEventInput

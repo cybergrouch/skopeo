@@ -274,6 +274,8 @@ tasks.jacocoTestReport {
                     // Exclude data classes, DTOs, and generated code from coverage
                     exclude(
                         "**/dto/**",
+                        // Mappers are pure dto↔model translation (like dto/), exercised via route/service tests.
+                        "**/mapper/**",
                         "**/model/**",
                         "**/*Application*.*",
                         // Database wiring requires a live PostgreSQL instance
@@ -358,6 +360,8 @@ tasks.jacocoTestCoverageVerification {
                     // Same exclusions as the report
                     exclude(
                         "**/dto/**",
+                        // Mappers are pure dto↔model translation (like dto/), exercised via route/service tests.
+                        "**/mapper/**",
                         "**/model/**",
                         "**/*Application*.*",
                         "**/config/**",

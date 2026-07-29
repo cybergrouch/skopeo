@@ -21,8 +21,8 @@ import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.dto.match.MatchStateRequest
 import org.skopeo.dto.match.ReorderMatchesRequest
 import org.skopeo.dto.match.SetHandicapsRequest
-import org.skopeo.dto.match.toResponse
-import org.skopeo.dto.rating.toResponse
+import org.skopeo.mapper.match.toResponse
+import org.skopeo.mapper.rating.toResponse
 import org.skopeo.model.MatchQuery
 import org.skopeo.model.MatchType
 import org.skopeo.model.PlacementBracket

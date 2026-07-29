@@ -5,7 +5,6 @@ package org.skopeo.dto.settings
 
 import kotlinx.serialization.Serializable
 import org.skopeo.model.OpenPlayPointsConfig
-import org.skopeo.model.StoredConfig
 import org.skopeo.model.TournamentPointsConfig
 
 /**
@@ -29,9 +28,3 @@ data class TournamentConfigResponse(
     val updatedAt: String? = null,
     val updatedBy: String? = null,
 )
-
-fun StoredConfig<OpenPlayPointsConfig>.toResponse(): OpenPlayConfigResponse =
-    OpenPlayConfigResponse(config = value, updatedAt = updatedAt?.toString(), updatedBy = updatedBy?.toString())
-
-fun StoredConfig<TournamentPointsConfig>.toResponse(): TournamentConfigResponse =
-    TournamentConfigResponse(config = value, updatedAt = updatedAt?.toString(), updatedBy = updatedBy?.toString())

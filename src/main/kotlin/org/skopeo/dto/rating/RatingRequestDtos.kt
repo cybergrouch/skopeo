@@ -5,11 +5,6 @@ package org.skopeo.dto.rating
 
 import kotlinx.serialization.Serializable
 import org.skopeo.dto.audit.AuditPersonResponse
-import org.skopeo.model.Level
-import org.skopeo.model.RatingRequest
-import org.skopeo.model.RatingRequestPage
-import org.skopeo.model.RatingRequestView
-import java.time.ZoneOffset
 
 /** Body for `POST /api/v1/rating-requests` — a player raises a re-rate request. */
 @Serializable
@@ -49,28 +44,3 @@ data class RatingRequestPageResponse(
     val items: List<RatingRequestResponse>,
     val total: Int,
 )
-
-private fun RatingRequest.toResponse(requester: AuditPersonResponse? = null): RatingRequestResponse =
-    RatingRequestResponse(
-        id = id.toString(),
-        userId = userId.toString(),
-        status = status.name,
-        justification = justification,
-        newRating = newRating?.let { Level.fromValue(value = it.toPlainString()).value },
-        reason = reason,
-        resolvedAt = resolvedAt?.toInstant(ZoneOffset.UTC)?.toString(),
-        createdAt = createdAt.toInstant(ZoneOffset.UTC).toString(),
-        requester = requester,
-    )
-
-/** The player's own request (no requester resolution needed). */
-fun RatingRequest.toResponse(): RatingRequestResponse = toResponse(requester = null)
-
-fun RatingRequestView.toResponse(): RatingRequestResponse =
-    request.toResponse(
-        requester =
-            requester?.let { AuditPersonResponse(userId = it.userId.toString(), displayName = it.displayName, publicCode = it.publicCode) },
-    )
-
-fun RatingRequestPage.toResponse(): RatingRequestPageResponse =
-    RatingRequestPageResponse(items = items.map { it.toResponse() }, total = total)

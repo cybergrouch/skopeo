@@ -19,7 +19,7 @@ import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.circuit.CreateCircuitRequest
 import org.skopeo.dto.circuit.UpdateCircuitRequest
-import org.skopeo.dto.circuit.toResponse
+import org.skopeo.mapper.circuit.toResponse
 import org.skopeo.service.circuit.CircuitService
 
 /**

@@ -4,7 +4,6 @@
 package org.skopeo.dto.standings
 
 import kotlinx.serialization.Serializable
-import org.skopeo.service.standings.StandingsCalculationService
 
 /**
  * Body for `POST /api/v1/standings/calculations` (#146 phase 2). [dryRun] defaults to true (preview
@@ -41,27 +40,3 @@ data class StandingsCalculationResponse(
     val groupsComputed: Int,
     val groups: List<StandingsCalculationGroupResponse>,
 )
-
-fun StandingsCalculationService.CalculationOutcome.toResponse(): StandingsCalculationResponse =
-    StandingsCalculationResponse(
-        dryRun = dryRun,
-        groupsComputed = groups.size,
-        groups =
-            groups.map { group ->
-                StandingsCalculationGroupResponse(
-                    band = group.band.code,
-                    sex = group.sex,
-                    entries =
-                        group.entries.map { entry ->
-                            StandingsCalculationEntryResponse(
-                                rank = entry.rank,
-                                userId = entry.userId.toString(),
-                                displayName = entry.displayName,
-                                publicCode = entry.publicCode,
-                                points = entry.points.toPlainString(),
-                                currentRating = entry.currentRating?.toPlainString(),
-                            )
-                        },
-                )
-            },
-    )

@@ -5,9 +5,6 @@ package org.skopeo.dto.seeding
 
 import kotlinx.serialization.Serializable
 import org.skopeo.dto.user.UserSummaryResponse
-import org.skopeo.model.PlayerList
-import org.skopeo.model.Seeding
-import org.skopeo.model.SeedingEntry
 
 /** Body for creating a named player list (#111). */
 @Serializable
@@ -69,33 +66,3 @@ data class SeedingResponse(
     val generatedAt: String,
     val entries: List<SeedingEntryResponse>,
 )
-
-fun PlayerList.toSummaryResponse(): PlayerListSummaryResponse =
-    PlayerListSummaryResponse(
-        id = id.toString(),
-        name = name,
-        createdAt = createdAt.toString(),
-        memberCount = memberUserIds.size,
-    )
-
-fun Seeding.toResponse(showRawRating: Boolean = false): SeedingResponse =
-    SeedingResponse(
-        generatedAt = generatedAt.toString(),
-        entries = entries.map { it.toResponse(showRawRating = showRawRating) },
-    )
-
-fun SeedingEntry.toResponse(showRawRating: Boolean = false): SeedingEntryResponse =
-    SeedingEntryResponse(
-        seed = seed,
-        position = position,
-        userId = userId?.toString(),
-        displayName = displayName,
-        publicCode = publicCode,
-        ntrpBand = ntrpBand,
-        // Raw rating value is ADMINISTRATOR-only (#583); non-admin staff see the band + seed order only.
-        rating = if (showRawRating) rating else null,
-        sex = sex,
-        age = age,
-        isPlaceholder = placeholder,
-        isDeleted = deleted,
-    )

@@ -8,7 +8,7 @@ import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.right
 import org.skopeo.dto.seeding.PlayerListResponse
-import org.skopeo.dto.user.toSummary
+import org.skopeo.mapper.user.toSummary
 import org.skopeo.model.Capability
 import org.skopeo.model.PlayerList
 import org.skopeo.model.ServiceError

@@ -18,7 +18,8 @@ import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.ranking.AdjustRankingPointsRequest
 import org.skopeo.dto.ranking.GrantRankingPointsRequest
 import org.skopeo.dto.ranking.RevokeRankingPointsRequest
-import org.skopeo.dto.ranking.toResponse
+import org.skopeo.mapper.ranking.toCommand
+import org.skopeo.mapper.ranking.toResponse
 import org.skopeo.service.ranking.RankingPointService
 
 /**

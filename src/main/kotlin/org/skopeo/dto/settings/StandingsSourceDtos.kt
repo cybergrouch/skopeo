@@ -4,7 +4,6 @@
 package org.skopeo.dto.settings
 
 import kotlinx.serialization.Serializable
-import org.skopeo.model.StandingsSourceValue
 
 /**
  * The standings serving source (#146): the [source] name (RATING/POINTS) plus provenance ([updatedAt] as
@@ -22,10 +21,3 @@ data class StandingsSourceResponse(
 data class SetStandingsSourceRequest(
     val source: String,
 )
-
-fun StandingsSourceValue.toResponse(): StandingsSourceResponse =
-    StandingsSourceResponse(
-        source = source.name,
-        updatedAt = updatedAt?.toString(),
-        updatedBy = updatedBy?.toString(),
-    )

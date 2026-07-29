@@ -15,7 +15,7 @@ import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.audit.AuditCommentRequest
-import org.skopeo.dto.audit.toResponse
+import org.skopeo.mapper.audit.toResponse
 import org.skopeo.model.AuditCategory
 import org.skopeo.service.audit.AuditService
 

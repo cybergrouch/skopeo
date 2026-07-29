@@ -18,7 +18,7 @@ import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.rating.ApproveRatingRequestRequest
 import org.skopeo.dto.rating.CreateRatingRequestRequest
 import org.skopeo.dto.rating.DenyRatingRequestRequest
-import org.skopeo.dto.rating.toResponse
+import org.skopeo.mapper.rating.toResponse
 import org.skopeo.model.Rating
 import org.skopeo.model.RatingRequestStatus
 import org.skopeo.service.rating.RatingRequestService

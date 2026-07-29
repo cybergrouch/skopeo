@@ -4,7 +4,6 @@
 package org.skopeo.dto.name
 
 import kotlinx.serialization.Serializable
-import org.skopeo.model.Name
 
 /** Body for `POST /api/v1/users/{userId}/names` — add a name (type DISPLAY replaces the display name). */
 @Serializable
@@ -28,13 +27,3 @@ data class NameResponse(
     val isActive: Boolean,
     val disabledAt: String? = null,
 )
-
-fun Name.toResponse(): NameResponse =
-    NameResponse(
-        id = id.toString(),
-        userId = userId.toString(),
-        type = type.name,
-        value = value,
-        isActive = isActive,
-        disabledAt = disabledAt?.toString(),
-    )
