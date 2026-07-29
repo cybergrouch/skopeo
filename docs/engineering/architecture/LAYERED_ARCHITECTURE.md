@@ -7,10 +7,10 @@ erode silently. The build fails if a rule is broken.
 ## Layers and the rules that hold
 
 ```
-routes (transport)  ──►  service  ──►  repository
-   │   │                   │  │           │
-   │   └──► dto ◄── mapper ─┘  └──► model ◄┘   (model is pure domain)
-   └──► mapper ──► model                       (mapper: dto↔model translation)
+routes ──► { service, dto }                    (routes never touch mapper — translation is service-side)
+service ──► { repository, mapper, dto, model }
+mapper ──► { dto, model }                       (mapper: dto↔model translation)
+repository ──► model                            (model is pure domain — depends up on nothing)
 ```
 
 Enforced invariants (each is true in the codebase today):
@@ -25,7 +25,11 @@ Enforced invariants (each is true in the codebase today):
 - **`mapper`** owns the dto↔model translation (the `toResponse`/`toCommand` extension functions). It
   depends on `dto` + `model` only, never `routes`/`repository`/`service`.
 - **`service`** never depends on the transport layer (`routes`); it *may* call `mapper` (one-way, so
-  the graph stays acyclic).
+  the graph stays acyclic). Services return response DTOs and accept request DTOs.
+- **`routes`** never depend on `mapper`: dto↔model translation is hidden behind the service, so a route
+  calls `service.*` and responds with the DTO it receives. (Routes still reference a thin slice of
+  `model` — enums parsed from query/path params, `ServiceError`, auth principals, and the wire-contract
+  request bodies below — so there is deliberately no `routes ↛ model` rule yet.)
 
 ## The one sanctioned `dto → model` dependency
 

@@ -104,7 +104,11 @@ The layering is enforced by `LayeredArchitectureTest` (ArchUnit) — see
 (they depend up on nothing), `service` is transport-agnostic (never imports `routes`), `dto` is a **pure
 serializable boundary record** (no `model`/`service` dependency — save a small allowlist of shared
 wire-contract value types), and `mapper` owns the dto↔model translation (`toResponse`/`toCommand`
-extensions), depending on `dto` + `model` only. `service` may call `mapper` (one-way, acyclic).
+extensions), depending on `dto` + `model` only. `service` may call `mapper` (one-way, acyclic). The
+dto↔model translation is **hidden behind the service**: services return response DTOs (and accept
+request DTOs), so `routes` depend on `service` + `dto` and never on `mapper`. (Routes still touch a
+thin slice of `model` — enums parsed from query/path params, `ServiceError`, auth principals, and the
+wire-contract request bodies — so there is deliberately no `routes ↛ model` rule yet.)
 
 ```mermaid
 classDiagram
@@ -116,7 +120,6 @@ classDiagram
     class model
     class DB["Exposed / PostgreSQL"]
     routes --> service
-    routes --> mapper
     routes --> dto
     service --> repository
     service --> mapper
