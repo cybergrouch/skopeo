@@ -9,6 +9,7 @@ import { ReRateRequestCard } from "@/components/ReRateRequestCard";
 import { ProfileFieldsForm } from "@/components/ProfileFieldsForm";
 import { PhotoSettingsForm } from "@/components/PhotoSettingsForm";
 import { LocalThemeForm } from "@/components/LocalThemeForm";
+import { MatchHistoryVisibilityForm } from "@/components/MatchHistoryVisibilityForm";
 import { useGetApiV1UsersUserIdRatings } from "@/api/generated/ratings/ratings";
 
 interface SettingsTabProps {
@@ -50,6 +51,16 @@ export function SettingsTab({ userId }: SettingsTabProps) {
             </p>
             <div className="pt-1">
               <PhotoSettingsForm userId={userId} />
+            </div>
+          </div>
+          {/* Match-history privacy (#622): hide your match history from other players. */}
+          <div className="space-y-1 border-t pt-4">
+            <p className="text-sm font-medium">Privacy</p>
+            <p className="text-xs text-muted-foreground">
+              Control what other players see on your public profile.
+            </p>
+            <div className="pt-1">
+              <MatchHistoryVisibilityForm userId={userId} />
             </div>
           </div>
           {/* Per-user local theme (#514): override the site theme, or follow the global default. */}

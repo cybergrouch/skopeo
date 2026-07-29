@@ -82,6 +82,11 @@ export function PlayerMatchesPage() {
             </select>
             {query.isLoading ? (
               <p className="text-sm text-muted-foreground">Loading…</p>
+            ) : query.data?.hidden ? (
+              // #622: the owner hid their match history and this viewer is not privileged.
+              <p className="text-sm text-muted-foreground">
+                This player has hidden their match history.
+              </p>
             ) : items.length > 0 ? (
               <>
                 <ul className="space-y-2">
