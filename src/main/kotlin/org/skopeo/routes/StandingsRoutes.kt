@@ -12,7 +12,7 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
-import org.skopeo.dto.standings.toResponse
+import org.skopeo.mapper.standings.toResponse
 import org.skopeo.model.StandingsBand
 import org.skopeo.service.standings.StandingsService
 

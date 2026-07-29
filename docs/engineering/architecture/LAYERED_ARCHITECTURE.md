@@ -8,26 +8,34 @@ erode silently. The build fails if a rule is broken.
 
 ```
 routes (transport)  ──►  service  ──►  repository
-   │                       │              │
-   └──► dto                └──► model ◄────┘   (model is pure domain)
+   │   │                   │  │           │
+   │   └──► dto ◄── mapper ─┘  └──► model ◄┘   (model is pure domain)
+   └──► mapper ──► model                       (mapper: dto↔model translation)
 ```
 
 Enforced invariants (each is true in the codebase today):
 
-- **`repository`** never depends on `routes`, `service`, or `dto`. It is the foundation and only
-  works with `model`.
-- **`model`** is pure domain — it depends on no other app layer (`routes`/`service`/`repository`/`dto`).
-  Generic numeric helpers it needs live in `model` (`BigDecimalUtils.kt`).
-- **`dto`** never depends on `routes` or `repository`. It is a boundary/serialization type.
-- **`service`** never depends on the transport layer (`routes`).
+- **`repository`** never depends on `routes`, `service`, `dto`, or `mapper`. It is the foundation and
+  only works with `model`.
+- **`model`** is pure domain — it depends on no other app layer
+  (`routes`/`service`/`repository`/`dto`/`mapper`). Generic numeric helpers it needs live in `model`
+  (`BigDecimalUtils.kt`).
+- **`dto`** is a **pure serializable boundary record**: it never depends on `routes`, `repository`,
+  `service`, or `model` — with one sanctioned exception (below).
+- **`mapper`** owns the dto↔model translation (the `toResponse`/`toCommand` extension functions). It
+  depends on `dto` + `model` only, never `routes`/`repository`/`service`.
+- **`service`** never depends on the transport layer (`routes`); it *may* call `mapper` (one-way, so
+  the graph stays acyclic).
 
-## What is deliberately *not* enforced
+## The one sanctioned `dto → model` dependency
 
-`service` and `dto` are **coupled at the HTTP boundary by design**: services accept request DTOs
-(e.g. `CreateUserRequest`) and some return response DTOs (e.g. `PlayerService.publicProfile`), and one
-DTO maps a service result type (`CalculationDtos`). Forcing strict "DTOs only in routes" would mean a
-large command/result refactor for little gain, so that relationship is left unconstrained. If we ever
-want it, that's a separate change — the test is the place to tighten the rules.
+Three v1 stateless-calculator contract DTOs (`RankingCalculationRequest`/`Response`, `RatingChange`) and
+the two points-config responses (`OpenPlayConfigResponse`, `TournamentConfigResponse`) deliberately embed
+shared `@Serializable` domain value types (`Team`, `MatchScore`, `PlayerProfile`, `Rating`,
+`RatingCalculationOptions`, `OpenPlayPointsConfig`, `TournamentPointsConfig`) directly as their wire
+format instead of mirroring them into parallel DTOs. The `dto ↛ model` rule exempts exactly these classes
+(by name). Fully decoupling that contract (DTO mirrors + bidirectional mapping) is a separate, larger
+change — the test is the place to tighten the rule if we ever pursue it.
 
 ## Why ArchUnit (not Konsist)
 

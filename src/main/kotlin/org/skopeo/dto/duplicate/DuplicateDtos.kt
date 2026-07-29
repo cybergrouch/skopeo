@@ -5,9 +5,6 @@ package org.skopeo.dto.duplicate
 
 import kotlinx.serialization.Serializable
 import org.skopeo.dto.user.UserSummaryResponse
-import org.skopeo.dto.user.toSummary
-import org.skopeo.model.DuplicateCandidateView
-import org.skopeo.model.DuplicateCandidateViewPage
 
 /** Body for `POST /api/v1/duplicate-candidates` — an admin manually flags a suspected pair (#126). */
 @Serializable
@@ -40,17 +37,3 @@ data class DuplicateCandidatePageResponse(
     val items: List<DuplicateCandidateResponse>,
     val total: Int,
 )
-
-fun DuplicateCandidateView.toResponse(): DuplicateCandidateResponse =
-    DuplicateCandidateResponse(
-        id = candidate.id.toString(),
-        status = candidate.status.name,
-        signal = candidate.signal.name,
-        detail = candidate.detail,
-        flaggedAt = candidate.flaggedAt.toString(),
-        userA = userA.toSummary(),
-        userB = userB.toSummary(),
-    )
-
-fun DuplicateCandidateViewPage.toResponse(): DuplicateCandidatePageResponse =
-    DuplicateCandidatePageResponse(items = items.map { it.toResponse() }, total = total)

@@ -13,7 +13,7 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.standings.StandingsCalculationRequest
-import org.skopeo.dto.standings.toResponse
+import org.skopeo.mapper.standings.toResponse
 import org.skopeo.service.standings.StandingsCalculationService
 
 /**

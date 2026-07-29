@@ -21,7 +21,7 @@ import org.skopeo.dto.club.AssignOwnerRequest
 import org.skopeo.dto.club.CreateClubRequest
 import org.skopeo.dto.club.SetSanctionRequest
 import org.skopeo.dto.club.UpdateClubRequest
-import org.skopeo.dto.club.toResponse
+import org.skopeo.mapper.club.toResponse
 import org.skopeo.service.club.ClubService
 import java.util.UUID
 

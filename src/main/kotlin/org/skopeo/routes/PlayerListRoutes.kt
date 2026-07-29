@@ -18,8 +18,8 @@ import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.seeding.AddMemberRequest
 import org.skopeo.dto.seeding.CreatePlayerListRequest
-import org.skopeo.dto.seeding.toResponse
-import org.skopeo.dto.seeding.toSummaryResponse
+import org.skopeo.mapper.seeding.toResponse
+import org.skopeo.mapper.seeding.toSummaryResponse
 import org.skopeo.service.seeding.PlayerListService
 import org.skopeo.service.seeding.SeedingService
 import org.skopeo.service.user.UserService

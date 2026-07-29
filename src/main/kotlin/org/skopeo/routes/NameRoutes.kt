@@ -18,7 +18,7 @@ import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.name.NameCreateRequest
 import org.skopeo.dto.name.NameStateRequest
-import org.skopeo.dto.name.toResponse
+import org.skopeo.mapper.name.toResponse
 import org.skopeo.model.NameType
 import org.skopeo.service.name.NameService
 

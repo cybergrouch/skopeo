@@ -4,8 +4,6 @@
 package org.skopeo.dto.settings
 
 import kotlinx.serialization.Serializable
-import org.skopeo.model.LocalThemeValue
-import org.skopeo.model.ThemeSettingValue
 
 /**
  * The global UI theme (#378): the [theme] name plus provenance ([updatedAt] as an ISO string,
@@ -23,13 +21,6 @@ data class ThemeResponse(
 data class SetThemeRequest(
     val theme: String,
 )
-
-fun ThemeSettingValue.toResponse(): ThemeResponse =
-    ThemeResponse(
-        theme = theme.name,
-        updatedAt = updatedAt?.toString(),
-        updatedBy = updatedBy?.toString(),
-    )
 
 /**
  * The caller's own local theme (#514): the chosen [theme] name and [setAt] (ISO string). Both null
@@ -49,9 +40,3 @@ data class LocalThemeResponse(
 data class SetLocalThemeRequest(
     val theme: String? = null,
 )
-
-fun LocalThemeValue.toResponse(): LocalThemeResponse =
-    LocalThemeResponse(
-        theme = theme?.name,
-        setAt = setAt?.toString(),
-    )

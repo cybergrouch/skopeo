@@ -18,7 +18,7 @@ import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.capability.CapabilityGrantRequest
-import org.skopeo.dto.capability.toResponse
+import org.skopeo.mapper.capability.toResponse
 import org.skopeo.model.Capability
 import org.skopeo.service.capability.CapabilityService
 

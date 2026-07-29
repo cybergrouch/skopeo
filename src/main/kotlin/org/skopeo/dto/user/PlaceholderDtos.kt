@@ -4,7 +4,6 @@
 package org.skopeo.dto.user
 
 import kotlinx.serialization.Serializable
-import org.skopeo.model.GeneratedClaimCode
 
 // Request/response shapes for placeholder ("dummy") player accounts + claim (#496). The caller's identity
 // is taken from the verified Firebase token; these bodies carry only the details the client supplies.
@@ -40,10 +39,3 @@ data class ClaimCodeResponse(
     val expiresAt: String,
     val placeholderPublicCode: String,
 )
-
-fun GeneratedClaimCode.toResponse(): ClaimCodeResponse =
-    ClaimCodeResponse(
-        code = plaintext,
-        expiresAt = code.expiresAt.toString(),
-        placeholderPublicCode = placeholderPublicCode,
-    )

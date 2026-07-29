@@ -6,6 +6,7 @@ package org.skopeo.dto.seeding
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
+import org.skopeo.mapper.seeding.toResponse
 import org.skopeo.model.SeedingEntry
 import java.util.UUID
 

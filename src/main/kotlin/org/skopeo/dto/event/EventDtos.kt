@@ -6,9 +6,6 @@ package org.skopeo.dto.event
 import kotlinx.serialization.Serializable
 import org.skopeo.dto.match.MatchPublicResponse
 import org.skopeo.dto.user.PublicRatingDto
-import org.skopeo.model.EventParticipantRef
-import org.skopeo.model.EventView
-import org.skopeo.model.MyEvent
 
 /** Body for `POST /api/v1/events` — create an event (name, date range, roster). */
 @Serializable
@@ -135,63 +132,6 @@ data class EventResponse(
     // Whether finalizing this event awards ranking points per the global schedules (#559). Default true.
     val awardRankingPoints: Boolean = true,
 )
-
-fun MyEvent.toResponse(completedMatchCount: Int = 0): MyEventResponse =
-    MyEventResponse(
-        publicCode = event.publicCode,
-        name = event.name,
-        startDate = event.startDate.toString(),
-        endDate = event.endDate.toString(),
-        status = status.name,
-        isFinalized = event.isFinalized,
-        completedMatchCount = completedMatchCount,
-    )
-
-fun EventView.toResponse(
-    completedMatchCount: Int = 0,
-    // Raw NTRP values on the roster are ADMINISTRATOR-only (#583); default false = band only.
-    showRawRating: Boolean = false,
-): EventResponse =
-    EventResponse(
-        id = event.id.toString(),
-        publicCode = event.publicCode,
-        name = event.name,
-        startDate = event.startDate.toString(),
-        endDate = event.endDate.toString(),
-        isActive = event.isActive,
-        participants = participants.map { it.toResponse(showRawRating = showRawRating) },
-        creatorDisplayName = creator?.displayName,
-        creatorPublicCode = creator?.publicCode,
-        clubId = club?.id?.toString(),
-        clubName = club?.name,
-        circuitId = event.circuitId?.toString(),
-        calcPriority = event.calcPriority,
-        type = event.type.name,
-        finalizedAt = event.finalizedAt?.toString(),
-        isFinalized = event.isFinalized,
-        completedMatchCount = completedMatchCount,
-        awardRankingPoints = event.awardRankingPoints,
-    )
-
-internal fun EventParticipantRef.toResponse(showRawRating: Boolean = false): EventParticipantResponse =
-    EventParticipantResponse(
-        userId = userId.toString(),
-        displayName = displayName,
-        publicCode = publicCode,
-        sex = sex,
-        age = age,
-        rating =
-            rating?.let {
-                PublicRatingDto(
-                    value = if (showRawRating) it.currentRating.toPlainString() else null,
-                    level = it.currentLevel,
-                    confidence = it.confidence.toPlainString(),
-                )
-            },
-        status = status.name,
-        isPlaceholder = placeholder,
-        isDeleted = deleted,
-    )
 
 /**
  * Read-only public summary of an event (#138): its details, participant roster, and the matches it

@@ -101,26 +101,32 @@ required); everything else is `authenticate(FIREBASE_AUTH)`.
 
 The layering is enforced by `LayeredArchitectureTest` (ArchUnit) — see
 [LAYERED_ARCHITECTURE](./LAYERED_ARCHITECTURE.md). In short: `repository` and `model` are foundations
-(they depend up on nothing), `service` is transport-agnostic (never imports `routes`), and `dto` is a
-boundary type that may couple to `service` but never to `routes`/`repository`.
+(they depend up on nothing), `service` is transport-agnostic (never imports `routes`), `dto` is a **pure
+serializable boundary record** (no `model`/`service` dependency — save a small allowlist of shared
+wire-contract value types), and `mapper` owns the dto↔model translation (`toResponse`/`toCommand`
+extensions), depending on `dto` + `model` only. `service` may call `mapper` (one-way, acyclic).
 
 ```mermaid
 classDiagram
     class routes
     class service
+    class mapper
     class repository
     class dto
     class model
     class DB["Exposed / PostgreSQL"]
     routes --> service
+    routes --> mapper
     routes --> dto
     service --> repository
+    service --> mapper
     service --> dto
+    mapper --> dto
+    mapper --> model
     repository --> DB
     routes --> model
     service --> model
     repository --> model
-    dto --> model
 ```
 
 ## Error handling & the result convention
@@ -299,4 +305,5 @@ sequenceDiagram
 | Persistence (Exposed) | `repository/*Table*.kt`, `repository/*Repository.kt` |
 | Pure domain + enums | `model/*Domain.kt` |
 | HTTP request/response records | `dto/**` |
+| dto↔model translation (`toResponse`/`toCommand`) | `mapper/**` |
 | DB connection + migrations | `config/DatabaseConfig.kt`, `src/main/resources/db/migration/` |

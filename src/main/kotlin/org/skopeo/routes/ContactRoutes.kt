@@ -19,7 +19,7 @@ import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.contact.ContactCreateRequest
 import org.skopeo.dto.contact.ContactStateRequest
 import org.skopeo.dto.contact.VerificationRequest
-import org.skopeo.dto.contact.toResponse
+import org.skopeo.mapper.contact.toResponse
 import org.skopeo.model.ContactType
 import org.skopeo.model.VerificationMethod
 import org.skopeo.model.VerificationStatus

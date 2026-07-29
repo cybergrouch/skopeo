@@ -24,7 +24,7 @@ import org.skopeo.PARTNER_RATE_LIMIT_NAME
 import org.skopeo.dto.client.CreateApiClientRequest
 import org.skopeo.dto.client.IssueApiKeyRequest
 import org.skopeo.dto.client.SetRateLimitRequest
-import org.skopeo.dto.client.toResponse
+import org.skopeo.mapper.client.toResponse
 import org.skopeo.model.ApiKeyEnvironment
 import org.skopeo.model.Capability
 import org.skopeo.model.ClientAuthResult

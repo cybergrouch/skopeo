@@ -4,7 +4,6 @@
 package org.skopeo.dto.circuit
 
 import kotlinx.serialization.Serializable
-import org.skopeo.model.Circuit
 
 /** Body for `POST /api/v1/circuits` — an administrator creates a circuit (#525). */
 @Serializable
@@ -24,10 +23,3 @@ data class CircuitResponse(
     val name: String,
     val isActive: Boolean,
 )
-
-fun Circuit.toResponse(): CircuitResponse =
-    CircuitResponse(
-        id = id.toString(),
-        name = name,
-        isActive = isActive,
-    )

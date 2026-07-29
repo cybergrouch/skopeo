@@ -17,7 +17,7 @@ import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.duplicate.ConfirmCandidateRequest
 import org.skopeo.dto.duplicate.FlagCandidateRequest
-import org.skopeo.dto.duplicate.toResponse
+import org.skopeo.mapper.duplicate.toResponse
 import org.skopeo.model.DuplicateCandidateStatus
 import org.skopeo.service.user.DuplicateCandidateService
 import java.util.UUID

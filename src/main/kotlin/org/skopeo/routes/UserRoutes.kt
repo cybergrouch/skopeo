@@ -24,8 +24,8 @@ import org.skopeo.dto.user.ProfileRequest
 import org.skopeo.dto.user.RatingPreviewResponse
 import org.skopeo.dto.user.SetRatingPreviewRequest
 import org.skopeo.dto.user.UserSummaryPageResponse
-import org.skopeo.dto.user.toResponse
-import org.skopeo.dto.user.toSummary
+import org.skopeo.mapper.user.toResponse
+import org.skopeo.mapper.user.toSummary
 import org.skopeo.model.Capability
 import org.skopeo.model.NumericRange
 import org.skopeo.service.user.DuplicateService
