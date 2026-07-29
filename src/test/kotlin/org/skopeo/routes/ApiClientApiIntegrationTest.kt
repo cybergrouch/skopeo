@@ -25,10 +25,12 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.dto.client.ApiClientResponse
+import org.skopeo.dto.client.ClientEffectiveCapabilitiesResponse
 import org.skopeo.dto.client.ClientIdentityResponse
 import org.skopeo.dto.client.CreateApiClientRequest
 import org.skopeo.dto.client.IssueApiKeyRequest
 import org.skopeo.dto.client.IssuedApiKeyResponse
+import org.skopeo.dto.client.PublicPlayerResponse
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.NameType
@@ -143,6 +145,74 @@ class ApiClientApiIntegrationTest {
             client.get(urlString = "/api/v1/client/me").status shouldBe HttpStatusCode.Unauthorized
             client.get(urlString = "/api/v1/client/me") {
                 header(key = "X-Api-Key", value = "garbage")
+            }.status shouldBe HttpStatusCode.Unauthorized
+        }
+
+    private suspend fun HttpClient.issueKeyFor(
+        adminAuth: String,
+        scopes: List<String>,
+    ): IssuedApiKeyResponse {
+        val clientId =
+            post(urlString = "/api/v1/api-clients") {
+                header(key = HttpHeaders.Authorization, value = adminAuth)
+                contentType(type = ContentType.Application.Json)
+                setBody(body = CreateApiClientRequest(name = "Partner A"))
+            }.body<ApiClientResponse>().id
+        return post(urlString = "/api/v1/api-clients/$clientId/keys") {
+            header(key = HttpHeaders.Authorization, value = adminAuth)
+            contentType(type = ContentType.Application.Json)
+            setBody(body = IssueApiKeyRequest(scopes = scopes))
+        }.body<IssuedApiKeyResponse>()
+    }
+
+    @Test
+    fun `the player directory is gated by the RESEARCHER scope (#597)`() =
+        withApp { client ->
+            seedUser(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+            seedUser(uid = "alice", roles = setOf(element = Capability.PLAYER))
+            val adminAuth = bearer(uid = "admin")
+
+            // A key without the RESEARCHER scope is refused.
+            val unscoped = client.issueKeyFor(adminAuth = adminAuth, scopes = emptyList())
+            client.get(urlString = "/api/v1/client/players") {
+                header(key = "X-Api-Key", value = unscoped.apiKey)
+            }.status shouldBe HttpStatusCode.Forbidden
+
+            // A key scoped for RESEARCHER may read the public directory.
+            val scoped = client.issueKeyFor(adminAuth = adminAuth, scopes = listOf(element = "RESEARCHER"))
+            val res =
+                client.get(urlString = "/api/v1/client/players") {
+                    header(key = "X-Api-Key", value = scoped.apiKey)
+                }
+            res.status shouldBe HttpStatusCode.OK
+            res.body<List<PublicPlayerResponse>>().map { it.publicCode }.size shouldBe 2
+        }
+
+    @Test
+    fun `me-capabilities returns the intersection and needs both a key and a user token (#597)`() =
+        withApp { client ->
+            seedUser(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+            seedUser(uid = "researcher", roles = setOf(Capability.PLAYER, Capability.RESEARCHER))
+            val adminAuth = bearer(uid = "admin")
+            val key = client.issueKeyFor(adminAuth = adminAuth, scopes = listOf("RESEARCHER", "HOST"))
+
+            // Delegated: key + the researcher's user token → intersection is just RESEARCHER.
+            val ok =
+                client.get(urlString = "/api/v1/client/me/capabilities") {
+                    header(key = HttpHeaders.Authorization, value = bearer(uid = "researcher"))
+                    header(key = "X-Api-Key", value = key.apiKey)
+                }
+            ok.status shouldBe HttpStatusCode.OK
+            ok.body<ClientEffectiveCapabilitiesResponse>().capabilities shouldBe listOf(element = "RESEARCHER")
+
+            // Missing the user token → the Firebase provider rejects with 401.
+            client.get(urlString = "/api/v1/client/me/capabilities") {
+                header(key = "X-Api-Key", value = key.apiKey)
+            }.status shouldBe HttpStatusCode.Unauthorized
+
+            // Missing the API key → the resolver rejects with 401.
+            client.get(urlString = "/api/v1/client/me/capabilities") {
+                header(key = HttpHeaders.Authorization, value = bearer(uid = "researcher"))
             }.status shouldBe HttpStatusCode.Unauthorized
         }
 

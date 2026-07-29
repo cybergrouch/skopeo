@@ -6,8 +6,10 @@ package org.skopeo.dto.client
 import kotlinx.serialization.Serializable
 import org.skopeo.model.ApiClient
 import org.skopeo.model.ApiKey
+import org.skopeo.model.ClientEffectiveCapabilities
 import org.skopeo.model.ClientPrincipal
 import org.skopeo.model.IssuedApiKey
+import org.skopeo.model.PublicPlayer
 
 /** Body for `POST /api/v1/api-clients` — an administrator registers a partner application. */
 @Serializable
@@ -66,6 +68,24 @@ data class ClientIdentityResponse(
     val scopes: List<String>,
 )
 
+/** A player in the partner directory read (`GET /api/v1/client/players`, #597) — public fields only. */
+@Serializable
+data class PublicPlayerResponse(
+    val publicCode: String,
+    val displayName: String? = null,
+)
+
+/**
+ * Response for `GET /api/v1/client/me/capabilities` (#597): what the calling app may do on behalf of the
+ * signed-in user — the intersection of the key's scopes and the user's capabilities.
+ */
+@Serializable
+data class ClientEffectiveCapabilitiesResponse(
+    val clientId: String,
+    val userId: String,
+    val capabilities: List<String>,
+)
+
 fun ApiKey.toResponse(): ApiKeyResponse =
     ApiKeyResponse(
         id = id.toString(),
@@ -97,4 +117,17 @@ fun ClientPrincipal.toResponse(): ClientIdentityResponse =
     ClientIdentityResponse(
         clientId = clientId.toString(),
         scopes = scopes.map { it.name },
+    )
+
+fun PublicPlayer.toResponse(): PublicPlayerResponse =
+    PublicPlayerResponse(
+        publicCode = publicCode,
+        displayName = displayName,
+    )
+
+fun ClientEffectiveCapabilities.toResponse(): ClientEffectiveCapabilitiesResponse =
+    ClientEffectiveCapabilitiesResponse(
+        clientId = clientId.toString(),
+        userId = userId.toString(),
+        capabilities = capabilities.map { it.name },
     )

@@ -25,6 +25,7 @@ import org.skopeo.model.ApiKeyEnvironment
 import org.skopeo.model.Capability
 import org.skopeo.model.ClientAuthResult
 import org.skopeo.model.ClientPrincipal
+import org.skopeo.model.hasScope
 import org.skopeo.service.client.ApiClientService
 
 /** The header a partner presents its API key in (#225/#596). */
@@ -42,9 +43,16 @@ fun Application.configureApiClientRoutes(service: ApiClientService = ApiClientSe
                 manageClients(service = service)
                 manageKeys(service = service)
             }
+            // Delegated (#597): a partner acting on behalf of a signed-in user — needs BOTH a user token
+            // (this Firebase block) and a valid API key (resolved in the handler).
+            route(path = "/api/v1/client") {
+                delegatedCapabilities(service = service)
+            }
         }
+        // Machine-to-machine (#596/#597): authenticated by the API key alone, no user token.
         route(path = "/api/v1/client") {
             clientSelfIdentity(service = service)
+            clientPlayerDirectory(service = service)
         }
     }
 }
@@ -110,6 +118,48 @@ private fun Route.clientSelfIdentity(service: ApiClientService) {
             call.respond(status = HttpStatusCode.OK, message = principal.toResponse())
         }
     }
+}
+
+/**
+ * `GET /api/v1/client/players` (#597) — a machine-to-machine partner directory read, gated by the
+ * RESEARCHER scope. Demonstrates least-privilege: a key without the scope is refused (403).
+ */
+private fun Route.clientPlayerDirectory(service: ApiClientService) {
+    get(path = "/players") {
+        respondMappingErrors {
+            val principal = resolveClient(service = service) ?: return@respondMappingErrors
+            if (!requireClientScope(principal = principal, required = Capability.RESEARCHER)) return@respondMappingErrors
+            call.respond(status = HttpStatusCode.OK, message = service.playerDirectory().map { it.toResponse() })
+        }
+    }
+}
+
+/**
+ * `GET /api/v1/client/me/capabilities` (#597) — delegated: requires a user token (the enclosing Firebase
+ * block) AND a valid API key, returning what the app may do for that user (scopes ∩ user capabilities).
+ */
+private fun Route.delegatedCapabilities(service: ApiClientService) {
+    get(path = "/me/capabilities") {
+        respondMappingErrors {
+            val principal = resolveClient(service = service) ?: return@respondMappingErrors
+            respondEither(result = service.effectiveCapabilities(token = verifiedToken(), principal = principal)) { effective ->
+                call.respond(status = HttpStatusCode.OK, message = effective.toResponse())
+            }
+        }
+    }
+}
+
+/** Client-scope gate (#597): true if [principal] holds [required], else respond 403 and return false. */
+private suspend fun RoutingContext.requireClientScope(
+    principal: ClientPrincipal,
+    required: Capability,
+): Boolean {
+    if (principal.hasScope(capability = required)) return true
+    call.respond(
+        status = HttpStatusCode.Forbidden,
+        message = errorBody(error = "Forbidden", message = "This API key is not scoped for '$required'"),
+    )
+    return false
 }
 
 /**

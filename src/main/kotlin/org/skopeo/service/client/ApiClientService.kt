@@ -18,11 +18,16 @@ import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
 import org.skopeo.model.Capability
 import org.skopeo.model.ClientAuthResult
+import org.skopeo.model.ClientEffectiveCapabilities
 import org.skopeo.model.ClientPrincipal
 import org.skopeo.model.InsertApiKeyCommand
 import org.skopeo.model.IssuedApiKey
+import org.skopeo.model.PublicPlayer
 import org.skopeo.model.ResolvedApiKey
 import org.skopeo.model.ServiceError
+import org.skopeo.model.UserSearchQuery
+import org.skopeo.model.displayName
+import org.skopeo.model.effectiveCapabilities
 import org.skopeo.repository.ApiClientRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService
@@ -190,6 +195,43 @@ class ApiClientService(
             )
         }
     }
+
+    /**
+     * A public player directory (#597) for a machine-to-machine partner read. Only public fields
+     * (public code + display name) are exposed. The caller's scope is enforced at the route.
+     */
+    fun playerDirectory(): List<PublicPlayer> =
+        users
+            .search(
+                query =
+                    UserSearchQuery(
+                        name = null,
+                        code = null,
+                        q = null,
+                        sex = null,
+                        dobMin = null,
+                        dobMax = null,
+                        rating = null,
+                    ),
+            ).map { PublicPlayer(publicCode = it.publicCode, displayName = it.displayName()) }
+
+    /**
+     * The capabilities [principal] may exercise on behalf of the user behind [token] (#597) — the
+     * intersection of the key's scopes and the user's own capabilities. Forbidden if the token resolves
+     * to no user (it always should on a Firebase-authenticated route).
+     */
+    fun effectiveCapabilities(
+        token: VerifiedFirebaseToken,
+        principal: ClientPrincipal,
+    ): Either<ServiceError, ClientEffectiveCapabilities> =
+        either {
+            val user = ensureNotNull(value = users.findByFirebaseUid(firebaseUid = token.uid)) { ServiceError.Forbidden() }
+            ClientEffectiveCapabilities(
+                clientId = principal.clientId,
+                userId = user.id,
+                capabilities = principal.effectiveCapabilities(userCapabilities = user.capabilities),
+            )
+        }
 
     /** Access gate: the caller must be an ADMINISTRATOR. Returns the caller's id (the audit actor). */
     private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
