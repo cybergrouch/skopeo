@@ -208,7 +208,6 @@ function ForCanonical({
                         type="button"
                         variant="ghost"
                         size="sm"
-                        disabled={replace.isPending}
                         onClick={() => {
                           setReplaceError(null)
                           setConfirmingReplaceId(d.id)

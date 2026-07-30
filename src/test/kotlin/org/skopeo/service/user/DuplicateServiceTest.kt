@@ -164,6 +164,23 @@ class DuplicateServiceTest {
     }
 
     @Test
+    fun `rejects replacing when the canonical is itself a duplicate (#124)`() {
+        admin()
+        val trueAccount = provisionUser(uid = "true")
+        val notCanonical = provisionUser(uid = "notcanon")
+        val old = provisionUser(uid = "old")
+        // notCanonical is itself a duplicate of trueAccount, so it cannot be a replace target.
+        service
+            .markDuplicates(token = token(uid = "root"), canonicalId = trueAccount.id, duplicateIds = listOf(element = notCanonical.id))
+            .shouldBeRight()
+
+        service
+            .replaceAccount(token = token(uid = "root"), canonicalId = notCanonical.id, duplicateId = old.id)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Conflict>()
+    }
+
+    @Test
     fun `a non-admin cannot replace (#124)`() {
         val canonical = provisionUser(uid = "new")
         val old = provisionUser(uid = "old")
