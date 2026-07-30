@@ -3,9 +3,9 @@
 
 package org.skopeo.service.event
 
-import org.skopeo.model.BandRelation
+import org.skopeo.contract.BandRelation
+import org.skopeo.contract.OpenPlayPointsConfig
 import org.skopeo.model.MatchSetResult
-import org.skopeo.model.OpenPlayPointsConfig
 import java.util.UUID
 
 /**

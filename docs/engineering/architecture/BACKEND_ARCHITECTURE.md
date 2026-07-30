@@ -102,17 +102,16 @@ required); everything else is `authenticate(FIREBASE_AUTH)`.
 The layering is enforced by `LayeredArchitectureTest` (ArchUnit) — see
 [LAYERED_ARCHITECTURE](./LAYERED_ARCHITECTURE.md). In short: `repository` and `model` are foundations
 (they depend up on nothing), `service` is transport-agnostic (never imports `routes`), `dto` is a **pure
-serializable boundary record** (no `model`/`service` dependency — save a small allowlist of shared
-wire-contract value types), and `mapper` owns the dto↔model translation (`toResponse`/`toCommand`
+serializable boundary record** (no `model`/`service` dependency — save a small allowlist of three v1
+stateless-calculator DTOs), and `mapper` owns the dto↔model translation (`toResponse`/`toCommand`
 extensions), depending on `dto` + `model` only. `service` may call `mapper` (one-way, acyclic). The
 dto↔model translation is **hidden behind the service**: services return response DTOs (and accept
-request DTOs), so `routes` depend on `service` + `dto` and never on `mapper`. Routes also hand services
-the **raw** query/path/body strings — services parse + validate them (bad enum/band/value →
-`ServiceError.Validation` → 400) — so routes no longer reference domain enums. `ServiceError` (package
-`org.skopeo.error`) and the auth principals (`ClientPrincipal`/`ClientAuthResult`, package
-`org.skopeo.security`) also live outside `model`. The **only** remaining `routes → model` reference is
-the two wire-contract request bodies (`OpenPlayPointsConfig`/`TournamentPointsConfig`) received via
-`call.receive<…>()`; a strict `routes ↛ model` rule waits on decoupling those.
+request DTOs), and routes hand services the **raw** query/path/body strings — services parse + validate
+them (bad enum/band/value → `ServiceError.Validation` → 400). So **`routes` depend only on `service` +
+`dto`** plus three neutral leaf packages — `error` (`ServiceError`), `security` (auth principals
+`ClientPrincipal`/`ClientAuthResult`), and `contract` (`@Serializable` value types shared across the wire
++ persistence, e.g. the points-config schedules) — and **never on `mapper` or `model`**, enforced by a
+strict `routes ↛ model` rule with no exception.
 
 ```mermaid
 classDiagram
@@ -122,19 +121,33 @@ classDiagram
     class repository
     class dto
     class model
+    class error["error · ServiceError"]
+    class security["security · auth principals"]
+    class contract["contract · @Serializable value types"]
     class DB["Exposed / PostgreSQL"]
     routes --> service
     routes --> dto
+    routes --> error
+    routes --> security
+    routes --> contract
     service --> repository
     service --> mapper
     service --> dto
+    service --> model
+    service --> error
+    service --> security
+    service --> contract
     mapper --> dto
     mapper --> model
-    repository --> DB
-    routes --> model
-    service --> model
     repository --> model
+    repository --> error
+    repository --> DB
+    security --> model
 ```
+
+`error`, `security`, and `contract` are foundation **leaves** (`contract`/`error` depend on nothing;
+`security` references only `model`'s `Capability`). Note there is **no `routes → model` edge** — the
+transport layer speaks only DTOs and these neutral value types.
 
 ## Error handling & the result convention
 
@@ -144,7 +157,8 @@ truly exceptional faults (bugs, IO) are still thrown and surface as `500`. `Serv
 maps it, via helpers in `routes/RouteSupport.kt`:
 
 - `verifiedToken()` / `optionalVerifiedToken()` — lift the `JWTPrincipal` to a `VerifiedFirebaseToken`.
-- `uuidParam(name)` / `parseEnumParam<T>(...)` — parse path/enum inputs (bad input → `400`).
+- `uuidParam(name)` — parse a UUID path param (bad input → `400`); enum/value parsing now happens
+  service-side (services take the raw string and return `ServiceError.Validation`).
 - `respondEither(result) { onSuccess }` — fold: left → `respondError`, right → write the success body.
 - `respondError(error)` — the one `ServiceError → HTTP` switch (logs every failure at WARN).
 - `respondMappingErrors { ... }` — wraps a handler so malformed JSON / DTO-`init` validation / parse

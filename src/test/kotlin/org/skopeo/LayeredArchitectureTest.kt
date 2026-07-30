@@ -17,17 +17,19 @@ import org.junit.jupiter.api.Test
  *    (save for a small allowlist of shared `@Serializable` value types used as a wire contract, below);
  *  - mapper owns the dto↔model translation — it depends on dto + model only, never routes/repository/service;
  *  - service never depends on the transport (routes); it MAY call mapper (one-way, acyclic);
- *  - routes never depend on mapper — translation is hidden behind the service (services return/accept DTOs),
- *    so a route calls service.* and responds with the DTO. (routes still touch a thin model slice — param
- *    enums, ServiceError, auth principals, wire-contract bodies — so there is deliberately no routes↛model rule.)
+ *  - routes never depend on mapper OR model — translation is hidden behind the service (services
+ *    return/accept DTOs) and all HTTP input is parsed service-side, so a route only touches service + dto
+ *    (+ the neutral error/security/contract packages). routes↛model is now enforced with no exception;
+ *  - contract holds `@Serializable` value types shared across the wire + persistence (the points-config
+ *    schedules) — a leaf depending on nothing, so routes/dto can carry them without reaching into model.
  *
  * dto↔model exemption: three v1 stateless-calculator contract DTOs (`RankingCalculationRequest`/`Response`,
- * `RatingChange`) and the two points-config responses (`OpenPlayConfigResponse`, `TournamentConfigResponse`)
- * deliberately embed shared `@Serializable` domain value types (`Team`, `MatchScore`, `PlayerProfile`,
- * `Rating`, `RatingCalculationOptions`, `OpenPlayPointsConfig`, `TournamentPointsConfig`) directly as their
- * wire format, rather than mirroring them. Fully decoupling that contract is a separate, larger change; until
- * then these classes are the only sanctioned dto→model dependency. Uses ArchUnit (bytecode-based) — chosen
- * over Konsist for robustness against the Kotlin compiler version (see #69).
+ * `RatingChange`) still embed shared `@Serializable` domain value types (`Team`, `MatchScore`,
+ * `PlayerProfile`, `Rating`, `RatingCalculationOptions`) directly as their wire format, rather than mirroring
+ * them. Fully decoupling that contract is a separate, larger change; until then these classes are the only
+ * sanctioned dto→model dependency. (The points-config types were relocated to `org.skopeo.contract`, so
+ * `OpenPlayConfigResponse`/`TournamentConfigResponse` no longer count.) Uses ArchUnit (bytecode-based) —
+ * chosen over Konsist for robustness against the Kotlin compiler version (see #69).
  */
 @Suppress("NamedArguments") // ArchUnit's fluent Java DSL has no Kotlin parameter names to name.
 class LayeredArchitectureTest {
@@ -39,8 +41,7 @@ class LayeredArchitectureTest {
     // The dto classes exempt from the dto↛model rule (their `$serializer`/`$Companion` synthetics included):
     // shared serializable value types are embedded as the wire contract. See the class KDoc.
     private val wireContractDtos =
-        ".*\\.(RankingCalculationRequest|RankingCalculationResponse|RatingChange|" +
-            "OpenPlayConfigResponse|TournamentConfigResponse).*"
+        ".*\\.(RankingCalculationRequest|RankingCalculationResponse|RatingChange).*"
 
     @Test
     fun `repository does not depend on routes, service, dto, or mapper`() {
@@ -56,7 +57,7 @@ class LayeredArchitectureTest {
         noClasses()
             .that().resideInAPackage("org.skopeo.model..")
             .should().dependOnClassesThat()
-            .resideInAnyPackage("..routes..", "..service..", "..repository..", "..dto..", "..mapper..", "..security..")
+            .resideInAnyPackage("..routes..", "..service..", "..repository..", "..dto..", "..mapper..", "..security..", "..contract..")
             .check(classes)
     }
 
@@ -127,12 +128,34 @@ class LayeredArchitectureTest {
     fun `routes do not depend on mapper`() {
         // dto↔model translation is hidden behind the service layer: services return response DTOs (and
         // accept request DTOs), so a route calls service.* and responds with the DTO it gets back — it
-        // never invokes a mapper. (routes still reference a thin slice of model — enums parsed from
-        // query/path params, ServiceError, auth principals, the wire-contract request bodies — which is a
-        // separate, later concern; there is intentionally no routes↛model rule yet.)
+        // never invokes a mapper.
         noClasses()
             .that().resideInAPackage("..routes..")
             .should().dependOnClassesThat().resideInAPackage("..mapper..")
+            .check(classes)
+    }
+
+    @Test
+    fun `routes do not depend on model`() {
+        // The transport layer speaks only DTOs (+ the neutral error/security/contract packages): responses
+        // are DTOs, request bodies are DTOs or `contract` value types, and all query/path input is parsed
+        // service-side. No exception — the former wire-contract request bodies (points-config) now live in
+        // `org.skopeo.contract`.
+        noClasses()
+            .that().resideInAPackage("..routes..")
+            .should().dependOnClassesThat().resideInAPackage("org.skopeo.model..")
+            .check(classes)
+    }
+
+    @Test
+    fun `contract is a foundation of shared serializable value types and depends on nothing`() {
+        // ClientPrincipal-style relocation for the points-config schedules (#552): `@Serializable` value
+        // types shared across the wire + persistence, kept out of model so routes/dto carry them without a
+        // model dependency. A pure leaf — it must not reach any app layer, including model.
+        noClasses()
+            .that().resideInAPackage("org.skopeo.contract..")
+            .should().dependOnClassesThat()
+            .resideInAnyPackage("..routes..", "..service..", "..repository..", "..dto..", "..mapper..", "org.skopeo.model..")
             .check(classes)
     }
 }

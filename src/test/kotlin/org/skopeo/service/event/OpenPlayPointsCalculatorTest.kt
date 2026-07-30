@@ -5,10 +5,10 @@ package org.skopeo.service.event
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
-import org.skopeo.model.BandRelation
+import org.skopeo.contract.BandRelation
+import org.skopeo.contract.OpenPlayMarginPoints
+import org.skopeo.contract.OpenPlayPointsConfig
 import org.skopeo.model.MatchSetResult
-import org.skopeo.model.OpenPlayMarginPoints
-import org.skopeo.model.OpenPlayPointsConfig
 import java.util.UUID
 
 /** Unit tests for the pure open-play points formula (#525/#553) — no I/O; margin-bracket + configurable. */
