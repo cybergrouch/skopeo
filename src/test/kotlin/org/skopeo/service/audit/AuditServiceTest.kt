@@ -16,7 +16,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.error.ServiceError
 import org.skopeo.model.AuditAction
-import org.skopeo.model.AuditCategory
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
 import org.skopeo.model.AuthProvider
@@ -90,16 +89,16 @@ class AuditServiceTest {
         provision(uid = "player", roles = setOf(element = Capability.PLAYER))
         seedEntry(actor = admin.id)
 
-        service.list(token = token(uid = "admin"), category = null, limit = 5, offset = 0).shouldBeRight().let {
+        service.list(token = token(uid = "admin"), categoryRaw = null, limit = 5, offset = 0).shouldBeRight().let {
             it.total shouldBe 1
             it.items shouldHaveSize 1
         }
         service
-            .list(token = token(uid = "player"), category = null, limit = 5, offset = 0)
+            .list(token = token(uid = "player"), categoryRaw = null, limit = 5, offset = 0)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
         service
-            .list(token = token(uid = "ghost"), category = null, limit = 5, offset = 0)
+            .list(token = token(uid = "ghost"), categoryRaw = null, limit = 5, offset = 0)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
@@ -131,7 +130,7 @@ class AuditServiceTest {
         )
 
         val caps =
-            service.list(token = token(uid = "admin"), category = AuditCategory.CAPABILITY_CHANGE, limit = 10, offset = 0).shouldBeRight()
+            service.list(token = token(uid = "admin"), categoryRaw = "CAPABILITY_CHANGE", limit = 10, offset = 0).shouldBeRight()
         caps.total shouldBe 1
         caps.items.single().let {
             it.action shouldBe AuditAction.CAPABILITY_GRANTED.name
@@ -143,11 +142,11 @@ class AuditServiceTest {
         }
 
         // An invite's entityId isn't a user → no resolved target.
-        service.list(token = token(uid = "admin"), category = AuditCategory.INVITE, limit = 10, offset = 0)
+        service.list(token = token(uid = "admin"), categoryRaw = "INVITE", limit = 10, offset = 0)
             .shouldBeRight().items.single().target.shouldBeNull()
 
         // A category with no events wired yet returns nothing.
-        service.list(token = token(uid = "admin"), category = AuditCategory.NAME_CHANGE, limit = 10, offset = 0)
+        service.list(token = token(uid = "admin"), categoryRaw = "NAME_CHANGE", limit = 10, offset = 0)
             .shouldBeRight().total shouldBe 0
     }
 
@@ -181,7 +180,7 @@ class AuditServiceTest {
                 ),
         )
 
-        service.list(token = token(uid = "admin"), category = AuditCategory.MATCH_FIXTURE, limit = 10, offset = 0)
+        service.list(token = token(uid = "admin"), categoryRaw = "MATCH_FIXTURE", limit = 10, offset = 0)
             .shouldBeRight().items.single().let {
                 it.target.shouldBeNull() // a match is not a user target
                 it.matchTarget.shouldNotBeNull()
@@ -204,7 +203,7 @@ class AuditServiceTest {
                 ),
         )
 
-        service.list(token = token(uid = "admin"), category = AuditCategory.MATCH_RESULT, limit = 10, offset = 0)
+        service.list(token = token(uid = "admin"), categoryRaw = "MATCH_RESULT", limit = 10, offset = 0)
             .shouldBeRight().items.single().matchTarget.shouldBeNull()
     }
 
@@ -215,19 +214,19 @@ class AuditServiceTest {
         seedEntry(actor = admin.id)
         val id =
             UUID.fromString(
-                service.list(token = token(uid = "admin"), category = null, limit = 1, offset = 0).shouldBeRight().items.single().id,
+                service.list(token = token(uid = "admin"), categoryRaw = null, limit = 1, offset = 0).shouldBeRight().items.single().id,
             )
 
         service.setComment(token = token(uid = "admin"), id = id, comment = "Looks intentional").shouldBeRight()
-        service.list(token = token(uid = "admin"), category = null, limit = 1, offset = 0)
+        service.list(token = token(uid = "admin"), categoryRaw = null, limit = 1, offset = 0)
             .shouldBeRight().items.single().comment shouldBe "Looks intentional"
 
         // A blank comment clears the note; a null comment likewise leaves none.
         service.setComment(token = token(uid = "admin"), id = id, comment = "   ").shouldBeRight()
-        service.list(token = token(uid = "admin"), category = null, limit = 1, offset = 0)
+        service.list(token = token(uid = "admin"), categoryRaw = null, limit = 1, offset = 0)
             .shouldBeRight().items.single().comment.shouldBeNull()
         service.setComment(token = token(uid = "admin"), id = id, comment = null).shouldBeRight()
-        service.list(token = token(uid = "admin"), category = null, limit = 1, offset = 0)
+        service.list(token = token(uid = "admin"), categoryRaw = null, limit = 1, offset = 0)
             .shouldBeRight().items.single().comment.shouldBeNull()
 
         service
@@ -238,6 +237,16 @@ class AuditServiceTest {
             .setComment(token = token(uid = "admin"), id = UUID.randomUUID(), comment = "x")
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
+    fun `an unknown audit category is a validation error`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+
+        service
+            .list(token = token(uid = "admin"), categoryRaw = "NOT_A_CATEGORY", limit = 10, offset = 0)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
     }
 
     @Test
@@ -265,7 +274,7 @@ class AuditServiceTest {
                 ),
         )
 
-        val views = service.list(token = token(uid = "admin"), category = null, limit = 10, offset = 0).shouldBeRight()
+        val views = service.list(token = token(uid = "admin"), categoryRaw = null, limit = 10, offset = 0).shouldBeRight()
         views.items.all { it.actor == null }.shouldBeTrue() // null actor → no resolved actor
         // A RATING entry with no entityId resolves to no target.
         views.items.first { it.action == AuditAction.RATING_SET.name }.target.shouldBeNull()

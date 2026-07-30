@@ -62,12 +62,13 @@ class NameService(
     fun create(
         token: VerifiedFirebaseToken,
         userId: UUID,
-        type: NameType,
+        typeRaw: String,
         value: String,
     ): Either<ServiceError, NameResponse> =
         either {
             requireUserExists(userId = userId).bind()
             val actor = requireUserAccess(token = token, userId = userId).bind()
+            val type = parseType(raw = typeRaw).bind()
             val name = names.create(userId = userId, type = type, value = value)
             audit.record(
                 write =
@@ -126,6 +127,12 @@ class NameService(
             ensure(condition = name.userId == userId) { ServiceError.NotFound(message = "Name $nameId not found") }
             name
         }
+
+    private fun parseType(raw: String): Either<ServiceError, NameType> {
+        val allowedTypes = NameType.entries.joinToString { it.name }
+        return NameType.entries.find { it.name == raw }?.right()
+            ?: ServiceError.Validation(message = "Invalid type '$raw'; expected one of $allowedTypes").left()
+    }
 
     private fun requireUserExists(userId: UUID): Either<ServiceError, Unit> = users.findById(id = userId).map { }
 

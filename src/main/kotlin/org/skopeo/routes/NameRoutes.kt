@@ -18,7 +18,6 @@ import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.name.NameCreateRequest
 import org.skopeo.dto.name.NameStateRequest
-import org.skopeo.model.NameType
 import org.skopeo.service.name.NameService
 
 /**
@@ -54,7 +53,7 @@ private fun Route.listAndCreate(service: NameService) {
                     service.create(
                         token = verifiedToken(),
                         userId = uuidParam(name = "userId"),
-                        type = parseEnumParam<NameType>(value = request.type, field = "type"),
+                        typeRaw = request.type,
                         value = request.value,
                     ),
             ) { name -> call.respond(status = HttpStatusCode.Created, message = name) }

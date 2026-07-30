@@ -79,10 +79,11 @@ class InviteService(
         token: VerifiedFirebaseToken,
         limit: Int,
         offset: Int,
-        status: InviteStatus? = null,
+        statusRaw: String? = null,
     ): Either<ServiceError, InvitePageResponse> =
         either {
             requireAdmin(token = token).bind()
+            val status = statusRaw?.let { raw -> parseStatus(raw = raw).bind() }
             val (items, total) =
                 invites.list(
                     limit = limit.coerceIn(minimumValue = 1, maximumValue = MAX_PAGE_SIZE),
@@ -111,6 +112,12 @@ class InviteService(
                     ),
             )
         }
+
+    private fun parseStatus(raw: String): Either<ServiceError, InviteStatus> {
+        val allowed = InviteStatus.entries.joinToString { it.name }
+        return InviteStatus.entries.find { it.name == raw.uppercase() }?.right()
+            ?: ServiceError.Validation(message = "Unknown invite status '$raw'; expected one of $allowed").left()
+    }
 
     /** ADMINISTRATOR-only access; returns the caller's id (the audit actor). */
     private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {

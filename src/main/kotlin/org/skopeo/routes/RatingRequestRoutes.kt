@@ -19,7 +19,6 @@ import org.skopeo.dto.rating.ApproveRatingRequestRequest
 import org.skopeo.dto.rating.CreateRatingRequestRequest
 import org.skopeo.dto.rating.DenyRatingRequestRequest
 import org.skopeo.model.Rating
-import org.skopeo.model.RatingRequestStatus
 import org.skopeo.service.rating.RatingRequestService
 import java.math.BigDecimal
 
@@ -70,7 +69,7 @@ private fun Route.raterEndpoints(service: RatingRequestService) {
                         token = verifiedToken(),
                         limit = params["limit"]?.toIntOrNull() ?: DEFAULT_PAGE_SIZE,
                         offset = params["offset"]?.toIntOrNull() ?: 0,
-                        status = params["status"]?.let { parseRequestStatus(raw = it) },
+                        statusRaw = params["status"],
                     ),
             ) { page -> call.respond(status = HttpStatusCode.OK, message = page) }
         }
@@ -101,8 +100,3 @@ private fun validatedRating(raw: String): BigDecimal {
     Rating.fromValue(value = raw)
     return BigDecimal(raw)
 }
-
-private fun parseRequestStatus(raw: String): RatingRequestStatus =
-    requireNotNull(value = RatingRequestStatus.entries.find { it.name == raw.uppercase() }) {
-        "Unknown status '$raw'; expected one of ${RatingRequestStatus.entries.joinToString { it.name }}"
-    }

@@ -15,7 +15,6 @@ import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.audit.AuditCommentRequest
-import org.skopeo.model.AuditCategory
 import org.skopeo.service.audit.AuditService
 
 private const val DEFAULT_AUDIT_PAGE_SIZE = 5
@@ -35,7 +34,7 @@ fun Application.configureAuditRoutes(service: AuditService = AuditService()) {
                             result =
                                 service.list(
                                     token = verifiedToken(),
-                                    category = params["category"]?.let { parseCategory(raw = it) },
+                                    categoryRaw = params["category"],
                                     limit = params["limit"]?.toIntOrNull() ?: DEFAULT_AUDIT_PAGE_SIZE,
                                     offset = params["offset"]?.toIntOrNull() ?: 0,
                                 ),
@@ -54,9 +53,3 @@ fun Application.configureAuditRoutes(service: AuditService = AuditService()) {
         }
     }
 }
-
-/** Parse a `category` filter to an [AuditCategory]; an unknown value is a 400. */
-private fun parseCategory(raw: String): AuditCategory =
-    requireNotNull(value = AuditCategory.entries.find { it.name == raw.uppercase() }) {
-        "Unknown audit category '$raw'; expected one of ${AuditCategory.entries.joinToString { it.name }}"
-    }

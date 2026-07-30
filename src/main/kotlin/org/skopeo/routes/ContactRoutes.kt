@@ -19,9 +19,6 @@ import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.contact.ContactCreateRequest
 import org.skopeo.dto.contact.ContactStateRequest
 import org.skopeo.dto.contact.VerificationRequest
-import org.skopeo.model.ContactType
-import org.skopeo.model.VerificationMethod
-import org.skopeo.model.VerificationStatus
 import org.skopeo.service.contact.ContactService
 
 /**
@@ -58,7 +55,7 @@ private fun Route.listAndCreate(service: ContactService) {
                     service.create(
                         token = verifiedToken(),
                         userId = uuidParam(name = "userId"),
-                        type = parseEnumParam<ContactType>(value = request.type, field = "type"),
+                        typeRaw = request.type,
                         value = request.value,
                         isPrimary = request.isPrimary,
                     ),
@@ -105,8 +102,8 @@ private fun Route.verification(service: ContactService) {
                         token = verifiedToken(),
                         userId = uuidParam(name = "userId"),
                         contactId = uuidParam(name = "id"),
-                        status = parseEnumParam<VerificationStatus>(value = request.status, field = "status"),
-                        method = request.method?.let { parseEnumParam<VerificationMethod>(value = it, field = "method") },
+                        statusRaw = request.status,
+                        methodRaw = request.method,
                     ),
             ) { contact -> call.respond(status = HttpStatusCode.OK, message = contact) }
         }

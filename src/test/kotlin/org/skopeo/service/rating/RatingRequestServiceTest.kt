@@ -120,12 +120,12 @@ class RatingRequestServiceTest {
                 token = token(uid = "rater"),
                 limit = 50,
                 offset = 0,
-                status = RatingRequestStatus.PENDING,
+                statusRaw = "PENDING",
             ).shouldBeRight()
         pending.items shouldHaveSize 1
         pending.items.single().requester?.displayName shouldBe "player"
         service
-            .list(token = token(uid = "rater"), limit = 50, offset = 0, status = RatingRequestStatus.DENIED)
+            .list(token = token(uid = "rater"), limit = 50, offset = 0, statusRaw = "DENIED")
             .shouldBeRight()
             .total shouldBe 0
 
@@ -133,8 +133,18 @@ class RatingRequestServiceTest {
             token = token(uid = "player"),
             limit = 50,
             offset = 0,
-            status = null,
+            statusRaw = null,
         ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
+    @Test
+    fun `list rejects an unknown status filter`() {
+        provision(uid = "rater", roles = setOf(Capability.PLAYER, Capability.RATER))
+
+        service
+            .list(token = token(uid = "rater"), limit = 50, offset = 0, statusRaw = "NOT_A_STATUS")
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
     }
 
     @Test
@@ -143,11 +153,11 @@ class RatingRequestServiceTest {
         provision(uid = "player", rated = true)
         val request = service.create(token = token(uid = "player"), justification = "x").shouldBeRight()
 
-        // status = null lists every request; ADMINISTRATOR implicitly rates.
-        service.list(token = token(uid = "admin"), limit = 50, offset = 0, status = null).shouldBeRight().total shouldBe 1
+        // statusRaw = null lists every request; ADMINISTRATOR implicitly rates.
+        service.list(token = token(uid = "admin"), limit = 50, offset = 0, statusRaw = null).shouldBeRight().total shouldBe 1
         service.approve(token = token(uid = "admin"), id = UUID.fromString(request.id), newRating = BigDecimal("4.5")).shouldBeRight()
 
-        service.list(token = token(uid = "ghost"), limit = 50, offset = 0, status = null)
+        service.list(token = token(uid = "ghost"), limit = 50, offset = 0, statusRaw = null)
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 

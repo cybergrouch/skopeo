@@ -205,11 +205,21 @@ class InviteServiceTest {
         invites.markAccepted(email = accepted.email, acceptedAt = java.time.LocalDateTime.now())
 
         val pending =
-            service.list(token = token(uid = "admin"), limit = 50, offset = 0, status = InviteStatus.PENDING).shouldBeRight()
+            service.list(token = token(uid = "admin"), limit = 50, offset = 0, statusRaw = "PENDING").shouldBeRight()
         pending.items.single().email shouldBe "pending@example.com"
         pending.total shouldBe 1
 
         val all = service.list(token = token(uid = "admin"), limit = 50, offset = 0).shouldBeRight()
         all.total shouldBe 2
+    }
+
+    @Test
+    fun `list rejects an unknown status filter`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+
+        service
+            .list(token = token(uid = "admin"), limit = 50, offset = 0, statusRaw = "NOT_A_STATUS")
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
     }
 }

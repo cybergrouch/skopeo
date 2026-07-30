@@ -70,7 +70,7 @@ class NameServiceTest {
     fun `adding and disabling a name write audit-log entries (#100)`() {
         val owner = provisionUser(uid = "owner")
         val added =
-            service.create(token = token(uid = "owner"), userId = owner.id, type = NameType.NICKNAME, value = "JB").shouldBeRight()
+            service.create(token = token(uid = "owner"), userId = owner.id, typeRaw = "NICKNAME", value = "JB").shouldBeRight()
         service.setActive(
             token = token(uid = "owner"),
             userId = owner.id,
@@ -99,8 +99,8 @@ class NameServiceTest {
     @Test
     fun `multiple names of the same type are allowed`() {
         val owner = provisionUser(uid = "owner")
-        service.create(token = token(uid = "owner"), userId = owner.id, type = NameType.NICKNAME, value = "JB").shouldBeRight()
-        service.create(token = token(uid = "owner"), userId = owner.id, type = NameType.NICKNAME, value = "Boy").shouldBeRight()
+        service.create(token = token(uid = "owner"), userId = owner.id, typeRaw = "NICKNAME", value = "JB").shouldBeRight()
+        service.create(token = token(uid = "owner"), userId = owner.id, typeRaw = "NICKNAME", value = "Boy").shouldBeRight()
 
         service.list(token = token(uid = "owner"), userId = owner.id).shouldBeRight().count { it.type == NameType.NICKNAME.name } shouldBe 2
     }
@@ -115,7 +115,7 @@ class NameServiceTest {
                 .create(
                     token = token(uid = "owner"),
                     userId = owner.id,
-                    type = NameType.DISPLAY,
+                    typeRaw = "DISPLAY",
                     value = "Johnny",
                 ).shouldBeRight()
 
@@ -144,7 +144,7 @@ class NameServiceTest {
     fun `re-enabling a former display name conflicts with the current one`() {
         val owner = provisionUser(uid = "owner")
         val original = displayNameOf(uid = "owner", userId = owner.id)
-        service.create(token = token(uid = "owner"), userId = owner.id, type = NameType.DISPLAY, value = "Johnny").shouldBeRight()
+        service.create(token = token(uid = "owner"), userId = owner.id, typeRaw = "DISPLAY", value = "Johnny").shouldBeRight()
 
         // `original` is now disabled history; re-enabling it collides with the active display.
         service
@@ -157,7 +157,7 @@ class NameServiceTest {
     fun `owner can disable a non-display name`() {
         val owner = provisionUser(uid = "owner")
         val name =
-            service.create(token = token(uid = "owner"), userId = owner.id, type = NameType.NICKNAME, value = "JB").shouldBeRight()
+            service.create(token = token(uid = "owner"), userId = owner.id, typeRaw = "NICKNAME", value = "JB").shouldBeRight()
 
         service
             .setActive(token = token(uid = "owner"), userId = owner.id, nameId = UUID.fromString(name.id), active = false)
@@ -172,7 +172,7 @@ class NameServiceTest {
         provisionUser(uid = "intruder")
         provisionUser(uid = "root", capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val name =
-            service.create(token = token(uid = "owner"), userId = owner.id, type = NameType.NICKNAME, value = "JB").shouldBeRight()
+            service.create(token = token(uid = "owner"), userId = owner.id, typeRaw = "NICKNAME", value = "JB").shouldBeRight()
 
         service.list(token = token(uid = "intruder"), userId = owner.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
         service.list(token = token(uid = "ghost"), userId = owner.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
@@ -184,7 +184,7 @@ class NameServiceTest {
         val owner = provisionUser(uid = "owner")
         val other = provisionUser(uid = "other")
         val name =
-            service.create(token = token(uid = "other"), userId = other.id, type = NameType.NICKNAME, value = "JB").shouldBeRight()
+            service.create(token = token(uid = "other"), userId = other.id, typeRaw = "NICKNAME", value = "JB").shouldBeRight()
 
         service
             .get(token = token(uid = "owner"), userId = owner.id, nameId = UUID.randomUUID())
@@ -211,16 +211,26 @@ class NameServiceTest {
         provisionUser(uid = "owner")
 
         service
-            .create(token = token(uid = "owner"), userId = UUID.randomUUID(), type = NameType.NICKNAME, value = "JB")
+            .create(token = token(uid = "owner"), userId = UUID.randomUUID(), typeRaw = "NICKNAME", value = "JB")
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
+    fun `creating a name with an unknown type is a validation error`() {
+        val owner = provisionUser(uid = "owner")
+
+        service
+            .create(token = token(uid = "owner"), userId = owner.id, typeRaw = "NOT_A_TYPE", value = "JB")
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
     }
 
     @Test
     fun `an administrator can list another user's names`() {
         val owner = provisionUser(uid = "owner")
         provisionUser(uid = "root", capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
-        service.create(token = token(uid = "owner"), userId = owner.id, type = NameType.NICKNAME, value = "JB").shouldBeRight()
+        service.create(token = token(uid = "owner"), userId = owner.id, typeRaw = "NICKNAME", value = "JB").shouldBeRight()
 
         service.list(token = token(uid = "root"), userId = owner.id).shouldBeRight().count { it.type == NameType.NICKNAME.name } shouldBe 1
     }
