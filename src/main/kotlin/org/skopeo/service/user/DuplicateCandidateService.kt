@@ -65,6 +65,8 @@ class DuplicateCandidateService(
                         candidate = it,
                         userA = byId.getValue(key = it.userAId),
                         userB = byId.getValue(key = it.userBId),
+                        userADeleted = byId.getValue(key = it.userAId).isDeleted(),
+                        userBDeleted = byId.getValue(key = it.userBId).isDeleted(),
                     )
                 }
             DuplicateCandidateViewPage(items = views, total = total.toInt()).toResponse()
@@ -101,7 +103,13 @@ class DuplicateCandidateService(
                         details = mapOf("userAId" to userAId.toString(), "userBId" to userBId.toString()),
                     ),
             )
-            DuplicateCandidateView(candidate = candidate, userA = userA, userB = userB).toResponse()
+            DuplicateCandidateView(
+                candidate = candidate,
+                userA = userA,
+                userB = userB,
+                userADeleted = userA.isDeleted(),
+                userBDeleted = userB.isDeleted(),
+            ).toResponse()
         }
 
     /** Dismiss an open candidate (a false positive). */

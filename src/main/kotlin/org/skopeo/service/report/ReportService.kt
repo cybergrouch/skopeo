@@ -16,11 +16,11 @@ import org.skopeo.dto.report.BandHopUserRow
 import org.skopeo.model.Level
 import org.skopeo.model.RatingHistoryEntry
 import org.skopeo.model.UserRating
-import org.skopeo.model.displayName
-import org.skopeo.model.isDeleted
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.user.VerifiedFirebaseToken
+import org.skopeo.service.user.displayName
+import org.skopeo.service.user.isDeleted
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime

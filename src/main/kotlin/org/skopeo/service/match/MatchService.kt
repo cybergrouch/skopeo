@@ -42,8 +42,6 @@ import org.skopeo.model.PlacementBracket
 import org.skopeo.model.TeamType
 import org.skopeo.model.User
 import org.skopeo.model.canSeeRawRatingOrFalse
-import org.skopeo.model.displayName
-import org.skopeo.model.isDeleted
 import org.skopeo.model.isExpired
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
@@ -51,6 +49,8 @@ import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService
 import org.skopeo.service.user.VerifiedFirebaseToken
+import org.skopeo.service.user.displayName
+import org.skopeo.service.user.isDeleted
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime

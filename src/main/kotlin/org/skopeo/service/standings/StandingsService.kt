@@ -18,13 +18,13 @@ import org.skopeo.model.User
 import org.skopeo.model.UserRating
 import org.skopeo.model.ageInYears
 import org.skopeo.model.canSeeRawRatingOrFalse
-import org.skopeo.model.displayName
-import org.skopeo.model.isDeleted
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.StandingsSnapshotRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.settings.SettingsService
 import org.skopeo.service.user.VerifiedFirebaseToken
+import org.skopeo.service.user.displayName
+import org.skopeo.service.user.isDeleted
 import java.time.LocalDate
 import java.util.UUID
 

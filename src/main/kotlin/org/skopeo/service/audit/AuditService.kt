@@ -21,12 +21,12 @@ import org.skopeo.model.AuditMatchRef
 import org.skopeo.model.AuditPersonRef
 import org.skopeo.model.AuditWrite
 import org.skopeo.model.actions
-import org.skopeo.model.displayName
-import org.skopeo.model.isDeleted
 import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.user.VerifiedFirebaseToken
+import org.skopeo.service.user.displayName
+import org.skopeo.service.user.isDeleted
 import java.util.UUID
 
 private const val MAX_PAGE_SIZE = 100

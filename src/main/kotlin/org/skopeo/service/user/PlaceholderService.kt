@@ -23,7 +23,6 @@ import org.skopeo.model.CreatePlaceholderCommand
 import org.skopeo.model.GeneratedClaimCode
 import org.skopeo.model.Level
 import org.skopeo.model.Rating
-import org.skopeo.model.displayName
 import org.skopeo.repository.PlaceholderClaimCodeRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService
@@ -131,7 +130,7 @@ class PlaceholderService(
     fun listPlaceholders(token: VerifiedFirebaseToken): Either<ServiceError, List<UserSummaryResponse>> =
         either {
             requireMatchManager(token = token).bind()
-            users.listPlaceholders().map { it.toSummary() }
+            users.listPlaceholders().map { it.toSummary(isDeleted = it.isDeleted()) }
         }
 
     /**

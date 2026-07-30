@@ -23,13 +23,13 @@ import org.skopeo.model.RatingRequest
 import org.skopeo.model.RatingRequestPage
 import org.skopeo.model.RatingRequestStatus
 import org.skopeo.model.RatingRequestView
-import org.skopeo.model.displayName
-import org.skopeo.model.isDeleted
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.RatingRequestRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService
 import org.skopeo.service.user.VerifiedFirebaseToken
+import org.skopeo.service.user.displayName
+import org.skopeo.service.user.isDeleted
 import java.math.BigDecimal
 import java.util.UUID
 

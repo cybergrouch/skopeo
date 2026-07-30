@@ -29,7 +29,6 @@ import org.skopeo.model.WinLossRecord
 import org.skopeo.model.ageRangeToDob
 import org.skopeo.model.canSeeRawRatingOrFalse
 import org.skopeo.model.effectivePhotoUrl
-import org.skopeo.model.isDeleted
 import org.skopeo.repository.CapabilityRepository
 import org.skopeo.repository.InviteRepository
 import org.skopeo.repository.MatchRepository
@@ -152,7 +151,7 @@ class UserService(
             // route), so the route stays thin and never touches the mapper.
             val ratingsById = currentRatings(ids = users.map { it.id })
             val showRaw = callerCanSeeRawRating(token = token)
-            users.map { it.toSummary(rating = ratingsById[it.id], showRawRating = showRaw) }
+            users.map { it.toSummary(rating = ratingsById[it.id], showRawRating = showRaw, isDeleted = it.isDeleted()) }
         }
 
     /** Like [search] but returns a page with the total match count, for numbered pagination (#232). */
@@ -182,7 +181,15 @@ class UserService(
             val records = winLossRecords(ids = ids)
             val showRaw = callerCanSeeRawRating(token = token)
             UserSummaryPageResponse(
-                items = items.map { it.toSummary(rating = ratingsById[it.id], record = records[it.id], showRawRating = showRaw) },
+                items =
+                    items.map {
+                        it.toSummary(
+                            rating = ratingsById[it.id],
+                            record = records[it.id],
+                            showRawRating = showRaw,
+                            isDeleted = it.isDeleted(),
+                        )
+                    },
                 total = total.toInt(),
             )
         }
@@ -240,7 +247,7 @@ class UserService(
             val users = repository.findAllByIds(ids = ids)
             val ratingsById = currentRatings(ids = users.map { it.id })
             val showRaw = callerCanSeeRawRating(token = token)
-            users.map { it.toSummary(rating = ratingsById[it.id], showRawRating = showRaw) }
+            users.map { it.toSummary(rating = ratingsById[it.id], showRawRating = showRaw, isDeleted = it.isDeleted()) }
         }
 
     /** Outcome of provisioning: [created] distinguishes a fresh user (201) from an idempotent hit (200). */
