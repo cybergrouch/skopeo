@@ -17,6 +17,7 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.skopeo.error.ServiceError
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.ContactInfo
@@ -25,7 +26,6 @@ import org.skopeo.model.ContactType
 import org.skopeo.model.NameType
 import org.skopeo.model.ProfilePatch
 import org.skopeo.model.ProvisionUserCommand
-import org.skopeo.model.ServiceError
 import org.skopeo.model.ThemeSetting
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName

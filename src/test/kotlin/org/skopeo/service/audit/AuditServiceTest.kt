@@ -14,6 +14,7 @@ import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.error.ServiceError
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditCategory
 import org.skopeo.model.AuditEntityType
@@ -24,7 +25,6 @@ import org.skopeo.model.CreateFixtureCommand
 import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
-import org.skopeo.model.ServiceError
 import org.skopeo.model.TeamType
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity

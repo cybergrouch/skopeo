@@ -11,12 +11,12 @@ import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.error.ServiceError
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.DuplicateCandidateStatus
 import org.skopeo.model.DuplicateSignal
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
-import org.skopeo.model.ServiceError
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.testsupport.PostgresTestDatabase

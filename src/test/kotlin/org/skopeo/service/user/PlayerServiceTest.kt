@@ -16,6 +16,7 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.dto.user.ResultsBucket
+import org.skopeo.error.ServiceError
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.AwardStatus
 import org.skopeo.model.Capability
@@ -29,7 +30,6 @@ import org.skopeo.model.PointSourceType
 import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.RankingPointAwardWrite
 import org.skopeo.model.RatingHistoryWrite
-import org.skopeo.model.ServiceError
 import org.skopeo.model.TeamType
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity

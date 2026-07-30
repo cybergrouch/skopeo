@@ -12,6 +12,7 @@ import org.skopeo.dto.user.CreateUserRequest
 import org.skopeo.dto.user.UserResponse
 import org.skopeo.dto.user.UserSummaryPageResponse
 import org.skopeo.dto.user.UserSummaryResponse
+import org.skopeo.error.ServiceError
 import org.skopeo.mapper.user.toResponse
 import org.skopeo.mapper.user.toSummary
 import org.skopeo.model.AuditAction
@@ -21,7 +22,6 @@ import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.NumericRange
 import org.skopeo.model.ProfilePatch
-import org.skopeo.model.ServiceError
 import org.skopeo.model.User
 import org.skopeo.model.UserRating
 import org.skopeo.model.UserSearchQuery

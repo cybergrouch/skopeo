@@ -19,6 +19,7 @@ import org.skopeo.dto.match.MatchResponse
 import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.dto.match.UpcomingMatchResponse
 import org.skopeo.dto.rating.MatchCalculationDetailResponse
+import org.skopeo.error.ServiceError
 import org.skopeo.mapper.match.toPublicResponse
 import org.skopeo.mapper.match.toResponse
 import org.skopeo.mapper.rating.toResponse
@@ -37,7 +38,6 @@ import org.skopeo.model.MatchStatus
 import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
 import org.skopeo.model.PlacementBracket
-import org.skopeo.model.ServiceError
 import org.skopeo.model.TeamType
 import org.skopeo.model.User
 import org.skopeo.model.canSeeRawRatingOrFalse

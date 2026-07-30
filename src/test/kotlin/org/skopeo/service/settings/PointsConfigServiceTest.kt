@@ -12,6 +12,7 @@ import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.error.ServiceError
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.BandRelation
 import org.skopeo.model.Capability
@@ -19,7 +20,6 @@ import org.skopeo.model.NameType
 import org.skopeo.model.OpenPlayMarginPoints
 import org.skopeo.model.OpenPlayPointsConfig
 import org.skopeo.model.ProvisionUserCommand
-import org.skopeo.model.ServiceError
 import org.skopeo.model.TournamentPointsConfig
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity

@@ -20,6 +20,7 @@ import org.jetbrains.exposed.sql.update
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.error.ServiceError
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.CreateEventCommand
 import org.skopeo.model.CreateFixtureCommand
@@ -29,7 +30,6 @@ import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
 import org.skopeo.model.PlacementBracket
 import org.skopeo.model.ProvisionUserCommand
-import org.skopeo.model.ServiceError
 import org.skopeo.model.TeamType
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName

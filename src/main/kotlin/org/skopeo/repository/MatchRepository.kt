@@ -24,6 +24,7 @@ import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
+import org.skopeo.error.ServiceError
 import org.skopeo.model.CreateFixtureCommand
 import org.skopeo.model.Match
 import org.skopeo.model.MatchPublicRef
@@ -32,7 +33,6 @@ import org.skopeo.model.MatchSide
 import org.skopeo.model.MatchStatus
 import org.skopeo.model.MatchType
 import org.skopeo.model.PlacementBracket
-import org.skopeo.model.ServiceError
 import org.skopeo.model.TeamType
 import org.skopeo.model.WinLossRecord
 import org.skopeo.model.WindowMatch

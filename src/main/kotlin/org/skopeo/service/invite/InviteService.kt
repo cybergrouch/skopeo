@@ -10,6 +10,7 @@ import arrow.core.raise.ensure
 import arrow.core.right
 import org.skopeo.dto.invite.InvitePageResponse
 import org.skopeo.dto.invite.InviteResponse
+import org.skopeo.error.ServiceError
 import org.skopeo.mapper.invite.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
@@ -17,7 +18,6 @@ import org.skopeo.model.AuditWrite
 import org.skopeo.model.Capability
 import org.skopeo.model.InvitePage
 import org.skopeo.model.InviteStatus
-import org.skopeo.model.ServiceError
 import org.skopeo.repository.ContactRepository
 import org.skopeo.repository.InviteRepository
 import org.skopeo.repository.UserRepository

@@ -11,13 +11,13 @@ import arrow.core.right
 import kotlinx.serialization.json.Json
 import org.skopeo.dto.settings.OpenPlayConfigResponse
 import org.skopeo.dto.settings.TournamentConfigResponse
+import org.skopeo.error.ServiceError
 import org.skopeo.mapper.settings.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
 import org.skopeo.model.Capability
 import org.skopeo.model.OpenPlayPointsConfig
-import org.skopeo.model.ServiceError
 import org.skopeo.model.StoredConfig
 import org.skopeo.model.TournamentPointsConfig
 import org.skopeo.repository.PointsConfigRepository

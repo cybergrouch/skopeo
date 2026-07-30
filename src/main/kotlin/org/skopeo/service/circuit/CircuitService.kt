@@ -10,13 +10,13 @@ import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
 import org.skopeo.dto.circuit.CircuitResponse
+import org.skopeo.error.ServiceError
 import org.skopeo.mapper.circuit.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
 import org.skopeo.model.Capability
 import org.skopeo.model.CreateCircuitCommand
-import org.skopeo.model.ServiceError
 import org.skopeo.repository.CircuitRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService

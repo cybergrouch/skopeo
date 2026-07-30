@@ -61,6 +61,17 @@ class LayeredArchitectureTest {
     }
 
     @Test
+    fun `error is a foundation and depends on no other app layer`() {
+        // ServiceError is a transport-free error taxonomy (issue #115) that every layer may return;
+        // it lives outside model so that returning it does not pull the domain into routes.
+        noClasses()
+            .that().resideInAPackage("org.skopeo.error..")
+            .should().dependOnClassesThat()
+            .resideInAnyPackage("..routes..", "..service..", "..repository..", "..dto..", "..mapper..", "org.skopeo.model..")
+            .check(classes)
+    }
+
+    @Test
     fun `dto does not depend on routes or repository`() {
         noClasses()
             .that().resideInAPackage("..dto..")
