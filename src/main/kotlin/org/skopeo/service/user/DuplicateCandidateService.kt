@@ -47,7 +47,7 @@ class DuplicateCandidateService(
         token: VerifiedFirebaseToken,
         limit: Int,
         offset: Int,
-        statusRaw: String? = null,
+        statusRaw: String?,
     ): Either<ServiceError, DuplicateCandidatePageResponse> =
         either {
             requireAdmin(token = token).bind()

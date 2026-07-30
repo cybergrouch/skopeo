@@ -86,7 +86,7 @@ class RatingRequestService(
         token: VerifiedFirebaseToken,
         limit: Int,
         offset: Int,
-        statusRaw: String? = null,
+        statusRaw: String?,
     ): Either<ServiceError, RatingRequestPageResponse> =
         either {
             requireRater(token = token).bind()
