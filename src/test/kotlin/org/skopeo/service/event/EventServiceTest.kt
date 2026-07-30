@@ -122,7 +122,7 @@ class EventServiceTest {
         participantIds = participants,
         clubId = clubId,
         circuitId = circuitId,
-        type = type,
+        type = type.name,
         awardRankingPoints = awardRankingPoints,
     )
 
@@ -836,7 +836,7 @@ class EventServiceTest {
             token = token(uid = "host"),
             eventId = event.id,
             userId = player.id,
-            status = EventParticipantStatus.APPROVED,
+            statusRaw = EventParticipantStatus.APPROVED.name,
         ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
     }
 
@@ -1063,7 +1063,7 @@ class EventServiceTest {
                     token = token(uid = "host"),
                     eventId = event.id,
                     userId = player.id,
-                    status = EventParticipantStatus.APPROVED,
+                    statusRaw = EventParticipantStatus.APPROVED.name,
                 ).shouldBeRight()
         view.participants.single { it.userId == player.id.toString() }.status shouldBe "APPROVED"
         view.domain().participantIds.contains(element = player.id).shouldBeTrue()
@@ -1081,7 +1081,12 @@ class EventServiceTest {
         service.selfSignup(token = token(uid = "player"), code = event.publicCode).shouldBeRight()
 
         service
-            .decideParticipant(token = token(uid = "host"), eventId = event.id, userId = player.id, status = EventParticipantStatus.HOLD)
+            .decideParticipant(
+                token = token(uid = "host"),
+                eventId = event.id,
+                userId = player.id,
+                statusRaw = EventParticipantStatus.HOLD.name,
+            )
             .shouldBeRight()
             .participants
             .single { it.userId == player.id.toString() }
@@ -1098,7 +1103,7 @@ class EventServiceTest {
                 token = token(uid = "host"),
                 eventId = event.id,
                 userId = player.id,
-                status = EventParticipantStatus.APPROVED,
+                statusRaw = EventParticipantStatus.APPROVED.name,
             ).shouldBeRight()
             .domain().participantIds
             .contains(element = player.id)
@@ -1118,7 +1123,7 @@ class EventServiceTest {
                 token = token(uid = "outsider"),
                 eventId = event.id,
                 userId = player.id,
-                status = EventParticipantStatus.APPROVED,
+                statusRaw = EventParticipantStatus.APPROVED.name,
             ).shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
 
@@ -1166,7 +1171,7 @@ class EventServiceTest {
                 token = token(uid = "host"),
                 eventId = UUID.randomUUID(),
                 userId = player.id,
-                status = EventParticipantStatus.APPROVED,
+                statusRaw = EventParticipantStatus.APPROVED.name,
             ).shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.NotFound>()
         // PENDING is not a valid decision (only APPROVED/HOLD).
@@ -1175,7 +1180,7 @@ class EventServiceTest {
                 token = token(uid = "host"),
                 eventId = event.id,
                 userId = player.id,
-                status = EventParticipantStatus.PENDING,
+                statusRaw = EventParticipantStatus.PENDING.name,
             ).shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Validation>()
         // The repository self-signup is a no-op (null) for an unknown event.

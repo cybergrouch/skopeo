@@ -116,7 +116,7 @@ class EventReverseRatingsTest {
                 endDate = LocalDate.now().plusDays(7),
                 participantIds = participants,
                 // TOURNAMENT is the host-designated awarding type (#525) — LEAGUE no longer awards.
-                type = EventType.TOURNAMENT,
+                type = EventType.TOURNAMENT.name,
                 // A tournament must reference a circuit (#525).
                 circuitId = seedCircuit(hostUid = hostUid),
             ),
@@ -306,7 +306,7 @@ class EventReverseRatingsTest {
                         startDate = LocalDate.now(),
                         endDate = LocalDate.now().plusDays(1),
                         participantIds = listOf(p1.id, p2.id),
-                        type = EventType.TOURNAMENT,
+                        type = EventType.TOURNAMENT.name,
                         circuitId = seedCircuit(hostUid = "host"),
                     ),
             ).shouldBeRight().domain()

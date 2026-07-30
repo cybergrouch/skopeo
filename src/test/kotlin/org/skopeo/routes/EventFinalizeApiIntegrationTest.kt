@@ -184,7 +184,7 @@ class EventFinalizeApiIntegrationTest {
                         startDate = LocalDate.now(),
                         endDate = LocalDate.now().plusDays(7),
                         participantIds = listOf(p1.id, p2.id),
-                        type = EventType.LEAGUE,
+                        type = EventType.LEAGUE.name,
                     ),
             ).let { UUID.fromString(requireNotNull(value = it.getOrNull()).id) }
         val fixture =

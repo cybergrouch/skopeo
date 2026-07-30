@@ -24,8 +24,6 @@ import org.skopeo.dto.event.DecideParticipantRequest
 import org.skopeo.dto.event.SetCalcPriorityRequest
 import org.skopeo.dto.event.SetEventClubRequest
 import org.skopeo.dto.event.UpdateEventRequest
-import org.skopeo.model.EventParticipantStatus
-import org.skopeo.model.EventType
 import org.skopeo.service.event.CreateEventInput
 import org.skopeo.service.event.EventService
 import java.time.LocalDate
@@ -202,18 +200,13 @@ private fun Route.byIdAndParticipants(service: EventService) {
     post(path = "/{id}/participants/{userId}/decision") {
         respondMappingErrors {
             val request = call.receive<DecideParticipantRequest>()
-            // Parse the decision at the boundary (#201): APPROVED or HOLD, else a 400.
-            val status =
-                requireNotNull(value = EventParticipantStatus.entries.firstOrNull { it.name == request.status }) {
-                    "Invalid decision '${request.status}'; expected APPROVED or HOLD"
-                }
             respondEither(
                 result =
                     service.decideParticipant(
                         token = verifiedToken(),
                         eventId = uuidParam(name = "id"),
                         userId = uuidParam(name = "userId"),
-                        status = status,
+                        statusRaw = request.status,
                     ),
             ) { event -> call.respond(status = HttpStatusCode.OK, message = event) }
         }
@@ -252,15 +245,6 @@ private fun toCreateEventInput(request: CreateEventRequest): CreateEventInput {
             throw IllegalArgumentException("Invalid $field '$value'; expected ISO-8601 (yyyy-MM-dd)", e)
         }
 
-    // Parse the optional event type (#403): one of the enum names, defaulting to OPEN_PLAY when absent.
-    fun parseType(value: String?): EventType =
-        if (value == null) {
-            EventType.OPEN_PLAY
-        } else {
-            requireNotNull(value = EventType.entries.firstOrNull { it.name == value }) {
-                "Invalid event type '$value'; expected OPEN_PLAY, LEAGUE, or TOURNAMENT"
-            }
-        }
     return CreateEventInput(
         name = request.name,
         startDate = parseDate(value = request.startDate, field = "startDate"),
@@ -268,7 +252,7 @@ private fun toCreateEventInput(request: CreateEventRequest): CreateEventInput {
         participantIds = request.participantIds.map { parseEventUuid(value = it) },
         clubId = request.clubId?.let { parseEventUuid(value = it, field = "club id") },
         circuitId = request.circuitId?.let { parseEventUuid(value = it, field = "circuit id") },
-        type = parseType(value = request.type),
+        type = request.type,
         // "Award Ranking Points" (#559) defaults to true when the client omits it.
         awardRankingPoints = request.awardRankingPoints ?: true,
     )

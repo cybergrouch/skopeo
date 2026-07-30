@@ -63,8 +63,8 @@ data class CreateEventInput(
     val clubId: UUID? = null,
     // The circuit a TOURNAMENT event belongs to (#525); required for tournaments, ignored otherwise.
     val circuitId: UUID? = null,
-    // The event's class (#403); defaults to OPEN_PLAY for backward compatibility.
-    val type: EventType = EventType.OPEN_PLAY,
+    // The event's class name (#403); a null/absent value defaults to OPEN_PLAY. Parsed in [EventService.create].
+    val type: String? = null,
     // Whether finalizing this event awards ranking points per the global schedules (#559). Default true.
     val awardRankingPoints: Boolean = true,
 )
@@ -104,12 +104,20 @@ class EventService(
                 ServiceError.Validation(message = "End date cannot be before the start date")
             }
             ensureKnownUsers(users = users, ids = input.participantIds).bind()
+            // Parse the optional event type (#403): one of the enum names, defaulting to OPEN_PLAY when absent.
+            val type =
+                input.type?.let { raw ->
+                    EventType.entries.firstOrNull { it.name == raw }
+                        ?: raise(
+                            r = ServiceError.Validation(message = "Invalid event type '$raw'; expected OPEN_PLAY, LEAGUE, or TOURNAMENT"),
+                        )
+                } ?: EventType.OPEN_PLAY
             // An optional club must exist (#313); a clubless event is fine.
             input.clubId?.let { clubId ->
                 ensureNotNull(value = clubs.findById(id = clubId)) { ServiceError.Validation(message = "Club $clubId not found") }
             }
             // A TOURNAMENT must belong to a circuit (#525); it must exist. Non-tournaments carry none.
-            val circuitId = resolveCircuit(type = input.type, circuitId = input.circuitId).bind()
+            val circuitId = resolveCircuit(type = type, circuitId = input.circuitId).bind()
             val event =
                 events.create(
                     command =
@@ -121,7 +129,7 @@ class EventService(
                             createdBy = createdBy,
                             clubId = input.clubId,
                             circuitId = circuitId,
-                            type = input.type,
+                            type = type,
                             awardRankingPoints = input.awardRankingPoints,
                         ),
                 )
@@ -548,10 +556,13 @@ class EventService(
         token: VerifiedFirebaseToken,
         eventId: UUID,
         userId: UUID,
-        status: EventParticipantStatus,
+        statusRaw: String,
     ): Either<ServiceError, EventResponse> =
         either {
             val actor = staffCaller(users = users, token = token).bind().id
+            val status =
+                EventParticipantStatus.entries.firstOrNull { it.name == statusRaw }
+                    ?: raise(r = ServiceError.Validation(message = "Invalid decision '$statusRaw'; expected APPROVED or HOLD"))
             val event =
                 ensureNotNull(value = events.findById(id = eventId)) { ServiceError.NotFound(message = "Event $eventId not found") }
             ensureNotFinalized(event = event).bind()
