@@ -116,6 +116,11 @@ export function PlayerProfilePage() {
                 )}
                 <div className="min-w-0">
                   <CardTitle>{player.displayName ?? 'Player'}</CardTitle>
+                  {/* Registered email (#630): revealed by the API only to the owner or an elevated
+                      viewer. Shown under the name as plain text, matching the private profile (#640). */}
+                  {player.email ? (
+                    <CardDescription>{player.email}</CardDescription>
+                  ) : null}
                   <CardDescription>
                     Player ID:{' '}
                     <code className="select-all font-mono font-medium text-foreground">
@@ -159,19 +164,6 @@ export function PlayerProfilePage() {
               ) : (
                 <p className="text-sm text-muted-foreground">No rating yet.</p>
               )}
-              {/* Registered email (#630): present only when the API reveals it — the owner viewing
-                  their own profile, or a HOST/CLUB_OWNER/RATER/ADMINISTRATOR viewer. Absent otherwise. */}
-              {player.email ? (
-                <p className="mt-2 text-sm">
-                  <span className="font-medium">Email</span>{' '}
-                  <a
-                    href={`mailto:${player.email}`}
-                    className="text-primary hover:underline"
-                  >
-                    {player.email}
-                  </a>
-                </p>
-              ) : null}
             </CardContent>
           </Card>
         ) : null}
