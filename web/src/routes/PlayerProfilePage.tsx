@@ -164,12 +164,7 @@ export function PlayerProfilePage() {
               {player.email ? (
                 <p className="mt-2 text-sm">
                   <span className="font-medium">Email</span>{' '}
-                  <a
-                    href={`mailto:${player.email}`}
-                    className="text-primary hover:underline"
-                  >
-                    {player.email}
-                  </a>
+                  {player.email}
                 </p>
               ) : null}
             </CardContent>

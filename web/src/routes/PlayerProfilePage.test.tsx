@@ -111,7 +111,7 @@ describe('PlayerProfilePage', () => {
     expect(screen.getByRole('button', { name: 'Copy link' })).toBeInTheDocument()
   })
 
-  it('renders the email as a mailto link when the API reveals it (#630)', () => {
+  it('renders the email as plain text when the API reveals it (#640)', () => {
     useGetApiV1PlayersCode.mockReturnValue({
       isLoading: false,
       isError: false,
@@ -124,8 +124,11 @@ describe('PlayerProfilePage', () => {
       },
     })
     renderAt()
-    const link = screen.getByRole('link', { name: 'ana@example.com' })
-    expect(link).toHaveAttribute('href', 'mailto:ana@example.com')
+    // Plain text, matching the private profile page — not a mailto link (#640).
+    expect(screen.getByText('ana@example.com')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('link', { name: 'ana@example.com' }),
+    ).not.toBeInTheDocument()
   })
 
   it('renders nothing for the email when the API omits it (#630)', () => {
