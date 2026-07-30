@@ -26,8 +26,6 @@ import org.skopeo.dto.user.PhotoSettingsRequest
 import org.skopeo.dto.user.ProfileRequest
 import org.skopeo.dto.user.RatingPreviewResponse
 import org.skopeo.dto.user.SetRatingPreviewRequest
-import org.skopeo.model.Capability
-import org.skopeo.model.NumericRange
 import org.skopeo.service.user.DuplicateService
 import org.skopeo.service.user.UserSearchFilters
 import org.skopeo.service.user.UserService
@@ -93,14 +91,6 @@ private fun Route.duplicateRoutes(service: DuplicateService) {
 
 private val FILTER_PARAMS = listOf("name", "code", "q", "sex", "age", "rating", "capability")
 
-/** Parse the optional `capability` search filter (#317) to a [Capability]; a bad value is a 400. */
-private fun parseCapability(raw: String?): Capability? =
-    raw?.let { value ->
-        requireNotNull(value = Capability.entries.find { it.name == value.uppercase() }) {
-            "Unknown capability '$value'; expected one of ${Capability.entries.joinToString { it.name }}"
-        }
-    }
-
 // Page size used when a search request omits `limit` (preserves the pre-pagination behaviour).
 private const val DEFAULT_SEARCH_PAGE_SIZE = 20
 
@@ -125,9 +115,9 @@ private fun Route.searchUsers(service: UserService) {
                                 code = params["code"],
                                 q = params["q"],
                                 sex = validatedSex(value = params["sex"]),
-                                age = params["age"]?.let { NumericRange.parse(raw = it) },
-                                rating = params["rating"]?.let { NumericRange.parse(raw = it) },
-                                capability = parseCapability(raw = params["capability"]),
+                                age = params["age"],
+                                rating = params["rating"],
+                                capability = params["capability"],
                             ),
                         limit = params["limit"]?.toIntOrNull() ?: DEFAULT_SEARCH_PAGE_SIZE,
                         offset = params["offset"]?.toIntOrNull() ?: 0,
@@ -159,9 +149,9 @@ private fun Route.searchUsersPaged(service: UserService) {
                             code = params["code"],
                             q = params["q"],
                             sex = validatedSex(value = params["sex"]),
-                            age = params["age"]?.let { NumericRange.parse(raw = it) },
-                            rating = params["rating"]?.let { NumericRange.parse(raw = it) },
-                            capability = parseCapability(raw = params["capability"]),
+                            age = params["age"],
+                            rating = params["rating"],
+                            capability = params["capability"],
                         ),
                     limit = params["limit"]?.toIntOrNull() ?: DEFAULT_SEARCH_PAGE_SIZE,
                     offset = params["offset"]?.toIntOrNull() ?: 0,
