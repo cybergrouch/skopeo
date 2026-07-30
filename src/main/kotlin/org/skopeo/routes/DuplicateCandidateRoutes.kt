@@ -17,17 +17,10 @@ import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.duplicate.ConfirmCandidateRequest
 import org.skopeo.dto.duplicate.FlagCandidateRequest
-import org.skopeo.model.DuplicateCandidateStatus
 import org.skopeo.service.user.DuplicateCandidateService
 import java.util.UUID
 
 private const val DEFAULT_CANDIDATE_PAGE_SIZE = 20
-
-/** Parse a `status` filter to a [DuplicateCandidateStatus]; an unknown value is a 400. */
-private fun parseCandidateStatus(raw: String): DuplicateCandidateStatus =
-    requireNotNull(value = DuplicateCandidateStatus.entries.find { it.name == raw.uppercase() }) {
-        "Unknown status '$raw'; expected one of ${DuplicateCandidateStatus.entries.joinToString { it.name }}"
-    }
 
 private fun parseUserId(raw: String): UUID =
     try {
@@ -53,7 +46,7 @@ fun Application.configureDuplicateCandidateRoutes(service: DuplicateCandidateSer
                                     token = verifiedToken(),
                                     limit = params["limit"]?.toIntOrNull() ?: DEFAULT_CANDIDATE_PAGE_SIZE,
                                     offset = params["offset"]?.toIntOrNull() ?: 0,
-                                    status = params["status"]?.let { parseCandidateStatus(raw = it) },
+                                    statusRaw = params["status"],
                                 ),
                         ) { page -> call.respond(status = HttpStatusCode.OK, message = page) }
                     }

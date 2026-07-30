@@ -19,7 +19,6 @@ import org.skopeo.error.ServiceError
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
-import org.skopeo.model.ContactType
 import org.skopeo.model.DuplicateCandidateStatus
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
@@ -75,14 +74,14 @@ class ContactServiceTest {
         adminUid: String,
         userId: UUID,
         contactId: UUID,
-        status: VerificationStatus = VerificationStatus.VERIFIED,
+        status: String = "VERIFIED",
     ): Either<ServiceError, ContactResponse> =
         service.setVerification(
             token = token(uid = adminUid),
             userId = userId,
             contactId = contactId,
-            status = status,
-            method = null,
+            statusRaw = status,
+            methodRaw = null,
         )
 
     @Test
@@ -93,7 +92,7 @@ class ContactServiceTest {
                 .create(
                     token = token(uid = "owner"),
                     userId = owner.id,
-                    type = ContactType.EMAIL,
+                    typeRaw = "EMAIL",
                     value = "a@b.dev",
                     isPrimary = true,
                 ).shouldBeRight()
@@ -125,7 +124,7 @@ class ContactServiceTest {
                 .create(
                     token = token(uid = "owner"),
                     userId = owner.id,
-                    type = ContactType.EMAIL,
+                    typeRaw = "EMAIL",
                     value = "a@example.com",
                     isPrimary = true,
                 ).shouldBeRight()
@@ -149,7 +148,7 @@ class ContactServiceTest {
                 .create(
                     token = token(uid = "owner"),
                     userId = owner.id,
-                    type = ContactType.EMAIL,
+                    typeRaw = "EMAIL",
                     value = "first@example.com",
                     isPrimary = true,
                 ).shouldBeRight()
@@ -162,7 +161,7 @@ class ContactServiceTest {
                 .create(
                     token = token(uid = "owner"),
                     userId = owner.id,
-                    type = ContactType.EMAIL,
+                    typeRaw = "EMAIL",
                     value = "second@example.com",
                     isPrimary = true,
                 ).shouldBeRight()
@@ -184,7 +183,7 @@ class ContactServiceTest {
                 .create(
                     token = token(uid = "owner"),
                     userId = owner.id,
-                    type = ContactType.EMAIL,
+                    typeRaw = "EMAIL",
                     value = "a@example.com",
                     isPrimary = true,
                 ).shouldBeRight()
@@ -202,7 +201,7 @@ class ContactServiceTest {
         val owner = provisionUser(uid = "owner")
         provisionUser(uid = "intruder")
         service
-            .create(token = token(uid = "owner"), userId = owner.id, type = ContactType.EMAIL, value = "a@example.com", isPrimary = true)
+            .create(token = token(uid = "owner"), userId = owner.id, typeRaw = "EMAIL", value = "a@example.com", isPrimary = true)
             .shouldBeRight()
 
         service.list(token = token(uid = "intruder"), userId = owner.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
@@ -217,7 +216,7 @@ class ContactServiceTest {
                 .create(
                     token = token(uid = "owner"),
                     userId = owner.id,
-                    type = ContactType.EMAIL,
+                    typeRaw = "EMAIL",
                     value = "a@example.com",
                     isPrimary = true,
                 ).shouldBeRight()
@@ -227,8 +226,8 @@ class ContactServiceTest {
                 token = token(uid = "owner"),
                 userId = owner.id,
                 contactId = UUID.fromString(contact.id),
-                status = VerificationStatus.VERIFIED,
-                method = null,
+                statusRaw = "VERIFIED",
+                methodRaw = null,
             ).shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
 
@@ -238,8 +237,8 @@ class ContactServiceTest {
                     token = token(uid = "root"),
                     userId = owner.id,
                     contactId = UUID.fromString(contact.id),
-                    status = VerificationStatus.VERIFIED,
-                    method = null,
+                    statusRaw = "VERIFIED",
+                    methodRaw = null,
                 ).shouldBeRight()
         verified.status shouldBe VerificationStatus.VERIFIED.name
         verified.method shouldBe VerificationMethod.ADMIN_OVERRIDE.name
@@ -255,7 +254,7 @@ class ContactServiceTest {
                 .create(
                     token = token(uid = "owner"),
                     userId = owner.id,
-                    type = ContactType.EMAIL,
+                    typeRaw = "EMAIL",
                     value = "a@example.com",
                     isPrimary = true,
                 ).shouldBeRight()
@@ -270,7 +269,7 @@ class ContactServiceTest {
     fun `a caller without a provisioned account is forbidden`() {
         val owner = provisionUser(uid = "owner")
         service
-            .create(token = token(uid = "owner"), userId = owner.id, type = ContactType.EMAIL, value = "a@example.com", isPrimary = true)
+            .create(token = token(uid = "owner"), userId = owner.id, typeRaw = "EMAIL", value = "a@example.com", isPrimary = true)
             .shouldBeRight()
 
         service.list(token = token(uid = "ghost"), userId = owner.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
@@ -284,7 +283,7 @@ class ContactServiceTest {
                 .create(
                     token = token(uid = "owner"),
                     userId = owner.id,
-                    type = ContactType.EMAIL,
+                    typeRaw = "EMAIL",
                     value = "a@example.com",
                     isPrimary = true,
                 ).shouldBeRight()
@@ -303,7 +302,7 @@ class ContactServiceTest {
                 .create(
                     token = token(uid = "owner"),
                     userId = owner.id,
-                    type = ContactType.EMAIL,
+                    typeRaw = "EMAIL",
                     value = "a@example.com",
                     isPrimary = true,
                 ).shouldBeRight()
@@ -314,7 +313,7 @@ class ContactServiceTest {
                 adminUid = "root",
                 userId = owner.id,
                 contactId = UUID.fromString(contact.id),
-                status = VerificationStatus.PENDING,
+                status = "PENDING",
             ).shouldBeRight()
 
         revoked.status shouldBe VerificationStatus.PENDING.name
@@ -328,7 +327,7 @@ class ContactServiceTest {
             .create(
                 token = token(uid = "owner"),
                 userId = owner.id,
-                type = ContactType.EMAIL,
+                typeRaw = "EMAIL",
                 value = "first@example.com",
                 isPrimary = true,
             ).shouldBeRight()
@@ -337,7 +336,7 @@ class ContactServiceTest {
             .create(
                 token = token(uid = "owner"),
                 userId = owner.id,
-                type = ContactType.EMAIL,
+                typeRaw = "EMAIL",
                 value = "second@example.com",
                 isPrimary = true,
             ).shouldBeLeft()
@@ -354,7 +353,7 @@ class ContactServiceTest {
                 .create(
                     token = token(uid = "a"),
                     userId = userA.id,
-                    type = ContactType.EMAIL,
+                    typeRaw = "EMAIL",
                     value = "dup@example.com",
                     isPrimary = true,
                 ).shouldBeRight()
@@ -364,7 +363,7 @@ class ContactServiceTest {
                 .create(
                     token = token(uid = "b"),
                     userId = userB.id,
-                    type = ContactType.EMAIL,
+                    typeRaw = "EMAIL",
                     value = "dup@example.com",
                     isPrimary = true,
                 ).shouldBeRight()
@@ -383,7 +382,7 @@ class ContactServiceTest {
                 .create(
                     token = token(uid = "other"),
                     userId = other.id,
-                    type = ContactType.EMAIL,
+                    typeRaw = "EMAIL",
                     value = "a@example.com",
                     isPrimary = true,
                 ).shouldBeRight()
@@ -407,7 +406,7 @@ class ContactServiceTest {
                 .create(
                     token = token(uid = "owner"),
                     userId = owner.id,
-                    type = ContactType.EMAIL,
+                    typeRaw = "EMAIL",
                     value = "a@example.com",
                     isPrimary = true,
                 ).shouldBeRight()
@@ -433,7 +432,7 @@ class ContactServiceTest {
                 .create(
                     token = token(uid = "owner"),
                     userId = owner.id,
-                    type = ContactType.EMAIL,
+                    typeRaw = "EMAIL",
                     value = "a@example.com",
                     isPrimary = true,
                 ).shouldBeRight()
@@ -444,8 +443,8 @@ class ContactServiceTest {
                     token = token(uid = "root"),
                     userId = owner.id,
                     contactId = UUID.fromString(contact.id),
-                    status = VerificationStatus.VERIFIED,
-                    method = VerificationMethod.EMAIL_LINK,
+                    statusRaw = "VERIFIED",
+                    methodRaw = "EMAIL_LINK",
                 ).shouldBeRight()
 
         verified.status shouldBe VerificationStatus.VERIFIED.name
@@ -460,7 +459,7 @@ class ContactServiceTest {
             .create(
                 token = token(uid = "owner"),
                 userId = UUID.randomUUID(),
-                type = ContactType.EMAIL,
+                typeRaw = "EMAIL",
                 value = "a@example.com",
                 isPrimary = true,
             ).shouldBeLeft()
@@ -485,7 +484,7 @@ class ContactServiceTest {
                 .create(
                     token = token(uid = "owner"),
                     userId = owner.id,
-                    type = ContactType.EMAIL,
+                    typeRaw = "EMAIL",
                     value = "a@example.com",
                     isPrimary = true,
                 ).shouldBeRight()
@@ -501,13 +500,13 @@ class ContactServiceTest {
         val a = provisionUser(uid = "a")
         val b = provisionUser(uid = "b")
         service
-            .create(token = token(uid = "a"), userId = a.id, type = ContactType.PHONE, value = "+639170000000", isPrimary = true)
+            .create(token = token(uid = "a"), userId = a.id, typeRaw = "PHONE", value = "+639170000000", isPrimary = true)
             .shouldBeRight()
 
         // A formatting variant of the same number still flags — and the contact add itself succeeds.
         val added =
             service
-                .create(token = token(uid = "b"), userId = b.id, type = ContactType.PHONE, value = "+63 917 000 0000", isPrimary = true)
+                .create(token = token(uid = "b"), userId = b.id, typeRaw = "PHONE", value = "+63 917 000 0000", isPrimary = true)
                 .shouldBeRight()
         added.value shouldBe "+63 917 000 0000"
 
@@ -522,15 +521,15 @@ class ContactServiceTest {
         val b = provisionUser(uid = "b")
         // EMAIL never triggers detection.
         service
-            .create(token = token(uid = "a"), userId = a.id, type = ContactType.EMAIL, value = "a@x.dev", isPrimary = true)
+            .create(token = token(uid = "a"), userId = a.id, typeRaw = "EMAIL", value = "a@x.dev", isPrimary = true)
             .shouldBeRight()
         // A's phone, then A is disabled — B reusing it should not flag (only active users count).
         service
-            .create(token = token(uid = "a"), userId = a.id, type = ContactType.PHONE, value = "+639170000000", isPrimary = false)
+            .create(token = token(uid = "a"), userId = a.id, typeRaw = "PHONE", value = "+639170000000", isPrimary = false)
             .shouldBeRight()
         users.deactivate(id = a.id)
         service
-            .create(token = token(uid = "b"), userId = b.id, type = ContactType.PHONE, value = "+639170000000", isPrimary = true)
+            .create(token = token(uid = "b"), userId = b.id, typeRaw = "PHONE", value = "+639170000000", isPrimary = true)
             .shouldBeRight()
 
         candidates.list(limit = 50, offset = 0, status = DuplicateCandidateStatus.OPEN).second shouldBe 0L

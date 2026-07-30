@@ -86,10 +86,16 @@ class RatingRequestService(
         token: VerifiedFirebaseToken,
         limit: Int,
         offset: Int,
-        status: RatingRequestStatus?,
+        statusRaw: String? = null,
     ): Either<ServiceError, RatingRequestPageResponse> =
         either {
             requireRater(token = token).bind()
+            val status =
+                statusRaw?.let { raw ->
+                    val allowed = RatingRequestStatus.entries.joinToString { it.name }
+                    RatingRequestStatus.entries.find { it.name == raw.uppercase() }
+                        ?: raise(r = ServiceError.Validation(message = "Unknown status '$raw'; expected one of $allowed"))
+                }
             val (items, total) =
                 requests.list(
                     limit = limit.coerceIn(minimumValue = 1, maximumValue = MAX_PAGE_SIZE),

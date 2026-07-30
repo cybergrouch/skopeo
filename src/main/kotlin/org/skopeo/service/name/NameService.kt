@@ -62,12 +62,16 @@ class NameService(
     fun create(
         token: VerifiedFirebaseToken,
         userId: UUID,
-        type: NameType,
+        typeRaw: String,
         value: String,
     ): Either<ServiceError, NameResponse> =
         either {
             requireUserExists(userId = userId).bind()
             val actor = requireUserAccess(token = token, userId = userId).bind()
+            val allowedTypes = NameType.entries.joinToString { it.name }
+            val type =
+                NameType.entries.find { it.name == typeRaw }
+                    ?: raise(r = ServiceError.Validation(message = "Invalid type '$typeRaw'; expected one of $allowedTypes"))
             val name = names.create(userId = userId, type = type, value = value)
             audit.record(
                 write =

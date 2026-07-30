@@ -47,10 +47,16 @@ class DuplicateCandidateService(
         token: VerifiedFirebaseToken,
         limit: Int,
         offset: Int,
-        status: DuplicateCandidateStatus?,
+        statusRaw: String? = null,
     ): Either<ServiceError, DuplicateCandidatePageResponse> =
         either {
             requireAdmin(token = token).bind()
+            val status =
+                statusRaw?.let { raw ->
+                    val allowed = DuplicateCandidateStatus.entries.joinToString { it.name }
+                    DuplicateCandidateStatus.entries.find { it.name == raw.uppercase() }
+                        ?: raise(r = ServiceError.Validation(message = "Unknown status '$raw'; expected one of $allowed"))
+                }
             val (items, total) =
                 candidates.list(
                     limit = limit.coerceIn(minimumValue = 1, maximumValue = MAX_PAGE_SIZE),

@@ -65,13 +65,17 @@ class ContactService(
     fun create(
         token: VerifiedFirebaseToken,
         userId: UUID,
-        type: ContactType,
+        typeRaw: String,
         value: String,
         isPrimary: Boolean,
     ): Either<ServiceError, ContactResponse> =
         either {
             requireUserExists(userId = userId).bind()
             val actor = requireUserAccess(token = token, userId = userId).bind()
+            val allowedTypes = ContactType.entries.joinToString { it.name }
+            val type =
+                ContactType.entries.find { it.name == typeRaw }
+                    ?: raise(r = ServiceError.Validation(message = "Invalid type '$typeRaw'; expected one of $allowedTypes"))
             val contact =
                 contacts
                     .create(
@@ -162,12 +166,22 @@ class ContactService(
         token: VerifiedFirebaseToken,
         userId: UUID,
         contactId: UUID,
-        status: VerificationStatus,
-        method: VerificationMethod?,
+        statusRaw: String,
+        methodRaw: String?,
     ): Either<ServiceError, ContactResponse> =
         either {
             val contact = locate(userId = userId, contactId = contactId).bind()
             val adminId = requireAdmin(token = token).bind()
+            val allowedStatuses = VerificationStatus.entries.joinToString { it.name }
+            val status =
+                VerificationStatus.entries.find { it.name == statusRaw }
+                    ?: raise(r = ServiceError.Validation(message = "Invalid status '$statusRaw'; expected one of $allowedStatuses"))
+            val method =
+                methodRaw?.let { raw ->
+                    val allowedMethods = VerificationMethod.entries.joinToString { it.name }
+                    VerificationMethod.entries.find { it.name == raw }
+                        ?: raise(r = ServiceError.Validation(message = "Invalid method '$raw'; expected one of $allowedMethods"))
+                }
             ensure(condition = contact.isActive) {
                 ServiceError.Validation(message = "Cannot change verification of a disabled contact")
             }

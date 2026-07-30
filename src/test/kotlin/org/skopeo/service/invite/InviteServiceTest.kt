@@ -205,7 +205,7 @@ class InviteServiceTest {
         invites.markAccepted(email = accepted.email, acceptedAt = java.time.LocalDateTime.now())
 
         val pending =
-            service.list(token = token(uid = "admin"), limit = 50, offset = 0, status = InviteStatus.PENDING).shouldBeRight()
+            service.list(token = token(uid = "admin"), limit = 50, offset = 0, statusRaw = "PENDING").shouldBeRight()
         pending.items.single().email shouldBe "pending@example.com"
         pending.total shouldBe 1
 

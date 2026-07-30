@@ -55,12 +55,18 @@ class AuditService(
     /** One page of audit entries, newest first, optionally scoped to a [category] (ADMINISTRATOR only). */
     fun list(
         token: VerifiedFirebaseToken,
-        category: AuditCategory?,
+        categoryRaw: String?,
         limit: Int,
         offset: Int,
     ): Either<ServiceError, AuditLogResponse> =
         either {
             requireAdmin(token = token).bind()
+            val category =
+                categoryRaw?.let { raw ->
+                    val allowed = AuditCategory.entries.joinToString { it.name }
+                    AuditCategory.entries.find { it.name == raw.uppercase() }
+                        ?: raise(r = ServiceError.Validation(message = "Unknown audit category '$raw'; expected one of $allowed"))
+                }
             val (items, total) =
                 audit.list(
                     actions = category?.actions(),

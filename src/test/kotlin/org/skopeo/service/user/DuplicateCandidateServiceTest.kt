@@ -78,7 +78,7 @@ class DuplicateCandidateServiceTest {
         service.flagManual(token = token(uid = "root"), userAId = b.id, userBId = a.id, reason = "again").shouldBeRight()
 
         val page =
-            service.list(token = token(uid = "root"), limit = 50, offset = 0, status = DuplicateCandidateStatus.OPEN).shouldBeRight()
+            service.list(token = token(uid = "root"), limit = 50, offset = 0, statusRaw = "OPEN").shouldBeRight()
         page.items shouldHaveSize 1
         setOf(page.items.single().userA.id, page.items.single().userB.id) shouldBe setOf(a.id.toString(), b.id.toString())
     }
@@ -201,12 +201,12 @@ class DuplicateCandidateServiceTest {
             service.flagManual(token = token(uid = "root"), userAId = a.id, userBId = b.id, reason = null).shouldBeRight()
 
         service
-            .list(token = token(uid = "a"), limit = 50, offset = 0, status = null)
+            .list(token = token(uid = "a"), limit = 50, offset = 0, statusRaw = null)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
         // An unknown caller (no such user) is also refused.
         service
-            .list(token = token(uid = "ghost"), limit = 50, offset = 0, status = null)
+            .list(token = token(uid = "ghost"), limit = 50, offset = 0, statusRaw = null)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
         service
