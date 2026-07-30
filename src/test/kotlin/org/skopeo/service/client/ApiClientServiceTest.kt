@@ -137,6 +137,28 @@ class ApiClientServiceTest {
     }
 
     @Test
+    fun `issueKey rejects an unknown scope or environment (#225)`() {
+        val adminToken = admin()
+        val client = service.createClient(token = adminToken, name = "Partner A").shouldBeRight()
+
+        service.issueKey(
+            token = adminToken,
+            clientId = UUID.fromString(client.id),
+            scopeNames = setOf(element = "NOT_A_SCOPE"),
+            environmentRaw = ApiKeyEnvironment.LIVE.name,
+            expiresInDays = null,
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+
+        service.issueKey(
+            token = adminToken,
+            clientId = UUID.fromString(client.id),
+            scopeNames = emptySet(),
+            environmentRaw = "NOT_AN_ENV",
+            expiresInDays = null,
+        ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
     fun `revokes a key, and a missing key is NotFound`() {
         val adminToken = admin()
         val client = service.createClient(token = adminToken, name = "Partner A").shouldBeRight()

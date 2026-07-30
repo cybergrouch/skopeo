@@ -101,24 +101,8 @@ class ApiClientService(
     ): Either<ServiceError, IssuedApiKeyResponse> =
         either {
             val adminId = requireAdmin(token = token).bind()
-            val scopes =
-                scopeNames.map { raw ->
-                    Capability.entries.find { it.name == raw }
-                        ?: raise(
-                            r =
-                                ServiceError.Validation(
-                                    message = "Invalid scope '$raw'; expected one of ${Capability.entries.joinToString { it.name }}",
-                                ),
-                        )
-                }.toSet()
-            val environment =
-                environmentRaw?.let { raw ->
-                    ApiKeyEnvironment.entries.find { it.name == raw }
-                        ?: run {
-                            val allowed = ApiKeyEnvironment.entries.joinToString { it.name }
-                            raise(r = ServiceError.Validation(message = "Invalid environment '$raw'; expected one of $allowed"))
-                        }
-                } ?: ApiKeyEnvironment.LIVE
+            val scopes = scopeNames.map { parseScope(raw = it).bind() }.toSet()
+            val environment = environmentRaw?.let { parseEnvironment(raw = it).bind() } ?: ApiKeyEnvironment.LIVE
             ensure(condition = expiresInDays == null || expiresInDays > 0) {
                 ServiceError.Validation(message = "expiresInDays must be positive")
             }
@@ -325,6 +309,20 @@ class ApiClientService(
 
     /** The client-identity DTO for a resolved [principal] (#597), so the route maps nothing itself. */
     fun describePrincipal(principal: ClientPrincipal): ClientIdentityResponse = principal.toResponse()
+
+    /** Parse a key scope name to a [Capability] (#225); an unknown name is a [ServiceError.Validation]. */
+    private fun parseScope(raw: String): Either<ServiceError, Capability> =
+        Capability.entries.find { it.name == raw }?.right()
+            ?: ServiceError.Validation(
+                message = "Invalid scope '$raw'; expected one of ${Capability.entries.joinToString { it.name }}",
+            ).left()
+
+    /** Parse a key environment name to an [ApiKeyEnvironment]; an unknown name is a [ServiceError.Validation]. */
+    private fun parseEnvironment(raw: String): Either<ServiceError, ApiKeyEnvironment> =
+        ApiKeyEnvironment.entries.find { it.name == raw }?.right()
+            ?: ServiceError.Validation(
+                message = "Invalid environment '$raw'; expected one of ${ApiKeyEnvironment.entries.joinToString { it.name }}",
+            ).left()
 
     /** Access gate: the caller must be an ADMINISTRATOR. Returns the caller's id (the audit actor). */
     private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {

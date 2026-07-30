@@ -163,6 +163,15 @@ class EventServiceTest {
     }
 
     @Test
+    fun `create rejects an unknown event type (#403)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        service
+            .create(token = token(uid = "host"), input = input().copy(type = "NOT_A_TYPE"))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
     fun `event participants carry the placeholder flag, true for a dummy and false for a real player (#505)`() {
         provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val real = provision(uid = "real")
@@ -1132,6 +1141,23 @@ class EventServiceTest {
             token = token(uid = "ghost"),
             code = event.publicCode,
         ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
+    @Test
+    fun `decideParticipant rejects an unknown decision status (#201)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val player = provision(uid = "player")
+        val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight().domain()
+        service.selfSignup(token = token(uid = "player"), code = event.publicCode).shouldBeRight()
+
+        service
+            .decideParticipant(
+                token = token(uid = "host"),
+                eventId = event.id,
+                userId = player.id,
+                statusRaw = "NOT_A_STATUS",
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
     }
 
     @Test

@@ -5,6 +5,7 @@ package org.skopeo.service.match
 
 import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContain
@@ -19,6 +20,7 @@ import org.jetbrains.exposed.sql.update
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.dto.match.CreateFixtureRequest
 import org.skopeo.dto.match.MatchResponse
 import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.dto.match.SetScoreRequest
@@ -619,6 +621,48 @@ class MatchServiceTest {
             .query(token = token(uid = "p1"), filter = "pending-calculation")
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
+    @Test
+    fun `query rejects an unknown filter with IllegalArgumentException (#331)`() {
+        shouldThrow<IllegalArgumentException> {
+            service.query(token = token(uid = "root"), filter = "bogus-filter")
+        }
+    }
+
+    @Test
+    fun `createFixture rejects an invalid placementBracket with IllegalArgumentException (#525)`() {
+        val request =
+            CreateFixtureRequest(
+                matchFormat = "SINGLES",
+                matchType = "OPEN_PLAY",
+                matchDate = "2026-01-01",
+                team1 = listOf(element = UUID.randomUUID().toString()),
+                team2 = listOf(element = UUID.randomUUID().toString()),
+                isPlacementMatch = true,
+                placementBracket = "NOT_A_BRACKET",
+            )
+        shouldThrow<IllegalArgumentException> {
+            service.createFixture(token = token(uid = "host"), request = request)
+        }
+    }
+
+    @Test
+    fun `createFixture parses a valid placementBracket via the raw request (#525)`() {
+        provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provisionUser(uid = "p1", rated = true)
+        val p2 = provisionUser(uid = "p2", rated = true)
+        val request =
+            CreateFixtureRequest(
+                matchFormat = "SINGLES",
+                matchType = "OPEN_PLAY",
+                matchDate = "2026-01-01",
+                team1 = listOf(element = p1.id.toString()),
+                team2 = listOf(element = p2.id.toString()),
+                isPlacementMatch = true,
+                placementBracket = "CHAMPIONSHIP_FINALS",
+            )
+        service.createFixture(token = token(uid = "host"), request = request).shouldBeRight()
     }
 
     @Test

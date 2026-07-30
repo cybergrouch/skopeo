@@ -103,7 +103,7 @@ class RatingService(
         token: VerifiedFirebaseToken,
         userId: UUID,
         band: String? = null,
-        value: String? = null,
+        value: String?,
     ): Either<ServiceError, UserRatingResponse> =
         either {
             val adminId = requireRater(token = token).bind()
