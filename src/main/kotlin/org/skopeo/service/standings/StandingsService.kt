@@ -69,7 +69,12 @@ class StandingsService(
         offset: Int?,
     ): StandingsPageResponse {
         val revealRates = callerCanSeeRates(token = token)
-        val parsedBand = band?.let(::bandFromCode)
+        val parsedBand =
+            band?.let { code ->
+                requireNotNull(value = StandingsBand.ofCode(code = code)) {
+                    "Invalid band '$code'; expected one of ${StandingsBand.entries.joinToString { it.code }}"
+                }
+            }
         val pageSize = (limit ?: DEFAULT_PAGE_SIZE).coerceIn(minimumValue = 1, maximumValue = MAX_PAGE_SIZE)
         val pageOffset = (offset ?: 0).coerceAtLeast(minimumValue = 0)
         val request = PageRequest(band = parsedBand, sex = sex, limit = pageSize, offset = pageOffset, revealRates = revealRates)
@@ -89,12 +94,6 @@ class StandingsService(
             }
         return view.toResponse()
     }
-
-    /** Parse a `band` query code to its [StandingsBand]; an unknown code is a 400 (mapped by the route). */
-    private fun bandFromCode(code: String): StandingsBand =
-        requireNotNull(value = StandingsBand.ofCode(code = code)) {
-            "Invalid band '$code'; expected one of ${StandingsBand.entries.joinToString { it.code }}"
-        }
 
     /** The resolved page request + privacy flag — bundled so serving stays under the parameter limit. */
     private data class PageRequest(

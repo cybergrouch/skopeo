@@ -158,14 +158,14 @@ class MatchService(
             "pending-calculation" -> MatchQuery.PENDING_CALCULATION
             "awaiting-results" -> MatchQuery.AWAITING_RESULTS
             "results" -> MatchQuery.RESULTS
-            else -> throw IllegalArgumentException("filter must be 'pending-calculation', 'awaiting-results', or 'results'")
+            else -> throw IllegalArgumentException(message = "filter must be 'pending-calculation', 'awaiting-results', or 'results'")
         }
 
     private fun matchDateOf(value: String): LocalDate =
         try {
             LocalDate.parse(value)
         } catch (e: DateTimeParseException) {
-            throw IllegalArgumentException("Invalid matchDate '$value'; expected ISO-8601 (yyyy-MM-dd)", e)
+            throw IllegalArgumentException(message = "Invalid matchDate '$value'; expected ISO-8601 (yyyy-MM-dd)", cause = e)
         }
 
     private fun uuidOf(
@@ -175,7 +175,7 @@ class MatchService(
         try {
             UUID.fromString(value)
         } catch (e: IllegalArgumentException) {
-            throw IllegalArgumentException("Invalid $field '$value'", e)
+            throw IllegalArgumentException(message = "Invalid $field '$value'", cause = e)
         }
 
     fun createFixture(
