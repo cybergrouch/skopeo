@@ -112,8 +112,8 @@ class ApiClientServiceTest {
             service.issueKey(
                 token = adminToken,
                 clientId = UUID.fromString(client.id),
-                scopes = setOf(element = Capability.PLAYER),
-                environment = ApiKeyEnvironment.LIVE,
+                scopeNames = setOf(element = Capability.PLAYER.name),
+                environmentRaw = ApiKeyEnvironment.LIVE.name,
                 expiresInDays = null,
             ).shouldBeRight()
         ApiKeyCrypto.looksValid(raw = issued.apiKey) shouldBe true
@@ -122,16 +122,16 @@ class ApiClientServiceTest {
         service.issueKey(
             token = adminToken,
             clientId = UUID.randomUUID(),
-            scopes = emptySet(),
-            environment = ApiKeyEnvironment.LIVE,
+            scopeNames = emptySet(),
+            environmentRaw = ApiKeyEnvironment.LIVE.name,
             expiresInDays = null,
         ).shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
 
         service.issueKey(
             token = adminToken,
             clientId = UUID.fromString(client.id),
-            scopes = emptySet(),
-            environment = ApiKeyEnvironment.LIVE,
+            scopeNames = emptySet(),
+            environmentRaw = ApiKeyEnvironment.LIVE.name,
             expiresInDays = 0,
         ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
     }
@@ -144,8 +144,8 @@ class ApiClientServiceTest {
             service.issueKey(
                 token = adminToken,
                 clientId = UUID.fromString(client.id),
-                scopes = emptySet(),
-                environment = ApiKeyEnvironment.LIVE,
+                scopeNames = emptySet(),
+                environmentRaw = ApiKeyEnvironment.LIVE.name,
                 expiresInDays = null,
             ).shouldBeRight()
 
@@ -162,8 +162,8 @@ class ApiClientServiceTest {
             service.issueKey(
                 token = adminToken,
                 clientId = UUID.fromString(client.id),
-                scopes = setOf(Capability.PLAYER, Capability.HOST),
-                environment = ApiKeyEnvironment.LIVE,
+                scopeNames = setOf(Capability.PLAYER.name, Capability.HOST.name),
+                environmentRaw = ApiKeyEnvironment.LIVE.name,
                 expiresInDays = 30,
             ).shouldBeRight()
 
@@ -191,8 +191,8 @@ class ApiClientServiceTest {
             service.issueKey(
                 token = adminToken,
                 clientId = UUID.fromString(client.id),
-                scopes = emptySet(),
-                environment = ApiKeyEnvironment.LIVE,
+                scopeNames = emptySet(),
+                environmentRaw = ApiKeyEnvironment.LIVE.name,
                 expiresInDays = null,
             ).shouldBeRight()
         service.revokeKey(token = adminToken, clientId = UUID.fromString(client.id), keyId = UUID.fromString(issued.key.id)).shouldBeRight()
@@ -201,10 +201,20 @@ class ApiClientServiceTest {
     }
 
     @Test
-    fun `playerDirectory returns the public projection of players`() {
+    fun `playerDirectory returns the public projection of players for a RESEARCHER-scoped key`() {
         val a = provision(uid = "alice", roles = setOf(element = Capability.PLAYER))
         val b = provision(uid = "bob", roles = setOf(element = Capability.PLAYER))
-        service.playerDirectory().map { it.publicCode } shouldContainExactlyInAnyOrder listOf(a.publicCode, b.publicCode)
+        val researcher =
+            ClientPrincipal(clientId = UUID.randomUUID(), keyId = UUID.randomUUID(), scopes = setOf(element = Capability.RESEARCHER))
+        service.playerDirectory(principal = researcher).shouldBeRight().map { it.publicCode } shouldContainExactlyInAnyOrder
+            listOf(a.publicCode, b.publicCode)
+    }
+
+    @Test
+    fun `playerDirectory is Forbidden for a key without the RESEARCHER scope (#597)`() {
+        val unscoped =
+            ClientPrincipal(clientId = UUID.randomUUID(), keyId = UUID.randomUUID(), scopes = setOf(element = Capability.PLAYER))
+        service.playerDirectory(principal = unscoped).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
@@ -237,8 +247,8 @@ class ApiClientServiceTest {
             service.issueKey(
                 token = adminToken,
                 clientId = UUID.fromString(client.id),
-                scopes = emptySet(),
-                environment = ApiKeyEnvironment.LIVE,
+                scopeNames = emptySet(),
+                environmentRaw = ApiKeyEnvironment.LIVE.name,
                 expiresInDays = null,
             ).shouldBeRight()
 
@@ -309,8 +319,8 @@ class ApiClientServiceTest {
             service.issueKey(
                 token = adminToken,
                 clientId = UUID.fromString(client.id),
-                scopes = emptySet(),
-                environment = ApiKeyEnvironment.LIVE,
+                scopeNames = emptySet(),
+                environmentRaw = ApiKeyEnvironment.LIVE.name,
                 expiresInDays = null,
             ).shouldBeRight()
         transaction {

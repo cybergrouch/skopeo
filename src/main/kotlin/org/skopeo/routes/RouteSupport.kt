@@ -65,19 +65,6 @@ internal fun RoutingContext.uuidParam(name: String): UUID {
 }
 
 /**
- * Parse [value] into enum [T] at the request boundary (issue #116) — a 400 when it isn't a valid
- * member. Services then receive the typed value and don't re-validate the request shape.
- */
-internal inline fun <reified T : Enum<T>> parseEnumParam(
-    value: String,
-    field: String,
-): T =
-    enumValues<T>().firstOrNull { it.name == value }
-        ?: throw BadRequestException(
-            message = "Invalid $field '$value'; expected one of ${enumValues<T>().joinToString { it.name }}",
-        )
-
-/**
  * Map a service/repository [ServiceError] (the Arrow `Either` left, issue #115) to its HTTP response.
  * This is the single place the error taxonomy meets the transport layer.
  */
@@ -124,7 +111,7 @@ internal suspend fun <T> RoutingContext.respondEither(
  * Run a handler, mapping request-shape failures and bugs to the right status code. Expected domain
  * failures now flow through [ServiceError]/[respondEither]; this catches what remains: malformed JSON,
  * DTO/model `init` validation (`IllegalArgumentException`), boundary parse errors (`BadRequestException`
- * from `uuidParam`/`parseEnumParam`), and anything unexpected (→ 500).
+ * from `uuidParam` or a service `ServiceError.Validation`), and anything unexpected (→ 500).
  */
 @Suppress("TooGenericExceptionCaught") // intentional catch-all that maps to a 500
 internal suspend fun RoutingContext.respondMappingErrors(block: suspend () -> Unit) {
