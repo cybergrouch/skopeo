@@ -12,13 +12,13 @@ import kotlinx.serialization.json.Json
 import org.skopeo.common.contract.OpenPlayPointsConfig
 import org.skopeo.common.contract.TournamentPointsConfig
 import org.skopeo.common.error.ServiceError
+import org.skopeo.common.security.Capability
 import org.skopeo.dto.settings.OpenPlayConfigResponse
 import org.skopeo.dto.settings.TournamentConfigResponse
 import org.skopeo.mapper.settings.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
-import org.skopeo.model.Capability
 import org.skopeo.model.StoredConfig
 import org.skopeo.repository.PointsConfigRepository
 import org.skopeo.repository.UserRepository

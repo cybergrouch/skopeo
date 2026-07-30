@@ -12,16 +12,18 @@ import org.junit.jupiter.api.Test
  * Enforces the layered package dependencies (issues #69, mapper extraction) so they don't erode. The
  * invariants below are the dependency directions that actually hold in this codebase:
  *  - repository is the foundation — it never reaches up to routes/service/dto/mapper;
- *  - model is pure domain — it depends on no other app layer (not even mapper);
+ *  - model is the domain — it never reaches routes/service/repository/dto/mapper; it MAY depend on the
+ *    neutral `common` foundation (e.g. the `Capability` enum);
  *  - dto is a pure boundary record — it never reaches routes/repository/service, and never model
  *    (save for a small allowlist of shared `@Serializable` value types used as a wire contract, below);
  *  - mapper owns the dto↔model translation — it depends on dto + model only, never routes/repository/service;
  *  - service never depends on the transport (routes); it MAY call mapper (one-way, acyclic);
  *  - routes never depend on mapper OR model — translation is hidden behind the service (services
  *    return/accept DTOs) and all HTTP input is parsed service-side, so a route only touches service + dto
- *    (+ the neutral error/security/contract packages). routes↛model is now enforced with no exception;
- *  - contract holds `@Serializable` value types shared across the wire + persistence (the points-config
- *    schedules) — a leaf depending on nothing, so routes/dto can carry them without reaching into model.
+ *    (+ the neutral `common` packages). routes↛model is enforced with no exception;
+ *  - common (`common.{error,security,contract}`) is the sanctioned cross-cutting foundation — dependency-free
+ *    shared value types (ServiceError, the auth principals + the `Capability` enum, the serializable
+ *    points-config contracts). ANY layer may depend on common; common depends on nothing above it, not even model.
  *
  * dto↔model exemption: three v1 stateless-calculator contract DTOs (`RankingCalculationRequest`/`Response`,
  * `RatingChange`) still embed shared `@Serializable` domain value types (`Team`, `MatchScore`,
@@ -57,29 +59,20 @@ class LayeredArchitectureTest {
         noClasses()
             .that().resideInAPackage("org.skopeo.model..")
             .should().dependOnClassesThat()
-            .resideInAnyPackage("..routes..", "..service..", "..repository..", "..dto..", "..mapper..", "..security..", "..contract..")
+            .resideInAnyPackage("..routes..", "..service..", "..repository..", "..dto..", "..mapper..")
             .check(classes)
     }
 
     @Test
-    fun `error is a foundation and depends on no other app layer`() {
-        // ServiceError is a transport-free error taxonomy (issue #115) that every layer may return;
-        // it lives outside model so that returning it does not pull the domain into routes.
+    fun `common is a cross-cutting foundation and never depends on model or any app layer`() {
+        // `common` holds shared, dependency-free value types — ServiceError (#115), the auth principals
+        // + the Capability enum (#597/#106), and the serializable points-config contracts (#552). ANY
+        // layer (including model) may depend on common; common itself depends on nothing above it — not
+        // even model. This is the sanctioned cross-cutting package.
         noClasses()
-            .that().resideInAPackage("org.skopeo.common.error..")
+            .that().resideInAPackage("org.skopeo.common..")
             .should().dependOnClassesThat()
             .resideInAnyPackage("..routes..", "..service..", "..repository..", "..dto..", "..mapper..", "org.skopeo.model..")
-            .check(classes)
-    }
-
-    @Test
-    fun `security holds auth-boundary types and never depends up`() {
-        // ClientPrincipal/ClientAuthResult are transport-boundary auth types kept out of model so routes
-        // can consume them (#597); they may reference model (Capability) but nothing above it.
-        noClasses()
-            .that().resideInAPackage("org.skopeo.common.security..")
-            .should().dependOnClassesThat()
-            .resideInAnyPackage("..routes..", "..service..", "..repository..", "..dto..", "..mapper..")
             .check(classes)
     }
 
@@ -144,18 +137,6 @@ class LayeredArchitectureTest {
         noClasses()
             .that().resideInAPackage("..routes..")
             .should().dependOnClassesThat().resideInAPackage("org.skopeo.model..")
-            .check(classes)
-    }
-
-    @Test
-    fun `contract is a foundation of shared serializable value types and depends on nothing`() {
-        // ClientPrincipal-style relocation for the points-config schedules (#552): `@Serializable` value
-        // types shared across the wire + persistence, kept out of model so routes/dto carry them without a
-        // model dependency. A pure leaf — it must not reach any app layer, including model.
-        noClasses()
-            .that().resideInAPackage("org.skopeo.common.contract..")
-            .should().dependOnClassesThat()
-            .resideInAnyPackage("..routes..", "..service..", "..repository..", "..dto..", "..mapper..", "org.skopeo.model..")
             .check(classes)
     }
 }

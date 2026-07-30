@@ -23,10 +23,10 @@ import io.ktor.server.testing.testApplication
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.common.security.Capability
 import org.skopeo.dto.event.CreateEventRequest
 import org.skopeo.dto.event.EventResponse
 import org.skopeo.model.AuthProvider
-import org.skopeo.model.Capability
 import org.skopeo.model.CreateFixtureCommand
 import org.skopeo.model.EventType
 import org.skopeo.model.MatchSetResult

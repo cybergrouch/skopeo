@@ -3,18 +3,12 @@
 
 package org.skopeo.model
 
+import org.skopeo.common.security.Capability
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.Period
 import java.util.UUID
-
-/**
- * Authorization roles granted to a user (broad for now; devolvable to fine-grained capabilities later).
- * RATER may set initial ratings and triage rating work (#106); RESEARCHER gates the player-research
- * feature (#107); ADMINISTRATOR implicitly has both.
- */
-enum class Capability { PLAYER, HOST, CLUB_OWNER, ADMINISTRATOR, RATER, RESEARCHER, POINTS_MANAGER }
 
 /**
  * An append-only grant of a [Capability] to a user. A grant is active until revoked; the

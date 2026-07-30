@@ -10,6 +10,7 @@ import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
 import org.skopeo.common.error.ServiceError
+import org.skopeo.common.security.Capability
 import org.skopeo.common.security.ClientAuthResult
 import org.skopeo.common.security.ClientPrincipal
 import org.skopeo.common.security.effectiveCapabilities
@@ -26,7 +27,6 @@ import org.skopeo.model.ApiKeyStatus
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
-import org.skopeo.model.Capability
 import org.skopeo.model.ClientEffectiveCapabilities
 import org.skopeo.model.InsertApiKeyCommand
 import org.skopeo.model.IssuedApiKey

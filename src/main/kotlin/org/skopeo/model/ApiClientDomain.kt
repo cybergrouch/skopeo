@@ -3,6 +3,7 @@
 
 package org.skopeo.model
 
+import org.skopeo.common.security.Capability
 import java.time.LocalDateTime
 import java.util.UUID
 

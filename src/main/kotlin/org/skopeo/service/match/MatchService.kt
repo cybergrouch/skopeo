@@ -9,6 +9,7 @@ import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
 import org.skopeo.common.error.ServiceError
+import org.skopeo.common.security.Capability
 import org.skopeo.dto.match.CreateFixtureRequest
 import org.skopeo.dto.match.MatchPublicEvent
 import org.skopeo.dto.match.MatchPublicHeadToHead
@@ -27,7 +28,6 @@ import org.skopeo.mapper.rating.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
-import org.skopeo.model.Capability
 import org.skopeo.model.CreateFixtureCommand
 import org.skopeo.model.Event
 import org.skopeo.model.Match

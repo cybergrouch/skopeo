@@ -108,10 +108,12 @@ extensions), depending on `dto` + `model` only. `service` may call `mapper` (one
 dto↔model translation is **hidden behind the service**: services return response DTOs (and accept
 request DTOs), and routes hand services the **raw** query/path/body strings — services parse + validate
 them (bad enum/band/value → `ServiceError.Validation` → 400). So **`routes` depend only on `service` +
-`dto`** plus three neutral leaf packages — `error` (`ServiceError`), `security` (auth principals
-`ClientPrincipal`/`ClientAuthResult`), and `contract` (`@Serializable` value types shared across the wire
-+ persistence, e.g. the points-config schedules) — and **never on `mapper` or `model`**, enforced by a
-strict `routes ↛ model` rule with no exception.
+`dto`** plus the neutral cross-cutting **`common`** package — `common.error` (`ServiceError`),
+`common.security` (auth principals `ClientPrincipal`/`ClientAuthResult` + the `Capability` enum), and
+`common.contract` (`@Serializable` value types shared across the wire + persistence, e.g. the
+points-config schedules) — and **never on `mapper` or `model`**, enforced by a strict `routes ↛ model`
+rule with no exception. `common` is a true foundation: **any** layer — including `model`, which
+references `Capability` — may depend on it, and it depends on nothing above, not even `model`.
 
 ```mermaid
 classDiagram
@@ -121,35 +123,29 @@ classDiagram
     class repository
     class dto
     class model
-    class error["common.error · ServiceError"]
-    class security["common.security · auth principals"]
-    class contract["common.contract · @Serializable value types"]
+    class common["common: ServiceError · auth principals + Capability · value contracts"]
     class DB["Exposed / PostgreSQL"]
     routes --> service
     routes --> dto
-    routes --> error
-    routes --> security
-    routes --> contract
+    routes --> common
     service --> repository
     service --> mapper
     service --> dto
     service --> model
-    service --> error
-    service --> security
-    service --> contract
+    service --> common
     mapper --> dto
     mapper --> model
     repository --> model
-    repository --> error
+    repository --> common
+    model --> common
     repository --> DB
-    security --> model
 ```
 
-These three neutral packages are grouped under a common parent, `org.skopeo.common.{error,security,contract}`
-(each a distinct package with its own rule). `error`, `security`, and `contract` are foundation **leaves**
-(`contract`/`error` depend on nothing;
-`security` references only `model`'s `Capability`). Note there is **no `routes → model` edge** — the
-transport layer speaks only DTOs and these neutral value types.
+`common` (`org.skopeo.common.{error,security,contract}` — each a distinct sub-package with its own scope,
+under one parent) is the sanctioned **cross-cutting foundation** of dependency-free shared value types:
+`ServiceError`, the auth principals + the `Capability` enum, and the serializable points-config
+contracts. **Every** layer — including `model` (which references `Capability`) — may depend on `common`;
+`common` depends on nothing above it, not even `model`. Note there is **no `routes → model` edge**.
 
 ## Error handling & the result convention
 

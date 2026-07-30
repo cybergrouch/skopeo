@@ -6,10 +6,10 @@ package org.skopeo.service.user
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
+import org.skopeo.common.security.Capability
 import org.skopeo.dto.user.CreateUserRequest
 import org.skopeo.dto.user.ProfileRequest
 import org.skopeo.model.AuthProvider
-import org.skopeo.model.Capability
 import org.skopeo.model.ContactSource
 import org.skopeo.model.ContactType
 import org.skopeo.model.NameType

@@ -3,10 +3,10 @@
 
 package org.skopeo.service.user
 
+import org.skopeo.common.security.Capability
 import org.skopeo.dto.user.CreateUserRequest
 import org.skopeo.dto.user.ProfileRequest
 import org.skopeo.model.AuthProvider
-import org.skopeo.model.Capability
 import org.skopeo.model.ContactInfo
 import org.skopeo.model.ContactSource
 import org.skopeo.model.ContactType

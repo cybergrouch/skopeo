@@ -25,8 +25,8 @@ import org.jetbrains.exposed.sql.stringParam
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.common.error.ServiceError
+import org.skopeo.common.security.Capability
 import org.skopeo.model.AuthProvider
-import org.skopeo.model.Capability
 import org.skopeo.model.Contact
 import org.skopeo.model.CreatePlaceholderCommand
 import org.skopeo.model.LocalThemeValue
