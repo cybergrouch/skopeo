@@ -15,12 +15,12 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
+import org.skopeo.common.security.Capability
 import org.skopeo.common.security.ClientAuthResult
 import org.skopeo.common.security.ClientPrincipal
 import org.skopeo.model.ApiClientStatus
 import org.skopeo.model.ApiKeyEnvironment
 import org.skopeo.model.AuthProvider
-import org.skopeo.model.Capability
 import org.skopeo.model.InsertApiKeyCommand
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand

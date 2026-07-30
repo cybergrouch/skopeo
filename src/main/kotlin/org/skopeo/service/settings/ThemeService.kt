@@ -9,13 +9,13 @@ import arrow.core.raise.either
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
 import org.skopeo.common.error.ServiceError
+import org.skopeo.common.security.Capability
 import org.skopeo.dto.settings.LocalThemeResponse
 import org.skopeo.dto.settings.ThemeResponse
 import org.skopeo.mapper.settings.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
-import org.skopeo.model.Capability
 import org.skopeo.model.ThemeSetting
 import org.skopeo.model.ThemeSettingValue
 import org.skopeo.repository.AppSettingsRepository

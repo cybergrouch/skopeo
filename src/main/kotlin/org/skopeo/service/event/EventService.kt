@@ -10,6 +10,7 @@ import arrow.core.raise.ensureNotNull
 import arrow.core.right
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.skopeo.common.error.ServiceError
+import org.skopeo.common.security.Capability
 import org.skopeo.dto.event.EventParticipantResponse
 import org.skopeo.dto.event.EventPublicResponse
 import org.skopeo.dto.event.EventResponse
@@ -20,7 +21,6 @@ import org.skopeo.mapper.match.toPublicResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
-import org.skopeo.model.Capability
 import org.skopeo.model.CreateEventCommand
 import org.skopeo.model.Event
 import org.skopeo.model.EventClubRef

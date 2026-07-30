@@ -11,9 +11,9 @@ import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.common.security.Capability
 import org.skopeo.model.ApiClientStatus
 import org.skopeo.model.ApiKeyStatus
-import org.skopeo.model.Capability
 import org.skopeo.model.InsertApiKeyCommand
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.time.LocalDateTime

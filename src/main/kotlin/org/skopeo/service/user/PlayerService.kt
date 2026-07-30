@@ -8,6 +8,7 @@ import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.right
 import org.skopeo.common.error.ServiceError
+import org.skopeo.common.security.Capability
 import org.skopeo.dto.rating.RatingHistoryResponse
 import org.skopeo.dto.user.ActivePointsAwardResponse
 import org.skopeo.dto.user.MatchHistoryParticipant
@@ -20,7 +21,6 @@ import org.skopeo.dto.user.PublicPlayerResponse
 import org.skopeo.dto.user.PublicRatingDto
 import org.skopeo.dto.user.ResultsBucket
 import org.skopeo.mapper.rating.toResponse
-import org.skopeo.model.Capability
 import org.skopeo.model.Match
 import org.skopeo.model.TeamType
 import org.skopeo.model.User

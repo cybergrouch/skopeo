@@ -17,12 +17,12 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
+import org.skopeo.common.security.Capability
 import org.skopeo.dto.event.EventResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.AwardStatus
-import org.skopeo.model.Capability
 import org.skopeo.model.CreateCircuitCommand
 import org.skopeo.model.CreateFixtureCommand
 import org.skopeo.model.Event

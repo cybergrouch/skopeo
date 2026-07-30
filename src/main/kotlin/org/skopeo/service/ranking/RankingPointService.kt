@@ -10,6 +10,7 @@ import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
 import org.skopeo.common.error.ServiceError
+import org.skopeo.common.security.Capability
 import org.skopeo.dto.ranking.AdjustRankingPointsRequest
 import org.skopeo.dto.ranking.AwardedPointsPageResponse
 import org.skopeo.dto.ranking.GrantRankingPointsRequest
@@ -21,7 +22,6 @@ import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
 import org.skopeo.model.AwardStatus
 import org.skopeo.model.AwardsPage
-import org.skopeo.model.Capability
 import org.skopeo.model.Level
 import org.skopeo.model.PointClass
 import org.skopeo.model.PointSourceType

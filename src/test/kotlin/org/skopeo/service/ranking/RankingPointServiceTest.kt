@@ -12,13 +12,13 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
+import org.skopeo.common.security.Capability
 import org.skopeo.dto.ranking.AdjustRankingPointsRequest
 import org.skopeo.dto.ranking.GrantRankingPointsRequest
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.AwardStatus
-import org.skopeo.model.Capability
 import org.skopeo.model.NameType
 import org.skopeo.model.PointClass
 import org.skopeo.model.PointSourceType

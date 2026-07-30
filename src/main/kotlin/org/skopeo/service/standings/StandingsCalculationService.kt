@@ -8,12 +8,12 @@ import arrow.core.left
 import arrow.core.raise.either
 import arrow.core.right
 import org.skopeo.common.error.ServiceError
+import org.skopeo.common.security.Capability
 import org.skopeo.dto.standings.StandingsCalculationResponse
 import org.skopeo.mapper.standings.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
-import org.skopeo.model.Capability
 import org.skopeo.model.GroupStanding
 import org.skopeo.model.RankedEntry
 import org.skopeo.model.SnapshotSource

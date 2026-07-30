@@ -7,34 +7,31 @@ erode silently. The build fails if a rule is broken.
 ## Layers and the rules that hold
 
 ```
-routes ──► { service, dto, error, security, contract }   (never mapper, never model)
-service ──► { repository, mapper, dto, model, error, security, contract }
+routes ──► { service, dto, common }             (never mapper, never model)
+service ──► { repository, mapper, dto, model, common }
 mapper ──► { dto, model }                       (mapper: dto↔model translation)
-repository ──► model                            (model is pure domain — depends up on nothing)
-{ routes, service, repository } ──► error       (error: transport-free ServiceError taxonomy — a leaf)
-security ──► model                              (security: auth-boundary types — ClientPrincipal etc.)
-contract ──► ∅                                  (contract: @Serializable value contracts — a pure leaf)
+repository ──► { model, common }                (the persistence foundation)
+model ──► common                                (e.g. the Capability enum; model reaches nothing else)
+common ──► ∅                                     (common: shared value types — a pure cross-cutting leaf)
 ```
 
-`error`, `security`, and `contract` live under a common parent package —
-`org.skopeo.common.{error,security,contract}` — each still its own package with its own rule below.
+`common` (`org.skopeo.common.{error,security,contract}` — each a distinct sub-package under one parent) is
+the sanctioned cross-cutting foundation: dependency-free value types any layer may use, itself depending
+on nothing above — not even `model`.
 
 Enforced invariants (each is true in the codebase today):
 
 - **`repository`** never depends on `routes`, `service`, `dto`, or `mapper`. It is the foundation and
   only works with `model`.
-- **`model`** is pure domain — it depends on no other app layer
-  (`routes`/`service`/`repository`/`dto`/`mapper`). Generic numeric helpers it needs live in `model`
-  (`BigDecimalUtils.kt`).
-- **`error`** is a transport-free error taxonomy (`ServiceError`, #115) in its own `org.skopeo.common.error`
-  package — a foundation leaf that depends on nothing. Any layer may return it, so it lives outside
-  `model` and returning it never pulls the domain up into `routes`.
-- **`security`** holds transport-boundary auth types (`ClientPrincipal`/`ClientAuthResult`, #597). It may
-  reference `model` (`Capability`) but nothing above, so routes can consume the resolved principal
-  without importing `model`.
-- **`contract`** holds `@Serializable` value types shared across the wire + persistence — the points-config
-  schedules (`OpenPlayPointsConfig`/`TournamentPointsConfig` and their nested rows) in `org.skopeo.common.contract`.
-  A pure leaf (depends on nothing), so routes/dto carry them without a `model` dependency.
+- **`model`** is the domain — it never depends on `routes`/`service`/`repository`/`dto`/`mapper`; it MAY
+  depend on the neutral `common` foundation (e.g. the `Capability` enum). Generic numeric helpers live in
+  `model` (`BigDecimalUtils.kt`).
+- **`common`** (`org.skopeo.common.{error,security,contract}`) is the sanctioned **cross-cutting
+  foundation** of dependency-free shared value types: `ServiceError` (#115); the auth principals
+  `ClientPrincipal`/`ClientAuthResult` + the `Capability` authorization enum (#597/#106); and the
+  serializable points-config contracts (`OpenPlayPointsConfig`/`TournamentPointsConfig`, #552). **Any**
+  layer — including `model` (which uses `Capability`) — may depend on it; `common` depends on nothing
+  above it, not even `model`. It is the one package referenced from every layer.
 - **`dto`** is a **pure serializable boundary record**: it never depends on `routes`, `repository`,
   `service`, or `model` — with one sanctioned exception (below).
 - **`mapper`** owns the dto↔model translation (the `toResponse`/`toCommand` extension functions). It

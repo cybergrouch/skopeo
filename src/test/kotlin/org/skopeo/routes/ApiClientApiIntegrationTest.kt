@@ -26,6 +26,7 @@ import io.ktor.server.testing.testApplication
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.common.security.Capability
 import org.skopeo.dto.client.ApiClientResponse
 import org.skopeo.dto.client.ClientEffectiveCapabilitiesResponse
 import org.skopeo.dto.client.ClientIdentityResponse
@@ -35,7 +36,6 @@ import org.skopeo.dto.client.IssuedApiKeyResponse
 import org.skopeo.dto.client.PartnerPlayerResponse
 import org.skopeo.dto.client.SetRateLimitRequest
 import org.skopeo.model.AuthProvider
-import org.skopeo.model.Capability
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.User

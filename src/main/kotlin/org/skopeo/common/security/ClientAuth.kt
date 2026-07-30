@@ -3,7 +3,6 @@
 
 package org.skopeo.common.security
 
-import org.skopeo.model.Capability
 import java.util.UUID
 
 /**

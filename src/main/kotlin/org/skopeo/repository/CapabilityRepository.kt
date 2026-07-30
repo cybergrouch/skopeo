@@ -9,7 +9,7 @@ import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
-import org.skopeo.model.Capability
+import org.skopeo.common.security.Capability
 import org.skopeo.model.CapabilityGrant
 import java.time.LocalDateTime
 import java.util.UUID

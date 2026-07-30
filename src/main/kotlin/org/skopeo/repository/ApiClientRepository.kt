@@ -12,11 +12,11 @@ import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
+import org.skopeo.common.security.Capability
 import org.skopeo.model.ApiClient
 import org.skopeo.model.ApiClientStatus
 import org.skopeo.model.ApiKey
 import org.skopeo.model.ApiKeyStatus
-import org.skopeo.model.Capability
 import org.skopeo.model.InsertApiKeyCommand
 import org.skopeo.model.ResolvedApiKey
 import java.time.LocalDateTime

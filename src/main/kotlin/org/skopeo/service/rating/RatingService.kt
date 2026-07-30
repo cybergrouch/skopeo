@@ -7,6 +7,7 @@ import arrow.core.left
 import arrow.core.raise.either
 import arrow.core.right
 import org.skopeo.common.error.ServiceError
+import org.skopeo.common.security.Capability
 import org.skopeo.dto.rating.PendingAssessmentPageResponse
 import org.skopeo.dto.rating.RatingHistoryResponse
 import org.skopeo.dto.rating.UserRatingResponse
@@ -14,7 +15,6 @@ import org.skopeo.mapper.rating.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
-import org.skopeo.model.Capability
 import org.skopeo.model.Level
 import org.skopeo.model.PendingAssessment
 import org.skopeo.model.PendingAssessmentPage
