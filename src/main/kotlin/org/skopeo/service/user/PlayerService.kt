@@ -21,6 +21,7 @@ import org.skopeo.dto.user.PublicPlayerResponse
 import org.skopeo.dto.user.PublicRatingDto
 import org.skopeo.dto.user.ResultsBucket
 import org.skopeo.mapper.rating.toResponse
+import org.skopeo.model.ContactType
 import org.skopeo.model.Match
 import org.skopeo.model.TeamType
 import org.skopeo.model.User
@@ -40,6 +41,9 @@ import java.util.UUID
 private const val DEFAULT_HISTORY_LIMIT = 20
 private const val MAX_HISTORY_LIMIT = 100
 
+// #630: capabilities that, like the owner, may see a player's registered email on the public profile.
+private val EMAIL_VIEW_ROLES = setOf(Capability.HOST, Capability.CLUB_OWNER, Capability.RATER, Capability.ADMINISTRATOR)
+
 /**
  * Resolves a player's shareable, auth-gated public profile from their [public code] (issue #61).
  * Open to any authenticated user (the route is behind auth); returns only a privacy-conscious
@@ -58,8 +62,8 @@ class PlayerService(
 ) {
     fun publicProfile(
         code: String,
-        // Optional viewer token (#193/#583): the raw NTRP value is revealed only to an ADMINISTRATOR
-        // viewer; anonymous or non-admin callers see the band + confidence only.
+        // Optional viewer token (#193/#583/#630): the raw NTRP value and the registered email are revealed
+        // only to privileged viewers — anonymous callers see neither. See [showRaw]/[canSeeEmail] below.
         token: VerifiedFirebaseToken? = null,
     ): Either<ServiceError, PublicPlayerResponse> =
         either {
@@ -68,11 +72,17 @@ class PlayerService(
                 mergedCard(located = located).bind()
             } else {
                 val rating = ratings.findCurrentRating(userId = located.id)
-                val showRaw = token?.let { users.findByFirebaseUid(firebaseUid = it.uid) }.canSeeRawRatingOrFalse()
+                val viewer = token?.let { users.findByFirebaseUid(firebaseUid = it.uid) }
+                val showRaw = viewer.canSeeRawRatingOrFalse()
+                // #630: reveal the email to the profile owner, or a HOST/CLUB_OWNER/RATER/ADMINISTRATOR
+                // viewer — gated here so it never leaves the API to another plain PLAYER or an anonymous caller.
+                val canSeeEmail =
+                    viewer != null && (viewer.id == located.id || viewer.capabilities.any { it in EMAIL_VIEW_ROLES })
                 PublicPlayerResponse(
                     publicCode = located.publicCode,
                     displayName = located.displayName(),
                     photoUrl = located.photoUrl,
+                    email = if (canSeeEmail) primaryEmailOf(user = located) else null,
                     rating =
                         rating?.let {
                             PublicRatingDto(
@@ -88,6 +98,17 @@ class PlayerService(
                 )
             }
         }
+
+    /**
+     * The player's registered email to display (#630): their active, primary EMAIL contact, falling back
+     * to any active EMAIL when none is flagged primary. Null when the player has no email on file. The
+     * caller decides whether the viewer is allowed to see it — this only picks which value that would be.
+     */
+    private fun primaryEmailOf(user: User): String? =
+        user.contacts
+            .filter { it.isActive && it.type == ContactType.EMAIL }
+            .let { active -> active.firstOrNull { it.isPrimary } ?: active.firstOrNull() }
+            ?.value
 
     /**
      * A disabled duplicate (#124) renders a "merged" card linking to its canonical account; a

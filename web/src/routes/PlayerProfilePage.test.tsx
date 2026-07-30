@@ -111,6 +111,38 @@ describe('PlayerProfilePage', () => {
     expect(screen.getByRole('button', { name: 'Copy link' })).toBeInTheDocument()
   })
 
+  it('renders the email as a mailto link when the API reveals it (#630)', () => {
+    useGetApiV1PlayersCode.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: {
+        publicCode: 'ABC234',
+        displayName: 'Ana',
+        photoUrl: null,
+        rating: undefined,
+        email: 'ana@example.com',
+      },
+    })
+    renderAt()
+    const link = screen.getByRole('link', { name: 'ana@example.com' })
+    expect(link).toHaveAttribute('href', 'mailto:ana@example.com')
+  })
+
+  it('renders nothing for the email when the API omits it (#630)', () => {
+    useGetApiV1PlayersCode.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: {
+        publicCode: 'ABC234',
+        displayName: 'Ana',
+        photoUrl: null,
+        rating: undefined,
+      },
+    })
+    renderAt()
+    expect(screen.queryByText('Email')).not.toBeInTheDocument()
+  })
+
   it('appends the computed rating confidence as a percentage (#343)', () => {
     useGetApiV1PlayersCode.mockReturnValue({
       isLoading: false,

@@ -7,7 +7,8 @@ import kotlinx.serialization.Serializable
 
 /**
  * A privacy-conscious player card resolved from a shareable public code (issue #61) — visible to
- * any authenticated user via the deep link. Deliberately omits email/contacts/date-of-birth.
+ * any authenticated user via the deep link. Deliberately omits contacts/date-of-birth; [email] is
+ * the one reveal-gated PII field (#630), populated only for the owner or an elevated viewer.
  */
 @Serializable
 data class PublicPlayerResponse(
@@ -15,6 +16,9 @@ data class PublicPlayerResponse(
     val displayName: String?,
     val photoUrl: String?,
     val rating: PublicRatingDto?,
+    // The player's registered email (#630) — PII, revealed server-side only to the profile owner or a
+    // HOST/CLUB_OWNER/RATER/ADMINISTRATOR viewer; null/omitted for other players and anonymous callers.
+    val email: String? = null,
     // Set when this profile was marked a duplicate and disabled (#124): the page shows a "merged"
     // notice and [canonical] links to the true account. Active profiles leave these at the defaults.
     val isDisabled: Boolean = false,
