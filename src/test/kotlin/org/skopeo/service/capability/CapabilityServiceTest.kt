@@ -76,11 +76,11 @@ class CapabilityServiceTest {
 
         service.list(token = token(uid = "player"), userId = player.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
         service
-            .grant(token = token(uid = "player"), userId = player.id, capability = Capability.HOST)
+            .grant(token = token(uid = "player"), userId = player.id, capabilityRaw = Capability.HOST.name)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
         service
-            .grant(token = token(uid = "ghost"), userId = player.id, capability = Capability.HOST)
+            .grant(token = token(uid = "ghost"), userId = player.id, capabilityRaw = Capability.HOST.name)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
@@ -90,12 +90,12 @@ class CapabilityServiceTest {
         val root = admin(uid = "root")
         val player = provisionUser(uid = "player")
 
-        val first = service.grant(token = token(uid = "root"), userId = player.id, capability = Capability.HOST).shouldBeRight()
+        val first = service.grant(token = token(uid = "root"), userId = player.id, capabilityRaw = Capability.HOST.name).shouldBeRight()
         first.created.shouldBeTrue()
         first.grant.capability shouldBe Capability.HOST.name
         first.grant.grantedBy shouldBe root.id.toString()
 
-        val again = service.grant(token = token(uid = "root"), userId = player.id, capability = Capability.HOST).shouldBeRight()
+        val again = service.grant(token = token(uid = "root"), userId = player.id, capabilityRaw = Capability.HOST.name).shouldBeRight()
         again.created.shouldBeFalse()
     }
 
@@ -103,8 +103,8 @@ class CapabilityServiceTest {
     fun `granting and revoking write audit-log entries (#100)`() {
         val root = admin(uid = "root")
         val player = provisionUser(uid = "player")
-        service.grant(token = token(uid = "root"), userId = player.id, capability = Capability.HOST).shouldBeRight()
-        service.revoke(token = token(uid = "root"), userId = player.id, capability = Capability.HOST).shouldBeRight()
+        service.grant(token = token(uid = "root"), userId = player.id, capabilityRaw = Capability.HOST.name).shouldBeRight()
+        service.revoke(token = token(uid = "root"), userId = player.id, capabilityRaw = Capability.HOST.name).shouldBeRight()
 
         val audit = AuditRepository()
         audit.list(actions = listOf(element = AuditAction.CAPABILITY_GRANTED), limit = 10, offset = 0).let { (items, total) ->
@@ -123,9 +123,9 @@ class CapabilityServiceTest {
     fun `an administrator can revoke a non-baseline role`() {
         admin(uid = "root")
         val player = provisionUser(uid = "player")
-        service.grant(token = token(uid = "root"), userId = player.id, capability = Capability.HOST).shouldBeRight()
+        service.grant(token = token(uid = "root"), userId = player.id, capabilityRaw = Capability.HOST.name).shouldBeRight()
 
-        service.revoke(token = token(uid = "root"), userId = player.id, capability = Capability.HOST).shouldBeRight()
+        service.revoke(token = token(uid = "root"), userId = player.id, capabilityRaw = Capability.HOST.name).shouldBeRight()
 
         service
             .list(token = token(uid = "root"), userId = player.id)
@@ -140,7 +140,7 @@ class CapabilityServiceTest {
         val player = provisionUser(uid = "player")
 
         service
-            .revoke(token = token(uid = "root"), userId = player.id, capability = Capability.PLAYER)
+            .revoke(token = token(uid = "root"), userId = player.id, capabilityRaw = Capability.PLAYER.name)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Conflict>()
     }
@@ -149,14 +149,14 @@ class CapabilityServiceTest {
     fun `the last administrator cannot be revoked, but one of several can`() {
         val root = admin(uid = "root")
         val second = provisionUser(uid = "second")
-        service.grant(token = token(uid = "root"), userId = second.id, capability = Capability.ADMINISTRATOR).shouldBeRight()
+        service.grant(token = token(uid = "root"), userId = second.id, capabilityRaw = Capability.ADMINISTRATOR.name).shouldBeRight()
 
         // Two admins now: root may revoke second's admin.
-        service.revoke(token = token(uid = "root"), userId = second.id, capability = Capability.ADMINISTRATOR).shouldBeRight()
+        service.revoke(token = token(uid = "root"), userId = second.id, capabilityRaw = Capability.ADMINISTRATOR.name).shouldBeRight()
 
         // root is the last admin: revoking it (their own) is blocked as the last-admin case.
         service
-            .revoke(token = token(uid = "root"), userId = root.id, capability = Capability.ADMINISTRATOR)
+            .revoke(token = token(uid = "root"), userId = root.id, capabilityRaw = Capability.ADMINISTRATOR.name)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Conflict>()
     }
@@ -167,7 +167,7 @@ class CapabilityServiceTest {
         provisionUser(uid = "second", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
 
         service
-            .revoke(token = token(uid = "root"), userId = root.id, capability = Capability.ADMINISTRATOR)
+            .revoke(token = token(uid = "root"), userId = root.id, capabilityRaw = Capability.ADMINISTRATOR.name)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
@@ -204,7 +204,7 @@ class CapabilityServiceTest {
         val boss = adminWithEmail(uid = "boss", email = "Boss@Skopeo.co", status = VerificationStatus.VERIFIED)
 
         gated
-            .revoke(token = token(uid = "root"), userId = boss.id, capability = Capability.ADMINISTRATOR)
+            .revoke(token = token(uid = "root"), userId = boss.id, capabilityRaw = Capability.ADMINISTRATOR.name)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Conflict>()
 
@@ -223,7 +223,7 @@ class CapabilityServiceTest {
         // Email is on the allowlist but not verified — the verified-email gate means no protection.
         val pending = adminWithEmail(uid = "pending", email = "boss@skopeo.co", status = VerificationStatus.PENDING)
 
-        gated.revoke(token = token(uid = "root"), userId = pending.id, capability = Capability.ADMINISTRATOR).shouldBeRight()
+        gated.revoke(token = token(uid = "root"), userId = pending.id, capabilityRaw = Capability.ADMINISTRATOR.name).shouldBeRight()
     }
 
     @Test
@@ -233,7 +233,7 @@ class CapabilityServiceTest {
         // Verified, but the address isn't on the allowlist → an ordinary admin, freely revocable.
         val other = adminWithEmail(uid = "other", email = "someone@elsewhere.com", status = VerificationStatus.VERIFIED)
 
-        gated.revoke(token = token(uid = "root"), userId = other.id, capability = Capability.ADMINISTRATOR).shouldBeRight()
+        gated.revoke(token = token(uid = "root"), userId = other.id, capabilityRaw = Capability.ADMINISTRATOR.name).shouldBeRight()
     }
 
     @Test
@@ -260,7 +260,7 @@ class CapabilityServiceTest {
                     ),
             )
 
-        gated.revoke(token = token(uid = "root"), userId = phoneAdmin.id, capability = Capability.ADMINISTRATOR).shouldBeRight()
+        gated.revoke(token = token(uid = "root"), userId = phoneAdmin.id, capabilityRaw = Capability.ADMINISTRATOR.name).shouldBeRight()
     }
 
     @Test
@@ -274,7 +274,7 @@ class CapabilityServiceTest {
             .setActive(id = emailContact.id, active = false, disabledAt = LocalDateTime.now())
             .shouldBeRight()
 
-        gated.revoke(token = token(uid = "root"), userId = boss.id, capability = Capability.ADMINISTRATOR).shouldBeRight()
+        gated.revoke(token = token(uid = "root"), userId = boss.id, capabilityRaw = Capability.ADMINISTRATOR.name).shouldBeRight()
     }
 
     @Test
@@ -283,7 +283,7 @@ class CapabilityServiceTest {
         val player = provisionUser(uid = "player")
 
         service
-            .revoke(token = token(uid = "root"), userId = player.id, capability = Capability.HOST)
+            .revoke(token = token(uid = "root"), userId = player.id, capabilityRaw = Capability.HOST.name)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.NotFound>()
     }

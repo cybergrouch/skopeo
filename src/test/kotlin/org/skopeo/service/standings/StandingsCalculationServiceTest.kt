@@ -387,20 +387,27 @@ class StandingsCalculationServiceTest {
         grant(userId = pointsLeader.id, points = "500")
 
         // Rating-derived source serves live off the current ratings — ordered by rating.
-        val ratingView = standings.page(token = token(uid = "admin"), band = StandingsBand.FROM_4_0, sex = "Male", limit = 25, offset = 0)
+        val ratingView =
+            standings.page(
+                token = token(uid = "admin"),
+                band = StandingsBand.FROM_4_0.code,
+                sex = "Male",
+                limit = 25,
+                offset = 0,
+            )
         ratingView.entries.first().userId shouldBe ratingLeader.id.toString()
 
         // Committing the points calculation NO LONGER auto-flips reads (#146): the source is config-gated,
         // so with standings_source unset (default RATING) reads still serve the rating-derived snapshot.
         service.calculate(token = token(uid = "admin"), dryRun = false).shouldBeRight()
         val stillRating =
-            standings.page(token = token(uid = "admin"), band = StandingsBand.FROM_4_0, sex = "Male", limit = 25, offset = 0)
+            standings.page(token = token(uid = "admin"), band = StandingsBand.FROM_4_0.code, sex = "Male", limit = 25, offset = 0)
         stillRating.entries.first().userId shouldBe ratingLeader.id.toString()
 
         // Flip the app-setting to POINTS → reads now serve the committed points snapshot, inverting the top spot.
         AppSettingsRepository().upsert(key = "standings_source", value = "POINTS", updatedBy = admin.id)
         val pointsView =
-            standings.page(token = token(uid = "admin"), band = StandingsBand.FROM_4_0, sex = "Male", limit = 25, offset = 0)
+            standings.page(token = token(uid = "admin"), band = StandingsBand.FROM_4_0.code, sex = "Male", limit = 25, offset = 0)
         pointsView.entries.first().userId shouldBe pointsLeader.id.toString()
     }
 

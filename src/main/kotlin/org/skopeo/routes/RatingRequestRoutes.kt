@@ -18,9 +18,7 @@ import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.rating.ApproveRatingRequestRequest
 import org.skopeo.dto.rating.CreateRatingRequestRequest
 import org.skopeo.dto.rating.DenyRatingRequestRequest
-import org.skopeo.model.Rating
 import org.skopeo.service.rating.RatingRequestService
-import java.math.BigDecimal
 
 /**
  * Re-rate requests (issue #140). A player creates a request and reads their own (`/me`); a RATER or
@@ -79,7 +77,7 @@ private fun Route.raterEndpoints(service: RatingRequestService) {
             val body = call.receive<ApproveRatingRequestRequest>()
             respondEither(
                 result =
-                    service.approve(token = verifiedToken(), id = uuidParam(name = "id"), newRating = validatedRating(raw = body.rating)),
+                    service.approve(token = verifiedToken(), id = uuidParam(name = "id"), newRatingRaw = body.rating),
             ) { request -> call.respond(status = HttpStatusCode.OK, message = request) }
         }
     }
@@ -94,9 +92,3 @@ private fun Route.raterEndpoints(service: RatingRequestService) {
 }
 
 private const val DEFAULT_PAGE_SIZE = 20
-
-/** Validate the NTRP value at the boundary (#116): a valid number in the 1.0–7.0 range, else a 400. */
-private fun validatedRating(raw: String): BigDecimal {
-    Rating.fromValue(value = raw)
-    return BigDecimal(raw)
-}

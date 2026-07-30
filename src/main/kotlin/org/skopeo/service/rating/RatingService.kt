@@ -102,18 +102,20 @@ class RatingService(
     fun setRating(
         token: VerifiedFirebaseToken,
         userId: UUID,
-        value: BigDecimal,
+        band: String? = null,
+        value: String? = null,
     ): Either<ServiceError, UserRatingResponse> =
         either {
             val adminId = requireRater(token = token).bind()
             requireUserExists(userId = userId).bind()
-            val level = Rating.fromValue(value = value.toPlainString()).publishedLevel.value
+            val resolved = resolveRating(band = band, value = value)
+            val level = Rating.fromValue(value = resolved.toPlainString()).publishedLevel.value
             val previous = ratings.findCurrentRating(userId = userId)
             // A manual assessment/override is not match-derived, so confidence computes to 0% (#343).
             val updated =
                 ratings.setRating(
                     userId = userId,
-                    rating = value,
+                    rating = resolved,
                     level = level,
                 )
             // A manual override of an existing rating is recorded in history for traceability (#96);
@@ -205,6 +207,24 @@ class RatingService(
             // Surface the self-reported value as its published NTRP band (e.g. "4.0"), not the raw decimal.
             proposedRating = proposedRating?.let { Level.fromValue(value = it.toPlainString()).value },
         )
+
+    /**
+     * Resolve the NTRP value to store (#206/#116). A [band] selection (the normal path) maps to the band
+     * MIDPOINT so initial ratings sit centered in their band; a precise [value] (the override path) is
+     * stored as-is. Exactly one must be present and in the 1.0–7.0 range, otherwise a 400.
+     */
+    private fun resolveRating(
+        band: String?,
+        value: String?,
+    ): BigDecimal {
+        if (band != null) {
+            Rating.fromValue(value = band) // reject a non-numeric / out-of-range band with a 400
+            return Level.bandMidpoint(band = BigDecimal(band))
+        }
+        val precise = requireNotNull(value = value) { "a band or value is required" }
+        Rating.fromValue(value = precise)
+        return BigDecimal(precise)
+    }
 
     private fun requireUserExists(userId: UUID): Either<ServiceError, Unit> = users.findById(id = userId).map { }
 

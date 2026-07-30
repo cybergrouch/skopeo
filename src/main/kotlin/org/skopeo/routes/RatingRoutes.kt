@@ -19,11 +19,8 @@ import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.rating.CalculationRequest
 import org.skopeo.dto.rating.SetRatingRequest
-import org.skopeo.model.Level
-import org.skopeo.model.Rating
 import org.skopeo.service.rating.RatingCalculationService
 import org.skopeo.service.rating.RatingService
-import java.math.BigDecimal
 
 private const val DEFAULT_PENDING_PAGE_SIZE = 20
 
@@ -96,27 +93,11 @@ private fun Route.ratings(service: RatingService) {
                     service.setRating(
                         token = verifiedToken(),
                         userId = uuidParam(name = "userId"),
-                        value = resolvedRating(request = request),
+                        band = request.band,
+                        value = request.value,
                     ),
                 // The setter is a RATER/ADMINISTRATOR, so echo back the exact value they just set.
             ) { rating -> call.respond(status = HttpStatusCode.OK, message = rating) }
         }
     }
-}
-
-/**
- * Resolve the NTRP value to store (#206/#116). A [SetRatingRequest.band] selection (the normal path)
- * is mapped to the band MIDPOINT so initial ratings sit centered in their band; a precise
- * [SetRatingRequest.value] (the override path) is stored as-is. Exactly one must be present and in the
- * 1.0–7.0 range, otherwise a 400.
- */
-private fun resolvedRating(request: SetRatingRequest): BigDecimal {
-    val band = request.band
-    if (band != null) {
-        Rating.fromValue(value = band) // reject a non-numeric / out-of-range band with a 400
-        return Level.bandMidpoint(band = BigDecimal(band))
-    }
-    val value = requireNotNull(value = request.value) { "a band or value is required" }
-    Rating.fromValue(value = value)
-    return BigDecimal(value)
 }

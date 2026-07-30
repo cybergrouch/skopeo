@@ -155,7 +155,7 @@ class RatingRequestServiceTest {
 
         // statusRaw = null lists every request; ADMINISTRATOR implicitly rates.
         service.list(token = token(uid = "admin"), limit = 50, offset = 0, statusRaw = null).shouldBeRight().total shouldBe 1
-        service.approve(token = token(uid = "admin"), id = UUID.fromString(request.id), newRating = BigDecimal("4.5")).shouldBeRight()
+        service.approve(token = token(uid = "admin"), id = UUID.fromString(request.id), newRatingRaw = "4.5").shouldBeRight()
 
         service.list(token = token(uid = "ghost"), limit = 50, offset = 0, statusRaw = null)
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
@@ -168,7 +168,7 @@ class RatingRequestServiceTest {
         val request = service.create(token = token(uid = "player"), justification = "promote me").shouldBeRight()
 
         val resolved =
-            service.approve(token = token(uid = "rater"), id = UUID.fromString(request.id), newRating = BigDecimal("4.5")).shouldBeRight()
+            service.approve(token = token(uid = "rater"), id = UUID.fromString(request.id), newRatingRaw = "4.5").shouldBeRight()
         resolved.status shouldBe RatingRequestStatus.APPROVED.name
         // resolvedBy is not surfaced on the response DTO; verify the persisted resolver instead.
         requests.findById(id = UUID.fromString(request.id))!!.resolvedBy shouldBe rater.id
@@ -176,7 +176,7 @@ class RatingRequestServiceTest {
         // The override is recorded in the rating history + audited.
         AuditRepository().list(actions = listOf(element = AuditAction.RATING_OVERRIDDEN), limit = 10, offset = 0).second shouldBe 1L
 
-        service.approve(token = token(uid = "rater"), id = UUID.fromString(request.id), newRating = BigDecimal("5.0"))
+        service.approve(token = token(uid = "rater"), id = UUID.fromString(request.id), newRatingRaw = "5.0")
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Conflict>()
         // Denying an already-resolved request is likewise a conflict.
         service.deny(token = token(uid = "rater"), id = UUID.fromString(request.id), reason = "too late")
@@ -210,11 +210,11 @@ class RatingRequestServiceTest {
         provision(uid = "player", rated = true)
         val request = service.create(token = token(uid = "player"), justification = "x").shouldBeRight()
 
-        service.approve(token = token(uid = "rater"), id = UUID.randomUUID(), newRating = BigDecimal("4.5"))
+        service.approve(token = token(uid = "rater"), id = UUID.randomUUID(), newRatingRaw = "4.5")
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
         service.deny(token = token(uid = "rater"), id = UUID.randomUUID(), reason = "no")
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
-        service.approve(token = token(uid = "player"), id = UUID.fromString(request.id), newRating = BigDecimal("4.5"))
+        service.approve(token = token(uid = "player"), id = UUID.fromString(request.id), newRatingRaw = "4.5")
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
         service.deny(token = token(uid = "player"), id = UUID.fromString(request.id), reason = "no")
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()

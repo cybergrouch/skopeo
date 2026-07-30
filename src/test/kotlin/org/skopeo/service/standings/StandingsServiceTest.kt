@@ -130,7 +130,7 @@ class StandingsServiceTest {
     ): User = users.createPlaceholder(command = CreatePlaceholderCommand(displayName = displayName, sex = sex))
 
     private fun page(
-        band: StandingsBand?,
+        band: String?,
         sex: String?,
         limit: Int? = null,
         offset: Int? = null,
@@ -166,7 +166,7 @@ class StandingsServiceTest {
         val m2 = provision(uid = "m2", sex = "Male").also { rate(user = it, value = "4.1") }
         provision(uid = "f1", sex = "Female").also { rate(user = it, value = "4.4") }
 
-        val men = page(band = StandingsBand.FROM_4_0, sex = "Male")
+        val men = page(band = StandingsBand.FROM_4_0.code, sex = "Male")
         men.band shouldBe StandingsBand.FROM_4_0.code
         men.sex shouldBe "Male"
         men.source shouldBe SnapshotSource.RATING.name
@@ -184,7 +184,7 @@ class StandingsServiceTest {
         val real = provision(uid = "real", sex = "Male").also { rate(user = it, value = "4.3") }
         val dummy = placeholder(displayName = "Dummy").also { rate(user = it, value = "4.1") }
 
-        val men = page(band = StandingsBand.FROM_4_0, sex = "Male")
+        val men = page(band = StandingsBand.FROM_4_0.code, sex = "Male")
         men.entries.single { it.userId == dummy.id.toString() }.isPlaceholder.shouldBeTrue()
         men.entries.single { it.userId == real.id.toString() }.isPlaceholder.shouldBeFalse()
     }
@@ -203,23 +203,23 @@ class StandingsServiceTest {
     fun `page paginates within a group live, honoring limit and offset (#220)`() {
         val ranked = (1..3).map { provision(uid = "p$it", sex = "Male").also { u -> rate(user = u, value = "4.${4 - it}") } }
 
-        val first = page(band = StandingsBand.FROM_4_0, sex = "Male", limit = 2, offset = 0)
+        val first = page(band = StandingsBand.FROM_4_0.code, sex = "Male", limit = 2, offset = 0)
         first.total shouldBe 3
         first.entries.map { it.userId } shouldContainExactly listOf(ranked[0].id.toString(), ranked[1].id.toString())
 
-        val second = page(band = StandingsBand.FROM_4_0, sex = "Male", limit = 2, offset = 2)
+        val second = page(band = StandingsBand.FROM_4_0.code, sex = "Male", limit = 2, offset = 2)
         second.entries.map { it.userId } shouldContainExactly listOf(element = ranked[2].id.toString())
     }
 
     @Test
     fun `a rating change is reflected live on the next page read (#146)`() {
         val player = provision(uid = "p", sex = "Male").also { rate(user = it, value = "4.2") }
-        page(band = StandingsBand.FROM_4_0, sex = "Male").entries.single().userId shouldBe player.id.toString()
+        page(band = StandingsBand.FROM_4_0.code, sex = "Male").entries.single().userId shouldBe player.id.toString()
 
         // A promotion into a higher band; the live read moves the player there with no rebuild.
         rate(user = player, value = "4.7")
-        page(band = StandingsBand.FROM_4_0, sex = "Male").total shouldBe 0
-        page(band = StandingsBand.FROM_4_5, sex = "Male").entries.single().userId shouldBe player.id.toString()
+        page(band = StandingsBand.FROM_4_0.code, sex = "Male").total shouldBe 0
+        page(band = StandingsBand.FROM_4_5.code, sex = "Male").entries.single().userId shouldBe player.id.toString()
     }
 
     @Test
@@ -229,11 +229,11 @@ class StandingsServiceTest {
         provision(uid = "rater", capabilities = setOf(Capability.PLAYER, Capability.RATER))
         val player = provision(uid = "p", sex = "Male").also { rate(user = it, value = "4.2") }
 
-        page(band = StandingsBand.FROM_4_0, sex = "Male", token = token(uid = "admin"))
+        page(band = StandingsBand.FROM_4_0.code, sex = "Male", token = token(uid = "admin"))
             .entries.single { it.userId == player.id.toString() }.currentRating shouldBe "4.200000"
-        page(band = StandingsBand.FROM_4_0, sex = "Male", token = token(uid = "rater"))
+        page(band = StandingsBand.FROM_4_0.code, sex = "Male", token = token(uid = "rater"))
             .entries.single { it.userId == player.id.toString() }.currentRating.shouldBeNull()
-        page(band = StandingsBand.FROM_4_0, sex = "Male", token = token(uid = "p"))
+        page(band = StandingsBand.FROM_4_0.code, sex = "Male", token = token(uid = "p"))
             .entries.single { it.userId == player.id.toString() }.currentRating.shouldBeNull()
     }
 
@@ -243,7 +243,7 @@ class StandingsServiceTest {
         val disabled = provision(uid = "disabled", sex = "Male").also { rate(user = it, value = "4.0") }
         users.deactivate(id = disabled.id)
 
-        page(band = StandingsBand.FROM_4_0, sex = "Male").entries.let {
+        page(band = StandingsBand.FROM_4_0.code, sex = "Male").entries.let {
             it shouldHaveSize 1
             it.single().userId shouldBe active.id.toString()
         }
@@ -288,7 +288,7 @@ class StandingsServiceTest {
         // Only a Male 4.0 group exists; requesting Female for that band yields an empty page, not a fallback.
         provision(uid = "m", sex = "Male").also { rate(user = it, value = "4.0") }
 
-        val view = page(band = StandingsBand.FROM_4_0, sex = "Female")
+        val view = page(band = StandingsBand.FROM_4_0.code, sex = "Female")
         view.entries shouldHaveSize 0
         view.total shouldBe 0
         // The selectors still advertise the group that does exist.
@@ -304,7 +304,7 @@ class StandingsServiceTest {
             provision(uid = "nodob", sex = "Male", dateOfBirth = null)
                 .also { rate(user = it, value = "4.1") }
 
-        val entries = page(band = StandingsBand.FROM_4_0, sex = "Male").entries.associateBy { it.userId }
+        val entries = page(band = StandingsBand.FROM_4_0.code, sex = "Male").entries.associateBy { it.userId }
         entries.getValue(key = withDob.id.toString()).age.shouldNotBeNull()
         entries.getValue(key = noDob.id.toString()).age.shouldBeNull()
     }
@@ -316,7 +316,7 @@ class StandingsServiceTest {
         val named = provision(uid = "named", sex = "Male").also { rate(user = it, value = "4.2") }
         val unnamed = provision(uid = "unnamed", sex = "Male", withName = false).also { rate(user = it, value = "4.2") }
 
-        val entries = page(band = StandingsBand.FROM_4_0, sex = "Male").entries
+        val entries = page(band = StandingsBand.FROM_4_0.code, sex = "Male").entries
         entries shouldHaveSize 2
         entries.map { it.userId }.toSet() shouldBe setOf(named.id.toString(), unnamed.id.toString())
         entries.single { it.userId == unnamed.id.toString() }.displayName.shouldBeNull()
@@ -449,7 +449,7 @@ class StandingsServiceTest {
         setSource(value = "POINTS")
 
         val entries =
-            page(band = StandingsBand.FROM_4_0, sex = "Male", token = token(uid = "viewer")).entries.associateBy { it.userId }
+            page(band = StandingsBand.FROM_4_0.code, sex = "Male", token = token(uid = "viewer")).entries.associateBy { it.userId }
         // Points are the served metric and public (persisted at the snapshot's NUMERIC scale); the precise
         // rating is never on a POINTS row.
         entries.getValue(key = top.id.toString()).points shouldBe "240.0000"
@@ -483,7 +483,7 @@ class StandingsServiceTest {
         )
         setSource(value = "POINTS")
 
-        val row = page(band = StandingsBand.FROM_4_0, sex = "Male", token = token(uid = "rater")).entries.single()
+        val row = page(band = StandingsBand.FROM_4_0.code, sex = "Male", token = token(uid = "rater")).entries.single()
         row.points shouldBe "240.0000"
         // Under POINTS the metric is points; the rating is not the served value, so it is never shown.
         row.currentRating.shouldBeNull()
@@ -494,7 +494,7 @@ class StandingsServiceTest {
         // Only one Male 4.0 group has data, yet the full band list is advertised for the dropdown.
         provision(uid = "m", sex = "Male").also { rate(user = it, value = "4.0") }
 
-        val view = page(band = StandingsBand.FROM_4_0, sex = "Male")
+        val view = page(band = StandingsBand.FROM_4_0.code, sex = "Male")
         view.bands.map { it.code } shouldContainExactly StandingsBand.entries.reversed().map { it.code }
         view.bands.first().code shouldBe StandingsBand.SIX_PLUS.code // strongest first
         view.groups shouldHaveSize 1 // only the populated group carries data

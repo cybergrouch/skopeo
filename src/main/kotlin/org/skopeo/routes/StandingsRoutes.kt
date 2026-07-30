@@ -7,12 +7,10 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.application.call
 import io.ktor.server.auth.authenticate
-import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
-import org.skopeo.model.StandingsBand
 import org.skopeo.service.standings.StandingsService
 
 /**
@@ -30,7 +28,7 @@ fun Application.configureStandingsRoutes(service: StandingsService = StandingsSe
                     val page =
                         service.page(
                             token = verifiedToken(),
-                            band = params["band"]?.let { bandFromCode(code = it) },
+                            band = params["band"],
                             sex = params["sex"],
                             limit = params["limit"]?.toIntOrNull(),
                             offset = params["offset"]?.toIntOrNull(),
@@ -55,10 +53,3 @@ fun Application.configureStandingsRoutes(service: StandingsService = StandingsSe
         }
     }
 }
-
-/** Map the `band` query code (e.g. "4.0") to its band, or a 400 when it isn't a known band code. */
-private fun bandFromCode(code: String): StandingsBand =
-    StandingsBand.ofCode(code = code)
-        ?: throw BadRequestException(
-            message = "Invalid band '$code'; expected one of ${StandingsBand.entries.joinToString { it.code }}",
-        )

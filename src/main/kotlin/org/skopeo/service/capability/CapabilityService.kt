@@ -5,6 +5,7 @@ package org.skopeo.service.capability
 
 import arrow.core.Either
 import arrow.core.left
+import arrow.core.raise.Raise
 import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.right
@@ -60,10 +61,11 @@ class CapabilityService(
     fun grant(
         token: VerifiedFirebaseToken,
         userId: UUID,
-        capability: Capability,
+        capabilityRaw: String,
     ): Either<ServiceError, Granted> =
         either {
             val adminId = requireAdmin(token = token).bind()
+            val capability = capabilityOf(raw = capabilityRaw)
             requireUserExists(userId = userId).bind()
             val existing = capabilities.findActive(userId = userId, capability = capability)
             if (existing != null) {
@@ -88,10 +90,11 @@ class CapabilityService(
     fun revoke(
         token: VerifiedFirebaseToken,
         userId: UUID,
-        capability: Capability,
+        capabilityRaw: String,
     ): Either<ServiceError, Unit> =
         either {
             val adminId = requireAdmin(token = token).bind()
+            val capability = capabilityOf(raw = capabilityRaw)
             val target = users.findById(id = userId).bind()
 
             ensure(condition = capability != Capability.PLAYER) {
@@ -130,6 +133,16 @@ class CapabilityService(
                     ),
             )
         }
+
+    /** Parse a raw `capability` name to a [Capability]; an unknown value is a 400 (`ServiceError.Validation`). */
+    private fun Raise<ServiceError>.capabilityOf(raw: String): Capability =
+        Capability.entries.find { it.name == raw.uppercase() }
+            ?: raise(
+                r =
+                    ServiceError.Validation(
+                        message = "Unknown capability '$raw'; expected one of ${Capability.entries.joinToString { it.name }}",
+                    ),
+            )
 
     private fun requireUserExists(userId: UUID): Either<ServiceError, Unit> = users.findById(id = userId).map { }
 
