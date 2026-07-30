@@ -35,6 +35,7 @@ import java.util.UUID
  *
  * Expected failures are returned as an [Either] left ([ServiceError], issue #115) rather than thrown.
  */
+@Suppress("TooManyFunctions") // Cohesive contact CRUD + the three query-param enum parsers (#597 routes↛model).
 class ContactService(
     private val contacts: ContactRepository = ContactRepository(),
     private val users: UserRepository = UserRepository(),
