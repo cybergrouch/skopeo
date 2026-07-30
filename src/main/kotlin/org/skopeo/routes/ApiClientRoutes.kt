@@ -24,11 +24,8 @@ import org.skopeo.PARTNER_RATE_LIMIT_NAME
 import org.skopeo.dto.client.CreateApiClientRequest
 import org.skopeo.dto.client.IssueApiKeyRequest
 import org.skopeo.dto.client.SetRateLimitRequest
-import org.skopeo.model.ApiKeyEnvironment
-import org.skopeo.model.Capability
 import org.skopeo.security.ClientAuthResult
 import org.skopeo.security.ClientPrincipal
-import org.skopeo.security.hasScope
 import org.skopeo.service.client.ApiClientService
 
 /** The header a partner presents its API key in (#225/#596). */
@@ -103,17 +100,13 @@ private fun Route.manageKeys(service: ApiClientService) {
     post(path = "/{id}/keys") {
         respondMappingErrors {
             val body = call.receive<IssueApiKeyRequest>()
-            val scopes = body.scopes.map { parseEnumParam<Capability>(value = it, field = "scope") }.toSet()
-            val environment =
-                body.environment?.let { parseEnumParam<ApiKeyEnvironment>(value = it, field = "environment") }
-                    ?: ApiKeyEnvironment.LIVE
             respondEither(
                 result =
                     service.issueKey(
                         token = verifiedToken(),
                         clientId = uuidParam(name = "id"),
-                        scopes = scopes,
-                        environment = environment,
+                        scopeNames = body.scopes.toSet(),
+                        environmentRaw = body.environment,
                         expiresInDays = body.expiresInDays,
                     ),
             ) { issued -> call.respond(status = HttpStatusCode.Created, message = issued) }
@@ -151,8 +144,9 @@ private fun Route.clientPlayerDirectory(service: ApiClientService) {
     get(path = "/players") {
         respondMappingErrors {
             val principal = resolveClient(service = service) ?: return@respondMappingErrors
-            if (!requireClientScope(principal = principal, required = Capability.RESEARCHER)) return@respondMappingErrors
-            call.respond(status = HttpStatusCode.OK, message = service.playerDirectory())
+            respondEither(result = service.playerDirectory(principal = principal)) { players ->
+                call.respond(status = HttpStatusCode.OK, message = players)
+            }
         }
     }
 }
@@ -170,19 +164,6 @@ private fun Route.delegatedCapabilities(service: ApiClientService) {
             }
         }
     }
-}
-
-/** Client-scope gate (#597): true if [principal] holds [required], else respond 403 and return false. */
-private suspend fun RoutingContext.requireClientScope(
-    principal: ClientPrincipal,
-    required: Capability,
-): Boolean {
-    if (principal.hasScope(capability = required)) return true
-    call.respond(
-        status = HttpStatusCode.Forbidden,
-        message = errorBody(error = "Forbidden", message = "This API key is not scoped for '$required'"),
-    )
-    return false
 }
 
 /**

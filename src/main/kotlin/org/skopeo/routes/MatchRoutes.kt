@@ -21,15 +21,8 @@ import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.dto.match.MatchStateRequest
 import org.skopeo.dto.match.ReorderMatchesRequest
 import org.skopeo.dto.match.SetHandicapsRequest
-import org.skopeo.model.MatchQuery
-import org.skopeo.model.MatchType
-import org.skopeo.model.PlacementBracket
-import org.skopeo.model.TeamType
-import org.skopeo.service.match.FixtureInput
 import org.skopeo.service.match.MatchService
 import java.math.BigDecimal
-import java.time.LocalDate
-import java.time.format.DateTimeParseException
 import java.util.UUID
 
 /**
@@ -69,9 +62,10 @@ private fun Route.upcoming(service: MatchService) {
 private fun Route.listAndCreate(service: MatchService) {
     get {
         respondMappingErrors {
-            val view = matchQueryOf(value = call.request.queryParameters["filter"])
             val eventId = call.request.queryParameters["eventId"]?.let { parseUuid(value = it) }
-            respondEither(result = service.query(token = verifiedToken(), view = view, eventId = eventId)) { list ->
+            respondEither(
+                result = service.query(token = verifiedToken(), filter = call.request.queryParameters["filter"], eventId = eventId),
+            ) { list ->
                 call.respond(status = HttpStatusCode.OK, message = list)
             }
         }
@@ -80,7 +74,7 @@ private fun Route.listAndCreate(service: MatchService) {
         respondMappingErrors {
             val request = call.receive<CreateFixtureRequest>()
             respondEither(
-                result = service.createFixture(token = verifiedToken(), request = toFixtureInput(request = request)),
+                result = service.createFixture(token = verifiedToken(), request = request),
             ) { match -> call.respond(status = HttpStatusCode.Created, message = match) }
         }
     }
@@ -96,32 +90,6 @@ private fun Route.listAndCreate(service: MatchService) {
     }
 }
 
-/** Parse + validate the fixture request shape at the boundary (#116): enums, date, ids, composition. */
-private fun toFixtureInput(request: CreateFixtureRequest): FixtureInput {
-    val matchFormat = parseEnumParam<TeamType>(value = request.matchFormat, field = "matchFormat")
-    val team1 = request.team1.map { parseUuid(value = it) }
-    val team2 = request.team2.map { parseUuid(value = it) }
-    // Composition check at the boundary: the right count per side and no player appearing twice.
-    val expected = if (matchFormat == TeamType.SINGLES) 1 else 2
-    require(value = team1.size == expected && team2.size == expected) { "$matchFormat needs $expected player(s) per side" }
-    (team1 + team2).let { all -> require(value = all.toSet().size == all.size) { "a player cannot appear more than once in a match" } }
-    return FixtureInput(
-        matchFormat = matchFormat,
-        matchType = parseEnumParam<MatchType>(value = request.matchType, field = "matchType"),
-        matchDate = parseMatchDate(value = request.matchDate),
-        team1 = team1,
-        team2 = team2,
-        venue = request.venue,
-        tournamentName = request.tournamentName,
-        eventId = request.eventId?.let { parseUuid(value = it, field = "event id") },
-        // Range (0 < h <= 1.0) is enforced in CreateFixtureRequest.init; here we only parse to BigDecimal.
-        team1Handicap = request.team1Handicap?.let { BigDecimal(it) },
-        team2Handicap = request.team2Handicap?.let { BigDecimal(it) },
-        isPlacementMatch = request.isPlacementMatch,
-        placementBracket = request.placementBracket?.let { parseEnumParam<PlacementBracket>(value = it, field = "placementBracket") },
-    )
-}
-
 private fun parseUuid(
     value: String,
     field: String = "user id",
@@ -130,13 +98,6 @@ private fun parseUuid(
         UUID.fromString(value)
     } catch (e: IllegalArgumentException) {
         throw IllegalArgumentException("Invalid $field '$value'", e)
-    }
-
-private fun parseMatchDate(value: String): LocalDate =
-    try {
-        LocalDate.parse(value)
-    } catch (e: DateTimeParseException) {
-        throw IllegalArgumentException("Invalid matchDate '$value'; expected ISO-8601 (yyyy-MM-dd)", e)
     }
 
 /**
@@ -208,11 +169,3 @@ private fun Route.fixtureUpdateRoutes(service: MatchService) {
         }
     }
 }
-
-private fun matchQueryOf(value: String?): MatchQuery =
-    when (value) {
-        "pending-calculation" -> MatchQuery.PENDING_CALCULATION
-        "awaiting-results" -> MatchQuery.AWAITING_RESULTS
-        "results" -> MatchQuery.RESULTS
-        else -> throw IllegalArgumentException("filter must be 'pending-calculation', 'awaiting-results', or 'results'")
-    }

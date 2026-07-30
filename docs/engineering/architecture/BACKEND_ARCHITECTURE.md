@@ -106,11 +106,13 @@ serializable boundary record** (no `model`/`service` dependency — save a small
 wire-contract value types), and `mapper` owns the dto↔model translation (`toResponse`/`toCommand`
 extensions), depending on `dto` + `model` only. `service` may call `mapper` (one-way, acyclic). The
 dto↔model translation is **hidden behind the service**: services return response DTOs (and accept
-request DTOs), so `routes` depend on `service` + `dto` and never on `mapper`. (Routes still touch a
-thin slice of `model` — enums parsed from query/path params and the wire-contract request bodies — so
-there is deliberately no `routes ↛ model` rule yet. `ServiceError` (package `org.skopeo.error`) and the
-auth principals (`ClientPrincipal`/`ClientAuthResult`, package `org.skopeo.security`) now live outside
-`model`, so returning/consuming them no longer counts as a `model` dependency.)
+request DTOs), so `routes` depend on `service` + `dto` and never on `mapper`. Routes also hand services
+the **raw** query/path/body strings — services parse + validate them (bad enum/band/value →
+`ServiceError.Validation` → 400) — so routes no longer reference domain enums. `ServiceError` (package
+`org.skopeo.error`) and the auth principals (`ClientPrincipal`/`ClientAuthResult`, package
+`org.skopeo.security`) also live outside `model`. The **only** remaining `routes → model` reference is
+the two wire-contract request bodies (`OpenPlayPointsConfig`/`TournamentPointsConfig`) received via
+`call.receive<…>()`; a strict `routes ↛ model` rule waits on decoupling those.
 
 ```mermaid
 classDiagram

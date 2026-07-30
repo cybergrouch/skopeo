@@ -122,7 +122,7 @@ class EventServiceTest {
         participantIds = participants,
         clubId = clubId,
         circuitId = circuitId,
-        type = type,
+        type = type.name,
         awardRankingPoints = awardRankingPoints,
     )
 
@@ -160,6 +160,15 @@ class EventServiceTest {
         // Participant order isn't guaranteed, so look p1 up by id rather than assuming it's first.
         view.participants.single { it.userId == p1.id.toString() }.displayName shouldBe "p1"
         view.clubId.shouldBeNull() // clubless by default
+    }
+
+    @Test
+    fun `create rejects an unknown event type (#403)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        service
+            .create(token = token(uid = "host"), input = input().copy(type = "NOT_A_TYPE"))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
     }
 
     @Test
@@ -836,7 +845,7 @@ class EventServiceTest {
             token = token(uid = "host"),
             eventId = event.id,
             userId = player.id,
-            status = EventParticipantStatus.APPROVED,
+            statusRaw = EventParticipantStatus.APPROVED.name,
         ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
     }
 
@@ -1063,7 +1072,7 @@ class EventServiceTest {
                     token = token(uid = "host"),
                     eventId = event.id,
                     userId = player.id,
-                    status = EventParticipantStatus.APPROVED,
+                    statusRaw = EventParticipantStatus.APPROVED.name,
                 ).shouldBeRight()
         view.participants.single { it.userId == player.id.toString() }.status shouldBe "APPROVED"
         view.domain().participantIds.contains(element = player.id).shouldBeTrue()
@@ -1081,7 +1090,12 @@ class EventServiceTest {
         service.selfSignup(token = token(uid = "player"), code = event.publicCode).shouldBeRight()
 
         service
-            .decideParticipant(token = token(uid = "host"), eventId = event.id, userId = player.id, status = EventParticipantStatus.HOLD)
+            .decideParticipant(
+                token = token(uid = "host"),
+                eventId = event.id,
+                userId = player.id,
+                statusRaw = EventParticipantStatus.HOLD.name,
+            )
             .shouldBeRight()
             .participants
             .single { it.userId == player.id.toString() }
@@ -1098,7 +1112,7 @@ class EventServiceTest {
                 token = token(uid = "host"),
                 eventId = event.id,
                 userId = player.id,
-                status = EventParticipantStatus.APPROVED,
+                statusRaw = EventParticipantStatus.APPROVED.name,
             ).shouldBeRight()
             .domain().participantIds
             .contains(element = player.id)
@@ -1118,7 +1132,7 @@ class EventServiceTest {
                 token = token(uid = "outsider"),
                 eventId = event.id,
                 userId = player.id,
-                status = EventParticipantStatus.APPROVED,
+                statusRaw = EventParticipantStatus.APPROVED.name,
             ).shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
 
@@ -1127,6 +1141,23 @@ class EventServiceTest {
             token = token(uid = "ghost"),
             code = event.publicCode,
         ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
+    @Test
+    fun `decideParticipant rejects an unknown decision status (#201)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val player = provision(uid = "player")
+        val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight().domain()
+        service.selfSignup(token = token(uid = "player"), code = event.publicCode).shouldBeRight()
+
+        service
+            .decideParticipant(
+                token = token(uid = "host"),
+                eventId = event.id,
+                userId = player.id,
+                statusRaw = "NOT_A_STATUS",
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
     }
 
     @Test
@@ -1166,7 +1197,7 @@ class EventServiceTest {
                 token = token(uid = "host"),
                 eventId = UUID.randomUUID(),
                 userId = player.id,
-                status = EventParticipantStatus.APPROVED,
+                statusRaw = EventParticipantStatus.APPROVED.name,
             ).shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.NotFound>()
         // PENDING is not a valid decision (only APPROVED/HOLD).
@@ -1175,7 +1206,7 @@ class EventServiceTest {
                 token = token(uid = "host"),
                 eventId = event.id,
                 userId = player.id,
-                status = EventParticipantStatus.PENDING,
+                statusRaw = EventParticipantStatus.PENDING.name,
             ).shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Validation>()
         // The repository self-signup is a no-op (null) for an unknown event.

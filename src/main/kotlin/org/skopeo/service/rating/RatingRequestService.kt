@@ -18,6 +18,7 @@ import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditPersonRef
 import org.skopeo.model.AuditWrite
 import org.skopeo.model.Capability
+import org.skopeo.model.Rating
 import org.skopeo.model.RatingRequest
 import org.skopeo.model.RatingRequestPage
 import org.skopeo.model.RatingRequestStatus
@@ -106,10 +107,11 @@ class RatingRequestService(
     fun approve(
         token: VerifiedFirebaseToken,
         id: UUID,
-        newRating: BigDecimal,
+        newRatingRaw: String,
     ): Either<ServiceError, RatingRequestResponse> =
         either {
             val raterId = requireRater(token = token).bind()
+            val newRating = validatedRating(raw = newRatingRaw)
             val request = ensureNotNull(value = requests.findById(id = id)) { ServiceError.NotFound(message = "Request $id not found") }
             // Atomically claim the request (PENDING → APPROVED); null means it was already resolved.
             val resolved =
@@ -124,7 +126,7 @@ class RatingRequestService(
                         ),
                 ) { ServiceError.Conflict(message = "This request has already been resolved") }
             // Apply the new rating now that the resolution is ours (records the override + history).
-            ratingService.setRating(token = token, userId = request.userId, value = newRating).bind()
+            ratingService.setRating(token = token, userId = request.userId, value = newRating.toPlainString()).bind()
             resolved.toResponse()
         }
 
@@ -183,6 +185,12 @@ class RatingRequestService(
                         deleted = user.isDeleted(),
                     )
             }
+
+    /** Validate the NTRP value at the boundary (#116): a valid number in the 1.0–7.0 range, else a 400. */
+    private fun validatedRating(raw: String): BigDecimal {
+        Rating.fromValue(value = raw)
+        return BigDecimal(raw)
+    }
 
     private fun requireRater(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
         val caller = users.findByFirebaseUid(firebaseUid = token.uid) ?: return ServiceError.Forbidden().left()

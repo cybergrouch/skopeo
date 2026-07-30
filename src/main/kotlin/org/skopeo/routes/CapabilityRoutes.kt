@@ -18,7 +18,6 @@ import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.dto.capability.CapabilityGrantRequest
-import org.skopeo.model.Capability
 import org.skopeo.service.capability.CapabilityService
 
 /**
@@ -53,7 +52,7 @@ private fun Route.listAndGrant(service: CapabilityService) {
                     service.grant(
                         token = verifiedToken(),
                         userId = uuidParam(name = "userId"),
-                        capability = parseEnumParam<Capability>(value = request.capability, field = "capability"),
+                        capabilityRaw = request.capability,
                     ),
             ) { result ->
                 val status = if (result.created) HttpStatusCode.Created else HttpStatusCode.OK
@@ -72,7 +71,7 @@ private fun Route.revoke(service: CapabilityService) {
                     service.revoke(
                         token = verifiedToken(),
                         userId = uuidParam(name = "userId"),
-                        capability = parseEnumParam<Capability>(value = raw, field = "capability"),
+                        capabilityRaw = raw,
                     ),
             ) { call.respond(status = HttpStatusCode.NoContent, message = "") }
         }

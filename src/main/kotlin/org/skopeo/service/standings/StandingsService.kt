@@ -63,15 +63,21 @@ class StandingsService(
      */
     fun page(
         token: VerifiedFirebaseToken,
-        band: StandingsBand?,
+        band: String?,
         sex: String?,
         limit: Int?,
         offset: Int?,
     ): StandingsPageResponse {
         val revealRates = callerCanSeeRates(token = token)
+        val parsedBand =
+            band?.let { code ->
+                requireNotNull(value = StandingsBand.ofCode(code = code)) {
+                    "Invalid band '$code'; expected one of ${StandingsBand.entries.joinToString { it.code }}"
+                }
+            }
         val pageSize = (limit ?: DEFAULT_PAGE_SIZE).coerceIn(minimumValue = 1, maximumValue = MAX_PAGE_SIZE)
         val pageOffset = (offset ?: 0).coerceAtLeast(minimumValue = 0)
-        val request = PageRequest(band = band, sex = sex, limit = pageSize, offset = pageOffset, revealRates = revealRates)
+        val request = PageRequest(band = parsedBand, sex = sex, limit = pageSize, offset = pageOffset, revealRates = revealRates)
         val source = settings.standingsSource()
         val view =
             if (source == SnapshotSource.POINTS) {

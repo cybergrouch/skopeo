@@ -100,7 +100,7 @@ class PlaceholderService(
             // Set the pre-validated rating via the canonical path (RATER-gated + audited). requireRater there
             // re-checks the caller, matching the up-front validation.
             if (ratingValue != null) {
-                ratings.setRating(token = token, userId = created.id, value = ratingValue).bind()
+                ratings.setRating(token = token, userId = created.id, value = ratingValue.toPlainString()).bind()
             }
             created.toResponse()
         }

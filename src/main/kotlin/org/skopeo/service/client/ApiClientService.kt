@@ -34,6 +34,7 @@ import org.skopeo.repository.UserRepository
 import org.skopeo.security.ClientAuthResult
 import org.skopeo.security.ClientPrincipal
 import org.skopeo.security.effectiveCapabilities
+import org.skopeo.security.hasScope
 import org.skopeo.service.audit.AuditService
 import org.skopeo.service.user.VerifiedFirebaseToken
 import java.time.LocalDateTime
@@ -94,12 +95,14 @@ class ApiClientService(
     fun issueKey(
         token: VerifiedFirebaseToken,
         clientId: UUID,
-        scopes: Set<Capability>,
-        environment: ApiKeyEnvironment,
+        scopeNames: Set<String>,
+        environmentRaw: String?,
         expiresInDays: Long?,
     ): Either<ServiceError, IssuedApiKeyResponse> =
         either {
             val adminId = requireAdmin(token = token).bind()
+            val scopes = scopeNames.map { parseScope(raw = it).bind() }.toSet()
+            val environment = environmentRaw?.let { parseEnvironment(raw = it).bind() } ?: ApiKeyEnvironment.LIVE
             ensure(condition = expiresInDays == null || expiresInDays > 0) {
                 ServiceError.Validation(message = "expiresInDays must be positive")
             }
@@ -265,20 +268,26 @@ class ApiClientService(
      * A public player directory (#597) for a machine-to-machine partner read. Only public fields
      * (public code + display name) are exposed. The caller's scope is enforced at the route.
      */
-    fun playerDirectory(): List<PartnerPlayerResponse> =
-        users
-            .search(
-                query =
-                    UserSearchQuery(
-                        name = null,
-                        code = null,
-                        q = null,
-                        sex = null,
-                        dobMin = null,
-                        dobMax = null,
-                        rating = null,
-                    ),
-            ).map { PublicPlayer(publicCode = it.publicCode, displayName = it.displayName()).toResponse() }
+    fun playerDirectory(principal: ClientPrincipal): Either<ServiceError, List<PartnerPlayerResponse>> =
+        either {
+            // Least-privilege gate (#597): a key without the RESEARCHER scope is refused (403).
+            ensure(condition = principal.hasScope(capability = Capability.RESEARCHER)) {
+                ServiceError.Forbidden(message = "This API key is not scoped for 'RESEARCHER'")
+            }
+            users
+                .search(
+                    query =
+                        UserSearchQuery(
+                            name = null,
+                            code = null,
+                            q = null,
+                            sex = null,
+                            dobMin = null,
+                            dobMax = null,
+                            rating = null,
+                        ),
+                ).map { PublicPlayer(publicCode = it.publicCode, displayName = it.displayName()).toResponse() }
+        }
 
     /**
      * The capabilities [principal] may exercise on behalf of the user behind [token] (#597) — the
@@ -300,6 +309,20 @@ class ApiClientService(
 
     /** The client-identity DTO for a resolved [principal] (#597), so the route maps nothing itself. */
     fun describePrincipal(principal: ClientPrincipal): ClientIdentityResponse = principal.toResponse()
+
+    /** Parse a key scope name to a [Capability] (#225); an unknown name is a [ServiceError.Validation]. */
+    private fun parseScope(raw: String): Either<ServiceError, Capability> =
+        Capability.entries.find { it.name == raw }?.right()
+            ?: ServiceError.Validation(
+                message = "Invalid scope '$raw'; expected one of ${Capability.entries.joinToString { it.name }}",
+            ).left()
+
+    /** Parse a key environment name to an [ApiKeyEnvironment]; an unknown name is a [ServiceError.Validation]. */
+    private fun parseEnvironment(raw: String): Either<ServiceError, ApiKeyEnvironment> =
+        ApiKeyEnvironment.entries.find { it.name == raw }?.right()
+            ?: ServiceError.Validation(
+                message = "Invalid environment '$raw'; expected one of ${ApiKeyEnvironment.entries.joinToString { it.name }}",
+            ).left()
 
     /** Access gate: the caller must be an ADMINISTRATOR. Returns the caller's id (the audit actor). */
     private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {

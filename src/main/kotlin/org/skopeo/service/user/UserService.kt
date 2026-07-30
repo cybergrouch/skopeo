@@ -58,10 +58,11 @@ data class UserSearchFilters(
     val code: String? = null,
     val q: String? = null,
     val sex: String? = null,
-    val age: NumericRange? = null,
-    val rating: NumericRange? = null,
-    // Restrict to users holding this capability (#317).
-    val capability: Capability? = null,
+    // Raw `min-max` range strings (#116/#317), parsed + validated in [UserService.validatedQuery].
+    val age: String? = null,
+    val rating: String? = null,
+    // Raw capability name to restrict to (#317).
+    val capability: String? = null,
 )
 
 /**
@@ -192,14 +193,26 @@ class UserService(
             val nameTerm = blankToNull(raw = filters.name)
             val codeTerm = blankToNull(raw = filters.code)?.uppercase()
             val qTerm = blankToNull(raw = filters.q)
+            val age = filters.age?.let { NumericRange.parse(raw = it) }
+            val rating = filters.rating?.let { NumericRange.parse(raw = it) }
+            val capability =
+                filters.capability?.let { raw ->
+                    Capability.entries.find { it.name == raw.uppercase() }
+                        ?: raise(
+                            r =
+                                ServiceError.Validation(
+                                    message = "Unknown capability '$raw'; expected one of ${Capability.entries.joinToString { it.name }}",
+                                ),
+                        )
+                }
             ensure(
                 condition =
                     nameTerm != null || codeTerm != null || qTerm != null ||
-                        filters.sex != null || filters.age != null || filters.rating != null || filters.capability != null,
+                        filters.sex != null || age != null || rating != null || capability != null,
             ) {
                 ServiceError.Validation(message = "at least one filter (name, code, q, sex, age, rating, capability) is required")
             }
-            val dob = filters.age?.let { ageRangeToDob(range = it, today = LocalDate.now()) }
+            val dob = age?.let { ageRangeToDob(range = it, today = LocalDate.now()) }
             UserSearchQuery(
                 name = nameTerm,
                 code = codeTerm,
@@ -207,8 +220,8 @@ class UserService(
                 sex = filters.sex,
                 dobMin = dob?.min,
                 dobMax = dob?.max,
-                rating = filters.rating,
-                capability = filters.capability,
+                rating = rating,
+                capability = capability,
             )
         }
 

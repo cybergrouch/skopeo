@@ -35,9 +35,12 @@ Enforced invariants (each is true in the codebase today):
 - **`service`** never depends on the transport layer (`routes`); it *may* call `mapper` (one-way, so
   the graph stays acyclic). Services return response DTOs and accept request DTOs.
 - **`routes`** never depend on `mapper`: dto↔model translation is hidden behind the service, so a route
-  calls `service.*` and responds with the DTO it receives. (Routes still reference a thin slice of
-  `model` — enums parsed from query/path params and the wire-contract request bodies below (auth
-  principals now live in `security`, not `model`) — so there is deliberately no `routes ↛ model` rule yet.)
+  calls `service.*` and responds with the DTO it receives. Routes also pass **raw** query/path/body
+  strings to services, which parse + validate them (an unknown enum/band/value is a
+  `ServiceError.Validation` → 400) — so routes no longer reference domain enums either. The **only**
+  remaining `routes → model` reference is the two wire-contract request bodies below
+  (`OpenPlayPointsConfig`/`TournamentPointsConfig`), received via `call.receive<…>()`; a strict
+  `routes ↛ model` rule waits on decoupling those.
 
 ## The one sanctioned `dto → model` dependency
 
