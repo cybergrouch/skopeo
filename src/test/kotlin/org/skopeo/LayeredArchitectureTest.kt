@@ -56,7 +56,7 @@ class LayeredArchitectureTest {
         noClasses()
             .that().resideInAPackage("org.skopeo.model..")
             .should().dependOnClassesThat()
-            .resideInAnyPackage("..routes..", "..service..", "..repository..", "..dto..", "..mapper..")
+            .resideInAnyPackage("..routes..", "..service..", "..repository..", "..dto..", "..mapper..", "..security..")
             .check(classes)
     }
 
@@ -68,6 +68,17 @@ class LayeredArchitectureTest {
             .that().resideInAPackage("org.skopeo.error..")
             .should().dependOnClassesThat()
             .resideInAnyPackage("..routes..", "..service..", "..repository..", "..dto..", "..mapper..", "org.skopeo.model..")
+            .check(classes)
+    }
+
+    @Test
+    fun `security holds auth-boundary types and never depends up`() {
+        // ClientPrincipal/ClientAuthResult are transport-boundary auth types kept out of model so routes
+        // can consume them (#597); they may reference model (Capability) but nothing above it.
+        noClasses()
+            .that().resideInAPackage("org.skopeo.security..")
+            .should().dependOnClassesThat()
+            .resideInAnyPackage("..routes..", "..service..", "..repository..", "..dto..", "..mapper..")
             .check(classes)
     }
 

@@ -26,9 +26,9 @@ import org.skopeo.dto.client.IssueApiKeyRequest
 import org.skopeo.dto.client.SetRateLimitRequest
 import org.skopeo.model.ApiKeyEnvironment
 import org.skopeo.model.Capability
-import org.skopeo.model.ClientAuthResult
-import org.skopeo.model.ClientPrincipal
-import org.skopeo.model.hasScope
+import org.skopeo.security.ClientAuthResult
+import org.skopeo.security.ClientPrincipal
+import org.skopeo.security.hasScope
 import org.skopeo.service.client.ApiClientService
 
 /** The header a partner presents its API key in (#225/#596). */

@@ -12,6 +12,7 @@ service ──► { repository, mapper, dto, model }
 mapper ──► { dto, model }                       (mapper: dto↔model translation)
 repository ──► model                            (model is pure domain — depends up on nothing)
 { routes, service, repository } ──► error       (error: transport-free ServiceError taxonomy — a leaf)
+security ──► model                              (security: auth-boundary types — ClientPrincipal etc.)
 ```
 
 Enforced invariants (each is true in the codebase today):
@@ -24,6 +25,9 @@ Enforced invariants (each is true in the codebase today):
 - **`error`** is a transport-free error taxonomy (`ServiceError`, #115) in its own `org.skopeo.error`
   package — a foundation leaf that depends on nothing. Any layer may return it, so it lives outside
   `model` and returning it never pulls the domain up into `routes`.
+- **`security`** holds transport-boundary auth types (`ClientPrincipal`/`ClientAuthResult`, #597). It may
+  reference `model` (`Capability`) but nothing above, so routes can consume the resolved principal
+  without importing `model`.
 - **`dto`** is a **pure serializable boundary record**: it never depends on `routes`, `repository`,
   `service`, or `model` — with one sanctioned exception (below).
 - **`mapper`** owns the dto↔model translation (the `toResponse`/`toCommand` extension functions). It
@@ -32,8 +36,8 @@ Enforced invariants (each is true in the codebase today):
   the graph stays acyclic). Services return response DTOs and accept request DTOs.
 - **`routes`** never depend on `mapper`: dto↔model translation is hidden behind the service, so a route
   calls `service.*` and responds with the DTO it receives. (Routes still reference a thin slice of
-  `model` — enums parsed from query/path params, auth principals, and the wire-contract
-  request bodies below — so there is deliberately no `routes ↛ model` rule yet.)
+  `model` — enums parsed from query/path params and the wire-contract request bodies below (auth
+  principals now live in `security`, not `model`) — so there is deliberately no `routes ↛ model` rule yet.)
 
 ## The one sanctioned `dto → model` dependency
 

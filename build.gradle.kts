@@ -279,6 +279,8 @@ tasks.jacocoTestReport {
                         "**/model/**",
                         // ServiceError is a pure error taxonomy (relocated out of model/), like dto/.
                         "**/error/**",
+                        // Auth-boundary value types (ClientPrincipal/ClientAuthResult), relocated out of model/.
+                        "**/security/**",
                         "**/*Application*.*",
                         // Database wiring requires a live PostgreSQL instance
                         "**/config/**",
@@ -367,6 +369,8 @@ tasks.jacocoTestCoverageVerification {
                         "**/model/**",
                         // ServiceError is a pure error taxonomy (relocated out of model/), like dto/.
                         "**/error/**",
+                        // Auth-boundary value types (ClientPrincipal/ClientAuthResult), relocated out of model/.
+                        "**/security/**",
                         "**/*Application*.*",
                         "**/config/**",
                         "**/*Kt.class",
