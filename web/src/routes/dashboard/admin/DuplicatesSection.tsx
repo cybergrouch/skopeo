@@ -14,6 +14,7 @@ import {
   useDeleteApiV1UsersIdDuplicate,
   useGetApiV1UsersIdDuplicates,
   usePostApiV1UsersIdDuplicates,
+  usePostApiV1UsersIdDuplicatesDuplicateIdReplace,
 } from '@/api/generated/users/users'
 import type { UserSummaryResponse } from '@/api/generated/model'
 
@@ -29,7 +30,8 @@ function Shell({ children }: { children: ReactNode }) {
         <CardDescription>
           Keep one canonical account and mark the others as duplicates. Duplicates are disabled (not
           deleted) and drop out of search; their public profile links here. Ratings are not merged.
-          This is reversible.
+          This is reversible. To fully absorb a duplicate — import its matches and rating into an empty
+          canonical and delete the old account — use “Replace account” below (permanent).
         </CardDescription>
       </CardHeader>
       <CardContent>{children}</CardContent>
@@ -73,11 +75,26 @@ function ForCanonical({
   const existing = useGetApiV1UsersIdDuplicates(canonical.id)
   const mark = usePostApiV1UsersIdDuplicates()
   const restore = useDeleteApiV1UsersIdDuplicate()
+  const replace = usePostApiV1UsersIdDuplicatesDuplicateIdReplace()
+  // Two-step confirm for the irreversible Replace: first click arms the row, second click runs it.
+  const [confirmingReplaceId, setConfirmingReplaceId] = useState<string | null>(null)
+  const [replaceError, setReplaceError] = useState<string | null>(null)
 
   function invalidate() {
     queryClient.invalidateQueries({
       queryKey: getGetApiV1UsersIdDuplicatesQueryKey(canonical.id),
     })
+  }
+
+  async function onReplace(id: string) {
+    setReplaceError(null)
+    try {
+      await replace.mutateAsync({ id: canonical.id, duplicateId: id })
+      setConfirmingReplaceId(null)
+      invalidate()
+    } catch {
+      setReplaceError('Could not replace the account. The canonical must be empty (no rating or matches of its own).')
+    }
   }
 
   async function onMark() {
@@ -150,19 +167,67 @@ function ForCanonical({
       {current.length > 0 ? (
         <div className="space-y-2">
           <p className="text-sm font-medium">Current duplicates of this account</p>
+          <p className="text-xs text-muted-foreground">
+            Restore un-marks a duplicate. Replace imports a duplicate’s matches and rating into this
+            account and then deletes the old one — permanent, and only into an empty canonical.
+          </p>
+          {replaceError ? (
+            <p className="text-sm text-destructive" role="alert">
+              {replaceError}
+            </p>
+          ) : null}
           <ul className="space-y-2">
             {current.map((d) => (
-              <li key={d.id} className="flex items-center justify-between rounded-md border p-2 text-sm">
+              <li key={d.id} className="flex items-center justify-between gap-2 rounded-md border p-2 text-sm">
                 <span>{label(d)}</span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  disabled={restore.isPending}
-                  onClick={() => onRestore(d.id)}
-                >
-                  Restore
-                </Button>
+                <div className="flex items-center gap-1">
+                  {confirmingReplaceId === d.id ? (
+                    <>
+                      <Button
+                        type="button"
+                        variant="default"
+                        size="sm"
+                        disabled={replace.isPending}
+                        onClick={() => onReplace(d.id)}
+                      >
+                        {replace.isPending ? 'Replacing…' : 'Confirm — delete & replace'}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={replace.isPending}
+                        onClick={() => setConfirmingReplaceId(null)}
+                      >
+                        Cancel
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={replace.isPending}
+                        onClick={() => {
+                          setReplaceError(null)
+                          setConfirmingReplaceId(d.id)
+                        }}
+                      >
+                        Replace account
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={restore.isPending}
+                        onClick={() => onRestore(d.id)}
+                      >
+                        Restore
+                      </Button>
+                    </>
+                  )}
+                </div>
               </li>
             ))}
           </ul>

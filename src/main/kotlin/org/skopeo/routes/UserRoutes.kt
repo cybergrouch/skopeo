@@ -80,6 +80,20 @@ private fun Route.duplicateRoutes(service: DuplicateService) {
             }
         }
     }
+    // Replace Account (#124): import a marked duplicate's history + rating into the canonical ({id}),
+    // then delete the old account.
+    post(path = "/{id}/duplicates/{duplicateId}/replace") {
+        respondMappingErrors {
+            respondEither(
+                result =
+                    service.replaceAccount(
+                        token = verifiedToken(),
+                        canonicalId = uuidParam(name = "id"),
+                        duplicateId = uuidParam(name = "duplicateId"),
+                    ),
+            ) { canonical -> call.respond(status = HttpStatusCode.OK, message = canonical) }
+        }
+    }
     delete(path = "/{id}/duplicate") {
         respondMappingErrors {
             respondEither(result = service.restore(token = verifiedToken(), id = uuidParam(name = "id"))) {

@@ -8,6 +8,7 @@ import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
@@ -17,14 +18,21 @@ import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
+import org.skopeo.model.CreateFixtureCommand
+import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
+import org.skopeo.model.TeamType
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.repository.AuditRepository
+import org.skopeo.repository.MatchRepository
+import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
+import java.math.BigDecimal
+import java.time.LocalDate
 import java.util.UUID
 
 class DuplicateServiceTest {
@@ -37,6 +45,8 @@ class DuplicateServiceTest {
     }
 
     private val users = UserRepository()
+    private val ratings = RatingRepository()
+    private val matches = MatchRepository()
     private val service = DuplicateService(users = users)
 
     @BeforeEach
@@ -61,6 +71,108 @@ class DuplicateServiceTest {
     private fun admin(uid: String = "root") = provisionUser(uid = uid, roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
+
+    // A singles fixture the given players contested — enough to give a user match participation (team_users).
+    private fun fixture(
+        u1: UUID,
+        u2: UUID,
+    ) = matches.createFixture(
+        command =
+            CreateFixtureCommand(
+                matchFormat = TeamType.SINGLES,
+                matchType = MatchType.OPEN_PLAY,
+                matchDate = LocalDate.of(2026, 1, 1),
+                team1UserIds = listOf(element = u1),
+                team2UserIds = listOf(element = u2),
+                team1Name = "T1",
+                team2Name = "T2",
+                createdBy = u1,
+            ),
+    )
+
+    @Test
+    fun `replaceAccount imports the old account's rating and matches into an empty canonical, then deletes the old (#124)`() {
+        admin()
+        val canonical = provisionUser(uid = "new")
+        val old = provisionUser(uid = "old")
+        val opponent = provisionUser(uid = "opp")
+        // The OLD account has a rating and a match; the NEW (canonical) account is empty.
+        ratings.setRating(userId = old.id, rating = BigDecimal("4.2"), level = "4.0")
+        fixture(u1 = old.id, u2 = opponent.id)
+        service
+            .markDuplicates(token = token(uid = "root"), canonicalId = canonical.id, duplicateIds = listOf(element = old.id))
+            .shouldBeRight()
+
+        service.replaceAccount(token = token(uid = "root"), canonicalId = canonical.id, duplicateId = old.id).shouldBeRight()
+
+        // The rating (+ match participation) now belong to the canonical; the old account is emptied.
+        ratings.findCurrentRating(userId = canonical.id).shouldNotBeNull().currentRating.toPlainString() shouldBe "4.200000"
+        ratings.findCurrentRating(userId = old.id).shouldBeNull()
+        users.hasMatchParticipation(userId = canonical.id).shouldBeTrue()
+        users.hasMatchParticipation(userId = old.id).shouldBeFalse()
+        // The old account is deleted (#518 state: inactive + no canonical pointer), not left a merged duplicate.
+        val deletedOld = users.findById(id = old.id).shouldBeRight()
+        deletedOld.isActive.shouldBeFalse()
+        deletedOld.isDeleted().shouldBeTrue()
+    }
+
+    @Test
+    fun `records an audit entry for the replace (#124)`() {
+        admin()
+        val canonical = provisionUser(uid = "new")
+        val old = provisionUser(uid = "old")
+        ratings.setRating(userId = old.id, rating = BigDecimal("4.2"), level = "4.0")
+        service
+            .markDuplicates(token = token(uid = "root"), canonicalId = canonical.id, duplicateIds = listOf(element = old.id))
+            .shouldBeRight()
+
+        service.replaceAccount(token = token(uid = "root"), canonicalId = canonical.id, duplicateId = old.id).shouldBeRight()
+
+        AuditRepository()
+            .list(actions = listOf(element = AuditAction.USER_ACCOUNT_REPLACED), limit = 10, offset = 0)
+            .second shouldBe 1L
+    }
+
+    @Test
+    fun `rejects replacing into a canonical that already has its own rating or matches (#124)`() {
+        admin()
+        val canonical = provisionUser(uid = "new")
+        val old = provisionUser(uid = "old")
+        val opponent = provisionUser(uid = "opp")
+        // The canonical is NOT empty — it played its own match.
+        fixture(u1 = canonical.id, u2 = opponent.id)
+        service
+            .markDuplicates(token = token(uid = "root"), canonicalId = canonical.id, duplicateIds = listOf(element = old.id))
+            .shouldBeRight()
+
+        service
+            .replaceAccount(token = token(uid = "root"), canonicalId = canonical.id, duplicateId = old.id)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Conflict>()
+    }
+
+    @Test
+    fun `rejects replacing with a user that is not a duplicate of the canonical (#124)`() {
+        admin()
+        val canonical = provisionUser(uid = "new")
+        val other = provisionUser(uid = "other") // never marked as a duplicate of canonical
+
+        service
+            .replaceAccount(token = token(uid = "root"), canonicalId = canonical.id, duplicateId = other.id)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Conflict>()
+    }
+
+    @Test
+    fun `a non-admin cannot replace (#124)`() {
+        val canonical = provisionUser(uid = "new")
+        val old = provisionUser(uid = "old")
+
+        service
+            .replaceAccount(token = token(uid = "old"), canonicalId = canonical.id, duplicateId = old.id)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
 
     @Test
     fun `an admin marks a cluster — duplicates are disabled and point at the canonical`() {

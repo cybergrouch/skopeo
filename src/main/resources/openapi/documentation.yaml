@@ -1090,6 +1090,46 @@ paths:
         '409':
           description: The user is not marked as a duplicate
 
+  /api/v1/users/{id}/duplicates/{duplicateId}/replace:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: The canonical ("true", surviving) account that replaces the old one.
+        schema:
+          type: string
+          format: uuid
+      - name: duplicateId
+        in: path
+        required: true
+        description: The old account (already marked a duplicate of this canonical) to import and delete.
+        schema:
+          type: string
+          format: uuid
+    post:
+      summary: Replace an old account with its canonical account (#124)
+      description: >-
+        ADMINISTRATOR only. Imports the old (marked-duplicate) account's matches, current rating, rating
+        history, points, and memberships into the canonical account, then deletes the old account (admin
+        soft-delete). Gated to an empty canonical (no rating/matches of its own). Irreversible; audit-logged.
+      tags:
+        - Users
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The canonical account after the replace
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSummaryResponse'
+        '403':
+          description: Caller is not an ADMINISTRATOR
+        '404':
+          description: No such canonical or duplicate user
+        '409':
+          description: The canonical is itself a duplicate, the target is not a duplicate of it, or the canonical is not empty
+
   /api/v1/users/{userId}/contacts:
     parameters:
       - name: userId

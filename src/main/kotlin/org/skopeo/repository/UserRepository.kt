@@ -438,28 +438,7 @@ class UserRepository {
         claimedAt: LocalDateTime,
     ): Unit =
         transaction {
-            // History + points: pure re-point (no per-user uniqueness).
-            UserRatingHistoryTable.update(where = { UserRatingHistoryTable.userId eq placeholderId }) {
-                it[userId] = claimantId
-            }
-            RankingPointAwardsTable.update(where = { RankingPointAwardsTable.userId eq placeholderId }) {
-                it[userId] = claimantId
-            }
-            // user_ratings: UNIQUE(user_id). The claimant is empty (no row), so a straight re-point is safe;
-            // guard anyway by dropping the placeholder's row if the claimant somehow already has one.
-            if (UserRatingsTable.selectAll().where { UserRatingsTable.userId eq claimantId }.any()) {
-                UserRatingsTable.deleteWhere { UserRatingsTable.userId eq placeholderId }
-            } else {
-                UserRatingsTable.update(where = { UserRatingsTable.userId eq placeholderId }) { it[userId] = claimantId }
-            }
-            // Rosters + memberships with a per-(parent,user) UNIQUE: dedupe, then re-point the rest.
-            repointTeamUsers(placeholderId = placeholderId, claimantId = claimantId)
-            repointEventParticipants(placeholderId = placeholderId, claimantId = claimantId)
-            repointPlayerListMembers(placeholderId = placeholderId, claimantId = claimantId)
-            repointClubOwners(placeholderId = placeholderId, claimantId = claimantId)
-            // seeding_entries: SET NULL semantics — re-point the id so a re-render shows the real player.
-            SeedingEntriesTable.update(where = { SeedingEntriesTable.userId eq placeholderId }) { it[userId] = claimantId }
-
+            absorbUserRecords(fromUserId = placeholderId, intoUserId = claimantId)
             // Retire the placeholder via the canonical-merge pattern (#124), plus claim provenance.
             UsersTable.update(where = { UsersTable.id eq placeholderId }) {
                 it[canonicalUserId] = claimantId
@@ -470,42 +449,97 @@ class UserRepository {
         }
 
     /**
+     * Replace a marked-duplicate ("old") account with its canonical account (#124): absorb [duplicateId]'s
+     * matches, current rating (+ rating history), points, and memberships into [canonicalId] — making the
+     * canonical read as if it had always been the true account — then **delete the old account**. This is the
+     * essential difference from a plain duplicate-mark: the old account is removed, not merely linked. Delete
+     * mirrors the admin soft-delete (#518): the old row is deactivated and its canonical pointer cleared, so
+     * it reads as a deleted account rather than a merged duplicate. The caller must ensure [canonicalId] is
+     * empty (no rating/matches of its own) so the current-rating re-point is unambiguous. One transaction;
+     * irreversible.
+     */
+    fun replaceAccount(
+        duplicateId: UUID,
+        canonicalId: UUID,
+    ): Unit =
+        transaction {
+            absorbUserRecords(fromUserId = duplicateId, intoUserId = canonicalId)
+            // Delete the now-emptied old account: #518 soft-delete state (inactive + no canonical pointer).
+            UsersTable.update(where = { UsersTable.id eq duplicateId }) {
+                it[isActive] = false
+                it[canonicalUserId] = null
+            }
+        }
+
+    /**
+     * Absorb every record owned by [fromUserId] into [intoUserId] — the shared consolidation primitive behind
+     * placeholder-claim (#496) and duplicate-import (#124). Re-points rating history + points (no per-user
+     * uniqueness), the current rating, match participation (team_users), event/list/club memberships, and
+     * seeding entries. Rosters/memberships carrying a per-(parent, user) UNIQUE are deduped (drop the source
+     * row when the target already belongs) before re-pointing. The current-rating re-point assumes [intoUserId]
+     * has no rating row (an empty target — callers enforce that); it defensively drops the source row otherwise.
+     * Must run inside a transaction.
+     */
+    private fun absorbUserRecords(
+        fromUserId: UUID,
+        intoUserId: UUID,
+    ) {
+        // History + points: pure re-point (no per-user uniqueness).
+        UserRatingHistoryTable.update(where = { UserRatingHistoryTable.userId eq fromUserId }) { it[userId] = intoUserId }
+        RankingPointAwardsTable.update(where = { RankingPointAwardsTable.userId eq fromUserId }) { it[userId] = intoUserId }
+        // user_ratings: UNIQUE(user_id). The target is empty (no row), so a straight re-point is safe;
+        // guard anyway by dropping the source's row if the target somehow already has one.
+        if (UserRatingsTable.selectAll().where { UserRatingsTable.userId eq intoUserId }.any()) {
+            UserRatingsTable.deleteWhere { UserRatingsTable.userId eq fromUserId }
+        } else {
+            UserRatingsTable.update(where = { UserRatingsTable.userId eq fromUserId }) { it[userId] = intoUserId }
+        }
+        // Rosters + memberships with a per-(parent,user) UNIQUE: dedupe, then re-point the rest.
+        repointTeamUsers(fromUserId = fromUserId, intoUserId = intoUserId)
+        repointEventParticipants(fromUserId = fromUserId, intoUserId = intoUserId)
+        repointPlayerListMembers(fromUserId = fromUserId, intoUserId = intoUserId)
+        repointClubOwners(fromUserId = fromUserId, intoUserId = intoUserId)
+        // seeding_entries: SET NULL semantics — re-point the id so a re-render shows the real player.
+        SeedingEntriesTable.update(where = { SeedingEntriesTable.userId eq fromUserId }) { it[userId] = intoUserId }
+    }
+
+    /**
      * team_users re-point (#496): re-point the placeholder's rows to the claimant, dropping any row for a
      * team the claimant is already on (UNIQUE team_id, user_id, joined_at). Must run in a transaction.
      */
     private fun repointTeamUsers(
-        placeholderId: UUID,
-        claimantId: UUID,
+        fromUserId: UUID,
+        intoUserId: UUID,
     ) {
-        TeamUsersTable.selectAll().where { TeamUsersTable.userId eq placeholderId }.toList().forEach { row ->
+        TeamUsersTable.selectAll().where { TeamUsersTable.userId eq fromUserId }.toList().forEach { row ->
             val teamId = row[TeamUsersTable.teamId]
             val claimantOnTeam =
-                TeamUsersTable.selectAll().where { (TeamUsersTable.userId eq claimantId) and (TeamUsersTable.teamId eq teamId) }.any()
+                TeamUsersTable.selectAll().where { (TeamUsersTable.userId eq intoUserId) and (TeamUsersTable.teamId eq teamId) }.any()
             if (claimantOnTeam) {
                 TeamUsersTable.deleteWhere { TeamUsersTable.id eq row[TeamUsersTable.id] }
             } else {
-                TeamUsersTable.update(where = { TeamUsersTable.id eq row[TeamUsersTable.id] }) { it[userId] = claimantId }
+                TeamUsersTable.update(where = { TeamUsersTable.id eq row[TeamUsersTable.id] }) { it[userId] = intoUserId }
             }
         }
     }
 
     /** event_participants re-point (#496): re-point, dropping duplicates (UNIQUE event_id, user_id). In a transaction. */
     private fun repointEventParticipants(
-        placeholderId: UUID,
-        claimantId: UUID,
+        fromUserId: UUID,
+        intoUserId: UUID,
     ) {
-        EventParticipantsTable.selectAll().where { EventParticipantsTable.userId eq placeholderId }.toList().forEach { row ->
+        EventParticipantsTable.selectAll().where { EventParticipantsTable.userId eq fromUserId }.toList().forEach { row ->
             val eventId = row[EventParticipantsTable.eventId]
             val claimantInEvent =
                 EventParticipantsTable
                     .selectAll()
-                    .where { (EventParticipantsTable.userId eq claimantId) and (EventParticipantsTable.eventId eq eventId) }
+                    .where { (EventParticipantsTable.userId eq intoUserId) and (EventParticipantsTable.eventId eq eventId) }
                     .any()
             if (claimantInEvent) {
                 EventParticipantsTable.deleteWhere { EventParticipantsTable.id eq row[EventParticipantsTable.id] }
             } else {
                 EventParticipantsTable.update(where = { EventParticipantsTable.id eq row[EventParticipantsTable.id] }) {
-                    it[userId] = claimantId
+                    it[userId] = intoUserId
                 }
             }
         }
@@ -513,21 +547,21 @@ class UserRepository {
 
     /** player_list_members re-point (#496): re-point, dropping duplicates (UNIQUE list_id, user_id). In a transaction. */
     private fun repointPlayerListMembers(
-        placeholderId: UUID,
-        claimantId: UUID,
+        fromUserId: UUID,
+        intoUserId: UUID,
     ) {
-        PlayerListMembersTable.selectAll().where { PlayerListMembersTable.userId eq placeholderId }.toList().forEach { row ->
+        PlayerListMembersTable.selectAll().where { PlayerListMembersTable.userId eq fromUserId }.toList().forEach { row ->
             val listId = row[PlayerListMembersTable.listId]
             val claimantInList =
                 PlayerListMembersTable
                     .selectAll()
-                    .where { (PlayerListMembersTable.userId eq claimantId) and (PlayerListMembersTable.listId eq listId) }
+                    .where { (PlayerListMembersTable.userId eq intoUserId) and (PlayerListMembersTable.listId eq listId) }
                     .any()
             if (claimantInList) {
                 PlayerListMembersTable.deleteWhere { PlayerListMembersTable.id eq row[PlayerListMembersTable.id] }
             } else {
                 PlayerListMembersTable.update(where = { PlayerListMembersTable.id eq row[PlayerListMembersTable.id] }) {
-                    it[userId] = claimantId
+                    it[userId] = intoUserId
                 }
             }
         }
@@ -535,17 +569,17 @@ class UserRepository {
 
     /** club_owners re-point (#496): re-point, dropping duplicates (UNIQUE club_id, user_id). In a transaction. */
     private fun repointClubOwners(
-        placeholderId: UUID,
-        claimantId: UUID,
+        fromUserId: UUID,
+        intoUserId: UUID,
     ) {
-        ClubOwnersTable.selectAll().where { ClubOwnersTable.userId eq placeholderId }.toList().forEach { row ->
+        ClubOwnersTable.selectAll().where { ClubOwnersTable.userId eq fromUserId }.toList().forEach { row ->
             val clubId = row[ClubOwnersTable.clubId]
             val claimantOwnsClub =
-                ClubOwnersTable.selectAll().where { (ClubOwnersTable.userId eq claimantId) and (ClubOwnersTable.clubId eq clubId) }.any()
+                ClubOwnersTable.selectAll().where { (ClubOwnersTable.userId eq intoUserId) and (ClubOwnersTable.clubId eq clubId) }.any()
             if (claimantOwnsClub) {
                 ClubOwnersTable.deleteWhere { ClubOwnersTable.id eq row[ClubOwnersTable.id] }
             } else {
-                ClubOwnersTable.update(where = { ClubOwnersTable.id eq row[ClubOwnersTable.id] }) { it[userId] = claimantId }
+                ClubOwnersTable.update(where = { ClubOwnersTable.id eq row[ClubOwnersTable.id] }) { it[userId] = intoUserId }
             }
         }
     }
