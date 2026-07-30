@@ -9,9 +9,9 @@ import arrow.core.raise.either
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.skopeo.common.error.ServiceError
 import org.skopeo.dto.RankingCalculationRequest
 import org.skopeo.dto.rating.CalculationResponse
-import org.skopeo.error.ServiceError
 import org.skopeo.mapper.rating.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType

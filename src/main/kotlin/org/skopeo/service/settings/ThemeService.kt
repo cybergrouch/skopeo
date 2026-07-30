@@ -8,9 +8,9 @@ import arrow.core.left
 import arrow.core.raise.either
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
+import org.skopeo.common.error.ServiceError
 import org.skopeo.dto.settings.LocalThemeResponse
 import org.skopeo.dto.settings.ThemeResponse
-import org.skopeo.error.ServiceError
 import org.skopeo.mapper.settings.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType

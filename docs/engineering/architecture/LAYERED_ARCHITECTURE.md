@@ -16,6 +16,9 @@ security ──► model                              (security: auth-boundary t
 contract ──► ∅                                  (contract: @Serializable value contracts — a pure leaf)
 ```
 
+`error`, `security`, and `contract` live under a common parent package —
+`org.skopeo.common.{error,security,contract}` — each still its own package with its own rule below.
+
 Enforced invariants (each is true in the codebase today):
 
 - **`repository`** never depends on `routes`, `service`, `dto`, or `mapper`. It is the foundation and
@@ -23,14 +26,14 @@ Enforced invariants (each is true in the codebase today):
 - **`model`** is pure domain — it depends on no other app layer
   (`routes`/`service`/`repository`/`dto`/`mapper`). Generic numeric helpers it needs live in `model`
   (`BigDecimalUtils.kt`).
-- **`error`** is a transport-free error taxonomy (`ServiceError`, #115) in its own `org.skopeo.error`
+- **`error`** is a transport-free error taxonomy (`ServiceError`, #115) in its own `org.skopeo.common.error`
   package — a foundation leaf that depends on nothing. Any layer may return it, so it lives outside
   `model` and returning it never pulls the domain up into `routes`.
 - **`security`** holds transport-boundary auth types (`ClientPrincipal`/`ClientAuthResult`, #597). It may
   reference `model` (`Capability`) but nothing above, so routes can consume the resolved principal
   without importing `model`.
 - **`contract`** holds `@Serializable` value types shared across the wire + persistence — the points-config
-  schedules (`OpenPlayPointsConfig`/`TournamentPointsConfig` and their nested rows) in `org.skopeo.contract`.
+  schedules (`OpenPlayPointsConfig`/`TournamentPointsConfig` and their nested rows) in `org.skopeo.common.contract`.
   A pure leaf (depends on nothing), so routes/dto carry them without a `model` dependency.
 - **`dto`** is a **pure serializable boundary record**: it never depends on `routes`, `repository`,
   `service`, or `model` — with one sanctioned exception (below).
@@ -43,7 +46,7 @@ Enforced invariants (each is true in the codebase today):
   strings to services, which parse + validate them (an unknown enum/band/value is a `ServiceError.Validation`
   → 400). Request bodies are DTOs or `contract` value types. This is enforced by a strict `routes ↛ model`
   rule **with no exception** — the former wire-contract request bodies (`OpenPlayPointsConfig`/
-  `TournamentPointsConfig`) were relocated to `org.skopeo.contract`.
+  `TournamentPointsConfig`) were relocated to `org.skopeo.common.contract`.
 
 ## The one sanctioned `dto → model` dependency
 
@@ -53,7 +56,7 @@ deliberately embed shared `@Serializable` domain value types (`Team`, `MatchScor
 parallel DTOs. The `dto ↛ model` rule exempts exactly these classes (by name). Fully decoupling that
 contract (DTO mirrors + bidirectional mapping) is a separate, larger change — the test is the place to
 tighten the rule if we ever pursue it. (The two points-config responses that used to be on this list no
-longer touch `model`: their `@Serializable` types were relocated to `org.skopeo.contract`.)
+longer touch `model`: their `@Serializable` types were relocated to `org.skopeo.common.contract`.)
 
 ## Why ArchUnit (not Konsist)
 

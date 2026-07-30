@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Lange Pantoja
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-package org.skopeo.security
+package org.skopeo.common.security
 
 import org.skopeo.model.Capability
 import java.util.UUID

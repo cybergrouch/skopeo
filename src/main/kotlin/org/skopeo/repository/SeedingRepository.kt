@@ -15,7 +15,7 @@ import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
-import org.skopeo.error.ServiceError
+import org.skopeo.common.error.ServiceError
 import org.skopeo.model.Seeding
 import org.skopeo.model.SeedingEntry
 import java.time.LocalDateTime

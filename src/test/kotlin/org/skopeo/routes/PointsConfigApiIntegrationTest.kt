@@ -21,8 +21,8 @@ import io.ktor.server.testing.testApplication
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.skopeo.contract.OpenPlayPointsConfig
-import org.skopeo.contract.TournamentPointsConfig
+import org.skopeo.common.contract.OpenPlayPointsConfig
+import org.skopeo.common.contract.TournamentPointsConfig
 import org.skopeo.dto.settings.OpenPlayConfigResponse
 import org.skopeo.dto.settings.TournamentConfigResponse
 import org.skopeo.model.AuthProvider

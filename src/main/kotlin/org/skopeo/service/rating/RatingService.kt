@@ -6,10 +6,10 @@ import arrow.core.Either
 import arrow.core.left
 import arrow.core.raise.either
 import arrow.core.right
+import org.skopeo.common.error.ServiceError
 import org.skopeo.dto.rating.PendingAssessmentPageResponse
 import org.skopeo.dto.rating.RatingHistoryResponse
 import org.skopeo.dto.rating.UserRatingResponse
-import org.skopeo.error.ServiceError
 import org.skopeo.mapper.rating.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType

@@ -8,11 +8,11 @@ import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.right
 import mu.KotlinLogging
+import org.skopeo.common.error.ServiceError
 import org.skopeo.dto.user.CreateUserRequest
 import org.skopeo.dto.user.UserResponse
 import org.skopeo.dto.user.UserSummaryPageResponse
 import org.skopeo.dto.user.UserSummaryResponse
-import org.skopeo.error.ServiceError
 import org.skopeo.mapper.user.toResponse
 import org.skopeo.mapper.user.toSummary
 import org.skopeo.model.AuditAction

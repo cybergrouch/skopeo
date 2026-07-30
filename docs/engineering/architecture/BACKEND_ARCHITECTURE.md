@@ -121,9 +121,9 @@ classDiagram
     class repository
     class dto
     class model
-    class error["error · ServiceError"]
-    class security["security · auth principals"]
-    class contract["contract · @Serializable value types"]
+    class error["common.error · ServiceError"]
+    class security["common.security · auth principals"]
+    class contract["common.contract · @Serializable value types"]
     class DB["Exposed / PostgreSQL"]
     routes --> service
     routes --> dto
@@ -145,7 +145,9 @@ classDiagram
     security --> model
 ```
 
-`error`, `security`, and `contract` are foundation **leaves** (`contract`/`error` depend on nothing;
+These three neutral packages are grouped under a common parent, `org.skopeo.common.{error,security,contract}`
+(each a distinct package with its own rule). `error`, `security`, and `contract` are foundation **leaves**
+(`contract`/`error` depend on nothing;
 `security` references only `model`'s `Capability`). Note there is **no `routes → model` edge** — the
 transport layer speaks only DTOs and these neutral value types.
 
@@ -153,7 +155,7 @@ transport layer speaks only DTOs and these neutral value types.
 
 Services and repositories return **`Either<ServiceError, T>`** for *expected* failures (issue #115);
 truly exceptional faults (bugs, IO) are still thrown and surface as `500`. `ServiceError`
-(`error/ServiceError.kt`, package `org.skopeo.error`) is a sealed, HTTP-free taxonomy. The route layer is the single place that
+(`common/error/ServiceError.kt`, package `org.skopeo.common.error`) is a sealed, HTTP-free taxonomy. The route layer is the single place that
 maps it, via helpers in `routes/RouteSupport.kt`:
 
 - `verifiedToken()` / `optionalVerifiedToken()` — lift the `JWTPrincipal` to a `VerifiedFirebaseToken`.

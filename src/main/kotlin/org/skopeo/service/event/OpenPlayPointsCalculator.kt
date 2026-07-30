@@ -3,8 +3,8 @@
 
 package org.skopeo.service.event
 
-import org.skopeo.contract.BandRelation
-import org.skopeo.contract.OpenPlayPointsConfig
+import org.skopeo.common.contract.BandRelation
+import org.skopeo.common.contract.OpenPlayPointsConfig
 import org.skopeo.model.MatchSetResult
 import java.util.UUID
 

@@ -7,7 +7,7 @@ import arrow.core.Either
 import arrow.core.left
 import arrow.core.right
 import org.jetbrains.exposed.exceptions.ExposedSQLException
-import org.skopeo.error.ServiceError
+import org.skopeo.common.error.ServiceError
 import java.sql.SQLException
 
 /** PostgreSQL SQLSTATE for a unique-constraint violation. */

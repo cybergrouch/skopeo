@@ -9,12 +9,12 @@ import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.skopeo.common.error.ServiceError
 import org.skopeo.dto.event.EventParticipantResponse
 import org.skopeo.dto.event.EventPublicResponse
 import org.skopeo.dto.event.EventResponse
 import org.skopeo.dto.event.MyEventResponse
 import org.skopeo.dto.match.MatchPublicPlayer
-import org.skopeo.error.ServiceError
 import org.skopeo.mapper.event.toResponse
 import org.skopeo.mapper.match.toPublicResponse
 import org.skopeo.model.AuditAction

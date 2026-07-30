@@ -14,7 +14,9 @@ import org.jetbrains.exposed.sql.update
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.skopeo.error.ServiceError
+import org.skopeo.common.error.ServiceError
+import org.skopeo.common.security.ClientAuthResult
+import org.skopeo.common.security.ClientPrincipal
 import org.skopeo.model.ApiClientStatus
 import org.skopeo.model.ApiKeyEnvironment
 import org.skopeo.model.AuthProvider
@@ -28,8 +30,6 @@ import org.skopeo.model.UserName
 import org.skopeo.repository.ApiClientRepository
 import org.skopeo.repository.ApiClientsTable
 import org.skopeo.repository.UserRepository
-import org.skopeo.security.ClientAuthResult
-import org.skopeo.security.ClientPrincipal
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.time.LocalDateTime
