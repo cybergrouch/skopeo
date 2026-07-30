@@ -516,6 +516,51 @@ class ContactServiceTest {
     }
 
     @Test
+    fun `creating a contact with an unknown type is a validation error`() {
+        val owner = provisionUser(uid = "owner")
+
+        service
+            .create(token = token(uid = "owner"), userId = owner.id, typeRaw = "NOT_A_TYPE", value = "a@b.dev", isPrimary = true)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `an unknown verification status or method is a validation error`() {
+        val owner = provisionUser(uid = "owner")
+        provisionUser(uid = "root", capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val contact =
+            service
+                .create(
+                    token = token(uid = "owner"),
+                    userId = owner.id,
+                    typeRaw = "EMAIL",
+                    value = "a@example.com",
+                    isPrimary = true,
+                ).shouldBeRight()
+
+        service
+            .setVerification(
+                token = token(uid = "root"),
+                userId = owner.id,
+                contactId = UUID.fromString(contact.id),
+                statusRaw = "NOT_A_STATUS",
+                methodRaw = null,
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+
+        service
+            .setVerification(
+                token = token(uid = "root"),
+                userId = owner.id,
+                contactId = UUID.fromString(contact.id),
+                statusRaw = "VERIFIED",
+                methodRaw = "NOT_A_METHOD",
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
     fun `a non-phone contact, or a match on a disabled user, raises no candidate (#126)`() {
         val a = provisionUser(uid = "a")
         val b = provisionUser(uid = "b")

@@ -240,6 +240,16 @@ class AuditServiceTest {
     }
 
     @Test
+    fun `an unknown audit category is a validation error`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+
+        service
+            .list(token = token(uid = "admin"), categoryRaw = "NOT_A_CATEGORY", limit = 10, offset = 0)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
     fun `list tolerates a system actor and an entity without a user id`() {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         // A system action (null actor) and a RATING entry whose entityId is absent.

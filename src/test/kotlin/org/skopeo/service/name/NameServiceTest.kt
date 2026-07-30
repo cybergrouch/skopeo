@@ -217,6 +217,16 @@ class NameServiceTest {
     }
 
     @Test
+    fun `creating a name with an unknown type is a validation error`() {
+        val owner = provisionUser(uid = "owner")
+
+        service
+            .create(token = token(uid = "owner"), userId = owner.id, typeRaw = "NOT_A_TYPE", value = "JB")
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
     fun `an administrator can list another user's names`() {
         val owner = provisionUser(uid = "owner")
         provisionUser(uid = "root", capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))

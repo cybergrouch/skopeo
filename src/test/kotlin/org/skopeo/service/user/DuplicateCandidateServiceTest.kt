@@ -193,6 +193,16 @@ class DuplicateCandidateServiceTest {
     }
 
     @Test
+    fun `list rejects an unknown status filter`() {
+        admin(uid = "root")
+
+        service
+            .list(token = token(uid = "root"), limit = 50, offset = 0, statusRaw = "NOT_A_STATUS")
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
     fun `every action is ADMINISTRATOR-only`() {
         admin(uid = "root")
         val a = provisionUser(uid = "a")

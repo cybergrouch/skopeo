@@ -138,6 +138,16 @@ class RatingRequestServiceTest {
     }
 
     @Test
+    fun `list rejects an unknown status filter`() {
+        provision(uid = "rater", roles = setOf(Capability.PLAYER, Capability.RATER))
+
+        service
+            .list(token = token(uid = "rater"), limit = 50, offset = 0, statusRaw = "NOT_A_STATUS")
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
     fun `an administrator without RATER can triage, and a ghost rater is refused`() {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         provision(uid = "player", rated = true)
