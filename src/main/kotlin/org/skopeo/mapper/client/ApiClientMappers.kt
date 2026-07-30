@@ -3,6 +3,7 @@
 
 package org.skopeo.mapper.client
 
+import org.skopeo.common.security.ClientPrincipal
 import org.skopeo.dto.client.ApiClientResponse
 import org.skopeo.dto.client.ApiKeyResponse
 import org.skopeo.dto.client.ClientEffectiveCapabilitiesResponse
@@ -14,7 +15,6 @@ import org.skopeo.model.ApiKey
 import org.skopeo.model.ClientEffectiveCapabilities
 import org.skopeo.model.IssuedApiKey
 import org.skopeo.model.PublicPlayer
-import org.skopeo.security.ClientPrincipal
 
 fun ApiKey.toResponse(): ApiKeyResponse =
     ApiKeyResponse(

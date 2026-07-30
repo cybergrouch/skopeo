@@ -25,7 +25,7 @@ import java.util.UUID
 /**
  * Persistence for partner API clients and their keys (#225/#596). Only the SHA-256 hash of a key is
  * stored; [findKeyByHash] is the hot path on every client-authenticated request. Returns raw domain
- * (the service layer owns the [org.skopeo.error.ServiceError] mapping), mirroring [ClubRepository].
+ * (the service layer owns the [org.skopeo.common.error.ServiceError] mapping), mirroring [ClubRepository].
  */
 @Suppress("TooManyFunctions") // Cohesive CRUD over api_clients/api_keys (clients, keys, resolution, rate limit).
 class ApiClientRepository {

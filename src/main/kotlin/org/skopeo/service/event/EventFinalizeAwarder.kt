@@ -3,7 +3,7 @@
 
 package org.skopeo.service.event
 
-import org.skopeo.contract.OpenPlayPointsConfig
+import org.skopeo.common.contract.OpenPlayPointsConfig
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite

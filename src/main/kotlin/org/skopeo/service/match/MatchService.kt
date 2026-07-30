@@ -8,6 +8,7 @@ import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
+import org.skopeo.common.error.ServiceError
 import org.skopeo.dto.match.CreateFixtureRequest
 import org.skopeo.dto.match.MatchPublicEvent
 import org.skopeo.dto.match.MatchPublicHeadToHead
@@ -20,7 +21,6 @@ import org.skopeo.dto.match.MatchResponse
 import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.dto.match.UpcomingMatchResponse
 import org.skopeo.dto.rating.MatchCalculationDetailResponse
-import org.skopeo.error.ServiceError
 import org.skopeo.mapper.match.toPublicResponse
 import org.skopeo.mapper.match.toResponse
 import org.skopeo.mapper.rating.toResponse

@@ -12,11 +12,11 @@ import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.skopeo.contract.BandRelation
-import org.skopeo.contract.OpenPlayMarginPoints
-import org.skopeo.contract.OpenPlayPointsConfig
-import org.skopeo.contract.TournamentPointsConfig
-import org.skopeo.error.ServiceError
+import org.skopeo.common.contract.BandRelation
+import org.skopeo.common.contract.OpenPlayMarginPoints
+import org.skopeo.common.contract.OpenPlayPointsConfig
+import org.skopeo.common.contract.TournamentPointsConfig
+import org.skopeo.common.error.ServiceError
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.NameType

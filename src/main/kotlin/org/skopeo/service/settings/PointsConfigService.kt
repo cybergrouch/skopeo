@@ -9,11 +9,11 @@ import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.right
 import kotlinx.serialization.json.Json
-import org.skopeo.contract.OpenPlayPointsConfig
-import org.skopeo.contract.TournamentPointsConfig
+import org.skopeo.common.contract.OpenPlayPointsConfig
+import org.skopeo.common.contract.TournamentPointsConfig
+import org.skopeo.common.error.ServiceError
 import org.skopeo.dto.settings.OpenPlayConfigResponse
 import org.skopeo.dto.settings.TournamentConfigResponse
-import org.skopeo.error.ServiceError
 import org.skopeo.mapper.settings.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType

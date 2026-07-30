@@ -13,7 +13,7 @@ import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
-import org.skopeo.error.ServiceError
+import org.skopeo.common.error.ServiceError
 import org.skopeo.model.Name
 import org.skopeo.model.NameType
 import java.time.LocalDateTime

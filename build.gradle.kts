@@ -277,12 +277,9 @@ tasks.jacocoTestReport {
                         // Mappers are pure dto↔model translation (like dto/), exercised via route/service tests.
                         "**/mapper/**",
                         "**/model/**",
-                        // ServiceError is a pure error taxonomy (relocated out of model/), like dto/.
-                        "**/error/**",
-                        // Auth-boundary value types (ClientPrincipal/ClientAuthResult), relocated out of model/.
-                        "**/security/**",
-                        // Shared serializable value contracts (points-config schedules), relocated out of model/.
-                        "**/contract/**",
+                        // Neutral boundary value types under org.skopeo.common (ServiceError, auth
+                        // principals, serializable contracts) — pure value types, like model/ and dto/.
+                        "**/common/**",
                         "**/*Application*.*",
                         // Database wiring requires a live PostgreSQL instance
                         "**/config/**",
@@ -369,12 +366,9 @@ tasks.jacocoTestCoverageVerification {
                         // Mappers are pure dto↔model translation (like dto/), exercised via route/service tests.
                         "**/mapper/**",
                         "**/model/**",
-                        // ServiceError is a pure error taxonomy (relocated out of model/), like dto/.
-                        "**/error/**",
-                        // Auth-boundary value types (ClientPrincipal/ClientAuthResult), relocated out of model/.
-                        "**/security/**",
-                        // Shared serializable value contracts (points-config schedules), relocated out of model/.
-                        "**/contract/**",
+                        // Neutral boundary value types under org.skopeo.common (ServiceError, auth
+                        // principals, serializable contracts) — pure value types, like model/ and dto/.
+                        "**/common/**",
                         "**/*Application*.*",
                         "**/config/**",
                         "**/*Kt.class",

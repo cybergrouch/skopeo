@@ -14,8 +14,8 @@ import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
-import org.skopeo.contract.OpenPlayPointsConfig
-import org.skopeo.contract.TournamentPointsConfig
+import org.skopeo.common.contract.OpenPlayPointsConfig
+import org.skopeo.common.contract.TournamentPointsConfig
 import org.skopeo.service.settings.PointsConfigService
 
 /**

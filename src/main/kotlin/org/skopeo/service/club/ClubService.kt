@@ -9,9 +9,9 @@ import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
+import org.skopeo.common.error.ServiceError
 import org.skopeo.dto.club.ClubPublicResponse
 import org.skopeo.dto.club.ClubResponse
-import org.skopeo.error.ServiceError
 import org.skopeo.mapper.club.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType

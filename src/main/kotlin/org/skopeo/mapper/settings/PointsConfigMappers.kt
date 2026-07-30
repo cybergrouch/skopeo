@@ -3,8 +3,8 @@
 
 package org.skopeo.mapper.settings
 
-import org.skopeo.contract.OpenPlayPointsConfig
-import org.skopeo.contract.TournamentPointsConfig
+import org.skopeo.common.contract.OpenPlayPointsConfig
+import org.skopeo.common.contract.TournamentPointsConfig
 import org.skopeo.dto.settings.OpenPlayConfigResponse
 import org.skopeo.dto.settings.TournamentConfigResponse
 import org.skopeo.model.StoredConfig

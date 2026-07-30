@@ -15,7 +15,7 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.RoutingContext
 import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
-import org.skopeo.error.ServiceError
+import org.skopeo.common.error.ServiceError
 import org.skopeo.service.user.VerifiedFirebaseToken
 import java.util.UUID
 

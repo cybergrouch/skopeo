@@ -27,7 +27,7 @@ import org.junit.jupiter.api.Test
  * `RatingChange`) still embed shared `@Serializable` domain value types (`Team`, `MatchScore`,
  * `PlayerProfile`, `Rating`, `RatingCalculationOptions`) directly as their wire format, rather than mirroring
  * them. Fully decoupling that contract is a separate, larger change; until then these classes are the only
- * sanctioned dto→model dependency. (The points-config types were relocated to `org.skopeo.contract`, so
+ * sanctioned dto→model dependency. (The points-config types were relocated to `org.skopeo.common.contract`, so
  * `OpenPlayConfigResponse`/`TournamentConfigResponse` no longer count.) Uses ArchUnit (bytecode-based) —
  * chosen over Konsist for robustness against the Kotlin compiler version (see #69).
  */
@@ -66,7 +66,7 @@ class LayeredArchitectureTest {
         // ServiceError is a transport-free error taxonomy (issue #115) that every layer may return;
         // it lives outside model so that returning it does not pull the domain into routes.
         noClasses()
-            .that().resideInAPackage("org.skopeo.error..")
+            .that().resideInAPackage("org.skopeo.common.error..")
             .should().dependOnClassesThat()
             .resideInAnyPackage("..routes..", "..service..", "..repository..", "..dto..", "..mapper..", "org.skopeo.model..")
             .check(classes)
@@ -77,7 +77,7 @@ class LayeredArchitectureTest {
         // ClientPrincipal/ClientAuthResult are transport-boundary auth types kept out of model so routes
         // can consume them (#597); they may reference model (Capability) but nothing above it.
         noClasses()
-            .that().resideInAPackage("org.skopeo.security..")
+            .that().resideInAPackage("org.skopeo.common.security..")
             .should().dependOnClassesThat()
             .resideInAnyPackage("..routes..", "..service..", "..repository..", "..dto..", "..mapper..")
             .check(classes)
@@ -140,7 +140,7 @@ class LayeredArchitectureTest {
         // The transport layer speaks only DTOs (+ the neutral error/security/contract packages): responses
         // are DTOs, request bodies are DTOs or `contract` value types, and all query/path input is parsed
         // service-side. No exception — the former wire-contract request bodies (points-config) now live in
-        // `org.skopeo.contract`.
+        // `org.skopeo.common.contract`.
         noClasses()
             .that().resideInAPackage("..routes..")
             .should().dependOnClassesThat().resideInAPackage("org.skopeo.model..")
@@ -153,7 +153,7 @@ class LayeredArchitectureTest {
         // types shared across the wire + persistence, kept out of model so routes/dto carry them without a
         // model dependency. A pure leaf — it must not reach any app layer, including model.
         noClasses()
-            .that().resideInAPackage("org.skopeo.contract..")
+            .that().resideInAPackage("org.skopeo.common.contract..")
             .should().dependOnClassesThat()
             .resideInAnyPackage("..routes..", "..service..", "..repository..", "..dto..", "..mapper..", "org.skopeo.model..")
             .check(classes)
