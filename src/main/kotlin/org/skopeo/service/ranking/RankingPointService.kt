@@ -28,8 +28,6 @@ import org.skopeo.model.PointSourceType
 import org.skopeo.model.RankingPointAward
 import org.skopeo.model.RankingPointAwardWrite
 import org.skopeo.model.ResolvedAward
-import org.skopeo.model.displayName
-import org.skopeo.model.isDeleted
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RankingPointRepository
@@ -37,6 +35,8 @@ import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService
 import org.skopeo.service.user.VerifiedFirebaseToken
+import org.skopeo.service.user.displayName
+import org.skopeo.service.user.isDeleted
 import java.math.BigDecimal
 import java.time.LocalDateTime
 import java.util.UUID

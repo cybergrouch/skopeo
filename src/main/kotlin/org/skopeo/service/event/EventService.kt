@@ -33,8 +33,6 @@ import org.skopeo.model.MatchStatus
 import org.skopeo.model.User
 import org.skopeo.model.ageInYears
 import org.skopeo.model.canSeeRawRatingOrFalse
-import org.skopeo.model.displayName
-import org.skopeo.model.isDeleted
 import org.skopeo.model.isExpired
 import org.skopeo.repository.CircuitRepository
 import org.skopeo.repository.ClubRepository
@@ -44,6 +42,8 @@ import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService
 import org.skopeo.service.user.VerifiedFirebaseToken
+import org.skopeo.service.user.displayName
+import org.skopeo.service.user.isDeleted
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID

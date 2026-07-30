@@ -42,6 +42,10 @@ data class DuplicateCandidateView(
     val candidate: DuplicateCandidate,
     val userA: User,
     val userB: User,
+    // Soft-deleted flags computed service-side (User.isDeleted) and carried as data, so the mapper — which
+    // cannot reach the service layer — can render them without recomputing.
+    val userADeleted: Boolean,
+    val userBDeleted: Boolean,
 )
 
 /** A page of resolved candidate views plus the total (for the admin queue). */

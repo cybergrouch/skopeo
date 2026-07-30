@@ -16,8 +16,8 @@ fun DuplicateCandidateView.toResponse(): DuplicateCandidateResponse =
         signal = candidate.signal.name,
         detail = candidate.detail,
         flaggedAt = candidate.flaggedAt.toString(),
-        userA = userA.toSummary(),
-        userB = userB.toSummary(),
+        userA = userA.toSummary(isDeleted = userADeleted),
+        userB = userB.toSummary(isDeleted = userBDeleted),
     )
 
 fun DuplicateCandidateViewPage.toResponse(): DuplicateCandidatePageResponse =

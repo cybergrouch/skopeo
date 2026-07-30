@@ -15,7 +15,6 @@ import org.skopeo.model.User
 import org.skopeo.model.UserRating
 import org.skopeo.model.WinLossRecord
 import org.skopeo.model.ageInYears
-import org.skopeo.model.isDeleted
 import java.time.LocalDate
 
 fun User.toResponse(): UserResponse =
@@ -70,6 +69,9 @@ fun User.toSummary(
     // The raw NTRP value is included only for an ADMINISTRATOR viewer (#583); everyone else gets the
     // band + confidence. Defaults false (the safe/privacy-preserving default) so callers must opt in.
     showRawRating: Boolean = false,
+    // Soft-deleted flag, computed by the caller (service-side User.isDeleted()); mappers can't reach the
+    // service layer, so the value is passed in rather than derived here.
+    isDeleted: Boolean,
 ): UserSummaryResponse =
     UserSummaryResponse(
         id = id.toString(),
@@ -89,5 +91,5 @@ fun User.toSummary(
         capabilities = capabilities.map { it.name }.sorted(),
         record = record?.let { WinLossDto(wins = it.wins, losses = it.losses, total = it.total) },
         isPlaceholder = placeholder,
-        isDeleted = isDeleted(),
+        isDeleted = isDeleted,
     )

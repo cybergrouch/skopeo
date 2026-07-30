@@ -23,13 +23,13 @@ import org.skopeo.model.ClubPublicEvent
 import org.skopeo.model.ClubPublicView
 import org.skopeo.model.ClubView
 import org.skopeo.model.CreateClubCommand
-import org.skopeo.model.displayName
 import org.skopeo.repository.ClubRepository
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService
 import org.skopeo.service.user.VerifiedFirebaseToken
+import org.skopeo.service.user.displayName
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID

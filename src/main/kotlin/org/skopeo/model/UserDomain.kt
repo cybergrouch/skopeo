@@ -153,13 +153,6 @@ fun effectivePhotoUrl(
 ): String? = if (photoHidden) null else customPhotoUrl ?: providerPhotoUrl
 
 /**
- * True when this account was soft-deleted by an administrator (#518). `is_active` is overloaded — a
- * merged duplicate (#124) is also inactive but carries a [User.canonicalUserId], so "deleted" is
- * qualified as inactive AND canonical-less. Centralized so every "Deleted" flag/list uses the same rule.
- */
-fun User.isDeleted(): Boolean = !isActive && canonicalUserId == null
-
-/**
  * Whether this viewer may see the raw NTRP rating value (full precision), #583. ADMINISTRATOR only,
  * and never while that admin has the per-admin "preview as non-admin" toggle on. Everyone else sees
  * the band + confidence + speedometer only. Anonymous/unresolved viewers get false at the call site.
@@ -168,9 +161,6 @@ fun User.canSeeRawRating(): Boolean = capabilities.contains(element = Capability
 
 /** Null-safe [canSeeRawRating] for optional/anonymous callers: no caller ⇒ band only. */
 fun User?.canSeeRawRatingOrFalse(): Boolean = this?.canSeeRawRating() == true
-
-/** The user's single active display name, if any (names include disabled ones). */
-fun User.displayName(): String? = names.firstOrNull { it.type == NameType.DISPLAY && it.isActive }?.value
 
 /** The user's single active first name, if any (private — never shown on the public profile). */
 fun User.firstName(): String? = names.firstOrNull { it.type == NameType.FIRST && it.isActive }?.value

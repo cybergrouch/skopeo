@@ -26,8 +26,6 @@ import org.skopeo.model.Match
 import org.skopeo.model.TeamType
 import org.skopeo.model.User
 import org.skopeo.model.canSeeRawRatingOrFalse
-import org.skopeo.model.displayName
-import org.skopeo.model.isDeleted
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RankingPointRepository

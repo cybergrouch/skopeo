@@ -72,7 +72,7 @@ class DuplicateService(
                         ),
                 )
             }
-            users.findDuplicatesOf(canonicalId = canonicalId).map { it.toSummary() }
+            users.findDuplicatesOf(canonicalId = canonicalId).map { it.toSummary(isDeleted = it.isDeleted()) }
         }
 
     /** Reverse a duplicate marking on [id]: reactivate and clear its canonical pointer. */
@@ -112,7 +112,7 @@ class DuplicateService(
         either {
             requireAdmin(token = token).bind()
             users.findById(id = canonicalId).bind()
-            users.findDuplicatesOf(canonicalId = canonicalId).map { it.toSummary() }
+            users.findDuplicatesOf(canonicalId = canonicalId).map { it.toSummary(isDeleted = it.isDeleted()) }
         }
 
     /** A target must exist and not itself already be a canonical for other duplicates. */

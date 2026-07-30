@@ -32,11 +32,11 @@ import org.skopeo.model.InsertApiKeyCommand
 import org.skopeo.model.IssuedApiKey
 import org.skopeo.model.PublicPlayer
 import org.skopeo.model.UserSearchQuery
-import org.skopeo.model.displayName
 import org.skopeo.repository.ApiClientRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService
 import org.skopeo.service.user.VerifiedFirebaseToken
+import org.skopeo.service.user.displayName
 import java.time.LocalDateTime
 import java.util.UUID
 

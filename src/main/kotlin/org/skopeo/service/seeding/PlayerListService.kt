@@ -19,6 +19,7 @@ import org.skopeo.repository.PlayerListRepository
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.user.VerifiedFirebaseToken
+import org.skopeo.service.user.isDeleted
 import java.util.UUID
 
 /** Roles that may build seeding lists (#111): HOST and CLUB_OWNER, plus ADMINISTRATOR. */
@@ -77,7 +78,7 @@ class PlayerListService(
                 id = list.id.toString(),
                 name = list.name,
                 createdAt = list.createdAt.toString(),
-                members = members.map { it.toSummary(rating = currentRatings[it.id], showRawRating = showRaw) },
+                members = members.map { it.toSummary(rating = currentRatings[it.id], showRawRating = showRaw, isDeleted = it.isDeleted()) },
             )
         }
 

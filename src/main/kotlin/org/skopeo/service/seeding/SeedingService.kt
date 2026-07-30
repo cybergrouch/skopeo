@@ -11,13 +11,13 @@ import org.skopeo.mapper.seeding.toResponse
 import org.skopeo.model.SeedingEntry
 import org.skopeo.model.User
 import org.skopeo.model.ageInYears
-import org.skopeo.model.displayName
-import org.skopeo.model.isDeleted
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.SeedingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.user.UserService
 import org.skopeo.service.user.VerifiedFirebaseToken
+import org.skopeo.service.user.displayName
+import org.skopeo.service.user.isDeleted
 import java.time.LocalDate
 import java.util.UUID
 import kotlin.math.ceil
