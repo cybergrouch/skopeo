@@ -28,7 +28,6 @@ import org.skopeo.model.AuthProvider
 import org.skopeo.model.Capability
 import org.skopeo.model.CreateEventCommand
 import org.skopeo.model.CreatePlaceholderCommand
-import org.skopeo.model.MatchQuery
 import org.skopeo.model.MatchStatus
 import org.skopeo.model.MatchType
 import org.skopeo.model.NameType
@@ -599,25 +598,25 @@ class MatchServiceTest {
 
         // Admin sees every match in the view.
         service
-            .query(token = token(uid = "root"), view = MatchQuery.PENDING_CALCULATION)
+            .query(token = token(uid = "root"), filter = "pending-calculation")
             .shouldBeRight()
             .map { it.id } shouldContain completed.id
         service
-            .query(token = token(uid = "root"), view = MatchQuery.AWAITING_RESULTS)
+            .query(token = token(uid = "root"), filter = "awaiting-results")
             .shouldBeRight()
             .map { it.id } shouldContain overdue.id
         // The host that created them can see their own.
         service
-            .query(token = token(uid = "host"), view = MatchQuery.PENDING_CALCULATION)
+            .query(token = token(uid = "host"), filter = "pending-calculation")
             .shouldBeRight()
             .map { it.id } shouldContain completed.id
         service
-            .query(token = token(uid = "host"), view = MatchQuery.AWAITING_RESULTS)
+            .query(token = token(uid = "host"), filter = "awaiting-results")
             .shouldBeRight()
             .map { it.id } shouldContain overdue.id
         // A non-staff player is refused.
         service
-            .query(token = token(uid = "p1"), view = MatchQuery.PENDING_CALCULATION)
+            .query(token = token(uid = "p1"), filter = "pending-calculation")
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
@@ -1105,7 +1104,7 @@ class MatchServiceTest {
         // A fixture not in any event.
         service.createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id)).shouldBeRight()
 
-        val scoped = service.query(token = token(uid = "host"), view = MatchQuery.AWAITING_RESULTS, eventId = event.id).shouldBeRight()
+        val scoped = service.query(token = token(uid = "host"), filter = "awaiting-results", eventId = event.id).shouldBeRight()
         scoped.map { it.id } shouldBe listOf(element = inEvent.id)
     }
 
@@ -1136,7 +1135,7 @@ class MatchServiceTest {
         service.uploadResult(token = token(uid = "host"), matchId = UUID.fromString(outside.id), request = straightSets()).shouldBeRight()
 
         val scoped =
-            service.query(token = token(uid = "host"), view = MatchQuery.PENDING_CALCULATION, eventId = event.id).shouldBeRight()
+            service.query(token = token(uid = "host"), filter = "pending-calculation", eventId = event.id).shouldBeRight()
         scoped.map { it.id } shouldBe listOf(element = inEvent.id)
     }
 
@@ -1169,18 +1168,18 @@ class MatchServiceTest {
         matchRepo.markRated(matchId = UUID.fromString(rated.id), ratedAt = LocalDateTime.now(), ratedBy = host.id)
 
         // RESULTS keeps the rated match on view alongside the recorded one...
-        val results = service.query(token = token(uid = "host"), view = MatchQuery.RESULTS, eventId = event.id).shouldBeRight()
+        val results = service.query(token = token(uid = "host"), filter = "results", eventId = event.id).shouldBeRight()
         results.map { it.id }.toSet() shouldBe setOf(recorded.id, rated.id)
         // ...while pending-calculation only surfaces the still-unrated one.
         val pending =
-            service.query(token = token(uid = "host"), view = MatchQuery.PENDING_CALCULATION, eventId = event.id).shouldBeRight()
+            service.query(token = token(uid = "host"), filter = "pending-calculation", eventId = event.id).shouldBeRight()
         pending.map { it.id } shouldBe listOf(element = recorded.id)
     }
 
     @Test
     fun `results without an event id is empty`() {
         provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
-        service.query(token = token(uid = "host"), view = MatchQuery.RESULTS).shouldBeRight() shouldBe emptyList()
+        service.query(token = token(uid = "host"), filter = "results").shouldBeRight() shouldBe emptyList()
     }
 
     @Test

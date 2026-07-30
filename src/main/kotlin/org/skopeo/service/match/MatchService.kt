@@ -8,6 +8,7 @@ import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
+import org.skopeo.dto.match.CreateFixtureRequest
 import org.skopeo.dto.match.MatchPublicEvent
 import org.skopeo.dto.match.MatchPublicHeadToHead
 import org.skopeo.dto.match.MatchPublicHeadToHeadEntry
@@ -53,6 +54,7 @@ import org.skopeo.service.user.VerifiedFirebaseToken
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.format.DateTimeParseException
 import java.util.UUID
 
 private val STAFF_ROLES = setOf(Capability.HOST, Capability.CLUB_OWNER, Capability.ADMINISTRATOR)
@@ -108,7 +110,74 @@ class MatchService(
     private val events: EventRepository = EventRepository(),
     private val audit: AuditService = AuditService(),
 ) {
-    /** [request] is parsed, range-checked, and composition-validated at the route boundary (#116). */
+    /** Create a fixture from the raw HTTP request (#116): parse/validate enums, date, ids, and composition. */
+    fun createFixture(
+        token: VerifiedFirebaseToken,
+        request: CreateFixtureRequest,
+    ): Either<ServiceError, MatchResponse> = createFixture(token = token, request = toFixtureInput(request = request))
+
+    private fun toFixtureInput(request: CreateFixtureRequest): FixtureInput {
+        val matchFormat =
+            requireNotNull(value = TeamType.entries.firstOrNull { it.name == request.matchFormat }) {
+                "Invalid matchFormat '${request.matchFormat}'; expected one of ${TeamType.entries.joinToString { it.name }}"
+            }
+        val team1 = request.team1.map { uuidOf(value = it) }
+        val team2 = request.team2.map { uuidOf(value = it) }
+        // Composition check at the boundary: the right count per side and no player appearing twice.
+        val expected = if (matchFormat == TeamType.SINGLES) 1 else 2
+        require(value = team1.size == expected && team2.size == expected) { "$matchFormat needs $expected player(s) per side" }
+        (team1 + team2).let { all -> require(value = all.toSet().size == all.size) { "a player cannot appear more than once in a match" } }
+        return FixtureInput(
+            matchFormat = matchFormat,
+            matchType =
+                requireNotNull(value = MatchType.entries.firstOrNull { it.name == request.matchType }) {
+                    "Invalid matchType '${request.matchType}'; expected one of ${MatchType.entries.joinToString { it.name }}"
+                },
+            matchDate = matchDateOf(value = request.matchDate),
+            team1 = team1,
+            team2 = team2,
+            venue = request.venue,
+            tournamentName = request.tournamentName,
+            eventId = request.eventId?.let { uuidOf(value = it, field = "event id") },
+            // Range (0 < h <= 1.0) is enforced in CreateFixtureRequest.init; here we only parse to BigDecimal.
+            team1Handicap = request.team1Handicap?.let { BigDecimal(it) },
+            team2Handicap = request.team2Handicap?.let { BigDecimal(it) },
+            isPlacementMatch = request.isPlacementMatch,
+            placementBracket =
+                request.placementBracket?.let { raw ->
+                    requireNotNull(value = PlacementBracket.entries.firstOrNull { it.name == raw }) {
+                        "Invalid placementBracket '$raw'; expected one of ${PlacementBracket.entries.joinToString { it.name }}"
+                    }
+                },
+        )
+    }
+
+    /** Map the `filter` query value to a [MatchQuery] (#331); an unknown value is a 400. */
+    private fun matchQueryOf(value: String?): MatchQuery =
+        when (value) {
+            "pending-calculation" -> MatchQuery.PENDING_CALCULATION
+            "awaiting-results" -> MatchQuery.AWAITING_RESULTS
+            "results" -> MatchQuery.RESULTS
+            else -> throw IllegalArgumentException("filter must be 'pending-calculation', 'awaiting-results', or 'results'")
+        }
+
+    private fun matchDateOf(value: String): LocalDate =
+        try {
+            LocalDate.parse(value)
+        } catch (e: DateTimeParseException) {
+            throw IllegalArgumentException("Invalid matchDate '$value'; expected ISO-8601 (yyyy-MM-dd)", e)
+        }
+
+    private fun uuidOf(
+        value: String,
+        field: String = "user id",
+    ): UUID =
+        try {
+            UUID.fromString(value)
+        } catch (e: IllegalArgumentException) {
+            throw IllegalArgumentException("Invalid $field '$value'", e)
+        }
+
     fun createFixture(
         token: VerifiedFirebaseToken,
         request: FixtureInput,
@@ -557,10 +626,11 @@ class MatchService(
      */
     fun query(
         token: VerifiedFirebaseToken,
-        view: MatchQuery,
+        filter: String?,
         eventId: UUID? = null,
     ): Either<ServiceError, List<MatchResponse>> =
         either {
+            val view = matchQueryOf(value = filter)
             val caller = staffCaller(token = token).bind()
             val scopedTo = if (caller.capabilities.contains(element = Capability.ADMINISTRATOR)) null else caller.id
             when (view) {
