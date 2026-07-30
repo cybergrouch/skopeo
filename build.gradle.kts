@@ -281,6 +281,8 @@ tasks.jacocoTestReport {
                         "**/error/**",
                         // Auth-boundary value types (ClientPrincipal/ClientAuthResult), relocated out of model/.
                         "**/security/**",
+                        // Shared serializable value contracts (points-config schedules), relocated out of model/.
+                        "**/contract/**",
                         "**/*Application*.*",
                         // Database wiring requires a live PostgreSQL instance
                         "**/config/**",
@@ -371,6 +373,8 @@ tasks.jacocoTestCoverageVerification {
                         "**/error/**",
                         // Auth-boundary value types (ClientPrincipal/ClientAuthResult), relocated out of model/.
                         "**/security/**",
+                        // Shared serializable value contracts (points-config schedules), relocated out of model/.
+                        "**/contract/**",
                         "**/*Application*.*",
                         "**/config/**",
                         "**/*Kt.class",

@@ -3,6 +3,7 @@
 
 package org.skopeo.service.event
 
+import org.skopeo.contract.OpenPlayPointsConfig
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -13,7 +14,6 @@ import org.skopeo.model.Level
 import org.skopeo.model.Match
 import org.skopeo.model.MatchSide
 import org.skopeo.model.MatchStatus
-import org.skopeo.model.OpenPlayPointsConfig
 import org.skopeo.model.PlacementBracket
 import org.skopeo.model.PointClass
 import org.skopeo.model.PointSourceType

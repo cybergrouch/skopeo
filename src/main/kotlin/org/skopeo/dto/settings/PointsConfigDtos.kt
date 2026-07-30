@@ -4,8 +4,8 @@
 package org.skopeo.dto.settings
 
 import kotlinx.serialization.Serializable
-import org.skopeo.model.OpenPlayPointsConfig
-import org.skopeo.model.TournamentPointsConfig
+import org.skopeo.contract.OpenPlayPointsConfig
+import org.skopeo.contract.TournamentPointsConfig
 
 /**
  * The open-play points schedule (#553) with provenance. [config] is the editable margin-bracket table

@@ -9,6 +9,8 @@ import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.right
 import kotlinx.serialization.json.Json
+import org.skopeo.contract.OpenPlayPointsConfig
+import org.skopeo.contract.TournamentPointsConfig
 import org.skopeo.dto.settings.OpenPlayConfigResponse
 import org.skopeo.dto.settings.TournamentConfigResponse
 import org.skopeo.error.ServiceError
@@ -17,9 +19,7 @@ import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
 import org.skopeo.model.Capability
-import org.skopeo.model.OpenPlayPointsConfig
 import org.skopeo.model.StoredConfig
-import org.skopeo.model.TournamentPointsConfig
 import org.skopeo.repository.PointsConfigRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService
