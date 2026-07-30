@@ -159,6 +159,19 @@ export function PlayerProfilePage() {
               ) : (
                 <p className="text-sm text-muted-foreground">No rating yet.</p>
               )}
+              {/* Registered email (#630): present only when the API reveals it — the owner viewing
+                  their own profile, or a HOST/CLUB_OWNER/RATER/ADMINISTRATOR viewer. Absent otherwise. */}
+              {player.email ? (
+                <p className="mt-2 text-sm">
+                  <span className="font-medium">Email</span>{' '}
+                  <a
+                    href={`mailto:${player.email}`}
+                    className="text-primary hover:underline"
+                  >
+                    {player.email}
+                  </a>
+                </p>
+              ) : null}
             </CardContent>
           </Card>
         ) : null}

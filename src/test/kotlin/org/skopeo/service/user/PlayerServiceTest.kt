@@ -20,6 +20,9 @@ import org.skopeo.common.security.Capability
 import org.skopeo.dto.user.ResultsBucket
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.AwardStatus
+import org.skopeo.model.ContactInfo
+import org.skopeo.model.ContactSource
+import org.skopeo.model.ContactType
 import org.skopeo.model.CreateFixtureCommand
 import org.skopeo.model.Match
 import org.skopeo.model.MatchSetResult
@@ -34,6 +37,7 @@ import org.skopeo.model.TeamType
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
+import org.skopeo.model.VerificationStatus
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RankingPointRepository
 import org.skopeo.repository.RatingRepository
@@ -93,6 +97,44 @@ class PlayerServiceTest {
         )
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
+
+    private fun emailContact(value: String): ContactInfo =
+        ContactInfo(
+            type = ContactType.EMAIL,
+            value = value,
+            source = ContactSource.MANUAL,
+            status = VerificationStatus.VERIFIED,
+            isPrimary = true,
+        )
+
+    private fun newUserWithEmail(
+        uid: String,
+        name: String,
+        email: String,
+    ): User =
+        users.provision(
+            command =
+                ProvisionUserCommand(
+                    firebaseUid = uid,
+                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                    names = display(name = name),
+                    email = emailContact(value = email),
+                ),
+        )
+
+    private fun viewerWith(
+        uid: String,
+        capabilities: Set<Capability>,
+    ): User =
+        users.provision(
+            command =
+                ProvisionUserCommand(
+                    firebaseUid = uid,
+                    identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
+                    names = display(name = uid),
+                    capabilities = capabilities,
+                ),
+        )
 
     private fun fixture(
         u1: UUID,
@@ -207,6 +249,61 @@ class PlayerServiceTest {
         profile.canonical?.publicCode shouldBe canonical.publicCode
         profile.canonical?.displayName shouldBe "Real"
         profile.rating.shouldBeNull()
+    }
+
+    @Test
+    fun `the profile owner sees their own email on their public profile (#630)`() {
+        val owner = newUserWithEmail(uid = "own", name = "Ana", email = "ana@example.com")
+
+        val profile = service.publicProfile(code = owner.publicCode, token = token(uid = "own")).shouldBeRight()
+
+        profile.email shouldBe "ana@example.com"
+    }
+
+    @Test
+    fun `a HOST, CLUB_OWNER, RATER or ADMINISTRATOR viewer sees the player's email (#630)`() {
+        val target = newUserWithEmail(uid = "tgt", name = "Bea", email = "bea@example.com")
+        val elevated =
+            mapOf(
+                "h" to Capability.HOST,
+                "c" to Capability.CLUB_OWNER,
+                "r" to Capability.RATER,
+                "a" to Capability.ADMINISTRATOR,
+            )
+        elevated.forEach { (uid, capability) ->
+            viewerWith(uid = uid, capabilities = setOf(Capability.PLAYER, capability))
+            val profile = service.publicProfile(code = target.publicCode, token = token(uid = uid)).shouldBeRight()
+            profile.email shouldBe "bea@example.com"
+        }
+    }
+
+    @Test
+    fun `another plain PLAYER viewer does not see the player's email (#630)`() {
+        val target = newUserWithEmail(uid = "tgt", name = "Bea", email = "bea@example.com")
+        // A plain player: newUser provisions with the default PLAYER-only capability set.
+        newUser(uid = "peer", names = display(name = "Peer"))
+
+        val profile = service.publicProfile(code = target.publicCode, token = token(uid = "peer")).shouldBeRight()
+
+        profile.email.shouldBeNull()
+    }
+
+    @Test
+    fun `an anonymous viewer does not see the player's email (#630)`() {
+        val target = newUserWithEmail(uid = "tgt", name = "Bea", email = "bea@example.com")
+
+        // No token → the OpenGraph/anonymous path — email must never be included.
+        service.publicProfile(code = target.publicCode).shouldBeRight().email.shouldBeNull()
+    }
+
+    @Test
+    fun `the email is null when the player has none on file even for a privileged viewer (#630)`() {
+        val target = newUser(uid = "tgt", names = display(name = "Bea"))
+        viewerWith(uid = "admin", capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+
+        val profile = service.publicProfile(code = target.publicCode, token = token(uid = "admin")).shouldBeRight()
+
+        profile.email.shouldBeNull()
     }
 
     @Test

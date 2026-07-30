@@ -4773,6 +4773,10 @@ components:
         photoUrl:
           type: string
           nullable: true
+        email:
+          type: string
+          nullable: true
+          description: Registered email (#630) — PII, revealed only to the profile owner or a HOST/CLUB_OWNER/RATER/ADMINISTRATOR viewer; null/omitted for other players and anonymous callers.
         rating:
           nullable: true
           type: object
