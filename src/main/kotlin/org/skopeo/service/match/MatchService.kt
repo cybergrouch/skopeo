@@ -153,21 +153,24 @@ class MatchService(
     }
 
     /** Map the `filter` query value to a [MatchQuery] (#331); an unknown value is a 400. */
+    @Suppress("NamedArguments") // java.lang.IllegalArgumentException ctors can't be called with named args.
     private fun matchQueryOf(value: String?): MatchQuery =
         when (value) {
             "pending-calculation" -> MatchQuery.PENDING_CALCULATION
             "awaiting-results" -> MatchQuery.AWAITING_RESULTS
             "results" -> MatchQuery.RESULTS
-            else -> throw IllegalArgumentException(message = "filter must be 'pending-calculation', 'awaiting-results', or 'results'")
+            else -> throw IllegalArgumentException("filter must be 'pending-calculation', 'awaiting-results', or 'results'")
         }
 
+    @Suppress("NamedArguments") // java.lang.IllegalArgumentException ctors can't be called with named args.
     private fun matchDateOf(value: String): LocalDate =
         try {
             LocalDate.parse(value)
         } catch (e: DateTimeParseException) {
-            throw IllegalArgumentException(message = "Invalid matchDate '$value'; expected ISO-8601 (yyyy-MM-dd)", cause = e)
+            throw IllegalArgumentException("Invalid matchDate '$value'; expected ISO-8601 (yyyy-MM-dd)", e)
         }
 
+    @Suppress("NamedArguments") // java.lang.IllegalArgumentException ctors can't be called with named args.
     private fun uuidOf(
         value: String,
         field: String = "user id",
@@ -175,7 +178,7 @@ class MatchService(
         try {
             UUID.fromString(value)
         } catch (e: IllegalArgumentException) {
-            throw IllegalArgumentException(message = "Invalid $field '$value'", cause = e)
+            throw IllegalArgumentException("Invalid $field '$value'", e)
         }
 
     fun createFixture(
