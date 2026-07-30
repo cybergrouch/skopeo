@@ -107,10 +107,10 @@ wire-contract value types), and `mapper` owns the dto↔model translation (`toRe
 extensions), depending on `dto` + `model` only. `service` may call `mapper` (one-way, acyclic). The
 dto↔model translation is **hidden behind the service**: services return response DTOs (and accept
 request DTOs), so `routes` depend on `service` + `dto` and never on `mapper`. (Routes still touch a
-thin slice of `model` — enums parsed from query/path params, auth principals, and the
-wire-contract request bodies — so there is deliberately no `routes ↛ model` rule yet. `ServiceError`
-now lives in its own foundation package `org.skopeo.error`, so returning it no longer counts as a
-`model` dependency.)
+thin slice of `model` — enums parsed from query/path params and the wire-contract request bodies — so
+there is deliberately no `routes ↛ model` rule yet. `ServiceError` (package `org.skopeo.error`) and the
+auth principals (`ClientPrincipal`/`ClientAuthResult`, package `org.skopeo.security`) now live outside
+`model`, so returning/consuming them no longer counts as a `model` dependency.)
 
 ```mermaid
 classDiagram
