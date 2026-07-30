@@ -40,6 +40,7 @@ enum class AuditAction {
     RATING_CALCULATION_COMMITTED,
     USER_MARKED_DUPLICATE,
     USER_UNMARKED_DUPLICATE,
+    USER_ACCOUNT_REPLACED,
     DUPLICATE_CANDIDATE_FLAGGED,
     DUPLICATE_CANDIDATE_DISMISSED,
     DUPLICATE_CANDIDATE_CONFIRMED,
@@ -150,6 +151,8 @@ val AuditAction.category: AuditCategory
             -> AuditCategory.RATING_CALCULATION
             AuditAction.USER_MARKED_DUPLICATE,
             AuditAction.USER_UNMARKED_DUPLICATE,
+            // Replacing an old account with its canonical: import history + rating, then delete the old (#124).
+            AuditAction.USER_ACCOUNT_REPLACED,
             AuditAction.DUPLICATE_CANDIDATE_FLAGGED,
             AuditAction.DUPLICATE_CANDIDATE_DISMISSED,
             AuditAction.DUPLICATE_CANDIDATE_CONFIRMED,

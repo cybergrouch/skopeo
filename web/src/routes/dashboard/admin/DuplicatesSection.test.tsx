@@ -4,11 +4,12 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { DuplicatesSection } from './DuplicatesSection'
 
-const { useGetApiV1UsersIdDuplicates, markMutate, deleteMutate, state } = vi.hoisted(() => ({
+const { useGetApiV1UsersIdDuplicates, markMutate, deleteMutate, replaceMutate, state } = vi.hoisted(() => ({
   useGetApiV1UsersIdDuplicates: vi.fn(),
   markMutate: vi.fn(),
   deleteMutate: vi.fn(),
-  state: { markFail: false, pending: false },
+  replaceMutate: vi.fn(),
+  state: { markFail: false, replaceFail: false, pending: false },
 }))
 
 vi.mock('@/api/generated/users/users', () => ({
@@ -25,6 +26,13 @@ vi.mock('@/api/generated/users/users', () => ({
     isPending: state.pending,
     mutateAsync: async (vars: unknown) => {
       deleteMutate(vars)
+    },
+  }),
+  usePostApiV1UsersIdDuplicatesDuplicateIdReplace: () => ({
+    isPending: state.pending,
+    mutateAsync: async (vars: unknown) => {
+      replaceMutate(vars)
+      if (state.replaceFail) throw new Error('boom')
     },
   }),
 }))
@@ -64,6 +72,7 @@ describe('DuplicatesSection', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     state.markFail = false
+    state.replaceFail = false
     state.pending = false
     useGetApiV1UsersIdDuplicates.mockReturnValue({ data: [] })
   })
@@ -142,6 +151,65 @@ describe('DuplicatesSection', () => {
     expect(screen.getByText('D1CODE')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Restore' }))
     expect(deleteMutate).toHaveBeenCalledWith({ id: 'd1' })
+  })
+
+  it('replaces an account only after a two-step confirm (#124)', async () => {
+    useGetApiV1UsersIdDuplicates.mockReturnValue({
+      data: [{ id: 'd1', publicCode: 'D1CODE', displayName: 'Dupe' }],
+    })
+    const user = userEvent.setup()
+    renderSection()
+    await user.click(screen.getByRole('button', { name: `pick:${CANONICAL}` }))
+
+    // First click only arms the confirm — no mutation yet.
+    await user.click(screen.getByRole('button', { name: 'Replace account' }))
+    expect(replaceMutate).not.toHaveBeenCalled()
+
+    // Second (confirm) click runs it with the canonical + duplicate ids.
+    await user.click(screen.getByRole('button', { name: /confirm — delete & replace/i }))
+    expect(replaceMutate).toHaveBeenCalledWith({ id: CANONICAL, duplicateId: 'd1' })
+  })
+
+  it('surfaces an error when the replace fails (#124)', async () => {
+    state.replaceFail = true
+    useGetApiV1UsersIdDuplicates.mockReturnValue({
+      data: [{ id: 'd1', publicCode: 'D1CODE', displayName: 'Dupe' }],
+    })
+    const user = userEvent.setup()
+    renderSection()
+    await user.click(screen.getByRole('button', { name: `pick:${CANONICAL}` }))
+
+    await user.click(screen.getByRole('button', { name: 'Replace account' }))
+    await user.click(screen.getByRole('button', { name: /confirm — delete & replace/i }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/could not replace the account/i)
+  })
+
+  it('shows the pending label while a replace is in flight (#124)', async () => {
+    state.pending = true
+    useGetApiV1UsersIdDuplicates.mockReturnValue({
+      data: [{ id: 'd1', publicCode: 'D1CODE', displayName: 'Dupe' }],
+    })
+    const user = userEvent.setup()
+    renderSection()
+    await user.click(screen.getByRole('button', { name: `pick:${CANONICAL}` }))
+
+    await user.click(screen.getByRole('button', { name: 'Replace account' }))
+    expect(screen.getByRole('button', { name: 'Replacing…' })).toBeDisabled()
+  })
+
+  it('can cancel an armed replace without mutating (#124)', async () => {
+    useGetApiV1UsersIdDuplicates.mockReturnValue({
+      data: [{ id: 'd1', publicCode: 'D1CODE', displayName: 'Dupe' }],
+    })
+    const user = userEvent.setup()
+    renderSection()
+    await user.click(screen.getByRole('button', { name: `pick:${CANONICAL}` }))
+
+    await user.click(screen.getByRole('button', { name: 'Replace account' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(replaceMutate).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Replace account' })).toBeInTheDocument()
   })
 
   it('shows no duplicates list when the query has no data', async () => {
