@@ -114,6 +114,66 @@ emits, per spec tag, typed TanStack Query hooks (`useGetApiV1UsersMe`, etc.) plu
   spec change that renames or drops a field surfaces as a TypeScript compile error here — the
   monorepo payoff of a shared contract.
 
+## Page architecture & state model
+
+Every leaf page — the public route pages (`PlayerProfilePage`, `MatchPage`, `EventPage`, club/player
+pages) and the dashboard tab/section components — follows the **same convention**. It is deliberately
+**not** a formal unidirectional-state framework: there is no Redux/Zustand/XState/MobX and nothing
+MVI- or cycle.js-shaped. State is *federated* across three tiers, and the "loop" is the one TanStack
+Query already provides (read from cache → mutate → invalidate → refetch).
+
+### Three state tiers
+
+| Tier | Where it lives | How pages use it |
+|---|---|---|
+| **Server state** | The TanStack Query cache, keyed per endpoint | Read via the generated hooks (`useGetApiV1PlayersCode(...)`); the cache — not component state — is the source of truth for anything from the API. No hand-written fetch/loading state. |
+| **Local UI state** | `useState` inside the component | Form fields, `saved`/`error` flags, expand/collapse — anything ephemeral and page-local. No shared store. |
+| **Session / app-wide state** | One React context, `AuthProvider` (`web/src/auth/`) | The Firebase session + resolved profile + capabilities. This is the *only* global state; route guards and capability gates read it via `useAuth()`. |
+
+### The read → mutate → invalidate cycle
+
+Reads are declarative (a component subscribes to a query and renders off the cached snapshot). Writes go
+through a generated mutation hook and, on success, **invalidate** the affected query keys so the
+subscribed reads re-fetch and the view re-renders — a unidirectional flow, but owned by the query cache
+rather than a hand-rolled Model→View→Intent loop:
+
+```mermaid
+flowchart LR
+    subgraph read
+      Q[useGet… query hook] -->|cached snapshot| V[Page / Section render]
+    end
+    V -->|user action / intent| M[usePut/Post/Delete… mutation]
+    M --> API[(API via axios + Firebase token)]
+    API -->|onSuccess| INV[queryClient.invalidateQueries]
+    INV -.->|marks keys stale| Q
+    M -->|isPending / error| L[local useState: Saving… / alert]
+    L --> V
+```
+
+`invalidateQueries` is the seam that keeps the two halves in sync (~60 call sites); local `useState`
+carries only transient feedback (`Saving…`, "Saved", inline error).
+
+### Shared page skeleton
+
+Because reads are query-driven, pages share a **`loading → error → empty → data`** branch shape (e.g.
+`query.isLoading ? … : query.isError ? … : data.length === 0 ? … : <content>`). This is a convention,
+not an enforced base component — there is no `Page` superclass or HOC; each page is a plain function
+component. Composition differs by area:
+
+- **Public pages** are standalone route components (one per `/players|matches|events/:code`), each
+  pulling its own queries and rendering a `ShareCard`.
+- **Dashboard tabs** compose smaller `*Section` components (e.g. `admin/ApiClientsSection`,
+  `admin/ClubsSection`), and the tab set itself is data — the `Section {value, label, element}` model
+  in [Dashboard structure](#dashboard-structure) is the single source of truth for both nav and content.
+
+### Why not MVI / a store
+
+A single global store or an MVI loop would centralize state that TanStack Query already manages
+correctly per-endpoint (caching, dedup, background refetch, invalidation). Keeping server state in the
+query cache, UI state local, and only the session in context avoids that redundancy and keeps each page
+independently testable (mock the generated hooks; assert the rendered branch). The trade-off is that
+"application state" is intentionally decentralized rather than expressed as one model.
+
 ## Routing
 
 Defined in `src/App.tsx`. Public, code-addressed pages and the authenticated dashboard:
