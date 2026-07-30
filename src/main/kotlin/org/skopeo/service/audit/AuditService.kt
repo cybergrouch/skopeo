@@ -61,12 +61,7 @@ class AuditService(
     ): Either<ServiceError, AuditLogResponse> =
         either {
             requireAdmin(token = token).bind()
-            val category =
-                categoryRaw?.let { raw ->
-                    val allowed = AuditCategory.entries.joinToString { it.name }
-                    AuditCategory.entries.find { it.name == raw.uppercase() }
-                        ?: raise(r = ServiceError.Validation(message = "Unknown audit category '$raw'; expected one of $allowed"))
-                }
+            val category = categoryRaw?.let { raw -> parseCategory(raw = raw).bind() }
             val (items, total) =
                 audit.list(
                     actions = category?.actions(),
@@ -130,6 +125,12 @@ class AuditService(
         return matches
             .publicRefsByIds(ids = ids)
             .mapValues { (_, ref) -> AuditMatchRef(matchId = ref.matchId, publicCode = ref.publicCode, matchDate = ref.matchDate) }
+    }
+
+    private fun parseCategory(raw: String): Either<ServiceError, AuditCategory> {
+        val allowed = AuditCategory.entries.joinToString { it.name }
+        return AuditCategory.entries.find { it.name == raw.uppercase() }?.right()
+            ?: ServiceError.Validation(message = "Unknown audit category '$raw'; expected one of $allowed").left()
     }
 
     private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {

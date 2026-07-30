@@ -51,12 +51,7 @@ class DuplicateCandidateService(
     ): Either<ServiceError, DuplicateCandidatePageResponse> =
         either {
             requireAdmin(token = token).bind()
-            val status =
-                statusRaw?.let { raw ->
-                    val allowed = DuplicateCandidateStatus.entries.joinToString { it.name }
-                    DuplicateCandidateStatus.entries.find { it.name == raw.uppercase() }
-                        ?: raise(r = ServiceError.Validation(message = "Unknown status '$raw'; expected one of $allowed"))
-                }
+            val status = statusRaw?.let { raw -> parseStatus(raw = raw).bind() }
             val (items, total) =
                 candidates.list(
                     limit = limit.coerceIn(minimumValue = 1, maximumValue = MAX_PAGE_SIZE),
@@ -164,6 +159,12 @@ class DuplicateCandidateService(
                     ),
             )
         }
+
+    private fun parseStatus(raw: String): Either<ServiceError, DuplicateCandidateStatus> {
+        val allowed = DuplicateCandidateStatus.entries.joinToString { it.name }
+        return DuplicateCandidateStatus.entries.find { it.name == raw.uppercase() }?.right()
+            ?: ServiceError.Validation(message = "Unknown status '$raw'; expected one of $allowed").left()
+    }
 
     private fun openCandidate(id: UUID): Either<ServiceError, DuplicateCandidate> =
         either {

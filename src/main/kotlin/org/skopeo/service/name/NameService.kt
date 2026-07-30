@@ -68,10 +68,7 @@ class NameService(
         either {
             requireUserExists(userId = userId).bind()
             val actor = requireUserAccess(token = token, userId = userId).bind()
-            val allowedTypes = NameType.entries.joinToString { it.name }
-            val type =
-                NameType.entries.find { it.name == typeRaw }
-                    ?: raise(r = ServiceError.Validation(message = "Invalid type '$typeRaw'; expected one of $allowedTypes"))
+            val type = parseType(raw = typeRaw).bind()
             val name = names.create(userId = userId, type = type, value = value)
             audit.record(
                 write =
@@ -130,6 +127,12 @@ class NameService(
             ensure(condition = name.userId == userId) { ServiceError.NotFound(message = "Name $nameId not found") }
             name
         }
+
+    private fun parseType(raw: String): Either<ServiceError, NameType> {
+        val allowedTypes = NameType.entries.joinToString { it.name }
+        return NameType.entries.find { it.name == raw }?.right()
+            ?: ServiceError.Validation(message = "Invalid type '$raw'; expected one of $allowedTypes").left()
+    }
 
     private fun requireUserExists(userId: UUID): Either<ServiceError, Unit> = users.findById(id = userId).map { }
 

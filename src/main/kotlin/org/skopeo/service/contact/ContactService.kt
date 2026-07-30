@@ -72,10 +72,7 @@ class ContactService(
         either {
             requireUserExists(userId = userId).bind()
             val actor = requireUserAccess(token = token, userId = userId).bind()
-            val allowedTypes = ContactType.entries.joinToString { it.name }
-            val type =
-                ContactType.entries.find { it.name == typeRaw }
-                    ?: raise(r = ServiceError.Validation(message = "Invalid type '$typeRaw'; expected one of $allowedTypes"))
+            val type = parseType(raw = typeRaw).bind()
             val contact =
                 contacts
                     .create(
@@ -172,16 +169,8 @@ class ContactService(
         either {
             val contact = locate(userId = userId, contactId = contactId).bind()
             val adminId = requireAdmin(token = token).bind()
-            val allowedStatuses = VerificationStatus.entries.joinToString { it.name }
-            val status =
-                VerificationStatus.entries.find { it.name == statusRaw }
-                    ?: raise(r = ServiceError.Validation(message = "Invalid status '$statusRaw'; expected one of $allowedStatuses"))
-            val method =
-                methodRaw?.let { raw ->
-                    val allowedMethods = VerificationMethod.entries.joinToString { it.name }
-                    VerificationMethod.entries.find { it.name == raw }
-                        ?: raise(r = ServiceError.Validation(message = "Invalid method '$raw'; expected one of $allowedMethods"))
-                }
+            val status = parseStatus(raw = statusRaw).bind()
+            val method = methodRaw?.let { raw -> parseMethod(raw = raw).bind() }
             ensure(condition = contact.isActive) {
                 ServiceError.Validation(message = "Cannot change verification of a disabled contact")
             }
@@ -220,6 +209,24 @@ class ContactService(
         val isSelf = caller.id == userId
         val isAdmin = caller.capabilities.contains(element = Capability.ADMINISTRATOR)
         return if (!isSelf && !isAdmin) ServiceError.Forbidden().left() else caller.id.right()
+    }
+
+    private fun parseType(raw: String): Either<ServiceError, ContactType> {
+        val allowedTypes = ContactType.entries.joinToString { it.name }
+        return ContactType.entries.find { it.name == raw }?.right()
+            ?: ServiceError.Validation(message = "Invalid type '$raw'; expected one of $allowedTypes").left()
+    }
+
+    private fun parseStatus(raw: String): Either<ServiceError, VerificationStatus> {
+        val allowedStatuses = VerificationStatus.entries.joinToString { it.name }
+        return VerificationStatus.entries.find { it.name == raw }?.right()
+            ?: ServiceError.Validation(message = "Invalid status '$raw'; expected one of $allowedStatuses").left()
+    }
+
+    private fun parseMethod(raw: String): Either<ServiceError, VerificationMethod> {
+        val allowedMethods = VerificationMethod.entries.joinToString { it.name }
+        return VerificationMethod.entries.find { it.name == raw }?.right()
+            ?: ServiceError.Validation(message = "Invalid method '$raw'; expected one of $allowedMethods").left()
     }
 
     /** ADMINISTRATOR-only access; returns the caller's id (the audit actor). */

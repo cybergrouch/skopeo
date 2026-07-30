@@ -90,12 +90,7 @@ class RatingRequestService(
     ): Either<ServiceError, RatingRequestPageResponse> =
         either {
             requireRater(token = token).bind()
-            val status =
-                statusRaw?.let { raw ->
-                    val allowed = RatingRequestStatus.entries.joinToString { it.name }
-                    RatingRequestStatus.entries.find { it.name == raw.uppercase() }
-                        ?: raise(r = ServiceError.Validation(message = "Unknown status '$raw'; expected one of $allowed"))
-                }
+            val status = statusRaw?.let { raw -> parseStatus(raw = raw).bind() }
             val (items, total) =
                 requests.list(
                     limit = limit.coerceIn(minimumValue = 1, maximumValue = MAX_PAGE_SIZE),
@@ -168,6 +163,12 @@ class RatingRequestService(
             )
             resolved.toResponse()
         }
+
+    private fun parseStatus(raw: String): Either<ServiceError, RatingRequestStatus> {
+        val allowed = RatingRequestStatus.entries.joinToString { it.name }
+        return RatingRequestStatus.entries.find { it.name == raw.uppercase() }?.right()
+            ?: ServiceError.Validation(message = "Unknown status '$raw'; expected one of $allowed").left()
+    }
 
     private fun resolveRequesters(requests: List<RatingRequest>): Map<UUID, AuditPersonRef> =
         users
