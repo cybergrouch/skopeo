@@ -3159,6 +3159,49 @@ paths:
         '403':
           description: Caller is not an ADMINISTRATOR
 
+  /api/v1/settings/facebook-login:
+    get:
+      summary: Get the Facebook-login feature flag (#647)
+      description: >-
+        Whether the "Continue with Facebook" sign-in/sign-up buttons are shown. Publicly readable so the
+        unauthenticated login/sign-up pages can decide whether to render them; defaults to enabled when unset.
+      tags:
+        - Settings
+      security:
+        - firebaseAuth: []
+        - {}
+      responses:
+        '200':
+          description: The current Facebook-login flag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FacebookLoginResponse'
+    put:
+      summary: Set the Facebook-login feature flag (#647)
+      description: ADMINISTRATOR only. Enables or disables the Facebook sign-in buttons app-wide; the write is audit-logged.
+      tags:
+        - Settings
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetFacebookLoginRequest'
+      responses:
+        '200':
+          description: The updated Facebook-login flag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FacebookLoginResponse'
+        '401':
+          description: Missing or invalid Firebase token
+        '403':
+          description: Caller is not an ADMINISTRATOR
+
   /api/v1/settings/points/open-play:
     get:
       summary: Get the open-play points schedule (#553)
@@ -6806,6 +6849,33 @@ components:
           type: string
           enum: [RATING, POINTS]
           description: The standings serving source to set (#146).
+
+    FacebookLoginResponse:
+      type: object
+      required:
+        - enabled
+      properties:
+        enabled:
+          type: boolean
+          description: Whether the "Continue with Facebook" buttons are shown (#647); true when unset.
+        updatedAt:
+          type: string
+          nullable: true
+          description: ISO timestamp of the last change; null when never set.
+        updatedBy:
+          type: string
+          format: uuid
+          nullable: true
+          description: The administrator who last set the flag; null when never set.
+
+    SetFacebookLoginRequest:
+      type: object
+      required:
+        - enabled
+      properties:
+        enabled:
+          type: boolean
+          description: Enable or disable the Facebook sign-in buttons app-wide (#647).
 
     OpenPlayMarginPoints:
       type: object

@@ -5,16 +5,21 @@ import { MemoryRouter } from 'react-router-dom'
 import { FirebaseError } from 'firebase/app'
 import { LoginPage } from './LoginPage'
 
-const { signInWithEmail, signInWithGoogle, signInWithFacebook, navigateMock } =
+const { signInWithEmail, signInWithGoogle, signInWithFacebook, navigateMock, useFbFlag } =
   vi.hoisted(() => ({
     signInWithEmail: vi.fn(),
     signInWithGoogle: vi.fn(),
     signInWithFacebook: vi.fn(),
     navigateMock: vi.fn(),
+    useFbFlag: vi.fn(),
   }))
 
 vi.mock('@/auth/useAuth', () => ({
   useAuth: () => ({ signInWithEmail, signInWithGoogle, signInWithFacebook }),
+}))
+
+vi.mock('@/api/generated/settings/settings', () => ({
+  useGetApiV1SettingsFacebookLogin: useFbFlag,
 }))
 
 vi.mock('react-router-dom', async (importOriginal) => {
@@ -33,6 +38,20 @@ function renderLogin() {
 describe('LoginPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Facebook login enabled by default (#647).
+    useFbFlag.mockReturnValue({ data: { enabled: true } })
+  })
+
+  it('hides the Facebook button when the feature flag is disabled (#647)', () => {
+    useFbFlag.mockReturnValue({ data: { enabled: false } })
+    renderLogin()
+    expect(
+      screen.queryByRole('button', { name: /continue with facebook/i }),
+    ).not.toBeInTheDocument()
+    // Google stays available.
+    expect(
+      screen.getByRole('button', { name: /continue with google/i }),
+    ).toBeInTheDocument()
   })
 
   it('signs in and navigates to the default destination', async () => {

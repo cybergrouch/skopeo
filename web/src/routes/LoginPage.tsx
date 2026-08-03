@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuth } from '@/auth/useAuth'
+import { useGetApiV1SettingsFacebookLogin } from '@/api/generated/settings/settings'
 import { authErrorMessage } from '@/lib/firebase-errors'
 
 interface LocationState {
@@ -15,6 +16,9 @@ export function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const { signInWithEmail, signInWithGoogle, signInWithFacebook } = useAuth()
+  // Facebook login can be turned off app-wide (#647); show the button unless the flag is explicitly false.
+  const facebookEnabled =
+    useGetApiV1SettingsFacebookLogin({ query: { retry: false } }).data?.enabled !== false
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -113,15 +117,17 @@ export function LoginPage() {
         Continue with Google
       </Button>
 
-      <Button
-        type="button"
-        variant="outline"
-        className="w-full"
-        onClick={() => void run(signInWithFacebook)}
-        disabled={busy}
-      >
-        Continue with Facebook
-      </Button>
+      {facebookEnabled ? (
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          onClick={() => void run(signInWithFacebook)}
+          disabled={busy}
+        >
+          Continue with Facebook
+        </Button>
+      ) : null}
     </AuthLayout>
   )
 }

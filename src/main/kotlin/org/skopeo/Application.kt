@@ -39,6 +39,7 @@ import org.skopeo.routes.configureClubRoutes
 import org.skopeo.routes.configureContactRoutes
 import org.skopeo.routes.configureDuplicateCandidateRoutes
 import org.skopeo.routes.configureEventRoutes
+import org.skopeo.routes.configureFeatureFlagRoutes
 import org.skopeo.routes.configureInviteRoutes
 import org.skopeo.routes.configureMatchRoutes
 import org.skopeo.routes.configureNameRoutes
@@ -136,6 +137,7 @@ fun Application.module(
     configureOpenGraphRoutes()
     configureThemeRoutes()
     configureStandingsSourceRoutes()
+    configureFeatureFlagRoutes()
     logger.info { "Skopeo API started successfully on port 8080" }
 }
 

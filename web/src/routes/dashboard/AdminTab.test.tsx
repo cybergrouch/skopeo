@@ -29,8 +29,8 @@ vi.mock("./admin/CircuitsSection", () => ({
 vi.mock("./admin/ThemeSection", () => ({
   ThemeSection: () => <div>theme section</div>,
 }));
-vi.mock("./admin/RawRatingsSection", () => ({
-  RawRatingsSection: () => <div>raw ratings section</div>,
+vi.mock("./admin/FeatureFlagsSection", () => ({
+  FeatureFlagsSection: () => <div>feature flags section</div>,
 }));
 vi.mock("./admin/StandingsSourceSection", () => ({
   StandingsSourceSection: () => <div>standings source section</div>,
@@ -53,6 +53,7 @@ describe("AdminTab", () => {
     expect(screen.getByText("pending calculation section")).toBeInTheDocument();
     expect(screen.getByText("theme section")).toBeInTheDocument();
     expect(screen.getByText("standings source section")).toBeInTheDocument();
+    expect(screen.getByText("feature flags section")).toBeInTheDocument();
     expect(screen.getByText("api clients section")).toBeInTheDocument();
     expect(screen.getByText("build info section")).toBeInTheDocument();
     expect(screen.queryByText("invites section")).not.toBeInTheDocument();

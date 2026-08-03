@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuth } from '@/auth/useAuth'
+import { useGetApiV1SettingsFacebookLogin } from '@/api/generated/settings/settings'
 import { usePostApiV1Users } from '@/api/generated/users/users'
 import type { CreateUserRequestSex } from '@/api/generated/model'
 import { NtrpSelfRatingSelect } from '@/components/NtrpSelfRatingSelect'
@@ -20,6 +21,9 @@ const SEXES = ['Male', 'Female'] as const
 export function SignUpPage() {
   const navigate = useNavigate()
   const { signInWithGoogle, signInWithFacebook } = useAuth()
+  // Facebook login can be turned off app-wide (#647); show the button unless the flag is explicitly false.
+  const facebookEnabled =
+    useGetApiV1SettingsFacebookLogin({ query: { retry: false } }).data?.enabled !== false
   const provision = usePostApiV1Users()
 
   const [name, setName] = useState('')
@@ -124,15 +128,17 @@ export function SignUpPage() {
         >
           Continue with Google
         </Button>
-        <Button
-          type="button"
-          variant="outline"
-          className="w-full"
-          onClick={() => void onOAuth(signInWithFacebook, 'Facebook')}
-          disabled={busy}
-        >
-          Continue with Facebook
-        </Button>
+        {facebookEnabled ? (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            onClick={() => void onOAuth(signInWithFacebook, 'Facebook')}
+            disabled={busy}
+          >
+            Continue with Facebook
+          </Button>
+        ) : null}
 
         <p className="text-center text-xs text-muted-foreground">
           Invited by an administrator? Use the sign-in link in your email.
