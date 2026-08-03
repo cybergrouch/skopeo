@@ -5,18 +5,6 @@ import { AdminTab } from "./AdminTab";
 vi.mock("./admin/PendingCalculationSection", () => ({
   PendingCalculationSection: () => <div>pending calculation section</div>,
 }));
-vi.mock("./admin/ManagePlayerSection", () => ({
-  ManagePlayerSection: () => <div>manage player section</div>,
-}));
-vi.mock("./admin/DeletedAccountsSection", () => ({
-  DeletedAccountsSection: () => <div>deleted accounts section</div>,
-}));
-vi.mock("./admin/DuplicatesSection", () => ({
-  DuplicatesSection: () => <div>duplicates section</div>,
-}));
-vi.mock("./admin/DuplicateCandidatesSection", () => ({
-  DuplicateCandidatesSection: () => <div>duplicate candidates section</div>,
-}));
 vi.mock("./admin/BuildInfoSection", () => ({
   BuildInfoSection: () => <div>build info section</div>,
 }));
@@ -42,14 +30,8 @@ vi.mock("./admin/ApiClientsSection", () => ({
 describe("AdminTab", () => {
   it("renders the admin sections (invites #135 and activity log #134 now live in their own tabs)", () => {
     render(<AdminTab />);
-    expect(screen.getByText("manage player section")).toBeInTheDocument();
-    expect(screen.getByText("deleted accounts section")).toBeInTheDocument();
     expect(screen.getByText("clubs section")).toBeInTheDocument();
     expect(screen.getByText("circuits section")).toBeInTheDocument();
-    expect(screen.getByText("duplicates section")).toBeInTheDocument();
-    expect(
-      screen.getByText("duplicate candidates section"),
-    ).toBeInTheDocument();
     expect(screen.getByText("pending calculation section")).toBeInTheDocument();
     expect(screen.getByText("theme section")).toBeInTheDocument();
     expect(screen.getByText("standings source section")).toBeInTheDocument();
@@ -61,6 +43,15 @@ describe("AdminTab", () => {
     // Points Management moved to its own top-level dashboard tab (#444), so it's no longer here.
     expect(
       screen.queryByText("points management section"),
+    ).not.toBeInTheDocument();
+    // Player/account administration moved to the Account Management tab (#648).
+    expect(screen.queryByText("manage player section")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("deleted accounts section"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("duplicates section")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("duplicate candidates section"),
     ).not.toBeInTheDocument();
   });
 });

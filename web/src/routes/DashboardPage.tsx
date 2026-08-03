@@ -24,6 +24,7 @@ import { useGetApiV1UsersMe } from "@/api/generated/users/users";
 import { ProfileTab } from "./dashboard/ProfileTab";
 import { SettingsTab } from "./dashboard/SettingsTab";
 import { AdminTab } from "./dashboard/AdminTab";
+import { AccountManagementTab } from "./dashboard/AccountManagementTab";
 import { PointsManagementSection } from "./dashboard/admin/PointsManagementSection";
 import { EventOrganizerTab } from "./dashboard/EventOrganizerTab";
 import { PlaceholderPlayersTab } from "./dashboard/PlaceholderPlayersTab";
@@ -58,6 +59,7 @@ export function DashboardPage() {
   const showInvites = isAdministrator(capabilities);
   const showActivity = isAdministrator(capabilities);
   const showReport = isAdministrator(capabilities);
+  const showAccountManagement = isAdministrator(capabilities);
   const showAdmin = isAdministrator(capabilities);
   // Points Management is always a standalone tab for anyone who can manage points budgets
   // (POINTS_MANAGER or ADMINISTRATOR); it's no longer embedded in the Admin tab.
@@ -145,6 +147,17 @@ export function DashboardPage() {
             value: "points",
             label: "Points Management",
             element: <PointsManagementSection capabilities={capabilities} />,
+          },
+        ]
+      : []),
+    // Account Management (#648): player/account administration, split out of Admin. ADMINISTRATOR-gated,
+    // placed just before Admin.
+    ...(showAccountManagement
+      ? [
+          {
+            value: "accounts",
+            label: "Account Management",
+            element: <AccountManagementTab />,
           },
         ]
       : []),
