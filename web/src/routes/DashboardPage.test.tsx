@@ -23,6 +23,9 @@ vi.mock('./dashboard/ProfileTab', () => ({
 vi.mock('./dashboard/SettingsTab', () => ({
   SettingsTab: () => <div>settings content</div>,
 }))
+vi.mock('./dashboard/AccountManagementTab', () => ({
+  AccountManagementTab: () => <div>account management content</div>,
+}))
 vi.mock('./dashboard/AdminTab', () => ({
   AdminTab: () => <div>admin content</div>,
 }))
@@ -113,6 +116,7 @@ describe('DashboardPage', () => {
     expect(screen.queryByRole('button', { name: 'Activity Log' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Reports' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Points Management' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Account Management' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Admin' })).not.toBeInTheDocument()
   })
 
@@ -212,9 +216,15 @@ describe('DashboardPage', () => {
     // Points Management is now a standalone tab administrators see too (#444).
     expect(screen.getByRole('button', { name: 'Points Management' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Admin' })).toBeInTheDocument()
+    // Account Management is an admin-only tab split out of Admin (#648).
+    expect(screen.getByRole('button', { name: 'Account Management' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Event Organizer' }))
     expect(screen.getByText('event organizer content')).toBeInTheDocument()
+
+    await openMenu(user)
+    await user.click(screen.getByRole('button', { name: 'Account Management' }))
+    expect(screen.getByText('account management content')).toBeInTheDocument()
 
     // The menu closes on select, so re-open it to navigate again.
     await openMenu(user)
