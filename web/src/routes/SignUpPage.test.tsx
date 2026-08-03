@@ -4,12 +4,13 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { SignUpPage } from './SignUpPage'
 
-const { signInWithGoogle, signInWithFacebook, mutateAsync, navigateMock } =
+const { signInWithGoogle, signInWithFacebook, mutateAsync, navigateMock, useFbFlag } =
   vi.hoisted(() => ({
     signInWithGoogle: vi.fn(),
     signInWithFacebook: vi.fn(),
     mutateAsync: vi.fn(),
     navigateMock: vi.fn(),
+    useFbFlag: vi.fn(),
   }))
 
 vi.mock('@/auth/useAuth', () => ({
@@ -17,6 +18,9 @@ vi.mock('@/auth/useAuth', () => ({
 }))
 vi.mock('@/api/generated/users/users', () => ({
   usePostApiV1Users: () => ({ mutateAsync }),
+}))
+vi.mock('@/api/generated/settings/settings', () => ({
+  useGetApiV1SettingsFacebookLogin: useFbFlag,
 }))
 vi.mock('react-router-dom', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react-router-dom')>()
@@ -42,6 +46,19 @@ async function fillProfile(user: ReturnType<typeof userEvent.setup>) {
 describe('SignUpPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Facebook login enabled by default (#647).
+    useFbFlag.mockReturnValue({ data: { enabled: true } })
+  })
+
+  it('hides the Facebook button when the feature flag is disabled (#647)', () => {
+    useFbFlag.mockReturnValue({ data: { enabled: false } })
+    renderSignUp()
+    expect(
+      screen.queryByRole('button', { name: /continue with facebook/i }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /continue with google/i }),
+    ).toBeInTheDocument()
   })
 
   it('no longer offers a manual email/password sign-up form', () => {

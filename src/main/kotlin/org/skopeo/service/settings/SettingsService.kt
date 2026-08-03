@@ -10,11 +10,13 @@ import arrow.core.raise.ensureNotNull
 import arrow.core.right
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
+import org.skopeo.dto.settings.FacebookLoginResponse
 import org.skopeo.dto.settings.StandingsSourceResponse
 import org.skopeo.mapper.settings.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
+import org.skopeo.model.FacebookLoginValue
 import org.skopeo.model.SnapshotSource
 import org.skopeo.model.StandingsSourceValue
 import org.skopeo.repository.AppSettingsRepository
@@ -25,6 +27,9 @@ import java.util.UUID
 
 /** The app_settings key selecting which snapshot source the Standings tab serves (#146). */
 private const val STANDINGS_SOURCE_KEY = "standings_source"
+
+/** The app_settings key toggling the Facebook sign-in buttons (#647); absent ⇒ enabled. */
+private const val FACEBOOK_LOGIN_KEY = "facebook_login_enabled"
 
 /**
  * Operational app_settings that steer serving behaviour without a redeploy (#146). Mirrors the
@@ -82,6 +87,45 @@ class SettingsService(
                     ),
             )
             StandingsSourceValue(source = parsed, updatedBy = row.updatedBy, updatedAt = row.updatedAt).toResponse()
+        }
+
+    /**
+     * Whether the Facebook sign-in buttons are enabled (#647). Defaults to true (enabled) when the
+     * `facebook_login_enabled` row is absent or holds a non-boolean value — so Facebook stays available
+     * until an admin explicitly turns it off. Public read — no auth.
+     */
+    fun getFacebookLogin(): FacebookLoginValue {
+        val row = settings.get(key = FACEBOOK_LOGIN_KEY)
+        val enabled = row?.value?.toBooleanStrictOrNull() ?: true
+        return FacebookLoginValue(enabled = enabled, updatedBy = row?.updatedBy, updatedAt = row?.updatedAt)
+    }
+
+    /** The Facebook-login flag as its response DTO — the route-facing form of [getFacebookLogin]. */
+    fun getFacebookLoginResponse(): FacebookLoginResponse = getFacebookLogin().toResponse()
+
+    /**
+     * Enable or disable the Facebook sign-in buttons (ADMINISTRATOR only, #647). Upserts the app-setting
+     * as the boolean's string form and records a provenance/audit row.
+     */
+    fun setFacebookLogin(
+        token: VerifiedFirebaseToken,
+        enabled: Boolean,
+    ): Either<ServiceError, FacebookLoginResponse> =
+        either {
+            val adminId = requireAdmin(token = token).bind()
+            val row = settings.upsert(key = FACEBOOK_LOGIN_KEY, value = enabled.toString(), updatedBy = adminId)
+            audit.record(
+                write =
+                    AuditWrite(
+                        actorUserId = adminId,
+                        action = AuditAction.SETTINGS_FACEBOOK_LOGIN_CHANGED,
+                        entityType = AuditEntityType.SETTING,
+                        entityId = null,
+                        summary = "${if (enabled) "Enabled" else "Disabled"} Facebook login",
+                        details = buildMap { put(key = "facebookLoginEnabled", value = enabled.toString()) },
+                    ),
+            )
+            FacebookLoginValue(enabled = enabled, updatedBy = row.updatedBy, updatedAt = row.updatedAt).toResponse()
         }
 
     /** ADMINISTRATOR-only access; returns the caller's id (the audit actor). */

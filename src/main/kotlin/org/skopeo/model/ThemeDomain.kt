@@ -57,3 +57,15 @@ data class StandingsSourceValue(
     val updatedBy: UUID?,
     val updatedAt: LocalDateTime?,
 )
+
+/**
+ * The "Facebook login enabled" feature flag (#647) plus its provenance: who last set it ([updatedBy]) and
+ * when ([updatedAt]). Both are null when the flag has never been explicitly set (default is enabled). When
+ * false, the web client hides the "Continue with Facebook" sign-in/sign-up buttons — an interim kill-switch
+ * while the Meta app is misconfigured.
+ */
+data class FacebookLoginValue(
+    val enabled: Boolean,
+    val updatedBy: UUID?,
+    val updatedAt: LocalDateTime?,
+)

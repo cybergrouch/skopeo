@@ -138,4 +138,45 @@ class SettingsServiceTest {
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Validation>()
     }
+
+    @Test
+    fun `facebook login defaults to enabled when no setting row exists (#647)`() {
+        service.getFacebookLogin().enabled shouldBe true
+    }
+
+    @Test
+    fun `facebook login reads a stored false value (#647)`() {
+        val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        settings.upsert(key = "facebook_login_enabled", value = "false", updatedBy = admin.id)
+        service.getFacebookLogin().enabled shouldBe false
+    }
+
+    @Test
+    fun `facebook login falls back to enabled when the stored value is not boolean (#647)`() {
+        val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        settings.upsert(key = "facebook_login_enabled", value = "maybe", updatedBy = admin.id)
+        service.getFacebookLogin().enabled shouldBe true
+    }
+
+    @Test
+    fun `an admin disables facebook login and the read reflects it, with an audit entry (#647)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+
+        val set = service.setFacebookLogin(token = token(uid = "admin"), enabled = false).shouldBeRight()
+
+        set.enabled shouldBe false
+        set.updatedBy.shouldBeInstanceOf<String>()
+        service.getFacebookLogin().enabled shouldBe false
+        AuditRepository()
+            .list(actions = listOf(element = AuditAction.SETTINGS_FACEBOOK_LOGIN_CHANGED), limit = 10, offset = 0)
+            .second shouldBe 1L
+    }
+
+    @Test
+    fun `a non-admin cannot set the facebook login flag (#647)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        service.setFacebookLogin(token = token(uid = "host"), enabled = false)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
 }
