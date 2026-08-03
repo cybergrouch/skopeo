@@ -235,6 +235,7 @@ gates above:
 | Activity Log | `ActivityTab` | `isAdministrator` |
 | Reports | `ReportTab` | `isAdministrator` |
 | Points Management | `PointsManagementSection` | `canManagePointsBudget` |
+| Account Management | `AccountManagementTab` | `isAdministrator` |
 | Admin | `AdminTab` | `isAdministrator` |
 | About | `AboutTab` | Always |
 
@@ -268,7 +269,7 @@ flowchart TD
     Pred -->|canRate| Ratings[Ratings]
     Pred -->|isResearcher| Research[Research]
     Pred -->|canManagePointsBudget| Points[Points Management]
-    Pred -->|isAdministrator| Adm["Invites, Activity Log, Reports, Admin"]
+    Pred -->|isAdministrator| Adm["Invites, Activity Log, Reports, Account Management, Admin"]
     Always --> Sec["Section array: nav + active content"]
     Settings --> Sec
     Org --> Sec
@@ -278,15 +279,25 @@ flowchart TD
     Adm --> Sec
 ```
 
-### Admin tab sections
+### Account Management tab sections
 
-`AdminTab.tsx` composes the administrator-only sections (`src/routes/dashboard/admin/`):
+`AccountManagementTab.tsx` composes the player/account administration sections (`src/routes/dashboard/admin/`),
+split out of the Admin tab (#648):
 
 - **Manage Player** (`ManagePlayerSection`) — administer an individual player.
-- **Duplicates** (`DuplicatesSection`) — confirmed duplicate records.
+- **Deleted Accounts** (`DeletedAccountsSection`) — restore soft-deleted accounts.
+- **Duplicates** (`DuplicatesSection`) — mark/replace confirmed duplicate records.
 - **Duplicate Candidates** (`DuplicateCandidatesSection`) — suspected duplicates for triage.
+
+### Admin tab sections
+
+`AdminTab.tsx` composes the remaining administrator-only sections (`src/routes/dashboard/admin/`):
+
+- **Clubs** / **Circuits** — club and circuit management.
 - **Pending Calculation** (`PendingCalculationSection`) — matches awaiting a rating calculation;
   triggers the dry-run/commit calculation.
+- **Standings Source** / **Feature Flags** / **Theme** — app-wide settings.
+- **API Clients** / **Build Info**.
 
 ## CORS
 

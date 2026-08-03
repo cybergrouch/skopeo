@@ -147,7 +147,7 @@ Skopeo persists its core data (PostgreSQL + Flyway + Exposed):
 - ✅ Event Organizer (events/meets with participants and matches) + host seeding generation
 - ✅ Governance: domain audit/activity log, duplicate detection + rectification, admin invites
 - ✅ Public pages by shareable code (player / match / event) with QR sharing
-- ✅ Web UI: sign-up + capability-gated dashboard (Profile / Settings / Research / Standings / Claim / Event Organizer / Seeding / Placeholder Players / Ratings / Invites / Activity Log / Reports / Points Management / Admin / About — each gated by capability)
+- ✅ Web UI: sign-up + capability-gated dashboard (Profile / Settings / Research / Standings / Claim / Event Organizer / Seeding / Placeholder Players / Ratings / Invites / Activity Log / Reports / Points Management / Account Management / Admin / About — each gated by capability)
 
 The `POST /api/v1/calculate-ranking` endpoint remains a stateless "what-if" calculator that writes nothing.
 
