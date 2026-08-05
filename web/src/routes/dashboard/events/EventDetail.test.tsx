@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -342,7 +342,7 @@ describe('EventDetail', () => {
     expect(screen.getByRole('button', { name: 'Schedule fixture' })).toBeDisabled()
     await user.selectOptions(screen.getByLabelText('Player 1'), 'u1')
     await user.selectOptions(screen.getByLabelText('Player 2'), 'u2')
-    await user.type(screen.getByLabelText('Date'), '2026-03-02')
+    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-03-02' } })
     expect(screen.getByRole('button', { name: 'Schedule fixture' })).toBeEnabled()
 
     await user.click(screen.getByRole('button', { name: 'Schedule fixture' }))
@@ -361,6 +361,11 @@ describe('EventDetail', () => {
     )
   })
 
+  it('pre-fills the fixture date with the event start date (#668)', () => {
+    renderDetail()
+    expect(screen.getByLabelText('Date')).toHaveValue('2026-03-01')
+  })
+
   it('schedules a tournament placement match with a bracket (#525)', async () => {
     useGetApiV1EventsId.mockReturnValue({
       data: { ...event, type: 'TOURNAMENT' },
@@ -371,7 +376,7 @@ describe('EventDetail', () => {
 
     await user.selectOptions(screen.getByLabelText('Player 1'), 'u1')
     await user.selectOptions(screen.getByLabelText('Player 2'), 'u2')
-    await user.type(screen.getByLabelText('Date'), '2026-03-02')
+    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-03-02' } })
     await user.click(screen.getByLabelText('Placement match'))
     await user.selectOptions(screen.getByLabelText('Placement'), 'PLATE_FINALS')
 
@@ -426,7 +431,7 @@ describe('EventDetail', () => {
 
     await user.selectOptions(screen.getByLabelText('Player 1'), 'u1')
     await user.selectOptions(screen.getByLabelText('Player 2'), 'u2')
-    await user.type(screen.getByLabelText('Date'), '2026-03-02')
+    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-03-02' } })
     await user.click(screen.getByLabelText('Apply handicap'))
     await user.type(screen.getByLabelText('Side 2 handicap'), '0.3')
 
@@ -445,7 +450,7 @@ describe('EventDetail', () => {
 
     await user.selectOptions(screen.getByLabelText('Player 1'), 'u1')
     await user.selectOptions(screen.getByLabelText('Player 2'), 'u2')
-    await user.type(screen.getByLabelText('Date'), '2026-03-02')
+    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-03-02' } })
     await user.click(screen.getByLabelText('Apply handicap'))
     await user.type(screen.getByLabelText('Side 1 handicap'), '0.4')
     await user.type(screen.getByLabelText('Side 2 handicap'), '0.2')
@@ -509,7 +514,7 @@ describe('EventDetail', () => {
     await user.selectOptions(screen.getByLabelText('Player 1'), 'u1')
     await user.selectOptions(screen.getByLabelText('Partner 1'), 'u2')
     await user.selectOptions(screen.getByLabelText('Player 2'), 'u3')
-    await user.type(screen.getByLabelText('Date'), '2026-03-02')
+    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-03-02' } })
     // Still missing Partner 2 → can't schedule yet.
     expect(screen.getByRole('button', { name: 'Schedule fixture' })).toBeDisabled()
 
@@ -542,7 +547,7 @@ describe('EventDetail', () => {
     await user.selectOptions(screen.getByLabelText('Partner 1'), 'u2')
     await user.selectOptions(screen.getByLabelText('Player 2'), 'u3')
     await user.selectOptions(screen.getByLabelText('Partner 2'), 'u4')
-    await user.type(screen.getByLabelText('Date'), '2026-03-02')
+    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-03-02' } })
     await user.click(screen.getByRole('button', { name: 'Schedule fixture' }))
 
     expect(createFixtureMutate.mock.calls[0][0].data.matchFormat).toBe('MIXED_DOUBLES')
@@ -579,7 +584,7 @@ describe('EventDetail', () => {
     expect(screen.queryByLabelText('Partner 1')).not.toBeInTheDocument()
     expect(within(screen.getByLabelText('Player 2')).getByRole('option', { name: 'Bob' })).toBeInTheDocument()
 
-    await user.type(screen.getByLabelText('Date'), '2026-03-02')
+    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-03-02' } })
     await user.click(screen.getByRole('button', { name: 'Schedule fixture' }))
     expect(createFixtureMutate).toHaveBeenCalledWith(
       {
@@ -603,7 +608,7 @@ describe('EventDetail', () => {
     await user.selectOptions(screen.getByLabelText('Match type'), 'LEAGUE_PLAY')
     await user.selectOptions(screen.getByLabelText('Player 1'), 'u1')
     await user.selectOptions(screen.getByLabelText('Player 2'), 'u2')
-    await user.type(screen.getByLabelText('Date'), '2026-03-02')
+    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-03-02' } })
     await user.click(screen.getByRole('button', { name: 'Schedule fixture' }))
     await waitFor(() =>
       expect(toastError).toHaveBeenCalledWith(
