@@ -97,6 +97,8 @@ function NewEventForm() {
   const create = usePostApiV1Events({
     mutation: {
       onSuccess: () => {
+        // Confirm the create (#667) before the fields reset — `name` is still the submitted value here.
+        toast.success(`Created event “${name.trim()}”.`);
         setName("");
         setStartDate("");
         setEndDate("");
