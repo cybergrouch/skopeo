@@ -66,6 +66,9 @@ data class PlayerMatchHistoryEntry(
     val partners: List<MatchHistoryParticipant>,
     val opponents: List<MatchHistoryParticipant>,
     val playerLevelAtMatch: String?,
+    // The player's raw NTRP rating at the time of the match — a raw-NTRP reveal (#583/#654), populated
+    // only for a viewer who may see raw ratings; null otherwise (band [playerLevelAtMatch] only).
+    val playerRatingAtMatch: String? = null,
     // The player's *current* rating confidence (#343), a 0..1 decimal string shown as a percentage.
     val playerConfidence: String? = null,
 )
@@ -94,6 +97,10 @@ data class MatchHistoryParticipant(
     val displayName: String?,
     val photoUrl: String?,
     val levelAtMatch: String?,
+    // The raw NTRP rating (full precision) at the time of the match — a raw-NTRP reveal (#583/#654),
+    // populated only for a viewer who may see raw ratings (an admin not previewing as non-admin); null
+    // for everyone else, who sees the band [levelAtMatch] only.
+    val ratingAtMatch: String? = null,
     // This participant's *current* rating confidence (#343), a 0..1 decimal string shown as a percentage.
     val confidence: String? = null,
     // True for a login-less, not-yet-claimed placeholder ("dummy") player (#496/#505): the history row

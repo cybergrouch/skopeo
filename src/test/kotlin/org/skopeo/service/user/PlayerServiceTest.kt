@@ -371,6 +371,45 @@ class PlayerServiceTest {
         win.opponents.single().levelAtMatch shouldBe "3.5"
     }
 
+    @Test
+    fun `match history reveals raw NTRP-at-match only to a raw-rating viewer (#654)`() {
+        val admin = newAdmin(uid = "admin")
+        val ana = newUser(uid = "a", names = display(name = "Ana"))
+        val ben = newUser(uid = "b", names = display(name = "Ben"))
+        val rated = fixture(u1 = ana.id, u2 = ben.id, date = LocalDate.of(2026, 1, 1))
+        matches.addResult(
+            matchId = rated.id,
+            sets = listOf(element = MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 4, winnerTeamId = rated.team1.teamId)),
+            winnerTeamId = rated.team1.teamId,
+            recordedBy = ana.id,
+            completedAt = LocalDateTime.now(),
+        )
+        matches.markRated(matchId = rated.id, ratedAt = LocalDateTime.now(), ratedBy = ana.id)
+        history(userId = ana.id, matchId = rated.id, previousLevel = "4.0")
+        history(userId = ben.id, matchId = rated.id, previousLevel = "3.5")
+
+        // Anonymous viewer: bands only, no raw NTRP-at-match.
+        service.matchHistory(code = ana.publicCode).shouldBeRight().items.single().let {
+            it.playerLevelAtMatch shouldBe "4.0"
+            it.playerRatingAtMatch.shouldBeNull()
+            it.opponents.single().ratingAtMatch.shouldBeNull()
+        }
+
+        // Admin with raw enabled: raw NTRP-at-match for the player and the opponent.
+        service.matchHistory(code = ana.publicCode, token = token(uid = "admin")).shouldBeRight().items.single().let {
+            it.playerRatingAtMatch.shouldNotBeNull()
+            it.opponents.single().ratingAtMatch.shouldNotBeNull()
+        }
+
+        // Admin previewing as a non-admin (#583): raw is hidden again, bands remain.
+        users.setPreviewRatingsAsNonAdmin(id = admin.id, preview = true).shouldBeRight()
+        service.matchHistory(code = ana.publicCode, token = token(uid = "admin")).shouldBeRight().items.single().let {
+            it.playerRatingAtMatch.shouldBeNull()
+            it.opponents.single().ratingAtMatch.shouldBeNull()
+            it.playerLevelAtMatch shouldBe "4.0"
+        }
+    }
+
     private var sparringCounter = 0
 
     /** Give [userId] a current rating plus [matchCount] in-window completed open-play matches (#459 confidence). */
@@ -722,7 +761,7 @@ class PlayerServiceTest {
 
     @Test
     fun `an admin reads a player's rating history by code, and a non-admin is forbidden`() {
-        newAdmin(uid = "admin")
+        val admin = newAdmin(uid = "admin")
         val player = newUser(uid = "p", names = display(name = "Ana"))
         val other = newUser(uid = "o", names = display(name = "Bob"))
         val match = fixture(u1 = player.id, u2 = other.id, date = LocalDate.of(2026, 1, 1))
@@ -734,6 +773,14 @@ class PlayerServiceTest {
         newUser(uid = "plain", names = display(name = "Plain"))
         service
             .ratingHistory(token = token(uid = "plain"), code = player.publicCode)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+
+        // An admin previewing as a non-admin (#583/#654) is treated like a non-admin here — the raw
+        // rating history is a raw-NTRP reveal, so it's forbidden while the preview toggle is on.
+        users.setPreviewRatingsAsNonAdmin(id = admin.id, preview = true).shouldBeRight()
+        service
+            .ratingHistory(token = token(uid = "admin"), code = player.publicCode)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
     }

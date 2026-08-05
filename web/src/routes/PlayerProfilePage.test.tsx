@@ -210,6 +210,21 @@ describe('PlayerProfilePage', () => {
     expect(screen.getByText('4.000000 → 4.300000')).toBeInTheDocument()
   })
 
+  it('hides rating history from an admin previewing as a non-admin (#654)', () => {
+    useGetApiV1PlayersCode.mockReturnValue(loadedPlayer)
+    // Admin, but the per-admin "Show raw NTRP ratings" toggle is off (previewing as non-admin, #583).
+    useGetApiV1UsersMe.mockReturnValue({
+      data: {
+        capabilities: ['PLAYER', 'ADMINISTRATOR'],
+        previewRatingsAsNonAdmin: true,
+      },
+    })
+    renderAt()
+    expect(
+      screen.queryByText('Full rating history (admin view).'),
+    ).not.toBeInTheDocument()
+  })
+
   it('hides rating history from a non-admin viewer', () => {
     useGetApiV1PlayersCode.mockReturnValue(loadedPlayer)
     // viewer defaults to PLAYER only (set in beforeEach)

@@ -38,6 +38,28 @@ describe('MatchHistoryRow', () => {
     expect(container.querySelector('img')).toHaveAttribute('src', 'https://example.com/ben.jpg')
   })
 
+  it('shows the raw NTRP-at-match when the API reveals it, else the band (#654)', () => {
+    // A raw-rating viewer (admin, not previewing): the API supplies ratingAtMatch/playerRatingAtMatch.
+    renderRow({
+      ...base,
+      playerLevelAtMatch: '4.0',
+      playerRatingAtMatch: '4.250000',
+      opponents: [
+        {
+          publicCode: 'BEN123',
+          displayName: 'Ben',
+          photoUrl: null,
+          levelAtMatch: '3.5',
+          ratingAtMatch: '3.700000',
+        },
+      ],
+    })
+    // Raw values are shown in place of the bands.
+    expect(
+      screen.getByText(/NTRP 4.250000 vs 3.700000 \(at the time\)/),
+    ).toBeInTheDocument()
+  })
+
   it("appends each player's current rating confidence beside their at-the-time band (#343)", () => {
     renderRow({
       ...base,

@@ -5010,6 +5010,10 @@ components:
           type: string
           nullable: true
           description: This player's published NTRP band at the time of the match (rated matches only).
+        playerRatingAtMatch:
+          type: string
+          nullable: true
+          description: This player's raw NTRP at the time of the match (#583/#654) — present only for a viewer who may see raw ratings; null otherwise.
         playerConfidence:
           type: string
           nullable: true
@@ -5052,6 +5056,10 @@ components:
           type: string
           nullable: true
           description: This participant's published NTRP band at the time of the match (rated matches only).
+        ratingAtMatch:
+          type: string
+          nullable: true
+          description: This participant's raw NTRP at the time of the match (#583/#654) — present only for a viewer who may see raw ratings; null otherwise.
         confidence:
           type: string
           nullable: true
