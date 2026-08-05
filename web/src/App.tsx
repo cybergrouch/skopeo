@@ -1,6 +1,7 @@
 import { lazy, Suspense } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { Toaster } from "sonner";
 import { AuthProvider } from "@/auth/AuthProvider";
 import { RequireAuth } from "@/auth/RequireAuth";
 import { RequireProfile } from "@/auth/RequireProfile";
@@ -74,6 +75,9 @@ function App() {
           {/* Authed local-theme layer (#514): overrides the global data-theme with the caller's own
               choice via resolveEffectiveTheme. Inert (and unfetched) when logged out. */}
           <LocalThemeApplier />
+          {/* App-wide toast notifications (#661): richColors gives success/error styling, closeButton a
+              manual dismiss; toasts also auto-dismiss. Sonner renders an aria live region for a11y. */}
+          <Toaster richColors closeButton position="top-center" />
           <BrowserRouter>
             <Suspense fallback={<PageFallback />}>
               <Routes>

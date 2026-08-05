@@ -4,9 +4,11 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CreatePlaceholderSection } from "./CreatePlaceholderSection";
 
-const { createMutate, createPending } = vi.hoisted(() => ({
+const { createMutate, createPending, toastSuccess, toastError } = vi.hoisted(() => ({
   createMutate: vi.fn(),
   createPending: { value: false },
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
 }));
 
 vi.mock("@/api/generated/users/users", () => ({
@@ -15,6 +17,9 @@ vi.mock("@/api/generated/users/users", () => ({
     mutateAsync: createMutate,
     isPending: createPending.value,
   }),
+}));
+vi.mock("sonner", () => ({
+  toast: { success: toastSuccess, error: toastError },
 }));
 
 function renderSection(capabilities: string[] = ["ADMINISTRATOR"]) {
@@ -54,7 +59,12 @@ describe("CreatePlaceholderSection", () => {
       }),
     );
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["placeholders"] });
-    expect(screen.getByRole("status")).toHaveTextContent("Created Alex P.");
+    // Success is a toast (#661), naming the created player.
+    await waitFor(() =>
+      expect(toastSuccess).toHaveBeenCalledWith(
+        expect.stringContaining("Alex P."),
+      ),
+    );
   });
 
   it("includes date of birth and initial rating when provided (rater)", async () => {
@@ -112,15 +122,18 @@ describe("CreatePlaceholderSection", () => {
     expect(screen.getByRole("button", { name: "Creating…" })).toBeDisabled();
   });
 
-  it("shows an inline error when creation fails", async () => {
+  it("shows an error toast when creation fails (#661)", async () => {
     createMutate.mockRejectedValue(new Error("boom"));
     const user = userEvent.setup();
     renderSection();
     await user.type(screen.getByLabelText("Display name"), "Alex P.");
     await user.selectOptions(screen.getByLabelText("Sex"), "Female");
     await user.click(screen.getByRole("button", { name: "Create placeholder" }));
-    expect(
-      await screen.findByText(/could not create the placeholder player/i),
-    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(
+        expect.stringMatching(/could not create the placeholder player/i),
+        expect.objectContaining({ duration: expect.any(Number) }),
+      ),
+    );
   });
 });
