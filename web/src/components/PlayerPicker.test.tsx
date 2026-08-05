@@ -4,9 +4,15 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PlayerPicker } from "./PlayerPicker";
 
-const { createMutate, createPending } = vi.hoisted(() => ({
+const { createMutate, createPending, toastSuccess, toastError } = vi.hoisted(() => ({
   createMutate: vi.fn(),
   createPending: { value: false },
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
+}));
+
+vi.mock("sonner", () => ({
+  toast: { success: toastSuccess, error: toastError },
 }));
 
 // The embedded search is exercised elsewhere; stub it to a button that emits a picked player, so this
@@ -128,6 +134,34 @@ describe("PlayerPicker", () => {
         displayName: "New Player",
         sex: "Female",
       }),
+    );
+    // Success is surfaced as a toast here too (#661), naming the player.
+    await waitFor(() =>
+      expect(toastSuccess).toHaveBeenCalledWith(
+        expect.stringContaining("New Player"),
+      ),
+    );
+  });
+
+  it("shows an error toast when placeholder creation fails (#661)", async () => {
+    createMutate.mockRejectedValue(new Error("boom"));
+    const user = userEvent.setup();
+    renderPicker();
+
+    await user.click(
+      screen.getByRole("button", { name: "Add placeholder player" }),
+    );
+    await user.type(screen.getByLabelText("Display name"), "New Player");
+    await user.selectOptions(screen.getByLabelText("Sex"), "Female");
+    await user.click(
+      screen.getByRole("button", { name: "Create placeholder" }),
+    );
+
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(
+        expect.stringMatching(/could not create the placeholder player/i),
+        expect.objectContaining({ duration: expect.any(Number) }),
+      ),
     );
   });
 
@@ -326,20 +360,4 @@ describe("PlayerPicker", () => {
     expect(screen.getByRole("option", { name: "NTRP 4.0" })).toBeInTheDocument();
   });
 
-  it("shows an inline error when the create fails", async () => {
-    createMutate.mockRejectedValue(new Error("boom"));
-    const user = userEvent.setup();
-    renderPicker();
-    await user.click(
-      screen.getByRole("button", { name: "Add placeholder player" }),
-    );
-    await user.type(screen.getByLabelText("Display name"), "New Player");
-    await user.selectOptions(screen.getByLabelText("Sex"), "Female");
-    await user.click(
-      screen.getByRole("button", { name: "Create placeholder" }),
-    );
-    expect(
-      await screen.findByText(/could not create the placeholder player/i),
-    ).toBeInTheDocument();
-  });
 });

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -108,8 +109,12 @@ export function PlayerPicker({
       onSelect(toSummary(user));
       reset();
       setCreating(false);
+      toast.success(`Created placeholder player “${name}”.`);
     } catch {
-      setError("Could not create the placeholder player. Try again.");
+      // Errors linger longer (and can be dismissed) so the reason isn't missed (#661).
+      toast.error("Could not create the placeholder player. Please try again.", {
+        duration: 8000,
+      });
     }
   }
 
