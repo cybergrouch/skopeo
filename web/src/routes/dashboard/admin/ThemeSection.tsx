@@ -15,6 +15,7 @@ import {
   usePutApiV1Theme,
 } from '@/api/generated/settings/settings'
 import type { SetThemeRequestTheme } from '@/api/generated/model'
+import { toast } from 'sonner'
 
 // The setting enum + human labels. AUTO resolves by date on each client; the rest pin a theme.
 const THEME_OPTIONS: ReadonlyArray<{ value: SetThemeRequestTheme; label: string }> = [
@@ -48,22 +49,18 @@ export function ThemeSection() {
   // (defaulting to AUTO before it loads) — no effect needed to sync to the fetched value.
   const [selected, setSelected] = useState<SetThemeRequestTheme | null>(null)
   const value: SetThemeRequestTheme = selected ?? current ?? 'AUTO'
-  const [saved, setSaved] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
   const setTheme = usePutApiV1Theme({
     mutation: {
       onSuccess: () => {
-        setSaved(true)
+        toast.success('Saved')
         queryClient.invalidateQueries({ queryKey: getGetApiV1ThemeQueryKey() })
       },
-      onError: () => setError('Could not set the theme. Try again.'),
+      onError: () => toast.error('Could not set the theme. Try again.', { duration: 8000 }),
     },
   })
 
   const onSave = () => {
-    setSaved(false)
-    setError(null)
     setTheme.mutate({ data: { theme: value } })
   }
 
@@ -87,7 +84,6 @@ export function ThemeSection() {
             disabled={themeQuery.isLoading}
             onChange={(e) => {
               setSelected(e.target.value as SetThemeRequestTheme)
-              setSaved(false)
             }}
           >
             {THEME_OPTIONS.map((option) => (
@@ -100,16 +96,6 @@ export function ThemeSection() {
         <Button type="button" size="sm" onClick={onSave} disabled={setTheme.isPending}>
           Save theme
         </Button>
-        {saved ? (
-          <span className="text-xs text-muted-foreground" role="status">
-            Saved
-          </span>
-        ) : null}
-        {error ? (
-          <span className="text-xs text-destructive" role="alert">
-            {error}
-          </span>
-        ) : null}
       </CardContent>
     </Card>
   )

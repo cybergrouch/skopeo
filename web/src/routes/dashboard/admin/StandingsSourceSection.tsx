@@ -16,6 +16,7 @@ import {
 } from '@/api/generated/settings/settings'
 import { getGetApiV1StandingsQueryKey } from '@/api/generated/standings/standings'
 import type { SetStandingsSourceRequestSource } from '@/api/generated/model'
+import { toast } from 'sonner'
 
 // The setting enum + human labels. RATING orders standings by current rating; POINTS by the ranking-points ledger.
 const SOURCE_OPTIONS: ReadonlyArray<{
@@ -46,13 +47,11 @@ export function StandingsSourceSection() {
     null,
   )
   const value: SetStandingsSourceRequestSource = selected ?? current ?? 'RATING'
-  const [saved, setSaved] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
   const setSource = usePutApiV1SettingsStandingsSource({
     mutation: {
       onSuccess: () => {
-        setSaved(true)
+        toast.success('Saved')
         queryClient.invalidateQueries({
           queryKey: getGetApiV1SettingsStandingsSourceQueryKey(),
         })
@@ -61,13 +60,12 @@ export function StandingsSourceSection() {
           queryKey: getGetApiV1StandingsQueryKey(),
         })
       },
-      onError: () => setError('Could not set the standings source. Try again.'),
+      onError: () =>
+        toast.error('Could not set the standings source. Try again.', { duration: 8000 }),
     },
   })
 
   const onSave = () => {
-    setSaved(false)
-    setError(null)
     setSource.mutate({ data: { source: value } })
   }
 
@@ -93,7 +91,6 @@ export function StandingsSourceSection() {
             disabled={sourceQuery.isLoading}
             onChange={(e) => {
               setSelected(e.target.value as SetStandingsSourceRequestSource)
-              setSaved(false)
             }}
           >
             {SOURCE_OPTIONS.map((option) => (
@@ -106,16 +103,6 @@ export function StandingsSourceSection() {
         <Button type="button" size="sm" onClick={onSave} disabled={setSource.isPending}>
           Save source
         </Button>
-        {saved ? (
-          <span className="text-xs text-muted-foreground" role="status">
-            Saved
-          </span>
-        ) : null}
-        {error ? (
-          <span className="text-xs text-destructive" role="alert">
-            {error}
-          </span>
-        ) : null}
       </CardContent>
     </Card>
   )

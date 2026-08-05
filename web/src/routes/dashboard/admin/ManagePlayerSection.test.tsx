@@ -17,6 +17,8 @@ const {
   revokeMutate,
   adjustMutate,
   deleteMutate,
+  toastSuccess,
+  toastError,
   picked,
 } = vi.hoisted(() => ({
   useGetApiV1UsersUserIdRatings: vi.fn(),
@@ -31,6 +33,8 @@ const {
   revokeMutate: vi.fn(),
   adjustMutate: vi.fn(),
   deleteMutate: vi.fn(),
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
   // The player the stub picker selects — overridable per test.
   picked: {
     current: {
@@ -65,6 +69,7 @@ vi.mock('@/api/generated/ranking-points/ranking-points', () => ({
 vi.mock('@/api/generated/users/users', () => ({
   useDeleteApiV1UsersId,
 }))
+vi.mock('sonner', () => ({ toast: { success: toastSuccess, error: toastError } }))
 // Drive selection from a stub so the real picker (axios → firebase) never loads.
 vi.mock('@/components/UserSearchSelect', () => ({
   UserSearchSelect: ({ onSelect }: { onSelect: (u: unknown) => void }) => (
@@ -175,7 +180,7 @@ describe('ManagePlayerSection', () => {
     await waitFor(() =>
       expect(putMutate).toHaveBeenCalledWith({ userId: 'u1', data: { value: '4.5' } }),
     )
-    expect(screen.getByText('Saved')).toBeInTheDocument()
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Saved'))
   })
 
   it('shows an error when the rating override fails', async () => {
@@ -185,7 +190,12 @@ describe('ManagePlayerSection', () => {
     })
     const user = await selectAlice()
     await user.click(screen.getByRole('button', { name: 'Override rating' }))
-    expect(await screen.findByText(/Could not set the rating/i)).toBeInTheDocument()
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(
+        'Could not set the rating. Check the value and try again.',
+        { duration: 8000 },
+      ),
+    )
   })
 
   it('shows a loading state while ratings load', async () => {
@@ -249,7 +259,9 @@ describe('ManagePlayerSection', () => {
 
     await user.click(screen.getByRole('button', { name: 'Grant ADMINISTRATOR' }))
     await user.click(screen.getByRole('button', { name: 'Confirm grant ADMINISTRATOR' }))
-    expect(screen.getByRole('alert')).toHaveTextContent('Could not grant the role.')
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith('Could not grant the role.', { duration: 8000 }),
+    )
   })
 
   it('surfaces the backend reason when revoking ADMINISTRATOR is refused (#194)', async () => {
@@ -269,7 +281,11 @@ describe('ManagePlayerSection', () => {
 
     await user.click(screen.getByRole('button', { name: 'Revoke ADMINISTRATOR' }))
     await user.click(screen.getByRole('button', { name: 'Confirm revoke ADMINISTRATOR' }))
-    expect(screen.getByRole('alert')).toHaveTextContent('Cannot revoke a bootstrap administrator')
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith('Cannot revoke a bootstrap administrator', {
+        duration: 8000,
+      }),
+    )
   })
 
   it('renders the point-adjustment sub-section with its four fields and the hint (#469)', async () => {
@@ -303,7 +319,7 @@ describe('ManagePlayerSection', () => {
         },
       }),
     )
-    expect(screen.getByText('Applied')).toBeInTheDocument()
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Applied'))
   })
 
   it('rejects a zero, fractional, or missing points value before calling the API (#469)', async () => {
@@ -369,7 +385,9 @@ describe('ManagePlayerSection', () => {
     await user.type(screen.getByLabelText('Validity start'), '2026-01-01')
     await user.type(screen.getByLabelText('Validity end'), '2026-06-01')
     await user.click(screen.getByRole('button', { name: 'Apply adjustment' }))
-    expect(await screen.findByText('Player has no rating')).toBeInTheDocument()
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith('Player has no rating', { duration: 8000 }),
+    )
   })
 
   it('gates the delete behind a confirmation, then deletes and returns to search (#518)', async () => {
@@ -407,10 +425,14 @@ describe('ManagePlayerSection', () => {
     const user = await selectAlice()
     await user.click(screen.getByRole('button', { name: 'Delete account' }))
     await user.click(screen.getByRole('button', { name: 'Confirm delete account' }))
-    expect(screen.getByRole('alert')).toHaveTextContent('Cannot delete the last active ADMINISTRATOR')
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith('Cannot delete the last active ADMINISTRATOR', {
+        duration: 8000,
+      }),
+    )
   })
 
-  it('keeps the delete error visible after cancelling back to the manage view (#518)', async () => {
+  it('surfaces the delete error as a toast, then lets you cancel back to the manage view (#518)', async () => {
     useDeleteApiV1UsersId.mockImplementation((options: SuccessOpts) => ({
       isPending: false,
       mutate: () =>
@@ -421,9 +443,13 @@ describe('ManagePlayerSection', () => {
     const user = await selectAlice()
     await user.click(screen.getByRole('button', { name: 'Delete account' }))
     await user.click(screen.getByRole('button', { name: 'Confirm delete account' }))
-    // Cancelling returns to the manage view; the error stays visible there.
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith('Cannot delete the last active ADMINISTRATOR', {
+        duration: 8000,
+      }),
+    )
+    // Cancelling returns to the manage view.
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(screen.getByRole('button', { name: 'Delete account' })).toBeInTheDocument()
-    expect(screen.getByRole('alert')).toHaveTextContent('Cannot delete the last active ADMINISTRATOR')
   })
 })

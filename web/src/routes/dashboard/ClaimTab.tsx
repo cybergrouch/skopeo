@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
+import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Card,
@@ -53,11 +54,12 @@ export function ClaimTab() {
         queryKey: getGetApiV1UsersMeQueryKey(),
       });
     } catch (err) {
-      setError(
+      toast.error(
         claimErrorMessage(
           err,
           "That code could not be used. It may be wrong, expired, or already claimed — or your account already has activity.",
         ),
+        { duration: 8000 },
       );
     }
   }

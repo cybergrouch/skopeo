@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReRateRequestCard } from './ReRateRequestCard'
@@ -22,6 +22,9 @@ vi.mock('@/api/generated/ratings/ratings', () => ({
     },
   }),
 }))
+
+const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }))
+vi.mock('sonner', () => ({ toast: { error: toastError } }))
 
 function renderCard() {
   return render(
@@ -79,7 +82,9 @@ describe('ReRateRequestCard', () => {
 
     await user.type(screen.getByLabelText('Justification'), 'try again')
     await user.click(screen.getByRole('button', { name: 'Request re-rate' }))
-    expect(screen.getByText(/Could not submit your request/)).toBeInTheDocument()
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith('Could not submit your request. Please try again.', { duration: 8000 }),
+    )
   })
 
   it('handles an approval with no new band and a denial with no reason', () => {

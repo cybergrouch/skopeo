@@ -1,8 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { RatingRequestSection } from './RatingRequestSection'
+
+const { toastSuccess, toastError } = vi.hoisted(() => ({
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
+}))
+vi.mock('sonner', () => ({ toast: { success: toastSuccess, error: toastError } }))
 
 const { useGetApiV1RatingRequests, approveMutate, denyMutate, state } = vi.hoisted(() => ({
   useGetApiV1RatingRequests: vi.fn(),
@@ -114,7 +120,12 @@ describe('RatingRequestSection', () => {
     expect(screen.getByText('abcdef12')).toBeInTheDocument() // requester fallback
     await user.type(screen.getByLabelText('New rating'), 'oops')
     await user.click(screen.getByRole('button', { name: 'Approve' }))
-    expect(screen.getByText(/Could not approve/)).toBeInTheDocument()
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(
+        'Could not approve. Check the rating value.',
+        { duration: 8000 },
+      ),
+    )
   })
 
   it('shows an error when denial fails', async () => {
@@ -123,6 +134,8 @@ describe('RatingRequestSection', () => {
     renderSection()
     await user.type(screen.getByLabelText('Denial reason'), 'nope')
     await user.click(screen.getByRole('button', { name: 'Deny' }))
-    expect(screen.getByText(/Could not deny the request/)).toBeInTheDocument()
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith('Could not deny the request.', { duration: 8000 }),
+    )
   })
 })

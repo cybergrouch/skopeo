@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   Card,
@@ -69,8 +70,6 @@ function ForCanonical({
 }) {
   const queryClient = useQueryClient()
   const [duplicates, setDuplicates] = useState<UserSummaryResponse[]>([])
-  const [error, setError] = useState<string | null>(null)
-  const [done, setDone] = useState(false)
 
   const existing = useGetApiV1UsersIdDuplicates(canonical.id)
   const mark = usePostApiV1UsersIdDuplicates()
@@ -78,7 +77,6 @@ function ForCanonical({
   const replace = usePostApiV1UsersIdDuplicatesDuplicateIdReplace()
   // Two-step confirm for the irreversible Replace: first click arms the row, second click runs it.
   const [confirmingReplaceId, setConfirmingReplaceId] = useState<string | null>(null)
-  const [replaceError, setReplaceError] = useState<string | null>(null)
 
   function invalidate() {
     queryClient.invalidateQueries({
@@ -87,26 +85,26 @@ function ForCanonical({
   }
 
   async function onReplace(id: string) {
-    setReplaceError(null)
     try {
       await replace.mutateAsync({ id: canonical.id, duplicateId: id })
       setConfirmingReplaceId(null)
       invalidate()
     } catch {
-      setReplaceError('Could not replace the account. The canonical must be empty (no rating or matches of its own).')
+      toast.error(
+        'Could not replace the account. The canonical must be empty (no rating or matches of its own).',
+        { duration: 8000 },
+      )
     }
   }
 
   async function onMark() {
-    setDone(false)
     try {
       await mark.mutateAsync({ id: canonical.id, data: { duplicateIds: duplicates.map((d) => d.id) } })
-      setError(null)
-      setDone(true)
       setDuplicates([])
       invalidate()
+      toast.success('Marked as duplicates.')
     } catch {
-      setError('Could not mark the selected profiles as duplicates.')
+      toast.error('Could not mark the selected profiles as duplicates.', { duration: 8000 })
     }
   }
 
@@ -149,17 +147,6 @@ function ForCanonical({
         </ul>
       ) : null}
 
-      {error ? (
-        <p className="text-sm text-destructive" role="alert">
-          {error}
-        </p>
-      ) : null}
-      {done ? (
-        <p className="text-sm text-foreground" role="status">
-          Marked as duplicates.
-        </p>
-      ) : null}
-
       <Button type="button" disabled={duplicates.length === 0 || mark.isPending} onClick={onMark}>
         {mark.isPending ? 'Marking…' : 'Mark as duplicates'}
       </Button>
@@ -171,11 +158,6 @@ function ForCanonical({
             Restore un-marks a duplicate. Replace imports a duplicate’s matches and rating into this
             account and then deletes the old one — permanent, and only into an empty canonical.
           </p>
-          {replaceError ? (
-            <p className="text-sm text-destructive" role="alert">
-              {replaceError}
-            </p>
-          ) : null}
           <ul className="space-y-2">
             {current.map((d) => (
               <li key={d.id} className="flex items-center justify-between gap-2 rounded-md border p-2 text-sm">
@@ -208,10 +190,7 @@ function ForCanonical({
                         type="button"
                         variant="ghost"
                         size="sm"
-                        onClick={() => {
-                          setReplaceError(null)
-                          setConfirmingReplaceId(d.id)
-                        }}
+                        onClick={() => setConfirmingReplaceId(d.id)}
                       >
                         Replace account
                       </Button>

@@ -21,6 +21,14 @@ vi.mock("@/api/generated/users/users", () => ({
   getGetApiV1UsersMeQueryKey: () => ["me"],
 }));
 
+const { toastSuccess, toastError } = vi.hoisted(() => ({
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
+}));
+vi.mock("sonner", () => ({
+  toast: { success: toastSuccess, error: toastError },
+}));
+
 function renderForm() {
   return render(
     <QueryClientProvider client={new QueryClient()}>
@@ -69,7 +77,7 @@ describe("MatchHistoryVisibilityForm", () => {
         data: { hidden: true },
       }),
     );
-    expect(await screen.findByRole("status")).toHaveTextContent("Saved");
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith("Saved"));
   });
 
   it("shows a saving indicator while the save is in flight", () => {
@@ -91,13 +99,16 @@ describe("MatchHistoryVisibilityForm", () => {
     });
     renderForm();
     await user.click(screen.getByRole("checkbox"));
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Could not save. Please try again.",
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(
+        "Could not save. Please try again.",
+        { duration: 8000 },
+      ),
     );
     expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(
       false,
     );
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(toastSuccess).not.toHaveBeenCalled();
   });
 
   it("renders the toggle once the user query resolves with data", () => {

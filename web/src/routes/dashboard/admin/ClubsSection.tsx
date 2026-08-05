@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { PublicPageLink } from "@/components/PublicPageLink";
 import {
   Card,
@@ -57,7 +58,7 @@ export function ClubsSection() {
       setName("");
       invalidate();
     } catch {
-      setError("Could not create the club.");
+      toast.error("Could not create the club.", { duration: 8000 });
     }
   }
 
@@ -127,7 +128,7 @@ function ClubRow({
       await sanction.mutateAsync({ id: club.id, data: { sanctioned } });
       onChange();
     } catch {
-      setError("Could not update the sanction setting.");
+      toast.error("Could not update the sanction setting.", { duration: 8000 });
     }
   }
 
@@ -158,7 +159,7 @@ function ClubRow({
       setEditing(false);
       onChange();
     } catch {
-      setError("Could not rename the club.");
+      toast.error("Could not rename the club.", { duration: 8000 });
     }
   }
 
@@ -174,7 +175,7 @@ function ClubRow({
       await del.mutateAsync({ id: club.id });
       onChange();
     } catch {
-      setError("Could not delete the club.");
+      toast.error("Could not delete the club.", { duration: 8000 });
       setConfirmingDelete(false);
     }
   }

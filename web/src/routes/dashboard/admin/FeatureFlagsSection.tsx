@@ -1,5 +1,5 @@
-import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   Card,
   CardContent,
@@ -50,24 +50,21 @@ function FacebookLoginToggle() {
   const flagQuery = useGetApiV1SettingsFacebookLogin({ query: { retry: false } });
   // Default to enabled while loading / when unset, matching the backend default.
   const enabled = flagQuery.data?.enabled ?? true;
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const setFlag = usePutApiV1SettingsFacebookLogin({
     mutation: {
       onSuccess: () => {
-        setSaved(true);
+        toast.success("Saved");
         void queryClient.invalidateQueries({
           queryKey: getGetApiV1SettingsFacebookLoginQueryKey(),
         });
       },
-      onError: () => setError("Could not update the setting. Try again."),
+      onError: () =>
+        toast.error("Could not update the setting. Try again.", { duration: 8000 }),
     },
   });
 
   const onToggle = (checked: boolean) => {
-    setSaved(false);
-    setError(null);
     setFlag.mutate({ data: { enabled: checked } });
   };
 
@@ -89,16 +86,6 @@ function FacebookLoginToggle() {
           />
           Enable Facebook login
         </label>
-        {saved ? (
-          <span className="text-xs text-muted-foreground" role="status">
-            Saved
-          </span>
-        ) : null}
-        {error ? (
-          <span className="text-xs text-destructive" role="alert">
-            {error}
-          </span>
-        ) : null}
       </div>
     </div>
   );
@@ -115,24 +102,21 @@ function RawRatingsToggle() {
   const meQuery = useGetApiV1UsersMe({ query: { retry: false } });
   // "Show raw ratings" is the inverse of the stored previewAsNonAdmin flag.
   const showRaw = !(meQuery.data?.previewRatingsAsNonAdmin ?? false);
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const setPreview = usePutApiV1UsersMeRatingPreview({
     mutation: {
       onSuccess: () => {
-        setSaved(true);
+        toast.success("Saved");
         // Refresh /me (the toggle state) and any rating-bearing queries so the change shows immediately.
         void queryClient.invalidateQueries({ queryKey: getGetApiV1UsersMeQueryKey() });
         void queryClient.invalidateQueries();
       },
-      onError: () => setError("Could not update the setting. Try again."),
+      onError: () =>
+        toast.error("Could not update the setting. Try again.", { duration: 8000 }),
     },
   });
 
   const onToggle = (checked: boolean) => {
-    setSaved(false);
-    setError(null);
     // checked = show raw → previewAsNonAdmin false; unchecked = preview as non-admin → true.
     setPreview.mutate({ data: { previewAsNonAdmin: !checked } });
   };
@@ -156,16 +140,6 @@ function RawRatingsToggle() {
           />
           Show raw NTRP ratings
         </label>
-        {saved ? (
-          <span className="text-xs text-muted-foreground" role="status">
-            Saved
-          </span>
-        ) : null}
-        {error ? (
-          <span className="text-xs text-destructive" role="alert">
-            {error}
-          </span>
-        ) : null}
       </div>
     </div>
   );

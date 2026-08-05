@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { NTRP_LEVELS } from '@/lib/ntrp'
@@ -21,53 +22,44 @@ export function SetRatingForm({
   onSaved?: () => void
 }) {
   const [band, setBand] = useState(initialValue)
-  const [error, setError] = useState<string | null>(null)
   const setRating = usePutApiV1UsersUserIdRatings()
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
-    setError(null)
     try {
       await setRating.mutateAsync({ userId, data: { band } })
       onSaved?.()
     } catch {
-      setError('Could not set the rating. Check the value and try again.')
+      toast.error('Could not set the rating. Check the value and try again.', { duration: 8000 })
     }
   }
 
   return (
-    <>
-      <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-2">
-        <div className="space-y-1">
-          <Label htmlFor={`value-${userId}`} className="text-xs">
-            Rating
-          </Label>
-          <select
-            id={`value-${userId}`}
-            value={band}
-            onChange={(e) => setBand(e.target.value)}
-            required
-            className="flex h-9 w-24 rounded-md border border-input bg-transparent px-3 text-sm"
-          >
-            <option value="" disabled>
-              NTRP…
+    <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-2">
+      <div className="space-y-1">
+        <Label htmlFor={`value-${userId}`} className="text-xs">
+          Rating
+        </Label>
+        <select
+          id={`value-${userId}`}
+          value={band}
+          onChange={(e) => setBand(e.target.value)}
+          required
+          className="flex h-9 w-24 rounded-md border border-input bg-transparent px-3 text-sm"
+        >
+          <option value="" disabled>
+            NTRP…
+          </option>
+          {NTRP_LEVELS.map((level) => (
+            <option key={level} value={level}>
+              {level}
             </option>
-            {NTRP_LEVELS.map((level) => (
-              <option key={level} value={level}>
-                {level}
-              </option>
-            ))}
-          </select>
-        </div>
-        <Button type="submit" size="sm" disabled={setRating.isPending}>
-          {setRating.isPending ? 'Setting…' : 'Set rating'}
-        </Button>
-      </form>
-      {error ? (
-        <p className="mt-2 text-sm text-destructive" role="alert">
-          {error}
-        </p>
-      ) : null}
-    </>
+          ))}
+        </select>
+      </div>
+      <Button type="submit" size="sm" disabled={setRating.isPending}>
+        {setRating.isPending ? 'Setting…' : 'Set rating'}
+      </Button>
+    </form>
   )
 }

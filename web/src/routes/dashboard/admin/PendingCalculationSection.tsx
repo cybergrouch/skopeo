@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   DndContext,
@@ -234,7 +235,6 @@ function OpenEntry({
 export function PendingCalculationSection() {
   const queryClient = useQueryClient()
   const [preview, setPreview] = useState<CalculationResponse | null>(null)
-  const [committed, setCommitted] = useState<number | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   // Selected events to scope the run to (#479); empty = all pending (unchanged default).
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -277,15 +277,17 @@ export function PendingCalculationSection() {
       onSuccess: (data) => {
         if (data.dryRun) {
           setPreview(data)
-          setCommitted(null)
         } else {
           setPreview(null)
-          setCommitted(data.matchesProcessed)
+          toast.success(
+            `Committed ratings for ${data.matchesProcessed} match${plural(data.matchesProcessed, 'es')}.`,
+          )
           // The committed events are gone from the pending list; start fresh.
           setSelected(new Set())
           queryClient.invalidateQueries({ queryKey: getGetApiV1MatchesQueryKey(PENDING_FILTER) })
         }
       },
+      onError: (e) => toast.error(errorMessage(e, 'Calculation failed.'), { duration: 8000 }),
     },
   })
 
@@ -337,10 +339,8 @@ export function PendingCalculationSection() {
     return null
   }
 
+  // Client-side selection guard (#479); the backend's guard message surfaces as a toast via onError.
   const scopeError = prefixError()
-  // Surface the backend's guard message too (belt-and-braces if the client check ever diverges).
-  const serverError = calculate.isError ? errorMessage(calculate.error, 'Calculation failed.') : null
-  const guardError = scopeError ?? serverError
 
   // An entry's processing key on the epoch-day scale: an event's calc_priority override or its end
   // date; an eventless entry keys off its match date (so events and Open entries interleave by date).
@@ -450,9 +450,9 @@ export function PendingCalculationSection() {
           </p>
         ) : null}
 
-        {guardError ? (
+        {scopeError ? (
           <p className="text-sm text-destructive" role="alert" data-testid="calculation-guard-error">
-            {guardError}
+            {scopeError}
           </p>
         ) : null}
 
@@ -485,12 +485,6 @@ export function PendingCalculationSection() {
             </>
           ) : null}
         </div>
-
-        {committed !== null ? (
-          <p className="text-sm text-foreground" role="status">
-            Committed ratings for {committed} match{plural(committed, 'es')}.
-          </p>
-        ) : null}
 
         {preview ? (
           <p

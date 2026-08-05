@@ -16,6 +16,14 @@ vi.mock('@/api/generated/settings/settings', () => ({
   getGetApiV1UsersMeThemeQueryKey: () => ['local-theme'],
 }))
 
+const { toastSuccess, toastError } = vi.hoisted(() => ({
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
+}))
+vi.mock('sonner', () => ({
+  toast: { success: toastSuccess, error: toastError },
+}))
+
 function renderForm() {
   return render(
     <QueryClientProvider client={new QueryClient()}>
@@ -95,15 +103,17 @@ describe('LocalThemeForm (#514)', () => {
     renderForm()
     await userEvent.selectOptions(screen.getByLabelText('Theme'), 'GRASS')
     await userEvent.click(screen.getByRole('button', { name: /save theme/i }))
-    expect(await screen.findByRole('status')).toHaveTextContent('Saved')
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Saved'))
   })
 
-  it('shows an inline error when the save fails', async () => {
+  it('shows an error toast when the save fails', async () => {
     putMutate.mockRejectedValue(new Error('boom'))
     useGetApiV1UsersMeTheme.mockReturnValue({ data: { theme: null, setAt: null }, isLoading: false })
     renderForm()
     await userEvent.selectOptions(screen.getByLabelText('Theme'), 'GRASS')
     await userEvent.click(screen.getByRole('button', { name: /save theme/i }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('Could not save your theme')
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith('Could not save your theme. Please try again.', { duration: 8000 }),
+    )
   })
 })

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { PublicPageLink } from "@/components/PublicPageLink";
 import {
   DndContext,
@@ -129,7 +130,7 @@ function MatchResultRow({
     try {
       await remove.mutateAsync({ id: match.id, data: { isActive: false } });
     } catch {
-      setError("Could not delete the fixture.");
+      toast.error("Could not delete the fixture.", { duration: 8000 });
       setConfirmingDelete(false);
     }
   }
@@ -151,7 +152,9 @@ function MatchResultRow({
       await upload.mutateAsync({ id: match.id, data: { sets } });
       setEditing(false);
     } catch {
-      setError("Could not save the result. Each set needs a clear winner.");
+      toast.error("Could not save the result. Each set needs a clear winner.", {
+        duration: 8000,
+      });
     }
   }
 

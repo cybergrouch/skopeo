@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,13 +30,11 @@ function Controls({
   const queryClient = useQueryClient();
   const [customUrl, setCustomUrl] = useState(initialCustomUrl);
   const [hidden, setHidden] = useState(initialHidden);
-  const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const save = usePutApiV1UsersIdPhoto();
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
-    setSaved(false);
     setError(null);
     const trimmed = customUrl.trim();
     if (trimmed && !/^https?:\/\//i.test(trimmed)) {
@@ -55,10 +54,11 @@ function Controls({
           queryKey: getGetApiV1UsersMeQueryKey(),
         }),
       ]);
-      setSaved(true);
+      toast.success("Saved");
     } catch {
-      setError(
+      toast.error(
         "Could not save your photo settings. Check the URL and try again.",
+        { duration: 8000 },
       );
     }
   }
@@ -71,7 +71,6 @@ function Controls({
           checked={hidden}
           onChange={(e) => {
             setHidden(e.target.checked);
-            setSaved(false);
           }}
           className="h-4 w-4"
         />
@@ -86,7 +85,6 @@ function Controls({
           value={customUrl}
           onChange={(e) => {
             setCustomUrl(e.target.value);
-            setSaved(false);
           }}
         />
         <p className="text-xs text-muted-foreground">
@@ -98,11 +96,6 @@ function Controls({
         <Button type="submit" size="sm" disabled={save.isPending}>
           {save.isPending ? "Saving…" : "Save photo"}
         </Button>
-        {saved ? (
-          <span className="text-xs text-muted-foreground" role="status">
-            Saved
-          </span>
-        ) : null}
         {error ? (
           <span className="text-xs text-destructive" role="alert">
             {error}

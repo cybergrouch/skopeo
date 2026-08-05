@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Card,
@@ -34,26 +35,27 @@ export function StandingsCalculationSection({
   const [preview, setPreview] = useState<StandingsCalculationResponse | null>(
     null,
   );
-  const [committed, setCommitted] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   const calculate = usePostApiV1StandingsCalculations({
     mutation: {
       onSuccess: (data) => {
-        setError(null);
         if (data.dryRun) {
           setPreview(data);
-          setCommitted(null);
         } else {
           setPreview(null);
-          setCommitted(data.groupsComputed);
+          toast.success(
+            `Published a Points snapshot with ${data.groupsComputed} group${plural(data.groupsComputed, "s")}.`,
+          );
           // The published snapshot changes what Points-mode standings serve (#424/#428).
           queryClient.invalidateQueries({
             queryKey: getGetApiV1StandingsQueryKey(),
           });
         }
       },
-      onError: () => setError("Could not run the standings calculation. Try again."),
+      onError: () =>
+        toast.error("Could not run the standings calculation. Try again.", {
+          duration: 8000,
+        }),
     },
   });
 
@@ -124,18 +126,6 @@ export function StandingsCalculationSection({
               </div>
             ) : null}
 
-            {committed !== null ? (
-              <p className="text-sm text-foreground" role="status">
-                Published a Points snapshot with {committed} group
-                {plural(committed, "s")}.
-              </p>
-            ) : null}
-
-            {error ? (
-              <p className="text-sm text-destructive" role="alert">
-                {error}
-              </p>
-            ) : null}
           </>
         )}
       </CardContent>

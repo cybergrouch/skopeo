@@ -6,6 +6,12 @@ import { SeedingTab } from './SeedingTab'
 import { seedingCsv } from '@/lib/seedingCsv'
 import type { SeedingEntryResponse } from '@/api/generated/model'
 
+const { toastSuccess, toastError } = vi.hoisted(() => ({
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
+}))
+vi.mock('sonner', () => ({ toast: { success: toastSuccess, error: toastError } }))
+
 const {
   useGetApiV1PlayerLists,
   useGetApiV1PlayerListsId,
@@ -308,7 +314,11 @@ describe('SeedingTab', () => {
     await user.click(screen.getByRole('button', { name: 'Search' }))
     await user.click(screen.getByRole('checkbox', { name: /New Player/ }))
     await user.click(screen.getByRole('button', { name: 'Add to List' }))
-    expect(await screen.findByText("Couldn't add the selected players.")).toBeInTheDocument()
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith("Couldn't add the selected players.", {
+        duration: 8000,
+      }),
+    )
   })
 
   it('removes a member', async () => {

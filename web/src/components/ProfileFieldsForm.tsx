@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -43,7 +44,6 @@ function Fields({ userId, initial }: { userId: string; initial: InitialFields })
   const [lastName, setLastName] = useState(initial.lastName)
   const [sex, setSex] = useState(initial.sex)
   const [dateOfBirth, setDateOfBirth] = useState(initial.dateOfBirth)
-  const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const patch = usePatchApiV1UsersId()
@@ -52,7 +52,6 @@ function Fields({ userId, initial }: { userId: string; initial: InitialFields })
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
-    setSaved(false)
     setError(null)
     const display = displayName.trim()
     if (!display) {
@@ -80,9 +79,9 @@ function Fields({ userId, initial }: { userId: string; initial: InitialFields })
         queryClient.invalidateQueries({ queryKey: getGetApiV1UsersMeQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getGetApiV1UsersUserIdNamesQueryKey(userId) }),
       ])
-      setSaved(true)
+      toast.success('Saved')
     } catch {
-      setError('Could not save the profile. Check the values and try again.')
+      toast.error('Could not save the profile. Check the values and try again.', { duration: 8000 })
     }
   }
 
@@ -95,7 +94,6 @@ function Fields({ userId, initial }: { userId: string; initial: InitialFields })
           value={displayName}
           onChange={(e) => {
             setDisplayName(e.target.value)
-            setSaved(false)
           }}
         />
       </div>
@@ -107,7 +105,6 @@ function Fields({ userId, initial }: { userId: string; initial: InitialFields })
             value={firstName}
             onChange={(e) => {
               setFirstName(e.target.value)
-              setSaved(false)
             }}
           />
         </div>
@@ -118,7 +115,6 @@ function Fields({ userId, initial }: { userId: string; initial: InitialFields })
             value={lastName}
             onChange={(e) => {
               setLastName(e.target.value)
-              setSaved(false)
             }}
           />
         </div>
@@ -133,7 +129,6 @@ function Fields({ userId, initial }: { userId: string; initial: InitialFields })
           value={sex}
           onChange={(e) => {
             setSex(e.target.value)
-            setSaved(false)
           }}
           className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
         >
@@ -150,7 +145,6 @@ function Fields({ userId, initial }: { userId: string; initial: InitialFields })
           value={dateOfBirth}
           onChange={(e) => {
             setDateOfBirth(e.target.value)
-            setSaved(false)
           }}
         />
       </div>
@@ -158,11 +152,6 @@ function Fields({ userId, initial }: { userId: string; initial: InitialFields })
         <Button type="submit" size="sm" disabled={busy}>
           {busy ? 'Saving…' : 'Save profile'}
         </Button>
-        {saved ? (
-          <span className="text-xs text-muted-foreground" role="status">
-            Saved
-          </span>
-        ) : null}
         {error ? (
           <span className="text-xs text-destructive" role="alert">
             {error}

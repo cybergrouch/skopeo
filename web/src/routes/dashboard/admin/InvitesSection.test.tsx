@@ -4,6 +4,12 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { InvitesSection } from './InvitesSection'
 
+const { toastSuccess, toastError } = vi.hoisted(() => ({
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
+}))
+vi.mock('sonner', () => ({ toast: { success: toastSuccess, error: toastError } }))
+
 const {
   useGetApiV1Invites,
   createMutate,
@@ -76,7 +82,12 @@ describe('InvitesSection', () => {
     renderSection()
     await user.type(screen.getByLabelText('Email'), 'new@x.dev')
     await user.click(screen.getByRole('button', { name: 'Send invite' }))
-    expect(await screen.findByText(/could not send the invite/i)).toBeInTheDocument()
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(
+        expect.stringMatching(/could not send the invite/i),
+        { duration: 8000 },
+      ),
+    )
   })
 
   it('shows the existing-account message and does not send when the API returns 409 (#132)', async () => {
@@ -85,9 +96,12 @@ describe('InvitesSection', () => {
     renderSection()
     await user.type(screen.getByLabelText('Email'), 'taken@x.dev')
     await user.click(screen.getByRole('button', { name: 'Send invite' }))
-    expect(
-      await screen.findByText(/an account already exists with this email/i),
-    ).toBeInTheDocument()
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(
+        expect.stringMatching(/an account already exists with this email/i),
+        { duration: 8000 },
+      ),
+    )
     // The invite link is never sent when the address is already taken.
     expect(sendSignInLink).not.toHaveBeenCalled()
   })
@@ -123,7 +137,12 @@ describe('InvitesSection', () => {
     const user = userEvent.setup()
     renderSection()
     await user.click(screen.getByRole('button', { name: 'Resend' }))
-    expect(await screen.findByText(/could not resend the invite/i)).toBeInTheDocument()
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(
+        expect.stringMatching(/could not resend the invite/i),
+        { duration: 8000 },
+      ),
+    )
   })
 
   it('does not offer resend/revoke on an accepted invite', () => {

@@ -10,6 +10,12 @@ const { useGet, usePut, putMutate } = vi.hoisted(() => ({
   putMutate: vi.fn(),
 }))
 
+const { toastSuccess, toastError } = vi.hoisted(() => ({
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
+}))
+vi.mock('sonner', () => ({ toast: { success: toastSuccess, error: toastError } }))
+
 vi.mock('@/api/generated/settings/settings', () => ({
   useGetApiV1SettingsStandingsSource: useGet,
   usePutApiV1SettingsStandingsSource: usePut,
@@ -70,7 +76,7 @@ describe('StandingsSourceSection', () => {
     await user.click(screen.getByRole('button', { name: 'Save source' }))
 
     expect(putMutate).toHaveBeenCalledWith({ data: { source: 'POINTS' } })
-    expect(screen.getByRole('status')).toHaveTextContent('Saved')
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Saved'))
   })
 
   it('defaults to RATING and disables the select while the setting is loading', () => {
@@ -89,6 +95,11 @@ describe('StandingsSourceSection', () => {
     const user = userEvent.setup()
     renderSection()
     await user.click(screen.getByRole('button', { name: 'Save source' }))
-    expect(screen.getByRole('alert')).toHaveTextContent('Could not set the standings source')
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(
+        'Could not set the standings source. Try again.',
+        { duration: 8000 },
+      ),
+    )
   })
 })

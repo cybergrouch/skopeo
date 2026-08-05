@@ -5,6 +5,12 @@ import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ClaimTab } from "./ClaimTab";
 
+const { toastSuccess, toastError } = vi.hoisted(() => ({
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
+}));
+vi.mock("sonner", () => ({ toast: { success: toastSuccess, error: toastError } }));
+
 const { claimMutate, claimState } = vi.hoisted(() => ({
   claimMutate: vi.fn(),
   claimState: { isPending: false },
@@ -71,9 +77,11 @@ describe("ClaimTab", () => {
     await user.type(screen.getByLabelText("Claim code"), "OLD-CODE");
     await user.click(screen.getByRole("button", { name: "Claim account" }));
 
-    expect(
-      await screen.findByText("This claim code has expired."),
-    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith("This claim code has expired.", {
+        duration: 8000,
+      }),
+    );
     // Still on the form, not the success view.
     expect(screen.queryByText("Account claimed")).not.toBeInTheDocument();
   });
@@ -84,9 +92,12 @@ describe("ClaimTab", () => {
     renderTab();
     await user.type(screen.getByLabelText("Claim code"), "BAD");
     await user.click(screen.getByRole("button", { name: "Claim account" }));
-    expect(
-      await screen.findByText(/that code could not be used/i),
-    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(
+        expect.stringMatching(/that code could not be used/i),
+        { duration: 8000 },
+      ),
+    );
   });
 
   it("shows a pending label and disables the button while claiming", () => {

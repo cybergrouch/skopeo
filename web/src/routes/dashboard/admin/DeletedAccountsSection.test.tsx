@@ -4,11 +4,18 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { DeletedAccountsSection } from './DeletedAccountsSection'
 
-const { useGetApiV1UsersSearch, usePostApiV1UsersIdReactivate, reactivateMutate, items } = vi.hoisted(
+const {
+  useGetApiV1UsersSearch,
+  usePostApiV1UsersIdReactivate,
+  reactivateMutate,
+  toastError,
+  items,
+} = vi.hoisted(
   () => ({
     useGetApiV1UsersSearch: vi.fn(),
     usePostApiV1UsersIdReactivate: vi.fn(),
     reactivateMutate: vi.fn(),
+    toastError: vi.fn(),
     items: {
       current: [] as Array<{
         id: string
@@ -30,6 +37,7 @@ vi.mock('@/api/generated/users/users', () => ({
 vi.mock('@/hooks/useDebouncedValue', () => ({
   useDebouncedValue: (value: string) => value,
 }))
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: toastError } }))
 
 type SuccessOpts = { mutation: { onSuccess: () => void; onError?: (e: unknown) => void } }
 
@@ -114,6 +122,8 @@ describe('DeletedAccountsSection (#518)', () => {
     await user.type(screen.getByLabelText('Search'), 'go')
 
     await user.click(screen.getByRole('button', { name: 'Allow login for DEL111' }))
-    expect(screen.getByRole('alert')).toHaveTextContent('Could not re-allow login.')
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith('Could not re-allow login.', { duration: 8000 }),
+    )
   })
 })

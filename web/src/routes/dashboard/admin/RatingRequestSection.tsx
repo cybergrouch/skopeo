@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   Card,
@@ -28,7 +29,6 @@ function RequestRow({ request }: { request: RatingRequestResponse }) {
   const queryClient = useQueryClient()
   const [rating, setRating] = useState('')
   const [reason, setReason] = useState('')
-  const [error, setError] = useState<string | null>(null)
 
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: getGetApiV1RatingRequestsQueryKey() })
@@ -53,10 +53,12 @@ function RequestRow({ request }: { request: RatingRequestResponse }) {
             size="sm"
             disabled={rating.trim() === '' || approve.isPending}
             onClick={() => {
-              setError(null)
               approve.mutate(
                 { id: request.id, data: { rating: rating.trim() } },
-                { onError: () => setError('Could not approve. Check the rating value.') },
+                {
+                  onError: () =>
+                    toast.error('Could not approve. Check the rating value.', { duration: 8000 }),
+                },
               )
             }}
           >
@@ -77,10 +79,12 @@ function RequestRow({ request }: { request: RatingRequestResponse }) {
             size="sm"
             disabled={reason.trim() === '' || deny.isPending}
             onClick={() => {
-              setError(null)
               deny.mutate(
                 { id: request.id, data: { reason: reason.trim() } },
-                { onError: () => setError('Could not deny the request.') },
+                {
+                  onError: () =>
+                    toast.error('Could not deny the request.', { duration: 8000 }),
+                },
               )
             }}
           >
@@ -88,11 +92,6 @@ function RequestRow({ request }: { request: RatingRequestResponse }) {
           </Button>
         </div>
       </div>
-      {error ? (
-        <p className="text-destructive" role="alert">
-          {error}
-        </p>
-      ) : null}
     </li>
   )
 }

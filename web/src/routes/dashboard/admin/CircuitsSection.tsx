@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   Card,
   CardContent,
@@ -51,7 +52,7 @@ export function CircuitsSection() {
       setName("");
       invalidate();
     } catch {
-      setError("Could not create the circuit.");
+      toast.error("Could not create the circuit.", { duration: 8000 });
     }
   }
 
@@ -132,7 +133,7 @@ function CircuitRow({
       setEditing(false);
       onChange();
     } catch {
-      setError("Could not rename the circuit.");
+      toast.error("Could not rename the circuit.", { duration: 8000 });
     }
   }
 
@@ -142,7 +143,7 @@ function CircuitRow({
       await del.mutateAsync({ id: circuit.id });
       onChange();
     } catch {
-      setError("Could not delete the circuit.");
+      toast.error("Could not delete the circuit.", { duration: 8000 });
     }
   }
 

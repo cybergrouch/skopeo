@@ -4,13 +4,25 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { DuplicatesSection } from './DuplicatesSection'
 
-const { useGetApiV1UsersIdDuplicates, markMutate, deleteMutate, replaceMutate, state } = vi.hoisted(() => ({
+const {
+  useGetApiV1UsersIdDuplicates,
+  markMutate,
+  deleteMutate,
+  replaceMutate,
+  toastSuccess,
+  toastError,
+  state,
+} = vi.hoisted(() => ({
   useGetApiV1UsersIdDuplicates: vi.fn(),
   markMutate: vi.fn(),
   deleteMutate: vi.fn(),
   replaceMutate: vi.fn(),
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
   state: { markFail: false, replaceFail: false, pending: false },
 }))
+
+vi.mock('sonner', () => ({ toast: { success: toastSuccess, error: toastError } }))
 
 vi.mock('@/api/generated/users/users', () => ({
   useGetApiV1UsersIdDuplicates,
@@ -102,7 +114,7 @@ describe('DuplicatesSection', () => {
         data: { duplicateIds: [DUPLICATE] },
       }),
     )
-    expect(screen.getByText('Marked as duplicates.')).toBeInTheDocument()
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Marked as duplicates.'))
   })
 
   it('shows an error when marking fails', async () => {
@@ -112,7 +124,12 @@ describe('DuplicatesSection', () => {
     await selectCanonicalAndDuplicate(user)
     await user.click(screen.getByRole('button', { name: 'Mark as duplicates' }))
 
-    expect(await screen.findByText(/could not mark the selected profiles/i)).toBeInTheDocument()
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(
+        'Could not mark the selected profiles as duplicates.',
+        { duration: 8000 },
+      ),
+    )
   })
 
   it('reflects the pending state for marking and restoring', async () => {
@@ -182,7 +199,12 @@ describe('DuplicatesSection', () => {
     await user.click(screen.getByRole('button', { name: 'Replace account' }))
     await user.click(screen.getByRole('button', { name: /confirm — delete & replace/i }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/could not replace the account/i)
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(
+        'Could not replace the account. The canonical must be empty (no rating or matches of its own).',
+        { duration: 8000 },
+      ),
+    )
   })
 
   it('shows the pending label while a replace is in flight (#124)', async () => {

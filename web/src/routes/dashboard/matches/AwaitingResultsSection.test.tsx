@@ -6,6 +6,12 @@ import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AwaitingResultsSection, RecordedResultsSection } from './AwaitingResultsSection'
 
+const { toastSuccess, toastError } = vi.hoisted(() => ({
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
+}))
+vi.mock('sonner', () => ({ toast: { success: toastSuccess, error: toastError } }))
+
 const {
   useGetApiV1Matches,
   useGetApiV1Users,
@@ -310,7 +316,12 @@ describe('AwaitingResultsSection', () => {
 
     await user.click(screen.getByRole('button', { name: 'Record result' }))
 
-    expect(await screen.findByText(/Could not save the result/i)).toBeInTheDocument()
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(
+        expect.stringMatching(/Could not save the result/i),
+        expect.anything(),
+      ),
+    )
   })
 
   it('deletes a fixture after a confirm step', async () => {
@@ -353,7 +364,12 @@ describe('AwaitingResultsSection', () => {
     await user.click(screen.getByRole('button', { name: 'Delete fixture' }))
     await user.click(screen.getByRole('button', { name: 'Confirm delete' }))
 
-    expect(await screen.findByText(/Could not delete the fixture/i)).toBeInTheDocument()
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(
+        expect.stringMatching(/Could not delete the fixture/i),
+        expect.anything(),
+      ),
+    )
     // The confirm step resets so the row returns to its default actions.
     expect(screen.getByRole('button', { name: 'Delete fixture' })).toBeInTheDocument()
   })

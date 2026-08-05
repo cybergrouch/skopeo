@@ -33,6 +33,12 @@ const {
   },
 }));
 
+const { toastSuccess, toastError } = vi.hoisted(() => ({
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
+}));
+vi.mock("sonner", () => ({ toast: { success: toastSuccess, error: toastError } }));
+
 vi.mock("@/api/generated/clubs/clubs", () => ({
   useGetApiV1Clubs,
   getGetApiV1ClubsQueryKey: () => ["clubs"],
@@ -243,8 +249,10 @@ describe("ClubsSection", () => {
     renderSection();
     await user.type(screen.getByLabelText("New club"), "Bad Club");
     await user.click(screen.getByRole("button", { name: "Create" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Could not create the club.",
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith("Could not create the club.", {
+        duration: 8000,
+      }),
     );
   });
 
@@ -323,8 +331,10 @@ describe("ClubsSection", () => {
 
     await user.click(screen.getByRole("button", { name: "Edit" }));
     await user.click(screen.getByRole("button", { name: "Save" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Could not rename the club.",
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith("Could not rename the club.", {
+        duration: 8000,
+      }),
     );
   });
 
@@ -390,8 +400,10 @@ describe("ClubsSection", () => {
 
     await user.click(screen.getByRole("button", { name: "Delete" }));
     await user.click(screen.getByRole("button", { name: "Confirm delete" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Could not delete the club.",
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith("Could not delete the club.", {
+        duration: 8000,
+      }),
     );
   });
 
@@ -438,6 +450,10 @@ describe("ClubsSection", () => {
     renderSection();
 
     await user.click(screen.getByRole("checkbox", { name: "Tournaments sanctioned" }));
-    expect(await screen.findByText("Could not update the sanction setting.")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith("Could not update the sanction setting.", {
+        duration: 8000,
+      }),
+    );
   });
 });

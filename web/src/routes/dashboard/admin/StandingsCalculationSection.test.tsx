@@ -1,15 +1,21 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StandingsCalculationSection } from "./StandingsCalculationSection";
 import { Capability } from "@/auth/capabilities";
 import type { StandingsCalculationResponse } from "@/api/generated/model";
 
-const { usePostApiV1StandingsCalculations, calcMutate } = vi.hoisted(() => ({
-  usePostApiV1StandingsCalculations: vi.fn(),
-  calcMutate: vi.fn(),
-}));
+const { usePostApiV1StandingsCalculations, calcMutate, toastSuccess, toastError } = vi.hoisted(
+  () => ({
+    usePostApiV1StandingsCalculations: vi.fn(),
+    calcMutate: vi.fn(),
+    toastSuccess: vi.fn(),
+    toastError: vi.fn(),
+  }),
+);
+
+vi.mock("sonner", () => ({ toast: { success: toastSuccess, error: toastError } }));
 
 type MutationOpts = {
   mutation: {
@@ -117,20 +123,25 @@ describe("StandingsCalculationSection", () => {
     await user.click(screen.getByRole("button", { name: "Commit" }));
 
     expect(calcMutate).toHaveBeenLastCalledWith({ data: { dryRun: false } });
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Published a Points snapshot with 2 groups",
+    await waitFor(() =>
+      expect(toastSuccess).toHaveBeenCalledWith(
+        "Published a Points snapshot with 2 groups.",
+      ),
     );
   });
 
-  it("shows inline error feedback when the calculation fails", async () => {
+  it("shows an error toast when the calculation fails", async () => {
     mockCalc(true);
     const user = userEvent.setup();
     renderSection([Capability.ADMINISTRATOR]);
 
     await user.click(screen.getByRole("button", { name: "Preview" }));
 
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      "Could not run the standings calculation",
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(
+        "Could not run the standings calculation. Try again.",
+        { duration: 8000 },
+      ),
     );
   });
 

@@ -12,6 +12,8 @@ const {
   useGetApiV1Events,
   setPriorityMutate,
   calculateMutate,
+  toastSuccess,
+  toastError,
   dnd,
 } = vi.hoisted(() => ({
   useGetApiV1Matches: vi.fn(),
@@ -20,8 +22,12 @@ const {
   useGetApiV1Events: vi.fn(),
   setPriorityMutate: vi.fn(),
   calculateMutate: vi.fn(),
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
   dnd: { onDragEnd: undefined as undefined | ((e: unknown) => void) },
 }))
+
+vi.mock('sonner', () => ({ toast: { success: toastSuccess, error: toastError } }))
 
 vi.mock('@/api/generated/matches/matches', () => ({
   useGetApiV1Matches,
@@ -334,9 +340,7 @@ describe('PendingCalculationSection', () => {
 
     await user.click(screen.getByRole('button', { name: 'Commit' }))
     await waitFor(() =>
-      expect(
-        screen.getByText('Committed ratings for 1 match.'),
-      ).toBeInTheDocument(),
+      expect(toastSuccess).toHaveBeenCalledWith('Committed ratings for 1 match.'),
     )
     expect(screen.queryByTestId('calculation-preview')).not.toBeInTheDocument()
   })
@@ -479,27 +483,36 @@ describe('PendingCalculationSection', () => {
     expect(screen.queryByTestId('calculation-preview')).not.toBeInTheDocument()
   })
 
-  it('surfaces the backend guard message when a calculation errors (#479)', () => {
-    usePostApiV1RatingsCalculations.mockImplementation(() => ({
-      isPending: false,
-      isError: true,
-      error: { response: { data: { message: 'Older pending events must be included.' } } },
-      mutate: vi.fn(),
-    }))
+  it('surfaces the backend guard message as a toast when a calculation errors (#479)', async () => {
+    const err = { response: { data: { message: 'Older pending events must be included.' } } }
+    usePostApiV1RatingsCalculations.mockImplementation(
+      (options: { mutation: { onError: (e: unknown) => void } }) => ({
+        isPending: false,
+        mutate: () => options.mutation.onError(err),
+      }),
+    )
+    const user = userEvent.setup()
     renderSection()
-    expect(screen.getByTestId('calculation-guard-error')).toHaveTextContent(
-      'Older pending events must be included.',
+    await user.click(screen.getByRole('button', { name: 'Preview' }))
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith('Older pending events must be included.', {
+        duration: 8000,
+      }),
     )
   })
 
-  it('falls back to a generic message when a calculation error has no body (#479)', () => {
-    usePostApiV1RatingsCalculations.mockImplementation(() => ({
-      isPending: false,
-      isError: true,
-      error: new Error('network down'), // no response.data.message → the `??` fallback arm.
-      mutate: vi.fn(),
-    }))
+  it('falls back to a generic message when a calculation error has no body (#479)', async () => {
+    usePostApiV1RatingsCalculations.mockImplementation(
+      (options: { mutation: { onError: (e: unknown) => void } }) => ({
+        isPending: false,
+        mutate: () => options.mutation.onError(new Error('network down')), // → the `??` fallback arm.
+      }),
+    )
+    const user = userEvent.setup()
     renderSection()
-    expect(screen.getByTestId('calculation-guard-error')).toHaveTextContent('Calculation failed.')
+    await user.click(screen.getByRole('button', { name: 'Preview' }))
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith('Calculation failed.', { duration: 8000 }),
+    )
   })
 })

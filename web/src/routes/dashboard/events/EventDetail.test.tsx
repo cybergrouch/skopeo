@@ -1,9 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { EventDetail } from './EventDetail'
+
+const { toastSuccess, toastError } = vi.hoisted(() => ({
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
+}))
+vi.mock('sonner', () => ({ toast: { success: toastSuccess, error: toastError } }))
 
 const {
   useGetApiV1EventsId,
@@ -599,7 +605,12 @@ describe('EventDetail', () => {
     await user.selectOptions(screen.getByLabelText('Player 2'), 'u2')
     await user.type(screen.getByLabelText('Date'), '2026-03-02')
     await user.click(screen.getByRole('button', { name: 'Schedule fixture' }))
-    expect(screen.getByText(/Could not schedule the fixture/)).toBeInTheDocument()
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(
+        expect.stringMatching(/Could not schedule the fixture/),
+        expect.anything(),
+      ),
+    )
     expect(createFixtureMutate.mock.calls[0][0].data.matchType).toBe('LEAGUE_PLAY')
   })
 
@@ -608,7 +619,9 @@ describe('EventDetail', () => {
     const user = userEvent.setup()
     renderDetail()
     await user.click(screen.getByRole('button', { name: 'Search players…' }))
-    expect(screen.getByText('Could not add that participant.')).toBeInTheDocument()
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith('Could not add that participant.', expect.anything()),
+    )
   })
 
   it('lists join requests and approves or holds them, keeping requests off the roster (#201)', async () => {
@@ -694,7 +707,9 @@ describe('EventDetail', () => {
     await user.click(screen.getByRole('button', { name: 'Delete event' }))
     await user.click(screen.getByRole('button', { name: 'Confirm delete' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Could not delete this event.')
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith('Could not delete this event.', expect.anything()),
+    )
   })
 
   it('surfaces the server guidance when a delete is refused (#243)', async () => {
@@ -713,7 +728,12 @@ describe('EventDetail', () => {
     await user.click(screen.getByRole('button', { name: 'Delete event' }))
     await user.click(screen.getByRole('button', { name: 'Confirm delete' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('recorded matches first')
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(
+        expect.stringContaining('recorded matches first'),
+        expect.anything(),
+      ),
+    )
     expect(onBack).not.toHaveBeenCalled()
   })
 
@@ -751,7 +771,7 @@ describe('EventDetail', () => {
     await user.click(screen.getByRole('button', { name: 'Rename' }))
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Nope')
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('Nope', expect.anything()))
   })
 
   it('shows a busy label while the rename is in flight', async () => {
@@ -816,7 +836,9 @@ describe('EventDetail', () => {
 
     await user.selectOptions(screen.getByLabelText('Club'), 'c1')
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Club not found')
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith('Club not found', expect.anything()),
+    )
   })
 
   it('blocks a HOST from entering data on an ended event (#310)', () => {
@@ -932,7 +954,9 @@ describe('EventDetail', () => {
     await user.click(screen.getByRole('button', { name: 'Finalize event' }))
     await user.click(screen.getByRole('button', { name: 'Confirm finalize' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Event is already finalized')
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith('Event is already finalized', expect.anything()),
+    )
   })
 
   // ---- Un-finalize (#477) ----
@@ -983,7 +1007,12 @@ describe('EventDetail', () => {
     await user.click(screen.getByRole('button', { name: 'Un-finalize event' }))
     await user.click(screen.getByRole('button', { name: 'Confirm un-finalize (revokes points)' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('This event has already-rated matches')
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(
+        'This event has already-rated matches',
+        expect.anything(),
+      ),
+    )
   })
 
   it('shows an un-finalizing label while the un-finalize mutation is pending (#477)', async () => {
@@ -1042,8 +1071,11 @@ describe('EventDetail', () => {
       }),
     )
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'later matches have already been rated on top of them',
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(
+        expect.stringContaining('later matches have already been rated on top of them'),
+        expect.anything(),
+      ),
     )
   })
 

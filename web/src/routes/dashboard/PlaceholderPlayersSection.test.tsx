@@ -20,6 +20,9 @@ vi.mock("@/api/generated/users/users", () => ({
   }),
 }));
 
+const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }));
+vi.mock("sonner", () => ({ toast: { error: toastError } }));
+
 function renderSection(capabilities: string[] = ["ADMINISTRATOR"]) {
   return render(
     <MemoryRouter>
@@ -202,16 +205,19 @@ describe("PlaceholderPlayersSection", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("shows an inline error when generation fails", async () => {
+  it("shows an error toast when generation fails", async () => {
     generateMutate.mockRejectedValue(new Error("boom"));
     const user = userEvent.setup();
     renderSection(["ADMINISTRATOR"]);
     await user.click(
       screen.getByRole("button", { name: "Generate claim code" }),
     );
-    expect(
-      await screen.findByText(/could not generate a claim code/i),
-    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(
+        "Could not generate a claim code. Try again.",
+        { duration: 8000 },
+      ),
+    );
   });
 
   it("shows an empty state when there are no placeholders", () => {

@@ -1,7 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PointsSchedulesSection } from "./PointsSchedulesSection";
+
+const { toastSuccess, toastError } = vi.hoisted(() => ({
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
+}));
+vi.mock("sonner", () => ({ toast: { success: toastSuccess, error: toastError } }));
 
 const { useGetOpenPlay, useGetTournament, putOpenPlay, putTournament, shouldFail, pendingSave } = vi.hoisted(() => ({
   useGetOpenPlay: vi.fn(),
@@ -13,7 +19,7 @@ const { useGetOpenPlay, useGetTournament, putOpenPlay, putTournament, shouldFail
 }));
 
 // The PUT mocks drive the real mutation callbacks: on success they record the payload and fire
-// onSuccess (→ "Saved"); when shouldFail is set they fire onError (→ the inline error).
+// onSuccess (→ toast.success); when shouldFail is set they fire onError (→ toast.error).
 vi.mock("@/api/generated/settings/settings", () => ({
   useGetApiV1SettingsPointsOpenPlay: useGetOpenPlay,
   useGetApiV1SettingsPointsTournament: useGetTournament,
@@ -89,7 +95,7 @@ describe("PointsSchedulesSection", () => {
     expect((screen.getByLabelText("unsanctioned 3rd points") as HTMLInputElement).value).toBe("20");
   });
 
-  it("edits open-play winner, loser and validity, saves, and confirms (diverse increments allowed)", () => {
+  it("edits open-play winner, loser and validity, saves, and confirms (diverse increments allowed)", async () => {
     renderSection();
     // Fibonacci-style dominance on a winner cell, a loser edit, and the study's 3-month validity.
     fireEvent.change(screen.getByLabelText("Upset margin 2 winner points"), { target: { value: "13" } });
@@ -106,8 +112,8 @@ describe("PointsSchedulesSection", () => {
       sent.rows.find((r: { relation: string; margin: number }) => r.relation === "FAVORITE" && r.margin === 1).loserPoints,
     ).toBe(2);
     expect(sent.validityDays).toBe(91);
-    // onSuccess fired → the "Saved" status shows.
-    expect(screen.getAllByRole("status").some((el) => el.textContent === "Saved")).toBe(true);
+    // onSuccess fired → a success toast shows.
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith("Saved"));
   });
 
   it("edits tournament sanctioned, unsanctioned and validity, then saves", () => {
@@ -124,14 +130,16 @@ describe("PointsSchedulesSection", () => {
     expect(sent.validityDays).toBe(180);
   });
 
-  it("shows an inline error when either save is unauthorized", () => {
+  it("shows an error toast when either save is unauthorized", async () => {
     shouldFail.value = true;
     renderSection();
     fireEvent.click(saveButtons()[0]); // open-play → onError
     fireEvent.click(saveButtons()[1]); // tournament → onError
-    const alerts = screen.getAllByRole("alert");
-    expect(alerts.length).toBeGreaterThanOrEqual(2);
-    expect(alerts[0].textContent).toMatch(/administrator access/i);
+    await waitFor(() => expect(toastError).toHaveBeenCalledTimes(2));
+    expect(toastError).toHaveBeenCalledWith(
+      expect.stringMatching(/administrator access/i),
+      { duration: 8000 },
+    );
     expect(putOpenPlay).not.toHaveBeenCalled();
     expect(putTournament).not.toHaveBeenCalled();
   });

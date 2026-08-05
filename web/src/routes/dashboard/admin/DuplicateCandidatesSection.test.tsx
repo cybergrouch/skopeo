@@ -4,15 +4,23 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { DuplicateCandidatesSection } from './DuplicateCandidatesSection'
 
-const { useGetApiV1DuplicateCandidates, flagMutate, confirmMutate, dismissMutate, state } = vi.hoisted(
-  () => ({
-    useGetApiV1DuplicateCandidates: vi.fn(),
-    flagMutate: vi.fn(),
-    confirmMutate: vi.fn(),
-    dismissMutate: vi.fn(),
-    state: { flagFail: false },
-  }),
-)
+const {
+  useGetApiV1DuplicateCandidates,
+  flagMutate,
+  confirmMutate,
+  dismissMutate,
+  toastError,
+  state,
+} = vi.hoisted(() => ({
+  useGetApiV1DuplicateCandidates: vi.fn(),
+  flagMutate: vi.fn(),
+  confirmMutate: vi.fn(),
+  dismissMutate: vi.fn(),
+  toastError: vi.fn(),
+  state: { flagFail: false },
+}))
+
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: toastError } }))
 
 vi.mock('@/api/generated/duplicates/duplicates', () => ({
   useGetApiV1DuplicateCandidates,
@@ -130,7 +138,12 @@ describe('DuplicateCandidatesSection', () => {
     await user.click(screen.getByRole('button', { name: 'pick:First account' }))
     await user.click(screen.getByRole('button', { name: 'pick:Second account' }))
     await user.click(screen.getByRole('button', { name: 'Flag as candidate' }))
-    expect(await screen.findByText(/could not flag the pair/i)).toBeInTheDocument()
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(
+        'Could not flag the pair (they must be two different users).',
+        { duration: 8000 },
+      ),
+    )
 
     // Both selections remain (the flag failed); each "Change" clears one.
     await user.click(screen.getAllByRole('button', { name: 'Change' })[0]) // clears the first account
