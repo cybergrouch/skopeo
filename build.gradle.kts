@@ -11,7 +11,7 @@ plugins {
 }
 
 group = "org.skopeo"
-version = "1.3.4-SNAPSHOT"
+version = "1.3.4"
 description = "Skopeo - Performance-based tennis rating system"
 
 application {
