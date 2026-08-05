@@ -166,11 +166,10 @@ class PlayerService(
                     .distinctBy { it.id }
                     .sortedByDescending { it.matchDate }
             val ratedMatchIds = played.filter { it.ratedAt != null }.map { it.id }
-            val levelByMatchAndUser =
-                ratings
-                    .historyForMatches(matchIds = ratedMatchIds)
-                    .groupBy { it.matchId }
-                    .mapValues { (_, rows) -> rows.associate { it.userId to it.previousLevel } }
+            // Raw at-the-time NTRP is a raw-NTRP reveal (#583/#654): only an admin not previewing as a
+            // non-admin sees it; everyone else gets the band ([levelAtMatch]) only.
+            val showRaw = token?.let { users.findByFirebaseUid(firebaseUid = it.uid) }.canSeeRawRatingOrFalse()
+            val atMatchByMatch = atMatchRatings(ratedMatchIds = ratedMatchIds, showRaw = showRaw)
             val participantByMatch = played.associate { it.id to participantOf(match = it, selfIds = selfIds) }
             // Resolve every other participant (partners + opponents) across all matches in one lookup.
             val otherIds =
@@ -191,7 +190,7 @@ class PlayerService(
                         match = match,
                         playerId = participant,
                         players = participantsById,
-                        levels = levelByMatchAndUser[match.id],
+                        atMatch = atMatchByMatch[match.id],
                         confidences = confidenceById,
                     )
                 }
@@ -297,9 +296,12 @@ class PlayerService(
         code: String,
     ): Either<ServiceError, List<RatingHistoryResponse>> =
         either {
-            // ADMINISTRATOR-only: the owner reads their own history via the user-id endpoint (#73).
+            // Raw rating history is a raw-NTRP reveal (#583/#654): ADMINISTRATOR only, AND not while that
+            // admin previews as a non-admin (the per-admin toggle). A previewing admin is treated exactly
+            // like a non-admin here — Forbidden — so the preview faithfully hides raw ratings. The owner
+            // reads their own history via the user-id endpoint (#73).
             val caller = users.findByFirebaseUid(firebaseUid = token.uid)
-            ensure(condition = caller != null && Capability.ADMINISTRATOR in caller.capabilities) { ServiceError.Forbidden() }
+            ensure(condition = caller.canSeeRawRatingOrFalse()) { ServiceError.Forbidden() }
             val user = resolve(code = code).bind()
             ratings.historyByUser(userId = user.id).map { it.toResponse() }
         }
@@ -402,7 +404,7 @@ class PlayerService(
         match: Match,
         playerId: UUID,
         players: Map<UUID, User>,
-        levels: Map<UUID, String?>?,
+        atMatch: AtMatchRatings?,
         confidences: Map<UUID, String>,
     ): PlayerMatchHistoryEntry {
         val onTeam1 = playerId in match.team1.userIds
@@ -415,7 +417,8 @@ class PlayerService(
                 publicCode = user.publicCode,
                 displayName = user.displayName(),
                 photoUrl = user.photoUrl,
-                levelAtMatch = levels?.get(key = userId),
+                levelAtMatch = atMatch?.levels?.get(key = userId),
+                ratingAtMatch = atMatch?.raw?.get(key = userId),
                 confidence = confidences[userId],
                 isPlaceholder = user.placeholder,
                 isDeleted = user.isDeleted(),
@@ -437,11 +440,34 @@ class PlayerService(
                 },
             partners = playerTeam.userIds.filterNot { it == playerId }.map(transform = ::participant),
             opponents = opposingTeam.userIds.map(transform = ::participant),
-            playerLevelAtMatch = levels?.get(key = playerId),
+            playerLevelAtMatch = atMatch?.levels?.get(key = playerId),
+            playerRatingAtMatch = atMatch?.raw?.get(key = playerId),
             playerConfidence = confidences[playerId],
         )
     }
+
+    /**
+     * Per-match at-the-time rating lookups by user id (#654): the published [levels] band and — only when
+     * the viewer may see raw ratings ([showRaw]) — the [raw] NTRP value. Both come from each match's
+     * live rating-history rows; [raw] is null for a non-raw viewer so band-only leaves the API.
+     */
+    private fun atMatchRatings(
+        ratedMatchIds: List<UUID>,
+        showRaw: Boolean,
+    ): Map<UUID?, AtMatchRatings> =
+        ratings.historyForMatches(matchIds = ratedMatchIds).groupBy { it.matchId }.mapValues { (_, rows) ->
+            AtMatchRatings(
+                levels = rows.associate { it.userId to it.previousLevel },
+                raw = if (showRaw) rows.associate { it.userId to it.previousRating.toPlainString() } else null,
+            )
+        }
 }
+
+/** At-the-time NTRP for one match keyed by user id (#654): the band [levels] and the raw [raw] (raw-viewers only). */
+private class AtMatchRatings(
+    val levels: Map<UUID, String?>,
+    val raw: Map<UUID, String>?,
+)
 
 /** One decided match reduced to what the results summary needs (#276): format, month, and outcome. */
 private data class ResultRow(

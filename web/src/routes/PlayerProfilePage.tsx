@@ -18,7 +18,7 @@ import { PlayerStandingCard } from '@/components/PlayerStandingCard'
 import { PointsAuditCard } from '@/components/PointsAuditCard'
 import { ShareCard } from '@/components/ShareCard'
 import { PublicPageNav } from '@/components/PublicPageNav'
-import { canViewPointsAudit, isAdministrator } from '@/auth/capabilities'
+import { canSeeRawRatings, canViewPointsAudit } from '@/auth/capabilities'
 import { formatConfidence } from '@/lib/confidence'
 import { ConfidenceValue } from '@/components/ConfidenceValue'
 
@@ -33,11 +33,15 @@ export function PlayerProfilePage() {
   const player = query.data
 
   // Rating history is admin-only on the public profile (issue #73): load the viewer's own profile
-  // to check capability, then fetch the precise history only when they're an ADMINISTRATOR.
+  // to check capability, then fetch the precise history only when the viewer may see raw ratings — an
+  // ADMINISTRATOR who is not previewing as a non-admin (#583/#654), matching the backend reveal rule.
   const meQuery = useGetApiV1UsersMe()
-  const isAdmin = isAdministrator(meQuery.data?.capabilities)
+  const showRawRatings = canSeeRawRatings(
+    meQuery.data?.capabilities,
+    meQuery.data?.previewRatingsAsNonAdmin,
+  )
   const ratingHistoryQuery = useGetApiV1PlayersCodeRatingHistory(code, {
-    query: { enabled: isAdmin },
+    query: { enabled: showRawRatings },
   })
 
   // The active-points audit (#448) is owner-or-admin only: the viewer owns this profile when their own
@@ -204,7 +208,7 @@ export function PlayerProfilePage() {
           <WinLossCard code={player.publicCode} />
         ) : null}
 
-        {player && !player.isDisabled && isAdmin ? (
+        {player && !player.isDisabled && showRawRatings ? (
           <RatingHistoryCard
             entries={ratingHistoryQuery.data ?? []}
             isLoading={ratingHistoryQuery.isLoading}

@@ -5,6 +5,7 @@ import {
   canManageMatches,
   canManagePointsBudget,
   canRate,
+  canSeeRawRatings,
   hasCapability,
   isAdministrator,
   isResearcher,
@@ -30,6 +31,16 @@ describe('capabilities', () => {
     expect(isAdministrator([Capability.ADMINISTRATOR])).toBe(true)
     expect(isAdministrator([Capability.HOST])).toBe(false)
     expect(isAdministrator(undefined)).toBe(false)
+  })
+
+  it('canSeeRawRatings requires ADMINISTRATOR and not previewing as non-admin (#583/#654)', () => {
+    expect(canSeeRawRatings([Capability.ADMINISTRATOR], false)).toBe(true)
+    expect(canSeeRawRatings([Capability.ADMINISTRATOR], undefined)).toBe(true)
+    // Admin previewing as a non-admin no longer sees raw ratings.
+    expect(canSeeRawRatings([Capability.ADMINISTRATOR], true)).toBe(false)
+    // Non-admins never see raw ratings, regardless of the toggle.
+    expect(canSeeRawRatings([Capability.PLAYER], false)).toBe(false)
+    expect(canSeeRawRatings(undefined, false)).toBe(false)
   })
 
   it('canRate is true for raters and administrators (#106)', () => {

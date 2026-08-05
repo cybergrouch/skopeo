@@ -38,11 +38,25 @@ function NameList({ side }: { side: PlayerMatchHistoryEntry['opponents'] }) {
 }
 
 /**
- * Comma-separated NTRP bands at match time for a side, each with the participant's *current* rating
- * confidence appended (#343), e.g. "3.5 · 40%, 4.0 · 100%" (dash for any missing band).
+ * The at-the-time NTRP value to display: the raw rating when the API reveals it (a raw-rating viewer,
+ * #583/#654), otherwise the published band. Everyone else only ever receives the band.
+ */
+function ratingOrBand(
+  rating: string | null | undefined,
+  level: string | null | undefined,
+): string | null | undefined {
+  return rating ?? level
+}
+
+/**
+ * Comma-separated NTRP at match time for a side, each with the participant's *current* rating confidence
+ * appended (#343), e.g. "3.5 · 40%, 4.0 · 100%". Shows the raw rating for a raw-rating viewer (#654),
+ * else the band (dash for any missing value).
  */
 function bands(side: PlayerMatchHistoryEntry['opponents']): string {
-  return side.map((p) => bandWithConfidence(p.levelAtMatch, p.confidence)).join(', ')
+  return side
+    .map((p) => bandWithConfidence(ratingOrBand(p.ratingAtMatch, p.levelAtMatch), p.confidence))
+    .join(', ')
 }
 
 /**
@@ -89,8 +103,12 @@ export function MatchHistoryRow({ match }: { match: PlayerMatchHistoryEntry }) {
           </div>
           {match.rated ? (
             <div className="mt-1 text-muted-foreground">
-              NTRP {bandWithConfidence(match.playerLevelAtMatch, match.playerConfidence)} vs{' '}
-              {bands(match.opponents)} (at the time)
+              NTRP{' '}
+              {bandWithConfidence(
+                ratingOrBand(match.playerRatingAtMatch, match.playerLevelAtMatch),
+                match.playerConfidence,
+              )}{' '}
+              vs {bands(match.opponents)} (at the time)
             </div>
           ) : null}
           <PublicPageLink

@@ -33,6 +33,18 @@ export function isAdministrator(
 }
 
 /**
+ * Whether the viewer may see raw NTRP values (full precision), #583: ADMINISTRATOR and not previewing
+ * as a non-admin via the per-admin toggle. Mirrors the backend `User.canSeeRawRating` so the UI reveals
+ * raw ratings on exactly the same rule (e.g. the public-profile rating history, #654).
+ */
+export function canSeeRawRatings(
+  capabilities: readonly Capability[] | undefined,
+  previewRatingsAsNonAdmin: boolean | undefined,
+): boolean {
+  return isAdministrator(capabilities) && !previewRatingsAsNonAdmin;
+}
+
+/**
  * The Settings tab is for players managing their own account (#589): every signed-in user is a PLAYER,
  * so in practice this is always true — it's an explicit gate so the tab reads as player-owned.
  */
