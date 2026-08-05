@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Card,
@@ -37,15 +38,15 @@ export function CreatePlaceholderSection({
   const [sex, setSex] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [initialRating, setInitialRating] = useState("");
+  // Inline error is for synchronous field validation only; the create action's success/failure is
+  // surfaced as a dismissable toast (#661).
   const [error, setError] = useState<string | null>(null);
-  const [created, setCreated] = useState<string | null>(null);
   const canSetRating = canRate(capabilities);
 
   const create = usePostApiV1UsersPlaceholders();
 
   async function submit() {
     setError(null);
-    setCreated(null);
     const name = displayName.trim();
     if (name === "") {
       setError("A display name is required.");
@@ -69,13 +70,16 @@ export function CreatePlaceholderSection({
       void queryClient.invalidateQueries({
         queryKey: getGetApiV1UsersPlaceholdersQueryKey(),
       });
-      setCreated(name);
+      toast.success(`Created placeholder player “${name}”.`);
       setDisplayName("");
       setSex("");
       setDateOfBirth("");
       setInitialRating("");
     } catch {
-      setError("Could not create the placeholder player. Try again.");
+      // Errors linger longer (and can be dismissed) so the reason isn't missed.
+      toast.error("Could not create the placeholder player. Please try again.", {
+        duration: 8000,
+      });
     }
   }
 
@@ -158,11 +162,7 @@ export function CreatePlaceholderSection({
           <Button type="button" size="sm" onClick={submit} disabled={create.isPending}>
             {create.isPending ? "Creating…" : "Create placeholder"}
           </Button>
-          {created ? (
-            <span className="text-xs text-muted-foreground" role="status">
-              Created {created}
-            </span>
-          ) : null}
+          {/* Synchronous field-validation only; the create result is a toast (#661). */}
           {error ? (
             <span className="text-xs text-destructive" role="alert">
               {error}
