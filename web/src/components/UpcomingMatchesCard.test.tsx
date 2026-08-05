@@ -20,7 +20,7 @@ const matches = [
   {
     publicCode: 'M2',
     matchDate: '2026-07-25',
-    matchType: 'LEAGUE_MATCH',
+    matchType: 'TOURNAMENT',
     opponents: [{ displayName: null, publicCode: 'BOB222' }],
   },
   {

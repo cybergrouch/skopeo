@@ -24,7 +24,7 @@ const club = {
       name: 'Spring Open',
       startDate: '2026-05-01',
       endDate: '2026-05-03',
-      eventType: 'LEAGUE',
+      eventType: 'OPEN_PLAY',
     },
   ],
   past: [
@@ -99,7 +99,7 @@ describe('ClubPage', () => {
 
     // Each event surfaces its type badge and date range; no per-event points are shown.
     const upcoming = screen.getByText('Upcoming events').parentElement as HTMLElement
-    expect(within(upcoming).getByText('LEAGUE')).toBeInTheDocument()
+    expect(within(upcoming).getByText('OPEN_PLAY')).toBeInTheDocument()
     expect(within(upcoming).getByText('2026-05-01 – 2026-05-03')).toBeInTheDocument()
 
     const past = screen.getByText('Past events').parentElement as HTMLElement

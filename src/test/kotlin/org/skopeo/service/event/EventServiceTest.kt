@@ -744,8 +744,8 @@ class EventServiceTest {
             .domain().type shouldBe EventType.OPEN_PLAY
         service.create(
             token = token(uid = "host"),
-            input = input(name = "League", type = EventType.LEAGUE),
-        ).shouldBeRight().domain().type shouldBe EventType.LEAGUE
+            input = input(name = "Casual", type = EventType.OPEN_PLAY),
+        ).shouldBeRight().domain().type shouldBe EventType.OPEN_PLAY
         val tourney =
             service.create(
                 token = token(uid = "host"),
@@ -1302,8 +1302,9 @@ class EventServiceTest {
     private fun budgetedEvent(
         hostUid: String,
         participants: List<UUID>,
-        // TOURNAMENT exercises placement awarding (#525); OPEN_PLAY is computed and LEAGUE awards nothing.
+        // TOURNAMENT exercises placement awarding (#525); OPEN_PLAY is computed per set (#553).
         type: EventType = EventType.TOURNAMENT,
+        awardRankingPoints: Boolean = true,
     ) = service.create(
         token = token(uid = hostUid),
         input =
@@ -1316,6 +1317,7 @@ class EventServiceTest {
                 participants = participants,
                 // A TOURNAMENT must belong to a circuit (#525); other types carry none.
                 circuitId = if (type == EventType.TOURNAMENT) seedCircuit(hostUid = hostUid) else null,
+                awardRankingPoints = awardRankingPoints,
             ),
     ).shouldBeRight().domain()
 
@@ -1483,18 +1485,24 @@ class EventServiceTest {
     }
 
     @Test
-    fun `finalizing a LEAGUE event awards nothing for now (deferred, #525)`() {
+    fun `finalizing an event with Award Ranking Points off awards nothing (#559)`() {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val p1 = provision(uid = "p1")
         val p2 = provision(uid = "p2")
         rate(userId = p1.id, level = "4.0")
         rate(userId = p2.id, level = "4.0")
-        val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id), type = EventType.LEAGUE)
+        val event =
+            budgetedEvent(
+                hostUid = "host",
+                participants = listOf(p1.id, p2.id),
+                type = EventType.OPEN_PLAY,
+                awardRankingPoints = false,
+            )
         seedCompletedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2)
 
         service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
 
-        // LEAGUE awarding is deferred to a follow-up issue (#525): finalizing a league event awards nothing.
+        // "Award Ranking Points" unchecked (#559): finalizing awards nothing, whatever the type.
         awardRepo.listByUser(userId = p1.id) shouldHaveSize 0
         awardRepo.listByUser(userId = p2.id) shouldHaveSize 0
     }

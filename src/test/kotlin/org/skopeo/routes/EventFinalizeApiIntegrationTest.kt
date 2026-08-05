@@ -160,7 +160,7 @@ class EventFinalizeApiIntegrationTest {
     // --- Reverse Ratings (#478). ---
 
     /**
-     * Seed a rated, finalized, at-tip LEAGUE event (host + admin already provisioned) directly via the
+     * Seed a rated, finalized, at-tip OPEN_PLAY event (host + admin already provisioned) directly via the
      * services against the same test DB, and return its id — the fixture the HTTP reverse-ratings call acts
      * on. Keeps the 200 test itself short (the deep behaviour is covered in EventReverseRatingsTest).
      */
@@ -184,7 +184,7 @@ class EventFinalizeApiIntegrationTest {
                         startDate = LocalDate.now(),
                         endDate = LocalDate.now().plusDays(7),
                         participantIds = listOf(p1.id, p2.id),
-                        type = EventType.LEAGUE.name,
+                        type = EventType.OPEN_PLAY.name,
                     ),
             ).let { UUID.fromString(requireNotNull(value = it.getOrNull()).id) }
         val fixture =

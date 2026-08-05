@@ -66,7 +66,7 @@ class RatingConfidenceTest {
     }
 
     @Test
-    fun `for equal counts spacing and recency a tournament outweighs a league outweighs open play`() {
+    fun `for equal counts spacing and recency a tournament outweighs open play`() {
         // Two matches on the same two dates across classes; only the weighted count (density) differs.
         fun twoOf(weightClass: WeightClass) =
             listOf(
@@ -74,10 +74,8 @@ class RatingConfidenceTest {
                 WindowMatch(matchDate = DAY_ZERO.plusDays(30), weightClass = weightClass),
             )
         val tournament = confidenceAt(matches = twoOf(weightClass = WeightClass.TOURNAMENT), now = NOW)
-        val league = confidenceAt(matches = twoOf(weightClass = WeightClass.LEAGUE), now = NOW)
         val openPlay = confidenceAt(matches = twoOf(weightClass = WeightClass.OPEN_PLAY), now = NOW)
-        tournament shouldBeGreaterThan league
-        league shouldBeGreaterThan openPlay
+        tournament shouldBeGreaterThan openPlay
     }
 
     @Test
@@ -100,10 +98,8 @@ class RatingConfidenceTest {
     }
 
     @Test
-    fun `the weight-class mapping folds league playoffs into their parent class`() {
+    fun `the weight-class mapping maps each match type to its confidence class`() {
         MatchType.TOURNAMENT.weightClass() shouldBe WeightClass.TOURNAMENT
-        MatchType.LEAGUE_PLAY.weightClass() shouldBe WeightClass.LEAGUE
-        MatchType.LEAGUE_PLAYOFFS.weightClass() shouldBe WeightClass.LEAGUE
         MatchType.OPEN_PLAY.weightClass() shouldBe WeightClass.OPEN_PLAY
     }
 }

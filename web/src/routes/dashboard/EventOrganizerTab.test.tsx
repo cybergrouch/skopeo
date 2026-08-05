@@ -364,19 +364,19 @@ describe("EventOrganizerTab", () => {
   it("includes the chosen event type in the create payload (#403)", async () => {
     const user = userEvent.setup();
     renderTab();
-    await user.type(screen.getByLabelText("Name"), "League Night");
+    await user.type(screen.getByLabelText("Name"), "Casual Night");
     await user.type(screen.getByLabelText("Start date"), "2026-06-01");
     await user.type(screen.getByLabelText("End date"), "2026-06-02");
-    // The type selector defaults to Open play; switch it to League.
-    await user.selectOptions(screen.getByLabelText("Type"), "LEAGUE");
+    // The type selector defaults to Open play; select it explicitly.
+    await user.selectOptions(screen.getByLabelText("Type"), "OPEN_PLAY");
     await user.click(screen.getByRole("button", { name: "Create event" }));
 
     expect(createMutate).toHaveBeenCalledWith({
       data: {
-        name: "League Night",
+        name: "Casual Night",
         startDate: "2026-06-01",
         endDate: "2026-06-02",
-        type: "LEAGUE",
+        type: "OPEN_PLAY",
         participantIds: [],
         awardRankingPoints: false,
       },
@@ -659,7 +659,7 @@ describe("EventOrganizerTab", () => {
     await user.type(screen.getByLabelText("Name"), "Casual Meetup");
     await user.type(screen.getByLabelText("Start date"), "2026-06-01");
     await user.type(screen.getByLabelText("End date"), "2026-06-02");
-    await user.selectOptions(screen.getByLabelText("Type"), "LEAGUE");
+    await user.selectOptions(screen.getByLabelText("Type"), "OPEN_PLAY");
 
     // The box defaults off (#567); ticking it opts the event into awarding points.
     await user.click(screen.getByLabelText("Award Ranking Points"));
@@ -669,7 +669,7 @@ describe("EventOrganizerTab", () => {
         name: "Casual Meetup",
         startDate: "2026-06-01",
         endDate: "2026-06-02",
-        type: "LEAGUE",
+        type: "OPEN_PLAY",
         participantIds: [],
         awardRankingPoints: true,
       },

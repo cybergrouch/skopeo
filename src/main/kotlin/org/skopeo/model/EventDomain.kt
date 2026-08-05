@@ -9,10 +9,11 @@ import java.util.UUID
 
 /**
  * The class of an event (#403), distinct from the match-level [MatchType] rating factors (#108):
- * OPEN_PLAY (casual), LEAGUE (multi-day / season-long, team format), or TOURNAMENT (1–2 day). It
- * later drives the per-type points budget (Phase B); Phase A only records it.
+ * OPEN_PLAY (casual) or TOURNAMENT (1–2 day). It later drives the per-type points budget (Phase B);
+ * Phase A only records it. The former LEAGUE type was removed (#669) so event type aligns 1:1 with
+ * [MatchType]; existing LEAGUE rows reclassify to OPEN_PLAY.
  */
-enum class EventType { OPEN_PLAY, LEAGUE, TOURNAMENT }
+enum class EventType { OPEN_PLAY, TOURNAMENT }
 
 /**
  * A participant's standing in an event (#201). APPROVED is a full roster member (eligible for
@@ -48,7 +49,7 @@ data class Event(
     val circuitId: UUID? = null,
     // Admin override for calculation processing order (#335); null = order by end date.
     val calcPriority: Double? = null,
-    // The event's class (#403): OPEN_PLAY | LEAGUE | TOURNAMENT.
+    // The event's class (#403): OPEN_PLAY | TOURNAMENT.
     val type: EventType = EventType.OPEN_PLAY,
     // When the event was finalized (#403); null while open. Finalize is terminal and queues rating.
     val finalizedAt: LocalDateTime? = null,

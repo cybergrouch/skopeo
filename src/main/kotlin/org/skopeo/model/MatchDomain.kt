@@ -23,18 +23,17 @@ data class WindowMatch(
     val weightClass: WeightClass,
 )
 
-/** The confidence weight class a [MatchType] maps to (#459) — tournament, league, or open play. */
-enum class WeightClass { TOURNAMENT, LEAGUE, OPEN_PLAY }
+/** The confidence weight class a [MatchType] maps to (#459) — tournament or open play. */
+enum class WeightClass { TOURNAMENT, OPEN_PLAY }
 
 /**
  * Which confidence weight class (#459) a match's [MatchType] counts toward: tournament play is
- * TOURNAMENT, the league rounds are LEAGUE, and casual play is OPEN_PLAY. League playoffs share their
- * parent class' weight.
+ * TOURNAMENT and casual play is OPEN_PLAY. The former LEAGUE class was removed (#669) with the LEAGUE
+ * match types.
  */
 fun MatchType.weightClass(): WeightClass =
     when (this) {
         MatchType.TOURNAMENT -> WeightClass.TOURNAMENT
-        MatchType.LEAGUE_PLAY, MatchType.LEAGUE_PLAYOFFS -> WeightClass.LEAGUE
         MatchType.OPEN_PLAY -> WeightClass.OPEN_PLAY
     }
 

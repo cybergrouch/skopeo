@@ -605,7 +605,7 @@ describe('EventDetail', () => {
     state.fixtureFail = true
     const user = userEvent.setup()
     renderDetail()
-    await user.selectOptions(screen.getByLabelText('Match type'), 'LEAGUE_PLAY')
+    await user.selectOptions(screen.getByLabelText('Match type'), 'TOURNAMENT')
     await user.selectOptions(screen.getByLabelText('Player 1'), 'u1')
     await user.selectOptions(screen.getByLabelText('Player 2'), 'u2')
     fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-03-02' } })
@@ -616,7 +616,7 @@ describe('EventDetail', () => {
         expect.anything(),
       ),
     )
-    expect(createFixtureMutate.mock.calls[0][0].data.matchType).toBe('LEAGUE_PLAY')
+    expect(createFixtureMutate.mock.calls[0][0].data.matchType).toBe('TOURNAMENT')
   })
 
   it('surfaces a roster error when adding a participant fails', async () => {
@@ -926,13 +926,13 @@ describe('EventDetail', () => {
 
   it('shows the type and a Finalized badge, and locks controls when finalized (#403)', () => {
     useGetApiV1EventsId.mockReturnValue({
-      data: { ...event, type: 'LEAGUE', endDate: '2999-01-01', isFinalized: true },
+      data: { ...event, type: 'TOURNAMENT', endDate: '2999-01-01', isFinalized: true },
       isLoading: false,
     })
     renderDetail()
 
     // The type is shown in the header and the finalized badge is present.
-    expect(screen.getByText(/League/)).toBeInTheDocument()
+    expect(screen.getByText(/Tournament/)).toBeInTheDocument()
     expect(screen.getByTestId('finalized-badge')).toBeInTheDocument()
     // A finalized banner explains the terminal state.
     expect(screen.getByText(/this event is finalized/i)).toBeInTheDocument()
@@ -968,7 +968,7 @@ describe('EventDetail', () => {
 
   it('un-finalizes a finalized event after a confirm step and calls the mutation (#477)', async () => {
     useGetApiV1EventsId.mockReturnValue({
-      data: { ...event, type: 'LEAGUE', endDate: '2999-01-01', isFinalized: true },
+      data: { ...event, type: 'TOURNAMENT', endDate: '2999-01-01', isFinalized: true },
       isLoading: false,
     })
     const user = userEvent.setup()
@@ -984,7 +984,7 @@ describe('EventDetail', () => {
 
   it('cancels a pending un-finalize without calling the API (#477)', async () => {
     useGetApiV1EventsId.mockReturnValue({
-      data: { ...event, type: 'LEAGUE', endDate: '2999-01-01', isFinalized: true },
+      data: { ...event, type: 'TOURNAMENT', endDate: '2999-01-01', isFinalized: true },
       isLoading: false,
     })
     const user = userEvent.setup()
@@ -1001,7 +1001,7 @@ describe('EventDetail', () => {
 
   it('surfaces a server error when un-finalize fails, e.g. a rated match (#477)', async () => {
     useGetApiV1EventsId.mockReturnValue({
-      data: { ...event, type: 'LEAGUE', endDate: '2999-01-01', isFinalized: true },
+      data: { ...event, type: 'TOURNAMENT', endDate: '2999-01-01', isFinalized: true },
       isLoading: false,
     })
     state.unfinalizeFail = true
@@ -1024,7 +1024,7 @@ describe('EventDetail', () => {
     // With the un-finalize mutation in flight, the confirm button reads "Un-finalizing…"
     // and is disabled (the `unfinalizeEvent.isPending` arm).
     useGetApiV1EventsId.mockReturnValue({
-      data: { ...event, type: 'LEAGUE', endDate: '2999-01-01', isFinalized: true },
+      data: { ...event, type: 'TOURNAMENT', endDate: '2999-01-01', isFinalized: true },
       isLoading: false,
     })
     state.unfinalizePending = true
@@ -1041,7 +1041,7 @@ describe('EventDetail', () => {
 
   it('reverses an already-rated event after a confirm step and calls the mutation (#478)', async () => {
     useGetApiV1EventsId.mockReturnValue({
-      data: { ...event, type: 'LEAGUE', endDate: '2999-01-01', isFinalized: true },
+      data: { ...event, type: 'TOURNAMENT', endDate: '2999-01-01', isFinalized: true },
       isLoading: false,
     })
     const user = userEvent.setup()
@@ -1060,7 +1060,7 @@ describe('EventDetail', () => {
 
   it('shows the not-at-tip refusal inline when reverse ratings fails (#478)', async () => {
     useGetApiV1EventsId.mockReturnValue({
-      data: { ...event, type: 'LEAGUE', endDate: '2999-01-01', isFinalized: true },
+      data: { ...event, type: 'TOURNAMENT', endDate: '2999-01-01', isFinalized: true },
       isLoading: false,
     })
     state.reverseFail = true
@@ -1087,7 +1087,7 @@ describe('EventDetail', () => {
   it('hides the Reverse ratings action from a non-administrator (#478)', () => {
     useGetApiV1UsersMe.mockReturnValue({ data: { capabilities: ['HOST'] } })
     useGetApiV1EventsId.mockReturnValue({
-      data: { ...event, type: 'LEAGUE', endDate: '2999-01-01', isFinalized: true },
+      data: { ...event, type: 'TOURNAMENT', endDate: '2999-01-01', isFinalized: true },
       isLoading: false,
     })
     renderDetail()
@@ -1099,7 +1099,7 @@ describe('EventDetail', () => {
 
   it('shows a pending label on the reverse confirm while the mutation runs (#478)', async () => {
     useGetApiV1EventsId.mockReturnValue({
-      data: { ...event, type: 'LEAGUE', endDate: '2999-01-01', isFinalized: true },
+      data: { ...event, type: 'TOURNAMENT', endDate: '2999-01-01', isFinalized: true },
       isLoading: false,
     })
     state.reversePending = true
@@ -1112,7 +1112,7 @@ describe('EventDetail', () => {
 
   it('cancels the reverse confirm without calling the mutation (#478)', async () => {
     useGetApiV1EventsId.mockReturnValue({
-      data: { ...event, type: 'LEAGUE', endDate: '2999-01-01', isFinalized: true },
+      data: { ...event, type: 'TOURNAMENT', endDate: '2999-01-01', isFinalized: true },
       isLoading: false,
     })
     const user = userEvent.setup()

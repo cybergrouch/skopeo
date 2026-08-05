@@ -12,8 +12,8 @@ private const val NAME_MAX = 255
 private const val TYPE_MAX = 20
 
 // placement_bracket carries longer enum names (#552): e.g. SEMI_FINALS_WITH_PLATE (22). Widened past
-// TYPE_MAX (see V29). match_type shares the width; its longest value is now LEAGUE_PLAYOFFS (15) since
-// TOURNAMENT_INITIAL_ROUND was collapsed into TOURNAMENT (#560). The DB columns are widened to match.
+// TYPE_MAX (see V29). match_type shares the width; its longest surviving value is now TOURNAMENT (10)
+// since the LEAGUE_PLAY / LEAGUE_PLAYOFFS types were removed (#669). The DB columns stay widened.
 private const val WIDE_TYPE_MAX = 32
 private const val ROUND_MAX = 50
 private const val PUBLIC_CODE_MAX = 6
