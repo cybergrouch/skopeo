@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   getGetApiV1UsersIdQueryKey,
   getGetApiV1UsersMeQueryKey,
@@ -21,14 +22,10 @@ function Controls({
 }) {
   const queryClient = useQueryClient();
   const [hidden, setHidden] = useState(initialHidden);
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const save = usePutApiV1UsersIdMatchHistoryVisibility();
 
   async function onToggle(next: boolean) {
     setHidden(next);
-    setSaved(false);
-    setError(null);
     try {
       await save.mutateAsync({ id: userId, data: { hidden: next } });
       await Promise.all([
@@ -39,10 +36,10 @@ function Controls({
           queryKey: getGetApiV1UsersMeQueryKey(),
         }),
       ]);
-      setSaved(true);
+      toast.success("Saved");
     } catch {
       setHidden(!next);
-      setError("Could not save. Please try again.");
+      toast.error("Could not save. Please try again.", { duration: 8000 });
     }
   }
 
@@ -61,16 +58,6 @@ function Controls({
       <div className="flex items-center gap-2">
         {save.isPending ? (
           <span className="text-xs text-muted-foreground">Saving…</span>
-        ) : null}
-        {saved ? (
-          <span className="text-xs text-muted-foreground" role="status">
-            Saved
-          </span>
-        ) : null}
-        {error ? (
-          <span className="text-xs text-destructive" role="alert">
-            {error}
-          </span>
         ) : null}
       </div>
     </div>

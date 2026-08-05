@@ -13,6 +13,12 @@ const { useMe, usePutRaw, rawMutate, useFbFlag, usePutFb, fbMutate } = vi.hoiste
   fbMutate: vi.fn(),
 }));
 
+const { toastSuccess, toastError } = vi.hoisted(() => ({
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
+}));
+vi.mock("sonner", () => ({ toast: { success: toastSuccess, error: toastError } }));
+
 vi.mock("@/api/generated/users/users", () => ({
   useGetApiV1UsersMe: useMe,
   getGetApiV1UsersMeQueryKey: () => ["me"],
@@ -71,7 +77,7 @@ describe("FeatureFlagsSection", () => {
     renderSection();
     await user.click(screen.getByLabelText("Enable Facebook login"));
     await waitFor(() => expect(fbMutate).toHaveBeenCalledWith({ data: { enabled: false } }));
-    expect(screen.getByRole("status")).toHaveTextContent("Saved");
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith("Saved"));
   });
 
   it("surfaces an error when saving the Facebook flag fails", async () => {
@@ -83,7 +89,9 @@ describe("FeatureFlagsSection", () => {
     renderSection();
     await user.click(screen.getByLabelText("Enable Facebook login"));
     await waitFor(() =>
-      expect(screen.getByRole("alert")).toHaveTextContent("Could not update the setting"),
+      expect(toastError).toHaveBeenCalledWith("Could not update the setting. Try again.", {
+        duration: 8000,
+      }),
     );
   });
 
@@ -97,7 +105,7 @@ describe("FeatureFlagsSection", () => {
     renderSection();
     await user.click(screen.getByLabelText("Show raw NTRP ratings"));
     await waitFor(() => expect(rawMutate).toHaveBeenCalledWith({ data: { previewAsNonAdmin: true } }));
-    expect(screen.getByRole("status")).toHaveTextContent("Saved");
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith("Saved"));
   });
 
   it("surfaces an error when saving the raw-ratings preference fails", async () => {
@@ -109,7 +117,9 @@ describe("FeatureFlagsSection", () => {
     renderSection();
     await user.click(screen.getByLabelText("Show raw NTRP ratings"));
     await waitFor(() =>
-      expect(screen.getByRole("alert")).toHaveTextContent("Could not update the setting"),
+      expect(toastError).toHaveBeenCalledWith("Could not update the setting. Try again.", {
+        duration: 8000,
+      }),
     );
   });
 });

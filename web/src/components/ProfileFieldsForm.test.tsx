@@ -24,6 +24,14 @@ vi.mock('@/api/generated/names/names', () => ({
   getGetApiV1UsersUserIdNamesQueryKey: (id: string) => ['names', id],
 }))
 
+const { toastSuccess, toastError } = vi.hoisted(() => ({
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
+}))
+vi.mock('sonner', () => ({
+  toast: { success: toastSuccess, error: toastError },
+}))
+
 function renderForm() {
   return render(
     <QueryClientProvider client={new QueryClient()}>
@@ -82,7 +90,7 @@ describe('ProfileFieldsForm', () => {
 
     await waitFor(() => expect(nameMutate).toHaveBeenCalledWith({ userId: 'u1', data: { type: 'DISPLAY', value: 'Alice B.' } }))
     expect(patchMutate).not.toHaveBeenCalled()
-    expect(screen.getByRole('status')).toHaveTextContent('Saved')
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Saved'))
   })
 
   it('updates first name (private) via the names API on change', async () => {
@@ -146,7 +154,7 @@ describe('ProfileFieldsForm', () => {
     await user.click(screen.getByRole('button', { name: 'Save profile' }))
 
     await waitFor(() =>
-      expect(screen.getByRole('alert')).toHaveTextContent('Could not save the profile. Check the values and try again.'),
+      expect(toastError).toHaveBeenCalledWith('Could not save the profile. Check the values and try again.', { duration: 8000 }),
     )
   })
 

@@ -5,12 +5,16 @@ import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { PendingAssessmentSection } from './PendingAssessmentSection'
 
-const { useGetApiV1UsersPendingAssessment, mutateAsync, setRatingState } =
+const { useGetApiV1UsersPendingAssessment, mutateAsync, setRatingState, toastError } =
   vi.hoisted(() => ({
     useGetApiV1UsersPendingAssessment: vi.fn(),
     mutateAsync: vi.fn(),
     setRatingState: { isPending: false },
+    toastError: vi.fn(),
   }))
+
+// SetRatingForm (embedded here) now surfaces its request-failure via a sonner toast (#661).
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: toastError } }))
 
 vi.mock('@/api/generated/ratings/ratings', () => ({
   useGetApiV1UsersPendingAssessment,
@@ -226,8 +230,11 @@ describe('PendingAssessmentSection', () => {
     await user.selectOptions(screen.getByLabelText('Rating'), '4.0')
     await user.click(screen.getByRole('button', { name: 'Set rating' }))
 
-    expect(
-      await screen.findByText(/Could not set the rating/i),
-    ).toBeInTheDocument()
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(
+        expect.stringMatching(/could not set the rating/i),
+        expect.objectContaining({ duration: expect.any(Number) }),
+      ),
+    )
   })
 })

@@ -1,6 +1,6 @@
-import { useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import {
   Card,
   CardContent,
@@ -28,14 +28,13 @@ function JoinCard({ code, viewerStatus }: { code: string; viewerStatus?: string 
   const queryClient = useQueryClient()
   const { user } = useAuth()
   const location = useLocation()
-  const [error, setError] = useState<string | null>(null)
   const signup = usePostApiV1EventsCodeCodeSignup({
     mutation: {
       onSuccess: () => {
-        setError(null)
         queryClient.invalidateQueries({ queryKey: getGetApiV1EventsCodeCodeQueryKey(code) })
       },
-      onError: () => setError('Could not sign up for this event. Please try again.'),
+      onError: () =>
+        toast.error('Could not sign up for this event. Please try again.', { duration: 8000 }),
     },
   })
 
@@ -73,11 +72,6 @@ function JoinCard({ code, viewerStatus }: { code: string; viewerStatus?: string 
       >
         {signup.isPending ? 'Requesting…' : 'Request to join'}
       </Button>
-      {error ? (
-        <p className="text-sm text-destructive" role="alert">
-          {error}
-        </p>
-      ) : null}
     </div>
   )
 }

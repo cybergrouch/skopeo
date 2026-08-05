@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -40,13 +41,9 @@ function Controls({ initialTheme }: { initialTheme: string }) {
   const queryClient = useQueryClient();
   const save = usePutApiV1UsersMeTheme();
   const [selected, setSelected] = useState<string>(initialTheme);
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
-    setSaved(false);
-    setError(null);
     try {
       // "" clears the local theme (null → follow the global theme).
       const theme =
@@ -55,9 +52,11 @@ function Controls({ initialTheme }: { initialTheme: string }) {
       await queryClient.invalidateQueries({
         queryKey: getGetApiV1UsersMeThemeQueryKey(),
       });
-      setSaved(true);
+      toast.success("Saved");
     } catch {
-      setError("Could not save your theme. Please try again.");
+      toast.error("Could not save your theme. Please try again.", {
+        duration: 8000,
+      });
     }
   }
 
@@ -70,7 +69,6 @@ function Controls({ initialTheme }: { initialTheme: string }) {
           value={selected}
           onChange={(e) => {
             setSelected(e.target.value);
-            setSaved(false);
           }}
           className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
         >
@@ -90,16 +88,6 @@ function Controls({ initialTheme }: { initialTheme: string }) {
         <Button type="submit" size="sm" disabled={save.isPending}>
           {save.isPending ? "Saving…" : "Save theme"}
         </Button>
-        {saved ? (
-          <span className="text-xs text-muted-foreground" role="status">
-            Saved
-          </span>
-        ) : null}
-        {error ? (
-          <span className="text-xs text-destructive" role="alert">
-            {error}
-          </span>
-        ) : null}
       </div>
     </form>
   );

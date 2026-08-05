@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   Card,
@@ -44,7 +45,6 @@ export function DuplicateCandidatesSection() {
   const [userA, setUserA] = useState<UserSummaryResponse | null>(null)
   const [userB, setUserB] = useState<UserSummaryResponse | null>(null)
   const [reason, setReason] = useState('')
-  const [error, setError] = useState<string | null>(null)
 
   const candidates = useGetApiV1DuplicateCandidates(OPEN)
   const flag = usePostApiV1DuplicateCandidates()
@@ -61,10 +61,9 @@ export function DuplicateCandidatesSection() {
       setUserA(null)
       setUserB(null)
       setReason('')
-      setError(null)
       invalidate()
     } catch {
-      setError('Could not flag the pair (they must be two different users).')
+      toast.error('Could not flag the pair (they must be two different users).', { duration: 8000 })
     }
   }
 
@@ -155,11 +154,6 @@ export function DuplicateCandidatesSection() {
               <Label htmlFor="reason">Reason (optional)</Label>
               <Input id="reason" value={reason} onChange={(e) => setReason(e.target.value)} />
             </div>
-            {error ? (
-              <p className="text-sm text-destructive" role="alert">
-                {error}
-              </p>
-            ) : null}
             {userA && userB ? (
               <Button type="button" onClick={() => onFlag(userA, userB)}>
                 Flag as candidate

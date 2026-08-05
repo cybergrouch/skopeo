@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import {
   Card,
   CardContent,
@@ -22,7 +23,6 @@ import {
 export function ReRateRequestCard() {
   const queryClient = useQueryClient()
   const [justification, setJustification] = useState('')
-  const [error, setError] = useState<string | null>(null)
 
   const mineQuery = useGetApiV1RatingRequestsMe()
   const mine = mineQuery.data
@@ -78,20 +78,17 @@ export function ReRateRequestCard() {
               size="sm"
               disabled={justification.trim() === '' || create.isPending}
               onClick={() => {
-                setError(null)
                 create.mutate(
                   { data: { justification: justification.trim() } },
-                  { onError: () => setError('Could not submit your request. Please try again.') },
+                  {
+                    onError: () =>
+                      toast.error('Could not submit your request. Please try again.', { duration: 8000 }),
+                  },
                 )
               }}
             >
               Request re-rate
             </Button>
-            {error ? (
-              <p className="text-sm text-destructive" role="alert">
-                {error}
-              </p>
-            ) : null}
           </div>
         )}
       </CardContent>

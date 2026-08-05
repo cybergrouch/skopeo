@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   Card,
@@ -44,13 +45,11 @@ function errorMessage(err: unknown, fallback: string): string {
 function RatingForm({ userId, initialValue }: { userId: string; initialValue: string }) {
   const queryClient = useQueryClient()
   const [value, setValue] = useState(initialValue)
-  const [saved, setSaved] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
   const setRating = usePutApiV1UsersUserIdRatings({
     mutation: {
       onSuccess: () => {
-        setSaved(true)
+        toast.success('Saved')
         queryClient.invalidateQueries({ queryKey: getGetApiV1UsersUserIdRatingsQueryKey(userId) })
         queryClient.invalidateQueries({
           queryKey: getGetApiV1UsersUserIdRatingHistoryQueryKey(userId),
@@ -61,12 +60,10 @@ function RatingForm({ userId, initialValue }: { userId: string; initialValue: st
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
-    setSaved(false)
-    setError(null)
     try {
       await setRating.mutateAsync({ userId, data: { value } })
     } catch {
-      setError('Could not set the rating. Check the value and try again.')
+      toast.error('Could not set the rating. Check the value and try again.', { duration: 8000 })
     }
   }
 
@@ -80,25 +77,12 @@ function RatingForm({ userId, initialValue }: { userId: string; initialValue: st
           id="manage-rating"
           value={value}
           placeholder="e.g. 4.0"
-          onChange={(e) => {
-            setValue(e.target.value)
-            setSaved(false)
-          }}
+          onChange={(e) => setValue(e.target.value)}
         />
       </div>
       <Button type="submit" size="sm" disabled={setRating.isPending}>
         Override rating
       </Button>
-      {saved ? (
-        <span className="text-xs text-muted-foreground" role="status">
-          Saved
-        </span>
-      ) : null}
-      {error ? (
-        <span className="text-xs text-destructive" role="alert">
-          {error}
-        </span>
-      ) : null}
     </form>
   )
 }
@@ -118,12 +102,10 @@ function CapabilitiesEditor({ userId }: { userId: string }) {
   const active = new Set(
     (capsQuery.data ?? []).filter((c) => c.isActive).map((c) => c.capability),
   )
-  const [error, setError] = useState<string | null>(null)
   // The role/action awaiting a confirm click — only ADMINISTRATOR is gated this way.
   const [confirming, setConfirming] = useState<string | null>(null)
 
   const invalidate = () => {
-    setError(null)
     setConfirming(null)
     queryClient.invalidateQueries({
       queryKey: getGetApiV1UsersUserIdCapabilitiesQueryKey(userId),
@@ -132,13 +114,14 @@ function CapabilitiesEditor({ userId }: { userId: string }) {
   const grant = usePostApiV1UsersUserIdCapabilities({
     mutation: {
       onSuccess: invalidate,
-      onError: (e) => setError(errorMessage(e, 'Could not grant the role.')),
+      onError: (e) => toast.error(errorMessage(e, 'Could not grant the role.'), { duration: 8000 }),
     },
   })
   const revoke = useDeleteApiV1UsersUserIdCapabilitiesCapability({
     mutation: {
       onSuccess: invalidate,
-      onError: (e) => setError(errorMessage(e, 'Could not revoke the role.')),
+      onError: (e) =>
+        toast.error(errorMessage(e, 'Could not revoke the role.'), { duration: 8000 }),
     },
   })
   const busy = grant.isPending || revoke.isPending
@@ -211,11 +194,6 @@ function CapabilitiesEditor({ userId }: { userId: string }) {
           )
         })}
       </ul>
-      {error ? (
-        <p className="mt-2 text-xs text-destructive" role="alert">
-          {error}
-        </p>
-      ) : null}
     </>
   )
 }
@@ -232,19 +210,20 @@ function PointAdjustmentForm({ userId }: { userId: string }) {
   const [reason, setReason] = useState('')
   const [validFrom, setValidFrom] = useState('')
   const [validUntil, setValidUntil] = useState('')
-  const [saved, setSaved] = useState(false)
+  // Inline error is for synchronous field validation only; the adjustment's success/failure is a toast.
   const [error, setError] = useState<string | null>(null)
 
   const adjust = usePostApiV1UsersUserIdRankingPointsAdjustments({
     mutation: {
       onSuccess: () => {
-        setSaved(true)
+        toast.success('Applied')
         setPoints('')
         setReason('')
         setValidFrom('')
         setValidUntil('')
       },
-      onError: (e) => setError(errorMessage(e, 'Could not apply the adjustment.')),
+      onError: (e) =>
+        toast.error(errorMessage(e, 'Could not apply the adjustment.'), { duration: 8000 }),
     },
   })
 
@@ -255,7 +234,6 @@ function PointAdjustmentForm({ userId }: { userId: string }) {
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
-    setSaved(false)
     setError(null)
     if (invalidPoints(points)) {
       setError('Points must be a non-zero whole number (e.g. 50 or -25).')
@@ -296,10 +274,7 @@ function PointAdjustmentForm({ userId }: { userId: string }) {
           id="adjust-points"
           value={points}
           placeholder="e.g. 50 or -25"
-          onChange={(e) => {
-            setPoints(e.target.value)
-            setSaved(false)
-          }}
+          onChange={(e) => setPoints(e.target.value)}
         />
       </div>
       <div className="space-y-1">
@@ -311,10 +286,7 @@ function PointAdjustmentForm({ userId }: { userId: string }) {
           value={reason}
           rows={2}
           placeholder="Why is this adjustment being made?"
-          onChange={(e) => {
-            setReason(e.target.value)
-            setSaved(false)
-          }}
+          onChange={(e) => setReason(e.target.value)}
           className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm"
         />
       </div>
@@ -327,10 +299,7 @@ function PointAdjustmentForm({ userId }: { userId: string }) {
             id="adjust-from"
             type="date"
             value={validFrom}
-            onChange={(e) => {
-              setValidFrom(e.target.value)
-              setSaved(false)
-            }}
+            onChange={(e) => setValidFrom(e.target.value)}
           />
         </div>
         <div className="space-y-1">
@@ -341,10 +310,7 @@ function PointAdjustmentForm({ userId }: { userId: string }) {
             id="adjust-until"
             type="date"
             value={validUntil}
-            onChange={(e) => {
-              setValidUntil(e.target.value)
-              setSaved(false)
-            }}
+            onChange={(e) => setValidUntil(e.target.value)}
           />
         </div>
       </div>
@@ -352,11 +318,6 @@ function PointAdjustmentForm({ userId }: { userId: string }) {
         <Button type="submit" size="sm" disabled={adjust.isPending}>
           Apply adjustment
         </Button>
-        {saved ? (
-          <span className="text-xs text-muted-foreground" role="status">
-            Applied
-          </span>
-        ) : null}
         {error ? (
           <span className="text-xs text-destructive" role="alert">
             {error}
@@ -394,12 +355,12 @@ function DeleteAccountForm({
   onDeleted: () => void
 }) {
   const [confirming, setConfirming] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
   const del = useDeleteApiV1UsersId({
     mutation: {
       onSuccess: onDeleted,
-      onError: (e) => setError(errorMessage(e, 'Could not delete the account.')),
+      onError: (e) =>
+        toast.error(errorMessage(e, 'Could not delete the account.'), { duration: 8000 }),
     },
   })
 
@@ -412,18 +373,10 @@ function DeleteAccountForm({
           size="sm"
           className="border-destructive/50 text-destructive hover:bg-destructive/10"
           aria-label="Delete account"
-          onClick={() => {
-            setError(null)
-            setConfirming(true)
-          }}
+          onClick={() => setConfirming(true)}
         >
           Delete account
         </Button>
-        {error ? (
-          <p className="text-xs text-destructive" role="alert">
-            {error}
-          </p>
-        ) : null}
       </div>
     )
   }
@@ -457,11 +410,6 @@ function DeleteAccountForm({
           Cancel
         </Button>
       </div>
-      {error ? (
-        <p className="text-xs text-destructive" role="alert">
-          {error}
-        </p>
-      ) : null}
     </div>
   )
 }

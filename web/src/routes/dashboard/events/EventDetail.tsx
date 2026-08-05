@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { PublicPageLink } from "@/components/PublicPageLink";
 import {
   Card,
@@ -145,21 +146,14 @@ export function EventDetail({
     | "SEMI_FINALS_WITH_PLATE"
     | "PLATE_FINALS"
   >("CHAMPIONSHIP_FINALS");
-  const [fixtureError, setFixtureError] = useState<string | null>(null);
-  const [rosterError, setRosterError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [renaming, setRenaming] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const [renameError, setRenameError] = useState<string | null>(null);
-  const [clubError, setClubError] = useState<string | null>(null);
   const [confirmingFinalize, setConfirmingFinalize] = useState(false);
-  const [finalizeError, setFinalizeError] = useState<string | null>(null);
   const [confirmingUnfinalize, setConfirmingUnfinalize] = useState(false);
-  const [unfinalizeError, setUnfinalizeError] = useState<string | null>(null);
   // Reverse Ratings (#478): a distinct, destructive, ADMINISTRATOR-only action for an already-rated event.
   const [confirmingReverse, setConfirmingReverse] = useState(false);
-  const [reverseError, setReverseError] = useState<string | null>(null);
   const isAdmin = isAdministrator(me?.capabilities);
 
   // Per-side handicap (#486): hidden behind an explicit checkbox (discouraged by design). Un-ticking
@@ -230,14 +224,15 @@ export function EventDetail({
   });
 
   async function saveClub(clubId: string) {
-    setClubError(null);
     try {
       await setClub.mutateAsync({
         id: eventId,
         data: { clubId: clubId || null },
       });
     } catch (e) {
-      setClubError(eventErrorMessage(e, "Could not update the club."));
+      toast.error(eventErrorMessage(e, "Could not update the club."), {
+        duration: 8000,
+      });
     }
   }
 
@@ -251,7 +246,9 @@ export function EventDetail({
     try {
       await renameEvent.mutateAsync({ id: eventId, data: { name } });
     } catch (e) {
-      setRenameError(eventErrorMessage(e, "Could not rename this event."));
+      toast.error(eventErrorMessage(e, "Could not rename this event."), {
+        duration: 8000,
+      });
     }
   }
 
@@ -269,11 +266,12 @@ export function EventDetail({
   });
 
   async function confirmDelete() {
-    setDeleteError(null);
     try {
       await deleteEvent.mutateAsync({ id: eventId });
     } catch (e) {
-      setDeleteError(eventErrorMessage(e, "Could not delete this event."));
+      toast.error(eventErrorMessage(e, "Could not delete this event."), {
+        duration: 8000,
+      });
       setConfirmingDelete(false);
     }
   }
@@ -293,11 +291,12 @@ export function EventDetail({
   });
 
   async function confirmFinalize() {
-    setFinalizeError(null);
     try {
       await finalizeEvent.mutateAsync({ id: eventId });
     } catch (e) {
-      setFinalizeError(eventErrorMessage(e, "Could not finalize this event."));
+      toast.error(eventErrorMessage(e, "Could not finalize this event."), {
+        duration: 8000,
+      });
       setConfirmingFinalize(false);
     }
   }
@@ -317,13 +316,12 @@ export function EventDetail({
   });
 
   async function confirmUnfinalize() {
-    setUnfinalizeError(null);
     try {
       await unfinalizeEvent.mutateAsync({ id: eventId });
     } catch (e) {
-      setUnfinalizeError(
-        eventErrorMessage(e, "Could not un-finalize this event."),
-      );
+      toast.error(eventErrorMessage(e, "Could not un-finalize this event."), {
+        duration: 8000,
+      });
       setConfirmingUnfinalize(false);
     }
   }
@@ -347,12 +345,12 @@ export function EventDetail({
   });
 
   async function confirmReverse() {
-    setReverseError(null);
     try {
       await reverseRatings.mutateAsync({ id: eventId });
     } catch (e) {
-      setReverseError(
+      toast.error(
         eventErrorMessage(e, "Could not reverse this event's ratings."),
+        { duration: 8000 },
       );
       setConfirmingReverse(false);
     }
@@ -368,7 +366,6 @@ export function EventDetail({
 
   function scheduleFixture(e: FormEvent) {
     e.preventDefault();
-    setFixtureError(null);
     createFixture.mutate(
       {
         data: {
@@ -393,8 +390,9 @@ export function EventDetail({
       },
       {
         onError: () =>
-          setFixtureError(
+          toast.error(
             "Could not schedule the fixture. Every player must be a participant and already rated.",
+            { duration: 8000 },
           ),
       },
     );
@@ -575,11 +573,6 @@ export function EventDetail({
                     </option>
                   ))}
                 </select>
-                {clubError ? (
-                  <p className="text-sm text-destructive" role="alert">
-                    {clubError}
-                  </p>
-                ) : null}
               </div>
 
               <div className="text-xs font-medium uppercase text-muted-foreground">
@@ -642,21 +635,17 @@ export function EventDetail({
                     excludeIds={allParticipants.map((p) => p.userId)}
                     canSetRating={canRate(me?.capabilities)}
                     onSelect={(user) => {
-                      setRosterError(null);
                       addParticipant.mutate(
                         { id: eventId, data: { userId: user.id } },
                         {
                           onError: () =>
-                            setRosterError("Could not add that participant."),
+                            toast.error("Could not add that participant.", {
+                              duration: 8000,
+                            }),
                         },
                       );
                     }}
                   />
-                  {rosterError ? (
-                    <p className="text-sm text-destructive" role="alert">
-                      {rosterError}
-                    </p>
-                  ) : null}
                 </div>
               )}
             </CardContent>
@@ -976,11 +965,6 @@ export function EventDetail({
                   >
                     Schedule fixture
                   </Button>
-                  {fixtureError ? (
-                    <p className="text-sm text-destructive" role="alert">
-                      {fixtureError}
-                    </p>
-                  ) : null}
                 </form>
               </CardContent>
             </Card>
@@ -1031,19 +1015,11 @@ export function EventDetail({
                   <Button
                     type="button"
                     size="sm"
-                    onClick={() => {
-                      setFinalizeError(null);
-                      setConfirmingFinalize(true);
-                    }}
+                    onClick={() => setConfirmingFinalize(true)}
                   >
                     Finalize event
                   </Button>
                 )}
-                {finalizeError ? (
-                  <p className="text-sm text-destructive" role="alert">
-                    {finalizeError}
-                  </p>
-                ) : null}
               </CardContent>
             </Card>
           )}
@@ -1089,19 +1065,11 @@ export function EventDetail({
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => {
-                      setUnfinalizeError(null);
-                      setConfirmingUnfinalize(true);
-                    }}
+                    onClick={() => setConfirmingUnfinalize(true)}
                   >
                     Un-finalize event
                   </Button>
                 )}
-                {unfinalizeError ? (
-                  <p className="text-sm text-destructive" role="alert">
-                    {unfinalizeError}
-                  </p>
-                ) : null}
               </CardContent>
             </Card>
           ) : null}
@@ -1153,19 +1121,11 @@ export function EventDetail({
                     variant="outline"
                     size="sm"
                     className="border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
-                    onClick={() => {
-                      setReverseError(null);
-                      setConfirmingReverse(true);
-                    }}
+                    onClick={() => setConfirmingReverse(true)}
                   >
                     Reverse ratings
                   </Button>
                 )}
-                {reverseError ? (
-                  <p className="text-sm text-destructive" role="alert">
-                    {reverseError}
-                  </p>
-                ) : null}
               </CardContent>
             </Card>
           ) : null}
@@ -1208,19 +1168,11 @@ export function EventDetail({
                   variant="ghost"
                   size="sm"
                   className="text-destructive hover:text-destructive"
-                  onClick={() => {
-                    setDeleteError(null);
-                    setConfirmingDelete(true);
-                  }}
+                  onClick={() => setConfirmingDelete(true)}
                 >
                   Delete event
                 </Button>
               )}
-              {deleteError ? (
-                <p className="text-sm text-destructive" role="alert">
-                  {deleteError}
-                </p>
-              ) : null}
             </CardContent>
           </Card>
         </>

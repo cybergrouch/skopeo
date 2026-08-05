@@ -23,6 +23,12 @@ const {
   },
 }));
 
+const { toastSuccess, toastError } = vi.hoisted(() => ({
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
+}));
+vi.mock("sonner", () => ({ toast: { success: toastSuccess, error: toastError } }));
+
 vi.mock("@/api/generated/circuits/circuits", () => ({
   useGetApiV1Circuits,
   getGetApiV1CircuitsQueryKey: () => ["circuits"],
@@ -117,8 +123,10 @@ describe("CircuitsSection", () => {
     renderSection();
     await user.type(screen.getByLabelText("New circuit"), "BAD");
     await user.click(screen.getByRole("button", { name: "Create" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Could not create the circuit.",
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith("Could not create the circuit.", {
+        duration: 8000,
+      }),
     );
   });
 
@@ -182,8 +190,10 @@ describe("CircuitsSection", () => {
 
     await user.click(screen.getByRole("button", { name: "Rename" }));
     await user.click(screen.getByRole("button", { name: "Save" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Could not rename the circuit.",
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith("Could not rename the circuit.", {
+        duration: 8000,
+      }),
     );
   });
 
@@ -228,8 +238,10 @@ describe("CircuitsSection", () => {
 
     await user.click(screen.getByRole("button", { name: "Delete" }));
     await user.click(screen.getByRole("button", { name: "Confirm" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Could not delete the circuit.",
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith("Could not delete the circuit.", {
+        duration: 8000,
+      }),
     );
   });
 });

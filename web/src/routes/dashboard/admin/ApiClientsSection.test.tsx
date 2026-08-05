@@ -20,6 +20,12 @@ const {
   pending: { value: false },
 }));
 
+const { toastSuccess, toastError } = vi.hoisted(() => ({
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
+}));
+vi.mock("sonner", () => ({ toast: { success: toastSuccess, error: toastError } }));
+
 vi.mock("@/api/generated/client-api/client-api", () => ({
   useGetApiV1ApiClients,
   getGetApiV1ApiClientsQueryKey: () => ["api-clients"],
@@ -207,9 +213,11 @@ describe("ApiClientsSection", () => {
       "50",
     );
     await user.click(screen.getByRole("button", { name: "Save limit" }));
-    expect(
-      await screen.findByText(/could not update the rate limit/i),
-    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith("Could not update the rate limit.", {
+        duration: 8000,
+      }),
+    );
   });
 
   it("revokes an active key", async () => {
@@ -274,9 +282,11 @@ describe("ApiClientsSection", () => {
     renderSection();
     await user.type(screen.getByLabelText("New client"), "Partner B");
     await user.click(screen.getByRole("button", { name: "Create" }));
-    expect(
-      await screen.findByText(/could not create the client/i),
-    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith("Could not create the client.", {
+        duration: 8000,
+      }),
+    );
   });
 
   it("surfaces an error when issuing a key fails", async () => {
@@ -284,9 +294,11 @@ describe("ApiClientsSection", () => {
     const user = userEvent.setup();
     renderSection();
     await user.click(screen.getByRole("button", { name: "Issue key" }));
-    expect(
-      await screen.findByText(/could not issue the key/i),
-    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith("Could not issue the key.", {
+        duration: 8000,
+      }),
+    );
   });
 
   it("surfaces an error when revoking a key fails", async () => {
@@ -294,9 +306,11 @@ describe("ApiClientsSection", () => {
     const user = userEvent.setup();
     renderSection();
     await user.click(screen.getByRole("button", { name: "Revoke" }));
-    expect(
-      await screen.findByText(/could not revoke the key/i),
-    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith("Could not revoke the key.", {
+        duration: 8000,
+      }),
+    );
   });
 
   it("deselects a scope when toggled twice, omitting scopes from the request", async () => {

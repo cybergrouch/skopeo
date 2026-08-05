@@ -19,6 +19,9 @@ vi.mock('@/api/generated/ratings/ratings', () => ({
   }),
 }))
 
+const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }))
+vi.mock('sonner', () => ({ toast: { error: toastError } }))
+
 describe('SetRatingForm', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -51,7 +54,9 @@ describe('SetRatingForm', () => {
     render(<SetRatingForm userId="u1" initialValue="4.0" onSaved={onSaved} />)
 
     await user.click(screen.getByRole('button', { name: 'Set rating' }))
-    expect(await screen.findByText(/Could not set the rating/i)).toBeInTheDocument()
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith('Could not set the rating. Check the value and try again.', { duration: 8000 }),
+    )
     expect(onSaved).not.toHaveBeenCalled()
   })
 })

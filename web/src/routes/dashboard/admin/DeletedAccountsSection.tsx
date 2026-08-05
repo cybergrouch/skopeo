@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Card,
@@ -28,7 +29,7 @@ function errorMessage(err: unknown, fallback: string): string {
   return message ?? fallback;
 }
 
-/** One deleted-account row with its "Allow login" (reactivate) action + inline feedback. */
+/** One deleted-account row with its "Allow login" (reactivate) action; failures surface as a toast. */
 function DeletedAccountRow({
   user,
   onReactivated,
@@ -36,11 +37,11 @@ function DeletedAccountRow({
   user: UserSummaryResponse;
   onReactivated: () => void;
 }) {
-  const [error, setError] = useState<string | null>(null);
   const reactivate = usePostApiV1UsersIdReactivate({
     mutation: {
       onSuccess: onReactivated,
-      onError: (e) => setError(errorMessage(e, "Could not re-allow login.")),
+      onError: (e) =>
+        toast.error(errorMessage(e, "Could not re-allow login."), { duration: 8000 }),
     },
   });
 
@@ -52,21 +53,13 @@ function DeletedAccountRow({
           <PlaceholderTag show={user.isPlaceholder} deleted={user.isDeleted} />
         </div>
         <div className="text-xs text-muted-foreground">{user.publicCode}</div>
-        {error ? (
-          <p className="mt-1 text-xs text-destructive" role="alert">
-            {error}
-          </p>
-        ) : null}
       </div>
       <Button
         type="button"
         size="sm"
         disabled={reactivate.isPending}
         aria-label={`Allow login for ${user.publicCode}`}
-        onClick={() => {
-          setError(null);
-          reactivate.mutate({ id: user.id });
-        }}
+        onClick={() => reactivate.mutate({ id: user.id })}
       >
         Allow login
       </Button>

@@ -1,9 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { EventPage } from './EventPage'
+
+const { toastSuccess, toastError } = vi.hoisted(() => ({
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
+}))
+vi.mock('sonner', () => ({ toast: { success: toastSuccess, error: toastError } }))
 
 const { useGetApiV1EventsCodeCode, signupMutate, state } = vi.hoisted(() => ({
   useGetApiV1EventsCodeCode: vi.fn(),
@@ -267,8 +273,13 @@ describe('EventPage', () => {
     state.signupFail = true
     renderAt()
     const user = userEvent.setup()
-    return user.click(screen.getByRole('button', { name: 'Request to join' })).then(() => {
-      expect(screen.getByRole('alert')).toHaveTextContent(/Could not sign up/i)
-    })
+    return user.click(screen.getByRole('button', { name: 'Request to join' })).then(() =>
+      waitFor(() =>
+        expect(toastError).toHaveBeenCalledWith(
+          expect.stringMatching(/Could not sign up/i),
+          expect.anything(),
+        ),
+      ),
+    )
   })
 })

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { EventOrganizerTab } from "./EventOrganizerTab";
@@ -32,6 +32,8 @@ vi.mock("@/api/generated/events/events", () => ({
     },
   }),
 }));
+const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }));
+vi.mock("sonner", () => ({ toast: { error: toastError } }));
 vi.mock("@/api/generated/clubs/clubs", () => ({ useGetApiV1Clubs }));
 vi.mock("@/api/generated/circuits/circuits", () => ({ useGetApiV1Circuits }));
 vi.mock("@/api/generated/users/users", () => ({ useGetApiV1UsersMe }));
@@ -378,7 +380,12 @@ describe("EventOrganizerTab", () => {
     await user.type(screen.getByLabelText("Start date"), "2026-06-01");
     await user.type(screen.getByLabelText("End date"), "2026-06-02");
     await user.click(screen.getByRole("button", { name: "Create event" }));
-    expect(screen.getByText(/Could not create the event/)).toBeInTheDocument();
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(
+        "Could not create the event. Check the name and dates.",
+        { duration: 8000 },
+      ),
+    );
   });
 
   it('groups events by club (alphabetically) with a clubless "Open" group last (#313)', () => {

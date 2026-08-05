@@ -10,6 +10,12 @@ const { useGetApiV1Theme, usePutApiV1Theme, putMutate } = vi.hoisted(() => ({
   putMutate: vi.fn(),
 }))
 
+const { toastSuccess, toastError } = vi.hoisted(() => ({
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
+}))
+vi.mock('sonner', () => ({ toast: { success: toastSuccess, error: toastError } }))
+
 vi.mock('@/api/generated/settings/settings', () => ({
   useGetApiV1Theme,
   usePutApiV1Theme,
@@ -73,7 +79,7 @@ describe('ThemeSection', () => {
     await user.selectOptions(screen.getByLabelText('Theme'), label)
     await user.click(screen.getByRole('button', { name: 'Save theme' }))
     expect(putMutate).toHaveBeenCalledWith({ data: { theme: value } })
-    expect(screen.getByRole('status')).toHaveTextContent('Saved')
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Saved'))
   })
 
   it('initializes the select from the loaded setting', async () => {
@@ -91,7 +97,7 @@ describe('ThemeSection', () => {
     await user.click(screen.getByRole('button', { name: 'Save theme' }))
 
     expect(putMutate).toHaveBeenCalledWith({ data: { theme: 'US_OPEN' } })
-    expect(screen.getByRole('status')).toHaveTextContent('Saved')
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Saved'))
   })
 
   it('defaults to AUTO and disables the select while the setting is loading', () => {
@@ -110,6 +116,10 @@ describe('ThemeSection', () => {
     const user = userEvent.setup()
     renderSection()
     await user.click(screen.getByRole('button', { name: 'Save theme' }))
-    expect(screen.getByRole('alert')).toHaveTextContent('Could not set the theme')
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith('Could not set the theme. Try again.', {
+        duration: 8000,
+      }),
+    )
   })
 })

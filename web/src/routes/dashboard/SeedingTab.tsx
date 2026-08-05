@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   Card,
@@ -67,7 +68,6 @@ export function SeedingTab() {
   const queryClient = useQueryClient()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [newName, setNewName] = useState('')
-  const [addError, setAddError] = useState<string | null>(null)
   const [searchName, setSearchName] = useState('')
   const [sex, setSex] = useState('')
   const [ageMin, setAgeMin] = useState('')
@@ -164,11 +164,10 @@ export function SeedingTab() {
     const chosen = candidates.filter((u) => checkedIds.has(u.id))
     try {
       await Promise.all(chosen.map((u) => addMember.mutateAsync({ id: listId, data: { userId: u.id } })))
-      setAddError(null)
       setCheckedIds(new Set())
       invalidateDetail(listId)
     } catch {
-      setAddError("Couldn't add the selected players.")
+      toast.error("Couldn't add the selected players.", { duration: 8000 })
     }
   }
 
@@ -414,12 +413,6 @@ export function SeedingTab() {
                   ) : (
                     <p className="text-sm text-muted-foreground">No matching players.</p>
                   )
-                ) : null}
-
-                {addError ? (
-                  <p className="text-sm text-destructive" role="alert">
-                    {addError}
-                  </p>
                 ) : null}
               </section>
 

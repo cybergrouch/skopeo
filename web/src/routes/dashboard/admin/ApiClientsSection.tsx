@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   Card,
   CardContent,
@@ -60,7 +61,7 @@ export function ApiClientsSection() {
       setName("");
       invalidate();
     } catch {
-      setError("Could not create the client.");
+      toast.error("Could not create the client.", { duration: 8000 });
     }
   }
 
@@ -130,7 +131,6 @@ function ApiClientRow({
   const [limitDraft, setLimitDraft] = useState(client.rateLimitPerMin?.toString() ?? "");
   const [issued, setIssued] = useState<IssuedApiKeyResponse | null>(null);
   const [copied, setCopied] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   function toggleScope(scope: string) {
     setScopes((prev) =>
@@ -139,7 +139,6 @@ function ApiClientRow({
   }
 
   async function onIssue() {
-    setError(null);
     const days = expiresInDays.trim();
     try {
       const result = await issue.mutateAsync({
@@ -156,22 +155,20 @@ function ApiClientRow({
       setExpiresInDays("");
       onChange();
     } catch {
-      setError("Could not issue the key.");
+      toast.error("Could not issue the key.", { duration: 8000 });
     }
   }
 
   async function onRevoke(keyId: string) {
-    setError(null);
     try {
       await revoke.mutateAsync({ clientId: client.id, keyId });
       onChange();
     } catch {
-      setError("Could not revoke the key.");
+      toast.error("Could not revoke the key.", { duration: 8000 });
     }
   }
 
   async function saveLimit() {
-    setError(null);
     const draft = limitDraft.trim();
     // Empty clears the override (fall back to the default tier); otherwise a positive integer.
     const rateLimitPerMin = draft === "" ? null : Number(draft);
@@ -179,7 +176,7 @@ function ApiClientRow({
       await setLimit.mutateAsync({ id: client.id, data: { rateLimitPerMin } });
       onChange();
     } catch {
-      setError("Could not update the rate limit.");
+      toast.error("Could not update the rate limit.", { duration: 8000 });
     }
   }
 
@@ -324,12 +321,6 @@ function ApiClientRow({
           </Button>
         </div>
       </div>
-
-      {error ? (
-        <p className="text-sm text-destructive" role="alert">
-          {error}
-        </p>
-      ) : null}
     </li>
   );
 }

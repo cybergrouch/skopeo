@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Card,
@@ -84,18 +85,17 @@ function OpenPlayPointsCard() {
 function OpenPlayEditor({ initial }: { initial: OpenPlayPointsConfig }) {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<OpenPlayPointsConfig>(initial);
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const save = usePutApiV1SettingsPointsOpenPlay({
     mutation: {
       onSuccess: () => {
-        setSaved(true);
+        toast.success("Saved");
         void queryClient.invalidateQueries({
           queryKey: getGetApiV1SettingsPointsOpenPlayQueryKey(),
         });
       },
-      onError: () => setError("Save failed. You need administrator access."),
+      onError: () =>
+        toast.error("Save failed. You need administrator access.", { duration: 8000 }),
     },
   });
 
@@ -105,7 +105,6 @@ function OpenPlayEditor({ initial }: { initial: OpenPlayPointsConfig }) {
     field: "winnerPoints" | "loserPoints",
     value: number,
   ) {
-    setSaved(false);
     setDraft((d) => ({
       ...d,
       rows: d.rows.map((r) =>
@@ -156,17 +155,12 @@ function OpenPlayEditor({ initial }: { initial: OpenPlayPointsConfig }) {
         scope="open-play"
         validityDays={draft.validityDays}
         onValidity={(v) => {
-          setSaved(false);
           setDraft((d) => ({ ...d, validityDays: v }));
         }}
         onSave={() => {
-          setError(null);
-          setSaved(false);
           save.mutate({ data: draft });
         }}
         pending={save.isPending}
-        saved={saved}
-        error={error}
       />
     </>
   );
@@ -237,23 +231,21 @@ function TournamentPointsCard() {
 function TournamentEditor({ initial }: { initial: TournamentPointsConfig }) {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<TournamentPointsConfig>(initial);
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const save = usePutApiV1SettingsPointsTournament({
     mutation: {
       onSuccess: () => {
-        setSaved(true);
+        toast.success("Saved");
         void queryClient.invalidateQueries({
           queryKey: getGetApiV1SettingsPointsTournamentQueryKey(),
         });
       },
-      onError: () => setError("Save failed. You need administrator access."),
+      onError: () =>
+        toast.error("Save failed. You need administrator access.", { duration: 8000 }),
     },
   });
 
   function setPlace(schedule: "sanctioned" | "unsanctioned", index: number, value: number) {
-    setSaved(false);
     setDraft((d) => ({
       ...d,
       [schedule]: d[schedule].map((p, i) => (i === index ? value : p)),
@@ -298,39 +290,30 @@ function TournamentEditor({ initial }: { initial: TournamentPointsConfig }) {
         scope="tournament"
         validityDays={draft.validityDays}
         onValidity={(v) => {
-          setSaved(false);
           setDraft((d) => ({ ...d, validityDays: v }));
         }}
         onSave={() => {
-          setError(null);
-          setSaved(false);
           save.mutate({ data: draft });
         }}
         pending={save.isPending}
-        saved={saved}
-        error={error}
       />
     </>
   );
 }
 
-/** Shared validity-days input + Save button with inline saved/error feedback. */
+/** Shared validity-days input + Save button; save result is surfaced via toast. */
 function ValidityAndSave({
   scope,
   validityDays,
   onValidity,
   onSave,
   pending,
-  saved,
-  error,
 }: {
   scope: string;
   validityDays: number;
   onValidity: (v: number) => void;
   onSave: () => void;
   pending: boolean;
-  saved: boolean;
-  error: string | null;
 }) {
   const id = `${scope}-validity-days`;
   return (
@@ -349,16 +332,6 @@ function ValidityAndSave({
       <Button size="sm" onClick={onSave} disabled={pending}>
         {pending ? "Saving…" : "Save"}
       </Button>
-      {saved ? (
-        <span className="text-xs text-muted-foreground" role="status">
-          Saved
-        </span>
-      ) : null}
-      {error ? (
-        <span className="text-xs text-destructive" role="alert">
-          {error}
-        </span>
-      ) : null}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   Card,
   CardContent,
@@ -72,7 +73,6 @@ function NewEventForm() {
   const [type, setType] = useState<EventType>("OPEN_PLAY");
   // The circuit a TOURNAMENT belongs to (#525); required for tournaments, ignored otherwise.
   const [circuitId, setCircuitId] = useState("");
-  const [error, setError] = useState<string | null>(null);
   // "Award Ranking Points" checkbox (#559): when set, finalizing the event awards ranking points per the
   // global schedules; unticking opts the whole event out of awarding.
   // TEMPORARY (#567): defaulted OFF during the testing phase so new events don't award points while we
@@ -114,7 +114,6 @@ function NewEventForm() {
 
   function submit(e: FormEvent) {
     e.preventDefault();
-    setError(null);
     create.mutate(
       {
         data: {
@@ -131,7 +130,10 @@ function NewEventForm() {
       },
       {
         onError: () =>
-          setError("Could not create the event. Check the name and dates."),
+          toast.error(
+            "Could not create the event. Check the name and dates.",
+            { duration: 8000 },
+          ),
       },
     );
   }
@@ -296,11 +298,6 @@ function NewEventForm() {
           >
             Create event
           </Button>
-          {error ? (
-            <p className="text-sm text-destructive" role="alert">
-              {error}
-            </p>
-          ) : null}
         </form>
       </CardContent>
     </Card>

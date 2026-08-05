@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   Card,
   CardContent,
@@ -96,17 +97,17 @@ function PlaceholderRow({
   canGenerate: boolean;
 }) {
   const [result, setResult] = useState<ClaimCodeResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const generate = usePostApiV1UsersIdClaimCode();
   const meta = placeholderMeta(user);
 
   async function onGenerate() {
-    setError(null);
     try {
       const code = await generate.mutateAsync({ id: user.id });
       setResult(code);
     } catch {
-      setError("Could not generate a claim code. Try again.");
+      toast.error("Could not generate a claim code. Try again.", {
+        duration: 8000,
+      });
     }
   }
 
@@ -137,11 +138,6 @@ function PlaceholderRow({
           </Button>
         ) : null}
       </div>
-      {error ? (
-        <p className="mt-2 text-sm text-destructive" role="alert">
-          {error}
-        </p>
-      ) : null}
       {result ? (
         <ClaimCodePanel result={result} onDismiss={() => setResult(null)} />
       ) : null}

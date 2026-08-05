@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   Card,
@@ -107,7 +108,6 @@ export function InvitesSection() {
   const [email, setEmail] = useState('')
   const [page, setPage] = useState(0)
   const [filter, setFilter] = useState<InviteFilter>('PENDING')
-  const [error, setError] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
 
   const create = usePostApiV1Invites()
@@ -135,25 +135,28 @@ export function InvitesSection() {
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
-    setError(null)
     setSending(true)
     try {
       await invite(email.trim())
       setEmail('')
     } catch (err) {
-      setError(existingAccountMessage(err) ?? 'Could not send the invite. Check the email and try again.')
+      toast.error(
+        existingAccountMessage(err) ?? 'Could not send the invite. Check the email and try again.',
+        { duration: 8000 },
+      )
     } finally {
       setSending(false)
     }
   }
 
   async function onResend(address: string) {
-    setError(null)
     setSending(true)
     try {
       await invite(address)
     } catch (err) {
-      setError(existingAccountMessage(err) ?? 'Could not resend the invite. Try again.')
+      toast.error(existingAccountMessage(err) ?? 'Could not resend the invite. Try again.', {
+        duration: 8000,
+      })
     } finally {
       setSending(false)
     }
@@ -187,11 +190,6 @@ export function InvitesSection() {
             {sending ? 'Sending…' : 'Send invite'}
           </Button>
         </form>
-        {error ? (
-          <p className="text-sm text-destructive" role="alert">
-            {error}
-          </p>
-        ) : null}
 
         <div className="flex flex-wrap gap-1" role="group" aria-label="Filter invites by status">
           {FILTERS.map((f) => (

@@ -19,6 +19,14 @@ vi.mock("@/api/generated/users/users", () => ({
   getGetApiV1UsersMeQueryKey: () => ["me"],
 }));
 
+const { toastSuccess, toastError } = vi.hoisted(() => ({
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
+}));
+vi.mock("sonner", () => ({
+  toast: { success: toastSuccess, error: toastError },
+}));
+
 function renderForm() {
   return render(
     <QueryClientProvider client={new QueryClient()}>
@@ -83,7 +91,7 @@ describe("PhotoSettingsForm", () => {
         data: { customPhotoUrl: "https://new.example/pic.png", hidden: true },
       }),
     );
-    expect(screen.getByRole("status")).toHaveTextContent("Saved");
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith("Saved"));
   });
 
   it("sends null to clear the custom URL when left blank", async () => {
@@ -137,8 +145,11 @@ describe("PhotoSettingsForm", () => {
     renderForm();
     await user.click(screen.getByRole("button", { name: "Save photo" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      /Could not save your photo settings/,
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(
+        "Could not save your photo settings. Check the URL and try again.",
+        { duration: 8000 },
+      ),
     );
   });
 
