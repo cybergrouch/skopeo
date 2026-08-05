@@ -767,7 +767,11 @@ class PlayerServiceTest {
         val match = fixture(u1 = player.id, u2 = other.id, date = LocalDate.of(2026, 1, 1))
         history(userId = player.id, matchId = match.id, previousLevel = "3.5")
 
-        service.ratingHistory(token = token(uid = "admin"), code = player.publicCode.lowercase()).shouldBeRight() shouldHaveSize 1
+        val adminHistory = service.ratingHistory(token = token(uid = "admin"), code = player.publicCode.lowercase()).shouldBeRight()
+        adminHistory shouldHaveSize 1
+        // The admin sees the RAW NTRP values, not just bands (#654) — the reveal must reach the DTO.
+        adminHistory.single().previousRating.shouldNotBeNull()
+        adminHistory.single().newRating.shouldNotBeNull()
 
         // A plain player cannot read anyone's rating history by code.
         newUser(uid = "plain", names = display(name = "Plain"))

@@ -303,7 +303,9 @@ class PlayerService(
             val caller = users.findByFirebaseUid(firebaseUid = token.uid)
             ensure(condition = caller.canSeeRawRatingOrFalse()) { ServiceError.Forbidden() }
             val user = resolve(code = code).bind()
-            ratings.historyByUser(userId = user.id).map { it.toResponse() }
+            // Everyone who passes the gate above is a raw-rating viewer, so reveal the raw NTRP values —
+            // otherwise toResponse() defaults to nulling them and the admin sees bands only (#654).
+            ratings.historyByUser(userId = user.id).map { it.toResponse(revealRawValue = true) }
         }
 
     /**
