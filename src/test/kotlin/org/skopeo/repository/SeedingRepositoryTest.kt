@@ -76,7 +76,7 @@ class SeedingRepositoryTest {
 
         seedings.replace(listId = list.id, generatedBy = owner.id, entries = listOf(element = entryFor(user = player, displayName = "P1")))
 
-        val found = seedings.findByListId(listId = list.id).shouldBeRight()
+        val found = seedings.findByListId(listId = list.id).shouldBeRight().toDomain()
         found.entries.single().let {
             it.userId shouldBe player.id
             it.displayName shouldBe "P1"
@@ -104,7 +104,7 @@ class SeedingRepositoryTest {
         // Hard-delete the user → the FK (ON DELETE SET NULL) nulls the entry's user_id; the snapshot stays.
         transaction { UsersTable.deleteWhere { UsersTable.id eq victim.id } }
 
-        seedings.findByListId(listId = list.id).shouldBeRight().entries.single().let {
+        seedings.findByListId(listId = list.id).shouldBeRight().toDomain().entries.single().let {
             it.userId.shouldBeNull()
             it.displayName shouldBe "Victim"
             it.publicCode shouldBe "ABC123"

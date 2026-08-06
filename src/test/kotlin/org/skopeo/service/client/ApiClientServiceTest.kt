@@ -18,6 +18,7 @@ import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.common.security.ClientAuthResult
 import org.skopeo.common.security.ClientPrincipal
+import org.skopeo.mapper.entity.client.toDomain
 import org.skopeo.model.ApiClientStatus
 import org.skopeo.model.ApiKeyEnvironment
 import org.skopeo.model.AuthProvider
@@ -317,7 +318,7 @@ class ApiClientServiceTest {
 
     @Test
     fun `authenticate rejects an expired key`() {
-        val client = clients.createClient(name = "Partner A", createdBy = null)
+        val client = clients.createClient(name = "Partner A", createdBy = null).toDomain()
         val generated = ApiKeyCrypto.generate(environment = ApiKeyEnvironment.LIVE)
         clients.insertKey(
             command =

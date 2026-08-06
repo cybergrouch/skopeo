@@ -8,6 +8,7 @@ import arrow.core.raise.either
 import org.skopeo.common.error.ServiceError
 import org.skopeo.dto.seeding.SeedingResponse
 import org.skopeo.mapper.dto.seeding.toResponse
+import org.skopeo.mapper.entity.seeding.toDomain
 import org.skopeo.model.SeedingEntry
 import org.skopeo.model.User
 import org.skopeo.model.ageInYears
@@ -89,7 +90,7 @@ class SeedingService(
         either {
             val showRaw = userService.callerCanSeeRawRating(token = token)
             lists.get(token = token, listId = listId).bind() // ownership + access
-            seedings.findByListId(listId = listId).bind().toResponse(showRawRating = showRaw)
+            seedings.findByListId(listId = listId).bind().toDomain().toResponse(showRawRating = showRaw)
         }
 
     /** The name to sort and snapshot by: the display name, falling back to the shareable code. */

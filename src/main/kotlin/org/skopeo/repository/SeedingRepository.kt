@@ -18,7 +18,9 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.skopeo.common.error.ServiceError
 import org.skopeo.model.Seeding
 import org.skopeo.model.SeedingEntry
+import org.skopeo.persistence.SeedingAggregateEntity
 import org.skopeo.persistence.SeedingEntity
+import org.skopeo.persistence.SeedingEntryEntity
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -56,7 +58,7 @@ class SeedingRepository {
             Seeding(id = seedingId, listId = listId, generatedAt = now, entries = entries)
         }
 
-    fun findByListId(listId: UUID): Either<ServiceError, Seeding> =
+    fun findByListId(listId: UUID): Either<ServiceError, SeedingAggregateEntity> =
         transaction {
             val row = SeedingsTable.selectAll().where { SeedingsTable.listId eq listId }.singleOrNull()
             if (row == null) {
@@ -73,8 +75,8 @@ class SeedingRepository {
                 // them from the live user rows in ONE batched query keyed by user id (never per-row). A claimed
                 // placeholder is re-pointed to the claimant (#496), so a stored user id always resolves.
                 val statusById = statusByUserId(userIds = rows.mapNotNull { it[SeedingEntriesTable.userId]?.value })
-                val entries = rows.map { it.toSeedingEntry(statusById = statusById) }
-                row.toSeedingEntity().toDomain(entries = entries).right()
+                val entries = rows.map { it.toSeedingEntryEntity(statusById = statusById) }
+                SeedingAggregateEntity(seeding = row.toSeedingEntity(), entries = entries).right()
             }
         }
 
@@ -102,10 +104,10 @@ class SeedingRepository {
                 }
         }
 
-    private fun ResultRow.toSeedingEntry(statusById: Map<UUID, UserStatus>): SeedingEntry {
+    private fun ResultRow.toSeedingEntryEntity(statusById: Map<UUID, UserStatus>): SeedingEntryEntity {
         val userId = this[SeedingEntriesTable.userId]?.value
         val status = userId?.let { statusById[it] }
-        return SeedingEntry(
+        return SeedingEntryEntity(
             seed = this[SeedingEntriesTable.seed],
             position = this[SeedingEntriesTable.position],
             userId = userId,
@@ -127,7 +129,4 @@ class SeedingRepository {
             generatedAt = this[SeedingsTable.generatedAt],
             generatedBy = this[SeedingsTable.generatedBy]?.value,
         )
-
-    private fun SeedingEntity.toDomain(entries: List<SeedingEntry>): Seeding =
-        Seeding(id = id, listId = listId, generatedAt = generatedAt, entries = entries)
 }
