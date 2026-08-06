@@ -11,8 +11,8 @@ import org.skopeo.model.Event
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RankingPointRepository
-import org.skopeo.repository.RatingRepository
 import org.skopeo.service.audit.AuditService
+import org.skopeo.service.rating.RatingAssembler
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -27,9 +27,9 @@ import java.util.UUID
  * these values so this unwinds them consistently:
  *
  *  1. **Restore** each participant to their pre-event rating — the `previous_rating`/`previous_level` of
- *     their EARLIEST in-event rating-history row ([RatingRepository.preEventRatings]).
+ *     their EARLIEST in-event rating-history row ([RatingAssembler.preEventRatings]).
  *  2. **Supersede** (soft-delete, not hard-delete) the event's own rating-history rows by stamping
- *     `reversed_at` ([RatingRepository.markEventHistoryReversed]); the read paths exclude them.
+ *     `reversed_at` ([RatingAssembler.markEventHistoryReversed]); the read paths exclude them.
  *  3. **Revoke** the event's active ranking-point awards (the #477 primitive).
  *  4. **Reset** `rated_at` on the event's matches so they re-enter the pending-calc queue, then restore
  *     each participant's `last_match_date` to the date of their latest still-rated match (null if none).
@@ -41,7 +41,7 @@ import java.util.UUID
  */
 class EventRatingsReverser(
     private val events: EventRepository = EventRepository(),
-    private val ratings: RatingRepository = RatingRepository(),
+    private val ratings: RatingAssembler = RatingAssembler(),
     private val matches: MatchRepository = MatchRepository(),
     private val awards: RankingPointRepository = RankingPointRepository(),
     private val audit: AuditService = AuditService(),

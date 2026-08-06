@@ -27,6 +27,7 @@ import org.skopeo.model.SetCalculationBreakdown
 import org.skopeo.model.TeamType
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
+import org.skopeo.service.rating.RatingAssembler
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.math.BigDecimal
 import java.time.LocalDate
@@ -45,6 +46,10 @@ class RatingRepositoryTest {
     private val users = UserRepository()
     private val matches = MatchRepository()
     private val ratings = RatingRepository()
+
+    // The repository now returns raw entities (#633); confidence (#459) and the decoded per-set breakdown
+    // (#110) are domain-only, assembled here — so those specific reads go through the assembler.
+    private val assembler = RatingAssembler(ratings = ratings, matches = matches)
 
     @BeforeEach
     fun reset() {
@@ -114,16 +119,16 @@ class RatingRepositoryTest {
 
         // No matches yet → confidence 0, whatever the rating source (a bare admin override here).
         ratings.setRating(userId = userId, rating = BigDecimal("4.0"), level = "4.0")
-        ratings.findCurrentRating(userId = userId)!!.confidence.compareTo(other = BigDecimal.ZERO) shouldBe 0
+        assembler.findCurrentRating(userId = userId)!!.confidence.compareTo(other = BigDecimal.ZERO) shouldBe 0
 
         // Two in-window open-play matches ⇒ weighted count 1.0, gap 30 → ≈ 0.595 (worked example A).
         val today = LocalDate.now()
         repeat(times = 2) { completedMatch(u1 = userId, u2 = opponent, matchType = MatchType.OPEN_PLAY, matchDate = today) }
-        ratings.findCurrentRating(userId = userId)!!.confidence.toDouble() shouldBe (0.595 plusOrMinus 0.001)
+        assembler.findCurrentRating(userId = userId)!!.confidence.toDouble() shouldBe (0.595 plusOrMinus 0.001)
 
         // A match outside the 30-day window does not count — confidence is unchanged.
         completedMatch(u1 = userId, u2 = opponent, matchType = MatchType.OPEN_PLAY, matchDate = today.minusDays(40))
-        ratings.findCurrentRating(userId = userId)!!.confidence.toDouble() shouldBe (0.595 plusOrMinus 0.001)
+        assembler.findCurrentRating(userId = userId)!!.confidence.toDouble() shouldBe (0.595 plusOrMinus 0.001)
     }
 
     @Test
@@ -239,7 +244,7 @@ class RatingRepositoryTest {
             write = historyWrite(userId = userId, newRating = "4.3", breakdown = netBreakdown.copy(sets = listOf(element = step))),
         )
 
-        val byRating = ratings.historyByUser(userId = userId).associateBy { it.newRating }
+        val byRating = assembler.historyByUser(userId = userId).associateBy { it.newRating }
         byRating.getValue(key = BigDecimal("4.100000")).setBreakdown shouldBe emptyList()
         byRating.getValue(key = BigDecimal("4.200000")).setBreakdown shouldBe emptyList()
         byRating.getValue(key = BigDecimal("4.300000")).setBreakdown shouldBe listOf(element = step)

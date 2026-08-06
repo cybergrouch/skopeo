@@ -34,9 +34,9 @@ import org.skopeo.model.User
 import org.skopeo.repository.AppSettingsRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RankingPointRepository
-import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.StandingsSnapshotRepository
 import org.skopeo.repository.UserRepository
+import org.skopeo.service.rating.RatingAssembler
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.math.BigDecimal
@@ -54,7 +54,7 @@ class StandingsCalculationServiceTest {
     }
 
     private val users = UserRepository()
-    private val ratings = RatingRepository()
+    private val ratings = RatingAssembler()
     private val matches = MatchRepository()
     private val awards = RankingPointRepository()
     private val snapshots = StandingsSnapshotRepository()

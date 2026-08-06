@@ -44,8 +44,8 @@ import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.MatchesTable
-import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
+import org.skopeo.service.rating.RatingAssembler
 import org.skopeo.service.rating.RatingCalculationService
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.testsupport.PostgresTestDatabase
@@ -64,7 +64,7 @@ class MatchServiceTest {
     }
 
     private val users = UserRepository()
-    private val ratings = RatingRepository()
+    private val ratings = RatingAssembler()
     private val matchRepo = MatchRepository()
     private val service = MatchService(matches = matchRepo, ratings = ratings, users = users)
     private val calc = RatingCalculationService(matches = matchRepo, ratings = ratings, users = users)

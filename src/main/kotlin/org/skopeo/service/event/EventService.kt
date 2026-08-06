@@ -41,9 +41,9 @@ import org.skopeo.repository.CircuitRepository
 import org.skopeo.repository.ClubRepository
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
-import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService
+import org.skopeo.service.rating.RatingAssembler
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.service.user.displayName
 import org.skopeo.service.user.isDeleted
@@ -81,7 +81,7 @@ class EventService(
     private val events: EventRepository = EventRepository(),
     private val users: UserRepository = UserRepository(),
     private val matches: MatchRepository = MatchRepository(),
-    private val ratings: RatingRepository = RatingRepository(),
+    private val ratings: RatingAssembler = RatingAssembler(),
     private val clubs: ClubRepository = ClubRepository(),
     private val circuits: CircuitRepository = CircuitRepository(),
     private val awarder: EventFinalizeAwarder = EventFinalizeAwarder(),

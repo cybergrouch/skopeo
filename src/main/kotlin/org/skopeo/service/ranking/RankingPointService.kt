@@ -33,9 +33,9 @@ import org.skopeo.model.ResolvedAward
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RankingPointRepository
-import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService
+import org.skopeo.service.rating.RatingAssembler
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.service.user.displayName
 import org.skopeo.service.user.isDeleted
@@ -59,7 +59,7 @@ private const val MAX_PAGE_SIZE = 100
 class RankingPointService(
     private val awards: RankingPointRepository = RankingPointRepository(),
     private val users: UserRepository = UserRepository(),
-    private val ratings: RatingRepository = RatingRepository(),
+    private val ratings: RatingAssembler = RatingAssembler(),
     private val matches: MatchRepository = MatchRepository(),
     private val events: EventRepository = EventRepository(),
     private val audit: AuditService = AuditService(),

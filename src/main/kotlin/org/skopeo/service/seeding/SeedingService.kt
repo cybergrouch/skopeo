@@ -13,9 +13,9 @@ import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.SeedingEntry
 import org.skopeo.model.User
 import org.skopeo.model.ageInYears
-import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.SeedingRepository
 import org.skopeo.repository.UserRepository
+import org.skopeo.service.rating.RatingAssembler
 import org.skopeo.service.user.UserService
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.service.user.displayName
@@ -32,7 +32,7 @@ import kotlin.math.ceil
 class SeedingService(
     private val lists: PlayerListService = PlayerListService(),
     private val users: UserRepository = UserRepository(),
-    private val ratings: RatingRepository = RatingRepository(),
+    private val ratings: RatingAssembler = RatingAssembler(),
     private val seedings: SeedingRepository = SeedingRepository(),
     private val userService: UserService = UserService(),
 ) {

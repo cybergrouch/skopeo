@@ -41,7 +41,6 @@ import org.skopeo.model.UserName
 import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
-import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRatingHistoryTable
 import org.skopeo.repository.UserRatingsTable
 import org.skopeo.repository.UserRepository
@@ -68,7 +67,7 @@ class RatingCalculationServiceTest {
     }
 
     private val users = UserRepository()
-    private val ratings = RatingRepository()
+    private val ratings = RatingAssembler()
     private val matchRepo = MatchRepository()
     private val matchService = MatchService(matches = matchRepo, ratings = ratings, users = users)
     private val calc = RatingCalculationService(matches = matchRepo, ratings = ratings, users = users)

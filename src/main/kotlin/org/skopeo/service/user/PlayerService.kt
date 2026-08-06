@@ -31,8 +31,8 @@ import org.skopeo.model.canSeeRawRatingOrFalse
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RankingPointRepository
-import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
+import org.skopeo.service.rating.RatingAssembler
 import org.skopeo.service.standings.StandingsService
 import java.time.LocalDateTime
 import java.util.UUID
@@ -54,7 +54,7 @@ private val EMAIL_VIEW_ROLES = setOf(Capability.HOST, Capability.CLUB_OWNER, Cap
 @Suppress("TooManyFunctions") // Cohesive public-read surface (profile/history/results/standing/points) + #622 gate.
 class PlayerService(
     private val users: UserRepository = UserRepository(),
-    private val ratings: RatingRepository = RatingRepository(),
+    private val ratings: RatingAssembler = RatingAssembler(),
     private val matches: MatchRepository = MatchRepository(),
     private val standings: StandingsService = StandingsService(),
     private val awards: RankingPointRepository = RankingPointRepository(),

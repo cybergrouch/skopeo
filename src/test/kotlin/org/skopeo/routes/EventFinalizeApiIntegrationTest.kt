@@ -40,10 +40,10 @@ import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.module
 import org.skopeo.repository.MatchRepository
-import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.event.CreateEventInput
 import org.skopeo.service.event.EventService
+import org.skopeo.service.rating.RatingAssembler
 import org.skopeo.service.rating.RatingCalculationService
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.testsupport.PostgresTestDatabase
@@ -170,7 +170,7 @@ class EventFinalizeApiIntegrationTest {
         p1: User,
         p2: User,
     ): String {
-        val ratings = RatingRepository()
+        val ratings = RatingAssembler()
         ratings.setRating(userId = p1.id, rating = BigDecimal("4.0"), level = "4.0")
         ratings.setRating(userId = p2.id, rating = BigDecimal("4.0"), level = "4.0")
         val matchRepo = MatchRepository()
