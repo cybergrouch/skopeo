@@ -26,6 +26,7 @@ import org.skopeo.dto.match.CreateFixtureRequest
 import org.skopeo.dto.match.MatchResponse
 import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.dto.match.SetScoreRequest
+import org.skopeo.mapper.entity.event.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.CreateEventCommand
@@ -730,7 +731,7 @@ class MatchServiceTest {
                         participantIds = listOf(p1.id, p2.id),
                         createdBy = host.id,
                     ),
-            )
+            ).toDomain()
 
         // A fixture scoped to the event surfaces the event's code + name.
         val evented =
@@ -1019,7 +1020,7 @@ class MatchServiceTest {
                         participantIds = listOf(p1.id, p2.id),
                         createdBy = host.id,
                     ),
-            )
+            ).toDomain()
 
         // Both players are participants → linked to the event.
         val ok =
@@ -1057,7 +1058,7 @@ class MatchServiceTest {
                         participantIds = listOf(p1.id, p2.id),
                         createdBy = host.id,
                     ),
-            )
+            ).toDomain()
         // A fixture recorded while the event is open; then the event is finalized.
         val match =
             service
@@ -1093,7 +1094,7 @@ class MatchServiceTest {
                         participantIds = listOf(p1.id, p2.id),
                         createdBy = host.id,
                     ),
-            )
+            ).toDomain()
 
         // HOST blocked from creating a fixture on the ended event.
         service
@@ -1140,7 +1141,7 @@ class MatchServiceTest {
                         participantIds = listOf(p1.id, p2.id),
                         createdBy = host.id,
                     ),
-            )
+            ).toDomain()
         val inEvent =
             service
                 .createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id))
@@ -1167,7 +1168,7 @@ class MatchServiceTest {
                         participantIds = listOf(p1.id, p2.id),
                         createdBy = host.id,
                     ),
-            )
+            ).toDomain()
         val inEvent =
             service
                 .createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id))
@@ -1198,7 +1199,7 @@ class MatchServiceTest {
                         participantIds = listOf(p1.id, p2.id),
                         createdBy = host.id,
                     ),
-            )
+            ).toDomain()
         val recorded =
             service
                 .createFixture(token = token(uid = "host"), request = fixtureRequest(p1 = p1.id, p2 = p2.id).copy(eventId = event.id))

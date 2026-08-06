@@ -16,18 +16,17 @@ import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.model.CreateEventCommand
-import org.skopeo.model.Event
 import org.skopeo.model.EventParticipantEntry
 import org.skopeo.model.EventParticipantStatus
-import org.skopeo.model.EventType
-import org.skopeo.model.MyEvent
+import org.skopeo.persistence.EventAggregateEntity
 import org.skopeo.persistence.EventEntity
+import org.skopeo.persistence.MyEventEntity
 import java.time.LocalDateTime
 import java.util.UUID
 
 /** Persistence for events/meets (issue #138): the event row plus its participant roster (#201). */
 class EventRepository {
-    fun create(command: CreateEventCommand): Event =
+    fun create(command: CreateEventCommand): EventAggregateEntity =
         transaction {
             val id =
                 EventsTable.insertAndGetId {
@@ -49,7 +48,7 @@ class EventRepository {
         }
 
     /** Active events, newest start date first. When [createdBy] is set, scoped to that creator (HOST). */
-    fun list(createdBy: UUID?): List<Event> =
+    fun list(createdBy: UUID?): List<EventAggregateEntity> =
         transaction {
             EventsTable
                 .selectAll()
@@ -60,32 +59,32 @@ class EventRepository {
                         EventsTable.isActive eq true
                     }
                 }.orderBy(EventsTable.startDate to SortOrder.DESC)
-                .map { buildEvent(row = it) }
+                .map { buildEventAggregate(row = it) }
         }
 
-    fun findById(id: UUID): Event? = transaction { loadEvent(id = id) }
+    fun findById(id: UUID): EventAggregateEntity? = transaction { loadEvent(id = id) }
 
     /**
      * The event with [id], which the caller knows exists — e.g. resolving a match's `event_id`, an
      * FK (`ON DELETE SET NULL`) so a non-null value always points to a live row (#358). Throws if
      * absent, rather than silently swallowing an impossible null.
      */
-    fun getById(id: UUID): Event = transaction { loadEventOrThrow(id = id) }
+    fun getById(id: UUID): EventAggregateEntity = transaction { loadEventOrThrow(id = id) }
 
     /** Active events belonging to [clubId] (#325) — the club-delete cascade soft-deletes each of these. */
-    fun listByClub(clubId: UUID): List<Event> =
+    fun listByClub(clubId: UUID): List<EventAggregateEntity> =
         transaction {
             EventsTable
                 .selectAll()
                 .where { EventsTable.isActive and (EventsTable.clubId eq clubId) }
-                .map { buildEvent(row = it) }
+                .map { buildEventAggregate(row = it) }
         }
 
     /** Rename an event (#269): update its name and return the event, or null if it doesn't exist. */
     fun rename(
         id: UUID,
         name: String,
-    ): Event? =
+    ): EventAggregateEntity? =
         transaction {
             if (loadEvent(id = id) == null) {
                 null
@@ -172,13 +171,13 @@ class EventRepository {
      * events still resolve (#325): their links stay honored for traceability — the public page flags
      * them as deleted. Ratings depend on historical matches, and deletion never touches ratings.
      */
-    fun findByPublicCode(code: String): Event? =
+    fun findByPublicCode(code: String): EventAggregateEntity? =
         transaction {
             EventsTable
                 .selectAll()
                 .where { EventsTable.publicCode eq code }
                 .singleOrNull()
-                ?.let { buildEvent(row = it) }
+                ?.let { buildEventAggregate(row = it) }
         }
 
     /**
@@ -205,7 +204,7 @@ class EventRepository {
         eventId: UUID,
         userId: UUID,
         approvedBy: UUID,
-    ): Event? =
+    ): EventAggregateEntity? =
         transaction {
             if (loadEvent(id = eventId) == null) {
                 null
@@ -226,7 +225,7 @@ class EventRepository {
     fun selfSignup(
         eventId: UUID,
         userId: UUID,
-    ): Event? =
+    ): EventAggregateEntity? =
         transaction {
             if (loadEvent(id = eventId) == null) {
                 null
@@ -247,7 +246,7 @@ class EventRepository {
         userId: UUID,
         status: EventParticipantStatus,
         approvedBy: UUID?,
-    ): Event? =
+    ): EventAggregateEntity? =
         transaction {
             if (loadEvent(id = eventId) == null) {
                 null
@@ -261,7 +260,7 @@ class EventRepository {
     fun removeParticipant(
         eventId: UUID,
         userId: UUID,
-    ): Event? =
+    ): EventAggregateEntity? =
         transaction {
             if (loadEvent(id = eventId) == null) {
                 null
@@ -274,16 +273,16 @@ class EventRepository {
         }
 
     /** A player's own events with their standing in each (#202), active only, newest end date first. */
-    fun findForParticipant(userId: UUID): List<MyEvent> =
+    fun findForParticipant(userId: UUID): List<MyEventEntity> =
         transaction {
             (EventParticipantsTable innerJoin EventsTable)
                 .selectAll()
                 .where { (EventParticipantsTable.userId eq userId) and EventsTable.isActive }
                 .orderBy(EventsTable.endDate to SortOrder.DESC)
                 .map {
-                    MyEvent(
-                        event = buildEvent(row = it),
-                        status = EventParticipantStatus.valueOf(value = it[EventParticipantsTable.status]),
+                    MyEventEntity(
+                        event = buildEventAggregate(row = it),
+                        status = it[EventParticipantsTable.status],
                     )
                 }
         }
@@ -344,14 +343,16 @@ class EventRepository {
         }
     }
 
-    private fun loadEvent(id: UUID): Event? =
-        EventsTable.selectAll().where { EventsTable.id eq id }.singleOrNull()?.let { buildEvent(row = it) }
+    private fun loadEvent(id: UUID): EventAggregateEntity? =
+        EventsTable.selectAll().where { EventsTable.id eq id }.singleOrNull()?.let { buildEventAggregate(row = it) }
 
-    private fun loadEventOrThrow(id: UUID): Event = buildEvent(row = EventsTable.selectAll().where { EventsTable.id eq id }.single())
+    private fun loadEventOrThrow(id: UUID): EventAggregateEntity =
+        buildEventAggregate(row = EventsTable.selectAll().where { EventsTable.id eq id }.single())
 
-    private fun buildEvent(row: ResultRow): Event {
+    /** Assemble the raw [EventAggregateEntity] graph (#633): the `events` row scalars plus its APPROVED roster ids. */
+    private fun buildEventAggregate(row: ResultRow): EventAggregateEntity {
         val entity = row.toEventEntity()
-        return entity.toDomain(participantIds = approvedParticipantIdsOf(eventId = entity.id))
+        return EventAggregateEntity(event = entity, participantIds = approvedParticipantIdsOf(eventId = entity.id))
     }
 
     /** Read only the raw `events`-row scalars into the persistence entity (#633); no child rows. */
@@ -371,26 +372,6 @@ class EventRepository {
             finalizedAt = this[EventsTable.finalizedAt],
             finalizedBy = this[EventsTable.finalizedBy]?.value,
             awardRankingPoints = this[EventsTable.awardRankingPoints],
-        )
-
-    /** Build the domain [Event] from the raw entity plus its separately-loaded APPROVED participant ids (#633). */
-    private fun EventEntity.toDomain(participantIds: List<UUID>): Event =
-        Event(
-            id = id,
-            publicCode = publicCode,
-            name = name,
-            startDate = startDate,
-            endDate = endDate,
-            participantIds = participantIds,
-            isActive = isActive,
-            createdBy = createdBy,
-            clubId = clubId,
-            circuitId = circuitId,
-            calcPriority = calcPriority,
-            type = EventType.valueOf(value = type),
-            finalizedAt = finalizedAt,
-            finalizedBy = finalizedBy,
-            awardRankingPoints = awardRankingPoints,
         )
 
     /** Only APPROVED participants count as the roster (eligible for fixtures/seeding, #201). */

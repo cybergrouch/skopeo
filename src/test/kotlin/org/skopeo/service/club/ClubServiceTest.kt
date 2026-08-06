@@ -17,6 +17,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
+import org.skopeo.mapper.entity.event.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.CreateEventCommand
 import org.skopeo.model.CreateFixtureCommand
@@ -215,7 +216,7 @@ class ClubServiceTest {
                         createdBy = admin.id,
                         clubId = UUID.fromString(club.id),
                     ),
-            )
+            ).toDomain()
         val match =
             matchRepo.createFixture(
                 command =
@@ -235,9 +236,9 @@ class ClubServiceTest {
         service.delete(token = token(uid = "admin"), clubId = UUID.fromString(club.id)).shouldBeRight()
 
         // The event and its match drop out of active lists…
-        events.findById(id = event.id)!!.isActive shouldBe false
+        events.findById(id = event.id)!!.toDomain().isActive shouldBe false
         // …but stay traceable by public code, flagged not-active (#325).
-        events.findByPublicCode(code = event.publicCode)!!.isActive shouldBe false
+        events.findByPublicCode(code = event.publicCode)!!.toDomain().isActive shouldBe false
         matchRepo.findByPublicCode(code = match.publicCode)!!.isActive shouldBe false
     }
 
@@ -258,7 +259,7 @@ class ClubServiceTest {
                         createdBy = admin.id,
                         clubId = UUID.fromString(club.id),
                     ),
-            )
+            ).toDomain()
         val underClub =
             matchRepo.createFixture(
                 command =

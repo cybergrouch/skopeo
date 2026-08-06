@@ -10,9 +10,9 @@ import java.util.UUID
 /**
  * Raw persistence view of an `events` row (#633): only the root-row scalar columns, no child rows
  * (the participant roster lives in `event_participants`) and no derived fields (`isFinalized` is a
- * model getter). Model-free leaf — [type] is held raw as [String] and parsed in the repository's
- * `toDomain`, which also attaches the separately-loaded APPROVED [participantIds] to build the
- * domain `Event`.
+ * model getter). Model-free leaf — [type] is held raw as [String]. The repository bundles this row
+ * with its separately-loaded APPROVED participant ids into an [EventAggregateEntity]; the
+ * `mapper.entity` conversion then parses [type] and builds the domain `Event`.
  */
 data class EventEntity(
     val id: UUID,

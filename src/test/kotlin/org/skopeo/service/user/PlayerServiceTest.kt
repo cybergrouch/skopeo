@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.dto.user.ResultsBucket
+import org.skopeo.mapper.entity.event.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.AwardStatus
 import org.skopeo.model.ContactInfo
@@ -969,7 +970,7 @@ class PlayerServiceTest {
         val owner = newUser(uid = "owner", names = display(name = "Owner"))
         // Simulate an event id via a real event so the code lookup resolves. Use EventRepository through
         // the service's default dependency by inserting an event and referencing its id on the award.
-        val event = org.skopeo.repository.EventRepository().create(command = eventCommand(createdBy = owner.id))
+        val event = org.skopeo.repository.EventRepository().create(command = eventCommand(createdBy = owner.id)).toDomain()
         grant(userId = owner.id, points = "15", matchId = null, eventId = event.id)
 
         val row = service.activePoints(token = token(uid = "owner"), code = owner.publicCode).shouldBeRight().single()

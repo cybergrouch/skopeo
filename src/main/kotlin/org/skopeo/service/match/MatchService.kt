@@ -25,6 +25,7 @@ import org.skopeo.dto.rating.MatchCalculationDetailResponse
 import org.skopeo.mapper.dto.match.toPublicResponse
 import org.skopeo.mapper.dto.match.toResponse
 import org.skopeo.mapper.dto.rating.toResponse
+import org.skopeo.mapper.entity.event.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -193,7 +194,7 @@ class MatchService(
             val event =
                 request.eventId?.let { eventId ->
                     val loaded =
-                        ensureNotNull(value = events.findById(id = eventId)) {
+                        ensureNotNull(value = events.findById(id = eventId)?.toDomain()) {
                             ServiceError.Validation(message = "Event $eventId not found")
                         }
                     ensureHostMayEnter(event = loaded, caller = caller).bind()
@@ -274,7 +275,9 @@ class MatchService(
             // A HOST cannot record results on an event that has ended; an ADMINISTRATOR still can (#310).
             match.eventId?.let { eventId ->
                 val event =
-                    ensureNotNull(value = events.findById(id = eventId)) { ServiceError.NotFound(message = "Event $eventId not found") }
+                    ensureNotNull(value = events.findById(id = eventId)?.toDomain()) {
+                        ServiceError.NotFound(message = "Event $eventId not found")
+                    }
                 ensureHostMayEnter(event = event, caller = caller).bind()
                 ensureEventNotFinalized(event = event).bind()
             }
@@ -442,7 +445,7 @@ class MatchService(
             // so the public page can link to the event. Null for eventless (open-play) matches.
             val event =
                 match.eventId?.let { eventId ->
-                    val owning = events.getById(id = eventId)
+                    val owning = events.getById(id = eventId).toDomain()
                     MatchPublicEvent(publicCode = owning.publicCode, name = owning.name)
                 }
             match.toPublicResponse(players = players, ratingChanges = ratingChanges, headToHead = headToHead, event = event)
@@ -664,7 +667,7 @@ class MatchService(
      */
     private fun ensureEventParticipants(request: FixtureInput): Either<ServiceError, Unit> {
         val eventId = request.eventId ?: return Unit.right()
-        val event = events.findById(id = eventId)
+        val event = events.findById(id = eventId)?.toDomain()
         val players = request.team1 + request.team2
         return when {
             event == null -> ServiceError.Validation(message = "Event $eventId not found").left()

@@ -15,6 +15,7 @@ import org.skopeo.dto.club.ClubPublicResponse
 import org.skopeo.dto.club.ClubResponse
 import org.skopeo.mapper.dto.club.toResponse
 import org.skopeo.mapper.entity.club.toDomain
+import org.skopeo.mapper.entity.event.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -130,7 +131,7 @@ class ClubService(
                 ensureNotNull(value = clubs.findById(id = clubId)) { ServiceError.NotFound(message = "Club $clubId not found") }.toDomain()
             ensure(condition = clubs.disable(id = clubId)) { ServiceError.NotFound(message = "Club $clubId not found") }
             val now = LocalDateTime.now()
-            events.listByClub(clubId = clubId).forEach { event ->
+            events.listByClub(clubId = clubId).map { it.toDomain() }.forEach { event ->
                 matches.listByEvent(eventId = event.id).forEach { match ->
                     matches.setActive(matchId = match.id, active = false, disabledAt = now).bind()
                 }
@@ -223,6 +224,7 @@ class ClubService(
             val (upcoming, past) =
                 events
                     .listByClub(clubId = club.id)
+                    .map { it.toDomain() }
                     .map { event ->
                         ClubPublicEvent(
                             publicCode = event.publicCode,
