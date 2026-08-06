@@ -26,6 +26,8 @@ import org.skopeo.model.SetCalculationBreakdown
 import org.skopeo.model.UserRating
 import org.skopeo.model.WindowMatch
 import org.skopeo.model.confidenceAt
+import org.skopeo.persistence.RatingHistoryEntryEntity
+import org.skopeo.persistence.UserRatingEntity
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -382,21 +384,45 @@ class RatingRepository(
 internal fun ResultRow.toUserRating(
     windowed: List<WindowMatch>,
     now: LocalDateTime,
-): UserRating =
-    UserRating(
+): UserRating = toUserRatingEntity().toDomain(windowed = windowed, now = now)
+
+/** Map a `user_ratings` row to the raw persistence entity (#633) — no derived `confidence`. */
+internal fun ResultRow.toUserRatingEntity(): UserRatingEntity =
+    UserRatingEntity(
         userId = this[UserRatingsTable.userId].value,
         currentRating = this[UserRatingsTable.currentRating],
         currentLevel = this[UserRatingsTable.currentLevel],
-        // Computed on read (#459): 3-factor recency × sparsity × spacing over the player's windowed match
-        // rows in the last 30 days; 0 when there is no qualifying play in the window.
-        confidence = confidenceAt(matches = windowed, now = now),
         matchesPlayed = this[UserRatingsTable.matchesPlayed],
         lastMatchDate = this[UserRatingsTable.lastMatchDate],
         matchRatedAt = this[UserRatingsTable.matchRatedAt],
     )
 
-internal fun ResultRow.toRatingHistory(): RatingHistoryEntry =
-    RatingHistoryEntry(
+/**
+ * Convert the raw persistence [UserRatingEntity] to the domain [UserRating] (#633): this single boundary
+ * is where the *computed* `confidence` is derived (#459) — a 3-factor recency × sparsity × spacing score
+ * over the player's [windowed] match rows in the last 30 days, 0 when there is no qualifying play. The
+ * direct analogue of `UserEntity.toDomain` computing `photoUrl`. Lives in the repository (which may
+ * reference both `persistence` and `model`) rather than a mapper, since `repository ↛ mapper` is enforced.
+ */
+internal fun UserRatingEntity.toDomain(
+    windowed: List<WindowMatch>,
+    now: LocalDateTime,
+): UserRating =
+    UserRating(
+        userId = userId,
+        currentRating = currentRating,
+        currentLevel = currentLevel,
+        confidence = confidenceAt(matches = windowed, now = now),
+        matchesPlayed = matchesPlayed,
+        lastMatchDate = lastMatchDate,
+        matchRatedAt = matchRatedAt,
+    )
+
+internal fun ResultRow.toRatingHistory(): RatingHistoryEntry = toRatingHistoryEntryEntity().toDomain()
+
+/** Map a `user_rating_history` row to the raw persistence entity (#633) — `setBreakdown` stays raw JSON. */
+internal fun ResultRow.toRatingHistoryEntryEntity(): RatingHistoryEntryEntity =
+    RatingHistoryEntryEntity(
         id = this[UserRatingHistoryTable.id].value,
         userId = this[UserRatingHistoryTable.userId].value,
         matchId = this[UserRatingHistoryTable.matchId],
@@ -417,12 +443,45 @@ internal fun ResultRow.toRatingHistory(): RatingHistoryEntry =
         isUpset = this[UserRatingHistoryTable.isUpset],
         upsetMultiplier = this[UserRatingHistoryTable.upsetMultiplier],
         kFactor = this[UserRatingHistoryTable.kFactor],
-        setBreakdown =
-            this[UserRatingHistoryTable.setBreakdown]
-                ?.let { RATING_HISTORY_JSON.decodeFromString(deserializer = SET_BREAKDOWN_SERIALIZER, string = it) }
-                .orEmpty(),
+        setBreakdown = this[UserRatingHistoryTable.setBreakdown],
         completedAt = this[UserRatingHistoryTable.completedAt],
         calculatedAt = this[UserRatingHistoryTable.calculatedAt],
+    )
+
+/**
+ * Convert the raw persistence [RatingHistoryEntryEntity] to the domain [RatingHistoryEntry] (#633): the
+ * single boundary where the raw `setBreakdown` JSON (#110) is decoded into `List<SetCalculationBreakdown>`.
+ * Lives in the repository (which may reference both `persistence` and `model`), since `repository ↛
+ * mapper` is enforced.
+ */
+internal fun RatingHistoryEntryEntity.toDomain(): RatingHistoryEntry =
+    RatingHistoryEntry(
+        id = id,
+        userId = userId,
+        matchId = matchId,
+        previousRating = previousRating,
+        newRating = newRating,
+        ratingChange = ratingChange,
+        percentChange = percentChange,
+        previousLevel = previousLevel,
+        newLevel = newLevel,
+        levelChanged = levelChanged,
+        dominanceFactor = dominanceFactor,
+        smoothingApplied = smoothingApplied,
+        smoothingFactor = smoothingFactor,
+        scale = scale,
+        ratingGap = ratingGap,
+        normalizedGap = normalizedGap,
+        competitiveThresholdPct = competitiveThresholdPct,
+        isUpset = isUpset,
+        upsetMultiplier = upsetMultiplier,
+        kFactor = kFactor,
+        setBreakdown =
+            setBreakdown
+                ?.let { RATING_HISTORY_JSON.decodeFromString(deserializer = SET_BREAKDOWN_SERIALIZER, string = it) }
+                .orEmpty(),
+        completedAt = completedAt,
+        calculatedAt = calculatedAt,
     )
 
 /** JSON codec and serializer for the per-set breakdown column (#110). */
