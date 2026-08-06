@@ -11,8 +11,9 @@ application) that can be on a request. Companion docs go deeper on specific slic
 
 - A single **Ktor** application (`Application.kt`) wired once in `Application.module()`; Netty engine,
   kotlinx.serialization JSON.
-- **Layered**: `routes → service → repository → Exposed/PostgreSQL`, over a pure `model` layer. The
-  directions are enforced by `LayeredArchitectureTest` (ArchUnit).
+- **Layered**: `routes → service → repository → Exposed/PostgreSQL`, over a pure `model` layer and a raw
+  `persistence` entity layer (#633: repositories map rows through dumb `<X>Entity` types, then convert to
+  `model` at one boundary). The directions are enforced by `LayeredArchitectureTest` (ArchUnit).
 - **Two identities**: end users authenticate with a **Firebase ID token** (verified against Google's
   JWKS); partner applications authenticate with a **hashed API key** (`X-Api-Key`). Authorization is
   in-house — capability roles for users, scopes for clients.
@@ -100,8 +101,10 @@ required); everything else is `authenticate(FIREBASE_AUTH)`.
 ## Layers
 
 The layering is enforced by `LayeredArchitectureTest` (ArchUnit) — see
-[LAYERED_ARCHITECTURE](./LAYERED_ARCHITECTURE.md). In short: `repository` and `model` are foundations
-(they depend up on nothing), `service` is transport-agnostic (never imports `routes`), `dto` is a **pure
+[LAYERED_ARCHITECTURE](./LAYERED_ARCHITECTURE.md). In short: `model`, `persistence`, and `common` are
+leaf foundations (they depend up on nothing above), `repository` sits directly above them — it maps a DB
+row to a raw **`persistence`** entity, then converts that entity to a `model` type at a single boundary
+(#633; see below) — `service` is transport-agnostic (never imports `routes`), `dto` is a **pure
 serializable boundary record** (no `model`/`service` dependency — save a small allowlist of three v1
 stateless-calculator DTOs), and `mapper` owns the dto↔model translation (`toResponse`/`toCommand`
 extensions), depending on `dto` + `model` only. `service` may call `mapper` (one-way, acyclic). The
@@ -123,6 +126,7 @@ classDiagram
     class repository
     class dto
     class model
+    class persistence["persistence: raw as-stored row entities (#633)"]
     class common["common: ServiceError · auth principals + Capability · value contracts"]
     class DB["Exposed / PostgreSQL"]
     routes --> service
@@ -135,8 +139,10 @@ classDiagram
     service --> common
     mapper --> dto
     mapper --> model
+    repository --> persistence
     repository --> model
     repository --> common
+    persistence --> common
     model --> common
     repository --> DB
 ```
@@ -146,6 +152,20 @@ under one parent) is the sanctioned **cross-cutting foundation** of dependency-f
 `ServiceError`, the auth principals + the `Capability` enum, and the serializable points-config
 contracts. **Every** layer — including `model` (which references `Capability`) — may depend on `common`;
 `common` depends on nothing above it, not even `model`. Note there is **no `routes → model` edge**.
+
+`persistence` (`org.skopeo.persistence`) is the **raw entity / data-model** leaf introduced by the #633
+split: one dumb `<X>Entity` per aggregate that mirrors a DB row **as stored** — enum columns held as raw
+`String`, JSON columns as the raw text, no derived fields and no behaviour (contrast the domain `model`
+types, which carry derivations like `User.photoUrl` and `UserRating.confidence` and the assembled child
+collections). Each `repository` maps `ResultRow → <X>Entity → domain model` and converts the entity to
+its `model` type at a **single boundary** (`XEntity.toDomain(...)`), where derived fields are computed and
+child collections attached. That conversion lives in `repository` because `persistence` is a strict leaf
+— like `model`/`common` it may depend only on `common`, and **`model` may not depend on `persistence`**
+(nor may `mapper`), so the boundary can sit nowhere else. Public repository signatures still return
+`model` types, so the split is invisible to `service`/`routes`/`dto`/`mapper`. The lone exception is the
+two config repositories (`AppSettings`/`PointsConfig`): a settings row is a bare key/value with no domain
+counterpart, so `AppSettingEntity`/`PointsConfigEntity` are returned to and interpreted by their services
+directly.
 
 ## Error handling & the result convention
 
@@ -322,6 +342,7 @@ sequenceDiagram
 | Feature transport | `routes/*.kt` |
 | Business logic | `service/**` |
 | Persistence (Exposed) | `repository/*Table*.kt`, `repository/*Repository.kt` |
+| Raw as-stored row entities (#633) | `persistence/*Entity.kt` |
 | Pure domain + enums | `model/*Domain.kt` |
 | HTTP request/response records | `dto/**` |
 | dto↔model translation (`toResponse`/`toCommand`) | `mapper/**` |
