@@ -55,9 +55,9 @@ features land — consult the CI test reports rather than a fixed number here.
 
 Tests pure business logic in complete isolation - no infrastructure, no HTTP, no JSON. This is the largest part of the suite.
 
-#### 1.1 PerformanceBasedRankingCalculatorImplTest
+#### 1.1 PerformanceBasedRankingCalculatorV2Test
 
-**File:** `impl/v1/PerformanceBasedRankingCalculatorImplTest.kt`
+**File:** `impl/v2/PerformanceBasedRankingCalculatorV2Test.kt`
 
 **Purpose:** Test the core ranking calculation algorithm
 
@@ -70,7 +70,7 @@ Covers, largely via parameterized scenarios (see `TestScenarios.kt`):
 
 #### 1.2 NtrpMatchupMatrixReport
 
-**File:** `impl/v1/NtrpMatchupMatrixReport.kt`
+**File:** `impl/v2/NtrpMatchupMatrixReport.kt`
 
 **Purpose:** Generate the full rating-change matrix for match-outcome scenarios (embedded in RATING_CALCULATION_ALGORITHM.md) and verify K-factor scaling
 
@@ -203,10 +203,10 @@ fun testRejectsInvalidJSON() = testApplication {
 
 ```
 src/test/kotlin/org/skopeo/
-├── service/
+├── domain/service/
 │   ├── calculator/
-│   │   ├── impl/v1/
-│   │   │   ├── PerformanceBasedRankingCalculatorImplTest.kt  # Core algorithm + audit suite
+│   │   ├── impl/v2/
+│   │   │   ├── PerformanceBasedRankingCalculatorV2Test.kt    # Core algorithm + audit suite
 │   │   │   ├── NtrpMatchupMatrixReport.kt                    # Rating-change matrix report
 │   │   │   ├── TestScenarios.kt                              # Parameterized scenarios
 │   │   │   └── TeamTestHelpers.kt                            # Test helpers

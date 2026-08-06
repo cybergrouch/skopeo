@@ -588,4 +588,4 @@ ADMINISTRATOR · `404` no such entry.
 - `RankingCalculator.kt` - Pure calculator interface
 
 **Tests:** the audit-trail assertions live in a nested suite inside
-`src/test/kotlin/org/skopeo/service/calculator/impl/v1/PerformanceBasedRankingCalculatorImplTest.kt`
+`src/test/kotlin/org/skopeo/domain/service/calculator/impl/v2/PerformanceBasedRankingCalculatorV2Test.kt`

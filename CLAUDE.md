@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Skopeo is a Ktor REST API that calculates performance-based tennis ratings (NTRP only) from match results using an Elo-style algorithm. UTR support was removed permanently; the system is NTRP-only by design. The stateless v1 calculator still exists behind `/api/v1/calculate-ranking`, but persistence is now fully built on top of it (PostgreSQL + Flyway + Exposed): admin-set initial ratings, match fixtures + result upload, a rating-calculation trigger (dry-run by default, explicit commit), and rating history. A capability-gated React web UI (`web/`) sits on top: sign-up (sex + date of birth required) plus a dashboard with Profile / Settings / Research / Standings / Claim / Event Organizer / Seeding / Placeholder Players / Ratings / Invites / Activity Log / Reports / Points Management / Account Management / Admin / About tabs (each gated by capability).
+Skopeo is a Ktor REST API that calculates performance-based tennis ratings (NTRP only) from match results using an Elo-style algorithm. UTR support was removed permanently; the system is NTRP-only by design. The stateless ranking calculator still exists behind `/api/v1/calculate-ranking`, but persistence is now fully built on top of it (PostgreSQL + Flyway + Exposed): admin-set initial ratings, match fixtures + result upload, a rating-calculation trigger (dry-run by default, explicit commit), and rating history. A capability-gated React web UI (`web/`) sits on top: sign-up (sex + date of birth required) plus a dashboard with Profile / Settings / Research / Standings / Claim / Event Organizer / Seeding / Placeholder Players / Ratings / Invites / Activity Log / Reports / Points Management / Account Management / Admin / About tabs (each gated by capability).
 
 ## Commands
 
@@ -31,7 +31,7 @@ Helper scripts in `scripts/`: `start-server.sh`, `stop-server.sh`, `test-api.sh`
 
 ## Architecture
 
-**Stateless calculation flow**: `Application.kt` (Ktor module setup) → `routes/RankingRoutes.kt` (POST `/api/v1/calculate-ranking`, error handling) → `service/calculator/impl/v1/PerformanceBasedRankingCalculatorImpl.kt` (the algorithm) → `RankingCalculationResult` (response DTO + audit trail). This endpoint persists nothing — it is a pure "what-if" calculator.
+**Stateless calculation flow**: `Application.kt` (Ktor module setup) → `routes/RankingRoutes.kt` (POST `/api/v1/calculate-ranking`, error handling) → `domain/service/calculator/impl/v2/PerformanceBasedRankingCalculatorImpl.kt` (the algorithm) → `RankingCalculationResult` (response DTO + audit trail). This endpoint persists nothing — it is a pure "what-if" calculator.
 
 **Pure-function core with audit trail**: `RankingCalculator.calculate()` is a pure function with no side effects. Instead of logging internally, it returns a `RankingCalculationResult` containing both the response and an `AuditTrail` (list of `AuditEntry`); the route layer logs the audit entries. This is why business-logic tests need no mocking and can assert on audit contents directly. See `docs/engineering/architecture/AUDIT_TRAIL.md`.
 
@@ -47,7 +47,7 @@ Helper scripts in `scripts/`: `start-server.sh`, `stop-server.sh`, `test-api.sh`
 
 **Money-style precision**: Ratings are `BigDecimal` throughout (serialized as strings in JSON); `service/calculator/impl/BigDecimalUtils.kt` centralizes scale/rounding.
 
-**Algorithm versioning**: Implementations live under `service/calculator/impl/v1/` behind the `RankingCalculator` interface — keep new algorithm work behind that interface.
+**Algorithm versioning**: Implementations live under `domain/service/calculator/impl/v2/` behind the `RankingCalculator` interface (the original v1 impl has been retired) — keep new algorithm work behind that interface.
 
 **Database**: `config/DatabaseConfig.kt` wires HikariCP + Flyway migrations + Exposed on startup. `Application.module(initDatabase: Boolean)` allows tests to skip DB init — integration tests call `module(initDatabase = false)`. Config is read from `src/main/resources/application.yaml` (env vars `DATABASE_URL`, `DATABASE_USER`, `DATABASE_PASSWORD`).
 
