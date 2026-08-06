@@ -5,7 +5,7 @@ package org.skopeo.mapper.entity.invite
 
 import org.skopeo.model.Invite
 import org.skopeo.model.InviteStatus
-import org.skopeo.persistence.InviteEntity
+import org.skopeo.repository.persistence.InviteEntity
 
 /**
  * Entity→domain mapper (#633): builds the domain [Invite] from the raw persistence [InviteEntity] the

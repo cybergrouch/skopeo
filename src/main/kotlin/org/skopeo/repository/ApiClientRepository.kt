@@ -15,9 +15,9 @@ import org.jetbrains.exposed.sql.update
 import org.skopeo.model.ApiClientStatus
 import org.skopeo.model.ApiKeyStatus
 import org.skopeo.model.InsertApiKeyCommand
-import org.skopeo.persistence.ApiClientAggregateEntity
-import org.skopeo.persistence.ApiClientEntity
-import org.skopeo.persistence.ApiKeyEntity
+import org.skopeo.repository.persistence.ApiClientAggregateEntity
+import org.skopeo.repository.persistence.ApiClientEntity
+import org.skopeo.repository.persistence.ApiKeyEntity
 import java.time.LocalDateTime
 import java.util.UUID
 

@@ -6,7 +6,7 @@ package org.skopeo.mapper.entity.audit
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditEntry
-import org.skopeo.persistence.AuditEntryEntity
+import org.skopeo.repository.persistence.AuditEntryEntity
 
 /**
  * Entity→domain mapper (#633): builds the domain [AuditEntry] from the raw persistence [AuditEntryEntity]

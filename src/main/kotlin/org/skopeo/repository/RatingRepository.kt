@@ -22,8 +22,8 @@ import org.skopeo.model.MatchRatingWrite
 import org.skopeo.model.PreEventRating
 import org.skopeo.model.RatingHistoryWrite
 import org.skopeo.model.SetCalculationBreakdown
-import org.skopeo.persistence.RatingHistoryEntryEntity
-import org.skopeo.persistence.UserRatingEntity
+import org.skopeo.repository.persistence.RatingHistoryEntryEntity
+import org.skopeo.repository.persistence.UserRatingEntity
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime

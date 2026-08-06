@@ -9,8 +9,8 @@ import org.skopeo.model.ApiClientStatus
 import org.skopeo.model.ApiKey
 import org.skopeo.model.ApiKeyStatus
 import org.skopeo.model.ResolvedApiKey
-import org.skopeo.persistence.ApiClientAggregateEntity
-import org.skopeo.persistence.ApiKeyEntity
+import org.skopeo.repository.persistence.ApiClientAggregateEntity
+import org.skopeo.repository.persistence.ApiKeyEntity
 
 // Entity→domain mappers (#633): build the domain ApiClient/ApiKey/ResolvedApiKey from the raw persistence
 // entities the repository returns, parsing the as-stored String columns (status enums and the

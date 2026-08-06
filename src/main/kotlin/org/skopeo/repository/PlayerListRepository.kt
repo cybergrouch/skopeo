@@ -16,8 +16,8 @@ import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.skopeo.common.error.ServiceError
-import org.skopeo.persistence.PlayerListAggregateEntity
-import org.skopeo.persistence.PlayerListEntity
+import org.skopeo.repository.persistence.PlayerListAggregateEntity
+import org.skopeo.repository.persistence.PlayerListEntity
 import java.time.LocalDateTime
 import java.util.UUID
 

@@ -10,7 +10,7 @@ import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.common.security.Capability
-import org.skopeo.persistence.CapabilityGrantEntity
+import org.skopeo.repository.persistence.CapabilityGrantEntity
 import java.time.LocalDateTime
 import java.util.UUID
 

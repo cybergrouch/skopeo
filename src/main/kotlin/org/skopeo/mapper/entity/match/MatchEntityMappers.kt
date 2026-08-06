@@ -17,9 +17,9 @@ import org.skopeo.model.MatchStatus
 import org.skopeo.model.MatchType
 import org.skopeo.model.PlacementBracket
 import org.skopeo.model.TeamType
-import org.skopeo.persistence.MatchAggregateEntity
-import org.skopeo.persistence.MatchSetEntity
-import org.skopeo.persistence.MatchSideEntity
+import org.skopeo.repository.persistence.MatchAggregateEntity
+import org.skopeo.repository.persistence.MatchSetEntity
+import org.skopeo.repository.persistence.MatchSideEntity
 
 // Convert a raw MatchSideEntity to the domain MatchSide (a straight field copy).
 fun MatchSideEntity.toDomain(): MatchSide =

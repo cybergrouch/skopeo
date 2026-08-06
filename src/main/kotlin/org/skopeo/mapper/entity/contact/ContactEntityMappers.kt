@@ -8,7 +8,7 @@ import org.skopeo.model.ContactSource
 import org.skopeo.model.ContactType
 import org.skopeo.model.VerificationMethod
 import org.skopeo.model.VerificationStatus
-import org.skopeo.persistence.ContactEntity
+import org.skopeo.repository.persistence.ContactEntity
 
 /**
  * Entity→domain mapper (#633): builds the domain [Contact] from the raw [ContactEntity] the repository

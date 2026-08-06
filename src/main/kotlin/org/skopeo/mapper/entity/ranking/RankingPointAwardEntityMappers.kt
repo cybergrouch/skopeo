@@ -7,7 +7,7 @@ import org.skopeo.model.AwardStatus
 import org.skopeo.model.PointClass
 import org.skopeo.model.PointSourceType
 import org.skopeo.model.RankingPointAward
-import org.skopeo.persistence.RankingPointAwardEntity
+import org.skopeo.repository.persistence.RankingPointAwardEntity
 
 /**
  * Entity→domain mapper (#633): builds the domain [RankingPointAward] from the raw persistence

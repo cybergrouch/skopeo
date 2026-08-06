@@ -5,7 +5,7 @@ package org.skopeo.mapper.entity.rating
 
 import org.skopeo.model.RatingRequest
 import org.skopeo.model.RatingRequestStatus
-import org.skopeo.persistence.RatingRequestEntity
+import org.skopeo.repository.persistence.RatingRequestEntity
 
 /**
  * Entity→domain mapper (#633): builds the domain [RatingRequest] from the raw persistence

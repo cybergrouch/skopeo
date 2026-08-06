@@ -4,7 +4,7 @@
 package org.skopeo.mapper.entity.circuit
 
 import org.skopeo.model.Circuit
-import org.skopeo.persistence.CircuitEntity
+import org.skopeo.repository.persistence.CircuitEntity
 
 /**
  * Entity→domain mapper (#633): builds the domain [Circuit] from the raw persistence [CircuitEntity] the

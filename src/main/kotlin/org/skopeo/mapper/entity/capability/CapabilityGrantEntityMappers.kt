@@ -4,7 +4,7 @@
 package org.skopeo.mapper.entity.capability
 
 import org.skopeo.model.CapabilityGrant
-import org.skopeo.persistence.CapabilityGrantEntity
+import org.skopeo.repository.persistence.CapabilityGrantEntity
 
 /**
  * Entity→domain mapper (#633): builds the domain [CapabilityGrant] from the raw persistence [CapabilityGrantEntity]

@@ -19,7 +19,7 @@ import org.skopeo.model.ContactSource
 import org.skopeo.model.ContactType
 import org.skopeo.model.VerificationMethod
 import org.skopeo.model.VerificationStatus
-import org.skopeo.persistence.ContactEntity
+import org.skopeo.repository.persistence.ContactEntity
 import java.time.LocalDateTime
 import java.util.UUID
 

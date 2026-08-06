@@ -14,8 +14,8 @@ import org.skopeo.model.AuthProvider
 import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.effectivePhotoUrl
-import org.skopeo.persistence.IdentityEntity
-import org.skopeo.persistence.UserAggregateEntity
+import org.skopeo.repository.persistence.IdentityEntity
+import org.skopeo.repository.persistence.UserAggregateEntity
 
 /**
  * Convert a raw [IdentityEntity] to the domain [UserIdentity]: the single boundary where the stored

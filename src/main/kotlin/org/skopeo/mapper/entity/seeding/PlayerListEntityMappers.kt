@@ -4,7 +4,7 @@
 package org.skopeo.mapper.entity.seeding
 
 import org.skopeo.model.PlayerList
-import org.skopeo.persistence.PlayerListAggregateEntity
+import org.skopeo.repository.persistence.PlayerListAggregateEntity
 
 /**
  * Entity→domain mapper (#633): builds the domain [PlayerList] from the raw [PlayerListAggregateEntity]

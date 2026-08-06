@@ -14,7 +14,7 @@ import org.skopeo.model.AwardStatus
 import org.skopeo.model.PointClass
 import org.skopeo.model.PointSourceType
 import org.skopeo.model.RankingPointAwardWrite
-import org.skopeo.persistence.RankingPointAwardEntity
+import org.skopeo.repository.persistence.RankingPointAwardEntity
 import java.math.BigDecimal
 import java.time.LocalDateTime
 import java.util.UUID

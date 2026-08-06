@@ -18,9 +18,9 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.skopeo.common.error.ServiceError
 import org.skopeo.model.Seeding
 import org.skopeo.model.SeedingEntry
-import org.skopeo.persistence.SeedingAggregateEntity
-import org.skopeo.persistence.SeedingEntity
-import org.skopeo.persistence.SeedingEntryEntity
+import org.skopeo.repository.persistence.SeedingAggregateEntity
+import org.skopeo.repository.persistence.SeedingEntity
+import org.skopeo.repository.persistence.SeedingEntryEntity
 import java.time.LocalDateTime
 import java.util.UUID
 
