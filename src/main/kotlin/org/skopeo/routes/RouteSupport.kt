@@ -16,7 +16,7 @@ import io.ktor.server.routing.RoutingContext
 import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
 import org.skopeo.common.error.ServiceError
-import org.skopeo.service.user.VerifiedFirebaseToken
+import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import java.util.UUID
 
 @Suppress("TopLevelPropertyNaming") // matches the `logger` convention used across the codebase

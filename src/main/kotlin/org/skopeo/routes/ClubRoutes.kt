@@ -17,11 +17,11 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
+import org.skopeo.domain.service.club.ClubService
 import org.skopeo.dto.club.AssignOwnerRequest
 import org.skopeo.dto.club.CreateClubRequest
 import org.skopeo.dto.club.SetSanctionRequest
 import org.skopeo.dto.club.UpdateClubRequest
-import org.skopeo.service.club.ClubService
 import java.util.UUID
 
 /**

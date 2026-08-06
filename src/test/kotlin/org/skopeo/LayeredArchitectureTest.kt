@@ -57,7 +57,7 @@ class LayeredArchitectureTest {
     @Test
     fun `model is pure domain and depends on no other app layer`() {
         noClasses()
-            .that().resideInAPackage("org.skopeo.model..")
+            .that().resideInAPackage("org.skopeo.domain.model..")
             .should().dependOnClassesThat()
             .resideInAnyPackage(
                 "..routes..",
@@ -87,7 +87,7 @@ class LayeredArchitectureTest {
                 "org.skopeo.repository",
                 "org.skopeo.dto..",
                 "..mapper..",
-                "org.skopeo.model..",
+                "org.skopeo.domain.model..",
             )
             .check(classes)
     }
@@ -107,7 +107,7 @@ class LayeredArchitectureTest {
                 "..repository..",
                 "org.skopeo.dto..",
                 "..mapper..",
-                "org.skopeo.model..",
+                "org.skopeo.domain.model..",
                 "org.skopeo.repository.persistence..",
             )
             .check(classes)
@@ -134,7 +134,7 @@ class LayeredArchitectureTest {
         noClasses()
             .that().resideInAPackage("org.skopeo.dto..")
             .and().haveNameNotMatching(wireContractDtos)
-            .should().dependOnClassesThat().resideInAPackage("org.skopeo.model..")
+            .should().dependOnClassesThat().resideInAPackage("org.skopeo.domain.model..")
             .check(classes)
     }
 
@@ -154,7 +154,7 @@ class LayeredArchitectureTest {
         // Two distinct mapper packages, both consumed only by the service layer: `mapper.dto` owns the
         // dto↔model translation and must never see persistence entities — that is `mapper.entity`'s job.
         noClasses()
-            .that().resideInAPackage("org.skopeo.mapper.dto..")
+            .that().resideInAPackage("org.skopeo.domain.mapper.dto..")
             .should().dependOnClassesThat().resideInAPackage("org.skopeo.repository.persistence..")
             .check(classes)
     }
@@ -166,7 +166,7 @@ class LayeredArchitectureTest {
         // cleanly separated even though both live under `..mapper..`. `allowEmptyShould` because the
         // package is intentionally empty until the #633 flip PRs populate it (this rule guards it early).
         noClasses()
-            .that().resideInAPackage("org.skopeo.mapper.entity..")
+            .that().resideInAPackage("org.skopeo.domain.mapper.entity..")
             .should().dependOnClassesThat().resideInAPackage("org.skopeo.dto..")
             .allowEmptyShould(true)
             .check(classes)
@@ -199,7 +199,7 @@ class LayeredArchitectureTest {
         // `org.skopeo.common.contract`.
         noClasses()
             .that().resideInAPackage("..routes..")
-            .should().dependOnClassesThat().resideInAPackage("org.skopeo.model..")
+            .should().dependOnClassesThat().resideInAPackage("org.skopeo.domain.model..")
             .check(classes)
     }
 }

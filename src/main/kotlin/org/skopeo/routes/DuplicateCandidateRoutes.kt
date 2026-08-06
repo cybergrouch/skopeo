@@ -15,9 +15,9 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
+import org.skopeo.domain.service.user.DuplicateCandidateService
 import org.skopeo.dto.duplicate.ConfirmCandidateRequest
 import org.skopeo.dto.duplicate.FlagCandidateRequest
-import org.skopeo.service.user.DuplicateCandidateService
 import java.util.UUID
 
 private const val DEFAULT_CANDIDATE_PAGE_SIZE = 20

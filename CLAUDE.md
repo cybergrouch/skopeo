@@ -12,7 +12,7 @@ Skopeo is a Ktor REST API that calculates performance-based tennis ratings (NTRP
 ./gradlew build                  # Full build (includes ktlint, detekt, tests, coverage verification)
 ./gradlew test                   # Run all tests (auto-generates JaCoCo report)
 ./gradlew test --tests "*.PerformanceBasedRankingCalculatorImplTest"   # Single test class
-./gradlew test --tests "org.skopeo.service.*"                          # Unit tests only
+./gradlew test --tests "org.skopeo.domain.service.*"                          # Unit tests only
 ./gradlew ktlintFormat           # Auto-fix formatting
 ./gradlew ktlintCheck            # Check formatting
 ./gradlew detekt                 # Static analysis (config: detekt.yml, baseline: detekt-baseline.xml)

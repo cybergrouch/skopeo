@@ -535,7 +535,7 @@ append-only record of provenance for traceable domain actions — *who did what,
 entity*. Domain tables don't reference it; a single log captures everything, and an admin "trace
 viewer" reads it back.
 
-### Data model (`org.skopeo.model.AuditDomain`)
+### Data model (`org.skopeo.domain.model.AuditDomain`)
 
 - **`AuditAction`** — the specific action, e.g. `USER_CREATED`, `NAME_ADDED`/`NAME_UPDATED`,
   `CONTACT_ADDED`/`CONTACT_UPDATED`, `CAPABILITY_GRANTED`/`CAPABILITY_REVOKED`, `RATING_SET`,

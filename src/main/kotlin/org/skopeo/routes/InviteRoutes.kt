@@ -15,8 +15,8 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
+import org.skopeo.domain.service.invite.InviteService
 import org.skopeo.dto.invite.CreateInviteRequest
-import org.skopeo.service.invite.InviteService
 
 private const val DEFAULT_INVITE_PAGE_SIZE = 20
 

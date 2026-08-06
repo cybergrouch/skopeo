@@ -16,9 +16,9 @@ import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
+import org.skopeo.domain.service.name.NameService
 import org.skopeo.dto.name.NameCreateRequest
 import org.skopeo.dto.name.NameStateRequest
-import org.skopeo.service.name.NameService
 
 /**
  * User-name API, nested under the owning user. Names are append-only (add, then disable —

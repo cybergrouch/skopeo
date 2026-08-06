@@ -6,8 +6,8 @@ package org.skopeo.dto.seeding
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
-import org.skopeo.mapper.dto.seeding.toResponse
-import org.skopeo.model.SeedingEntry
+import org.skopeo.domain.mapper.dto.seeding.toResponse
+import org.skopeo.domain.model.SeedingEntry
 import java.util.UUID
 
 /** The raw rating on a seeding row is ADMINISTRATOR-only (#583): shown when [showRawRating], else null. */

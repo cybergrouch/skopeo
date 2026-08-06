@@ -15,10 +15,10 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
+import org.skopeo.domain.service.ranking.RankingPointService
 import org.skopeo.dto.ranking.AdjustRankingPointsRequest
 import org.skopeo.dto.ranking.GrantRankingPointsRequest
 import org.skopeo.dto.ranking.RevokeRankingPointsRequest
-import org.skopeo.service.ranking.RankingPointService
 
 /**
  * Ranking-points ledger (#146, phase 1). The per-user grant/list/revoke routes are ADMINISTRATOR-gated

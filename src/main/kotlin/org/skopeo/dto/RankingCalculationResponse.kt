@@ -4,8 +4,8 @@
 package org.skopeo.dto
 
 import kotlinx.serialization.Serializable
-import org.skopeo.model.PlayerProfile
-import org.skopeo.model.Team
+import org.skopeo.domain.model.PlayerProfile
+import org.skopeo.domain.model.Team
 
 @Serializable
 data class RankingCalculationResponse(

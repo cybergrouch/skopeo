@@ -10,7 +10,7 @@ import java.util.UUID
 /**
  * Raw persistence view of a `ranking_point_awards` row (#633): the dumb, as-stored data with **no
  * behaviour**. Kept **model-free** (only stdlib types) so `persistence` stays a leaf package — the
- * repository maps a DB row to this, then converts it to the domain `org.skopeo.model.RankingPointAward`
+ * repository maps a DB row to this, then converts it to the domain `org.skopeo.domain.model.RankingPointAward`
  * at a single boundary (`RankingPointAwardEntity.toDomain`). The three enum-backed columns
  * ([pointClass], [sourceType], [status]) are held RAW as their stored `String` values here and parsed
  * into their model enums (`PointClass`/`PointSourceType`/`AwardStatus`) only in `toDomain`.

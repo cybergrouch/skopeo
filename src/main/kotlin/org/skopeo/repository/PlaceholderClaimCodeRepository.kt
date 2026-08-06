@@ -9,7 +9,7 @@ import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
-import org.skopeo.model.ClaimCodeStatus
+import org.skopeo.domain.model.ClaimCodeStatus
 import org.skopeo.repository.persistence.ClaimCodeEntity
 import java.time.LocalDateTime
 import java.util.UUID

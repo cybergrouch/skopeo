@@ -13,16 +13,16 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.postgresql.util.PGobject
 import org.skopeo.common.security.Capability
-import org.skopeo.mapper.entity.client.toDomain
-import org.skopeo.mapper.entity.user.toDomain
-import org.skopeo.model.AuditAction
-import org.skopeo.model.AuditEntityType
-import org.skopeo.model.AuditWrite
-import org.skopeo.model.AuthProvider
-import org.skopeo.model.NameType
-import org.skopeo.model.ProvisionUserCommand
-import org.skopeo.model.UserIdentity
-import org.skopeo.model.UserName
+import org.skopeo.domain.mapper.entity.client.toDomain
+import org.skopeo.domain.mapper.entity.user.toDomain
+import org.skopeo.domain.model.AuditAction
+import org.skopeo.domain.model.AuditEntityType
+import org.skopeo.domain.model.AuditWrite
+import org.skopeo.domain.model.AuthProvider
+import org.skopeo.domain.model.NameType
+import org.skopeo.domain.model.ProvisionUserCommand
+import org.skopeo.domain.model.UserIdentity
+import org.skopeo.domain.model.UserName
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.util.UUID
 

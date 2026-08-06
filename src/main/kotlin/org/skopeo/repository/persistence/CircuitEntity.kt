@@ -8,7 +8,7 @@ import java.util.UUID
 /**
  * Raw persistence view of a `circuits` row (#633): the dumb, as-stored data with **no behaviour**.
  * A flat aggregate — no child rows and no derived fields — so the corresponding domain
- * `org.skopeo.model.Circuit` is a field-for-field copy; the split is purely structural (raw persistence
+ * `org.skopeo.domain.model.Circuit` is a field-for-field copy; the split is purely structural (raw persistence
  * type vs the service's domain type). Kept **model-free** (only stdlib types) so `persistence` stays a
  * leaf package — the repository maps a DB row to this, then converts it to the domain `Circuit` at a
  * single boundary (`CircuitEntity.toDomain`).

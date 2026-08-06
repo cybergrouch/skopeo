@@ -1,0 +1,253 @@
+// SPDX-FileCopyrightText: 2026 Lange Pantoja
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+package org.skopeo.domain.service.user
+
+import arrow.core.Either
+import arrow.core.left
+import arrow.core.raise.either
+import arrow.core.raise.ensure
+import arrow.core.raise.ensureNotNull
+import arrow.core.right
+import org.skopeo.common.error.ServiceError
+import org.skopeo.common.security.Capability
+import org.skopeo.domain.mapper.dto.user.toResponse
+import org.skopeo.domain.mapper.dto.user.toSummary
+import org.skopeo.domain.mapper.entity.user.toDomain
+import org.skopeo.domain.model.AuditAction
+import org.skopeo.domain.model.AuditEntityType
+import org.skopeo.domain.model.AuditWrite
+import org.skopeo.domain.model.CreatePlaceholderCommand
+import org.skopeo.domain.model.GeneratedClaimCode
+import org.skopeo.domain.model.Level
+import org.skopeo.domain.model.Rating
+import org.skopeo.domain.service.audit.AuditService
+import org.skopeo.domain.service.rating.RatingService
+import org.skopeo.dto.user.ClaimCodeResponse
+import org.skopeo.dto.user.UserResponse
+import org.skopeo.dto.user.UserSummaryResponse
+import org.skopeo.repository.PlaceholderClaimCodeRepository
+import org.skopeo.repository.UserRepository
+import java.math.BigDecimal
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.util.UUID
+
+// Claim-code TTL (#496) — mirrors the 7-day invite expiry cadence (see InviteService.INVITE_TTL_DAYS).
+private const val CLAIM_CODE_TTL_DAYS = 7L
+
+private val ALLOWED_SEXES = setOf("Male", "Female")
+
+// Match-management roles that may create a placeholder (no invite gate). ADMINISTRATOR also qualifies.
+private val MATCH_MANAGEMENT_ROLES = setOf(Capability.HOST, Capability.CLUB_OWNER, Capability.ADMINISTRATOR)
+
+/**
+ * Placeholder ("dummy") player accounts + claim/adopt (#496). A HOST/CLUB_OWNER/ADMINISTRATOR creates a
+ * login-less placeholder that matches can be logged against; later the real person adopts it with a
+ * secret, backend-generated, expiring, one-time claim code, merging the placeholder's history into their
+ * (empty) account via the existing canonical-merge routine. See docs/product/PLACEHOLDER_ACCOUNTS.md.
+ *
+ * Expected failures are returned as an [Either] left ([ServiceError], issue #115) rather than thrown.
+ */
+class PlaceholderService(
+    private val users: UserRepository = UserRepository(),
+    private val claimCodes: PlaceholderClaimCodeRepository = PlaceholderClaimCodeRepository(),
+    private val audit: AuditService = AuditService(),
+    private val ratings: RatingService = RatingService(),
+) {
+    /**
+     * Create a login-less placeholder player (#496) — HOST/CLUB_OWNER/ADMINISTRATOR, no invite gate.
+     * [displayName] and [sex] are required; [dateOfBirth] is optional. The row gets firebase_uid = NULL,
+     * placeholder = true, an auto public code, a DISPLAY name, and the PLAYER capability only.
+     *
+     * [initialRating] (#503) is optional and always may be omitted (a rating-less create always
+     * succeeds). When present it is set in the same flow via [RatingService.setRating], so it inherits
+     * that path's RATER/ADMINISTRATOR gate, NTRP-range validation, and audit. To keep the create-then-rate
+     * pair consistent, the RATER capability and the NTRP range are validated BEFORE the placeholder row is
+     * written, so a non-RATER caller passing a rating (or an out-of-range value) is rejected up front and
+     * no orphan placeholder is created.
+     */
+    fun createPlaceholder(
+        token: VerifiedFirebaseToken,
+        displayName: String,
+        sex: String,
+        dateOfBirth: LocalDate? = null,
+        initialRating: String? = null,
+    ): Either<ServiceError, UserResponse> =
+        either {
+            val actorId = requireMatchManager(token = token).bind()
+            val name = displayName.trim()
+            ensure(condition = name.isNotEmpty()) { ServiceError.Validation(message = "A display name is required") }
+            ensure(condition = sex in ALLOWED_SEXES) { ServiceError.Validation(message = "sex must be one of $ALLOWED_SEXES") }
+            // Validate the optional rating (RATER gate + NTRP range) before creating, so a rejected rating
+            // never leaves an orphan placeholder. A caller who omits [initialRating] skips all of this.
+            val ratingValue = initialRating?.let { validatedRating(caller = actorId, raw = it).bind() }
+            val created =
+                users.createPlaceholder(
+                    command = CreatePlaceholderCommand(displayName = name, sex = sex, dateOfBirth = dateOfBirth),
+                ).toDomain()
+            audit.record(
+                write =
+                    AuditWrite(
+                        actorUserId = actorId,
+                        action = AuditAction.PLACEHOLDER_CREATED,
+                        entityType = AuditEntityType.USER,
+                        entityId = created.id,
+                        summary = "Created placeholder player ${created.publicCode}",
+                        details = mapOf("publicCode" to created.publicCode, "displayName" to name),
+                    ),
+            )
+            // Set the pre-validated rating via the canonical path (RATER-gated + audited). requireRater there
+            // re-checks the caller, matching the up-front validation.
+            if (ratingValue != null) {
+                ratings.setRating(token = token, userId = created.id, value = ratingValue.toPlainString()).bind()
+            }
+            created.toResponse()
+        }
+
+    /**
+     * Validate an optional initial rating (#503): the caller must hold RATER/ADMINISTRATOR and the value
+     * must be a numeric NTRP rating in 1.0–7.0. The chosen band is stored at its **midpoint** (#579),
+     * mirroring the rater set-rating route (`Level.bandMidpoint`) — so a placeholder created at band 3.0
+     * sits at 3.25 (centered), not the 3.0 floor where a single loss would immediately drop a band.
+     */
+    private fun validatedRating(
+        caller: UUID,
+        raw: String,
+    ): Either<ServiceError, BigDecimal> =
+        either {
+            ensure(condition = canRate(userId = caller)) { ServiceError.Forbidden() }
+            val parsed =
+                try {
+                    Rating.fromValue(value = raw) // rejects non-numeric / out-of-range with IllegalArgumentException
+                    BigDecimal(raw)
+                } catch (e: IllegalArgumentException) {
+                    raise(r = ServiceError.Validation(message = e.message ?: "Invalid rating '$raw'"))
+                }
+            Level.bandMidpoint(band = parsed)
+        }
+
+    /** Unclaimed placeholders (#496), for the admin/host management view. Match-management access. */
+    fun listPlaceholders(token: VerifiedFirebaseToken): Either<ServiceError, List<UserSummaryResponse>> =
+        either {
+            requireMatchManager(token = token).bind()
+            users.listPlaceholders().map { it.toDomain() }.map { it.toSummary(isDeleted = it.isDeleted()) }
+        }
+
+    /**
+     * Generate a claim code for a placeholder (#496) — ADMINISTRATOR only. The backend generates the
+     * random plaintext + a 7-day expiry, stores only the hash, supersedes any prior ACTIVE code, and
+     * returns the plaintext once. Valid only for a placeholder = true, unclaimed (active) user.
+     */
+    fun generateClaimCode(
+        token: VerifiedFirebaseToken,
+        placeholderId: UUID,
+    ): Either<ServiceError, ClaimCodeResponse> =
+        either {
+            val adminId = requireAdmin(token = token).bind()
+            val target = users.findById(id = placeholderId).bind().toDomain()
+            ensure(condition = target.placeholder) { ServiceError.Validation(message = "User ${target.publicCode} is not a placeholder") }
+            ensure(condition = target.isActive && target.canonicalUserId == null) {
+                ServiceError.Conflict(message = "Placeholder ${target.publicCode} has already been claimed")
+            }
+            val plaintext = ClaimCodeCrypto.generate()
+            val stored =
+                claimCodes.issue(
+                    placeholderUserId = placeholderId,
+                    codeHash = ClaimCodeCrypto.hash(plaintext = plaintext),
+                    expiresAt = LocalDateTime.now().plusDays(CLAIM_CODE_TTL_DAYS),
+                    createdBy = adminId,
+                )
+            GeneratedClaimCode(plaintext = plaintext, code = stored.toDomain(), placeholderPublicCode = target.publicCode)
+                .toResponse()
+        }
+
+    /**
+     * Claim/adopt a placeholder (#496): the authenticated caller pastes a secret code. The claim is
+     * admitted only when the code hashes to an ACTIVE, non-expired record, the caller's account is
+     * "empty" (no rating history and no match participation), and the caller is not itself a placeholder.
+     * On success the placeholder's history merges into the caller's account (canonical-merge routine), the
+     * placeholder is retired + linked, the code is consumed, and the claim is audited (target = caller).
+     */
+    fun claim(
+        token: VerifiedFirebaseToken,
+        code: String,
+    ): Either<ServiceError, UserResponse> =
+        either {
+            val caller =
+                ensureNotNull(value = users.findByFirebaseUid(firebaseUid = token.uid)) {
+                    ServiceError.Forbidden(message = "You must be signed up to claim an account")
+                }.toDomain()
+            ensure(condition = !caller.placeholder) { ServiceError.Conflict(message = "A placeholder account cannot claim another") }
+
+            val trimmed = code.trim()
+            ensure(condition = trimmed.isNotEmpty()) { ServiceError.Validation(message = "A claim code is required") }
+            val record =
+                ensureNotNull(value = claimCodes.findActiveByHash(codeHash = ClaimCodeCrypto.hash(plaintext = trimmed))) {
+                    ServiceError.NotFound(message = "Invalid or unknown claim code")
+                }.toDomain()
+            ensure(condition = record.isUsable(asOf = LocalDateTime.now())) {
+                ServiceError.Validation(message = "This claim code has expired")
+            }
+
+            val placeholder = users.findById(id = record.placeholderUserId).bind().toDomain()
+            // A claimed placeholder carries a canonical link. (No self-claim check is needed: a signed-up
+            // caller can never be a placeholder — the !caller.placeholder guard above already rejects that.)
+            ensure(condition = placeholder.canonicalUserId == null) {
+                ServiceError.Conflict(message = "This placeholder has already been claimed")
+            }
+            // v1 merge-into-empty only: reject when the caller already has a rating/match history (#496).
+            ensure(condition = !users.hasRatingHistory(userId = caller.id) && !users.hasMatchParticipation(userId = caller.id)) {
+                ServiceError.Conflict(
+                    message = "Your account already has match/rating history; claiming into a non-empty account is not yet supported",
+                )
+            }
+
+            val now = LocalDateTime.now()
+            users.claimPlaceholder(placeholderId = placeholder.id, claimantId = caller.id, claimedAt = now)
+            claimCodes.consume(id = record.id, consumedBy = caller.id, consumedAt = now)
+            audit.record(
+                write =
+                    AuditWrite(
+                        // The claiming user is the actor and the target (their account absorbs the history).
+                        actorUserId = caller.id,
+                        action = AuditAction.PLACEHOLDER_CLAIMED,
+                        entityType = AuditEntityType.USER,
+                        entityId = caller.id,
+                        summary = "Claimed placeholder ${placeholder.publicCode} (${placeholder.displayName().orEmpty()})",
+                        details =
+                            mapOf(
+                                "placeholderUserId" to placeholder.id.toString(),
+                                "placeholderPublicCode" to placeholder.publicCode,
+                            ),
+                    ),
+            )
+            users.findById(id = caller.id).bind().toDomain().toResponse()
+        }
+
+    /** ADMINISTRATOR-only; returns the caller's id (the audit actor). */
+    private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
+        return if (caller == null || Capability.ADMINISTRATOR !in caller.capabilities) {
+            ServiceError.Forbidden().left()
+        } else {
+            caller.id.right()
+        }
+    }
+
+    /** True when [userId] holds RATER or ADMINISTRATOR (ADMINISTRATOR implicitly rates, #106). */
+    private fun canRate(userId: UUID): Boolean {
+        val caller = users.findById(id = userId).getOrNull()?.toDomain() ?: return false
+        return Capability.RATER in caller.capabilities || Capability.ADMINISTRATOR in caller.capabilities
+    }
+
+    /** HOST/CLUB_OWNER/ADMINISTRATOR (match-management); returns the caller's id (the audit actor). */
+    private fun requireMatchManager(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
+        return if (caller == null || caller.capabilities.none { it in MATCH_MANAGEMENT_ROLES }) {
+            ServiceError.Forbidden().left()
+        } else {
+            caller.id.right()
+        }
+    }
+}

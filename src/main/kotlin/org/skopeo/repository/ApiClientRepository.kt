@@ -12,9 +12,9 @@ import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
-import org.skopeo.model.ApiClientStatus
-import org.skopeo.model.ApiKeyStatus
-import org.skopeo.model.InsertApiKeyCommand
+import org.skopeo.domain.model.ApiClientStatus
+import org.skopeo.domain.model.ApiKeyStatus
+import org.skopeo.domain.model.InsertApiKeyCommand
 import org.skopeo.repository.persistence.ApiClientAggregateEntity
 import org.skopeo.repository.persistence.ApiClientEntity
 import org.skopeo.repository.persistence.ApiKeyEntity

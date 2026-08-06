@@ -16,10 +16,10 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
+import org.skopeo.domain.service.seeding.PlayerListService
+import org.skopeo.domain.service.seeding.SeedingService
 import org.skopeo.dto.seeding.AddMemberRequest
 import org.skopeo.dto.seeding.CreatePlayerListRequest
-import org.skopeo.service.seeding.PlayerListService
-import org.skopeo.service.seeding.SeedingService
 import java.util.UUID
 
 /**

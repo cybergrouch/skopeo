@@ -10,7 +10,7 @@ import java.util.UUID
 
 /**
  * Raw persistence view of a `users` row (#633 proof): the dumb, as-stored data with **no derived fields
- * and no behaviour** — contrast the domain `org.skopeo.model.User`, which additionally carries the
+ * and no behaviour** — contrast the domain `org.skopeo.domain.model.User`, which additionally carries the
  * *derived* `photoUrl` (see `effectivePhotoUrl`) and the assembled name/contact/identity/capability
  * sub-objects. This is the "entity/data model" half of the entity ⟷ domain split: it encapsulates the
  * raw row so the domain model no longer does double duty as both persistence type and service type.

@@ -8,7 +8,7 @@ import java.util.UUID
 /**
  * Raw persistence view of a completed set's score (#633): mirrors the domain `MatchSetResult` field for
  * field, loaded from the `match_sets` row plus its optional `match_set_tiebreaks` sub-row. The dumb,
- * as-stored data with no behaviour; it is assembled into the domain `org.skopeo.model.MatchSetResult` at
+ * as-stored data with no behaviour; it is assembled into the domain `org.skopeo.domain.model.MatchSetResult` at
  * the `MatchAggregateEntity` conversion boundary in `mapper.entity`. Kept **model-free** so `persistence`
  * stays a leaf.
  */

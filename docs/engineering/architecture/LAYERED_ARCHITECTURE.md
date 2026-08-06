@@ -1,8 +1,13 @@
 # Layered package architecture
 
-The backend is organised into layers by top-level package under `org.skopeo`. Their dependency
-directions are **enforced** by `src/test/.../LayeredArchitectureTest.kt` (ArchUnit) so they don't
-erode silently. The build fails if a rule is broken.
+The backend is organised into layers by package under `org.skopeo`. Their dependency directions are
+**enforced** by `src/test/.../LayeredArchitectureTest.kt` (ArchUnit) so they don't erode silently. The
+build fails if a rule is broken.
+
+Package roots: `routes`, `repository` (with its `repository.persistence` entity leaf), `dto`, and
+`common` sit directly under `org.skopeo`; the domain-side layers — `model`, `service`, and `mapper`
+(`mapper.dto` + `mapper.entity`) — are grouped under **`org.skopeo.domain`**. The layer names below use
+the short form for brevity.
 
 ## Layers and the rules that hold
 

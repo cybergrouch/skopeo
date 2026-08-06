@@ -8,7 +8,7 @@ import java.util.UUID
 
 /**
  * Raw persistence view of an `audit_log` row (#633): the dumb, as-stored data with **no behaviour**.
- * A flat aggregate that mirrors `org.skopeo.model.AuditEntry` field-for-field, but keeps the columns
+ * A flat aggregate that mirrors `org.skopeo.domain.model.AuditEntry` field-for-field, but keeps the columns
  * in their **stored** shape: [action] and [entityType] are the model enums as the raw `String` names
  * held in the DB (parsed via `valueOf` in `toDomain`), and [details] is the JSON blob already decoded
  * into its plain `Map<String, String?>` form. Kept **model-free** (only stdlib types) so `persistence`

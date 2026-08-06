@@ -10,10 +10,10 @@ import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
-import org.skopeo.model.AwardStatus
-import org.skopeo.model.PointClass
-import org.skopeo.model.PointSourceType
-import org.skopeo.model.RankingPointAwardWrite
+import org.skopeo.domain.model.AwardStatus
+import org.skopeo.domain.model.PointClass
+import org.skopeo.domain.model.PointSourceType
+import org.skopeo.domain.model.RankingPointAwardWrite
 import org.skopeo.repository.persistence.RankingPointAwardEntity
 import java.math.BigDecimal
 import java.time.LocalDateTime

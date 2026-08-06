@@ -133,7 +133,7 @@
     <ID>NamedArguments:UserSearchApiIntegrationTest.kt$UserSearchApiIntegrationTest$setOf(Capability.ADMINISTRATOR)</ID>
     <ID>NamedArguments:UserSearchApiIntegrationTest.kt$UserSearchApiIntegrationTest$setOf(Capability.HOST)</ID>
     <ID>NamedArguments:UserSearchApiIntegrationTest.kt$UserSearchApiIntegrationTest$setOf(Capability.PLAYER)</ID>
-    <ID>NamedArguments:UserServiceTest.kt$UserServiceTest$listOf(UserName(type = org.skopeo.model.NameType.FIRST, value = "Root"))</ID>
+    <ID>NamedArguments:UserServiceTest.kt$UserServiceTest$listOf(UserName(type = org.skopeo.domain.model.NameType.FIRST, value = "Root"))</ID>
     <ID>NamedArguments:UserServiceTest.kt$UserServiceTest$setOf(Capability.PLAYER)</ID>
     <ID>ReturnCount:Level.kt$Level.Companion$fun isWithinLevel( rating: Rating, level: Level, ): Boolean</ID>
     <ID>TooGenericExceptionCaught:DatabaseConfig.kt$DatabaseConfig$e: Exception</ID>

@@ -4,7 +4,7 @@
 package org.skopeo.dto
 
 import kotlinx.serialization.Serializable
-import org.skopeo.model.Rating
+import org.skopeo.domain.model.Rating
 
 /**
  * Represents a rating change result for a player after a match.

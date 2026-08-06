@@ -16,8 +16,8 @@ import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.skopeo.common.error.ServiceError
-import org.skopeo.model.Seeding
-import org.skopeo.model.SeedingEntry
+import org.skopeo.domain.model.Seeding
+import org.skopeo.domain.model.SeedingEntry
 import org.skopeo.repository.persistence.SeedingAggregateEntity
 import org.skopeo.repository.persistence.SeedingEntity
 import org.skopeo.repository.persistence.SeedingEntryEntity

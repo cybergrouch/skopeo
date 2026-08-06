@@ -8,7 +8,7 @@ import java.util.UUID
 
 /**
  * Raw persistence view of an `invites` row (#633): the dumb, as-stored data with **no behaviour**.
- * A flat aggregate — no child rows — so the corresponding domain `org.skopeo.model.Invite` differs
+ * A flat aggregate — no child rows — so the corresponding domain `org.skopeo.domain.model.Invite` differs
  * only in that [status] is stored **raw as a `String`** here and parsed into the `InviteStatus` enum at
  * the domain boundary. Kept **model-free** (only stdlib types) so `persistence` stays a leaf package —
  * the repository maps a DB row to this, then converts it to the domain `Invite` at a single boundary

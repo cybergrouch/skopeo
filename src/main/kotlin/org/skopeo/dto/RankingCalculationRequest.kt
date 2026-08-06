@@ -4,9 +4,9 @@
 package org.skopeo.dto
 
 import kotlinx.serialization.Serializable
-import org.skopeo.model.MatchScore
-import org.skopeo.model.RatingCalculationOptions
-import org.skopeo.model.Team
+import org.skopeo.domain.model.MatchScore
+import org.skopeo.domain.model.RatingCalculationOptions
+import org.skopeo.domain.model.Team
 
 @Serializable
 data class RankingCalculationRequest(

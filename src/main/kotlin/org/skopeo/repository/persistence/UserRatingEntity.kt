@@ -10,7 +10,7 @@ import java.util.UUID
 
 /**
  * Raw persistence view of a `user_ratings` row (#633): the dumb, as-stored data with **no derived
- * fields**. Contrast the domain `org.skopeo.model.UserRating`, which additionally carries the *computed*
+ * fields**. Contrast the domain `org.skopeo.domain.model.UserRating`, which additionally carries the *computed*
  * `confidence` (#459) — a recency × sparsity × spacing score over the player's windowed match rows, never
  * stored. This is the direct analogue of `UserEntity`'s derived `photoUrl`: the raw row is captured here,
  * and `confidence` is computed at the single `UserRatingEntity.toDomain(windowed, now)` boundary in the

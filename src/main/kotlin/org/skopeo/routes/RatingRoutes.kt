@@ -17,10 +17,10 @@ import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
+import org.skopeo.domain.service.rating.RatingCalculationService
+import org.skopeo.domain.service.rating.RatingService
 import org.skopeo.dto.rating.CalculationRequest
 import org.skopeo.dto.rating.SetRatingRequest
-import org.skopeo.service.rating.RatingCalculationService
-import org.skopeo.service.rating.RatingService
 
 private const val DEFAULT_PENDING_PAGE_SIZE = 20
 

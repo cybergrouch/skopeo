@@ -10,9 +10,9 @@ import io.ktor.server.response.respondText
 import io.ktor.server.routing.RoutingContext
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
-import org.skopeo.service.event.EventService
-import org.skopeo.service.match.MatchService
-import org.skopeo.service.user.PlayerService
+import org.skopeo.domain.service.event.EventService
+import org.skopeo.domain.service.match.MatchService
+import org.skopeo.domain.service.user.PlayerService
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
