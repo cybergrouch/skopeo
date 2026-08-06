@@ -21,6 +21,7 @@ import org.skopeo.dto.user.PublicPlayerResponse
 import org.skopeo.dto.user.PublicRatingDto
 import org.skopeo.dto.user.ResultsBucket
 import org.skopeo.mapper.dto.rating.toResponse
+import org.skopeo.mapper.entity.match.toDomain
 import org.skopeo.mapper.entity.ranking.toDomain
 import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.ContactType
@@ -165,6 +166,7 @@ class PlayerService(
             val played =
                 selfIds
                     .flatMap { matches.listByUser(userId = it) }
+                    .map { it.toDomain() }
                     .distinctBy { it.id }
                     .sortedByDescending { it.matchDate }
             val ratedMatchIds = played.filter { it.ratedAt != null }.map { it.id }
@@ -261,6 +263,7 @@ class PlayerService(
             val rows =
                 selfIds
                     .flatMap { matches.listByUser(userId = it) }
+                    .map { it.toDomain() }
                     .distinctBy { it.id }
                     .filter { it.winnerTeamId != null }
                     .map { match ->

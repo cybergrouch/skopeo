@@ -16,6 +16,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
+import org.skopeo.mapper.entity.match.toDomain
 import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
@@ -89,7 +90,7 @@ class DuplicateServiceTest {
                 team2Name = "T2",
                 createdBy = u1,
             ),
-    )
+    ).toDomain()
 
     @Test
     fun `replaceAccount imports the old account's rating and matches into an empty canonical, then deletes the old (#124)`() {

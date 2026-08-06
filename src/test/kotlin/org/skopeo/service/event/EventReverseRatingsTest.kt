@@ -20,6 +20,7 @@ import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.dto.event.EventResponse
 import org.skopeo.mapper.entity.event.toDomain
+import org.skopeo.mapper.entity.match.toDomain
 import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
@@ -160,7 +161,7 @@ class EventReverseRatingsTest {
                         isPlacementMatch = true,
                         placementBracket = PlacementBracket.CHAMPIONSHIP_FINALS,
                     ),
-            )
+            ).toDomain()
         matchRepo.addResult(
             matchId = match.id,
             sets = listOf(element = MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 4, winnerTeamId = match.team1.teamId)),
@@ -168,7 +169,7 @@ class EventReverseRatingsTest {
             recordedBy = host.id,
             completedAt = java.time.LocalDateTime.now(),
         )
-        return matchRepo.findById(matchId = match.id).shouldBeRight()
+        return matchRepo.findById(matchId = match.id).shouldBeRight().toDomain()
     }
 
     /** Finalize [eventId] (host) then commit the rating calculation (admin), leaving the event's matches rated. */
@@ -250,7 +251,7 @@ class EventReverseRatingsTest {
     @Test
     fun `reversal clears rated_at on the event's matches and clears the finalize flag (#478)`() {
         val re = ratedEvent()
-        matchRepo.findById(matchId = re.match.id).shouldBeRight().ratedAt.shouldNotBeNull()
+        matchRepo.findById(matchId = re.match.id).shouldBeRight().toDomain().ratedAt.shouldNotBeNull()
 
         val view = service.reverseRatings(token = token(uid = "admin"), id = re.eventId).shouldBeRight()
 
@@ -258,7 +259,7 @@ class EventReverseRatingsTest {
         val persisted = events.findById(id = re.eventId).shouldNotBeNull().toDomain()
         persisted.finalizedAt.shouldBeNull()
         persisted.finalizedBy.shouldBeNull()
-        matchRepo.findById(matchId = re.match.id).shouldBeRight().ratedAt.shouldBeNull()
+        matchRepo.findById(matchId = re.match.id).shouldBeRight().toDomain().ratedAt.shouldBeNull()
     }
 
     @Test

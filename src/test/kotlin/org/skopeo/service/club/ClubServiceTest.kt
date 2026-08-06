@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.mapper.entity.event.toDomain
+import org.skopeo.mapper.entity.match.toDomain
 import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.CreateEventCommand
@@ -232,7 +233,7 @@ class ClubServiceTest {
                         createdBy = admin.id,
                         eventId = event.id,
                     ),
-            )
+            ).toDomain()
 
         service.delete(token = token(uid = "admin"), clubId = UUID.fromString(club.id)).shouldBeRight()
 
@@ -240,7 +241,7 @@ class ClubServiceTest {
         events.findById(id = event.id)!!.toDomain().isActive shouldBe false
         // …but stay traceable by public code, flagged not-active (#325).
         events.findByPublicCode(code = event.publicCode)!!.toDomain().isActive shouldBe false
-        matchRepo.findByPublicCode(code = match.publicCode)!!.isActive shouldBe false
+        matchRepo.findByPublicCode(code = match.publicCode)!!.toDomain().isActive shouldBe false
     }
 
     @Test
@@ -275,7 +276,7 @@ class ClubServiceTest {
                         createdBy = admin.id,
                         eventId = event.id,
                     ),
-            )
+            ).toDomain()
         matchRepo.addResult(
             matchId = underClub.id,
             sets = listOf(element = MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 0, winnerTeamId = underClub.team1.teamId)),
@@ -297,12 +298,12 @@ class ClubServiceTest {
                         team2Name = "p2",
                         createdBy = admin.id,
                     ),
-            )
+            ).toDomain()
 
         // Deleting the club cascades is_active=false down through its event onto the match.
         service.delete(token = token(uid = "admin"), clubId = UUID.fromString(club.id)).shouldBeRight()
 
-        val history = matchRepo.listByUser(userId = p1.id).map { it.id }
+        val history = matchRepo.listByUser(userId = p1.id).map { it.toDomain().id }
         history shouldContain standalone.id
         history shouldNotContain underClub.id
         // Win/loss likewise drops the only decided match (the container-deleted one), leaving p1 with no

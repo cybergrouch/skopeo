@@ -5,6 +5,7 @@ package org.skopeo.service.event
 
 import org.skopeo.common.contract.OpenPlayPointsConfig
 import org.skopeo.mapper.entity.club.toDomain
+import org.skopeo.mapper.entity.match.toDomain
 import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
@@ -104,7 +105,7 @@ class EventFinalizeAwarder(
         // Validity runs from the event end for the configured tournament window (#559: no per-event override).
         val start = event.endDate
         val end = event.endDate.plusDays(tournament.validityDays.toLong())
-        val placementMatches = matches.listByEvent(eventId = event.id).filter { isAwardablePlacement(match = it) }
+        val placementMatches = matches.listByEvent(eventId = event.id).map { it.toDomain() }.filter { isAwardablePlacement(match = it) }
         val hasCompletedPlate = placementMatches.any { it.placementBracket == PlacementBracket.PLATE_FINALS }
         val userIds = placementMatches.flatMap { it.team1.userIds + it.team2.userIds }.distinct()
         val ctx =
@@ -239,7 +240,10 @@ class EventFinalizeAwarder(
         val validFrom = event.endDate.atStartOfDay()
         val validUntil = event.endDate.plusDays(config.validityDays.toLong()).plusDays(1).atStartOfDay()
         val completed =
-            matches.listByEvent(eventId = event.id).filter { it.status == MatchStatus.COMPLETED && it.winnerTeamId != null }
+            matches
+                .listByEvent(eventId = event.id)
+                .map { it.toDomain() }
+                .filter { it.status == MatchStatus.COMPLETED && it.winnerTeamId != null }
         val userIds = completed.flatMap { it.team1.userIds + it.team2.userIds }.distinct()
         val bands = ratings.findCurrentRatings(userIds = userIds)
         val sexes = users.findAllByIds(ids = userIds).map { it.toDomain() }.associate { it.id to (it.sex ?: UNSPECIFIED_SEX) }

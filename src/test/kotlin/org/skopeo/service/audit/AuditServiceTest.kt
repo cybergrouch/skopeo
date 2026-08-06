@@ -16,6 +16,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
+import org.skopeo.mapper.entity.match.toDomain
 import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
@@ -169,7 +170,7 @@ class AuditServiceTest {
                         team2Name = "p2",
                         createdBy = admin.id,
                     ),
-            )
+            ).toDomain()
         service.record(
             write =
                 AuditWrite(

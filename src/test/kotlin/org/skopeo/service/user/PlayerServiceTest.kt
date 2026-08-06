@@ -19,6 +19,7 @@ import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.dto.user.ResultsBucket
 import org.skopeo.mapper.entity.event.toDomain
+import org.skopeo.mapper.entity.match.toDomain
 import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.AwardStatus
@@ -154,7 +155,7 @@ class PlayerServiceTest {
                 team2Name = "T2",
                 createdBy = u1,
             ),
-    )
+    ).toDomain()
 
     private fun doublesFixture(
         team1: List<UUID>,
@@ -172,7 +173,7 @@ class PlayerServiceTest {
                 team2Name = "T2",
                 createdBy = team1.first(),
             ),
-    )
+    ).toDomain()
 
     /** Append a single player's rating-history row for a match, carrying their pre-match band. */
     private fun history(

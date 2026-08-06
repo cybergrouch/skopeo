@@ -26,18 +26,18 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.common.error.ServiceError
 import org.skopeo.model.CreateFixtureCommand
-import org.skopeo.model.Match
 import org.skopeo.model.MatchPublicRef
 import org.skopeo.model.MatchSetResult
-import org.skopeo.model.MatchSide
 import org.skopeo.model.MatchStatus
 import org.skopeo.model.MatchType
-import org.skopeo.model.PlacementBracket
 import org.skopeo.model.TeamType
 import org.skopeo.model.WinLossRecord
 import org.skopeo.model.WindowMatch
 import org.skopeo.model.weightClass
+import org.skopeo.persistence.MatchAggregateEntity
 import org.skopeo.persistence.MatchEntity
+import org.skopeo.persistence.MatchSetEntity
+import org.skopeo.persistence.MatchSideEntity
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -50,7 +50,7 @@ private const val CONFIDENCE_WINDOW_DAYS = 30L
  * Matches are append-only: created as fixtures, completed with results, then rated separately.
  */
 class MatchRepository {
-    fun createFixture(command: CreateFixtureCommand): Match =
+    fun createFixture(command: CreateFixtureCommand): MatchAggregateEntity =
         transaction {
             val team1 = createTeam(name = command.team1Name, type = command.matchFormat, userIds = command.team1UserIds)
             val team2 = createTeam(name = command.team2Name, type = command.matchFormat, userIds = command.team2UserIds)
@@ -82,7 +82,7 @@ class MatchRepository {
         winnerTeamId: UUID,
         recordedBy: UUID,
         completedAt: LocalDateTime,
-    ): Either<ServiceError, Match> =
+    ): Either<ServiceError, MatchAggregateEntity> =
         transaction {
             if (loadMatch(id = matchId) == null) {
                 return@transaction ServiceError.NotFound(message = "Match $matchId not found").left()
@@ -123,7 +123,7 @@ class MatchRepository {
         matchId: UUID,
         active: Boolean,
         disabledAt: LocalDateTime?,
-    ): Either<ServiceError, Match> =
+    ): Either<ServiceError, MatchAggregateEntity> =
         transaction {
             val updated =
                 MatchesTable.update(where = { MatchesTable.id eq matchId }) {
@@ -145,7 +145,7 @@ class MatchRepository {
         matchId: UUID,
         team1Handicap: java.math.BigDecimal?,
         team2Handicap: java.math.BigDecimal?,
-    ): Either<ServiceError, Match> =
+    ): Either<ServiceError, MatchAggregateEntity> =
         transaction {
             val updated =
                 MatchesTable.update(where = { MatchesTable.id eq matchId }) {
@@ -171,7 +171,7 @@ class MatchRepository {
         }
     }
 
-    fun findById(matchId: UUID): Either<ServiceError, Match> =
+    fun findById(matchId: UUID): Either<ServiceError, MatchAggregateEntity> =
         transaction {
             val match = loadMatch(id = matchId)
             if (match == null) ServiceError.NotFound(message = "Match $matchId not found").left() else match.right()
@@ -182,17 +182,17 @@ class MatchRepository {
      * matches still resolve (#325): they feed historical rating calculations, and deletion never
      * touches ratings, so their links stay honored for traceability — the page flags them as deleted.
      */
-    fun findByPublicCode(code: String): Match? =
+    fun findByPublicCode(code: String): MatchAggregateEntity? =
         transaction {
             MatchesTable
                 .selectAll()
                 .where { MatchesTable.publicCode eq code }
                 .singleOrNull()
-                ?.let { row -> buildMatch(row = row) }
+                ?.let { row -> buildMatchAggregate(row = row) }
         }
 
     /** Every active match in an event (#138), newest match date first — for the public event page. */
-    fun listByEvent(eventId: UUID): List<Match> =
+    fun listByEvent(eventId: UUID): List<MatchAggregateEntity> =
         transaction {
             MatchesTable
                 .selectAll()
@@ -307,7 +307,7 @@ class MatchRepository {
     fun listPendingCalculation(
         createdBy: UUID? = null,
         eventId: UUID? = null,
-    ): List<Match> =
+    ): List<MatchAggregateEntity> =
         transaction {
             val matches =
                 MatchesTable
@@ -358,23 +358,23 @@ class MatchRepository {
         }
 
     /** Order matches into the global calculation sequence (#335) — see [listPendingCalculation]. */
-    private fun sortForCalculation(matches: List<Match>): List<Match> {
-        val keyByEvent = eventProcessingKeys(eventIds = matches.mapNotNull { it.eventId }.distinct())
+    private fun sortForCalculation(matches: List<MatchAggregateEntity>): List<MatchAggregateEntity> {
+        val keyByEvent = eventProcessingKeys(eventIds = matches.mapNotNull { it.match.eventId }.distinct())
 
         // Processing key: an evented match keys off its event; an eventless one off its own match date.
-        fun processingKey(match: Match): Double =
-            match.eventId?.let { keyByEvent.getValue(key = it) } ?: match.matchDate.toEpochDay().toDouble()
+        fun processingKey(match: MatchAggregateEntity): Double =
+            match.match.eventId?.let { keyByEvent.getValue(key = it) } ?: match.match.matchDate.toEpochDay().toDouble()
         return matches.sortedWith(
             comparator =
                 compareBy(
                     { processingKey(match = it) },
                     // Keep a single event's matches contiguous when two events share a key.
-                    { it.eventId?.toString().orEmpty() },
-                    { it.matchDate },
+                    { it.match.eventId?.toString().orEmpty() },
+                    { it.match.matchDate },
                     // An un-dragged match (null calc_sequence) sorts after dragged ones within its date.
-                    { it.calcSequence ?: Int.MAX_VALUE },
-                    { it.completedAt },
-                    { it.id.toString() },
+                    { it.match.calcSequence ?: Int.MAX_VALUE },
+                    { it.match.completedAt },
+                    { it.match.id.toString() },
                 ),
         )
     }
@@ -410,7 +410,7 @@ class MatchRepository {
      * All of an event's active, completed fixtures — rated or not (#138). Lets the event page keep a
      * rated match on view as a read-only record alongside the recorded-but-unrated ones.
      */
-    fun listResultsByEvent(eventId: UUID): List<Match> =
+    fun listResultsByEvent(eventId: UUID): List<MatchAggregateEntity> =
         transaction {
             MatchesTable
                 .selectAll()
@@ -436,7 +436,7 @@ class MatchRepository {
     fun listAwaitingResults(
         createdBy: UUID? = null,
         eventId: UUID? = null,
-    ): List<Match> =
+    ): List<MatchAggregateEntity> =
         transaction {
             MatchesTable
                 .selectAll()
@@ -468,7 +468,7 @@ class MatchRepository {
      * feeds historical rating calculations and stays resolvable by code ([findByPublicCode], #325) — it
      * just no longer appears in this listing.
      */
-    fun listByUser(userId: UUID): List<Match> =
+    fun listByUser(userId: UUID): List<MatchAggregateEntity> =
         transaction {
             val teamIds = teamIdsOf(userId = userId)
             if (teamIds.isEmpty()) {
@@ -625,7 +625,7 @@ class MatchRepository {
     fun listBetweenUsers(
         userIdA: UUID,
         userIdB: UUID,
-    ): List<Match> =
+    ): List<MatchAggregateEntity> =
         transaction {
             val teamsA = teamIdsOf(userId = userIdA)
             val teamsB = teamIdsOf(userId = userIdB)
@@ -688,18 +688,32 @@ class MatchRepository {
         return teamId
     }
 
-    private fun loadMatch(id: UUID): Match? =
-        MatchesTable.selectAll().where { MatchesTable.id eq id }.singleOrNull()?.let { row -> buildMatch(row = row) }
+    private fun loadMatch(id: UUID): MatchAggregateEntity? =
+        MatchesTable.selectAll().where { MatchesTable.id eq id }.singleOrNull()?.let { row -> buildMatchAggregate(row = row) }
 }
 
 /** Reload a match that is known to exist (e.g. just inserted/updated) — no caller-side null branch. */
-private fun loadMatchOrThrow(id: UUID): Match = buildMatch(row = MatchesTable.selectAll().where { MatchesTable.id eq id }.single())
+private fun loadMatchOrThrow(id: UUID): MatchAggregateEntity =
+    buildMatchAggregate(row = MatchesTable.selectAll().where { MatchesTable.id eq id }.single())
 
 /** A unique shareable match code (#136), retrying on the rare collision. Must run in a transaction. */
 private fun generateUniqueMatchCode(): String =
     PublicCode.generate { code -> MatchesTable.selectAll().where { MatchesTable.publicCode eq code }.any() }
 
-private fun buildMatch(row: ResultRow): Match = row.toMatchEntity().toDomain()
+/**
+ * Assemble the raw persistence graph (#633) from a `matches` row: the [MatchEntity] scalars plus the two
+ * sides (each with its ordered user ids) and the sets (each with its optional tiebreak). No enum parsing
+ * and no model types — the `mapper.entity` boundary turns this into the domain `Match`.
+ */
+private fun buildMatchAggregate(row: ResultRow): MatchAggregateEntity {
+    val match = row.toMatchEntity()
+    return MatchAggregateEntity(
+        match = match,
+        team1 = sideOf(teamId = match.team1Id),
+        team2 = sideOf(teamId = match.team2Id),
+        sets = setsOf(matchId = match.id),
+    )
+}
 
 /** Map a `matches` row to the raw persistence entity (#633) — no assembled sides/sets, no enum parsing. */
 private fun ResultRow.toMatchEntity(): MatchEntity =
@@ -728,42 +742,9 @@ private fun ResultRow.toMatchEntity(): MatchEntity =
         placementBracket = this[MatchesTable.placementBracket],
     )
 
-/**
- * Convert the raw persistence [MatchEntity] to the domain [Match] (#633): the single boundary where the
- * stored enum strings are parsed ([TeamType]/[MatchType]/[MatchStatus]/[PlacementBracket]) and the child
- * collections are attached — the two sides via [sideOf] (each with its ordered user ids) and the [sets]
- * via [setsOf] (each with its optional tiebreak). Lives in the repository (which may reference both
- * `persistence` and `model`) rather than a mapper, since `repository ↛ mapper` is enforced.
- */
-private fun MatchEntity.toDomain(): Match =
-    Match(
-        id = id,
-        publicCode = publicCode,
-        matchFormat = TeamType.valueOf(value = matchFormat),
-        matchType = MatchType.valueOf(value = matchType),
-        matchDate = matchDate,
-        status = MatchStatus.valueOf(value = status),
-        team1 = sideOf(teamId = team1Id),
-        team2 = sideOf(teamId = team2Id),
-        winnerTeamId = winnerTeamId,
-        sets = setsOf(matchId = id),
-        venue = venue,
-        tournamentName = tournamentName,
-        isActive = isActive,
-        completedAt = completedAt,
-        ratedAt = ratedAt,
-        createdBy = createdBy,
-        recordedBy = recordedBy,
-        eventId = eventId,
-        calcSequence = calcSequence,
-        team1Handicap = team1Handicap,
-        team2Handicap = team2Handicap,
-        isPlacementMatch = isPlacementMatch,
-        placementBracket = placementBracket?.let { PlacementBracket.valueOf(value = it) },
-    )
-
-private fun sideOf(teamId: UUID): MatchSide =
-    MatchSide(
+/** Load one side of a match as the raw [MatchSideEntity]: its team id + ordered participant user ids. */
+private fun sideOf(teamId: UUID): MatchSideEntity =
+    MatchSideEntity(
         teamId = teamId,
         userIds =
             TeamUsersTable
@@ -773,7 +754,8 @@ private fun sideOf(teamId: UUID): MatchSide =
                 .map { it[TeamUsersTable.userId].value },
     )
 
-private fun setsOf(matchId: UUID): List<MatchSetResult> =
+/** Load a match's sets as raw [MatchSetEntity] rows, each with its optional tiebreak sub-row. */
+private fun setsOf(matchId: UUID): List<MatchSetEntity> =
     MatchSetsTable
         .selectAll()
         .where { MatchSetsTable.matchId eq matchId }
@@ -781,7 +763,7 @@ private fun setsOf(matchId: UUID): List<MatchSetResult> =
         .map { setRow ->
             val setId = setRow[MatchSetsTable.id].value
             val tb = MatchSetTiebreaksTable.selectAll().where { MatchSetTiebreaksTable.matchSetId eq setId }.singleOrNull()
-            MatchSetResult(
+            MatchSetEntity(
                 setNumber = setRow[MatchSetsTable.setNumber],
                 team1Games = setRow[MatchSetsTable.team1Games],
                 team2Games = setRow[MatchSetsTable.team2Games],

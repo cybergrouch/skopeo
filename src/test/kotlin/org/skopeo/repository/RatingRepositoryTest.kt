@@ -14,6 +14,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.mapper.entity.match.toDomain
 import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.CalculationBreakdownSnapshot
@@ -86,7 +87,7 @@ class RatingRepositoryTest {
                         team2Name = "T2",
                         createdBy = u1,
                     ),
-            )
+            ).toDomain()
         matches.addResult(
             matchId = match.id,
             sets = listOf(element = MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 0, winnerTeamId = match.team1.teamId)),
