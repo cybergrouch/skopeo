@@ -19,6 +19,8 @@ import org.skopeo.model.ApiKey
 import org.skopeo.model.ApiKeyStatus
 import org.skopeo.model.InsertApiKeyCommand
 import org.skopeo.model.ResolvedApiKey
+import org.skopeo.persistence.ApiClientEntity
+import org.skopeo.persistence.ApiKeyEntity
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -138,37 +140,72 @@ class ApiClientRepository {
 
     /** Map a clients row to the domain, loading its keys (runs in the caller's transaction). */
     private fun ResultRow.toClient(): ApiClient {
-        val clientId = this[ApiClientsTable.id].value
+        val entity = toApiClientEntity()
         val keys =
             ApiKeysTable
                 .selectAll()
-                .where { ApiKeysTable.clientId eq clientId }
+                .where { ApiKeysTable.clientId eq entity.id }
                 .orderBy(ApiKeysTable.createdAt to SortOrder.DESC)
                 .map { it.toKey() }
-        return ApiClient(
-            id = clientId,
+        return entity.toDomain(keys = keys)
+    }
+
+    private fun ResultRow.toKey(): ApiKey = toApiKeyEntity().toDomain()
+
+    /** Read the raw `api_clients` root-row scalars into the model-free persistence entity (#633). */
+    private fun ResultRow.toApiClientEntity(): ApiClientEntity =
+        ApiClientEntity(
+            id = this[ApiClientsTable.id].value,
             name = this[ApiClientsTable.name],
-            status = ApiClientStatus.valueOf(value = this[ApiClientsTable.status]),
+            status = this[ApiClientsTable.status],
+            rateLimitPerMin = this[ApiClientsTable.rateLimitPerMin],
             createdBy = this[ApiClientsTable.createdBy]?.value,
             createdAt = this[ApiClientsTable.createdAt],
             updatedAt = this[ApiClientsTable.updatedAt],
-            keys = keys,
-            rateLimitPerMin = this[ApiClientsTable.rateLimitPerMin],
         )
-    }
 
-    private fun ResultRow.toKey(): ApiKey =
-        ApiKey(
+    /** Convert the raw client entity to the domain, attaching the separately-loaded [keys]. */
+    private fun ApiClientEntity.toDomain(keys: List<ApiKey>): ApiClient =
+        ApiClient(
+            id = id,
+            name = name,
+            status = ApiClientStatus.valueOf(value = status),
+            createdBy = createdBy,
+            createdAt = createdAt,
+            updatedAt = updatedAt,
+            keys = keys,
+            rateLimitPerMin = rateLimitPerMin,
+        )
+
+    /** Read the raw `api_keys` row scalars into the model-free persistence entity (#633). */
+    private fun ResultRow.toApiKeyEntity(): ApiKeyEntity =
+        ApiKeyEntity(
             id = this[ApiKeysTable.id].value,
             clientId = this[ApiKeysTable.clientId].value,
             keyPrefix = this[ApiKeysTable.keyPrefix],
-            scopes = parseScopes(raw = this[ApiKeysTable.scopes]),
-            status = ApiKeyStatus.valueOf(value = this[ApiKeysTable.status]),
+            keyHash = this[ApiKeysTable.keyHash],
+            scopes = this[ApiKeysTable.scopes],
+            status = this[ApiKeysTable.status],
             createdBy = this[ApiKeysTable.createdBy]?.value,
             createdAt = this[ApiKeysTable.createdAt],
             expiresAt = this[ApiKeysTable.expiresAt],
             lastUsedAt = this[ApiKeysTable.lastUsedAt],
             revokedAt = this[ApiKeysTable.revokedAt],
+        )
+
+    /** Convert the raw key entity to the domain, parsing the raw scopes/status columns. */
+    private fun ApiKeyEntity.toDomain(): ApiKey =
+        ApiKey(
+            id = id,
+            clientId = clientId,
+            keyPrefix = keyPrefix,
+            scopes = parseScopes(raw = scopes),
+            status = ApiKeyStatus.valueOf(value = status),
+            createdBy = createdBy,
+            createdAt = createdAt,
+            expiresAt = expiresAt,
+            lastUsedAt = lastUsedAt,
+            revokedAt = revokedAt,
         )
 
     /** Parse the comma-separated scopes column, dropping any value that is no longer a known capability. */

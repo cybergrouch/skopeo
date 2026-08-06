@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Lange Pantoja
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+@file:Suppress("TooManyFunctions") // The #633 entity split adds toClubEntity()/toDomain() to a cohesive repository.
+
 package org.skopeo.repository
 
 import org.jetbrains.exposed.sql.ResultRow
@@ -15,6 +17,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.model.Club
 import org.skopeo.model.CreateClubCommand
+import org.skopeo.persistence.ClubEntity
 import java.util.UUID
 
 /**
@@ -115,17 +118,32 @@ class ClubRepository {
 
     /** Map a clubs row to the domain, loading its owner ids (runs in the caller's transaction). */
     private fun ResultRow.toClub(): Club {
-        val clubId = this[ClubsTable.id].value
+        val entity = toClubEntity()
         val ownerIds =
-            ClubOwnersTable.selectAll().where { ClubOwnersTable.clubId eq clubId }.map { it[ClubOwnersTable.userId].value }
-        return Club(
-            id = clubId,
+            ClubOwnersTable.selectAll().where { ClubOwnersTable.clubId eq entity.id }.map { it[ClubOwnersTable.userId].value }
+        return entity.toDomain(ownerIds = ownerIds)
+    }
+
+    /** Read only the raw `clubs`-row scalars into the persistence entity (#633); no child rows. */
+    private fun ResultRow.toClubEntity(): ClubEntity =
+        ClubEntity(
+            id = this[ClubsTable.id].value,
             name = this[ClubsTable.name],
             publicCode = this[ClubsTable.publicCode],
             isActive = this[ClubsTable.isActive],
             tournamentsSanctioned = this[ClubsTable.tournamentsSanctioned],
             createdBy = this[ClubsTable.createdBy]?.value,
+        )
+
+    /** Build the domain [Club] from the raw entity plus its separately-loaded owner ids (#633). */
+    private fun ClubEntity.toDomain(ownerIds: List<UUID>): Club =
+        Club(
+            id = id,
+            name = name,
+            publicCode = publicCode,
+            isActive = isActive,
+            tournamentsSanctioned = tournamentsSanctioned,
+            createdBy = createdBy,
             ownerIds = ownerIds,
         )
-    }
 }

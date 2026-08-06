@@ -21,6 +21,7 @@ import org.skopeo.model.EventParticipantEntry
 import org.skopeo.model.EventParticipantStatus
 import org.skopeo.model.EventType
 import org.skopeo.model.MyEvent
+import org.skopeo.persistence.EventEntity
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -349,25 +350,48 @@ class EventRepository {
     private fun loadEventOrThrow(id: UUID): Event = buildEvent(row = EventsTable.selectAll().where { EventsTable.id eq id }.single())
 
     private fun buildEvent(row: ResultRow): Event {
-        val id = row[EventsTable.id].value
-        return Event(
-            id = id,
-            publicCode = row[EventsTable.publicCode],
-            name = row[EventsTable.name],
-            startDate = row[EventsTable.startDate],
-            endDate = row[EventsTable.endDate],
-            participantIds = approvedParticipantIdsOf(eventId = id),
-            isActive = row[EventsTable.isActive],
-            createdBy = row[EventsTable.createdBy]?.value,
-            clubId = row[EventsTable.clubId]?.value,
-            circuitId = row[EventsTable.circuitId]?.value,
-            calcPriority = row[EventsTable.calcPriority],
-            type = EventType.valueOf(value = row[EventsTable.type]),
-            finalizedAt = row[EventsTable.finalizedAt],
-            finalizedBy = row[EventsTable.finalizedBy]?.value,
-            awardRankingPoints = row[EventsTable.awardRankingPoints],
-        )
+        val entity = row.toEventEntity()
+        return entity.toDomain(participantIds = approvedParticipantIdsOf(eventId = entity.id))
     }
+
+    /** Read only the raw `events`-row scalars into the persistence entity (#633); no child rows. */
+    private fun ResultRow.toEventEntity(): EventEntity =
+        EventEntity(
+            id = this[EventsTable.id].value,
+            publicCode = this[EventsTable.publicCode],
+            name = this[EventsTable.name],
+            startDate = this[EventsTable.startDate],
+            endDate = this[EventsTable.endDate],
+            isActive = this[EventsTable.isActive],
+            createdBy = this[EventsTable.createdBy]?.value,
+            clubId = this[EventsTable.clubId]?.value,
+            circuitId = this[EventsTable.circuitId]?.value,
+            calcPriority = this[EventsTable.calcPriority],
+            type = this[EventsTable.type],
+            finalizedAt = this[EventsTable.finalizedAt],
+            finalizedBy = this[EventsTable.finalizedBy]?.value,
+            awardRankingPoints = this[EventsTable.awardRankingPoints],
+        )
+
+    /** Build the domain [Event] from the raw entity plus its separately-loaded APPROVED participant ids (#633). */
+    private fun EventEntity.toDomain(participantIds: List<UUID>): Event =
+        Event(
+            id = id,
+            publicCode = publicCode,
+            name = name,
+            startDate = startDate,
+            endDate = endDate,
+            participantIds = participantIds,
+            isActive = isActive,
+            createdBy = createdBy,
+            clubId = clubId,
+            circuitId = circuitId,
+            calcPriority = calcPriority,
+            type = EventType.valueOf(value = type),
+            finalizedAt = finalizedAt,
+            finalizedBy = finalizedBy,
+            awardRankingPoints = awardRankingPoints,
+        )
 
     /** Only APPROVED participants count as the roster (eligible for fixtures/seeding, #201). */
     private fun approvedParticipantIdsOf(eventId: UUID): List<UUID> =

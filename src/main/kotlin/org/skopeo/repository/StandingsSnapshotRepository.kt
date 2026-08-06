@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Lange Pantoja
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+@file:Suppress("TooManyFunctions") // The #633 entity split adds toStandingsEntryEntity()/toDomain() to a cohesive repository.
+
 package org.skopeo.repository
 
 import org.jetbrains.exposed.sql.ResultRow
@@ -16,6 +18,7 @@ import org.skopeo.model.StandingsBand
 import org.skopeo.model.StandingsEntryWrite
 import org.skopeo.model.StandingsPage
 import org.skopeo.model.StandingsSnapshotEntry
+import org.skopeo.persistence.StandingsEntryEntity
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
@@ -144,7 +147,7 @@ class StandingsSnapshotRepository {
                 query()
                     .orderBy(StandingsEntriesTable.rank to SortOrder.ASC)
                     .limit(n = limit, offset = offset.toLong())
-                    .map { it.toSnapshotEntry(band = band) }
+                    .map { it.toStandingsEntryEntity().toDomain() }
             StandingsPage(entries = entries, total = total.toInt())
         }
 
@@ -162,15 +165,8 @@ class StandingsSnapshotRepository {
                 .selectAll()
                 .where { (StandingsEntriesTable.snapshotId eq snapshotId) and (StandingsEntriesTable.userId eq userId) }
                 .firstOrNull()
-                ?.let { row ->
-                    StandingsSnapshotEntry(
-                        band = StandingsBand.requireCode(code = row[StandingsEntriesTable.band]),
-                        sex = row.sexValue(),
-                        rank = row[StandingsEntriesTable.rank],
-                        userId = row[StandingsEntriesTable.userId].value,
-                        orderingValue = row[StandingsEntriesTable.orderingValue],
-                    )
-                }
+                ?.toStandingsEntryEntity()
+                ?.toDomain()
         }
 
     private fun groupWhere(
@@ -196,14 +192,32 @@ class StandingsSnapshotRepository {
                 }
             }
 
-    // [band] is the group filtered on, so every row carries it — no need to re-parse the persisted code.
-    private fun ResultRow.toSnapshotEntry(band: StandingsBand): StandingsSnapshotEntry =
-        StandingsSnapshotEntry(
-            band = band,
-            sex = sexValue(),
+    /** Map a `standings_entries` row to the raw persistence entity (#633) — no derivations. */
+    private fun ResultRow.toStandingsEntryEntity(): StandingsEntryEntity =
+        StandingsEntryEntity(
+            snapshotId = this[StandingsEntriesTable.snapshotId].value,
+            band = this[StandingsEntriesTable.band],
+            sex = this[StandingsEntriesTable.sex],
             rank = this[StandingsEntriesTable.rank],
             userId = this[StandingsEntriesTable.userId].value,
             orderingValue = this[StandingsEntriesTable.orderingValue],
+            tiebreakRating = this[StandingsEntriesTable.tiebreakRating],
+            achievedAt = this[StandingsEntriesTable.achievedAt],
+        )
+
+    /**
+     * Convert the raw [StandingsEntryEntity] to the domain [StandingsSnapshotEntry] (#633): the single
+     * boundary where the stored band code is parsed into a [StandingsBand] and the [UNSPECIFIED_SEX]
+     * sentinel round-trips back to a null sex. Lives in the repository (which may reference both
+     * `persistence` and `model`) rather than a mapper, since `repository ↛ mapper` is enforced.
+     */
+    private fun StandingsEntryEntity.toDomain(): StandingsSnapshotEntry =
+        StandingsSnapshotEntry(
+            band = StandingsBand.requireCode(code = band),
+            sex = if (sex == UNSPECIFIED_SEX) null else sex,
+            rank = rank,
+            userId = userId,
+            orderingValue = orderingValue,
         )
 }
 

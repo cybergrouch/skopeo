@@ -17,6 +17,7 @@ import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.skopeo.common.error.ServiceError
 import org.skopeo.model.PlayerList
+import org.skopeo.persistence.PlayerListEntity
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -97,12 +98,22 @@ class PlayerListRepository {
             .orderBy(PlayerListMembersTable.addedAt to SortOrder.ASC)
             .map { it[PlayerListMembersTable.userId].value }
 
-    private fun ResultRow.toPlayerList(memberIds: List<UUID>): PlayerList =
-        PlayerList(
+    private fun ResultRow.toPlayerList(memberIds: List<UUID>): PlayerList = this.toPlayerListEntity().toDomain(memberUserIds = memberIds)
+
+    private fun ResultRow.toPlayerListEntity(): PlayerListEntity =
+        PlayerListEntity(
             id = this[PlayerListsTable.id].value,
             ownerId = this[PlayerListsTable.ownerId].value,
             name = this[PlayerListsTable.name],
             createdAt = this[PlayerListsTable.createdAt],
-            memberUserIds = memberIds,
+        )
+
+    private fun PlayerListEntity.toDomain(memberUserIds: List<UUID>): PlayerList =
+        PlayerList(
+            id = id,
+            ownerId = ownerId,
+            name = name,
+            createdAt = createdAt,
+            memberUserIds = memberUserIds,
         )
 }
