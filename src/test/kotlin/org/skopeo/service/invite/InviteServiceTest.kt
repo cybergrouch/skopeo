@@ -13,6 +13,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.ContactInfo
@@ -63,7 +64,7 @@ class InviteServiceTest {
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                     capabilities = roles,
                 ),
-        )
+        ).toDomain()
 
     /** Provision an account that owns a verified EMAIL contact — the existing-account guard input (#132). */
     private fun provisionWithEmail(
@@ -86,7 +87,7 @@ class InviteServiceTest {
                             isPrimary = true,
                         ),
                 ),
-        )
+        ).toDomain()
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 

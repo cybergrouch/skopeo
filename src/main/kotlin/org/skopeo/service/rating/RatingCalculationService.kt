@@ -14,6 +14,7 @@ import org.skopeo.common.security.Capability
 import org.skopeo.dto.RankingCalculationRequest
 import org.skopeo.dto.rating.CalculationResponse
 import org.skopeo.mapper.dto.rating.toResponse
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -354,7 +355,7 @@ class RatingCalculationService(
         }
 
     private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
         return if (caller == null || !caller.capabilities.contains(element = Capability.ADMINISTRATOR)) {
             ServiceError.Forbidden().left()
         } else {

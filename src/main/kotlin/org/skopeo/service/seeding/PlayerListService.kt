@@ -14,6 +14,7 @@ import org.skopeo.dto.seeding.PlayerListSummaryResponse
 import org.skopeo.mapper.dto.seeding.toSummaryResponse
 import org.skopeo.mapper.dto.user.toSummary
 import org.skopeo.mapper.entity.seeding.toDomain
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.PlayerList
 import org.skopeo.model.canSeeRawRatingOrFalse
 import org.skopeo.repository.PlayerListRepository
@@ -71,10 +72,10 @@ class PlayerListService(
     ): Either<ServiceError, PlayerListResponse> =
         either {
             val list = get(token = token, listId = listId).bind()
-            val members = users.findAllByIds(ids = list.memberUserIds)
+            val members = users.findAllByIds(ids = list.memberUserIds).map { it.toDomain() }
             val currentRatings = ratings.findCurrentRatings(userIds = list.memberUserIds)
             // Raw NTRP values are ADMINISTRATOR-only (#583); a non-admin seeder sees bands only.
-            val showRaw = users.findByFirebaseUid(firebaseUid = token.uid).canSeeRawRatingOrFalse()
+            val showRaw = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain().canSeeRawRatingOrFalse()
             PlayerListResponse(
                 id = list.id.toString(),
                 name = list.name,
@@ -99,7 +100,7 @@ class PlayerListService(
     ): Either<ServiceError, Unit> =
         either {
             get(token = token, listId = listId).bind()
-            val member = users.findById(id = userId).bind()
+            val member = users.findById(id = userId).bind().toDomain()
             ensure(condition = member.capabilities.contains(element = Capability.PLAYER)) {
                 ServiceError.Validation(message = "Only players can be added to a list")
             }
@@ -117,7 +118,7 @@ class PlayerListService(
         }
 
     private fun requireSeeder(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid) ?: return ServiceError.Forbidden().left()
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain() ?: return ServiceError.Forbidden().left()
         return if (caller.capabilities.any { it in SEEDING_ROLES }) caller.id.right() else ServiceError.Forbidden().left()
     }
 }

@@ -15,6 +15,7 @@ import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.dto.ranking.AdjustRankingPointsRequest
 import org.skopeo.dto.ranking.GrantRankingPointsRequest
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuthProvider
@@ -69,7 +70,7 @@ class RankingPointServiceTest {
                     sex = sex,
                     capabilities = roles,
                 ),
-        )
+        ).toDomain()
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 

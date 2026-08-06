@@ -18,6 +18,7 @@ import org.skopeo.dto.ranking.RankingPointAwardResponse
 import org.skopeo.mapper.dto.ranking.toCommand
 import org.skopeo.mapper.dto.ranking.toResponse
 import org.skopeo.mapper.entity.ranking.toDomain
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -87,7 +88,7 @@ class RankingPointService(
             val target =
                 users.findById(
                     id = command.userId,
-                ).mapLeft { ServiceError.Validation(message = "Unknown user ${command.userId}") }.bind()
+                ).mapLeft { ServiceError.Validation(message = "Unknown user ${command.userId}") }.bind().toDomain()
             ensure(condition = target.isActive) { ServiceError.Validation(message = "User ${command.userId} is not active") }
 
             val validFrom = command.validFrom ?: LocalDateTime.now()
@@ -164,7 +165,7 @@ class RankingPointService(
             val target =
                 users.findById(
                     id = command.userId,
-                ).mapLeft { ServiceError.Validation(message = "Unknown user ${command.userId}") }.bind()
+                ).mapLeft { ServiceError.Validation(message = "Unknown user ${command.userId}") }.bind().toDomain()
             ensure(condition = target.isActive) { ServiceError.Validation(message = "User ${command.userId} is not active") }
 
             // Band tagged from the player's current rating; an unrated player has nothing to tag → Validation.
@@ -270,7 +271,7 @@ class RankingPointService(
     ): Either<ServiceError, List<RankingPointAwardResponse>> =
         either {
             requireAdmin(token = token).bind()
-            users.findById(id = userId).mapLeft { ServiceError.NotFound(message = "User $userId not found") }.bind()
+            users.findById(id = userId).mapLeft { ServiceError.NotFound(message = "User $userId not found") }.bind().toDomain()
             awards.listByUser(userId = userId).map { it.toDomain().toResponse() }
         }
 
@@ -292,7 +293,7 @@ class RankingPointService(
             val (rowEntities, total) = awards.listAwards(limit = pageSize, offset = pageOffset)
             val rows = rowEntities.map { it.toDomain() }
 
-            val usersById = users.findAllByIds(ids = rows.map { it.userId }).associateBy { it.id }
+            val usersById = users.findAllByIds(ids = rows.map { it.userId }).map { it.toDomain() }.associateBy { it.id }
             val matchRefs = matches.publicRefsByIds(ids = rows.mapNotNull { it.matchId })
             val eventCodes = events.publicCodesByIds(ids = rows.mapNotNull { it.eventId })
             val resolved =
@@ -319,7 +320,7 @@ class RankingPointService(
 
     /** ADMINISTRATOR-only access; returns the caller's id (the audit actor). */
     private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
         return if (caller == null || !caller.capabilities.contains(element = Capability.ADMINISTRATOR)) {
             ServiceError.Forbidden().left()
         } else {
@@ -332,7 +333,7 @@ class RankingPointService(
      * as an ADMINISTRATOR or a POINTS_MANAGER — matching the Points Management tab. Returns the caller's id.
      */
     private fun requirePointsManager(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
         val allowed =
             caller != null &&
                 caller.capabilities.any { it == Capability.ADMINISTRATOR || it == Capability.POINTS_MANAGER }

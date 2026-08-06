@@ -15,6 +15,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.NameType
@@ -60,7 +61,7 @@ class RatingServiceTest {
                 names = listOf(UserName(type = NameType.DISPLAY, value = uid)),
                 capabilities = roles,
             ),
-        )
+        ).toDomain()
 
     private fun admin(uid: String = "root") = provisionUser(uid = uid, roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
 
@@ -243,7 +244,7 @@ class RatingServiceTest {
                         sex = "Female",
                         capabilities = setOf(element = Capability.PLAYER),
                     ),
-            )
+            ).toDomain()
 
         val page = service.pendingAssessment(token = token(uid = "root"), limit = 50, offset = 0).shouldBeRight()
         val entry = page.items.single { it.userId == player.id.toString() }
@@ -268,7 +269,7 @@ class RatingServiceTest {
                         proposedRating = BigDecimal("3.5"),
                         capabilities = setOf(element = Capability.PLAYER),
                     ),
-            )
+            ).toDomain()
         val plain = provisionUser(uid = "plain")
 
         val items = service.pendingAssessment(token = token(uid = "root"), limit = 50, offset = 0).shouldBeRight().items
@@ -313,7 +314,7 @@ class RatingServiceTest {
                         names = listOf(UserName(type = NameType.FIRST, value = "First")),
                         capabilities = setOf(Capability.PLAYER),
                     ),
-            )
+            ).toDomain()
 
         val entry =
             service

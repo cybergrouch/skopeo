@@ -14,6 +14,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.ContactInfo
@@ -63,7 +64,7 @@ class CapabilityServiceTest {
                 names = listOf(UserName(type = NameType.DISPLAY, value = uid)),
                 capabilities = roles,
             ),
-        )
+        ).toDomain()
 
     private fun admin(uid: String = "root"): User = provisionUser(uid = uid, roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
 
@@ -194,7 +195,7 @@ class CapabilityServiceTest {
                         ),
                     capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
                 ),
-        )
+        ).toDomain()
 
     @Test
     fun `a bootstrap administrator (verified email on the allowlist) cannot be revoked (#194)`() {
@@ -258,7 +259,7 @@ class CapabilityServiceTest {
                             ),
                         capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
                     ),
-            )
+            ).toDomain()
 
         gated.revoke(token = token(uid = "root"), userId = phoneAdmin.id, capabilityRaw = Capability.ADMINISTRATOR.name).shouldBeRight()
     }

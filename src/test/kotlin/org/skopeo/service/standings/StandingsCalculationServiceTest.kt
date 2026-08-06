@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.mapper.entity.ranking.toDomain
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.AwardStatus
 import org.skopeo.model.CreateFixtureCommand
@@ -80,7 +81,7 @@ class StandingsCalculationServiceTest {
                     sex = sex,
                     capabilities = roles,
                 ),
-        )
+        ).toDomain()
 
     /** A user with only a NICKNAME name (no active DISPLAY name) so [User.displayName] is null. */
     private fun provisionNoDisplayName(uid: String): User =
@@ -93,7 +94,7 @@ class StandingsCalculationServiceTest {
                     sex = "Male",
                     capabilities = setOf(element = Capability.PLAYER),
                 ),
-        )
+        ).toDomain()
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 

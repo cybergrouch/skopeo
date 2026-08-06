@@ -25,6 +25,7 @@ import org.skopeo.dto.event.EventResponse
 import org.skopeo.mapper.entity.club.toDomain
 import org.skopeo.mapper.entity.event.toDomain
 import org.skopeo.mapper.entity.ranking.toDomain
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuthProvider
@@ -99,11 +100,11 @@ class EventServiceTest {
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                     capabilities = roles,
                 ),
-        )
+        ).toDomain()
 
     // A login-less placeholder ("dummy") player (#496/#505) — a real users row with placeholder = true.
     private fun placeholder(displayName: String): User =
-        users.createPlaceholder(command = CreatePlaceholderCommand(displayName = displayName, sex = "Male"))
+        users.createPlaceholder(command = CreatePlaceholderCommand(displayName = displayName, sex = "Male")).toDomain()
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
@@ -380,7 +381,7 @@ class EventServiceTest {
                         sex = "Female",
                         dateOfBirth = dob,
                     ),
-            )
+            ).toDomain()
         RatingRepository().setRating(
             userId = player.id,
             rating = BigDecimal("4.000000"),
@@ -1326,7 +1327,10 @@ class EventServiceTest {
 
     /** Seed a circuit (#525) attributed to [hostUid], returning its id — tournaments must reference one. */
     private fun seedCircuit(hostUid: String): UUID {
-        val creator = requireNotNull(value = UserRepository().findByFirebaseUid(firebaseUid = hostUid)) { "unknown host $hostUid" }
+        val creator =
+            requireNotNull(
+                value = UserRepository().findByFirebaseUid(firebaseUid = hostUid),
+            ) { "unknown host $hostUid" }.toDomain()
         return CircuitRepository().create(command = CreateCircuitCommand(name = "NORTH", createdBy = creator.id)).id
     }
 

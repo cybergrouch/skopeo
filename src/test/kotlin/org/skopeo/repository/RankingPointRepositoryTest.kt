@@ -10,6 +10,7 @@ import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.AwardStatus
 import org.skopeo.model.NameType
@@ -49,7 +50,7 @@ class RankingPointRepositoryTest {
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                 ),
-        ).id
+        ).toDomain().id
 
     private fun write(
         userId: UUID,

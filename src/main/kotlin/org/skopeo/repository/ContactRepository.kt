@@ -15,7 +15,6 @@ import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.common.error.ServiceError
-import org.skopeo.model.Contact
 import org.skopeo.model.ContactSource
 import org.skopeo.model.ContactType
 import org.skopeo.model.VerificationMethod
@@ -25,24 +24,26 @@ import java.time.LocalDateTime
 import java.util.UUID
 
 /**
- * Row-level persistence for individual [Contact]s. Contacts are written here as
+ * Row-level persistence for individual contacts. Contacts are written here as
  * MANUAL/PENDING (the user/admin adds them by hand); verification state is set
  * separately via [setVerification]. The DB enforces one-per-type and globally-unique
- * verified values — those surface as a [ServiceError.Conflict] via [conflictAware].
+ * verified values — those surface as a [ServiceError.Conflict] via [conflictAware]. Reads
+ * return raw [ContactEntity] rows (#633); the service converts them to the domain `Contact`
+ * via `mapper.entity`.
  */
 class ContactRepository {
-    fun listByUser(userId: UUID): List<Contact> =
+    fun listByUser(userId: UUID): List<ContactEntity> =
         transaction {
             ContactInformationTable
                 .selectAll()
                 .where { ContactInformationTable.userId eq userId }
-                .map { it.toContact() }
+                .map { it.toContactEntity() }
         }
 
-    fun findById(id: UUID): Either<ServiceError, Contact> =
+    fun findById(id: UUID): Either<ServiceError, ContactEntity> =
         transaction {
             val row = ContactInformationTable.selectAll().where { ContactInformationTable.id eq id }.singleOrNull()
-            if (row == null) ServiceError.NotFound(message = "Contact $id not found").left() else row.toContact().right()
+            if (row == null) ServiceError.NotFound(message = "Contact $id not found").left() else row.toContactEntity().right()
         }
 
     /**
@@ -54,7 +55,7 @@ class ContactRepository {
         type: ContactType,
         value: String,
         isPrimary: Boolean,
-    ): Either<ServiceError, Contact> =
+    ): Either<ServiceError, ContactEntity> =
         conflictAware(message = "A ${type.name} contact already exists for this user") {
             transaction {
                 val id =
@@ -75,7 +76,7 @@ class ContactRepository {
      * (#126). Excludes [excludeUserId] and any contact of a disabled user. Values are returned as
      * stored; the caller normalizes for comparison.
      */
-    fun activePhonesOfOtherActiveUsers(excludeUserId: UUID): List<Contact> =
+    fun activePhonesOfOtherActiveUsers(excludeUserId: UUID): List<ContactEntity> =
         transaction {
             // contact_information has two FKs to users (user_id, verified_by), so the join column is explicit.
             ContactInformationTable
@@ -90,7 +91,7 @@ class ContactRepository {
                         ContactInformationTable.isActive and
                         UsersTable.isActive and
                         (ContactInformationTable.userId neq excludeUserId)
-                }.map { it.toContact() }
+                }.map { it.toContactEntity() }
         }
 
     /**
@@ -124,7 +125,7 @@ class ContactRepository {
         id: UUID,
         active: Boolean,
         disabledAt: LocalDateTime?,
-    ): Either<ServiceError, Contact> =
+    ): Either<ServiceError, ContactEntity> =
         conflictAware(message = "Another active contact of that type already exists") {
             transaction {
                 val updated =
@@ -147,13 +148,16 @@ class ContactRepository {
         method: VerificationMethod?,
         verifiedBy: UUID?,
         verifiedAt: LocalDateTime?,
-    ): Either<ServiceError, Contact> =
+    ): Either<ServiceError, ContactEntity> =
         conflictAware(message = "This value is already verified for another account") {
             transaction {
-                val verified = status == VerificationStatus.VERIFIED
-                val methodName = if (verified) method?.name else null
-                val whenVerified = if (verified) verifiedAt else null
-                val whoVerified = if (verified) verifiedBy else null
+                // VERIFIED stamps method/time/admin; any other status clears all three together.
+                val (methodName, whenVerified, whoVerified) =
+                    if (status == VerificationStatus.VERIFIED) {
+                        Triple(first = method?.name, second = verifiedAt, third = verifiedBy)
+                    } else {
+                        Triple(first = null, second = null, third = null)
+                    }
                 val updated =
                     ContactInformationTable.update(where = { ContactInformationTable.id eq id }) {
                         it[verificationStatus] = status.name
@@ -165,18 +169,15 @@ class ContactRepository {
             }
         }.flatten()
 
-    private fun loadById(id: UUID): Contact =
+    private fun loadById(id: UUID): ContactEntity =
         ContactInformationTable
             .selectAll()
             .where { ContactInformationTable.id eq id }
             .single()
-            .toContact()
+            .toContactEntity()
 }
 
-/** Map a contact_information row to the [Contact] domain type. Shared with [UserRepository]. */
-internal fun ResultRow.toContact(): Contact = toContactEntity().toDomain()
-
-/** Map a contact_information row to the raw persistence entity (#633) — no derivations, no child rows. */
+/** Map a contact_information row to the raw persistence entity (#633) — no derivations, no child rows. Shared with [UserRepository]. */
 internal fun ResultRow.toContactEntity(): ContactEntity =
     ContactEntity(
         id = this[ContactInformationTable.id].value,
@@ -191,26 +192,4 @@ internal fun ResultRow.toContactEntity(): ContactEntity =
         verifiedAt = this[ContactInformationTable.verifiedAt],
         verifiedBy = this[ContactInformationTable.verifiedBy]?.value,
         disabledAt = this[ContactInformationTable.disabledAt],
-    )
-
-/**
- * Convert the raw persistence [ContactEntity] to the domain [Contact] (#633): the single boundary where
- * the stored enum strings are parsed into their [ContactType]/[ContactSource]/[VerificationStatus]/
- * [VerificationMethod] values. Lives in the repository (which may reference both `persistence` and
- * `model`) rather than a mapper, since `repository ↛ mapper` is enforced.
- */
-internal fun ContactEntity.toDomain(): Contact =
-    Contact(
-        id = id,
-        userId = userId,
-        type = ContactType.valueOf(value = type),
-        value = value,
-        source = ContactSource.valueOf(value = source),
-        status = VerificationStatus.valueOf(value = status),
-        method = method?.let(block = VerificationMethod::valueOf),
-        isPrimary = isPrimary,
-        isActive = isActive,
-        verifiedAt = verifiedAt,
-        verifiedBy = verifiedBy,
-        disabledAt = disabledAt,
     )

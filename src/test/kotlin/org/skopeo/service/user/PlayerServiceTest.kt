@@ -19,6 +19,7 @@ import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.dto.user.ResultsBucket
 import org.skopeo.mapper.entity.event.toDomain
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.AwardStatus
 import org.skopeo.model.ContactInfo
@@ -82,7 +83,7 @@ class PlayerServiceTest {
                     names = names,
                     sex = sex,
                 ),
-        )
+        ).toDomain()
 
     private fun display(name: String): List<UserName> = listOf(element = UserName(type = NameType.DISPLAY, value = name))
 
@@ -95,7 +96,7 @@ class PlayerServiceTest {
                     names = display(name = "Admin"),
                     capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
                 ),
-        )
+        ).toDomain()
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
@@ -121,7 +122,7 @@ class PlayerServiceTest {
                     names = display(name = name),
                     email = emailContact(value = email),
                 ),
-        )
+        ).toDomain()
 
     private fun viewerWith(
         uid: String,
@@ -135,7 +136,7 @@ class PlayerServiceTest {
                     names = display(name = uid),
                     capabilities = capabilities,
                 ),
-        )
+        ).toDomain()
 
     private fun fixture(
         u1: UUID,
@@ -917,7 +918,7 @@ class PlayerServiceTest {
                         names = display(name = "Admin"),
                         capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
                     ),
-            )
+            ).toDomain()
 
         // Anonymous + the owner (non-admin): band + confidence, but no raw value.
         service.publicProfile(code = player.publicCode).shouldBeRight().rating.shouldNotBeNull().let {

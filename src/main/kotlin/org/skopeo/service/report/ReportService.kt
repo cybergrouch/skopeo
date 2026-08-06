@@ -13,6 +13,7 @@ import org.skopeo.common.security.Capability
 import org.skopeo.dto.report.BandHopBucket
 import org.skopeo.dto.report.BandHopReportResponse
 import org.skopeo.dto.report.BandHopUserRow
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.Level
 import org.skopeo.model.RatingHistoryEntry
 import org.skopeo.model.UserRating
@@ -84,7 +85,7 @@ class ReportService(
                     )
                 }
 
-            val namesById = users.findAllByIds(ids = allHops.map { it.userId }).associateBy { it.id }
+            val namesById = users.findAllByIds(ids = allHops.map { it.userId }).map { it.toDomain() }.associateBy { it.id }
             // Exclude soft-deleted accounts (#550) before bucketing/counting, so a deleted account never
             // appears in the report and the totals/percentages reflect only live accounts.
             val hops = allHops.filter { namesById[it.userId]?.isDeleted() == false }
@@ -183,7 +184,7 @@ class ReportService(
     private fun bandIndex(level: Level): Int = (level.minRating.toBigDecimal() - NTRP_FLOOR).divide(BAND_WIDTH).intValueExact()
 
     private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
         return if (caller == null || !caller.capabilities.contains(element = Capability.ADMINISTRATOR)) {
             ServiceError.Forbidden().left()
         } else {

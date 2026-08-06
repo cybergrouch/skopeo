@@ -16,6 +16,7 @@ import org.skopeo.dto.club.ClubResponse
 import org.skopeo.mapper.dto.club.toResponse
 import org.skopeo.mapper.entity.club.toDomain
 import org.skopeo.mapper.entity.event.toDomain
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -157,7 +158,7 @@ class ClubService(
     ): Either<ServiceError, ClubResponse> =
         either {
             val adminId = requireCapability(token = token, allowed = ADMIN_ONLY).bind()
-            val owner = users.findById(id = userId).mapLeft { ServiceError.Validation(message = "Unknown user $userId") }.bind()
+            val owner = users.findById(id = userId).mapLeft { ServiceError.Validation(message = "Unknown user $userId") }.bind().toDomain()
             ensure(condition = owner.isActive) { ServiceError.Validation(message = "User $userId is not active") }
             // A club owner must hold the CLUB_OWNER capability (#317) — grant it first via capabilities.
             ensure(condition = owner.capabilities.contains(element = Capability.CLUB_OWNER)) {
@@ -253,7 +254,7 @@ class ClubService(
             isActive = club.isActive,
             tournamentsSanctioned = club.tournamentsSanctioned,
             owners =
-                users.findAllByIds(ids = club.ownerIds).map {
+                users.findAllByIds(ids = club.ownerIds).map { it.toDomain() }.map {
                     ClubOwnerRef(userId = it.id, displayName = it.displayName(), publicCode = it.publicCode)
                 },
         )
@@ -292,7 +293,7 @@ class ClubService(
         token: VerifiedFirebaseToken,
         allowed: Set<Capability>,
     ): Either<ServiceError, UUID> {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
         val permitted = caller != null && caller.capabilities.any { it in allowed }
         return if (caller == null || !permitted) ServiceError.Forbidden().left() else caller.id.right()
     }

@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.dto.report.BandHopReportResponse
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
@@ -59,7 +60,7 @@ class ReportServiceTest {
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                     capabilities = roles,
                 ),
-        )
+        ).toDomain()
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
@@ -195,7 +196,7 @@ class ReportServiceTest {
 
         result.totalPlayers shouldBe 1
         result.buckets.single { it.hopDistance == 0 }.users.single().publicCode shouldBe
-            users.findByFirebaseUid(firebaseUid = "banded")!!.publicCode
+            users.findByFirebaseUid(firebaseUid = "banded")!!.toDomain().publicCode
     }
 
     @Test

@@ -13,6 +13,7 @@ import org.skopeo.common.security.Capability
 import org.skopeo.dto.settings.LocalThemeResponse
 import org.skopeo.dto.settings.ThemeResponse
 import org.skopeo.mapper.dto.settings.toResponse
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -110,13 +111,13 @@ class ThemeService(
 
     /** Resolve the caller's provisioned user id, or [ServiceError.Forbidden] when the token maps to none. */
     private fun requireCaller(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
         return if (caller == null) ServiceError.Forbidden().left() else caller.id.right()
     }
 
     /** ADMINISTRATOR-only access; returns the caller's id (the audit actor). */
     private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
         val isAdmin = caller != null && caller.capabilities.contains(element = Capability.ADMINISTRATOR)
         return if (caller == null || !isAdmin) ServiceError.Forbidden().left() else caller.id.right()
     }

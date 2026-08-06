@@ -59,7 +59,8 @@ class DuplicateCandidateService(
                     offset = offset.coerceAtLeast(minimumValue = 0),
                     status = status,
                 )
-            val byId = users.findAllByIds(ids = items.flatMap { listOf(it.userAId, it.userBId) }).associateBy { it.id }
+            val byId =
+                users.findAllByIds(ids = items.flatMap { listOf(it.userAId, it.userBId) }).map { it.toDomain() }.associateBy { it.id }
             val views =
                 items.map {
                     DuplicateCandidateView(
@@ -83,8 +84,8 @@ class DuplicateCandidateService(
         either {
             val adminId = requireAdmin(token = token).bind()
             ensure(condition = userAId != userBId) { ServiceError.Validation(message = "A candidate needs two different users") }
-            val userA = users.findById(id = userAId).bind()
-            val userB = users.findById(id = userBId).bind()
+            val userA = users.findById(id = userAId).bind().toDomain()
+            val userB = users.findById(id = userBId).bind().toDomain()
             val candidate =
                 candidates.flag(
                     userAId = userAId,
@@ -185,7 +186,7 @@ class DuplicateCandidateService(
         }
 
     private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
         return if (caller == null || !caller.capabilities.contains(element = Capability.ADMINISTRATOR)) {
             ServiceError.Forbidden().left()
         } else {

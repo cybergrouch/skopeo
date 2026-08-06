@@ -22,6 +22,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.NameType
@@ -76,7 +77,7 @@ class PlaceholderServiceTest {
                     sex = "Male",
                     capabilities = roles,
                 ),
-        )
+        ).toDomain()
 
     private fun admin(uid: String = "root") = provisionUser(uid = uid, roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
 
@@ -101,7 +102,7 @@ class PlaceholderServiceTest {
                 .shouldBeRight()
 
         // UserResponse carries no placeholder flag; confirm placeholder-ness via the persisted row.
-        users.findById(id = UUID.fromString(created.id)).shouldBeRight().placeholder.shouldBeTrue()
+        users.findById(id = UUID.fromString(created.id)).shouldBeRight().toDomain().placeholder.shouldBeTrue()
         created.firebaseUid shouldBe null
         created.capabilities shouldBe listOf(element = "PLAYER")
         created.names.firstOrNull { it.type == "DISPLAY" && it.isActive }?.value shouldBe "Backlog Player"
@@ -201,7 +202,7 @@ class PlaceholderServiceTest {
                 .createPlaceholder(token = token(uid = "host"), displayName = "Fine", sex = "Male")
                 .shouldBeRight()
 
-        users.findById(id = UUID.fromString(created.id)).shouldBeRight().placeholder.shouldBeTrue()
+        users.findById(id = UUID.fromString(created.id)).shouldBeRight().toDomain().placeholder.shouldBeTrue()
         ratings.findCurrentRating(userId = UUID.fromString(created.id)) shouldBe null
     }
 
@@ -310,7 +311,7 @@ class PlaceholderServiceTest {
         users.hasRatingHistory(userId = claimant.id).shouldBeTrue()
         users.hasRatingHistory(userId = UUID.fromString(placeholder.id)).shouldBeFalse()
         // Placeholder retired via the canonical-link pattern.
-        val retired = users.findById(id = UUID.fromString(placeholder.id)).shouldBeRight()
+        val retired = users.findById(id = UUID.fromString(placeholder.id)).shouldBeRight().toDomain()
         retired.isActive.shouldBeFalse()
         retired.canonicalUserId shouldBe claimant.id
         retired.claimedBy shouldBe claimant.id

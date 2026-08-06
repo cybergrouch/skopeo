@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test
 import org.postgresql.util.PGobject
 import org.skopeo.common.security.Capability
 import org.skopeo.mapper.entity.client.toDomain
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -51,7 +52,7 @@ class AuditRepositoryTest {
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = "Admin")),
                     capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
                 ),
-        ).id
+        ).toDomain().id
 
     @Test
     fun `records an entry and reads it back with details (incl a null value) round-tripped`() {

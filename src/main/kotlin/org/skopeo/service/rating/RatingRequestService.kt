@@ -15,6 +15,7 @@ import org.skopeo.dto.rating.RatingRequestPageResponse
 import org.skopeo.dto.rating.RatingRequestResponse
 import org.skopeo.mapper.dto.rating.toResponse
 import org.skopeo.mapper.entity.rating.toDomain
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditPersonRef
@@ -56,7 +57,7 @@ class RatingRequestService(
         justification: String,
     ): Either<ServiceError, RatingRequestResponse> =
         either {
-            val caller = ensureNotNull(value = users.findByFirebaseUid(firebaseUid = token.uid)) { ServiceError.Forbidden() }
+            val caller = ensureNotNull(value = users.findByFirebaseUid(firebaseUid = token.uid)) { ServiceError.Forbidden() }.toDomain()
             ensure(condition = justification.isNotBlank()) { ServiceError.Validation(message = "A justification is required") }
             ensure(condition = ratings.findCurrentRating(userId = caller.id) != null) {
                 ServiceError.Validation(message = "You don't have a rating to reconsider yet")
@@ -79,7 +80,7 @@ class RatingRequestService(
     /** The caller's most recent re-rate request (or null) — for the Profile tab. */
     fun mine(token: VerifiedFirebaseToken): Either<ServiceError, RatingRequestResponse?> =
         either {
-            val caller = ensureNotNull(value = users.findByFirebaseUid(firebaseUid = token.uid)) { ServiceError.Forbidden() }
+            val caller = ensureNotNull(value = users.findByFirebaseUid(firebaseUid = token.uid)) { ServiceError.Forbidden() }.toDomain()
             requests.findLatestByUser(userId = caller.id)?.toDomain()?.toResponse()
         }
 
@@ -177,6 +178,7 @@ class RatingRequestService(
     private fun resolveRequesters(requests: List<RatingRequest>): Map<UUID, AuditPersonRef> =
         users
             .findAllByIds(ids = requests.map { it.userId }.distinct())
+            .map { it.toDomain() }
             .associate { user ->
                 user.id to
                     AuditPersonRef(
@@ -195,7 +197,7 @@ class RatingRequestService(
     }
 
     private fun requireRater(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid) ?: return ServiceError.Forbidden().left()
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain() ?: return ServiceError.Forbidden().left()
         val canRate =
             caller.capabilities.contains(element = Capability.RATER) ||
                 caller.capabilities.contains(element = Capability.ADMINISTRATOR)

@@ -30,20 +30,18 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
-import org.skopeo.model.AuthProvider
-import org.skopeo.model.Contact
 import org.skopeo.model.CreatePlaceholderCommand
 import org.skopeo.model.LocalThemeValue
-import org.skopeo.model.Name
 import org.skopeo.model.NameType
 import org.skopeo.model.NumericRange
 import org.skopeo.model.ProfilePatch
 import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.ThemeSetting
-import org.skopeo.model.User
-import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserSearchQuery
-import org.skopeo.model.effectivePhotoUrl
+import org.skopeo.persistence.ContactEntity
+import org.skopeo.persistence.IdentityEntity
+import org.skopeo.persistence.NameEntity
+import org.skopeo.persistence.UserAggregateEntity
 import org.skopeo.persistence.UserEntity
 import java.text.Normalizer
 import java.time.LocalDateTime
@@ -61,7 +59,7 @@ private const val SIMILARITY_THRESHOLD = 0.3f
  * writes the whole aggregate atomically so a partial sign-up never persists.
  */
 class UserRepository {
-    fun provision(command: ProvisionUserCommand): User =
+    fun provision(command: ProvisionUserCommand): UserAggregateEntity =
         transaction {
             val userId =
                 UsersTable.insertAndGetId {
@@ -112,7 +110,7 @@ class UserRepository {
             loadAggregateOrThrow(id = userId.value)
         }
 
-    fun findById(id: UUID): Either<ServiceError, User> = transaction { aggregateOrNotFound(id = id) }
+    fun findById(id: UUID): Either<ServiceError, UserAggregateEntity> = transaction { aggregateOrNotFound(id = id) }
 
     /**
      * The user's per-profile "local theme" (#514): the raw stored [ThemeSetting] name (null = follow
@@ -165,7 +163,7 @@ class UserRepository {
         }
 
     /** Resolve multiple ids to their aggregates in one transaction; unknown ids are dropped. */
-    fun findAllByIds(ids: List<UUID>): List<User> = transaction { ids.distinct().mapNotNull { loadAggregate(id = it) } }
+    fun findAllByIds(ids: List<UUID>): List<UserAggregateEntity> = transaction { ids.distinct().mapNotNull { loadAggregate(id = it) } }
 
     /**
      * Active users matching every supplied facet of [query] (AND): a fuzzy name match (trigram
@@ -182,7 +180,7 @@ class UserRepository {
         // When true, include soft-deleted/inactive accounts (Research; #518). Default excludes them so
         // pickers and normal search remain active-only.
         includeInactive: Boolean = false,
-    ): List<User> =
+    ): List<UserAggregateEntity> =
         transaction {
             UsersTable
                 .selectAll()
@@ -231,7 +229,7 @@ class UserRepository {
             }
         }.reduce { acc, op -> acc and op }
 
-    fun findByFirebaseUid(firebaseUid: String): User? =
+    fun findByFirebaseUid(firebaseUid: String): UserAggregateEntity? =
         transaction {
             UsersTable
                 .selectAll()
@@ -241,7 +239,7 @@ class UserRepository {
         }
 
     /** Resolve a user by their shareable public code (exact match; caller normalizes case). */
-    fun findByPublicCode(code: String): User? =
+    fun findByPublicCode(code: String): UserAggregateEntity? =
         transaction {
             UsersTable
                 .selectAll()
@@ -271,7 +269,7 @@ class UserRepository {
         id: UUID,
         customPhotoUrl: String?,
         photoHidden: Boolean,
-    ): Either<ServiceError, User> =
+    ): Either<ServiceError, UserAggregateEntity> =
         transaction {
             val updated =
                 UsersTable.update(where = { UsersTable.id eq id }) {
@@ -285,7 +283,7 @@ class UserRepository {
     fun setMatchHistoryHidden(
         id: UUID,
         hidden: Boolean,
-    ): Either<ServiceError, User> =
+    ): Either<ServiceError, UserAggregateEntity> =
         transaction {
             val updated =
                 UsersTable.update(where = { UsersTable.id eq id }) {
@@ -297,7 +295,7 @@ class UserRepository {
     fun updateProfile(
         id: UUID,
         patch: ProfilePatch,
-    ): Either<ServiceError, User> =
+    ): Either<ServiceError, UserAggregateEntity> =
         transaction {
             val updated =
                 UsersTable.update(where = { UsersTable.id eq id }) {
@@ -315,7 +313,7 @@ class UserRepository {
     fun replaceProfile(
         id: UUID,
         patch: ProfilePatch,
-    ): Either<ServiceError, User> =
+    ): Either<ServiceError, UserAggregateEntity> =
         transaction {
             val updated =
                 UsersTable.update(where = { UsersTable.id eq id }) {
@@ -371,7 +369,7 @@ class UserRepository {
         }
 
     /** The disabled duplicates pointing at [canonicalId] (#124) — for the history merge and admin list. */
-    fun findDuplicatesOf(canonicalId: UUID): List<User> =
+    fun findDuplicatesOf(canonicalId: UUID): List<UserAggregateEntity> =
         transaction {
             UsersTable
                 .selectAll()
@@ -385,7 +383,7 @@ class UserRepository {
      * placeholder = true, an auto public code, a DISPLAY name, and the PLAYER capability only — no
      * identities/contacts. Written atomically like [provision]. Returns the created aggregate.
      */
-    fun createPlaceholder(command: CreatePlaceholderCommand): User =
+    fun createPlaceholder(command: CreatePlaceholderCommand): UserAggregateEntity =
         transaction {
             val userId =
                 UsersTable.insertAndGetId {
@@ -408,7 +406,7 @@ class UserRepository {
         }
 
     /** Active, unclaimed placeholders (#496), newest-id first, for the management view. */
-    fun listPlaceholders(): List<User> =
+    fun listPlaceholders(): List<UserAggregateEntity> =
         transaction {
             UsersTable
                 .selectAll()
@@ -590,23 +588,25 @@ class UserRepository {
     }
 
     /** Load the aggregate as an [Either], turning absence into a [ServiceError.NotFound]. Must run in a transaction. */
-    private fun aggregateOrNotFound(id: UUID): Either<ServiceError, User> {
+    private fun aggregateOrNotFound(id: UUID): Either<ServiceError, UserAggregateEntity> {
         val user = loadAggregate(id = id)
         return if (user == null) ServiceError.NotFound(message = "User $id not found").left() else user.right()
     }
 
-    private fun loadAggregate(id: UUID): User? =
+    private fun loadAggregate(id: UUID): UserAggregateEntity? =
         UsersTable.selectAll().where { UsersTable.id eq id }.singleOrNull()?.let { row -> buildAggregate(id = id, row = row) }
 
-    private fun loadAggregateOrThrow(id: UUID): User =
+    private fun loadAggregateOrThrow(id: UUID): UserAggregateEntity =
         buildAggregate(id = id, row = UsersTable.selectAll().where { UsersTable.id eq id }.single())
 }
 
+/** Assemble the raw [UserAggregateEntity] graph (#633): the `users` row entity plus its separately-loaded children. */
 private fun buildAggregate(
     id: UUID,
     row: ResultRow,
-): User =
-    row.toUserEntity().toDomain(
+): UserAggregateEntity =
+    UserAggregateEntity(
+        user = row.toUserEntity(),
         names = namesOf(id = id),
         contacts = contactsOf(id = id),
         identities = identitiesOf(id = id),
@@ -681,25 +681,25 @@ private fun ratingMatches(range: NumericRange): Op<Boolean> =
             },
     )
 
-private fun namesOf(id: UUID): List<Name> =
+private fun namesOf(id: UUID): List<NameEntity> =
     UserNamesTable
         .selectAll()
         .where { UserNamesTable.userId eq id }
-        .map { it.toName() }
+        .map { it.toNameEntity() }
 
-private fun contactsOf(id: UUID): List<Contact> =
+private fun contactsOf(id: UUID): List<ContactEntity> =
     ContactInformationTable
         .selectAll()
         .where { ContactInformationTable.userId eq id }
-        .map { it.toContact() }
+        .map { it.toContactEntity() }
 
-private fun identitiesOf(id: UUID): List<UserIdentity> =
+private fun identitiesOf(id: UUID): List<IdentityEntity> =
     UserIdentitiesTable
         .selectAll()
         .where { UserIdentitiesTable.userId eq id }
         .map {
-            UserIdentity(
-                provider = AuthProvider.valueOf(value = it[UserIdentitiesTable.provider]),
+            IdentityEntity(
+                provider = it[UserIdentitiesTable.provider],
                 providerUid = it[UserIdentitiesTable.providerUid],
                 isPrimary = it[UserIdentitiesTable.isPrimary],
             )
@@ -734,50 +734,6 @@ private fun ResultRow.toUserEntity(): UserEntity =
         claimedAt = this[UsersTable.claimedAt],
         claimedBy = this[UsersTable.claimedBy]?.value,
         previewRatingsAsNonAdmin = this[UsersTable.previewRatingsAsNonAdmin],
-    )
-
-/**
- * Convert the raw persistence [UserEntity] to the domain [User] (#633): this single boundary is where
- * the derived `photoUrl` is computed (via [effectivePhotoUrl]) and the loaded child sub-objects are
- * attached. Lives in the repository (which may reference both `persistence` and `model`) rather than a
- * mapper, since `repository ↛ mapper` is enforced.
- */
-private fun UserEntity.toDomain(
-    names: List<Name>,
-    contacts: List<Contact>,
-    identities: List<UserIdentity>,
-    capabilities: Set<Capability>,
-): User =
-    User(
-        id = id,
-        publicCode = publicCode,
-        firebaseUid = firebaseUid,
-        photoUrl =
-            effectivePhotoUrl(
-                providerPhotoUrl = providerPhotoUrl,
-                customPhotoUrl = customPhotoUrl,
-                photoHidden = photoHidden,
-            ),
-        providerPhotoUrl = providerPhotoUrl,
-        customPhotoUrl = customPhotoUrl,
-        photoHidden = photoHidden,
-        matchHistoryHidden = matchHistoryHidden,
-        dateOfBirth = dateOfBirth,
-        sex = sex,
-        city = city,
-        country = country,
-        kycVerified = kycVerified,
-        isActive = isActive,
-        proposedRating = proposedRating,
-        canonicalUserId = canonicalUserId,
-        placeholder = placeholder,
-        claimedAt = claimedAt,
-        claimedBy = claimedBy,
-        previewRatingsAsNonAdmin = previewRatingsAsNonAdmin,
-        names = names,
-        contacts = contacts,
-        identities = identities,
-        capabilities = capabilities,
     )
 
 /** Generate a unique shareable player code (issue #56), retrying on the (rare) collision. Must run in a transaction. */

@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test
 import org.skopeo.common.security.Capability
 import org.skopeo.dto.standings.StandingsCalculationRequest
 import org.skopeo.dto.standings.StandingsCalculationResponse
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.AwardStatus
 import org.skopeo.model.NameType
@@ -78,7 +79,7 @@ class StandingsCalculationApiIntegrationTest {
                     sex = "Male",
                     capabilities = roles,
                 ),
-        )
+        ).toDomain()
 
     private fun seedAward(userId: UUID) {
         RankingPointRepository().award(

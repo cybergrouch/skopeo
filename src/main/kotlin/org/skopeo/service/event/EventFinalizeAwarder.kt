@@ -5,6 +5,7 @@ package org.skopeo.service.event
 
 import org.skopeo.common.contract.OpenPlayPointsConfig
 import org.skopeo.mapper.entity.club.toDomain
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -109,7 +110,7 @@ class EventFinalizeAwarder(
         val ctx =
             AwardContext(
                 bands = ratings.findCurrentRatings(userIds = userIds),
-                sexes = users.findAllByIds(ids = userIds).associate { it.id to (it.sex ?: UNSPECIFIED_SEX) },
+                sexes = users.findAllByIds(ids = userIds).map { it.toDomain() }.associate { it.id to (it.sex ?: UNSPECIFIED_SEX) },
                 grantedBy = grantedBy,
                 now = now,
                 validFrom = start.atStartOfDay(),
@@ -241,7 +242,7 @@ class EventFinalizeAwarder(
             matches.listByEvent(eventId = event.id).filter { it.status == MatchStatus.COMPLETED && it.winnerTeamId != null }
         val userIds = completed.flatMap { it.team1.userIds + it.team2.userIds }.distinct()
         val bands = ratings.findCurrentRatings(userIds = userIds)
-        val sexes = users.findAllByIds(ids = userIds).associate { it.id to (it.sex ?: UNSPECIFIED_SEX) }
+        val sexes = users.findAllByIds(ids = userIds).map { it.toDomain() }.associate { it.id to (it.sex ?: UNSPECIFIED_SEX) }
         val ctx =
             AwardContext(
                 bands = bands,

@@ -26,6 +26,7 @@ import org.skopeo.mapper.dto.match.toPublicResponse
 import org.skopeo.mapper.dto.match.toResponse
 import org.skopeo.mapper.dto.rating.toResponse
 import org.skopeo.mapper.entity.event.toDomain
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -405,7 +406,7 @@ class MatchService(
     ): Either<ServiceError, Match> =
         either {
             val match = matches.findById(matchId = matchId).bind()
-            val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+            val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
             val isStaff = caller != null && caller.capabilities.any { it in STAFF_ROLES }
             val isParticipant = caller != null && caller.id in (match.team1.userIds + match.team2.userIds)
             ensure(condition = isStaff || isParticipant) { ServiceError.Forbidden() }
@@ -425,7 +426,7 @@ class MatchService(
             val match = matches.findByPublicCode(code = code)
             ensureNotNull(value = match) { ServiceError.NotFound(message = "Match $code not found") }
             val ids = match.team1.userIds + match.team2.userIds
-            val usersById = users.findAllByIds(ids = ids).associateBy { it.id }
+            val usersById = users.findAllByIds(ids = ids).map { it.toDomain() }.associateBy { it.id }
             val players =
                 usersById.mapValues { (_, user) ->
                     MatchPublicPlayer(
@@ -457,7 +458,7 @@ class MatchService(
      */
     fun upcomingForCaller(token: VerifiedFirebaseToken): Either<ServiceError, List<UpcomingMatchResponse>> =
         either {
-            val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+            val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
             if (caller == null) emptyList() else upcomingMatchesOf(userId = caller.id)
         }
 
@@ -469,7 +470,10 @@ class MatchService(
                 .filter { it.status == MatchStatus.SCHEDULED && !it.matchDate.isBefore(today) }
                 .sortedBy { it.matchDate }
         val playersById =
-            users.findAllByIds(ids = upcoming.flatMap { it.team1.userIds + it.team2.userIds }.distinct()).associateBy { it.id }
+            users
+                .findAllByIds(ids = upcoming.flatMap { it.team1.userIds + it.team2.userIds }.distinct())
+                .map { it.toDomain() }
+                .associateBy { it.id }
         return upcoming.map { match ->
             val callerOnTeam1 = userId in match.team1.userIds
             val opponentIds = if (callerOnTeam1) match.team2.userIds else match.team1.userIds
@@ -590,7 +594,7 @@ class MatchService(
     /** Whether the viewer may see precise rates: ADMINISTRATOR only (#583), honoring the per-admin preview
      * toggle; anonymous/non-admin (#193) ⇒ false, bands only. */
     private fun callerCanSeeRates(token: VerifiedFirebaseToken?): Boolean =
-        token?.let { users.findByFirebaseUid(firebaseUid = it.uid) }.canSeeRawRatingOrFalse()
+        token?.let { users.findByFirebaseUid(firebaseUid = it.uid)?.toDomain() }.canSeeRawRatingOrFalse()
 
     /**
      * The match result plus the stored per-player calculation behind it (#97), for the detail view
@@ -606,7 +610,7 @@ class MatchService(
         either {
             // The calculation breakdown is an ADMINISTRATOR-only analysis tool (#583): it exposes the raw
             // per-set ratings/dominance/scale. A non-admin — or an admin previewing as non-admin — is denied.
-            val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+            val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
             ensure(condition = caller.canSeeRawRatingOrFalse()) { ServiceError.Forbidden() }
             val match = accessibleMatch(token = token, matchId = matchId).bind()
             val byUser = ratings.historyForMatches(matchIds = listOf(element = matchId)).associateBy { it.userId }
@@ -624,7 +628,7 @@ class MatchService(
         }
 
     private fun displayNames(userIds: List<UUID>): Map<UUID, String?> =
-        users.findAllByIds(ids = userIds).associate { it.id to it.displayName() }
+        users.findAllByIds(ids = userIds).map { it.toDomain() }.associate { it.id to it.displayName() }
 
     /**
      * Oversight lists for staff. An ADMINISTRATOR sees every match in the view; a HOST sees only
@@ -704,14 +708,15 @@ class MatchService(
         }
 
     private fun staffCaller(token: VerifiedFirebaseToken): Either<ServiceError, User> {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
         return if (caller == null || caller.capabilities.none { it in STAFF_ROLES }) ServiceError.Forbidden().left() else caller.right()
     }
 
     private fun resolveRatedParticipants(ids: List<UUID>): Either<ServiceError, List<User>> =
         either {
             ids.map { id ->
-                val user = users.findById(id = id).mapLeft { ServiceError.Validation(message = "Unknown user $id") }.bind()
+                val user =
+                    users.findById(id = id).map { it.toDomain() }.mapLeft { ServiceError.Validation(message = "Unknown user $id") }.bind()
                 ensure(condition = user.isActive) { ServiceError.Validation(message = "User $id is not active") }
                 ensure(condition = ratings.findCurrentRating(userId = id) != null) {
                     ServiceError.Validation(message = "User $id has no rating yet (pending assessment)")

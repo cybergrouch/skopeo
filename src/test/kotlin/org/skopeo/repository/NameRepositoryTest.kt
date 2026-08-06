@@ -14,6 +14,8 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
+import org.skopeo.mapper.entity.name.toDomain
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
@@ -47,13 +49,13 @@ class NameRepositoryTest {
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                     names = emptyList(),
                 ),
-        ).id
+        ).toDomain().id
 
     @Test
     fun `create stores an active name`() {
         val userId = newUser(uid = "u1")
 
-        val name = names.create(userId = userId, type = NameType.NICKNAME, value = "Johnny")
+        val name = names.create(userId = userId, type = NameType.NICKNAME, value = "Johnny").toDomain()
 
         name.type shouldBe NameType.NICKNAME
         name.isActive.shouldBeTrue()
@@ -75,7 +77,7 @@ class NameRepositoryTest {
 
         names.findById(id = first.id).shouldBeRight().isActive.shouldBeFalse()
         second.isActive.shouldBeTrue()
-        names.listByUser(userId = userId).count { it.type == NameType.DISPLAY && it.isActive } shouldBe 1
+        names.listByUser(userId = userId).map { it.toDomain() }.count { it.type == NameType.DISPLAY && it.isActive } shouldBe 1
     }
 
     @Test
@@ -92,8 +94,8 @@ class NameRepositoryTest {
         names.findById(id = lastA.id).shouldBeRight().isActive.shouldBeFalse()
         firstB.isActive.shouldBeTrue()
         lastB.isActive.shouldBeTrue()
-        names.listByUser(userId = userId).count { it.type == NameType.FIRST && it.isActive } shouldBe 1
-        names.listByUser(userId = userId).count { it.type == NameType.LAST && it.isActive } shouldBe 1
+        names.listByUser(userId = userId).map { it.toDomain() }.count { it.type == NameType.FIRST && it.isActive } shouldBe 1
+        names.listByUser(userId = userId).map { it.toDomain() }.count { it.type == NameType.LAST && it.isActive } shouldBe 1
     }
 
     @Test

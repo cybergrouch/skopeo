@@ -12,6 +12,7 @@ import org.skopeo.dto.rating.PendingAssessmentPageResponse
 import org.skopeo.dto.rating.RatingHistoryResponse
 import org.skopeo.dto.rating.UserRatingResponse
 import org.skopeo.mapper.dto.rating.toResponse
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -191,7 +192,7 @@ class RatingService(
                 )
             val today = LocalDate.now()
             // findAllByIds preserves the id order, so the page order is the repository's stable order.
-            val items = users.findAllByIds(ids = ids).map { it.toPendingAssessment(today = today) }
+            val items = users.findAllByIds(ids = ids).map { it.toDomain().toPendingAssessment(today = today) }
             PendingAssessmentPage(items = items, total = total.toInt()).toResponse()
         }
 
@@ -233,7 +234,7 @@ class RatingService(
         token: VerifiedFirebaseToken,
         userId: UUID,
     ): Either<ServiceError, User> {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid) ?: return ServiceError.Forbidden().left()
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain() ?: return ServiceError.Forbidden().left()
         val isSelf = caller.id == userId
         val isAdmin = caller.capabilities.contains(element = Capability.ADMINISTRATOR)
         return if (!isSelf && !isAdmin) ServiceError.Forbidden().left() else caller.right()
@@ -241,7 +242,7 @@ class RatingService(
 
     /** RATER-or-ADMINISTRATOR access (ADMINISTRATOR implicitly rates); returns the caller's id (the audit actor). */
     private fun requireRater(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid) ?: return ServiceError.Forbidden().left()
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain() ?: return ServiceError.Forbidden().left()
         val canRate =
             caller.capabilities.contains(element = Capability.RATER) ||
                 caller.capabilities.contains(element = Capability.ADMINISTRATOR)

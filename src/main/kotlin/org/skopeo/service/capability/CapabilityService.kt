@@ -14,6 +14,7 @@ import org.skopeo.common.security.Capability
 import org.skopeo.dto.capability.CapabilityResponse
 import org.skopeo.mapper.dto.capability.toResponse
 import org.skopeo.mapper.entity.capability.toDomain
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -96,7 +97,7 @@ class CapabilityService(
         either {
             val adminId = requireAdmin(token = token).bind()
             val capability = capabilityOf(raw = capabilityRaw)
-            val target = users.findById(id = userId).bind()
+            val target = users.findById(id = userId).bind().toDomain()
 
             ensure(condition = capability != Capability.PLAYER) {
                 ServiceError.Conflict(message = "The PLAYER role cannot be revoked")
@@ -163,7 +164,7 @@ class CapabilityService(
 
     /** Every capability operation requires the caller to be an ADMINISTRATOR; returns their id. */
     private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
         return if (caller == null || !caller.capabilities.contains(element = Capability.ADMINISTRATOR)) {
             ServiceError.Forbidden().left()
         } else {

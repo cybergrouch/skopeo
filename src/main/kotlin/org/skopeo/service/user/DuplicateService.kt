@@ -12,6 +12,7 @@ import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.dto.user.UserSummaryResponse
 import org.skopeo.mapper.dto.user.toSummary
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -42,7 +43,7 @@ class DuplicateService(
     ): Either<ServiceError, List<UserSummaryResponse>> =
         either {
             val adminId = requireAdmin(token = token).bind()
-            val canonical = users.findById(id = canonicalId).bind()
+            val canonical = users.findById(id = canonicalId).bind().toDomain()
             ensure(condition = duplicateIds.isNotEmpty()) { ServiceError.Validation(message = "At least one duplicate is required") }
             ensure(
                 condition = duplicateIds.toSet().size == duplicateIds.size,
@@ -73,7 +74,7 @@ class DuplicateService(
                         ),
                 )
             }
-            users.findDuplicatesOf(canonicalId = canonicalId).map { it.toSummary(isDeleted = it.isDeleted()) }
+            users.findDuplicatesOf(canonicalId = canonicalId).map { it.toDomain() }.map { it.toSummary(isDeleted = it.isDeleted()) }
         }
 
     /**
@@ -93,8 +94,8 @@ class DuplicateService(
     ): Either<ServiceError, UserSummaryResponse> =
         either {
             val adminId = requireAdmin(token = token).bind()
-            val canonical = users.findById(id = canonicalId).bind()
-            val duplicate = users.findById(id = duplicateId).bind()
+            val canonical = users.findById(id = canonicalId).bind().toDomain()
+            val duplicate = users.findById(id = duplicateId).bind().toDomain()
             ensure(condition = canonical.canonicalUserId == null) {
                 ServiceError.Conflict(message = "The canonical account is itself a duplicate")
             }
@@ -132,7 +133,7 @@ class DuplicateService(
                             ),
                     ),
             )
-            val updated = users.findById(id = canonicalId).bind()
+            val updated = users.findById(id = canonicalId).bind().toDomain()
             updated.toSummary(isDeleted = updated.isDeleted())
         }
 
@@ -143,7 +144,7 @@ class DuplicateService(
     ): Either<ServiceError, Unit> =
         either {
             val adminId = requireAdmin(token = token).bind()
-            val target = users.findById(id = id).bind()
+            val target = users.findById(id = id).bind().toDomain()
             ensure(condition = target.canonicalUserId != null) {
                 ServiceError.Conflict(message = "User ${target.publicCode} is not marked as a duplicate")
             }
@@ -173,13 +174,13 @@ class DuplicateService(
         either {
             requireAdmin(token = token).bind()
             users.findById(id = canonicalId).bind()
-            users.findDuplicatesOf(canonicalId = canonicalId).map { it.toSummary(isDeleted = it.isDeleted()) }
+            users.findDuplicatesOf(canonicalId = canonicalId).map { it.toDomain() }.map { it.toSummary(isDeleted = it.isDeleted()) }
         }
 
     /** A target must exist and not itself already be a canonical for other duplicates. */
     private fun resolveMarkable(id: UUID): Either<ServiceError, User> =
         either {
-            val target = users.findById(id = id).bind()
+            val target = users.findById(id = id).bind().toDomain()
             ensure(condition = users.findDuplicatesOf(canonicalId = id).isEmpty()) {
                 ServiceError.Conflict(message = "User ${target.publicCode} is itself a canonical account for other duplicates")
             }
@@ -187,7 +188,7 @@ class DuplicateService(
         }
 
     private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
         return if (caller == null || !caller.capabilities.contains(element = Capability.ADMINISTRATOR)) {
             ServiceError.Forbidden().left()
         } else {

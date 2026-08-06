@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.mapper.entity.event.toDomain
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.CreateEventCommand
 import org.skopeo.model.CreateFixtureCommand
@@ -71,7 +72,7 @@ class ClubServiceTest {
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                     capabilities = roles,
                 ),
-        )
+        ).toDomain()
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
@@ -442,7 +443,7 @@ class ClubServiceTest {
                         names = emptyList(),
                         capabilities = setOf(element = Capability.CLUB_OWNER),
                     ),
-            )
+            ).toDomain()
         val club = service.create(token = token(uid = "admin"), name = "Club").shouldBeRight()
 
         service.assignOwner(token = token(uid = "admin"), clubId = UUID.fromString(club.id), userId = owner.id)

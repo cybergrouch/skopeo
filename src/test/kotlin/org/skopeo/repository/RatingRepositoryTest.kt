@@ -14,6 +14,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.CalculationBreakdownSnapshot
 import org.skopeo.model.CreateFixtureCommand
@@ -58,7 +59,7 @@ class RatingRepositoryTest {
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                     names = listOf(UserName(type = NameType.DISPLAY, value = uid)),
                 ),
-        ).id
+        ).toDomain().id
 
     /** Create a COMPLETED match on [matchDate] between [u1] and [u2] of the given [matchType]. */
     private fun completedMatch(

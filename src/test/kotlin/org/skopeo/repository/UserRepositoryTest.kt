@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.ContactInfo
 import org.skopeo.model.ContactSource
@@ -87,7 +88,7 @@ class UserRepositoryTest {
 
     @Test
     fun `provision writes and reads back the full aggregate`() {
-        val created = repository.provision(command = googleSignup(email = "juan@example.com"))
+        val created = repository.provision(command = googleSignup(email = "juan@example.com")).toDomain()
 
         created.firebaseUid.shouldNotBeNull()
         created.country shouldBe "PH" // defaulted by the DB
@@ -116,13 +117,13 @@ class UserRepositoryTest {
                             googleSignup().copy(
                                 identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = "sub-$n", isPrimary = true),
                             ),
-                    ).id
+                    ).toDomain().id
                 }.toSet()
         val query =
             UserSearchQuery(name = null, code = null, q = null, sex = "Male", dobMin = null, dobMax = null, rating = null)
 
-        val firstPage = repository.search(query = query, limit = 2, offset = 0)
-        val secondPage = repository.search(query = query, limit = 2, offset = 2)
+        val firstPage = repository.search(query = query, limit = 2, offset = 0).map { it.toDomain() }
+        val secondPage = repository.search(query = query, limit = 2, offset = 2).map { it.toDomain() }
 
         firstPage shouldHaveSize 2
         secondPage shouldHaveSize 1
@@ -130,14 +131,14 @@ class UserRepositoryTest {
         (firstPage.map { it.id } + secondPage.map { it.id }).toSet() shouldBe ids
 
         // Default limit/offset (the typeahead path) returns every match in one page.
-        repository.search(query = query).map { it.id }.toSet() shouldBe ids
+        repository.search(query = query).map { it.toDomain().id }.toSet() shouldBe ids
     }
 
     @Test
     fun `findByFirebaseUid returns the aggregate`() {
-        val created = repository.provision(command = googleSignup(firebaseUid = "uid-lookup"))
+        val created = repository.provision(command = googleSignup(firebaseUid = "uid-lookup")).toDomain()
 
-        val found = repository.findByFirebaseUid(firebaseUid = "uid-lookup")
+        val found = repository.findByFirebaseUid(firebaseUid = "uid-lookup")?.toDomain()
 
         found.shouldNotBeNull()
         found.id shouldBe created.id
@@ -168,7 +169,7 @@ class UserRepositoryTest {
                     ),
             )
 
-        val created = repository.provision(command = command)
+        val created = repository.provision(command = command).toDomain()
 
         created.contacts.map { it.type }.shouldContainExactlyInAnyOrder(ContactType.EMAIL, ContactType.PHONE)
         created.country shouldBe "US"
@@ -176,12 +177,13 @@ class UserRepositoryTest {
 
     @Test
     fun `updateProfile patches only the provided fields`() {
-        val created = repository.provision(command = googleSignup())
+        val created = repository.provision(command = googleSignup()).toDomain()
 
         val updated =
             repository
                 .updateProfile(id = created.id, patch = ProfilePatch(city = "Cebu", dateOfBirth = LocalDate.of(1990, 1, 2)))
                 .shouldBeRight()
+                .toDomain()
 
         updated.city shouldBe "Cebu"
         updated.dateOfBirth shouldBe LocalDate.of(1990, 1, 2)
@@ -190,11 +192,11 @@ class UserRepositoryTest {
 
     @Test
     fun `updateProviderPhotoUrl refreshes the provider photo without touching other fields (#219)`() {
-        val created = repository.provision(command = googleSignup())
+        val created = repository.provision(command = googleSignup()).toDomain()
 
         repository.updateProviderPhotoUrl(userId = created.id, providerPhotoUrl = "https://example.com/new.jpg")
 
-        val updated = repository.findById(id = created.id).shouldBeRight()
+        val updated = repository.findById(id = created.id).shouldBeRight().toDomain()
         // No custom URL / hide, so the effective photo is the freshly synced provider photo.
         updated.photoUrl shouldBe "https://example.com/new.jpg"
         updated.city shouldBe "Manila" // untouched
@@ -202,16 +204,17 @@ class UserRepositoryTest {
 
     @Test
     fun `updatePhotoSettings sets a custom URL and hide, provider refresh never clobbers the custom photo (#303)`() {
-        val created = repository.provision(command = googleSignup())
+        val created = repository.provision(command = googleSignup()).toDomain()
 
         // A custom photo overrides the provider photo as the effective photo.
         repository.updatePhotoSettings(id = created.id, customPhotoUrl = "https://c/me.png", photoHidden = false)
             .shouldBeRight()
+            .toDomain()
             .photoUrl shouldBe "https://c/me.png"
 
         // Refreshing the provider photo (as login does) keeps the custom photo effective.
         repository.updateProviderPhotoUrl(userId = created.id, providerPhotoUrl = "https://p/new.jpg")
-        repository.findById(id = created.id).shouldBeRight().let {
+        repository.findById(id = created.id).shouldBeRight().toDomain().let {
             it.photoUrl shouldBe "https://c/me.png"
             it.providerPhotoUrl shouldBe "https://p/new.jpg"
         }
@@ -219,21 +222,23 @@ class UserRepositoryTest {
         // Hiding suppresses the effective photo; clearing the custom URL reverts to the provider photo.
         repository.updatePhotoSettings(id = created.id, customPhotoUrl = null, photoHidden = true)
             .shouldBeRight()
+            .toDomain()
             .photoUrl
             .shouldBeNull()
         repository.updatePhotoSettings(id = created.id, customPhotoUrl = null, photoHidden = false)
             .shouldBeRight()
+            .toDomain()
             .photoUrl shouldBe "https://p/new.jpg"
     }
 
     @Test
     fun `read maps the raw persistence entity to the domain user, deriving photoUrl (#633)`() {
-        // The repository now reads a row into a raw UserEntity and converts it to the domain User at one
-        // boundary. Confirm the raw photo fields flow through AND the derived photoUrl is computed there:
-        // no custom/hidden → the effective photo is the provider photo.
-        val created = repository.provision(command = googleSignup()) // photoUrl → providerPhotoUrl
+        // The repository now returns a raw UserAggregateEntity; the mapper.entity `toDomain()` converts it to
+        // the domain User at one boundary. Confirm the raw photo fields flow through AND the derived photoUrl
+        // is computed there: no custom/hidden → the effective photo is the provider photo.
+        val created = repository.provision(command = googleSignup()).toDomain() // photoUrl → providerPhotoUrl
 
-        val user = repository.findById(id = created.id).shouldBeRight()
+        val user = repository.findById(id = created.id).shouldBeRight().toDomain()
 
         user.providerPhotoUrl shouldBe "https://example.com/photo.jpg"
         user.customPhotoUrl shouldBe null
@@ -250,9 +255,9 @@ class UserRepositoryTest {
 
     @Test
     fun `updateProfile changes sex when provided`() {
-        val created = repository.provision(command = googleSignup()) // sex = Male
+        val created = repository.provision(command = googleSignup()).toDomain() // sex = Male
 
-        val updated = repository.updateProfile(id = created.id, patch = ProfilePatch(sex = "Female")).shouldBeRight()
+        val updated = repository.updateProfile(id = created.id, patch = ProfilePatch(sex = "Female")).shouldBeRight().toDomain()
 
         updated.sex shouldBe "Female"
     }
@@ -267,9 +272,9 @@ class UserRepositoryTest {
 
     @Test
     fun `replaceProfile overwrites all mutable fields, clearing omitted ones`() {
-        val created = repository.provision(command = googleSignup()) // sex = Male, city = Manila
+        val created = repository.provision(command = googleSignup()).toDomain() // sex = Male, city = Manila
 
-        val replaced = repository.replaceProfile(id = created.id, patch = ProfilePatch(city = "Iloilo")).shouldBeRight()
+        val replaced = repository.replaceProfile(id = created.id, patch = ProfilePatch(city = "Iloilo")).shouldBeRight().toDomain()
 
         replaced.city shouldBe "Iloilo"
         replaced.sex.shouldBe(expected = null) // omitted from the replacement → cleared
@@ -285,11 +290,11 @@ class UserRepositoryTest {
 
     @Test
     fun `deactivate soft-deletes the user`() {
-        val created = repository.provision(command = googleSignup())
+        val created = repository.provision(command = googleSignup()).toDomain()
 
         repository.deactivate(id = created.id).shouldBeRight()
 
-        repository.findById(id = created.id).shouldBeRight().isActive.shouldBeFalse()
+        repository.findById(id = created.id).shouldBeRight().toDomain().isActive.shouldBeFalse()
         repository.deactivate(id = UUID.randomUUID()).shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
@@ -326,7 +331,7 @@ class UserRepositoryTest {
                     googleSignup().copy(
                         identity = UserIdentity(provider = AuthProvider.GOOGLE, providerUid = "cs-2", isPrimary = true),
                     ),
-            )
+            ).toDomain()
         repository.deactivate(id = deleted.id).shouldBeRight()
         val query = UserSearchQuery(name = null, code = null, q = null, sex = "Male", dobMin = null, dobMax = null, rating = null)
 

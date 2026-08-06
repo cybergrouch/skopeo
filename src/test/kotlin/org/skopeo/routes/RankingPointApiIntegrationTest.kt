@@ -27,6 +27,7 @@ import org.skopeo.dto.ranking.AwardedPointsPageResponse
 import org.skopeo.dto.ranking.GrantRankingPointsRequest
 import org.skopeo.dto.ranking.RankingPointAwardResponse
 import org.skopeo.dto.ranking.RevokeRankingPointsRequest
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
@@ -76,7 +77,7 @@ class RankingPointApiIntegrationTest {
                     sex = "Male",
                     capabilities = roles,
                 ),
-        )
+        ).toDomain()
 
     @Test
     fun `an admin grants, lists, and revokes an award while a non-admin is forbidden`() =

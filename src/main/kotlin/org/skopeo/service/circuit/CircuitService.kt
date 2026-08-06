@@ -14,6 +14,7 @@ import org.skopeo.common.security.Capability
 import org.skopeo.dto.circuit.CircuitResponse
 import org.skopeo.mapper.dto.circuit.toResponse
 import org.skopeo.mapper.entity.circuit.toDomain
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -125,14 +126,14 @@ class CircuitService(
 
     /** ADMINISTRATOR-only access; returns the caller's id (the audit actor). */
     private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
         val isAdmin = caller != null && caller.capabilities.contains(element = Capability.ADMINISTRATOR)
         return if (caller == null || !isAdmin) ServiceError.Forbidden().left() else caller.id.right()
     }
 
     /** Staff (HOST/CLUB_OWNER/ADMINISTRATOR) access, for reads like the circuit list. */
     private fun requireStaff(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
         val isStaff = caller != null && caller.capabilities.any { it in CIRCUIT_STAFF_ROLES }
         return if (caller == null || !isStaff) ServiceError.Forbidden().left() else caller.id.right()
     }

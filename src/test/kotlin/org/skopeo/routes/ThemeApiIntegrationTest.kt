@@ -26,6 +26,7 @@ import org.skopeo.dto.settings.LocalThemeResponse
 import org.skopeo.dto.settings.SetLocalThemeRequest
 import org.skopeo.dto.settings.SetThemeRequest
 import org.skopeo.dto.settings.ThemeResponse
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
@@ -72,7 +73,7 @@ class ThemeApiIntegrationTest {
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                     capabilities = roles,
                 ),
-        )
+        ).toDomain()
 
     @Test
     fun `the theme is publicly readable and defaults to AUTO (#378)`() =

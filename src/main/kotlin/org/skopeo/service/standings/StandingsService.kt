@@ -6,6 +6,7 @@ package org.skopeo.service.standings
 import org.skopeo.dto.standings.StandingsLocateResponse
 import org.skopeo.dto.standings.StandingsPageResponse
 import org.skopeo.mapper.dto.standings.toResponse
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.GroupRef
 import org.skopeo.model.LocateView
 import org.skopeo.model.PlayerStanding
@@ -168,7 +169,7 @@ class StandingsService(
      */
     private fun rankLeaderboard(): Map<Pair<StandingsBand, String?>, List<RankedPlayer>> {
         val current = ratings.allCurrentRatings().associateBy { it.userId }
-        val active = users.findAllByIds(ids = current.keys.toList()).filter { it.isActive }
+        val active = users.findAllByIds(ids = current.keys.toList()).map { it.toDomain() }.filter { it.isActive }
         return active
             .groupBy { StandingsBand.of(rating = current.getValue(key = it.id).currentRating) to it.sex }
             .mapValues { (_, group) ->
@@ -215,7 +216,7 @@ class StandingsService(
             snapshots.page(snapshotId = snapshotId, band = chosen.band, sex = chosen.sex, limit = request.limit, offset = request.offset)
         val today = LocalDate.now()
         val shownIds = result.entries.map { it.userId }
-        val byId = users.findAllByIds(ids = shownIds).associateBy { it.id }
+        val byId = users.findAllByIds(ids = shownIds).map { it.toDomain() }.associateBy { it.id }
         val entries =
             result.entries.map { entry ->
                 // The snapshot's user_id FK is ON DELETE CASCADE, so every ranked entry has a live user.
@@ -259,7 +260,7 @@ class StandingsService(
         token: VerifiedFirebaseToken,
         limit: Int?,
     ): StandingsLocateResponse? {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid) ?: return null
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain() ?: return null
         val location =
             if (settings.standingsSource() == SnapshotSource.POINTS) {
                 // POINTS: locate only in the latest published POINTS snapshot; no snapshot → null (#428).
@@ -329,7 +330,7 @@ class StandingsService(
     private fun callerCanSeeRates(token: VerifiedFirebaseToken): Boolean =
         // Raw rating values are ADMINISTRATOR-only (#583); a RATER seeing them was a leak. Honors the
         // per-admin "preview as non-admin" toggle via [User.canSeeRawRating].
-        users.findByFirebaseUid(firebaseUid = token.uid).canSeeRawRatingOrFalse()
+        users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain().canSeeRawRatingOrFalse()
 
     private fun standingsComparator(current: Map<UUID, UserRating>): Comparator<User> =
         Comparator { left, right ->

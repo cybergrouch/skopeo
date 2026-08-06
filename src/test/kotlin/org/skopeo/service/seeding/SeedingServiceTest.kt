@@ -14,6 +14,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.CreateFixtureCommand
 import org.skopeo.model.MatchSetResult
@@ -66,7 +67,7 @@ class SeedingServiceTest {
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                     capabilities = roles,
                 ),
-        )
+        ).toDomain()
 
     /** A PLAYER with no display name → seeding falls back to the public code. */
     private fun provisionUnnamed(uid: String): User =
@@ -78,7 +79,7 @@ class SeedingServiceTest {
                     names = emptyList(),
                     capabilities = setOf(element = Capability.PLAYER),
                 ),
-        )
+        ).toDomain()
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 

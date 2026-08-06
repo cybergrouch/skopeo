@@ -27,6 +27,7 @@ import org.skopeo.dto.match.MatchResponse
 import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.dto.match.SetScoreRequest
 import org.skopeo.mapper.entity.event.toDomain
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.CreateEventCommand
@@ -87,7 +88,7 @@ class MatchServiceTest {
                         names = listOf(UserName(type = NameType.DISPLAY, value = uid)),
                         capabilities = roles,
                     ),
-            )
+            ).toDomain()
         if (rated) {
             ratings.setRating(
                 userId = user.id,
@@ -100,7 +101,7 @@ class MatchServiceTest {
 
     // A login-less placeholder ("dummy") player (#496/#505) — a real users row with placeholder = true.
     private fun placeholderUser(displayName: String): User =
-        users.createPlaceholder(command = CreatePlaceholderCommand(displayName = displayName, sex = "Male"))
+        users.createPlaceholder(command = CreatePlaceholderCommand(displayName = displayName, sex = "Male")).toDomain()
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 

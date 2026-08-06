@@ -23,6 +23,7 @@ import org.skopeo.dto.client.PartnerPlayerResponse
 import org.skopeo.mapper.dto.client.toResponse
 import org.skopeo.mapper.entity.client.toDomain
 import org.skopeo.mapper.entity.client.toResolved
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.ApiClientStatus
 import org.skopeo.model.ApiKeyEnvironment
 import org.skopeo.model.ApiKeyStatus
@@ -289,7 +290,8 @@ class ApiClientService(
                             dobMax = null,
                             rating = null,
                         ),
-                ).map { PublicPlayer(publicCode = it.publicCode, displayName = it.displayName()).toResponse() }
+                ).map { it.toDomain() }
+                .map { PublicPlayer(publicCode = it.publicCode, displayName = it.displayName()).toResponse() }
         }
 
     /**
@@ -302,7 +304,7 @@ class ApiClientService(
         principal: ClientPrincipal,
     ): Either<ServiceError, ClientEffectiveCapabilitiesResponse> =
         either {
-            val user = ensureNotNull(value = users.findByFirebaseUid(firebaseUid = token.uid)) { ServiceError.Forbidden() }
+            val user = ensureNotNull(value = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()) { ServiceError.Forbidden() }
             ClientEffectiveCapabilities(
                 clientId = principal.clientId,
                 userId = user.id,
@@ -329,7 +331,7 @@ class ApiClientService(
 
     /** Access gate: the caller must be an ADMINISTRATOR. Returns the caller's id (the audit actor). */
     private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
         val permitted = caller != null && caller.capabilities.contains(element = Capability.ADMINISTRATOR)
         return if (caller == null || !permitted) ServiceError.Forbidden().left() else caller.id.right()
     }

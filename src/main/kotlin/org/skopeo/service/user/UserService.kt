@@ -16,6 +16,7 @@ import org.skopeo.dto.user.UserSummaryPageResponse
 import org.skopeo.dto.user.UserSummaryResponse
 import org.skopeo.mapper.dto.user.toResponse
 import org.skopeo.mapper.dto.user.toSummary
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -90,7 +91,7 @@ class UserService(
      * `showRawRating` into [User.toSummary] so the raw `value` is band-only for everyone else.
      */
     fun callerCanSeeRawRating(token: VerifiedFirebaseToken): Boolean =
-        repository.findByFirebaseUid(firebaseUid = token.uid).canSeeRawRatingOrFalse()
+        repository.findByFirebaseUid(firebaseUid = token.uid)?.toDomain().canSeeRawRatingOrFalse()
 
     /**
      * Set the caller's own per-admin "preview as non-admin" toggle (#583) — ADMINISTRATOR-only, since it
@@ -146,7 +147,7 @@ class UserService(
                     limit = limit.coerceIn(minimumValue = 1, maximumValue = MAX_SEARCH_LIMIT),
                     offset = offset.coerceAtLeast(minimumValue = 0),
                     includeInactive = includeInactive,
-                )
+                ).map { it.toDomain() }
             // Enrich each summary with the current rating + the raw-reveal flag here (was assembled in the
             // route), so the route stays thin and never touches the mapper.
             val ratingsById = currentRatings(ids = users.map { it.id })
@@ -172,7 +173,7 @@ class UserService(
                     limit = limit.coerceIn(minimumValue = 1, maximumValue = MAX_SEARCH_LIMIT),
                     offset = offset.coerceAtLeast(minimumValue = 0),
                     includeInactive = includeInactive,
-                )
+                ).map { it.toDomain() }
             val total = repository.countSearch(query = query, includeInactive = includeInactive)
             // Enrich with current ratings + win–loss records (#342) + the raw-reveal flag here (was in the
             // route), returning the finished page DTO so the route stays thin.
@@ -244,7 +245,7 @@ class UserService(
         either {
             requireStaff(repository = repository, token = token).bind()
             ensure(condition = ids.isNotEmpty()) { ServiceError.Validation(message = "ids must not be empty") }
-            val users = repository.findAllByIds(ids = ids)
+            val users = repository.findAllByIds(ids = ids).map { it.toDomain() }
             val ratingsById = currentRatings(ids = users.map { it.id })
             val showRaw = callerCanSeeRawRating(token = token)
             users.map { it.toSummary(rating = ratingsById[it.id], showRawRating = showRaw, isDeleted = it.isDeleted()) }
@@ -265,7 +266,7 @@ class UserService(
         request: CreateUserRequest,
     ): Either<ServiceError, Provisioned> =
         either {
-            val existing = repository.findByFirebaseUid(firebaseUid = token.uid)
+            val existing = repository.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
             if (existing != null) {
                 provisionExisting(token = token, existing = existing).bind()
             } else {
@@ -282,7 +283,7 @@ class UserService(
         existing: User,
     ): Either<ServiceError, Provisioned> {
         // A disabled duplicate (#124) cannot sign back in; point them at the canonical account.
-        val canonical = existing.canonicalUserId?.let { repository.findById(id = it).getOrNull() }
+        val canonical = existing.canonicalUserId?.let { repository.findById(id = it).getOrNull()?.toDomain() }
         return when {
             canonical != null -> ServiceError.AccountMerged(canonicalPublicCode = canonical.publicCode).left()
             // An admin-deleted account (#518) — inactive with no canonical pointer (a merged duplicate was
@@ -326,9 +327,10 @@ class UserService(
         photoHidden: Boolean,
     ): Either<ServiceError, UserResponse> =
         either {
-            val target = repository.findById(id = id).bind()
+            val target = repository.findById(id = id).bind().toDomain()
             requireAccess(token = token, target = target).bind()
-            repository.updatePhotoSettings(id = id, customPhotoUrl = customPhotoUrl, photoHidden = photoHidden).bind().toResponse()
+            repository.updatePhotoSettings(id = id, customPhotoUrl = customPhotoUrl, photoHidden = photoHidden)
+                .bind().toDomain().toResponse()
         }
 
     /**
@@ -341,9 +343,9 @@ class UserService(
         hidden: Boolean,
     ): Either<ServiceError, UserResponse> =
         either {
-            val target = repository.findById(id = id).bind()
+            val target = repository.findById(id = id).bind().toDomain()
             requireAccess(token = token, target = target).bind()
-            repository.setMatchHistoryHidden(id = id, hidden = hidden).bind().toResponse()
+            repository.setMatchHistoryHidden(id = id, hidden = hidden).bind().toDomain().toResponse()
         }
 
     /** First-time sign-up: enforce the invite gate, write the aggregate, and audit the creation. */
@@ -356,7 +358,7 @@ class UserService(
             // email so we can mark its invite accepted once the profile is created.
             val invitedEmail = requireInviteForManualSignup(invites = invites, token = token).bind()
             val command = buildProvisionCommand(token = token, request = request, adminEmails = adminEmails)
-            val user = repository.provision(command = command)
+            val user = repository.provision(command = command).toDomain()
             if (invitedEmail != null) invites.markAccepted(email = invitedEmail, acceptedAt = LocalDateTime.now())
             audit.record(
                 // Self sign-up: the new user is the actor.
@@ -374,7 +376,7 @@ class UserService(
 
     /** The caller's own profile, or null if they have not been provisioned yet. Refreshes the photo (#219). */
     fun currentUser(token: VerifiedFirebaseToken): UserResponse? {
-        val user = repository.findByFirebaseUid(firebaseUid = token.uid) ?: return null
+        val user = repository.findByFirebaseUid(firebaseUid = token.uid)?.toDomain() ?: return null
         val promoted = promoteIfBootstrapAdmin(token = token, user = user, adminEmails = adminEmails, capabilities = capabilities)
         return refreshPhoto(token = token, user = promoted).toResponse()
     }
@@ -384,7 +386,7 @@ class UserService(
         id: UUID,
     ): Either<ServiceError, UserResponse> =
         either {
-            val target = repository.findById(id = id).bind()
+            val target = repository.findById(id = id).bind().toDomain()
             requireAccess(token = token, target = target).bind()
             target.toResponse()
         }
@@ -395,9 +397,9 @@ class UserService(
         patch: ProfilePatch,
     ): Either<ServiceError, UserResponse> =
         either {
-            val target = repository.findById(id = id).bind()
+            val target = repository.findById(id = id).bind().toDomain()
             requireAccess(token = token, target = target).bind()
-            repository.updateProfile(id = id, patch = patch).bind().toResponse()
+            repository.updateProfile(id = id, patch = patch).bind().toDomain().toResponse()
         }
 
     fun replaceProfile(
@@ -406,9 +408,9 @@ class UserService(
         patch: ProfilePatch,
     ): Either<ServiceError, UserResponse> =
         either {
-            val target = repository.findById(id = id).bind()
+            val target = repository.findById(id = id).bind().toDomain()
             requireAccess(token = token, target = target).bind()
-            repository.replaceProfile(id = id, patch = patch).bind().toResponse()
+            repository.replaceProfile(id = id, patch = patch).bind().toDomain().toResponse()
         }
 
     /**
@@ -423,7 +425,7 @@ class UserService(
     ): Either<ServiceError, Unit> =
         either {
             val actorId = requireAdmin(token = token).bind()
-            val target = repository.findById(id = id).bind()
+            val target = repository.findById(id = id).bind().toDomain()
             // Don't let a delete drop the system to zero active admins.
             ensure(
                 condition = Capability.ADMINISTRATOR !in target.capabilities || capabilities.countActiveAdministrators() > 1,
@@ -453,7 +455,7 @@ class UserService(
     ): Either<ServiceError, Unit> =
         either {
             val actorId = requireAdmin(token = token).bind()
-            val target = repository.findById(id = id).bind()
+            val target = repository.findById(id = id).bind().toDomain()
             repository.reactivate(id = id).bind()
             audit.record(
                 write =
@@ -472,7 +474,7 @@ class UserService(
         token: VerifiedFirebaseToken,
         target: User,
     ): Either<ServiceError, Unit> {
-        val caller = repository.findByFirebaseUid(firebaseUid = token.uid)
+        val caller = repository.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
         val isSelf = caller?.id == target.id
         val isAdmin = caller != null && caller.capabilities.contains(element = Capability.ADMINISTRATOR)
         return if (!isSelf && !isAdmin) ServiceError.Forbidden().left() else Unit.right()
@@ -480,7 +482,7 @@ class UserService(
 
     /** Allow only an ADMINISTRATOR caller; returns their id for audit attribution. */
     private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
-        val caller = repository.findByFirebaseUid(firebaseUid = token.uid)
+        val caller = repository.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
         return if (caller == null || Capability.ADMINISTRATOR !in caller.capabilities) {
             ServiceError.Forbidden().left()
         } else {
@@ -525,7 +527,7 @@ private fun requireStaff(
     repository: UserRepository,
     token: VerifiedFirebaseToken,
 ): Either<ServiceError, Unit> {
-    val caller = repository.findByFirebaseUid(firebaseUid = token.uid)
+    val caller = repository.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
     return if (caller == null || caller.capabilities.none { it in STAFF_ROLES }) {
         ServiceError.Forbidden().left()
     } else {
@@ -542,7 +544,7 @@ private fun requireResearchAccess(
     repository: UserRepository,
     token: VerifiedFirebaseToken,
 ): Either<ServiceError, Unit> {
-    val caller = repository.findByFirebaseUid(firebaseUid = token.uid)
+    val caller = repository.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
     val searchRoles = setOf(Capability.RESEARCHER, Capability.RATER)
     val allowed =
         caller != null &&

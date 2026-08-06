@@ -16,6 +16,8 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
+import org.skopeo.mapper.entity.contact.toDomain
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.Contact
 import org.skopeo.model.ContactType
@@ -54,14 +56,14 @@ class ContactRepositoryTest {
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                     names = listOf(UserName(type = NameType.FIRST, value = "Test")),
                 ),
-        ).id
+        ).toDomain().id
 
     /** Add a contact, returning the raw [Either] so callers can assert either branch. */
     private fun addContact(
         userId: UUID,
         type: ContactType,
         value: String,
-    ): Either<ServiceError, Contact> = contacts.create(userId = userId, type = type, value = value, isPrimary = true)
+    ): Either<ServiceError, Contact> = contacts.create(userId = userId, type = type, value = value, isPrimary = true).map { it.toDomain() }
 
     @Test
     fun `create stores a MANUAL PENDING contact`() {
@@ -94,7 +96,7 @@ class ContactRepositoryTest {
                 method = VerificationMethod.ADMIN_OVERRIDE,
                 verifiedBy = userId,
                 verifiedAt = LocalDateTime.now(),
-            ).shouldBeRight()
+            ).shouldBeRight().toDomain()
         verified.status shouldBe VerificationStatus.VERIFIED
         verified.method shouldBe VerificationMethod.ADMIN_OVERRIDE
         verified.verifiedAt.shouldNotBeNull()
@@ -107,7 +109,7 @@ class ContactRepositoryTest {
                 method = null,
                 verifiedBy = userId,
                 verifiedAt = LocalDateTime.now(),
-            ).shouldBeRight()
+            ).shouldBeRight().toDomain()
         reverted.status shouldBe VerificationStatus.PENDING
         reverted.method.shouldBeNull()
         reverted.verifiedAt.shouldBeNull()
@@ -126,7 +128,7 @@ class ContactRepositoryTest {
                 method = null,
                 verifiedBy = userId,
                 verifiedAt = LocalDateTime.now(),
-            ).shouldBeRight()
+            ).shouldBeRight().toDomain()
 
         verified.status shouldBe VerificationStatus.VERIFIED
         verified.method.shouldBeNull()
@@ -219,7 +221,7 @@ class ContactRepositoryTest {
                 method = VerificationMethod.ADMIN_OVERRIDE,
                 verifiedBy = userB,
                 verifiedAt = LocalDateTime.now(),
-            ).shouldBeRight()
+            ).shouldBeRight().toDomain()
         nowVerified.status shouldBe VerificationStatus.VERIFIED
     }
 }

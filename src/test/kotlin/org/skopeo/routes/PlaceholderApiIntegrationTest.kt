@@ -30,6 +30,7 @@ import org.skopeo.dto.user.ClaimRequest
 import org.skopeo.dto.user.CreatePlaceholderRequest
 import org.skopeo.dto.user.UserResponse
 import org.skopeo.dto.user.UserSummaryResponse
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
@@ -81,7 +82,7 @@ class PlaceholderApiIntegrationTest {
                     sex = "Male",
                     capabilities = roles,
                 ),
-        )
+        ).toDomain()
 
     private fun tokenFor(uid: String): String = TestFirebaseAuth.mintToken(uid = uid, emailVerified = true)
 
@@ -303,5 +304,5 @@ class PlaceholderApiIntegrationTest {
             client.claim(token = tokenFor(uid = "second"), code = code).status shouldBe HttpStatusCode.NotFound
         }
 
-    private fun seededClaimantId(uid: String): String = UserRepository().findByFirebaseUid(firebaseUid = uid)!!.id.toString()
+    private fun seededClaimantId(uid: String): String = UserRepository().findByFirebaseUid(firebaseUid = uid)!!.toDomain().id.toString()
 }

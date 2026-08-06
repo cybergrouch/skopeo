@@ -85,7 +85,7 @@ class PlaceholderService(
             val created =
                 users.createPlaceholder(
                     command = CreatePlaceholderCommand(displayName = name, sex = sex, dateOfBirth = dateOfBirth),
-                )
+                ).toDomain()
             audit.record(
                 write =
                     AuditWrite(
@@ -131,7 +131,7 @@ class PlaceholderService(
     fun listPlaceholders(token: VerifiedFirebaseToken): Either<ServiceError, List<UserSummaryResponse>> =
         either {
             requireMatchManager(token = token).bind()
-            users.listPlaceholders().map { it.toSummary(isDeleted = it.isDeleted()) }
+            users.listPlaceholders().map { it.toDomain() }.map { it.toSummary(isDeleted = it.isDeleted()) }
         }
 
     /**
@@ -145,7 +145,7 @@ class PlaceholderService(
     ): Either<ServiceError, ClaimCodeResponse> =
         either {
             val adminId = requireAdmin(token = token).bind()
-            val target = users.findById(id = placeholderId).bind()
+            val target = users.findById(id = placeholderId).bind().toDomain()
             ensure(condition = target.placeholder) { ServiceError.Validation(message = "User ${target.publicCode} is not a placeholder") }
             ensure(condition = target.isActive && target.canonicalUserId == null) {
                 ServiceError.Conflict(message = "Placeholder ${target.publicCode} has already been claimed")
@@ -177,7 +177,7 @@ class PlaceholderService(
             val caller =
                 ensureNotNull(value = users.findByFirebaseUid(firebaseUid = token.uid)) {
                     ServiceError.Forbidden(message = "You must be signed up to claim an account")
-                }
+                }.toDomain()
             ensure(condition = !caller.placeholder) { ServiceError.Conflict(message = "A placeholder account cannot claim another") }
 
             val trimmed = code.trim()
@@ -190,7 +190,7 @@ class PlaceholderService(
                 ServiceError.Validation(message = "This claim code has expired")
             }
 
-            val placeholder = users.findById(id = record.placeholderUserId).bind()
+            val placeholder = users.findById(id = record.placeholderUserId).bind().toDomain()
             // A claimed placeholder carries a canonical link. (No self-claim check is needed: a signed-up
             // caller can never be a placeholder — the !caller.placeholder guard above already rejects that.)
             ensure(condition = placeholder.canonicalUserId == null) {
@@ -222,12 +222,12 @@ class PlaceholderService(
                             ),
                     ),
             )
-            users.findById(id = caller.id).bind().toResponse()
+            users.findById(id = caller.id).bind().toDomain().toResponse()
         }
 
     /** ADMINISTRATOR-only; returns the caller's id (the audit actor). */
     private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
         return if (caller == null || Capability.ADMINISTRATOR !in caller.capabilities) {
             ServiceError.Forbidden().left()
         } else {
@@ -237,13 +237,13 @@ class PlaceholderService(
 
     /** True when [userId] holds RATER or ADMINISTRATOR (ADMINISTRATOR implicitly rates, #106). */
     private fun canRate(userId: UUID): Boolean {
-        val caller = users.findById(id = userId).getOrNull() ?: return false
+        val caller = users.findById(id = userId).getOrNull()?.toDomain() ?: return false
         return Capability.RATER in caller.capabilities || Capability.ADMINISTRATOR in caller.capabilities
     }
 
     /** HOST/CLUB_OWNER/ADMINISTRATOR (match-management); returns the caller's id (the audit actor). */
     private fun requireMatchManager(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
         return if (caller == null || caller.capabilities.none { it in MATCH_MANAGEMENT_ROLES }) {
             ServiceError.Forbidden().left()
         } else {

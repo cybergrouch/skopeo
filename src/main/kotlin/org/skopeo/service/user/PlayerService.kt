@@ -22,6 +22,7 @@ import org.skopeo.dto.user.PublicRatingDto
 import org.skopeo.dto.user.ResultsBucket
 import org.skopeo.mapper.dto.rating.toResponse
 import org.skopeo.mapper.entity.ranking.toDomain
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.ContactType
 import org.skopeo.model.Match
 import org.skopeo.model.TeamType
@@ -71,7 +72,7 @@ class PlayerService(
                 mergedCard(located = located).bind()
             } else {
                 val rating = ratings.findCurrentRating(userId = located.id)
-                val viewer = token?.let { users.findByFirebaseUid(firebaseUid = it.uid) }
+                val viewer = token?.let { users.findByFirebaseUid(firebaseUid = it.uid)?.toDomain() }
                 val showRaw = viewer.canSeeRawRatingOrFalse()
                 // #630: reveal the email to the profile owner, or a HOST/CLUB_OWNER/RATER/ADMINISTRATOR
                 // viewer — gated here so it never leaves the API to another plain PLAYER or an anonymous caller.
@@ -117,7 +118,7 @@ class PlayerService(
      */
     private fun mergedCard(located: User): Either<ServiceError, PublicPlayerResponse> {
         val canonicalId = located.canonicalUserId
-        val canonical = if (canonicalId == null) null else users.findById(id = canonicalId).getOrNull()
+        val canonical = if (canonicalId == null) null else users.findById(id = canonicalId).getOrNull()?.toDomain()
         if (canonical == null) {
             return ServiceError.NotFound(message = "No player with code ${located.publicCode}").left()
         }
@@ -160,7 +161,7 @@ class PlayerService(
             // A canonical account's history also surfaces its disabled duplicates' matches (#124,
             // display-only — ratings are never consolidated). Each match is oriented from whichever of
             // these "self" ids actually played it.
-            val selfIds = (listOf(element = user.id) + users.findDuplicatesOf(canonicalId = user.id).map { it.id }).toSet()
+            val selfIds = (listOf(element = user.id) + users.findDuplicatesOf(canonicalId = user.id).map { it.toDomain().id }).toSet()
             val played =
                 selfIds
                     .flatMap { matches.listByUser(userId = it) }
@@ -169,7 +170,7 @@ class PlayerService(
             val ratedMatchIds = played.filter { it.ratedAt != null }.map { it.id }
             // Raw at-the-time NTRP is a raw-NTRP reveal (#583/#654): only an admin not previewing as a
             // non-admin sees it; everyone else gets the band ([levelAtMatch]) only.
-            val showRaw = token?.let { users.findByFirebaseUid(firebaseUid = it.uid) }.canSeeRawRatingOrFalse()
+            val showRaw = token?.let { users.findByFirebaseUid(firebaseUid = it.uid)?.toDomain() }.canSeeRawRatingOrFalse()
             val atMatchByMatch = atMatchRatings(ratedMatchIds = ratedMatchIds, showRaw = showRaw)
             val participantByMatch = played.associate { it.id to participantOf(match = it, selfIds = selfIds) }
             // Resolve every other participant (partners + opponents) across all matches in one lookup.
@@ -178,7 +179,7 @@ class PlayerService(
                     val self = participantByMatch.getValue(key = match.id)
                     (match.team1.userIds + match.team2.userIds).filterNot { it == self }
                 }
-            val participantsById = users.findAllByIds(ids = otherIds).associateBy { it.id }
+            val participantsById = users.findAllByIds(ids = otherIds).map { it.toDomain() }.associateBy { it.id }
             // Every participant's *current* rating confidence (#343), shown beside the at-the-time band.
             val confidenceById =
                 ratings
@@ -241,7 +242,7 @@ class PlayerService(
         token: VerifiedFirebaseToken?,
     ): PlayerMatchHistoryPage? {
         if (!target.matchHistoryHidden) return null
-        val viewer = token?.let { users.findByFirebaseUid(firebaseUid = it.uid) }
+        val viewer = token?.let { users.findByFirebaseUid(firebaseUid = it.uid)?.toDomain() }
         val privileged = viewer != null && (viewer.id == target.id || viewer.capabilities.any { it != Capability.PLAYER })
         return if (privileged) null else PlayerMatchHistoryPage(items = emptyList(), total = 0, hidden = true)
     }
@@ -256,7 +257,7 @@ class PlayerService(
     fun resultsSummary(code: String): Either<ServiceError, PlayerResultsSummary> =
         either {
             val user = resolve(code = code).bind()
-            val selfIds = (listOf(element = user.id) + users.findDuplicatesOf(canonicalId = user.id).map { it.id }).toSet()
+            val selfIds = (listOf(element = user.id) + users.findDuplicatesOf(canonicalId = user.id).map { it.toDomain().id }).toSet()
             val rows =
                 selfIds
                     .flatMap { matches.listByUser(userId = it) }
@@ -301,7 +302,7 @@ class PlayerService(
             // admin previews as a non-admin (the per-admin toggle). A previewing admin is treated exactly
             // like a non-admin here — Forbidden — so the preview faithfully hides raw ratings. The owner
             // reads their own history via the user-id endpoint (#73).
-            val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+            val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
             ensure(condition = caller.canSeeRawRatingOrFalse()) { ServiceError.Forbidden() }
             val user = resolve(code = code).bind()
             // Everyone who passes the gate above is a raw-rating viewer, so reveal the raw NTRP values —
@@ -329,7 +330,7 @@ class PlayerService(
             standings.locatePlayer(userId = user.id)?.let { standing ->
                 // Reveal the precise rating only to an ADMINISTRATOR (#583) — no longer RATER/owner. The
                 // per-admin "preview as non-admin" toggle further suppresses it. Everyone else: rank + band.
-                val caller = token?.let { users.findByFirebaseUid(firebaseUid = it.uid) }
+                val caller = token?.let { users.findByFirebaseUid(firebaseUid = it.uid)?.toDomain() }
                 val canSeeRating = caller.canSeeRawRatingOrFalse()
                 PlayerStandingResponse(
                     band = standing.band.code,
@@ -357,7 +358,7 @@ class PlayerService(
         either {
             val user = resolve(code = code).bind()
             // Owner-or-admin only (#448): the caller is the profile owner, or holds ADMINISTRATOR.
-            val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+            val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
             val allowed = caller != null && (caller.id == user.id || Capability.ADMINISTRATOR in caller.capabilities)
             ensure(condition = allowed) { ServiceError.Forbidden() }
 
@@ -389,7 +390,7 @@ class PlayerService(
         requireActive: Boolean = true,
     ): Either<ServiceError, User> {
         val normalized = code.trim().uppercase()
-        val user = users.findByPublicCode(code = normalized)
+        val user = users.findByPublicCode(code = normalized)?.toDomain()
         return if (user == null || (requireActive && !user.isActive)) {
             ServiceError.NotFound(message = "No player with code $normalized").left()
         } else {

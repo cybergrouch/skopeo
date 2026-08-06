@@ -20,6 +20,7 @@ import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.dto.event.EventResponse
 import org.skopeo.mapper.entity.event.toDomain
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuthProvider
@@ -96,7 +97,7 @@ class EventReverseRatingsTest {
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                     capabilities = roles,
                 ),
-        )
+        ).toDomain()
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
@@ -125,7 +126,10 @@ class EventReverseRatingsTest {
 
     /** Seed a circuit (#525) attributed to [hostUid]; a tournament must reference one. */
     private fun seedCircuit(hostUid: String): UUID {
-        val creator = requireNotNull(value = UserRepository().findByFirebaseUid(firebaseUid = hostUid)) { "unknown host $hostUid" }
+        val creator =
+            requireNotNull(
+                value = UserRepository().findByFirebaseUid(firebaseUid = hostUid),
+            ) { "unknown host $hostUid" }.toDomain()
         return CircuitRepository().create(command = CreateCircuitCommand(name = "NORTH", createdBy = creator.id)).id
     }
 

@@ -28,6 +28,7 @@ import org.skopeo.dto.club.AssignOwnerRequest
 import org.skopeo.dto.club.ClubPublicResponse
 import org.skopeo.dto.club.ClubResponse
 import org.skopeo.dto.club.CreateClubRequest
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
@@ -75,7 +76,7 @@ class ClubApiIntegrationTest {
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                     capabilities = roles,
                 ),
-        )
+        ).toDomain()
 
     private suspend fun HttpClient.createClub(
         token: String,
