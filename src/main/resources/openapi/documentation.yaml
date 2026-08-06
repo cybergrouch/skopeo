@@ -3202,6 +3202,49 @@ paths:
         '403':
           description: Caller is not an ADMINISTRATOR
 
+  /api/v1/settings/award-ranking-points:
+    get:
+      summary: Get the award-ranking-points feature flag (#641)
+      description: >-
+        Whether the event-create form offers the "Award Ranking Points" checkbox. Defaults to disabled
+        (checkbox hidden) when unset, so hosts can't opt an event into awarding until an admin enables it.
+      tags:
+        - Settings
+      security:
+        - firebaseAuth: []
+        - {}
+      responses:
+        '200':
+          description: The current award-ranking-points flag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AwardRankingPointsResponse'
+    put:
+      summary: Set the award-ranking-points feature flag (#641)
+      description: ADMINISTRATOR only. Shows or hides the event award-ranking-points checkbox; the write is audit-logged.
+      tags:
+        - Settings
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetAwardRankingPointsRequest'
+      responses:
+        '200':
+          description: The updated award-ranking-points flag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AwardRankingPointsResponse'
+        '401':
+          description: Missing or invalid Firebase token
+        '403':
+          description: Caller is not an ADMINISTRATOR
+
   /api/v1/settings/points/open-play:
     get:
       summary: Get the open-play points schedule (#553)
@@ -6884,6 +6927,33 @@ components:
         enabled:
           type: boolean
           description: Enable or disable the Facebook sign-in buttons app-wide (#647).
+
+    AwardRankingPointsResponse:
+      type: object
+      required:
+        - enabled
+      properties:
+        enabled:
+          type: boolean
+          description: Whether the event "Award Ranking Points" checkbox is shown (#641); false when unset.
+        updatedAt:
+          type: string
+          nullable: true
+          description: ISO timestamp of the last change; null when never set.
+        updatedBy:
+          type: string
+          format: uuid
+          nullable: true
+          description: The administrator who last set the flag; null when never set.
+
+    SetAwardRankingPointsRequest:
+      type: object
+      required:
+        - enabled
+      properties:
+        enabled:
+          type: boolean
+          description: Show or hide the event "Award Ranking Points" checkbox (#641).
 
     OpenPlayMarginPoints:
       type: object

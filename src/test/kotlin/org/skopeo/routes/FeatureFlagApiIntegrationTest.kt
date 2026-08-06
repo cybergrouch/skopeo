@@ -22,7 +22,9 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.security.Capability
+import org.skopeo.dto.settings.AwardRankingPointsResponse
 import org.skopeo.dto.settings.FacebookLoginResponse
+import org.skopeo.dto.settings.SetAwardRankingPointsRequest
 import org.skopeo.dto.settings.SetFacebookLoginRequest
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.NameType
@@ -108,6 +110,46 @@ class FeatureFlagApiIntegrationTest {
                 header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
                 contentType(type = ContentType.Application.Json)
                 setBody(body = SetFacebookLoginRequest(enabled = false))
+            }.status shouldBe HttpStatusCode.Forbidden
+        }
+
+    @Test
+    fun `the award-ranking-points flag is publicly readable and defaults to disabled (#641)`() =
+        withApp { client ->
+            val anon = client.get(urlString = "/api/v1/settings/award-ranking-points")
+            anon.status shouldBe HttpStatusCode.OK
+            anon.body<AwardRankingPointsResponse>().enabled shouldBe false
+        }
+
+    @Test
+    fun `an admin enables award ranking points and the read reflects it (#641)`() =
+        withApp { client ->
+            seedUser(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+            val adminToken = TestFirebaseAuth.mintToken(uid = "admin")
+
+            val updated =
+                client.put(urlString = "/api/v1/settings/award-ranking-points") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = SetAwardRankingPointsRequest(enabled = true))
+                }
+            updated.status shouldBe HttpStatusCode.OK
+            updated.body<AwardRankingPointsResponse>().enabled shouldBe true
+
+            client.get(urlString = "/api/v1/settings/award-ranking-points")
+                .body<AwardRankingPointsResponse>().enabled shouldBe true
+        }
+
+    @Test
+    fun `a plain player cannot set the award-ranking-points flag (#641)`() =
+        withApp { client ->
+            seedUser(uid = "player", roles = setOf(element = Capability.PLAYER))
+            val playerToken = TestFirebaseAuth.mintToken(uid = "player")
+
+            client.put(urlString = "/api/v1/settings/award-ranking-points") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $playerToken")
+                contentType(type = ContentType.Application.Json)
+                setBody(body = SetAwardRankingPointsRequest(enabled = true))
             }.status shouldBe HttpStatusCode.Forbidden
         }
 }

@@ -9,6 +9,7 @@ const {
   useGetApiV1Clubs,
   useGetApiV1Circuits,
   useGetApiV1UsersMe,
+  useAwardFlag,
   createMutate,
   state,
 } = vi.hoisted(() => ({
@@ -16,6 +17,7 @@ const {
   useGetApiV1Clubs: vi.fn(),
   useGetApiV1Circuits: vi.fn(),
   useGetApiV1UsersMe: vi.fn(),
+  useAwardFlag: vi.fn(),
   createMutate: vi.fn(),
   state: { fail: false },
 }));
@@ -42,6 +44,9 @@ vi.mock("sonner", () => ({
 vi.mock("@/api/generated/clubs/clubs", () => ({ useGetApiV1Clubs }));
 vi.mock("@/api/generated/circuits/circuits", () => ({ useGetApiV1Circuits }));
 vi.mock("@/api/generated/users/users", () => ({ useGetApiV1UsersMe }));
+vi.mock("@/api/generated/settings/settings", () => ({
+  useGetApiV1SettingsAwardRankingPoints: useAwardFlag,
+}));
 vi.mock("@/components/PlayerPicker", () => ({
   PlayerPicker: ({
     placeholder,
@@ -122,6 +127,8 @@ describe("EventOrganizerTab", () => {
     useGetApiV1UsersMe.mockReturnValue({
       data: { id: "me", capabilities: ["HOST"] },
     });
+    // Award-points feature flag (#641) defaults OFF → the checkbox is hidden unless a test enables it.
+    useAwardFlag.mockReturnValue({ data: { enabled: false } });
   });
 
   it("shows loading and empty states", () => {
@@ -643,7 +650,8 @@ describe("EventOrganizerTab", () => {
 
   // --- "Award Ranking Points" checkbox on create (#559) ---
 
-  it("shows the Award Ranking Points checkbox, unchecked by default during testing (#567)", () => {
+  it("shows the Award Ranking Points checkbox (flag on), unchecked by default (#567/#641)", () => {
+    useAwardFlag.mockReturnValue({ data: { enabled: true } });
     renderTab();
 
     // The single boolean flag replaces the old points-config UI; there is no min/max/validity input.
@@ -653,7 +661,14 @@ describe("EventOrganizerTab", () => {
     expect(screen.queryByLabelText("Validity start")).not.toBeInTheDocument();
   });
 
+  it("hides the Award Ranking Points checkbox when the feature flag is off (#641)", () => {
+    // Default beforeEach flag is off.
+    renderTab();
+    expect(screen.queryByLabelText("Award Ranking Points")).not.toBeInTheDocument();
+  });
+
   it("sends awardRankingPoints:true when the checkbox is ticked (#559)", async () => {
+    useAwardFlag.mockReturnValue({ data: { enabled: true } });
     const user = userEvent.setup();
     renderTab();
     await user.type(screen.getByLabelText("Name"), "Casual Meetup");

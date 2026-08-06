@@ -10,12 +10,14 @@ import arrow.core.raise.ensureNotNull
 import arrow.core.right
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
+import org.skopeo.dto.settings.AwardRankingPointsResponse
 import org.skopeo.dto.settings.FacebookLoginResponse
 import org.skopeo.dto.settings.StandingsSourceResponse
 import org.skopeo.mapper.settings.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
+import org.skopeo.model.AwardRankingPointsValue
 import org.skopeo.model.FacebookLoginValue
 import org.skopeo.model.SnapshotSource
 import org.skopeo.model.StandingsSourceValue
@@ -31,12 +33,16 @@ private const val STANDINGS_SOURCE_KEY = "standings_source"
 /** The app_settings key toggling the Facebook sign-in buttons (#647); absent ⇒ enabled. */
 private const val FACEBOOK_LOGIN_KEY = "facebook_login_enabled"
 
+/** The app_settings key toggling the event "Award Ranking Points" checkbox (#641); absent ⇒ disabled. */
+private const val AWARD_RANKING_POINTS_KEY = "award_ranking_points_enabled"
+
 /**
  * Operational app_settings that steer serving behaviour without a redeploy (#146). Mirrors the
  * [ThemeService] pattern: a value is looked up in the generic app_settings store and coalesced to a safe
  * default when the row is absent or holds an unrecognized value — so no migration/seed is required — while
  * writes are ADMINISTRATOR-only and audit-logged. Expected failures return an [Either] left ([ServiceError]).
  */
+@Suppress("TooManyFunctions") // Cohesive app_settings surface: standings source + a small set of feature flags.
 class SettingsService(
     private val settings: AppSettingsRepository = AppSettingsRepository(),
     private val users: UserRepository = UserRepository(),
@@ -126,6 +132,45 @@ class SettingsService(
                     ),
             )
             FacebookLoginValue(enabled = enabled, updatedBy = row.updatedBy, updatedAt = row.updatedAt).toResponse()
+        }
+
+    /**
+     * Whether the event-create form offers the "Award Ranking Points" checkbox (#641). Defaults to
+     * DISABLED (checkbox hidden) when the `award_ranking_points_enabled` row is absent or non-boolean — so
+     * hosts can't opt an event into awarding until an admin turns it on. Public read — no auth.
+     */
+    fun getAwardRankingPoints(): AwardRankingPointsValue {
+        val row = settings.get(key = AWARD_RANKING_POINTS_KEY)
+        val enabled = row?.value?.toBooleanStrictOrNull() ?: false
+        return AwardRankingPointsValue(enabled = enabled, updatedBy = row?.updatedBy, updatedAt = row?.updatedAt)
+    }
+
+    /** The award-points flag as its response DTO — the route-facing form of [getAwardRankingPoints]. */
+    fun getAwardRankingPointsResponse(): AwardRankingPointsResponse = getAwardRankingPoints().toResponse()
+
+    /**
+     * Show or hide the event "Award Ranking Points" checkbox (ADMINISTRATOR only, #641). Upserts the
+     * app-setting as the boolean's string form and records a provenance/audit row.
+     */
+    fun setAwardRankingPoints(
+        token: VerifiedFirebaseToken,
+        enabled: Boolean,
+    ): Either<ServiceError, AwardRankingPointsResponse> =
+        either {
+            val adminId = requireAdmin(token = token).bind()
+            val row = settings.upsert(key = AWARD_RANKING_POINTS_KEY, value = enabled.toString(), updatedBy = adminId)
+            audit.record(
+                write =
+                    AuditWrite(
+                        actorUserId = adminId,
+                        action = AuditAction.SETTINGS_AWARD_RANKING_POINTS_CHANGED,
+                        entityType = AuditEntityType.SETTING,
+                        entityId = null,
+                        summary = "${if (enabled) "Enabled" else "Disabled"} the event award-ranking-points option",
+                        details = buildMap { put(key = "awardRankingPointsEnabled", value = enabled.toString()) },
+                    ),
+            )
+            AwardRankingPointsValue(enabled = enabled, updatedBy = row.updatedBy, updatedAt = row.updatedAt).toResponse()
         }
 
     /** ADMINISTRATOR-only access; returns the caller's id (the audit actor). */

@@ -69,3 +69,15 @@ data class FacebookLoginValue(
     val updatedBy: UUID?,
     val updatedAt: LocalDateTime?,
 )
+
+/**
+ * The "award ranking points" feature flag (#641) plus its provenance ([updatedBy]/[updatedAt], null until
+ * set). Default is DISABLED: while false the event-create form hides the "Award Ranking Points" checkbox so
+ * a host can't opt an event into awarding — preventing the accidental awards seen during the testing phase.
+ * An admin turns it on when awarding should be available.
+ */
+data class AwardRankingPointsValue(
+    val enabled: Boolean,
+    val updatedBy: UUID?,
+    val updatedAt: LocalDateTime?,
+)

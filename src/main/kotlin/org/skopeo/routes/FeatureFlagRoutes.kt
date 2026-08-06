@@ -14,6 +14,7 @@ import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
+import org.skopeo.dto.settings.SetAwardRankingPointsRequest
 import org.skopeo.dto.settings.SetFacebookLoginRequest
 import org.skopeo.service.settings.SettingsService
 
@@ -40,6 +41,29 @@ fun Application.configureFeatureFlagRoutes(service: SettingsService = SettingsSe
                         val request = call.receive<SetFacebookLoginRequest>()
                         respondEither(
                             result = service.setFacebookLogin(token = verifiedToken(), enabled = request.enabled),
+                        ) { value ->
+                            call.respond(status = HttpStatusCode.OK, message = value)
+                        }
+                    }
+                }
+            }
+        }
+        // Award-ranking-points checkbox toggle (#641): the event-create form reads this to decide whether
+        // to offer the checkbox; default disabled. Admin-only write.
+        route(path = "/api/v1/settings/award-ranking-points") {
+            authenticate(FIREBASE_AUTH, optional = true) {
+                get {
+                    respondMappingErrors {
+                        call.respond(status = HttpStatusCode.OK, message = service.getAwardRankingPointsResponse())
+                    }
+                }
+            }
+            authenticate(FIREBASE_AUTH) {
+                put {
+                    respondMappingErrors {
+                        val request = call.receive<SetAwardRankingPointsRequest>()
+                        respondEither(
+                            result = service.setAwardRankingPoints(token = verifiedToken(), enabled = request.enabled),
                         ) { value ->
                             call.respond(status = HttpStatusCode.OK, message = value)
                         }
