@@ -26,6 +26,7 @@ import org.skopeo.dto.RankingCalculationResponse
 import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.dto.match.SetScoreRequest
 import org.skopeo.mapper.dto.rating.toResponse
+import org.skopeo.mapper.entity.event.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.CreateEventCommand
@@ -438,7 +439,7 @@ class RatingCalculationServiceTest {
                         participantIds = listOf(p1.id, p2.id),
                         createdBy = users.findByFirebaseUid(firebaseUid = "root")!!.id,
                     ),
-            )
+            ).toDomain()
         // An evented match (recorded while the event is open) and an event-less one.
         val eventedFixture =
             matchService.createFixture(
@@ -730,7 +731,7 @@ class RatingCalculationServiceTest {
                         participantIds = listOf(a, b),
                         createdBy = root,
                     ),
-            )
+            ).toDomain()
         val fixture =
             matchService.createFixture(
                 token = token(uid = "root"),

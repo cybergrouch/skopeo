@@ -10,6 +10,7 @@ import org.jetbrains.exposed.sql.update
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.mapper.entity.event.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.CreateEventCommand
 import org.skopeo.model.NameType
@@ -60,13 +61,13 @@ class EventRepositoryTest {
                         participantIds = emptyList(),
                         createdBy = creator,
                     ),
-            )
+            ).toDomain()
         event.createdBy shouldBe creator
 
         // Simulate the creator's account being removed — the FK is ON DELETE SET NULL.
         transaction { EventsTable.update(where = { EventsTable.id eq event.id }) { it[createdBy] = null } }
 
-        events.findById(id = event.id)!!.createdBy.shouldBeNull()
+        events.findById(id = event.id)!!.toDomain().createdBy.shouldBeNull()
     }
 
     @Test
@@ -82,13 +83,13 @@ class EventRepositoryTest {
                         participantIds = emptyList(),
                         createdBy = creator,
                     ),
-            )
-        events.findByPublicCode(code = event.publicCode)!!.id shouldBe event.id
+            ).toDomain()
+        events.findByPublicCode(code = event.publicCode)!!.toDomain().id shouldBe event.id
 
         // A disabled (soft-deleted) event still resolves by code so its link stays honored (#325);
         // it's simply flagged not-active.
         transaction { EventsTable.update(where = { EventsTable.id eq event.id }) { it[isActive] = false } }
-        events.findByPublicCode(code = event.publicCode)!!.isActive shouldBe false
+        events.findByPublicCode(code = event.publicCode)!!.toDomain().isActive shouldBe false
     }
 
     @Test
@@ -104,10 +105,10 @@ class EventRepositoryTest {
                         participantIds = emptyList(),
                         createdBy = creator,
                     ),
-            )
+            ).toDomain()
 
-        events.rename(id = event.id, name = "New Name")!!.name shouldBe "New Name"
-        events.findById(id = event.id)!!.name shouldBe "New Name"
+        events.rename(id = event.id, name = "New Name")!!.toDomain().name shouldBe "New Name"
+        events.findById(id = event.id)!!.toDomain().name shouldBe "New Name"
         events.rename(id = UUID.randomUUID(), name = "Ghost").shouldBeNull()
     }
 
@@ -124,16 +125,16 @@ class EventRepositoryTest {
                         participantIds = emptyList(),
                         createdBy = creator,
                     ),
-            )
+            ).toDomain()
         // No override to start with.
-        events.findById(id = event.id)!!.calcPriority.shouldBeNull()
+        events.findById(id = event.id)!!.toDomain().calcPriority.shouldBeNull()
 
         events.setCalcPriority(id = event.id, priority = 3.5)
-        events.findById(id = event.id)!!.calcPriority shouldBe 3.5
+        events.findById(id = event.id)!!.toDomain().calcPriority shouldBe 3.5
 
         // Updating a missing id matches no rows and must not throw or touch the real event.
         events.setCalcPriority(id = UUID.randomUUID(), priority = 9.0)
-        events.findById(id = event.id)!!.calcPriority shouldBe 3.5
+        events.findById(id = event.id)!!.toDomain().calcPriority shouldBe 3.5
     }
 
     @Test

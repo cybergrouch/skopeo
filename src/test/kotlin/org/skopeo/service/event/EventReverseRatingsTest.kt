@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.dto.event.EventResponse
+import org.skopeo.mapper.entity.event.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuthProvider
@@ -76,7 +77,7 @@ class EventReverseRatingsTest {
 
     // The service now returns EventResponse DTOs; re-fetch the persisted domain Event for fixtures/
     // assertions that need domain-typed fields absent from the DTO (id as UUID, createdBy, etc.).
-    private fun EventResponse.domain(): Event = events.findById(id = UUID.fromString(id))!!
+    private fun EventResponse.domain(): Event = events.findById(id = UUID.fromString(id))!!.toDomain()
 
     @BeforeEach
     fun reset() {
@@ -250,7 +251,7 @@ class EventReverseRatingsTest {
         val view = service.reverseRatings(token = token(uid = "admin"), id = re.eventId).shouldBeRight()
 
         view.isFinalized.shouldBeFalse()
-        val persisted = events.findById(id = re.eventId).shouldNotBeNull()
+        val persisted = events.findById(id = re.eventId).shouldNotBeNull().toDomain()
         persisted.finalizedAt.shouldBeNull()
         persisted.finalizedBy.shouldBeNull()
         matchRepo.findById(matchId = re.match.id).shouldBeRight().ratedAt.shouldBeNull()
@@ -321,7 +322,7 @@ class EventReverseRatingsTest {
                 .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
         error.message shouldContain "later matches have already been rated"
         // Nothing was touched: A stays finalized and its awards stay live (both placements).
-        events.findById(id = eventA.id).shouldNotBeNull().isFinalized.shouldBeTrue()
+        events.findById(id = eventA.id).shouldNotBeNull().toDomain().isFinalized.shouldBeTrue()
         awardRepo.listActiveByEvent(eventId = eventA.id) shouldHaveSize 2
 
         // The tip event B, however, reverses cleanly.
@@ -373,6 +374,6 @@ class EventReverseRatingsTest {
         service.reverseRatings(token = token(uid = "ghost"), id = re.eventId)
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
         // Nothing was reversed by the forbidden attempts.
-        events.findById(id = re.eventId).shouldNotBeNull().isFinalized.shouldBeTrue()
+        events.findById(id = re.eventId).shouldNotBeNull().toDomain().isFinalized.shouldBeTrue()
     }
 }

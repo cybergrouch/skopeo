@@ -23,6 +23,7 @@ import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.dto.event.EventResponse
 import org.skopeo.mapper.entity.club.toDomain
+import org.skopeo.mapper.entity.event.toDomain
 import org.skopeo.mapper.entity.ranking.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
@@ -79,7 +80,7 @@ class EventServiceTest {
     // The service now returns EventResponse DTOs; re-fetch the persisted domain Event for assertions
     // and fixtures that need domain-typed fields absent from the DTO (createdBy, participantIds,
     // finalizedBy, type as EventType, dates as LocalDate).
-    private fun EventResponse.domain(): Event = events.findById(id = UUID.fromString(id))!!
+    private fun EventResponse.domain(): Event = events.findById(id = UUID.fromString(id))!!.toDomain()
 
     @BeforeEach
     fun reset() {
@@ -609,7 +610,7 @@ class EventServiceTest {
 
         service.delete(token = token(uid = "host"), id = event.id).shouldBeRight()
 
-        events.findById(id = event.id)!!.isActive.shouldBeFalse()
+        events.findById(id = event.id)!!.toDomain().isActive.shouldBeFalse()
         service.list(token = token(uid = "host")).shouldBeRight() shouldHaveSize 0
         // The soft-delete writes an Activity Log entry (#354).
         AuditRepository().list(actions = listOf(element = AuditAction.EVENT_DELETED), limit = 10, offset = 0).first.single().let {
@@ -642,7 +643,7 @@ class EventServiceTest {
 
         val error = service.delete(token = token(uid = "host"), id = event.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Conflict>()
         error.message shouldContain "recorded matches first"
-        events.findById(id = event.id)!!.isActive.shouldBeTrue()
+        events.findById(id = event.id)!!.toDomain().isActive.shouldBeTrue()
     }
 
     @Test
@@ -657,7 +658,7 @@ class EventServiceTest {
 
         val error = service.delete(token = token(uid = "host"), id = event.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Conflict>()
         error.message shouldContain "rated matches"
-        events.findById(id = event.id)!!.isActive.shouldBeTrue()
+        events.findById(id = event.id)!!.toDomain().isActive.shouldBeTrue()
     }
 
     @Test
@@ -668,10 +669,10 @@ class EventServiceTest {
         val event = service.create(token = token(uid = "owner"), input = input()).shouldBeRight().domain()
 
         service.delete(token = token(uid = "other"), id = event.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
-        events.findById(id = event.id)!!.isActive.shouldBeTrue()
+        events.findById(id = event.id)!!.toDomain().isActive.shouldBeTrue()
 
         service.delete(token = token(uid = "admin"), id = event.id).shouldBeRight()
-        events.findById(id = event.id)!!.isActive.shouldBeFalse()
+        events.findById(id = event.id)!!.toDomain().isActive.shouldBeFalse()
         owner.id shouldBe event.createdBy
     }
 
@@ -683,7 +684,7 @@ class EventServiceTest {
         val renamed = service.rename(token = token(uid = "host"), id = event.id, name = "  Summer Classic  ").shouldBeRight()
 
         renamed.name shouldBe "Summer Classic"
-        events.findById(id = event.id)!!.name shouldBe "Summer Classic"
+        events.findById(id = event.id)!!.toDomain().name shouldBe "Summer Classic"
         AuditRepository().list(actions = listOf(element = AuditAction.EVENT_RENAMED), limit = 10, offset = 0).first.single().let {
             it.actorUserId shouldBe host.id
             it.entityId shouldBe event.id
@@ -699,7 +700,7 @@ class EventServiceTest {
 
         service.rename(token = token(uid = "host"), id = event.id, name = "   ")
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
-        events.findById(id = event.id)!!.name shouldBe "Spring Open"
+        events.findById(id = event.id)!!.toDomain().name shouldBe "Spring Open"
     }
 
     @Test
@@ -711,10 +712,10 @@ class EventServiceTest {
 
         service.rename(token = token(uid = "other"), id = event.id, name = "Hijacked")
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
-        events.findById(id = event.id)!!.name shouldBe "Owner Cup"
+        events.findById(id = event.id)!!.toDomain().name shouldBe "Owner Cup"
 
         service.rename(token = token(uid = "admin"), id = event.id, name = "Admin Renamed").shouldBeRight()
-        events.findById(id = event.id)!!.name shouldBe "Admin Renamed"
+        events.findById(id = event.id)!!.toDomain().name shouldBe "Admin Renamed"
     }
 
     @Test
@@ -735,7 +736,7 @@ class EventServiceTest {
         val circuitId = seedCircuit(hostUid = "host")
         val created =
             service.create(token = token(uid = "host"), input = input(type = EventType.TOURNAMENT, circuitId = circuitId)).shouldBeRight()
-        events.findById(id = UUID.fromString(created.id))!!.circuitId shouldBe circuitId
+        events.findById(id = UUID.fromString(created.id))!!.toDomain().circuitId shouldBe circuitId
     }
 
     @Test
@@ -760,7 +761,7 @@ class EventServiceTest {
             ).shouldBeRight()
         tourney.type shouldBe "TOURNAMENT"
         // The type round-trips through persistence.
-        events.findById(id = UUID.fromString(tourney.id))!!.type shouldBe EventType.TOURNAMENT
+        events.findById(id = UUID.fromString(tourney.id))!!.toDomain().type shouldBe EventType.TOURNAMENT
     }
 
     @Test
@@ -773,7 +774,7 @@ class EventServiceTest {
 
         finalized.isFinalized.shouldBeTrue()
         finalized.domain().finalizedBy shouldBe host.id
-        val persisted = events.findById(id = event.id)!!
+        val persisted = events.findById(id = event.id)!!.toDomain()
         persisted.isFinalized.shouldBeTrue()
         persisted.finalizedBy shouldBe host.id
         AuditRepository().list(actions = listOf(element = AuditAction.EVENT_FINALIZED), limit = 10, offset = 0).first.single().let {
@@ -801,7 +802,7 @@ class EventServiceTest {
 
         service.finalize(token = token(uid = "ghost"), id = event.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
         service.finalize(token = token(uid = "other"), id = event.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
-        events.findById(id = event.id)!!.isFinalized.shouldBeFalse()
+        events.findById(id = event.id)!!.toDomain().isFinalized.shouldBeFalse()
 
         // A club owner may finalize an event they didn't create.
         provision(uid = "clubowner", roles = setOf(Capability.PLAYER, Capability.CLUB_OWNER))
@@ -863,7 +864,7 @@ class EventServiceTest {
 
         reopened.isFinalized.shouldBeFalse()
         reopened.domain().finalizedBy.shouldBeNull()
-        val persisted = events.findById(id = event.id)!!
+        val persisted = events.findById(id = event.id)!!.toDomain()
         persisted.isFinalized.shouldBeFalse()
         persisted.finalizedBy.shouldBeNull()
         persisted.finalizedAt.shouldBeNull()
@@ -899,7 +900,7 @@ class EventServiceTest {
 
         service.unfinalize(token = token(uid = "ghost"), id = event.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
         service.unfinalize(token = token(uid = "other"), id = event.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
-        events.findById(id = event.id)!!.isFinalized.shouldBeTrue()
+        events.findById(id = event.id)!!.toDomain().isFinalized.shouldBeTrue()
     }
 
     @Test
@@ -939,7 +940,7 @@ class EventServiceTest {
                 .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
         error.message shouldContain "already-rated"
         // The event stays finalized and its awards stay live — nothing was reversed (both placements).
-        events.findById(id = event.id)!!.isFinalized.shouldBeTrue()
+        events.findById(id = event.id)!!.toDomain().isFinalized.shouldBeTrue()
         awardRepo.listActiveByEvent(eventId = event.id) shouldHaveSize 2
     }
 

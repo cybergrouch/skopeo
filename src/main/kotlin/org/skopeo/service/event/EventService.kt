@@ -19,6 +19,7 @@ import org.skopeo.dto.match.MatchPublicPlayer
 import org.skopeo.mapper.dto.event.toResponse
 import org.skopeo.mapper.dto.match.toPublicResponse
 import org.skopeo.mapper.entity.club.toDomain
+import org.skopeo.mapper.entity.event.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -127,7 +128,7 @@ class EventService(
                             type = type,
                             awardRankingPoints = input.awardRankingPoints,
                         ),
-                )
+                ).toDomain()
             // Activity Log entry for the creation (#334); rename/set-club/delete are follow-ups.
             audit.record(
                 write =
@@ -155,7 +156,7 @@ class EventService(
         either {
             val caller = staffCaller(users = users, token = token).bind()
             val scopedTo = if (caller.capabilities.contains(element = Capability.ADMINISTRATOR)) null else caller.id
-            val views = events.list(createdBy = scopedTo).map { toView(event = it) }
+            val views = events.list(createdBy = scopedTo).map { toView(event = it.toDomain()) }
             // Batched "has results" counts (#483) + the raw-rating reveal flag, assembled here so the route
             // stays thin and never touches the mapper: an ADMINISTRATOR sees raw NTRP values on the roster.
             val counts = completedResultCounts(eventIds = views.map { it.event.id })
@@ -170,7 +171,7 @@ class EventService(
     fun myEvents(token: VerifiedFirebaseToken): Either<ServiceError, List<MyEventResponse>> =
         either {
             val caller = users.findByFirebaseUid(firebaseUid = token.uid)
-            val mine = caller?.let { events.findForParticipant(userId = it.id) }.orEmpty()
+            val mine = caller?.let { events.findForParticipant(userId = it.id).map { entry -> entry.toDomain() } }.orEmpty()
             // Batched "has results" counts (#483) assembled here so the route stays thin.
             val counts = completedResultCounts(eventIds = mine.map { it.event.id })
             mine.map { it.toResponse(completedMatchCount = counts[it.event.id] ?: 0) }
@@ -190,7 +191,8 @@ class EventService(
     ): Either<ServiceError, EventResponse> =
         either {
             staffCaller(users = users, token = token).bind().id
-            val event = ensureNotNull(value = events.findById(id = id)) { ServiceError.NotFound(message = "Event $id not found") }
+            val event =
+                ensureNotNull(value = events.findById(id = id)?.toDomain()) { ServiceError.NotFound(message = "Event $id not found") }
             toView(event = event).toResponse()
         }
 
@@ -205,7 +207,8 @@ class EventService(
     ): Either<ServiceError, EventResponse> =
         either {
             val caller = staffCaller(users = users, token = token).bind()
-            val event = ensureNotNull(value = events.findById(id = id)) { ServiceError.NotFound(message = "Event $id not found") }
+            val event =
+                ensureNotNull(value = events.findById(id = id)?.toDomain()) { ServiceError.NotFound(message = "Event $id not found") }
             val isAdmin = caller.capabilities.contains(element = Capability.ADMINISTRATOR)
             ensure(condition = isAdmin || event.createdBy == caller.id) { ServiceError.Forbidden() }
             ensureNotFinalized(event = event).bind()
@@ -244,7 +247,8 @@ class EventService(
     ): Either<ServiceError, EventResponse> =
         either {
             val caller = staffCaller(users = users, token = token).bind()
-            val event = ensureNotNull(value = events.findById(id = id)) { ServiceError.NotFound(message = "Event $id not found") }
+            val event =
+                ensureNotNull(value = events.findById(id = id)?.toDomain()) { ServiceError.NotFound(message = "Event $id not found") }
             val isAdmin = caller.capabilities.contains(element = Capability.ADMINISTRATOR)
             ensure(condition = isAdmin || event.createdBy == caller.id) { ServiceError.Forbidden() }
             ensureNotFinalized(event = event).bind()
@@ -286,7 +290,8 @@ class EventService(
         either {
             val caller = staffCaller(users = users, token = token).bind()
             ensure(condition = caller.capabilities.contains(element = Capability.ADMINISTRATOR)) { ServiceError.Forbidden() }
-            val event = ensureNotNull(value = events.findById(id = id)) { ServiceError.NotFound(message = "Event $id not found") }
+            val event =
+                ensureNotNull(value = events.findById(id = id)?.toDomain()) { ServiceError.NotFound(message = "Event $id not found") }
             events.setCalcPriority(id = id, priority = priority)
             toView(event = event.copy(calcPriority = priority)).toResponse()
         }
@@ -310,7 +315,8 @@ class EventService(
     ): Either<ServiceError, EventResponse> =
         either {
             val caller = staffCaller(users = users, token = token).bind()
-            val event = ensureNotNull(value = events.findById(id = id)) { ServiceError.NotFound(message = "Event $id not found") }
+            val event =
+                ensureNotNull(value = events.findById(id = id)?.toDomain()) { ServiceError.NotFound(message = "Event $id not found") }
             val isAdminOrOwner = caller.capabilities.any { it == Capability.ADMINISTRATOR || it == Capability.CLUB_OWNER }
             ensure(condition = isAdminOrOwner || event.createdBy == caller.id) { ServiceError.Forbidden() }
             ensure(condition = event.isActive) { ServiceError.Validation(message = "A deleted event cannot be finalized") }
@@ -376,7 +382,8 @@ class EventService(
     ): Either<ServiceError, EventResponse> =
         either {
             val caller = staffCaller(users = users, token = token).bind()
-            val event = ensureNotNull(value = events.findById(id = id)) { ServiceError.NotFound(message = "Event $id not found") }
+            val event =
+                ensureNotNull(value = events.findById(id = id)?.toDomain()) { ServiceError.NotFound(message = "Event $id not found") }
             val isAdminOrOwner = caller.capabilities.any { it == Capability.ADMINISTRATOR || it == Capability.CLUB_OWNER }
             ensure(condition = isAdminOrOwner || event.createdBy == caller.id) { ServiceError.Forbidden() }
             ensure(condition = event.isFinalized) { ServiceError.Validation(message = "Event is not finalized") }
@@ -416,7 +423,8 @@ class EventService(
         either {
             val caller = staffCaller(users = users, token = token).bind()
             ensure(condition = caller.capabilities.contains(element = Capability.ADMINISTRATOR)) { ServiceError.Forbidden() }
-            val event = ensureNotNull(value = events.findById(id = id)) { ServiceError.NotFound(message = "Event $id not found") }
+            val event =
+                ensureNotNull(value = events.findById(id = id)?.toDomain()) { ServiceError.NotFound(message = "Event $id not found") }
             ensure(condition = event.isFinalized) { ServiceError.Validation(message = "Event is not finalized") }
             ensure(condition = matches.listByEvent(eventId = id).any { it.ratedAt != null }) {
                 ServiceError.Validation(
@@ -450,7 +458,8 @@ class EventService(
     ): Either<ServiceError, Unit> =
         either {
             val caller = staffCaller(users = users, token = token).bind()
-            val event = ensureNotNull(value = events.findById(id = id)) { ServiceError.NotFound(message = "Event $id not found") }
+            val event =
+                ensureNotNull(value = events.findById(id = id)?.toDomain()) { ServiceError.NotFound(message = "Event $id not found") }
             val isAdmin = caller.capabilities.contains(element = Capability.ADMINISTRATOR)
             ensure(condition = isAdmin || event.createdBy == caller.id) { ServiceError.Forbidden() }
 
@@ -492,12 +501,14 @@ class EventService(
         either {
             val caller = staffCaller(users = users, token = token).bind()
             val event =
-                ensureNotNull(value = events.findById(id = eventId)) { ServiceError.NotFound(message = "Event $eventId not found") }
+                ensureNotNull(value = events.findById(id = eventId)?.toDomain()) {
+                    ServiceError.NotFound(message = "Event $eventId not found")
+                }
             ensureHostMayEnter(event = event, caller = caller).bind()
             ensureNotFinalized(event = event).bind()
             ensureKnownUsers(users = users, ids = listOf(element = userId)).bind()
             val updated =
-                ensureNotNull(value = events.addParticipant(eventId = eventId, userId = userId, approvedBy = caller.id)) {
+                ensureNotNull(value = events.addParticipant(eventId = eventId, userId = userId, approvedBy = caller.id)?.toDomain()) {
                     ServiceError.NotFound(message = "Event $eventId not found")
                 }
             toView(event = updated).toResponse()
@@ -511,7 +522,7 @@ class EventService(
         either {
             staffCaller(users = users, token = token).bind().id
             val updated =
-                ensureNotNull(value = events.removeParticipant(eventId = eventId, userId = userId)) {
+                ensureNotNull(value = events.removeParticipant(eventId = eventId, userId = userId)?.toDomain()) {
                     ServiceError.NotFound(message = "Event $eventId not found")
                 }
             toView(event = updated).toResponse()
@@ -536,7 +547,7 @@ class EventService(
                 ServiceError.Validation(message = "A deleted account cannot sign up for events")
             }
             val event =
-                ensureNotNull(value = events.findByPublicCode(code = code)) {
+                ensureNotNull(value = events.findByPublicCode(code = code)?.toDomain()) {
                     ServiceError.NotFound(message = "Event $code not found")
                 }
             events.selfSignup(eventId = event.id, userId = caller.id)
@@ -557,7 +568,9 @@ class EventService(
             val actor = staffCaller(users = users, token = token).bind().id
             val status = parseParticipantStatus(raw = statusRaw).bind()
             val event =
-                ensureNotNull(value = events.findById(id = eventId)) { ServiceError.NotFound(message = "Event $eventId not found") }
+                ensureNotNull(value = events.findById(id = eventId)?.toDomain()) {
+                    ServiceError.NotFound(message = "Event $eventId not found")
+                }
             ensureNotFinalized(event = event).bind()
             ensure(condition = status == EventParticipantStatus.APPROVED || status == EventParticipantStatus.HOLD) {
                 ServiceError.Validation(message = "A decision must be APPROVED or HOLD")
@@ -565,7 +578,9 @@ class EventService(
             val approver = if (status == EventParticipantStatus.APPROVED) actor else null
             val updated =
                 ensureNotNull(
-                    value = events.setParticipantStatus(eventId = eventId, userId = userId, status = status, approvedBy = approver),
+                    value =
+                        events.setParticipantStatus(eventId = eventId, userId = userId, status = status, approvedBy = approver)
+                            ?.toDomain(),
                 ) { ServiceError.NotFound(message = "Event $eventId not found") }
             toView(event = updated).toResponse()
         }
@@ -581,7 +596,7 @@ class EventService(
     ): Either<ServiceError, EventPublicResponse> =
         either {
             val event =
-                ensureNotNull(value = events.findByPublicCode(code = code)) {
+                ensureNotNull(value = events.findByPublicCode(code = code)?.toDomain()) {
                     ServiceError.NotFound(message = "Event $code not found")
                 }
             // The viewer's own standing (#201), so the page can show Request-to-join vs Pending/On hold.

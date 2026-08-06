@@ -21,6 +21,7 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
+import org.skopeo.mapper.entity.event.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.CreateEventCommand
 import org.skopeo.model.CreateFixtureCommand
@@ -176,7 +177,7 @@ class MatchRepositoryTest {
                     participantIds = members,
                     createdBy = creator,
                 ),
-        ).id
+        ).toDomain().id
 
     /** A COMPLETED doubles match (two a side) where [winners] beat [losers]. */
     private fun completedDoubles(
