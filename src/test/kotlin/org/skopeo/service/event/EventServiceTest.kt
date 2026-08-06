@@ -1393,7 +1393,7 @@ class EventServiceTest {
         winner.band shouldBe "4.0"
         winner.eventId shouldBe event.id
         winner.sourceId shouldBe event.id.toString()
-        winner.pointClass shouldBe org.skopeo.model.PointClass.ANNUAL_TOURNAMENT
+        winner.pointClass shouldBe org.skopeo.model.PointClass.ANNUAL_TOURNAMENT.name
         // Validity (#559) runs from the event end for the global tournament schedule's window (no per-event override).
         val tvDays = org.skopeo.service.settings.PointsConfigService().getTournament().value.validityDays.toLong()
         winner.validFrom shouldBe event.endDate.atStartOfDay()
@@ -1602,7 +1602,7 @@ class EventServiceTest {
         winner.points shouldBe BigDecimal("3.0000")
         winner.band shouldBe "4.0"
         winner.eventId shouldBe event.id
-        winner.pointClass shouldBe org.skopeo.model.PointClass.OPEN_PLAY
+        winner.pointClass shouldBe org.skopeo.model.PointClass.OPEN_PLAY.name
         awardRepo.listByUser(userId = p2.id).single().points shouldBe BigDecimal("0.0000")
         // Validity defaults to [event end, end + 2 months) when no window is configured (#525).
         winner.validFrom shouldBe event.endDate.atStartOfDay()
