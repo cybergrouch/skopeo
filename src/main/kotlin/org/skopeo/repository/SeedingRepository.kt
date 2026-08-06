@@ -18,6 +18,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.skopeo.common.error.ServiceError
 import org.skopeo.model.Seeding
 import org.skopeo.model.SeedingEntry
+import org.skopeo.persistence.SeedingEntity
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -73,7 +74,7 @@ class SeedingRepository {
                 // placeholder is re-pointed to the claimant (#496), so a stored user id always resolves.
                 val statusById = statusByUserId(userIds = rows.mapNotNull { it[SeedingEntriesTable.userId]?.value })
                 val entries = rows.map { it.toSeedingEntry(statusById = statusById) }
-                Seeding(id = id, listId = listId, generatedAt = row[SeedingsTable.generatedAt], entries = entries).right()
+                row.toSeedingEntity().toDomain(entries = entries).right()
             }
         }
 
@@ -118,4 +119,15 @@ class SeedingRepository {
             deleted = status?.deleted ?: false,
         )
     }
+
+    private fun ResultRow.toSeedingEntity(): SeedingEntity =
+        SeedingEntity(
+            id = this[SeedingsTable.id].value,
+            listId = this[SeedingsTable.listId].value,
+            generatedAt = this[SeedingsTable.generatedAt],
+            generatedBy = this[SeedingsTable.generatedBy]?.value,
+        )
+
+    private fun SeedingEntity.toDomain(entries: List<SeedingEntry>): Seeding =
+        Seeding(id = id, listId = listId, generatedAt = generatedAt, entries = entries)
 }
