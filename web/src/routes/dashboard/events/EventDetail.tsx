@@ -137,7 +137,15 @@ export function EventDetail({
     useState<(typeof MATCH_FORMATS)[number]>("SINGLES");
   const [matchType, setMatchType] =
     useState<(typeof MATCH_TYPES)[number]>("OPEN_PLAY");
+  // Fixture date defaults to the event's start date (#668). Seeded during render (React's "adjust state
+  // when a prop changes" pattern — no effect) once the event loads, and only while the field is still
+  // untouched, so a date the host already entered isn't clobbered. Reset to the start date after create.
   const [date, setDate] = useState("");
+  const [dateSeededFor, setDateSeededFor] = useState<string | undefined>(undefined);
+  if (event?.startDate && dateSeededFor !== event.startDate) {
+    setDateSeededFor(event.startDate);
+    if (date === "") setDate(event.startDate);
+  }
   // Tournament placement match (#525): mark a fixture as deciding a placement + which bracket.
   const [isPlacement, setIsPlacement] = useState(false);
   const [placementBracket, setPlacementBracket] = useState<
@@ -187,7 +195,8 @@ export function EventDetail({
         setTeam1b("");
         setTeam2a("");
         setTeam2b("");
-        setDate("");
+        // Reset to the event's start date (#668), not blank, so back-to-back fixtures keep the default.
+        setDate(event?.startDate ?? "");
         setIsPlacement(false);
         void queryClient.invalidateQueries({
           queryKey: getGetApiV1MatchesQueryKey(),
