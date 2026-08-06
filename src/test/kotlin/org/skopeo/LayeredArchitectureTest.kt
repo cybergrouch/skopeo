@@ -157,10 +157,12 @@ class LayeredArchitectureTest {
     fun `entity mappers do not depend on dto`() {
         // `mapper.entity` owns the entity↔domain translation (persistence ⟷ model) and must never touch
         // DTOs — the wire contract is `mapper.dto`'s concern. Together the two rules keep the mapper sets
-        // cleanly separated even though both live under `..mapper..`.
+        // cleanly separated even though both live under `..mapper..`. `allowEmptyShould` because the
+        // package is intentionally empty until the #633 flip PRs populate it (this rule guards it early).
         noClasses()
             .that().resideInAPackage("org.skopeo.mapper.entity..")
             .should().dependOnClassesThat().resideInAPackage("org.skopeo.dto..")
+            .allowEmptyShould(true)
             .check(classes)
     }
 
