@@ -50,7 +50,7 @@ class LayeredArchitectureTest {
         noClasses()
             .that().resideInAPackage("..repository..")
             .should().dependOnClassesThat()
-            .resideInAnyPackage("..routes..", "..service..", "..dto..", "..mapper..")
+            .resideInAnyPackage("..routes..", "..service..", "org.skopeo.dto..", "..mapper..")
             .check(classes)
     }
 
@@ -63,7 +63,7 @@ class LayeredArchitectureTest {
                 "..routes..",
                 "..service..",
                 "..repository..",
-                "..dto..",
+                "org.skopeo.dto..",
                 "..mapper..",
                 "org.skopeo.persistence..",
             )
@@ -72,9 +72,9 @@ class LayeredArchitectureTest {
 
     @Test
     fun `persistence entities are a leaf and depend on no other app layer including model`() {
-        // The entity/data-model layer (#633): dumb raw-row types owned by the repository, distinct from
-        // the domain model. Kept a leaf like `model`/`common` — the repository maps rows to entities and
-        // converts entity→domain, so nothing flows the other way. May depend only on `common`.
+        // The entity/data-model layer (#633): dumb raw-row types the repository returns. Kept a leaf like
+        // `model`/`common` — repositories map rows to entities; the `mapper.entity` package converts
+        // entity→domain, so nothing flows the other way. May depend only on `common`.
         noClasses()
             .that().resideInAPackage("org.skopeo.persistence..")
             .should().dependOnClassesThat()
@@ -82,7 +82,7 @@ class LayeredArchitectureTest {
                 "..routes..",
                 "..service..",
                 "..repository..",
-                "..dto..",
+                "org.skopeo.dto..",
                 "..mapper..",
                 "org.skopeo.model..",
             )
@@ -102,7 +102,7 @@ class LayeredArchitectureTest {
                 "..routes..",
                 "..service..",
                 "..repository..",
-                "..dto..",
+                "org.skopeo.dto..",
                 "..mapper..",
                 "org.skopeo.model..",
                 "org.skopeo.persistence..",
@@ -113,7 +113,7 @@ class LayeredArchitectureTest {
     @Test
     fun `dto does not depend on routes or repository`() {
         noClasses()
-            .that().resideInAPackage("..dto..")
+            .that().resideInAPackage("org.skopeo.dto..")
             .should().dependOnClassesThat().resideInAnyPackage("..routes..", "..repository..")
             .check(classes)
     }
@@ -121,7 +121,7 @@ class LayeredArchitectureTest {
     @Test
     fun `dto does not depend on service`() {
         noClasses()
-            .that().resideInAPackage("..dto..")
+            .that().resideInAPackage("org.skopeo.dto..")
             .should().dependOnClassesThat().resideInAnyPackage("..service..")
             .check(classes)
     }
@@ -129,7 +129,7 @@ class LayeredArchitectureTest {
     @Test
     fun `dto is a pure record and does not depend on model, save the wire-contract value types`() {
         noClasses()
-            .that().resideInAPackage("..dto..")
+            .that().resideInAPackage("org.skopeo.dto..")
             .and().haveNameNotMatching(wireContractDtos)
             .should().dependOnClassesThat().resideInAPackage("org.skopeo.model..")
             .check(classes)
@@ -140,6 +140,27 @@ class LayeredArchitectureTest {
         noClasses()
             .that().resideInAPackage("..mapper..")
             .should().dependOnClassesThat().resideInAnyPackage("..routes..", "..repository..", "..service..")
+            .check(classes)
+    }
+
+    @Test
+    fun `dto mappers do not depend on persistence`() {
+        // Two distinct mapper packages, both consumed only by the service layer: `mapper.dto` owns the
+        // dto↔model translation and must never see persistence entities — that is `mapper.entity`'s job.
+        noClasses()
+            .that().resideInAPackage("org.skopeo.mapper.dto..")
+            .should().dependOnClassesThat().resideInAPackage("org.skopeo.persistence..")
+            .check(classes)
+    }
+
+    @Test
+    fun `entity mappers do not depend on dto`() {
+        // `mapper.entity` owns the entity↔domain translation (persistence ⟷ model) and must never touch
+        // DTOs — the wire contract is `mapper.dto`'s concern. Together the two rules keep the mapper sets
+        // cleanly separated even though both live under `..mapper..`.
+        noClasses()
+            .that().resideInAPackage("org.skopeo.mapper.entity..")
+            .should().dependOnClassesThat().resideInAPackage("org.skopeo.dto..")
             .check(classes)
     }
 

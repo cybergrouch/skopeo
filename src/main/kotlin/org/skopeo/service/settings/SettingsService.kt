@@ -13,7 +13,7 @@ import org.skopeo.common.security.Capability
 import org.skopeo.dto.settings.AwardRankingPointsResponse
 import org.skopeo.dto.settings.FacebookLoginResponse
 import org.skopeo.dto.settings.StandingsSourceResponse
-import org.skopeo.mapper.settings.toResponse
+import org.skopeo.mapper.dto.settings.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite

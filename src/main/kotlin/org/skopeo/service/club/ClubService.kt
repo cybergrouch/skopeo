@@ -13,7 +13,7 @@ import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.dto.club.ClubPublicResponse
 import org.skopeo.dto.club.ClubResponse
-import org.skopeo.mapper.club.toResponse
+import org.skopeo.mapper.dto.club.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite

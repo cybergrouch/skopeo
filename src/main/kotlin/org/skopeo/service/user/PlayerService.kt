@@ -20,7 +20,7 @@ import org.skopeo.dto.user.PlayerStandingResponse
 import org.skopeo.dto.user.PublicPlayerResponse
 import org.skopeo.dto.user.PublicRatingDto
 import org.skopeo.dto.user.ResultsBucket
-import org.skopeo.mapper.rating.toResponse
+import org.skopeo.mapper.dto.rating.toResponse
 import org.skopeo.model.ContactType
 import org.skopeo.model.Match
 import org.skopeo.model.TeamType

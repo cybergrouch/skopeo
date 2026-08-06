@@ -10,7 +10,7 @@ import arrow.core.right
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.dto.standings.StandingsCalculationResponse
-import org.skopeo.mapper.standings.toResponse
+import org.skopeo.mapper.dto.standings.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite

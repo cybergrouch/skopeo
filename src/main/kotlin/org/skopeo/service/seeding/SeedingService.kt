@@ -7,7 +7,7 @@ import arrow.core.Either
 import arrow.core.raise.either
 import org.skopeo.common.error.ServiceError
 import org.skopeo.dto.seeding.SeedingResponse
-import org.skopeo.mapper.seeding.toResponse
+import org.skopeo.mapper.dto.seeding.toResponse
 import org.skopeo.model.SeedingEntry
 import org.skopeo.model.User
 import org.skopeo.model.ageInYears

@@ -11,8 +11,8 @@ import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.dto.seeding.PlayerListResponse
 import org.skopeo.dto.seeding.PlayerListSummaryResponse
-import org.skopeo.mapper.seeding.toSummaryResponse
-import org.skopeo.mapper.user.toSummary
+import org.skopeo.mapper.dto.seeding.toSummaryResponse
+import org.skopeo.mapper.dto.user.toSummary
 import org.skopeo.model.PlayerList
 import org.skopeo.model.canSeeRawRatingOrFalse
 import org.skopeo.repository.PlayerListRepository
