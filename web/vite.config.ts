@@ -71,6 +71,11 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     css: false,
+    // Heavy component tests (many rows + userEvent) can exceed the 5s default under full-suite
+    // parallel load on a saturated CI runner, surfacing as intermittent timeouts. Give every test
+    // headroom so load spikes don't fail otherwise-passing tests. (Root-cause speedups still apply
+    // per-test, e.g. userEvent.setup({ delay: null }).)
+    testTimeout: 15000,
     // JUnit XML feeds the drillable "Web Test Report" check in CI (dorny);
     // the default reporter keeps console output readable locally.
     reporters: ['default', 'junit'],
