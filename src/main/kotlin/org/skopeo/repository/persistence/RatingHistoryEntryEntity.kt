@@ -9,7 +9,7 @@ import java.util.UUID
 
 /**
  * Raw persistence view of a `user_rating_history` row (#633): the dumb, as-stored data with **no
- * behaviour**. Mirrors the domain `org.skopeo.model.RatingHistoryEntry` field-for-field, except
+ * behaviour**. Mirrors the domain `org.skopeo.domain.model.RatingHistoryEntry` field-for-field, except
  * [setBreakdown] is held as the RAW stored JSON `String` (the per-set breakdown, #110) — the decode into
  * the domain `List<SetCalculationBreakdown>` happens at the `toDomain` boundary in the repository, since
  * `persistence` is a leaf that must not import `model`. Kept **model-free** (only stdlib types).

@@ -13,7 +13,7 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
-import org.skopeo.service.user.PlayerService
+import org.skopeo.domain.service.user.PlayerService
 
 // Page size used when a match-history request omits `limit` (#284) — the full-history page default.
 private const val DEFAULT_MATCH_HISTORY_PAGE_SIZE = 20

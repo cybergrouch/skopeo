@@ -27,6 +27,13 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.security.Capability
+import org.skopeo.domain.mapper.entity.user.toDomain
+import org.skopeo.domain.model.AuthProvider
+import org.skopeo.domain.model.NameType
+import org.skopeo.domain.model.ProvisionUserCommand
+import org.skopeo.domain.model.User
+import org.skopeo.domain.model.UserIdentity
+import org.skopeo.domain.model.UserName
 import org.skopeo.dto.client.ApiClientResponse
 import org.skopeo.dto.client.ClientEffectiveCapabilitiesResponse
 import org.skopeo.dto.client.ClientIdentityResponse
@@ -35,13 +42,6 @@ import org.skopeo.dto.client.IssueApiKeyRequest
 import org.skopeo.dto.client.IssuedApiKeyResponse
 import org.skopeo.dto.client.PartnerPlayerResponse
 import org.skopeo.dto.client.SetRateLimitRequest
-import org.skopeo.mapper.entity.user.toDomain
-import org.skopeo.model.AuthProvider
-import org.skopeo.model.NameType
-import org.skopeo.model.ProvisionUserCommand
-import org.skopeo.model.User
-import org.skopeo.model.UserIdentity
-import org.skopeo.model.UserName
 import org.skopeo.module
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase

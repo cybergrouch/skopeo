@@ -14,8 +14,8 @@ import io.ktor.server.routing.patch
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
+import org.skopeo.domain.service.audit.AuditService
 import org.skopeo.dto.audit.AuditCommentRequest
-import org.skopeo.service.audit.AuditService
 
 private const val DEFAULT_AUDIT_PAGE_SIZE = 5
 

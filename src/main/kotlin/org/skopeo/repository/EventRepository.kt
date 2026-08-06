@@ -15,9 +15,9 @@ import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
-import org.skopeo.model.CreateEventCommand
-import org.skopeo.model.EventParticipantEntry
-import org.skopeo.model.EventParticipantStatus
+import org.skopeo.domain.model.CreateEventCommand
+import org.skopeo.domain.model.EventParticipantEntry
+import org.skopeo.domain.model.EventParticipantStatus
 import org.skopeo.repository.persistence.EventAggregateEntity
 import org.skopeo.repository.persistence.EventEntity
 import org.skopeo.repository.persistence.MyEventEntity

@@ -18,10 +18,10 @@ import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
-import org.skopeo.model.MatchRatingWrite
-import org.skopeo.model.PreEventRating
-import org.skopeo.model.RatingHistoryWrite
-import org.skopeo.model.SetCalculationBreakdown
+import org.skopeo.domain.model.MatchRatingWrite
+import org.skopeo.domain.model.PreEventRating
+import org.skopeo.domain.model.RatingHistoryWrite
+import org.skopeo.domain.model.SetCalculationBreakdown
 import org.skopeo.repository.persistence.RatingHistoryEntryEntity
 import org.skopeo.repository.persistence.UserRatingEntity
 import java.math.BigDecimal

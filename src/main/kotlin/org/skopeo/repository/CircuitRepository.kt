@@ -11,7 +11,7 @@ import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
-import org.skopeo.model.CreateCircuitCommand
+import org.skopeo.domain.model.CreateCircuitCommand
 import org.skopeo.repository.persistence.CircuitEntity
 import java.util.UUID
 

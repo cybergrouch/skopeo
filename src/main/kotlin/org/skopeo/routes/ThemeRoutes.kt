@@ -14,9 +14,9 @@ import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
+import org.skopeo.domain.service.settings.ThemeService
 import org.skopeo.dto.settings.SetLocalThemeRequest
 import org.skopeo.dto.settings.SetThemeRequest
-import org.skopeo.service.settings.ThemeService
 
 /**
  * The global UI theme setting (#378). The GET is public (viewable anonymously, so the web UI can

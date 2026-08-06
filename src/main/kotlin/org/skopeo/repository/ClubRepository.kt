@@ -15,7 +15,7 @@ import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
-import org.skopeo.model.CreateClubCommand
+import org.skopeo.domain.model.CreateClubCommand
 import org.skopeo.repository.persistence.ClubAggregateEntity
 import org.skopeo.repository.persistence.ClubEntity
 import java.util.UUID

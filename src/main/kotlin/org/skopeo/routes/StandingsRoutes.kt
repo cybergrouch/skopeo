@@ -11,7 +11,7 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
-import org.skopeo.service.standings.StandingsService
+import org.skopeo.domain.service.standings.StandingsService
 
 /**
  * Per-band "Ranking Race" standings (issue #113), served paged from a persisted snapshot (#220) and

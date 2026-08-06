@@ -9,7 +9,7 @@ import java.util.UUID
 /**
  * Raw persistence view of a `duplicate_candidates` row (#633): the dumb, as-stored data with **no
  * behaviour**. A flat aggregate — no child rows and no derived fields — so it mirrors the domain
- * `org.skopeo.model.DuplicateCandidate` field-for-field, except the two enums ([signal], [status]) are
+ * `org.skopeo.domain.model.DuplicateCandidate` field-for-field, except the two enums ([signal], [status]) are
  * held as their **raw stored `String`** and parsed at the boundary. Kept **model-free** (only stdlib
  * types) so `persistence` stays a leaf package — the repository maps a DB row to this, then converts it to
  * the domain `DuplicateCandidate` at a single boundary (`DuplicateCandidateEntity.toDomain`).

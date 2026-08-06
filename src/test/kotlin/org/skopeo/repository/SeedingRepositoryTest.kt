@@ -15,15 +15,15 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
-import org.skopeo.mapper.entity.seeding.toDomain
-import org.skopeo.mapper.entity.user.toDomain
-import org.skopeo.model.AuthProvider
-import org.skopeo.model.NameType
-import org.skopeo.model.ProvisionUserCommand
-import org.skopeo.model.SeedingEntry
-import org.skopeo.model.User
-import org.skopeo.model.UserIdentity
-import org.skopeo.model.UserName
+import org.skopeo.domain.mapper.entity.seeding.toDomain
+import org.skopeo.domain.mapper.entity.user.toDomain
+import org.skopeo.domain.model.AuthProvider
+import org.skopeo.domain.model.NameType
+import org.skopeo.domain.model.ProvisionUserCommand
+import org.skopeo.domain.model.SeedingEntry
+import org.skopeo.domain.model.User
+import org.skopeo.domain.model.UserIdentity
+import org.skopeo.domain.model.UserName
 import org.skopeo.testsupport.PostgresTestDatabase
 
 class SeedingRepositoryTest {

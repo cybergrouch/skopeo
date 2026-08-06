@@ -12,10 +12,10 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.security.Capability
-import org.skopeo.mapper.entity.client.toDomain
-import org.skopeo.model.ApiClientStatus
-import org.skopeo.model.ApiKeyStatus
-import org.skopeo.model.InsertApiKeyCommand
+import org.skopeo.domain.mapper.entity.client.toDomain
+import org.skopeo.domain.model.ApiClientStatus
+import org.skopeo.domain.model.ApiKeyStatus
+import org.skopeo.domain.model.InsertApiKeyCommand
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.time.LocalDateTime
 import java.util.UUID

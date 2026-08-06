@@ -16,7 +16,7 @@ import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.common.contract.OpenPlayPointsConfig
 import org.skopeo.common.contract.TournamentPointsConfig
-import org.skopeo.service.settings.PointsConfigService
+import org.skopeo.domain.service.settings.PointsConfigService
 
 /**
  * The global, admin-configurable points schedules (#552/#553): the open-play margin-bracket table and

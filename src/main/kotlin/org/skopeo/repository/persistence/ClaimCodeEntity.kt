@@ -11,7 +11,7 @@ import java.util.UUID
  * behaviour**. A flat aggregate — no child rows and no derived fields. Kept **model-free** (only stdlib
  * types) so `persistence` stays a leaf package: enum-valued columns are stored RAW as their persisted
  * `String` ([status]) and parsed into the domain enum only at the boundary (`ClaimCodeEntity.toDomain`),
- * which produces the domain `org.skopeo.model.ClaimCode`.
+ * which produces the domain `org.skopeo.domain.model.ClaimCode`.
  */
 data class ClaimCodeEntity(
     val id: UUID,

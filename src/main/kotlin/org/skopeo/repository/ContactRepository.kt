@@ -15,10 +15,10 @@ import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.common.error.ServiceError
-import org.skopeo.model.ContactSource
-import org.skopeo.model.ContactType
-import org.skopeo.model.VerificationMethod
-import org.skopeo.model.VerificationStatus
+import org.skopeo.domain.model.ContactSource
+import org.skopeo.domain.model.ContactType
+import org.skopeo.domain.model.VerificationMethod
+import org.skopeo.domain.model.VerificationStatus
 import org.skopeo.repository.persistence.ContactEntity
 import java.time.LocalDateTime
 import java.util.UUID

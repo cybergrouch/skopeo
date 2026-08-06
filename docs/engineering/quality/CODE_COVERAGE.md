@@ -436,10 +436,10 @@ Classes         | 2      | 18      | 20     | 90%
 
 Shows coverage by package (excluded packages don't appear in the report):
 ```
-org.skopeo.service     measured  🟢
+org.skopeo.domain.service     measured  🟢
 org.skopeo.routes      N/A  (excluded)
 org.skopeo.config      N/A  (excluded)
-org.skopeo.model       N/A  (excluded)
+org.skopeo.domain.model       N/A  (excluded)
 ```
 
 ### Class View

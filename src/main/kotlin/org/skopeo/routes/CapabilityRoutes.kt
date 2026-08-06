@@ -17,8 +17,8 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
+import org.skopeo.domain.service.capability.CapabilityService
 import org.skopeo.dto.capability.CapabilityGrantRequest
-import org.skopeo.service.capability.CapabilityService
 
 /**
  * Capability (role) management, nested under the user. The entire surface is

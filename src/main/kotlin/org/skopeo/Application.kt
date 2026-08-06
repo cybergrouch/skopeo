@@ -31,6 +31,9 @@ import io.micrometer.prometheus.PrometheusConfig
 import io.micrometer.prometheus.PrometheusMeterRegistry
 import mu.KotlinLogging
 import org.skopeo.config.DatabaseConfig
+import org.skopeo.domain.service.capability.CapabilityService
+import org.skopeo.domain.service.client.ApiClientService
+import org.skopeo.domain.service.user.UserService
 import org.skopeo.routes.configureApiClientRoutes
 import org.skopeo.routes.configureAuditRoutes
 import org.skopeo.routes.configureCapabilityRoutes
@@ -58,9 +61,6 @@ import org.skopeo.routes.configureStandingsRoutes
 import org.skopeo.routes.configureStandingsSourceRoutes
 import org.skopeo.routes.configureThemeRoutes
 import org.skopeo.routes.configureUserRoutes
-import org.skopeo.service.capability.CapabilityService
-import org.skopeo.service.client.ApiClientService
-import org.skopeo.service.user.UserService
 import org.slf4j.event.Level
 import kotlin.time.Duration.Companion.seconds
 

@@ -1,0 +1,479 @@
+// SPDX-FileCopyrightText: 2026 Lange Pantoja
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+package org.skopeo.domain.service.rating
+
+import arrow.core.Either
+import arrow.core.left
+import arrow.core.raise.either
+import arrow.core.raise.ensureNotNull
+import arrow.core.right
+import org.jetbrains.exposed.sql.transactions.transaction
+import org.skopeo.common.error.ServiceError
+import org.skopeo.common.security.Capability
+import org.skopeo.domain.mapper.dto.rating.toResponse
+import org.skopeo.domain.mapper.entity.match.toDomain
+import org.skopeo.domain.mapper.entity.user.toDomain
+import org.skopeo.domain.model.AuditAction
+import org.skopeo.domain.model.AuditEntityType
+import org.skopeo.domain.model.AuditWrite
+import org.skopeo.domain.model.CalculationBreakdown
+import org.skopeo.domain.model.CalculationBreakdownSnapshot
+import org.skopeo.domain.model.Match
+import org.skopeo.domain.model.MatchCalculation
+import org.skopeo.domain.model.MatchRatingWrite
+import org.skopeo.domain.model.MatchScore
+import org.skopeo.domain.model.PlayerChange
+import org.skopeo.domain.model.PlayerProfile
+import org.skopeo.domain.model.Rating
+import org.skopeo.domain.model.RatingCalculationOptions
+import org.skopeo.domain.model.RatingCalculationOutcome
+import org.skopeo.domain.model.RatingHistoryWrite
+import org.skopeo.domain.model.SetCalculationBreakdown
+import org.skopeo.domain.model.SetScore
+import org.skopeo.domain.model.Team
+import org.skopeo.domain.model.TeamType
+import org.skopeo.domain.model.TiebreakScore
+import org.skopeo.domain.service.audit.AuditService
+import org.skopeo.domain.service.calculator.AuditEntry
+import org.skopeo.domain.service.calculator.RankingCalculator
+import org.skopeo.domain.service.calculator.impl.v2.PerformanceBasedRankingCalculatorImpl
+import org.skopeo.domain.service.user.VerifiedFirebaseToken
+import org.skopeo.dto.RankingCalculationRequest
+import org.skopeo.dto.rating.CalculationResponse
+import org.skopeo.repository.MatchRepository
+import org.skopeo.repository.UserRepository
+import java.math.BigDecimal
+import java.time.LocalDateTime
+import java.util.UUID
+
+/**
+ * The rating calculation trigger (ADMINISTRATOR only). It processes the matches pending
+ * calculation oldest→newest, carrying ratings forward through an in-memory snapshot so the
+ * chain is correct, reusing the existing [RankingCalculator]. Dry-run (the default) returns a
+ * full preview with no writes; an explicit commit persists ratings, history, and `rated_at` in
+ * one transaction.
+ *
+ * Expected failures are returned as an [Either] left ([ServiceError], issue #115) rather than thrown.
+ */
+class RatingCalculationService(
+    private val matches: MatchRepository = MatchRepository(),
+    private val ratings: RatingAssembler = RatingAssembler(),
+    private val users: UserRepository = UserRepository(),
+    private val calculator: RankingCalculator = PerformanceBasedRankingCalculatorImpl(),
+    private val audit: AuditService = AuditService(),
+) {
+    fun calculate(
+        token: VerifiedFirebaseToken,
+        dryRun: Boolean,
+        eventIds: List<String>? = null,
+    ): Either<ServiceError, CalculationResponse> =
+        either {
+            val adminId = requireAdmin(token = token).bind()
+            val snapshot = mutableMapOf<UUID, BigDecimal>()
+            // The full pending timeline in global processing order (#335). A selection scopes the run to
+            // a leading PREFIX of it (#479) — ratings carry forward in date order, so an earlier pending
+            // match may never be skipped. selectPrefix enforces that and returns the scoped, ordered list.
+            val pending = matches.listPendingCalculation().map { it.toDomain() }
+            val scoped = selectPrefix(pending = pending, eventIds = eventIds).bind()
+            val processed = scoped.map { processMatch(match = it, snapshot = snapshot).bind() }
+
+            if (!dryRun) {
+                commit(processed = processed, ratedBy = adminId)
+            } else if (processed.isNotEmpty()) {
+                // One compact Activity Log summary per preview (#333): the per-match order trace is
+                // reserved for the committed run, so repeated dry-runs don't flood the log.
+                audit.record(
+                    write =
+                        AuditWrite(
+                            actorUserId = adminId,
+                            action = AuditAction.RATING_CALCULATION_PREVIEWED,
+                            entityType = AuditEntityType.CALCULATION,
+                            entityId = null,
+                            summary = "Previewed rating calculation for ${processed.size} pending matches",
+                            details = calculationDetails(processed = processed),
+                        ),
+                )
+            }
+            RatingCalculationOutcome(dryRun = dryRun, matches = processed).toResponse()
+        }
+
+    /**
+     * Scope the pending timeline to a selection of events (#479), preserving global oldest→newest
+     * consistency. [pending] is the full timeline in processing order.
+     *
+     * - Null/empty [eventIds] → the whole timeline, unchanged (all pending, as before).
+     * - Otherwise, keep the matches whose event is selected. Ratings carry forward in date order, so
+     *   the selection MUST be a contiguous **prefix**: no pending match may be excluded while a LATER
+     *   selected match is included. Concretely, every pending match up to the last selected one must
+     *   also be selected (an eventless "Open" match can never be selected via event ids, so an earlier
+     *   Open match breaks the prefix). A skip is rejected as [ServiceError.Validation], naming the
+     *   earliest excluded match. The same guard runs for preview and commit alike.
+     */
+    internal fun selectPrefix(
+        pending: List<Match>,
+        eventIds: List<String>?,
+    ): Either<ServiceError, List<Match>> {
+        if (eventIds.isNullOrEmpty()) {
+            return pending.right()
+        }
+        val selected = eventIds.toSet()
+
+        fun isSelected(match: Match): Boolean = match.eventId?.toString() in selected
+
+        // The scoped run is the leading prefix up to the last selected match; nothing selected → empty (no-op).
+        val lastSelectedIndex = pending.indexOfLast { isSelected(match = it) }
+        val prefix = if (lastSelectedIndex < 0) emptyList() else pending.take(n = lastSelectedIndex + 1)
+
+        // Every match in that prefix must be selected; a gap means an earlier pending match would be left
+        // unrated while a later selected one is committed — reject, naming the earliest excluded match.
+        val excluded = prefix.firstOrNull { !isSelected(match = it) }
+        return if (excluded == null) {
+            prefix.right()
+        } else {
+            val label = excluded.eventId?.let { "event $it" } ?: "Open (eventless) match ${excluded.id}"
+            ServiceError.Validation(
+                message =
+                    "Selection must be a contiguous prefix of the pending timeline: " +
+                        "$label (match ${excluded.id}, dated ${excluded.matchDate}) is older than a " +
+                        "selected event but was not included.",
+            ).left()
+        }
+    }
+
+    /** Shared summary details for a preview/commit audit entry: match count + distinct players affected. */
+    private fun calculationDetails(processed: List<MatchCalculation>): Map<String, String?> =
+        mapOf(
+            "matches" to processed.size.toString(),
+            "players" to processed.flatMap { calc -> calc.changes.map { it.userId } }.distinct().size.toString(),
+        )
+
+    private fun commit(
+        processed: List<MatchCalculation>,
+        ratedBy: UUID,
+    ) {
+        val now = LocalDateTime.now()
+        // One identity per calc run, shared by every history row it writes (#481) — mirrors how `now`
+        // is captured once per run. A deterministic key to order/group this batch's rows.
+        val ratingRunId = UUID.randomUUID()
+        transaction {
+            processed.forEach { calc ->
+                calc.changes.forEach { change ->
+                    ratings.applyMatchRating(
+                        write =
+                            MatchRatingWrite(
+                                userId = change.userId,
+                                newRating = change.newRating,
+                                newLevel = change.newLevel,
+                                matchDate = calc.matchDate,
+                                ratedAt = now,
+                                // Band-jump bookkeeping (matches-since-reset); now vestigial for confidence (#459).
+                                bandJumped = change.levelChanged,
+                            ),
+                    )
+                    ratings.appendHistory(
+                        write =
+                            RatingHistoryWrite(
+                                userId = change.userId,
+                                matchId = calc.matchId,
+                                previousRating = change.previousRating,
+                                newRating = change.newRating,
+                                ratingChange = change.change,
+                                percentChange = change.percentChange,
+                                previousLevel = change.previousLevel,
+                                newLevel = change.newLevel,
+                                levelChanged = change.levelChanged,
+                                breakdown = change.breakdown.toSnapshot(),
+                                completedAt = calc.completedAt,
+                                calculatedAt = now,
+                                ratingRunId = ratingRunId,
+                            ),
+                    )
+                }
+                matches.markRated(matchId = calc.matchId, ratedAt = now, ratedBy = ratedBy)
+            }
+        }
+        if (processed.isNotEmpty()) {
+            // The RATING standings are computed live from current ratings (#146), so a committed calculation
+            // needs no snapshot rebuild — the moved leaderboard is reflected on the next read.
+            recordCommitTrace(processed = processed, ratedBy = ratedBy)
+        }
+    }
+
+    /**
+     * Activity Log trace for a committed calculation (#333): one entry per match in processing order
+     * (the `position` makes the ORDER traceable regardless of identical timestamps), then a single
+     * summary entry. Recorded after the commit transaction so the log reflects a persisted run.
+     */
+    private fun recordCommitTrace(
+        processed: List<MatchCalculation>,
+        ratedBy: UUID,
+    ) {
+        processed.forEachIndexed { index, calc ->
+            audit.record(
+                write =
+                    AuditWrite(
+                        actorUserId = ratedBy,
+                        action = AuditAction.RATING_CALCULATION_MATCH_RATED,
+                        entityType = AuditEntityType.MATCH,
+                        entityId = calc.matchId,
+                        summary = "Rated match ${index + 1} of ${processed.size} in the calculation",
+                        details =
+                            mapOf(
+                                "position" to (index + 1).toString(),
+                                "totalMatches" to processed.size.toString(),
+                                "matchDate" to calc.matchDate.toString(),
+                                "playersRated" to calc.changes.size.toString(),
+                            ),
+                    ),
+            )
+        }
+        audit.record(
+            write =
+                AuditWrite(
+                    actorUserId = ratedBy,
+                    action = AuditAction.RATING_CALCULATION_COMMITTED,
+                    entityType = AuditEntityType.CALCULATION,
+                    entityId = null,
+                    summary = "Committed rating calculation for ${processed.size} matches",
+                    details = calculationDetails(processed = processed),
+                ),
+        )
+    }
+
+    private fun processMatch(
+        match: Match,
+        snapshot: MutableMap<UUID, BigDecimal>,
+    ): Either<ServiceError, MatchCalculation> =
+        either {
+            // Singles (1 player/team) and doubles (2 players/team) both flow through here; the calculator
+            // picks the format-specific handler, and the audit/response are keyed per player either way.
+            val players = match.team1.userIds + match.team2.userIds
+            val ratingsByUser = players.map { it to currentRating(userId = it, snapshot = snapshot).bind() }.toMap()
+
+            val request = buildRequest(match = match, ratingsByUser = ratingsByUser)
+            val result = calculator.calculate(request = request)
+            val breakdowns = breakdownsByPlayer(audit = result.audit)
+
+            val changes = players.map { playerChange(userId = it, response = result.response, breakdowns = breakdowns).bind() }
+            changes.forEach { snapshot[it.userId] = it.newRating }
+            MatchCalculation(matchId = match.id, matchDate = match.matchDate, completedAt = match.completedAt, changes = changes)
+        }
+
+    /**
+     * Pull the per-player calculator derivatives out of the audit trail, keyed by player id. v1 emits
+     * one net entry per player (no `setIndex`); v2 emits one entry per set per player (with `setIndex`,
+     * #110). Per-set entries are grouped into an ordered [SetCalculationBreakdown] list with the net
+     * fields left null; net entries keep the existing net breakdown with no sets.
+     */
+    internal fun breakdownsByPlayer(audit: List<AuditEntry>): Map<String, CalculationBreakdown> {
+        // Every breakdown entry (v1 net or v2 per-set) carries a "dominance" key alongside "playerId";
+        // match-level audit entries carry neither. Filtering on the one key avoids a permanently dead
+        // "playerId without dominance" branch (the two keys are always emitted together).
+        val relevant = audit.filter { it.context.containsKey(key = "dominance") }
+        val (perSet, net) = relevant.partition { it.context.containsKey(key = "setIndex") }
+
+        val perSetByPlayer =
+            perSet
+                .groupBy { it.context.getValue(key = "playerId") as String }
+                .mapValues { (_, entries) ->
+                    val steps =
+                        entries
+                            .sortedBy { it.context.factor(key = "setIndex").toInt() }
+                            .map { it.context.toSetBreakdown() }
+                    CalculationBreakdown(
+                        dominance = null,
+                        scale = null,
+                        ratingGap = null,
+                        normalizedGap = null,
+                        competitiveThresholdPct = null,
+                        isUpset = null,
+                        upsetMultiplier = null,
+                        kFactor = null,
+                        sets = steps,
+                    )
+                }
+
+        val netByPlayer =
+            net.associate { entry ->
+                val ctx = entry.context
+                (ctx.getValue(key = "playerId") as String) to
+                    CalculationBreakdown(
+                        dominance = ctx.factor(key = "dominance"),
+                        scale = ctx.factor(key = "scale"),
+                        ratingGap = ctx.factor(key = "ratingGap"),
+                        normalizedGap = ctx.factor(key = "normalizedGap"),
+                        competitiveThresholdPct = ctx.factor(key = "competitiveThresholdPct"),
+                        isUpset = ctx.factor(key = "isUpset").toBoolean(),
+                        upsetMultiplier = ctx.factor(key = "upsetMultiplier"),
+                        kFactor = ctx.factor(key = "kFactor"),
+                    )
+            }
+
+        return netByPlayer + perSetByPlayer
+    }
+
+    private fun currentRating(
+        userId: UUID,
+        snapshot: MutableMap<UUID, BigDecimal>,
+    ): Either<ServiceError, BigDecimal> =
+        either {
+            snapshot.getOrElse(key = userId) {
+                val rating = ratings.findCurrentRating(userId = userId)
+                ensureNotNull(value = rating) {
+                    ServiceError.Validation(message = "User $userId has no rating (pending assessment)")
+                }
+                rating.currentRating.also { snapshot[userId] = it }
+            }
+        }
+
+    private fun playerChange(
+        userId: UUID,
+        response: org.skopeo.dto.RankingCalculationResponse,
+        breakdowns: Map<String, CalculationBreakdown>,
+    ): Either<ServiceError, PlayerChange> =
+        either {
+            val rc = response.ratingChanges[userId.toString()]
+            ensureNotNull(value = rc) {
+                ServiceError.Validation(message = "calculator returned no change for player $userId")
+            }
+            val breakdown = breakdowns[userId.toString()]
+            ensureNotNull(value = breakdown) {
+                ServiceError.Validation(message = "calculator returned no breakdown for player $userId")
+            }
+            PlayerChange(
+                userId = userId,
+                previousRating = BigDecimal(rc.previousRating.value),
+                newRating = BigDecimal(rc.newRating.value),
+                change = BigDecimal(rc.change),
+                percentChange = BigDecimal(rc.percentChange.removeSuffix(suffix = "%")),
+                previousLevel = rc.previousRating.publishedLevel.value,
+                newLevel = rc.newRating.publishedLevel.value,
+                levelChanged = rc.levelChanged,
+                breakdown = breakdown,
+            )
+        }
+
+    private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
+        return if (caller == null || !caller.capabilities.contains(element = Capability.ADMINISTRATOR)) {
+            ServiceError.Forbidden().left()
+        } else {
+            caller.id.right()
+        }
+    }
+}
+
+/** Read an audit-context value (always a precise string for the adjustment-factor entries). */
+private fun Map<String, Any>.factor(key: String): String = this.getValue(key = key) as String
+
+/** Map a v2 per-set audit-context map (#110) into a [SetCalculationBreakdown]. */
+private fun Map<String, Any>.toSetBreakdown(): SetCalculationBreakdown =
+    SetCalculationBreakdown(
+        setIndex = factor(key = "setIndex").toInt(),
+        score = factor(key = "setScore"),
+        dominance = factor(key = "dominance"),
+        scale = factor(key = "scale"),
+        ratingGap = factor(key = "ratingGap"),
+        normalizedGap = factor(key = "normalizedGap"),
+        competitiveThresholdPct = factor(key = "competitiveThresholdPct"),
+        isUpset = factor(key = "isUpset").toBoolean(),
+        upsetMultiplier = factor(key = "upsetMultiplier"),
+        kFactor = factor(key = "kFactor"),
+        delta = factor(key = "delta"),
+        ratingAfter = factor(key = "ratingAfter"),
+    )
+
+/** Persist-ready form of the in-memory breakdown (#97/#110): net strings become [BigDecimal] columns, sets carry through. */
+private fun CalculationBreakdown.toSnapshot(): CalculationBreakdownSnapshot =
+    CalculationBreakdownSnapshot(
+        dominance = dominance?.let { BigDecimal(it) },
+        scale = scale?.let { BigDecimal(it) },
+        ratingGap = ratingGap?.let { BigDecimal(it) },
+        normalizedGap = normalizedGap?.let { BigDecimal(it) },
+        competitiveThresholdPct = competitiveThresholdPct?.let { BigDecimal(it) },
+        isUpset = isUpset,
+        upsetMultiplier = upsetMultiplier?.let { BigDecimal(it) },
+        kFactor = kFactor?.let { BigDecimal(it) },
+        sets = sets,
+    )
+
+private fun buildRequest(
+    match: Match,
+    ratingsByUser: Map<UUID, BigDecimal>,
+): RankingCalculationRequest {
+    val t1 = match.team1.teamId.toString()
+    val t2 = match.team2.teamId.toString()
+    val teams =
+        mapOf(
+            t1 to
+                teamOf(
+                    teamId = t1,
+                    userIds = match.team1.userIds,
+                    format = match.matchFormat,
+                    ratingsByUser = ratingsByUser,
+                    // Per-side handicap (#486): deducted from this side for the delta calc only.
+                    handicap = match.team1Handicap,
+                ),
+            t2 to
+                teamOf(
+                    teamId = t2,
+                    userIds = match.team2.userIds,
+                    format = match.matchFormat,
+                    ratingsByUser = ratingsByUser,
+                    handicap = match.team2Handicap,
+                ),
+        )
+    val sets =
+        match.sets.map { set ->
+            val tiebreak =
+                if (set.tiebreakTeam1Points != null && set.tiebreakTeam2Points != null) {
+                    TiebreakScore(
+                        points = mapOf(t1 to set.tiebreakTeam1Points, t2 to set.tiebreakTeam2Points),
+                        winnerTeamId = set.winnerTeamId.toString(),
+                    )
+                } else {
+                    null
+                }
+            val winner = set.winnerTeamId.toString()
+            val games = mapOf(t1 to set.team1Games, t2 to set.team2Games)
+            SetScore(
+                games = games,
+                winnerTeamId = winner,
+                // Name the loser explicitly (the other team): for an equal-games set (tiebreak-decided)
+                // the default (fewest games) would otherwise collide with the winner.
+                loserTeamId = (games.keys - winner).single(),
+                tiebreak = tiebreak,
+            )
+        }
+    return RankingCalculationRequest(
+        teams = teams,
+        matchScore = MatchScore(sets = sets, winnerTeamId = match.winnerTeamId.toString()),
+        matchDate = match.matchDate.toString(),
+        // The match-type factor (#108) is folded into the rating change via the calculator's scale term.
+        options = RatingCalculationOptions(matchTypeFactor = match.matchType.factor),
+    )
+}
+
+private fun teamOf(
+    teamId: String,
+    userIds: List<UUID>,
+    format: TeamType,
+    ratingsByUser: Map<UUID, BigDecimal>,
+    handicap: BigDecimal? = null,
+): Team =
+    Team(
+        teamId = teamId,
+        name = teamId,
+        players =
+            userIds.map { userId ->
+                PlayerProfile(
+                    playerId = userId.toString(),
+                    name = "Player",
+                    rating = Rating.fromValue(value = ratingsByUser.getValue(key = userId).toPlainString()),
+                )
+            },
+        teamType = format,
+        // Team-mean NTRP-unit handicap (#486); the calculator deducts it from this side for the delta only.
+        handicap = handicap?.toPlainString(),
+    )

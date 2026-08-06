@@ -12,7 +12,7 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
-import org.skopeo.service.report.ReportService
+import org.skopeo.domain.service.report.ReportService
 import java.time.LocalDate
 import java.time.format.DateTimeParseException
 

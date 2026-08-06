@@ -442,7 +442,7 @@ tasks.register<JavaExec>("generateMatchupReport") {
     description = "Generate the NTRP matchup matrix report (text + Markdown)"
     dependsOn(tasks.named("testClasses"))
     classpath = sourceSets.getByName("test").runtimeClasspath
-    mainClass.set("org.skopeo.service.calculator.impl.v2.NtrpMatchupMatrixReportKt")
+    mainClass.set("org.skopeo.domain.service.calculator.impl.v2.NtrpMatchupMatrixReportKt")
 }
 
 // Run the NTRP rating Monte Carlo simulation (a program, not a test). Writes
@@ -452,7 +452,7 @@ tasks.register<JavaExec>("generateMonteCarloReport") {
     description = "Monte Carlo simulation of NTRP rating evolution over N matches"
     dependsOn(tasks.named("testClasses"))
     classpath = sourceSets.getByName("test").runtimeClasspath
-    mainClass.set("org.skopeo.service.calculator.impl.v2.NtrpMonteCarloReportKt")
+    mainClass.set("org.skopeo.domain.service.calculator.impl.v2.NtrpMonteCarloReportKt")
 }
 
 // Run the doubles dominance study (a program, not a test). Shows how a doubles win's dominance and the
@@ -463,7 +463,7 @@ tasks.register<JavaExec>("generateDoublesDominanceReport") {
     description = "Doubles: effect of dominance + within-team gap on each partner's rating change"
     dependsOn(tasks.named("testClasses"))
     classpath = sourceSets.getByName("test").runtimeClasspath
-    mainClass.set("org.skopeo.service.calculator.impl.v2.DoublesDominanceReportKt")
+    mainClass.set("org.skopeo.domain.service.calculator.impl.v2.DoublesDominanceReportKt")
 }
 
 // Monte Carlo study of the ranking-POINTS design (#525): expected steady-state leaderboard score
@@ -474,5 +474,5 @@ tasks.register<JavaExec>("generatePointsSimulationReport") {
     description = "Monte Carlo simulation of ranking-points steady-state score and its cap"
     dependsOn(tasks.named("testClasses"))
     classpath = sourceSets.getByName("test").runtimeClasspath
-    mainClass.set("org.skopeo.service.calculator.impl.v2.PointsRankingSimulationReportKt")
+    mainClass.set("org.skopeo.domain.service.calculator.impl.v2.PointsRankingSimulationReportKt")
 }

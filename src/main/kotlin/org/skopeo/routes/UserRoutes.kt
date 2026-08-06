@@ -19,6 +19,10 @@ import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
+import org.skopeo.domain.service.user.DuplicateService
+import org.skopeo.domain.service.user.UserSearchFilters
+import org.skopeo.domain.service.user.UserService
+import org.skopeo.domain.service.user.toProfilePatch
 import org.skopeo.dto.user.CreateUserRequest
 import org.skopeo.dto.user.MarkDuplicatesRequest
 import org.skopeo.dto.user.MatchHistoryVisibilityRequest
@@ -26,10 +30,6 @@ import org.skopeo.dto.user.PhotoSettingsRequest
 import org.skopeo.dto.user.ProfileRequest
 import org.skopeo.dto.user.RatingPreviewResponse
 import org.skopeo.dto.user.SetRatingPreviewRequest
-import org.skopeo.service.user.DuplicateService
-import org.skopeo.service.user.UserSearchFilters
-import org.skopeo.service.user.UserService
-import org.skopeo.service.user.toProfilePatch
 import java.util.UUID
 
 /**

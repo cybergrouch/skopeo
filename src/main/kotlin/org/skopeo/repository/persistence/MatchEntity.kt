@@ -10,7 +10,7 @@ import java.util.UUID
 
 /**
  * Raw persistence view of a `matches` row (#633): the dumb, as-stored data with **no behaviour and no
- * assembled children**. Contrast the domain `org.skopeo.model.Match`, which carries the assembled
+ * assembled children**. Contrast the domain `org.skopeo.domain.model.Match`, which carries the assembled
  * `team1`/`team2` sides (with their user ids) and the `sets` list (each with an optional tiebreak) — all
  * loaded from other tables. This entity holds only the raw `matches`-row scalars, including the raw team
  * FK columns ([team1Id]/[team2Id]); the sides and sets are attached, and the enum columns

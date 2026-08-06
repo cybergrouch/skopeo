@@ -466,7 +466,7 @@ See [CODE_COVERAGE.md](CODE_COVERAGE.md) for detailed coverage documentation.
 ### Fast Feedback (Unit Tests Only)
 
 ```bash
-./gradlew test --tests "org.skopeo.service.*"
+./gradlew test --tests "org.skopeo.domain.service.*"
 ```
 
 ---

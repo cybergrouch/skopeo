@@ -9,13 +9,13 @@ import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.skopeo.mapper.entity.user.toDomain
-import org.skopeo.model.AuthProvider
-import org.skopeo.model.CreateCircuitCommand
-import org.skopeo.model.NameType
-import org.skopeo.model.ProvisionUserCommand
-import org.skopeo.model.UserIdentity
-import org.skopeo.model.UserName
+import org.skopeo.domain.mapper.entity.user.toDomain
+import org.skopeo.domain.model.AuthProvider
+import org.skopeo.domain.model.CreateCircuitCommand
+import org.skopeo.domain.model.NameType
+import org.skopeo.domain.model.ProvisionUserCommand
+import org.skopeo.domain.model.UserIdentity
+import org.skopeo.domain.model.UserName
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.util.UUID
 

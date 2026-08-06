@@ -14,7 +14,7 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
-import org.skopeo.model.InviteStatus
+import org.skopeo.domain.model.InviteStatus
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.time.LocalDateTime
 import java.util.UUID

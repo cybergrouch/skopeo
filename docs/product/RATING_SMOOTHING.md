@@ -122,7 +122,7 @@ Player 2: 4.0 → 3.984000 (-0.016000)
 
 ```kotlin
 import org.skopeo.dto.RankingCalculationRequest
-import org.skopeo.model.RatingCalculationOptions
+import org.skopeo.domain.model.RatingCalculationOptions
 
 val request = RankingCalculationRequest(
     players = mapOf(

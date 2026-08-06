@@ -14,8 +14,8 @@ import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.common.error.ServiceError
-import org.skopeo.model.DuplicateCandidateStatus
-import org.skopeo.model.DuplicateSignal
+import org.skopeo.domain.model.DuplicateCandidateStatus
+import org.skopeo.domain.model.DuplicateSignal
 import org.skopeo.repository.persistence.DuplicateCandidateEntity
 import java.time.LocalDateTime
 import java.util.UUID
