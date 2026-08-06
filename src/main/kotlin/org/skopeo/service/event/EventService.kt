@@ -18,6 +18,7 @@ import org.skopeo.dto.event.MyEventResponse
 import org.skopeo.dto.match.MatchPublicPlayer
 import org.skopeo.mapper.dto.event.toResponse
 import org.skopeo.mapper.dto.match.toPublicResponse
+import org.skopeo.mapper.entity.club.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -620,7 +621,7 @@ class EventService(
                     match.toPublicResponse(players = players)
                 }
             // Surface the organizing club's name (#313), read-only; null for a clubless event.
-            val clubEntity = event.clubId?.let { clubs.findById(id = it) }
+            val clubEntity = event.clubId?.let { clubs.findById(id = it)?.toDomain() }
             val clubName = clubEntity?.name
             EventPublicResponse(
                 publicCode = event.publicCode,
@@ -697,7 +698,7 @@ class EventService(
                 EventCreatorRef(displayName = host.displayName(), publicCode = host.publicCode)
             }
         // Resolve the club (#313) to id + name for grouping/display; null for a clubless event.
-        val clubEntity = event.clubId?.let { clubs.findById(id = it) }
+        val clubEntity = event.clubId?.let { clubs.findById(id = it)?.toDomain() }
         val club = clubEntity?.let { EventClubRef(id = it.id, name = it.name) }
         return EventView(event = event, participants = participants, creator = creator, club = club)
     }

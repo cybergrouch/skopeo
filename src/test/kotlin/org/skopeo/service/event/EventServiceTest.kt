@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.dto.event.EventResponse
+import org.skopeo.mapper.entity.club.toDomain
 import org.skopeo.mapper.entity.ranking.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
@@ -252,7 +253,7 @@ class EventServiceTest {
     @Test
     fun `an event can be created under a club, and an unknown club is rejected (#313)`() {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
-        val club = clubs.create(command = CreateClubCommand(name = "Downtown TC", createdBy = host.id))
+        val club = clubs.create(command = CreateClubCommand(name = "Downtown TC", createdBy = host.id)).toDomain()
 
         // A club event of any type now requires a points config (OPEN_PLAY unified); supply a valid window.
         val view = service.create(token = token(uid = "host"), input = clubInput(clubId = club.id)).shouldBeRight()
@@ -269,8 +270,8 @@ class EventServiceTest {
     @Test
     fun `setClub sets, changes, and clears an event's club (#319)`() {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
-        val clubA = clubs.create(command = CreateClubCommand(name = "Downtown TC", createdBy = host.id))
-        val clubB = clubs.create(command = CreateClubCommand(name = "West End", createdBy = host.id))
+        val clubA = clubs.create(command = CreateClubCommand(name = "Downtown TC", createdBy = host.id)).toDomain()
+        val clubB = clubs.create(command = CreateClubCommand(name = "West End", createdBy = host.id)).toDomain()
         val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight()
         event.clubId.shouldBeNull() // clubless to start
 
@@ -299,7 +300,7 @@ class EventServiceTest {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         provision(uid = "other", roles = setOf(Capability.PLAYER, Capability.HOST))
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
-        val club = clubs.create(command = CreateClubCommand(name = "Downtown TC", createdBy = host.id))
+        val club = clubs.create(command = CreateClubCommand(name = "Downtown TC", createdBy = host.id)).toDomain()
         val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight()
 
         // Unknown club → Validation.
@@ -553,7 +554,7 @@ class EventServiceTest {
     @Test
     fun `publicByCode surfaces the organizing club's name, and null when clubless (#313)`() {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
-        val club = clubs.create(command = CreateClubCommand(name = "Downtown TC", createdBy = host.id))
+        val club = clubs.create(command = CreateClubCommand(name = "Downtown TC", createdBy = host.id)).toDomain()
         val underClub = service.create(token = token(uid = "host"), input = clubInput(clubId = club.id)).shouldBeRight()
         val clubless = service.create(token = token(uid = "host"), input = input()).shouldBeRight()
 
@@ -1775,7 +1776,7 @@ class EventServiceTest {
         val p2 = provision(uid = "p2")
         rate(userId = p1.id, level = "4.0")
         rate(userId = p2.id, level = "4.0")
-        val club = clubs.create(command = CreateClubCommand(name = "Downtown TC", createdBy = host.id))
+        val club = clubs.create(command = CreateClubCommand(name = "Downtown TC", createdBy = host.id)).toDomain()
         clubs.setSanction(id = club.id, sanctioned = true)
         val event =
             service.create(

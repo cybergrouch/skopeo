@@ -16,17 +16,21 @@ import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.skopeo.common.error.ServiceError
-import org.skopeo.model.PlayerList
+import org.skopeo.persistence.PlayerListAggregateEntity
 import org.skopeo.persistence.PlayerListEntity
 import java.time.LocalDateTime
 import java.util.UUID
 
-/** Persistence for host-curated player lists and their members (issue #111). */
+/**
+ * Persistence for host-curated player lists and their members (issue #111). Returns the raw
+ * [PlayerListAggregateEntity] graph (#633); the service converts to the domain `PlayerList` via
+ * `mapper.entity`.
+ */
 class PlayerListRepository {
     fun create(
         ownerId: UUID,
         name: String,
-    ): PlayerList =
+    ): PlayerListAggregateEntity =
         transaction {
             val now = LocalDateTime.now()
             val id =
@@ -35,26 +39,29 @@ class PlayerListRepository {
                     it[PlayerListsTable.name] = name
                     it[createdAt] = now
                 }.value
-            PlayerList(id = id, ownerId = ownerId, name = name, createdAt = now, memberUserIds = emptyList())
+            PlayerListAggregateEntity(
+                list = PlayerListEntity(id = id, ownerId = ownerId, name = name, createdAt = now),
+                memberUserIds = emptyList(),
+            )
         }
 
     /** The owner's lists, newest first, each with its member ids. */
-    fun listByOwner(ownerId: UUID): List<PlayerList> =
+    fun listByOwner(ownerId: UUID): List<PlayerListAggregateEntity> =
         transaction {
             PlayerListsTable
                 .selectAll()
                 .where { PlayerListsTable.ownerId eq ownerId }
                 .orderBy(PlayerListsTable.createdAt to SortOrder.DESC)
-                .map { it.toPlayerList(memberIds = memberIdsOf(listId = it[PlayerListsTable.id].value)) }
+                .map { it.toPlayerListAggregate(memberIds = memberIdsOf(listId = it[PlayerListsTable.id].value)) }
         }
 
-    fun findById(id: UUID): Either<ServiceError, PlayerList> =
+    fun findById(id: UUID): Either<ServiceError, PlayerListAggregateEntity> =
         transaction {
             val row = PlayerListsTable.selectAll().where { PlayerListsTable.id eq id }.singleOrNull()
             if (row == null) {
                 ServiceError.NotFound(message = "Player list $id not found").left()
             } else {
-                row.toPlayerList(memberIds = memberIdsOf(listId = id)).right()
+                row.toPlayerListAggregate(memberIds = memberIdsOf(listId = id)).right()
             }
         }
 
@@ -98,7 +105,8 @@ class PlayerListRepository {
             .orderBy(PlayerListMembersTable.addedAt to SortOrder.ASC)
             .map { it[PlayerListMembersTable.userId].value }
 
-    private fun ResultRow.toPlayerList(memberIds: List<UUID>): PlayerList = this.toPlayerListEntity().toDomain(memberUserIds = memberIds)
+    private fun ResultRow.toPlayerListAggregate(memberIds: List<UUID>): PlayerListAggregateEntity =
+        PlayerListAggregateEntity(list = toPlayerListEntity(), memberUserIds = memberIds)
 
     private fun ResultRow.toPlayerListEntity(): PlayerListEntity =
         PlayerListEntity(
@@ -106,14 +114,5 @@ class PlayerListRepository {
             ownerId = this[PlayerListsTable.ownerId].value,
             name = this[PlayerListsTable.name],
             createdAt = this[PlayerListsTable.createdAt],
-        )
-
-    private fun PlayerListEntity.toDomain(memberUserIds: List<UUID>): PlayerList =
-        PlayerList(
-            id = id,
-            ownerId = ownerId,
-            name = name,
-            createdAt = createdAt,
-            memberUserIds = memberUserIds,
         )
 }
