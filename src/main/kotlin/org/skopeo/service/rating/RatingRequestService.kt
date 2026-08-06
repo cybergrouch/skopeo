@@ -14,6 +14,7 @@ import org.skopeo.common.security.Capability
 import org.skopeo.dto.rating.RatingRequestPageResponse
 import org.skopeo.dto.rating.RatingRequestResponse
 import org.skopeo.mapper.dto.rating.toResponse
+import org.skopeo.mapper.entity.rating.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditPersonRef
@@ -72,14 +73,14 @@ class RatingRequestService(
                         details = mapOf("requestId" to request.id.toString(), "justification" to request.justification),
                     ),
             )
-            request.toResponse()
+            request.toDomain().toResponse()
         }
 
     /** The caller's most recent re-rate request (or null) — for the Profile tab. */
     fun mine(token: VerifiedFirebaseToken): Either<ServiceError, RatingRequestResponse?> =
         either {
             val caller = ensureNotNull(value = users.findByFirebaseUid(firebaseUid = token.uid)) { ServiceError.Forbidden() }
-            requests.findLatestByUser(userId = caller.id)?.toResponse()
+            requests.findLatestByUser(userId = caller.id)?.toDomain()?.toResponse()
         }
 
     /** The re-rate triage list (RATER/ADMINISTRATOR), newest first, optionally filtered by status. */
@@ -92,12 +93,13 @@ class RatingRequestService(
         either {
             requireRater(token = token).bind()
             val status = statusRaw?.let { raw -> parseStatus(raw = raw).bind() }
-            val (items, total) =
+            val (rows, total) =
                 requests.list(
                     limit = limit.coerceIn(minimumValue = 1, maximumValue = MAX_PAGE_SIZE),
                     offset = offset.coerceAtLeast(minimumValue = 0),
                     status = status,
                 )
+            val items = rows.map { it.toDomain() }
             val refs = resolveRequesters(requests = items)
             RatingRequestPage(items = items.map { RatingRequestView(request = it, requester = refs[it.userId]) }, total = total.toInt())
                 .toResponse()
@@ -127,7 +129,7 @@ class RatingRequestService(
                 ) { ServiceError.Conflict(message = "This request has already been resolved") }
             // Apply the new rating now that the resolution is ours (records the override + history).
             ratingService.setRating(token = token, userId = request.userId, value = newRating.toPlainString()).bind()
-            resolved.toResponse()
+            resolved.toDomain().toResponse()
         }
 
     /** Deny a pending request with a reason (audited as RATING_REQUEST_DENIED). */
@@ -163,7 +165,7 @@ class RatingRequestService(
                         details = mapOf("requestId" to id.toString(), "reason" to reason.trim()),
                     ),
             )
-            resolved.toResponse()
+            resolved.toDomain().toResponse()
         }
 
     private fun parseStatus(raw: String): Either<ServiceError, RatingRequestStatus> {

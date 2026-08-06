@@ -13,6 +13,7 @@ import org.skopeo.common.security.Capability
 import org.skopeo.dto.invite.InvitePageResponse
 import org.skopeo.dto.invite.InviteResponse
 import org.skopeo.mapper.dto.invite.toResponse
+import org.skopeo.mapper.entity.invite.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -60,7 +61,7 @@ class InviteService(
                     email = email,
                     invitedBy = adminId,
                     expiresAt = LocalDateTime.now().plusDays(INVITE_TTL_DAYS),
-                )
+                ).toDomain()
             audit.record(
                 write =
                     AuditWrite(
@@ -90,7 +91,7 @@ class InviteService(
                     offset = offset.coerceAtLeast(minimumValue = 0),
                     status = status,
                 )
-            InvitePage(items = items, total = total.toInt()).toResponse()
+            InvitePage(items = items.map { it.toDomain() }, total = total.toInt()).toResponse()
         }
 
     fun revoke(

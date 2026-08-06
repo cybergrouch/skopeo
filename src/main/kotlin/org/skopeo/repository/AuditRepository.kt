@@ -14,8 +14,6 @@ import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.model.AuditAction
-import org.skopeo.model.AuditEntityType
-import org.skopeo.model.AuditEntry
 import org.skopeo.model.AuditWrite
 import org.skopeo.persistence.AuditEntryEntity
 import java.time.LocalDateTime
@@ -62,7 +60,7 @@ class AuditRepository {
         actions: Collection<AuditAction>?,
         limit: Int,
         offset: Int,
-    ): Pair<List<AuditEntry>, Long> =
+    ): Pair<List<AuditEntryEntity>, Long> =
         transaction {
             val names = actions?.map { it.name }
 
@@ -77,12 +75,10 @@ class AuditRepository {
                 query()
                     .orderBy(AuditLogTable.occurredAt to SortOrder.DESC)
                     .limit(n = limit, offset = offset.toLong())
-                    .map { it.toAuditEntry() }
+                    .map { it.toAuditEntryEntity() }
             items to total
         }
 }
-
-internal fun ResultRow.toAuditEntry(): AuditEntry = toAuditEntryEntity().toDomain()
 
 internal fun ResultRow.toAuditEntryEntity(): AuditEntryEntity =
     AuditEntryEntity(
@@ -99,18 +95,4 @@ internal fun ResultRow.toAuditEntryEntity(): AuditEntryEntity =
                 ?.let { Json.decodeFromString(deserializer = DETAILS_SERIALIZER, string = it) }
                 .orEmpty(),
         comment = this[AuditLogTable.comment],
-    )
-
-internal fun AuditEntryEntity.toDomain(): AuditEntry =
-    AuditEntry(
-        id = id,
-        occurredAt = occurredAt,
-        actorUserId = actorUserId,
-        actorClientId = actorClientId,
-        action = AuditAction.valueOf(value = action),
-        entityType = AuditEntityType.valueOf(value = entityType),
-        entityId = entityId,
-        summary = summary,
-        details = details,
-        comment = comment,
     )

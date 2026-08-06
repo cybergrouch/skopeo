@@ -10,7 +10,6 @@ import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.common.security.Capability
-import org.skopeo.model.CapabilityGrant
 import org.skopeo.persistence.CapabilityGrantEntity
 import java.time.LocalDateTime
 import java.util.UUID
@@ -21,20 +20,20 @@ import java.util.UUID
  * at most one active grant per (user, capability).
  */
 class CapabilityRepository {
-    fun listByUser(userId: UUID): List<CapabilityGrant> =
+    fun listByUser(userId: UUID): List<CapabilityGrantEntity> =
         transaction {
             UserCapabilitiesTable
                 .selectAll()
                 .where { UserCapabilitiesTable.userId eq userId }
-                .map { it.toCapabilityGrant() }
+                .map { it.toCapabilityGrantEntity() }
         }
 
     fun findActive(
         userId: UUID,
         capability: Capability,
-    ): CapabilityGrant? =
+    ): CapabilityGrantEntity? =
         transaction {
-            activeRow(userId = userId, capability = capability)?.toCapabilityGrant()
+            activeRow(userId = userId, capability = capability)?.toCapabilityGrantEntity()
         }
 
     fun grant(
@@ -42,7 +41,7 @@ class CapabilityRepository {
         capability: Capability,
         // Null = a system grant (e.g. the verified-email bootstrap allowlist), not an admin action.
         grantedBy: UUID? = null,
-    ): CapabilityGrant =
+    ): CapabilityGrantEntity =
         transaction {
             val id =
                 UserCapabilitiesTable.insertAndGetId {
@@ -60,7 +59,7 @@ class CapabilityRepository {
         capability: Capability,
         revokedBy: UUID,
         revokedAt: LocalDateTime,
-    ): CapabilityGrant? =
+    ): CapabilityGrantEntity? =
         transaction {
             val active = activeRow(userId = userId, capability = capability) ?: return@transaction null
             val id = active[UserCapabilitiesTable.id].value
@@ -94,15 +93,13 @@ class CapabilityRepository {
                     UserCapabilitiesTable.isActive
             }.singleOrNull()
 
-    private fun loadById(id: UUID): CapabilityGrant =
+    private fun loadById(id: UUID): CapabilityGrantEntity =
         UserCapabilitiesTable
             .selectAll()
             .where { UserCapabilitiesTable.id eq id }
             .single()
-            .toCapabilityGrant()
+            .toCapabilityGrantEntity()
 }
-
-internal fun ResultRow.toCapabilityGrant(): CapabilityGrant = toCapabilityGrantEntity().toDomain()
 
 /** Map a `user_capabilities` row to the raw persistence entity (#633) — no derivations, no child rows. */
 internal fun ResultRow.toCapabilityGrantEntity(): CapabilityGrantEntity =
@@ -115,17 +112,4 @@ internal fun ResultRow.toCapabilityGrantEntity(): CapabilityGrantEntity =
         grantedAt = this[UserCapabilitiesTable.grantedAt],
         revokedBy = this[UserCapabilitiesTable.revokedBy]?.value,
         revokedAt = this[UserCapabilitiesTable.revokedAt],
-    )
-
-/** Convert the raw persistence [CapabilityGrantEntity] to the domain [CapabilityGrant] (#633). Flat: field-for-field copy. */
-internal fun CapabilityGrantEntity.toDomain(): CapabilityGrant =
-    CapabilityGrant(
-        id = id,
-        userId = userId,
-        capability = capability,
-        isActive = isActive,
-        grantedBy = grantedBy,
-        grantedAt = grantedAt,
-        revokedBy = revokedBy,
-        revokedAt = revokedAt,
     )

@@ -13,6 +13,7 @@ import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.dto.circuit.CircuitResponse
 import org.skopeo.mapper.dto.circuit.toResponse
+import org.skopeo.mapper.entity.circuit.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -56,14 +57,14 @@ class CircuitService(
                         details = mapOf("circuitId" to circuit.id.toString(), "name" to circuit.name),
                     ),
             )
-            circuit.toResponse()
+            circuit.toDomain().toResponse()
         }
 
     /** Readable by staff (HOST/CLUB_OWNER/ADMINISTRATOR) so tournament organizers can pick a circuit (#525). */
     fun list(token: VerifiedFirebaseToken): Either<ServiceError, List<CircuitResponse>> =
         either {
             requireStaff(token = token).bind()
-            circuits.list().map { it.toResponse() }
+            circuits.list().map { it.toDomain().toResponse() }
         }
 
     /** Rename a circuit (#525). ADMINISTRATOR-only; the name is validated (non-blank) and trimmed. */
@@ -90,7 +91,7 @@ class CircuitService(
                         details = mapOf("circuitId" to circuitId.toString(), "name" to updated.name),
                     ),
             )
-            updated.toResponse()
+            updated.toDomain().toResponse()
         }
 
     /**

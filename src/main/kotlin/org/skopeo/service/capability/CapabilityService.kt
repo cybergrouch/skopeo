@@ -13,6 +13,7 @@ import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.dto.capability.CapabilityResponse
 import org.skopeo.mapper.dto.capability.toResponse
+import org.skopeo.mapper.entity.capability.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -55,7 +56,7 @@ class CapabilityService(
         either {
             requireAdmin(token = token).bind()
             requireUserExists(userId = userId).bind()
-            capabilities.listByUser(userId = userId).map { it.toResponse() }
+            capabilities.listByUser(userId = userId).map { it.toDomain().toResponse() }
         }
 
     fun grant(
@@ -69,7 +70,7 @@ class CapabilityService(
             requireUserExists(userId = userId).bind()
             val existing = capabilities.findActive(userId = userId, capability = capability)
             if (existing != null) {
-                Granted(grant = existing.toResponse(), created = false)
+                Granted(grant = existing.toDomain().toResponse(), created = false)
             } else {
                 val grant = capabilities.grant(userId = userId, capability = capability, grantedBy = adminId)
                 audit.record(
@@ -83,7 +84,7 @@ class CapabilityService(
                             details = mapOf("userId" to userId.toString(), "capability" to capability.name),
                         ),
                 )
-                Granted(grant = grant.toResponse(), created = true)
+                Granted(grant = grant.toDomain().toResponse(), created = true)
             }
         }
 

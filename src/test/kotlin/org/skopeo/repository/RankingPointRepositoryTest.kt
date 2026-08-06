@@ -81,7 +81,7 @@ class RankingPointRepositoryTest {
         val admin = newUser(uid = "admin")
 
         val award = awards.award(write = write(userId = user, grantedBy = admin))
-        award.status shouldBe AwardStatus.ACTIVE
+        award.status shouldBe AwardStatus.ACTIVE.name
         award.points shouldBe BigDecimal("100.0000")
         award.band shouldBe "4.0"
         award.grantedBy shouldBe admin
@@ -131,13 +131,13 @@ class RankingPointRepositoryTest {
         val original = awards.award(write = write(userId = user))
 
         val marker = awards.revoke(awardId = original.id, revokedBy = admin, reason = "mistake", revokedAt = LocalDateTime.now())!!
-        marker.status shouldBe AwardStatus.REVOKED
+        marker.status shouldBe AwardStatus.REVOKED.name
         marker.points shouldBe BigDecimal("0.0000")
         marker.revokesAwardId shouldBe original.id
         marker.reason shouldBe "mistake"
 
         // The original is now REVOKED.
-        awards.findById(id = original.id)!!.status shouldBe AwardStatus.REVOKED
+        awards.findById(id = original.id)!!.status shouldBe AwardStatus.REVOKED.name
         // The ledger holds both rows.
         awards.listByUser(userId = user) shouldHaveSize 2
 

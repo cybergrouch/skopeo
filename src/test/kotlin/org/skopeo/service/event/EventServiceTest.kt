@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.dto.event.EventResponse
+import org.skopeo.mapper.entity.ranking.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuthProvider
@@ -868,7 +869,7 @@ class EventServiceTest {
         AuditRepository().list(actions = listOf(element = AuditAction.EVENT_UNFINALIZED), limit = 10, offset = 0).first.single().let {
             it.actorUserId shouldBe host.id
             it.entityId shouldBe event.id
-            it.entityType shouldBe AuditEntityType.EVENT
+            it.entityType shouldBe AuditEntityType.EVENT.name
             it.summary shouldContain "Un-finalized event Spring Open"
         }
     }
@@ -966,9 +967,9 @@ class EventServiceTest {
         awardRepo.listActiveByEvent(eventId = event.id) shouldHaveSize 0
         val rows = awardRepo.listByUser(userId = p1.id)
         rows shouldHaveSize 2
-        rows.count { it.status == AwardStatus.ACTIVE } shouldBe 0
+        rows.count { it.status == AwardStatus.ACTIVE.name } shouldBe 0
         val marker = rows.single { it.revokesAwardId != null }
-        marker.status shouldBe AwardStatus.REVOKED
+        marker.status shouldBe AwardStatus.REVOKED.name
         marker.points shouldBe BigDecimal("0.0000")
         marker.reason.shouldNotBeNull() shouldContain "Reversed on un-finalize"
         // The reversal is audited with the revoked count (both placement awards).
@@ -1392,7 +1393,7 @@ class EventServiceTest {
         winner.band shouldBe "4.0"
         winner.eventId shouldBe event.id
         winner.sourceId shouldBe event.id.toString()
-        winner.pointClass shouldBe org.skopeo.model.PointClass.ANNUAL_TOURNAMENT
+        winner.pointClass shouldBe org.skopeo.model.PointClass.ANNUAL_TOURNAMENT.name
         // Validity (#559) runs from the event end for the global tournament schedule's window (no per-event override).
         val tvDays = org.skopeo.service.settings.PointsConfigService().getTournament().value.validityDays.toLong()
         winner.validFrom shouldBe event.endDate.atStartOfDay()
@@ -1534,7 +1535,7 @@ class EventServiceTest {
                 .list(actions = listOf(element = AuditAction.RANKING_POINTS_AWARDED), limit = 10, offset = 0)
                 .first
         entries shouldHaveSize 2
-        entries.forEach { it.entityType shouldBe AuditEntityType.USER }
+        entries.forEach { it.entityType shouldBe AuditEntityType.USER.name }
         entries.forEach { it.actorUserId shouldBe host.id }
         entries.map { it.entityId }.toSet() shouldBe setOf(p1.id, p2.id)
 
@@ -1601,7 +1602,7 @@ class EventServiceTest {
         winner.points shouldBe BigDecimal("3.0000")
         winner.band shouldBe "4.0"
         winner.eventId shouldBe event.id
-        winner.pointClass shouldBe org.skopeo.model.PointClass.OPEN_PLAY
+        winner.pointClass shouldBe org.skopeo.model.PointClass.OPEN_PLAY.name
         awardRepo.listByUser(userId = p2.id).single().points shouldBe BigDecimal("0.0000")
         // Validity defaults to [event end, end + 2 months) when no window is configured (#525).
         winner.validFrom shouldBe event.endDate.atStartOfDay()
@@ -1720,7 +1721,7 @@ class EventServiceTest {
                 placementBracket = PlacementBracket.CHAMPIONSHIP_FINALS,
             )
             service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
-            return awardRepo.listByUser(userId = p1.id).single().pointClass
+            return awardRepo.listByUser(userId = p1.id).single().toDomain().pointClass
         }
 
         // Placement points always carry ANNUAL_TOURNAMENT (#525) — the old window→class mapping is gone.

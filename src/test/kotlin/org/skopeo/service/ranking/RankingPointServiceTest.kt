@@ -121,7 +121,7 @@ class RankingPointServiceTest {
             AuditRepository()
                 .list(actions = listOf(element = AuditAction.RANKING_POINTS_AWARDED), limit = 10, offset = 0)
                 .first.single()
-        entry.entityType shouldBe AuditEntityType.USER
+        entry.entityType shouldBe AuditEntityType.USER.name
         entry.entityId shouldBe player.id
         entry.actorUserId shouldBe admin.id
         entry.details["awardId"] shouldBe award.id
@@ -484,7 +484,7 @@ class RankingPointServiceTest {
             AuditRepository()
                 .list(actions = listOf(element = AuditAction.RANKING_POINTS_AWARDED), limit = 10, offset = 0)
                 .first.single()
-        entry.entityType shouldBe AuditEntityType.USER
+        entry.entityType shouldBe AuditEntityType.USER.name
         entry.entityId shouldBe player.id
         entry.actorUserId shouldBe admin.id
         entry.details["awardId"] shouldBe award.id

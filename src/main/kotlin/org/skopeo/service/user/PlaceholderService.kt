@@ -16,6 +16,7 @@ import org.skopeo.dto.user.UserResponse
 import org.skopeo.dto.user.UserSummaryResponse
 import org.skopeo.mapper.dto.user.toResponse
 import org.skopeo.mapper.dto.user.toSummary
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -157,7 +158,8 @@ class PlaceholderService(
                     expiresAt = LocalDateTime.now().plusDays(CLAIM_CODE_TTL_DAYS),
                     createdBy = adminId,
                 )
-            GeneratedClaimCode(plaintext = plaintext, code = stored, placeholderPublicCode = target.publicCode).toResponse()
+            GeneratedClaimCode(plaintext = plaintext, code = stored.toDomain(), placeholderPublicCode = target.publicCode)
+                .toResponse()
         }
 
     /**
@@ -183,7 +185,7 @@ class PlaceholderService(
             val record =
                 ensureNotNull(value = claimCodes.findActiveByHash(codeHash = ClaimCodeCrypto.hash(plaintext = trimmed))) {
                     ServiceError.NotFound(message = "Invalid or unknown claim code")
-                }
+                }.toDomain()
             ensure(condition = record.isUsable(asOf = LocalDateTime.now())) {
                 ServiceError.Validation(message = "This claim code has expired")
             }

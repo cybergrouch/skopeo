@@ -11,48 +11,48 @@ import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
-import org.skopeo.model.Circuit
 import org.skopeo.model.CreateCircuitCommand
 import org.skopeo.persistence.CircuitEntity
 import java.util.UUID
 
 /**
  * Persistence for circuits (#525). Mirrors [ClubRepository] minus the owner association: create,
- * read, rename, and soft-delete (is_active). created_at is DB-managed.
+ * read, rename, and soft-delete (is_active). created_at is DB-managed. Returns raw [CircuitEntity]
+ * rows (#633); the service converts to the domain `Circuit` via `mapper.entity`.
  */
 class CircuitRepository {
-    fun create(command: CreateCircuitCommand): Circuit =
+    fun create(command: CreateCircuitCommand): CircuitEntity =
         transaction {
             val id =
                 CircuitsTable.insertAndGetId {
                     it[name] = command.name
                     it[createdBy] = command.createdBy
                 }.value
-            CircuitsTable.selectAll().where { CircuitsTable.id eq id }.single().toCircuit()
+            CircuitsTable.selectAll().where { CircuitsTable.id eq id }.single().toCircuitEntity()
         }
 
-    fun findById(id: UUID): Circuit? =
-        transaction { CircuitsTable.selectAll().where { CircuitsTable.id eq id }.singleOrNull()?.toCircuit() }
+    fun findById(id: UUID): CircuitEntity? =
+        transaction { CircuitsTable.selectAll().where { CircuitsTable.id eq id }.singleOrNull()?.toCircuitEntity() }
 
     /** All active circuits, alphabetical by name. */
-    fun list(): List<Circuit> =
+    fun list(): List<CircuitEntity> =
         transaction {
             CircuitsTable
                 .selectAll()
                 .where { CircuitsTable.isActive eq true }
                 .orderBy(CircuitsTable.name to SortOrder.ASC)
-                .map { it.toCircuit() }
+                .map { it.toCircuitEntity() }
         }
 
     /** Rename [id] (#525). Returns the refreshed circuit, or null if no such circuit. */
     fun rename(
         id: UUID,
         name: String,
-    ): Circuit? =
+    ): CircuitEntity? =
         transaction {
             CircuitsTable.selectAll().where { CircuitsTable.id eq id }.singleOrNull() ?: return@transaction null
             CircuitsTable.update(where = { CircuitsTable.id eq id }) { it[CircuitsTable.name] = name }
-            CircuitsTable.selectAll().where { CircuitsTable.id eq id }.single().toCircuit()
+            CircuitsTable.selectAll().where { CircuitsTable.id eq id }.single().toCircuitEntity()
         }
 
     /**
@@ -66,8 +66,6 @@ class CircuitRepository {
             ) { it[isActive] = false } > 0
         }
 
-    private fun ResultRow.toCircuit(): Circuit = toCircuitEntity().toDomain()
-
     /** Map a `circuits` row to the raw persistence entity (#633) — no derivations, no child rows. */
     private fun ResultRow.toCircuitEntity(): CircuitEntity =
         CircuitEntity(
@@ -75,18 +73,5 @@ class CircuitRepository {
             name = this[CircuitsTable.name],
             isActive = this[CircuitsTable.isActive],
             createdBy = this[CircuitsTable.createdBy]?.value,
-        )
-
-    /**
-     * Convert the raw persistence [CircuitEntity] to the domain [Circuit] (#633). A flat aggregate, so
-     * this is a field-for-field copy. Lives in the repository (which may reference both `persistence` and
-     * `model`) rather than a mapper, since `repository ↛ mapper` is enforced.
-     */
-    private fun CircuitEntity.toDomain(): Circuit =
-        Circuit(
-            id = id,
-            name = name,
-            isActive = isActive,
-            createdBy = createdBy,
         )
 }
