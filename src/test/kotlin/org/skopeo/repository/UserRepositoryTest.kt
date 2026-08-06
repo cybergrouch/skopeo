@@ -227,6 +227,21 @@ class UserRepositoryTest {
     }
 
     @Test
+    fun `read maps the raw persistence entity to the domain user, deriving photoUrl (#633)`() {
+        // The repository now reads a row into a raw UserEntity and converts it to the domain User at one
+        // boundary. Confirm the raw photo fields flow through AND the derived photoUrl is computed there:
+        // no custom/hidden → the effective photo is the provider photo.
+        val created = repository.provision(command = googleSignup()) // photoUrl → providerPhotoUrl
+
+        val user = repository.findById(id = created.id).shouldBeRight()
+
+        user.providerPhotoUrl shouldBe "https://example.com/photo.jpg"
+        user.customPhotoUrl shouldBe null
+        user.photoHidden shouldBe false
+        user.photoUrl shouldBe "https://example.com/photo.jpg" // derived at the entity→domain boundary
+    }
+
+    @Test
     fun `updatePhotoSettings is a NotFound for an unknown user (#303)`() {
         repository.updatePhotoSettings(id = UUID.randomUUID(), customPhotoUrl = null, photoHidden = true)
             .shouldBeLeft()

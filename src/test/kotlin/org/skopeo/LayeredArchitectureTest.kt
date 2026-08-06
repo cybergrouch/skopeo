@@ -59,7 +59,33 @@ class LayeredArchitectureTest {
         noClasses()
             .that().resideInAPackage("org.skopeo.model..")
             .should().dependOnClassesThat()
-            .resideInAnyPackage("..routes..", "..service..", "..repository..", "..dto..", "..mapper..")
+            .resideInAnyPackage(
+                "..routes..",
+                "..service..",
+                "..repository..",
+                "..dto..",
+                "..mapper..",
+                "org.skopeo.persistence..",
+            )
+            .check(classes)
+    }
+
+    @Test
+    fun `persistence entities are a leaf and depend on no other app layer including model`() {
+        // The entity/data-model layer (#633): dumb raw-row types owned by the repository, distinct from
+        // the domain model. Kept a leaf like `model`/`common` — the repository maps rows to entities and
+        // converts entity→domain, so nothing flows the other way. May depend only on `common`.
+        noClasses()
+            .that().resideInAPackage("org.skopeo.persistence..")
+            .should().dependOnClassesThat()
+            .resideInAnyPackage(
+                "..routes..",
+                "..service..",
+                "..repository..",
+                "..dto..",
+                "..mapper..",
+                "org.skopeo.model..",
+            )
             .check(classes)
     }
 
@@ -72,7 +98,15 @@ class LayeredArchitectureTest {
         noClasses()
             .that().resideInAPackage("org.skopeo.common..")
             .should().dependOnClassesThat()
-            .resideInAnyPackage("..routes..", "..service..", "..repository..", "..dto..", "..mapper..", "org.skopeo.model..")
+            .resideInAnyPackage(
+                "..routes..",
+                "..service..",
+                "..repository..",
+                "..dto..",
+                "..mapper..",
+                "org.skopeo.model..",
+                "org.skopeo.persistence..",
+            )
             .check(classes)
     }
 
