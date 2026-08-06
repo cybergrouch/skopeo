@@ -32,8 +32,13 @@ vi.mock("@/api/generated/events/events", () => ({
     },
   }),
 }));
-const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }));
-vi.mock("sonner", () => ({ toast: { error: toastError } }));
+const { toastError, toastSuccess } = vi.hoisted(() => ({
+  toastError: vi.fn(),
+  toastSuccess: vi.fn(),
+}));
+vi.mock("sonner", () => ({
+  toast: { error: toastError, success: toastSuccess },
+}));
 vi.mock("@/api/generated/clubs/clubs", () => ({ useGetApiV1Clubs }));
 vi.mock("@/api/generated/circuits/circuits", () => ({ useGetApiV1Circuits }));
 vi.mock("@/api/generated/users/users", () => ({ useGetApiV1UsersMe }));
@@ -348,6 +353,12 @@ describe("EventOrganizerTab", () => {
         awardRankingPoints: false,
       },
     });
+    // Success is confirmed via a toast naming the event (#667).
+    await waitFor(() =>
+      expect(toastSuccess).toHaveBeenCalledWith(
+        expect.stringContaining("Summer Open"),
+      ),
+    );
   });
 
   it("includes the chosen event type in the create payload (#403)", async () => {
