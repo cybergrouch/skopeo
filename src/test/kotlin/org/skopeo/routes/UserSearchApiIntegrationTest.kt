@@ -29,6 +29,7 @@ import org.skopeo.dto.user.CreateUserRequest
 import org.skopeo.dto.user.UserResponse
 import org.skopeo.dto.user.UserSummaryPageResponse
 import org.skopeo.dto.user.UserSummaryResponse
+import org.skopeo.mapper.entity.match.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.CreateFixtureCommand
 import org.skopeo.model.MatchSetResult
@@ -424,7 +425,7 @@ class UserSearchApiIntegrationTest {
                             team2Name = "T2",
                             createdBy = UUID.fromString(alice.id),
                         ),
-                )
+                ).toDomain()
             matches.addResult(
                 matchId = match.id,
                 sets =

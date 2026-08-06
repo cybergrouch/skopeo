@@ -26,6 +26,7 @@ import org.skopeo.mapper.dto.match.toPublicResponse
 import org.skopeo.mapper.dto.match.toResponse
 import org.skopeo.mapper.dto.rating.toResponse
 import org.skopeo.mapper.entity.event.toDomain
+import org.skopeo.mapper.entity.match.toDomain
 import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
@@ -213,7 +214,7 @@ class MatchService(
                             team2Name = teamName(users = team2Users),
                             createdBy = createdBy,
                         ),
-                )
+                ).toDomain()
             audit.record(
                 write =
                     AuditWrite(
@@ -266,7 +267,7 @@ class MatchService(
         either {
             val caller = staffCaller(token = token).bind()
             val recordedBy = caller.id
-            val match = matches.findById(matchId = matchId).bind()
+            val match = matches.findById(matchId = matchId).bind().toDomain()
             ensure(condition = match.isActive) { ServiceError.Conflict(message = "Match is disabled") }
             // Results can be recorded on a scheduled fixture and re-recorded (edited) on a completed one,
             // but only while the match is still unrated — a rated result is frozen.
@@ -309,6 +310,7 @@ class MatchService(
                     recordedBy = recordedBy,
                     completedAt = LocalDateTime.now(),
                 ).bind()
+                .toDomain()
                 .toResponse()
         }
 
@@ -325,13 +327,13 @@ class MatchService(
     ): Either<ServiceError, MatchResponse> =
         either {
             val caller = staffCaller(token = token).bind()
-            val match = matches.findById(matchId = matchId).bind()
+            val match = matches.findById(matchId = matchId).bind().toDomain()
             ensure(condition = match.isActive) { ServiceError.Conflict(message = "Match is disabled") }
             ensure(condition = match.ratedAt == null) {
                 ServiceError.Conflict(message = "Cannot change the handicap on a match that has already been rated")
             }
             val updated =
-                matches.setHandicaps(matchId = matchId, team1Handicap = team1Handicap, team2Handicap = team2Handicap).bind()
+                matches.setHandicaps(matchId = matchId, team1Handicap = team1Handicap, team2Handicap = team2Handicap).bind().toDomain()
             audit.record(
                 write =
                     AuditWrite(
@@ -357,12 +359,12 @@ class MatchService(
     ): Either<ServiceError, MatchResponse> =
         either {
             requireStaff(token = token).bind()
-            val match = matches.findById(matchId = matchId).bind()
+            val match = matches.findById(matchId = matchId).bind().toDomain()
             ensure(condition = active || match.ratedAt == null) {
                 ServiceError.Conflict(message = "Cannot disable a match that has already been rated")
             }
             val disabledAt = if (active) null else LocalDateTime.now()
-            matches.setActive(matchId = matchId, active = active, disabledAt = disabledAt).bind().toResponse()
+            matches.setActive(matchId = matchId, active = active, disabledAt = disabledAt).bind().toDomain().toResponse()
         }
 
     /**
@@ -381,7 +383,7 @@ class MatchService(
             ensure(condition = matchIds.size == matchIds.distinct().size) {
                 ServiceError.Validation(message = "Duplicate match ids in the reorder request")
             }
-            val loaded = matchIds.map { matches.findById(matchId = it).bind() }
+            val loaded = matchIds.map { matches.findById(matchId = it).bind().toDomain() }
             ensure(condition = loaded.all { it.isActive }) {
                 ServiceError.Validation(message = "Cannot reorder a disabled match")
             }
@@ -405,7 +407,7 @@ class MatchService(
         matchId: UUID,
     ): Either<ServiceError, Match> =
         either {
-            val match = matches.findById(matchId = matchId).bind()
+            val match = matches.findById(matchId = matchId).bind().toDomain()
             val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
             val isStaff = caller != null && caller.capabilities.any { it in STAFF_ROLES }
             val isParticipant = caller != null && caller.id in (match.team1.userIds + match.team2.userIds)
@@ -423,7 +425,7 @@ class MatchService(
         code: String,
     ): Either<ServiceError, MatchPublicResponse> =
         either {
-            val match = matches.findByPublicCode(code = code)
+            val match = matches.findByPublicCode(code = code)?.toDomain()
             ensureNotNull(value = match) { ServiceError.NotFound(message = "Match $code not found") }
             val ids = match.team1.userIds + match.team2.userIds
             val usersById = users.findAllByIds(ids = ids).map { it.toDomain() }.associateBy { it.id }
@@ -467,6 +469,7 @@ class MatchService(
         val upcoming =
             matches
                 .listByUser(userId = userId)
+                .map { it.toDomain() }
                 .filter { it.status == MatchStatus.SCHEDULED && !it.matchDate.isBefore(today) }
                 .sortedBy { it.matchDate }
         val playersById =
@@ -516,6 +519,7 @@ class MatchService(
         val prior =
             matches
                 .listBetweenUsers(userIdA = team1Id, userIdB = team2Id)
+                .map { it.toDomain() }
                 .filter { it.id != match.id && it.status == MatchStatus.COMPLETED }
                 // Count only meetings where the two were opponents (on opposite sides) — never partners
                 // on the same doubles team, which listBetweenUsers can otherwise surface (#285).
@@ -662,7 +666,7 @@ class MatchService(
                 // All of an event's completed fixtures (rated or not), so a rated match stays on view as
                 // a read-only record (#138). Event-scoped only.
                 MatchQuery.RESULTS -> eventId?.let { matches.listResultsByEvent(eventId = it) }.orEmpty()
-            }.map { it.toResponse() }
+            }.map { it.toDomain().toResponse() }
         }
 
     /**

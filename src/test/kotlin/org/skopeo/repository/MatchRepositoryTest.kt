@@ -22,6 +22,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
 import org.skopeo.mapper.entity.event.toDomain
+import org.skopeo.mapper.entity.match.toDomain
 import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.CreateEventCommand
@@ -87,7 +88,7 @@ class MatchRepositoryTest {
                 team2Name = "T2",
                 createdBy = u1,
             ),
-    )
+    ).toDomain()
 
     /** Create a COMPLETED (pending-calculation) match on [matchDate], optionally under [eventId]. */
     private fun completedMatch(
@@ -112,7 +113,7 @@ class MatchRepositoryTest {
                         createdBy = u1,
                         eventId = eventId,
                     ),
-            )
+            ).toDomain()
         matches.addResult(
             matchId = match.id,
             sets =
@@ -149,7 +150,7 @@ class MatchRepositoryTest {
                         createdBy = creator,
                         eventId = eventId,
                     ),
-            )
+            ).toDomain()
         matches.addResult(
             matchId = match.id,
             sets =
@@ -198,7 +199,7 @@ class MatchRepositoryTest {
                         team2Name = "T2",
                         createdBy = winners.first(),
                     ),
-            )
+            ).toDomain()
         matches.addResult(
             matchId = match.id,
             sets = listOf(element = MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 0, winnerTeamId = match.team1.teamId)),
@@ -228,8 +229,8 @@ class MatchRepositoryTest {
                         isPlacementMatch = true,
                         placementBracket = PlacementBracket.CHAMPIONSHIP_FINALS,
                     ),
-            )
-        matches.findById(matchId = placement.id).shouldBeRight().let {
+            ).toDomain()
+        matches.findById(matchId = placement.id).shouldBeRight().toDomain().let {
             it.isPlacementMatch shouldBe true
             it.placementBracket shouldBe PlacementBracket.CHAMPIONSHIP_FINALS
         }
@@ -284,7 +285,7 @@ class MatchRepositoryTest {
                         team2Name = "T2",
                         createdBy = a,
                     ),
-            )
+            ).toDomain()
         matches.addResult(
             matchId = match.id,
             sets = listOf(element = MatchSetResult(setNumber = 1, team1Games = 2, team2Games = 6, winnerTeamId = match.team2.teamId)),
@@ -330,14 +331,14 @@ class MatchRepositoryTest {
         events.finalize(id = eventB, finalizedAt = LocalDateTime.now(), finalizedBy = u1)
 
         // Default: event A (ends 1/10; a2 dragged first, then the a1/a3 tie) → eventless (1/15) → event B.
-        val order = matches.listPendingCalculation().map { it.id }
+        val order = matches.listPendingCalculation().map { it.toDomain().id }
         order.first() shouldBe a2
         order.subList(fromIndex = 1, toIndex = 3).toSet() shouldBe setOf(a1, a3)
         order.subList(fromIndex = 3, toIndex = 5) shouldBe listOf(open, b1)
 
         // Admin bumps event B ahead of everything by giving it the lowest processing key.
         events.setCalcPriority(id = eventB, priority = 0.0)
-        val overridden = matches.listPendingCalculation().map { it.id }
+        val overridden = matches.listPendingCalculation().map { it.toDomain().id }
         overridden.first() shouldBe b1
         overridden[1] shouldBe a2
         overridden.subList(fromIndex = 2, toIndex = 4).toSet() shouldBe setOf(a1, a3)
@@ -360,7 +361,7 @@ class MatchRepositoryTest {
         completedMatch(u1 = host, u2 = p2, matchDate = LocalDate.of(2026, 2, 18), eventId = other)
         completedMatch(u1 = host, u2 = p1, matchDate = LocalDate.of(2026, 2, 15))
 
-        matches.listPendingCalculation(eventId = target).map { it.id }.toSet() shouldBe setOf(byHost, byOther)
+        matches.listPendingCalculation(eventId = target).map { it.toDomain().id }.toSet() shouldBe setOf(byHost, byOther)
     }
 
     @Test
@@ -373,7 +374,7 @@ class MatchRepositoryTest {
         // A fixture created by another host must be excluded from a creator-scoped list.
         completedMatchCreatedBy(creator = otherHost, u1 = otherHost, u2 = p2, matchDate = LocalDate.of(2026, 3, 1))
 
-        matches.listPendingCalculation(createdBy = host).map { it.id } shouldBe listOf(element = mine)
+        matches.listPendingCalculation(createdBy = host).map { it.toDomain().id } shouldBe listOf(element = mine)
     }
 
     @Test
@@ -384,7 +385,7 @@ class MatchRepositoryTest {
         val u1 = newUser(uid = "u1")
         val u2 = newUser(uid = "u2")
         val only = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 1))
-        matches.listPendingCalculation(createdBy = u1).map { it.id } shouldBe listOf(element = only)
+        matches.listPendingCalculation(createdBy = u1).map { it.toDomain().id } shouldBe listOf(element = only)
     }
 
     @Test
@@ -396,22 +397,22 @@ class MatchRepositoryTest {
         val eventless = completedMatch(u1 = u1, u2 = u2, matchDate = LocalDate.of(2026, 1, 2))
 
         // While the event is open, only the event-less match is eligible; the evented one is held back.
-        matches.listPendingCalculation().map { it.id }.let { queued ->
+        matches.listPendingCalculation().map { it.toDomain().id }.let { queued ->
             queued shouldContain eventless
             queued shouldNotContain evented
         }
-        matches.listPendingCalculation(createdBy = u1).map { it.id }.let { queued ->
+        matches.listPendingCalculation(createdBy = u1).map { it.toDomain().id }.let { queued ->
             queued shouldContain eventless
             queued shouldNotContain evented
         }
 
         // Once the event is finalized, its match becomes eligible too.
         events.finalize(id = eventId, finalizedAt = LocalDateTime.now(), finalizedBy = u1)
-        matches.listPendingCalculation().map { it.id }.let { queued ->
+        matches.listPendingCalculation().map { it.toDomain().id }.let { queued ->
             queued shouldContain eventless
             queued shouldContain evented
         }
-        matches.listPendingCalculation(createdBy = u1).map { it.id } shouldContain evented
+        matches.listPendingCalculation(createdBy = u1).map { it.toDomain().id } shouldContain evented
     }
 
     @Test
@@ -438,7 +439,7 @@ class MatchRepositoryTest {
         val newer = fixture(u1 = b, u2 = a, date = LocalDate.of(2026, 2, 1)) // reversed sides still count
         fixture(u1 = a, u2 = c, date = LocalDate.of(2026, 1, 15)) // a vs c — not the pair
 
-        matches.listBetweenUsers(userIdA = a, userIdB = b).map { it.id } shouldBe listOf(newer.id, older.id)
+        matches.listBetweenUsers(userIdA = a, userIdB = b).map { it.toDomain().id } shouldBe listOf(newer.id, older.id)
     }
 
     @Test
@@ -480,6 +481,7 @@ class MatchRepositoryTest {
                     recordedBy = u1,
                     completedAt = LocalDateTime.now(),
                 ).shouldBeRight()
+                .toDomain()
 
         completed.status shouldBe MatchStatus.COMPLETED
         completed.winnerTeamId shouldBe t1
@@ -533,6 +535,7 @@ class MatchRepositoryTest {
                     recordedBy = u1,
                     completedAt = LocalDateTime.now(),
                 ).shouldBeRight()
+                .toDomain()
 
         completed.sets.size shouldBe 1
         completed.sets[0].tiebreakTeam1Points.shouldBeNull()
@@ -566,7 +569,7 @@ class MatchRepositoryTest {
             MatchesTable.update(where = { MatchesTable.id eq match.id }) { it[createdBy] = null }
         }
 
-        val reloaded = matches.findById(matchId = match.id).shouldBeRight()
+        val reloaded = matches.findById(matchId = match.id).shouldBeRight().toDomain()
 
         reloaded.createdBy.shouldBeNull()
     }
@@ -575,10 +578,10 @@ class MatchRepositoryTest {
     fun `setActive disables and re-enables`() {
         val match = fixture(u1 = newUser(uid = "u1"), u2 = newUser(uid = "u2"))
 
-        matches.setActive(matchId = match.id, active = false, disabledAt = LocalDateTime.now()).shouldBeRight().let {
+        matches.setActive(matchId = match.id, active = false, disabledAt = LocalDateTime.now()).shouldBeRight().toDomain().let {
             it.isActive.shouldBeFalse()
         }
-        matches.setActive(matchId = match.id, active = true, disabledAt = null).shouldBeRight().isActive.shouldBeTrue()
+        matches.setActive(matchId = match.id, active = true, disabledAt = null).shouldBeRight().toDomain().isActive.shouldBeTrue()
     }
 
     @Test
@@ -598,7 +601,7 @@ class MatchRepositoryTest {
         )
         val scheduled = fixture(u1 = newUser(uid = "b1"), u2 = newUser(uid = "b2"))
 
-        val pending = matches.listPendingCalculation().map { it.id }
+        val pending = matches.listPendingCalculation().map { it.toDomain().id }
         pending shouldContain completed.id
         pending shouldNotContain scheduled.id
     }
@@ -678,7 +681,7 @@ class MatchRepositoryTest {
         val today = fixture(u1 = newUser(uid = "t1"), u2 = newUser(uid = "t2"), date = LocalDate.now())
         val future = fixture(u1 = newUser(uid = "f1"), u2 = newUser(uid = "f2"), date = LocalDate.of(2999, 1, 1))
 
-        val awaiting = matches.listAwaitingResults().map { it.id }
+        val awaiting = matches.listAwaitingResults().map { it.toDomain().id }
         awaiting shouldContain overdue.id
         awaiting shouldContain today.id
         awaiting shouldContain future.id
@@ -726,7 +729,7 @@ class MatchRepositoryTest {
         // Soft-delete the container event (the state both event-delete and club-delete cascades produce).
         events.setActive(id = deletedEvent, active = false, disabledAt = LocalDateTime.now())
 
-        val history = matches.listByUser(userId = u1).map { it.id }
+        val history = matches.listByUser(userId = u1).map { it.toDomain().id }
 
         history shouldContainExactlyInAnyOrder listOf(inActive, standalone)
         history shouldNotContain inDeleted
@@ -761,7 +764,7 @@ class MatchRepositoryTest {
         matches.setActive(matchId = directlyDeleted, active = false, disabledAt = LocalDateTime.now())
         events.setActive(id = deletedEvent, active = false, disabledAt = LocalDateTime.now())
 
-        val meetings = matches.listBetweenUsers(userIdA = a, userIdB = b).map { it.id }
+        val meetings = matches.listBetweenUsers(userIdA = a, userIdB = b).map { it.toDomain().id }
 
         meetings shouldContainExactlyInAnyOrder listOf(element = standalone)
         meetings shouldNotContain underDeletedEvent
@@ -793,7 +796,7 @@ class MatchRepositoryTest {
         // Directly soft-delete the match (its event is null, so this is a direct is_active flip).
         matches.setActive(matchId = deleted, active = false, disabledAt = LocalDateTime.now())
 
-        val history = matches.listByUser(userId = u1).map { it.id }
+        val history = matches.listByUser(userId = u1).map { it.toDomain().id }
 
         history shouldContainExactlyInAnyOrder listOf(element = active)
         history shouldNotContain deleted
@@ -835,7 +838,7 @@ class MatchRepositoryTest {
         matches.setActive(matchId = match.id, active = false, disabledAt = LocalDateTime.now())
 
         // The public match page (/matches/:code) must still open a deleted match, flagged as deleted.
-        val resolved = matches.findByPublicCode(code = match.publicCode)
+        val resolved = matches.findByPublicCode(code = match.publicCode)?.toDomain()
         resolved.shouldNotBeNull()
         resolved.id shouldBe match.id
         resolved.isActive.shouldBeFalse()

@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test
 import org.skopeo.common.security.Capability
 import org.skopeo.dto.event.CreateEventRequest
 import org.skopeo.dto.event.EventResponse
+import org.skopeo.mapper.entity.match.toDomain
 import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.CreateFixtureCommand
@@ -202,7 +203,7 @@ class EventFinalizeApiIntegrationTest {
                         createdBy = host.id,
                         eventId = eventId,
                     ),
-            )
+            ).toDomain()
         matchRepo.addResult(
             matchId = fixture.id,
             sets = listOf(element = MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 4, winnerTeamId = fixture.team1.teamId)),

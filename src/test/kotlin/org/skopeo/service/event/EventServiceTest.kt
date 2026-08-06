@@ -24,6 +24,7 @@ import org.skopeo.common.security.Capability
 import org.skopeo.dto.event.EventResponse
 import org.skopeo.mapper.entity.club.toDomain
 import org.skopeo.mapper.entity.event.toDomain
+import org.skopeo.mapper.entity.match.toDomain
 import org.skopeo.mapper.entity.ranking.toDomain
 import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
@@ -587,7 +588,7 @@ class EventServiceTest {
                     createdBy = host.id,
                     eventId = eventId,
                 ),
-        )
+        ).toDomain()
 
     private fun recordResult(match: Match) {
         matchRepo.addResult(
@@ -1364,9 +1365,9 @@ class EventServiceTest {
                         isPlacementMatch = placementBracket != null,
                         placementBracket = placementBracket,
                     ),
-            )
+            ).toDomain()
         recordResult(match = match)
-        return matchRepo.findById(matchId = match.id).shouldBeRight()
+        return matchRepo.findById(matchId = match.id).shouldBeRight().toDomain()
     }
 
     private fun rate(
@@ -1759,7 +1760,7 @@ class EventServiceTest {
                         isPlacementMatch = true,
                         placementBracket = PlacementBracket.CHAMPIONSHIP_FINALS,
                     ),
-            )
+            ).toDomain()
         // team2 (p2) wins the Super Finals → p2 places 1st (40), the team1 loser places 2nd (30).
         matchRepo.addResult(
             matchId = match.id,

@@ -20,6 +20,7 @@ import org.skopeo.mapper.dto.event.toResponse
 import org.skopeo.mapper.dto.match.toPublicResponse
 import org.skopeo.mapper.entity.club.toDomain
 import org.skopeo.mapper.entity.event.toDomain
+import org.skopeo.mapper.entity.match.toDomain
 import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
@@ -388,7 +389,7 @@ class EventService(
             val isAdminOrOwner = caller.capabilities.any { it == Capability.ADMINISTRATOR || it == Capability.CLUB_OWNER }
             ensure(condition = isAdminOrOwner || event.createdBy == caller.id) { ServiceError.Forbidden() }
             ensure(condition = event.isFinalized) { ServiceError.Validation(message = "Event is not finalized") }
-            ensure(condition = matches.listByEvent(eventId = id).none { it.ratedAt != null }) {
+            ensure(condition = matches.listByEvent(eventId = id).map { it.toDomain() }.none { it.ratedAt != null }) {
                 ServiceError.Validation(
                     message =
                         "This event has already-rated matches; un-finalize cannot reverse rating history. " +
@@ -427,7 +428,7 @@ class EventService(
             val event =
                 ensureNotNull(value = events.findById(id = id)?.toDomain()) { ServiceError.NotFound(message = "Event $id not found") }
             ensure(condition = event.isFinalized) { ServiceError.Validation(message = "Event is not finalized") }
-            ensure(condition = matches.listByEvent(eventId = id).any { it.ratedAt != null }) {
+            ensure(condition = matches.listByEvent(eventId = id).map { it.toDomain() }.any { it.ratedAt != null }) {
                 ServiceError.Validation(
                     message = "This event has no rated matches to reverse; use un-finalize instead.",
                 )
@@ -464,7 +465,7 @@ class EventService(
             val isAdmin = caller.capabilities.contains(element = Capability.ADMINISTRATOR)
             ensure(condition = isAdmin || event.createdBy == caller.id) { ServiceError.Forbidden() }
 
-            val eventMatches = matches.listByEvent(eventId = id)
+            val eventMatches = matches.listByEvent(eventId = id).map { it.toDomain() }
             ensure(condition = eventMatches.none { it.ratedAt != null }) {
                 ServiceError.Conflict(message = "This event has rated matches and can't be deleted")
             }
@@ -607,7 +608,7 @@ class EventService(
                 caller
                     ?.let { c -> events.participantsOf(eventId = event.id).firstOrNull { it.userId == c.id } }
                     ?.let { it.status.name }
-            val eventMatches = matches.listByEvent(eventId = event.id)
+            val eventMatches = matches.listByEvent(eventId = event.id).map { it.toDomain() }
             val matchPlayerIds = eventMatches.flatMap { it.team1.userIds + it.team2.userIds }
             val byId =
                 users

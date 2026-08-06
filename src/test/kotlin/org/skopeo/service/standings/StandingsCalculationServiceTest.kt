@@ -16,6 +16,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
+import org.skopeo.mapper.entity.match.toDomain
 import org.skopeo.mapper.entity.ranking.toDomain
 import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuthProvider
@@ -157,7 +158,7 @@ class StandingsCalculationServiceTest {
                         team2Name = "T2",
                         createdBy = u1,
                     ),
-            )
+            ).toDomain()
         matches.addResult(
             matchId = match.id,
             sets = listOf(element = MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 0, winnerTeamId = match.team1.teamId)),

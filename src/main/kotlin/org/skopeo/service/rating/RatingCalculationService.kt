@@ -14,6 +14,7 @@ import org.skopeo.common.security.Capability
 import org.skopeo.dto.RankingCalculationRequest
 import org.skopeo.dto.rating.CalculationResponse
 import org.skopeo.mapper.dto.rating.toResponse
+import org.skopeo.mapper.entity.match.toDomain
 import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
@@ -73,7 +74,7 @@ class RatingCalculationService(
             // The full pending timeline in global processing order (#335). A selection scopes the run to
             // a leading PREFIX of it (#479) — ratings carry forward in date order, so an earlier pending
             // match may never be skipped. selectPrefix enforces that and returns the scoped, ordered list.
-            val pending = matches.listPendingCalculation()
+            val pending = matches.listPendingCalculation().map { it.toDomain() }
             val scoped = selectPrefix(pending = pending, eventIds = eventIds).bind()
             val processed = scoped.map { processMatch(match = it, snapshot = snapshot).bind() }
 

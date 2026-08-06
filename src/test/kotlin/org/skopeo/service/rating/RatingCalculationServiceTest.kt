@@ -27,6 +27,7 @@ import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.dto.match.SetScoreRequest
 import org.skopeo.mapper.dto.rating.toResponse
 import org.skopeo.mapper.entity.event.toDomain
+import org.skopeo.mapper.entity.match.toDomain
 import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
@@ -282,7 +283,7 @@ class RatingCalculationServiceTest {
         }
         // nothing persisted
         ratings.findCurrentRating(userId = p1.id)!!.currentRating shouldBe BigDecimal("4.000000")
-        matchRepo.findById(matchId = matchId).shouldBeRight().ratedAt.shouldBeNull()
+        matchRepo.findById(matchId = matchId).shouldBeRight().toDomain().ratedAt.shouldBeNull()
         matchRepo.listPendingCalculation().size shouldBe 1
     }
 
@@ -363,7 +364,7 @@ class RatingCalculationServiceTest {
             it.matchId shouldBe matchId
             // The source match's completed_at is snapshotted onto the history row as the ordering
             // tiebreaker (#301); it matches what the match itself records.
-            it.completedAt shouldBe matchRepo.findById(matchId = matchId).shouldBeRight().completedAt
+            it.completedAt shouldBe matchRepo.findById(matchId = matchId).shouldBeRight().toDomain().completedAt
             it.completedAt.shouldNotBeNull()
             // The v2 per-set breakdown is persisted at commit and round-trips through the JSON column (#110);
             // the net fields stay null for v2.
@@ -377,7 +378,7 @@ class RatingCalculationServiceTest {
                 set.isUpset shouldBe false
             }
         }
-        matchRepo.findById(matchId = matchId).shouldBeRight().ratedAt.shouldNotBeNull()
+        matchRepo.findById(matchId = matchId).shouldBeRight().toDomain().ratedAt.shouldNotBeNull()
         matchRepo.listPendingCalculation().shouldBe(expected = emptyList())
 
         // idempotent — nothing left to process
@@ -459,14 +460,14 @@ class RatingCalculationServiceTest {
 
         // Commit while the event is still open: the event-less match is rated, the evented one is not.
         calc.calculate(token = token(uid = "root"), dryRun = false).shouldBeRight()
-        matchRepo.findById(matchId = eventless).shouldBeRight().ratedAt.shouldNotBeNull()
-        matchRepo.findById(matchId = UUID.fromString(eventedFixture.id)).shouldBeRight().ratedAt.shouldBeNull()
+        matchRepo.findById(matchId = eventless).shouldBeRight().toDomain().ratedAt.shouldNotBeNull()
+        matchRepo.findById(matchId = UUID.fromString(eventedFixture.id)).shouldBeRight().toDomain().ratedAt.shouldBeNull()
 
         // After finalizing the event, its match becomes eligible and a commit rates it.
         val root = users.findByFirebaseUid(firebaseUid = "root")!!.toDomain().id
         eventRepo.finalize(id = event.id, finalizedAt = LocalDateTime.now(), finalizedBy = root)
         calc.calculate(token = token(uid = "root"), dryRun = false).shouldBeRight()
-        matchRepo.findById(matchId = UUID.fromString(eventedFixture.id)).shouldBeRight().ratedAt.shouldNotBeNull()
+        matchRepo.findById(matchId = UUID.fromString(eventedFixture.id)).shouldBeRight().toDomain().ratedAt.shouldNotBeNull()
     }
 
     @Test

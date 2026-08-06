@@ -27,6 +27,7 @@ import org.skopeo.dto.match.MatchResponse
 import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.dto.match.SetScoreRequest
 import org.skopeo.mapper.entity.event.toDomain
+import org.skopeo.mapper.entity.match.toDomain
 import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
@@ -1253,7 +1254,7 @@ class MatchServiceTest {
         service.setActive(token = token(uid = "host"), matchId = UUID.fromString(match.id), active = false).shouldBeRight()
 
         // #502: a directly soft-deleted match drops out of the history listing on both profiles...
-        matchRepo.listByUser(userId = p1.id).map { it.id } shouldNotContain UUID.fromString(match.id)
+        matchRepo.listByUser(userId = p1.id).map { it.toDomain().id } shouldNotContain UUID.fromString(match.id)
         // ...yet its shared link still resolves (#325), flagged as deleted.
         service.publicByCode(token = token(uid = "host"), code = match.publicCode).shouldBeRight().isActive shouldBe false
     }
@@ -1270,8 +1271,8 @@ class MatchServiceTest {
 
         service.reorder(token = token(uid = "host"), matchIds = listOf(UUID.fromString(m2.id), UUID.fromString(m1.id))).shouldBeRight()
 
-        matchRepo.findById(matchId = UUID.fromString(m2.id)).shouldBeRight().calcSequence shouldBe 0
-        matchRepo.findById(matchId = UUID.fromString(m1.id)).shouldBeRight().calcSequence shouldBe 1
+        matchRepo.findById(matchId = UUID.fromString(m2.id)).shouldBeRight().toDomain().calcSequence shouldBe 0
+        matchRepo.findById(matchId = UUID.fromString(m1.id)).shouldBeRight().toDomain().calcSequence shouldBe 1
     }
 
     @Test
