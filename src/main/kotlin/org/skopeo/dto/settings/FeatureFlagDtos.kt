@@ -23,3 +23,21 @@ data class FacebookLoginResponse(
 data class SetFacebookLoginRequest(
     val enabled: Boolean,
 )
+
+/**
+ * The "award ranking points" feature flag (#641): whether the event-create form shows the "Award Ranking
+ * Points" checkbox, plus provenance. Default is disabled (checkbox hidden) so hosts can't opt an event
+ * into awarding until an admin turns it on.
+ */
+@Serializable
+data class AwardRankingPointsResponse(
+    val enabled: Boolean,
+    val updatedAt: String? = null,
+    val updatedBy: String? = null,
+)
+
+/** Body for `PUT /api/v1/settings/award-ranking-points` — show/hide the award-points checkbox (#641). */
+@Serializable
+data class SetAwardRankingPointsRequest(
+    val enabled: Boolean,
+)

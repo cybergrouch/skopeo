@@ -179,4 +179,44 @@ class SettingsServiceTest {
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
+
+    @Test
+    fun `award ranking points defaults to disabled when no setting row exists (#641)`() {
+        service.getAwardRankingPoints().enabled shouldBe false
+    }
+
+    @Test
+    fun `award ranking points reads a stored true value (#641)`() {
+        val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        settings.upsert(key = "award_ranking_points_enabled", value = "true", updatedBy = admin.id)
+        service.getAwardRankingPoints().enabled shouldBe true
+    }
+
+    @Test
+    fun `award ranking points falls back to disabled when the stored value is not boolean (#641)`() {
+        val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        settings.upsert(key = "award_ranking_points_enabled", value = "maybe", updatedBy = admin.id)
+        service.getAwardRankingPoints().enabled shouldBe false
+    }
+
+    @Test
+    fun `an admin enables award ranking points and the read reflects it, with an audit entry (#641)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+
+        val set = service.setAwardRankingPoints(token = token(uid = "admin"), enabled = true).shouldBeRight()
+
+        set.enabled shouldBe true
+        service.getAwardRankingPoints().enabled shouldBe true
+        AuditRepository()
+            .list(actions = listOf(element = AuditAction.SETTINGS_AWARD_RANKING_POINTS_CHANGED), limit = 10, offset = 0)
+            .second shouldBe 1L
+    }
+
+    @Test
+    fun `a non-admin cannot set the award ranking points flag (#641)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        service.setAwardRankingPoints(token = token(uid = "host"), enabled = true)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
 }

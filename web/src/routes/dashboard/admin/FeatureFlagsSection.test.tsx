@@ -4,14 +4,18 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { FeatureFlagsSection } from "./FeatureFlagsSection";
 
-const { useMe, usePutRaw, rawMutate, useFbFlag, usePutFb, fbMutate } = vi.hoisted(() => ({
-  useMe: vi.fn(),
-  usePutRaw: vi.fn(),
-  rawMutate: vi.fn(),
-  useFbFlag: vi.fn(),
-  usePutFb: vi.fn(),
-  fbMutate: vi.fn(),
-}));
+const { useMe, usePutRaw, rawMutate, useFbFlag, usePutFb, fbMutate, useAwardFlag, usePutAward, awardMutate } =
+  vi.hoisted(() => ({
+    useMe: vi.fn(),
+    usePutRaw: vi.fn(),
+    rawMutate: vi.fn(),
+    useFbFlag: vi.fn(),
+    usePutFb: vi.fn(),
+    fbMutate: vi.fn(),
+    useAwardFlag: vi.fn(),
+    usePutAward: vi.fn(),
+    awardMutate: vi.fn(),
+  }));
 
 const { toastSuccess, toastError } = vi.hoisted(() => ({
   toastSuccess: vi.fn(),
@@ -28,6 +32,9 @@ vi.mock("@/api/generated/settings/settings", () => ({
   useGetApiV1SettingsFacebookLogin: useFbFlag,
   usePutApiV1SettingsFacebookLogin: usePutFb,
   getGetApiV1SettingsFacebookLoginQueryKey: () => ["fb"],
+  useGetApiV1SettingsAwardRankingPoints: useAwardFlag,
+  usePutApiV1SettingsAwardRankingPoints: usePutAward,
+  getGetApiV1SettingsAwardRankingPointsQueryKey: () => ["award"],
 }));
 
 type MutationOpts = { mutation: { onSuccess: () => void; onError?: (e: unknown) => void } };
@@ -45,6 +52,14 @@ describe("FeatureFlagsSection", () => {
     vi.clearAllMocks();
     useMe.mockReturnValue({ data: { previewRatingsAsNonAdmin: false }, isLoading: false });
     useFbFlag.mockReturnValue({ data: { enabled: true }, isLoading: false });
+    useAwardFlag.mockReturnValue({ data: { enabled: false }, isLoading: false });
+    usePutAward.mockImplementation((options: MutationOpts) => ({
+      isPending: false,
+      mutate: (vars: unknown) => {
+        awardMutate(vars);
+        options.mutation.onSuccess();
+      },
+    }));
     usePutRaw.mockImplementation((options: MutationOpts) => ({
       isPending: false,
       mutate: (vars: unknown) => {
@@ -116,6 +131,34 @@ describe("FeatureFlagsSection", () => {
     const user = userEvent.setup();
     renderSection();
     await user.click(screen.getByLabelText("Show raw NTRP ratings"));
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith("Could not update the setting. Try again.", {
+        duration: 8000,
+      }),
+    );
+  });
+
+  it("shows the award-ranking-points toggle unchecked when the flag is off (#641)", () => {
+    renderSection(); // beforeEach default: award flag disabled
+    expect(screen.getByLabelText("Enable award ranking points")).not.toBeChecked();
+  });
+
+  it("enabling award ranking points sends enabled=true and shows Saved (#641)", async () => {
+    const user = userEvent.setup();
+    renderSection();
+    await user.click(screen.getByLabelText("Enable award ranking points"));
+    await waitFor(() => expect(awardMutate).toHaveBeenCalledWith({ data: { enabled: true } }));
+    expect(toastSuccess).toHaveBeenCalledWith("Saved");
+  });
+
+  it("surfaces an error when saving the award-ranking-points flag fails (#641)", async () => {
+    usePutAward.mockImplementation((options: MutationOpts) => ({
+      isPending: false,
+      mutate: () => options.mutation.onError?.(new Error("boom")),
+    }));
+    const user = userEvent.setup();
+    renderSection();
+    await user.click(screen.getByLabelText("Enable award ranking points"));
     await waitFor(() =>
       expect(toastError).toHaveBeenCalledWith("Could not update the setting. Try again.", {
         duration: 8000,

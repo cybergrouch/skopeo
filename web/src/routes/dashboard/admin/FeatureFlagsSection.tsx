@@ -12,8 +12,11 @@ import {
   useGetApiV1UsersMe,
 } from "@/api/generated/users/users";
 import {
+  getGetApiV1SettingsAwardRankingPointsQueryKey,
   getGetApiV1SettingsFacebookLoginQueryKey,
+  useGetApiV1SettingsAwardRankingPoints,
   useGetApiV1SettingsFacebookLogin,
+  usePutApiV1SettingsAwardRankingPoints,
   usePutApiV1SettingsFacebookLogin,
   usePutApiV1UsersMeRatingPreview,
 } from "@/api/generated/settings/settings";
@@ -22,6 +25,8 @@ import {
  * Consolidated admin "Feature flags" section. Groups the app's toggle-style settings in one card:
  * - Facebook login (#647): a GLOBAL kill-switch — off hides the "Continue with Facebook" buttons on the
  *   sign-in/sign-up pages for everyone (interim, while the Meta app is misconfigured).
+ * - Award ranking points (#641): a GLOBAL flag — off hides the "Award Ranking Points" checkbox on the
+ *   event-create form so hosts can't opt an event into awarding.
  * - Show raw NTRP ratings (#583): a PER-ADMIN preference — lets this admin preview the non-admin
  *   experience on production without affecting anyone else.
  * The Admin tab is already ADMINISTRATOR-gated, so no extra gating here.
@@ -38,9 +43,57 @@ export function FeatureFlagsSection() {
       </CardHeader>
       <CardContent className="space-y-6">
         <FacebookLoginToggle />
+        <AwardRankingPointsToggle />
         <RawRatingsToggle />
       </CardContent>
     </Card>
+  );
+}
+
+/** Global feature flag (#641): show/hide the event-create "Award Ranking Points" checkbox. */
+function AwardRankingPointsToggle() {
+  const queryClient = useQueryClient();
+  const flagQuery = useGetApiV1SettingsAwardRankingPoints({ query: { retry: false } });
+  // Default to disabled while loading / when unset, matching the backend default.
+  const enabled = flagQuery.data?.enabled ?? false;
+
+  const setFlag = usePutApiV1SettingsAwardRankingPoints({
+    mutation: {
+      onSuccess: () => {
+        toast.success("Saved");
+        void queryClient.invalidateQueries({
+          queryKey: getGetApiV1SettingsAwardRankingPointsQueryKey(),
+        });
+      },
+      onError: () =>
+        toast.error("Could not update the setting. Try again.", { duration: 8000 }),
+    },
+  });
+
+  const onToggle = (checked: boolean) => {
+    setFlag.mutate({ data: { enabled: checked } });
+  };
+
+  return (
+    <div className="space-y-2">
+      <p className="text-sm font-medium">Award ranking points (global)</p>
+      <p className="text-xs text-muted-foreground">
+        When off, the "Award Ranking Points" checkbox is hidden on the event-create form, so no event can
+        be set to award points. Turn it on once awarding should be available.
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={enabled}
+            disabled={flagQuery.isLoading || setFlag.isPending}
+            onChange={(e) => onToggle(e.target.checked)}
+            aria-label="Enable award ranking points"
+          />
+          Enable award ranking points
+        </label>
+      </div>
+    </div>
   );
 }
 

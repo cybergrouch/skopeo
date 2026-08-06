@@ -19,6 +19,7 @@ import {
 import { useGetApiV1Clubs } from "@/api/generated/clubs/clubs";
 import { useGetApiV1Circuits } from "@/api/generated/circuits/circuits";
 import { useGetApiV1UsersMe } from "@/api/generated/users/users";
+import { useGetApiV1SettingsAwardRankingPoints } from "@/api/generated/settings/settings";
 import type {
   ClubResponse,
   EventResponse,
@@ -84,6 +85,10 @@ function NewEventForm() {
   // Circuits to file a TOURNAMENT under (#525). Staff-readable; empty when none exist.
   const circuits = useGetApiV1Circuits().data ?? [];
   const me = useGetApiV1UsersMe().data;
+  // Award-points checkbox is gated behind a feature flag (#641), default off — only show it when an
+  // admin has explicitly enabled it; while loading / unset it stays hidden (matching the backend default).
+  const awardPointsEnabled =
+    useGetApiV1SettingsAwardRankingPoints({ query: { retry: false } }).data?.enabled === true;
 
   // Default the selector to a CLUB_OWNER's own club (#364), but only while the field is untouched;
   // once the user selects anything (including "Open") their choice wins.
@@ -249,16 +254,19 @@ function NewEventForm() {
             </div>
           ) : null}
           {/* "Award Ranking Points" checkbox (#559): when set, finalizing the event awards ranking points
-              per the global schedules. Defaulted OFF during the testing phase (#567), revert to on later. */}
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={awardRankingPoints}
-              onChange={(e) => setAwardRankingPoints(e.target.checked)}
-              aria-label="Award Ranking Points"
-            />
-            Award Ranking Points
-          </label>
+              per the global schedules. Gated behind an admin feature flag (#641, default off) so hosts
+              can't opt an event into awarding until it's enabled; hidden → the payload stays false. */}
+          {awardPointsEnabled ? (
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={awardRankingPoints}
+                onChange={(e) => setAwardRankingPoints(e.target.checked)}
+                aria-label="Award Ranking Points"
+              />
+              Award Ranking Points
+            </label>
+          ) : null}
           <div className="space-y-1">
             <Label className="text-xs">Participants</Label>
             {roster.length > 0 ? (
