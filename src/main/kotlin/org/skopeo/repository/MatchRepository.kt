@@ -37,6 +37,7 @@ import org.skopeo.model.TeamType
 import org.skopeo.model.WinLossRecord
 import org.skopeo.model.WindowMatch
 import org.skopeo.model.weightClass
+import org.skopeo.persistence.MatchEntity
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -187,7 +188,7 @@ class MatchRepository {
                 .selectAll()
                 .where { MatchesTable.publicCode eq code }
                 .singleOrNull()
-                ?.let { row -> buildMatch(id = row[MatchesTable.id].value, row = row) }
+                ?.let { row -> buildMatch(row = row) }
         }
 
     /** Every active match in an event (#138), newest match date first — for the public event page. */
@@ -688,44 +689,77 @@ class MatchRepository {
     }
 
     private fun loadMatch(id: UUID): Match? =
-        MatchesTable.selectAll().where { MatchesTable.id eq id }.singleOrNull()?.let { row -> buildMatch(id = id, row = row) }
+        MatchesTable.selectAll().where { MatchesTable.id eq id }.singleOrNull()?.let { row -> buildMatch(row = row) }
 }
 
 /** Reload a match that is known to exist (e.g. just inserted/updated) — no caller-side null branch. */
-private fun loadMatchOrThrow(id: UUID): Match = buildMatch(id = id, row = MatchesTable.selectAll().where { MatchesTable.id eq id }.single())
+private fun loadMatchOrThrow(id: UUID): Match = buildMatch(row = MatchesTable.selectAll().where { MatchesTable.id eq id }.single())
 
 /** A unique shareable match code (#136), retrying on the rare collision. Must run in a transaction. */
 private fun generateUniqueMatchCode(): String =
     PublicCode.generate { code -> MatchesTable.selectAll().where { MatchesTable.publicCode eq code }.any() }
 
-private fun buildMatch(
-    id: UUID,
-    row: ResultRow,
-): Match =
+private fun buildMatch(row: ResultRow): Match = row.toMatchEntity().toDomain()
+
+/** Map a `matches` row to the raw persistence entity (#633) — no assembled sides/sets, no enum parsing. */
+private fun ResultRow.toMatchEntity(): MatchEntity =
+    MatchEntity(
+        id = this[MatchesTable.id].value,
+        publicCode = this[MatchesTable.publicCode],
+        matchFormat = this[MatchesTable.matchFormat],
+        matchType = this[MatchesTable.matchType],
+        matchDate = this[MatchesTable.matchDate],
+        status = this[MatchesTable.status],
+        team1Id = this[MatchesTable.team1Id].value,
+        team2Id = this[MatchesTable.team2Id].value,
+        winnerTeamId = this[MatchesTable.winnerTeamId]?.value,
+        venue = this[MatchesTable.venue],
+        tournamentName = this[MatchesTable.tournamentName],
+        isActive = this[MatchesTable.isActive],
+        completedAt = this[MatchesTable.completedAt],
+        ratedAt = this[MatchesTable.ratedAt],
+        createdBy = this[MatchesTable.createdBy]?.value,
+        recordedBy = this[MatchesTable.recordedBy]?.value,
+        eventId = this[MatchesTable.eventId]?.value,
+        calcSequence = this[MatchesTable.calcSequence],
+        team1Handicap = this[MatchesTable.team1Handicap],
+        team2Handicap = this[MatchesTable.team2Handicap],
+        isPlacementMatch = this[MatchesTable.isPlacementMatch],
+        placementBracket = this[MatchesTable.placementBracket],
+    )
+
+/**
+ * Convert the raw persistence [MatchEntity] to the domain [Match] (#633): the single boundary where the
+ * stored enum strings are parsed ([TeamType]/[MatchType]/[MatchStatus]/[PlacementBracket]) and the child
+ * collections are attached — the two sides via [sideOf] (each with its ordered user ids) and the [sets]
+ * via [setsOf] (each with its optional tiebreak). Lives in the repository (which may reference both
+ * `persistence` and `model`) rather than a mapper, since `repository ↛ mapper` is enforced.
+ */
+private fun MatchEntity.toDomain(): Match =
     Match(
         id = id,
-        publicCode = row[MatchesTable.publicCode],
-        matchFormat = TeamType.valueOf(value = row[MatchesTable.matchFormat]),
-        matchType = MatchType.valueOf(value = row[MatchesTable.matchType]),
-        matchDate = row[MatchesTable.matchDate],
-        status = MatchStatus.valueOf(value = row[MatchesTable.status]),
-        team1 = sideOf(teamId = row[MatchesTable.team1Id].value),
-        team2 = sideOf(teamId = row[MatchesTable.team2Id].value),
-        winnerTeamId = row[MatchesTable.winnerTeamId]?.value,
+        publicCode = publicCode,
+        matchFormat = TeamType.valueOf(value = matchFormat),
+        matchType = MatchType.valueOf(value = matchType),
+        matchDate = matchDate,
+        status = MatchStatus.valueOf(value = status),
+        team1 = sideOf(teamId = team1Id),
+        team2 = sideOf(teamId = team2Id),
+        winnerTeamId = winnerTeamId,
         sets = setsOf(matchId = id),
-        venue = row[MatchesTable.venue],
-        tournamentName = row[MatchesTable.tournamentName],
-        isActive = row[MatchesTable.isActive],
-        completedAt = row[MatchesTable.completedAt],
-        ratedAt = row[MatchesTable.ratedAt],
-        createdBy = row[MatchesTable.createdBy]?.value,
-        recordedBy = row[MatchesTable.recordedBy]?.value,
-        eventId = row[MatchesTable.eventId]?.value,
-        calcSequence = row[MatchesTable.calcSequence],
-        team1Handicap = row[MatchesTable.team1Handicap],
-        team2Handicap = row[MatchesTable.team2Handicap],
-        isPlacementMatch = row[MatchesTable.isPlacementMatch],
-        placementBracket = row[MatchesTable.placementBracket]?.let { PlacementBracket.valueOf(value = it) },
+        venue = venue,
+        tournamentName = tournamentName,
+        isActive = isActive,
+        completedAt = completedAt,
+        ratedAt = ratedAt,
+        createdBy = createdBy,
+        recordedBy = recordedBy,
+        eventId = eventId,
+        calcSequence = calcSequence,
+        team1Handicap = team1Handicap,
+        team2Handicap = team2Handicap,
+        isPlacementMatch = isPlacementMatch,
+        placementBracket = placementBracket?.let { PlacementBracket.valueOf(value = it) },
     )
 
 private fun sideOf(teamId: UUID): MatchSide =
