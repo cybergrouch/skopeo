@@ -150,4 +150,19 @@ describe("FeatureFlagsSection", () => {
     await waitFor(() => expect(awardMutate).toHaveBeenCalledWith({ data: { enabled: true } }));
     expect(toastSuccess).toHaveBeenCalledWith("Saved");
   });
+
+  it("surfaces an error when saving the award-ranking-points flag fails (#641)", async () => {
+    usePutAward.mockImplementation((options: MutationOpts) => ({
+      isPending: false,
+      mutate: () => options.mutation.onError?.(new Error("boom")),
+    }));
+    const user = userEvent.setup();
+    renderSection();
+    await user.click(screen.getByLabelText("Enable award ranking points"));
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith("Could not update the setting. Try again.", {
+        duration: 8000,
+      }),
+    );
+  });
 });
