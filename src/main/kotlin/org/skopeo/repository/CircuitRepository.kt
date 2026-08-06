@@ -13,6 +13,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.model.Circuit
 import org.skopeo.model.CreateCircuitCommand
+import org.skopeo.persistence.CircuitEntity
 import java.util.UUID
 
 /**
@@ -65,11 +66,27 @@ class CircuitRepository {
             ) { it[isActive] = false } > 0
         }
 
-    private fun ResultRow.toCircuit(): Circuit =
-        Circuit(
+    private fun ResultRow.toCircuit(): Circuit = toCircuitEntity().toDomain()
+
+    /** Map a `circuits` row to the raw persistence entity (#633) — no derivations, no child rows. */
+    private fun ResultRow.toCircuitEntity(): CircuitEntity =
+        CircuitEntity(
             id = this[CircuitsTable.id].value,
             name = this[CircuitsTable.name],
             isActive = this[CircuitsTable.isActive],
             createdBy = this[CircuitsTable.createdBy]?.value,
+        )
+
+    /**
+     * Convert the raw persistence [CircuitEntity] to the domain [Circuit] (#633). A flat aggregate, so
+     * this is a field-for-field copy. Lives in the repository (which may reference both `persistence` and
+     * `model`) rather than a mapper, since `repository ↛ mapper` is enforced.
+     */
+    private fun CircuitEntity.toDomain(): Circuit =
+        Circuit(
+            id = id,
+            name = name,
+            isActive = isActive,
+            createdBy = createdBy,
         )
 }

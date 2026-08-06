@@ -9,30 +9,24 @@ import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
+import org.skopeo.persistence.PointsConfigEntity
 import java.time.LocalDateTime
 import java.util.UUID
 
-/** A single points_config row (#552/#553): the stored JSON value plus who last wrote it and when. */
-data class PointsConfigRow(
-    val key: String,
-    val value: String,
-    val updatedBy: UUID?,
-    val updatedAt: LocalDateTime,
-)
-
 /**
  * Persistence for the points_config JSON store (#552/#553). [get] reads one schedule by key; [upsert]
- * writes it (insert-or-update on the primary key), recording the admin and time.
+ * writes it (insert-or-update on the primary key), recording the admin and time. Returns the raw
+ * [PointsConfigEntity] (#633) — there is no separate domain type; the service decodes `value`.
  */
 class PointsConfigRepository {
-    fun get(key: String): PointsConfigRow? =
+    fun get(key: String): PointsConfigEntity? =
         transaction { PointsConfigTable.selectAll().where { PointsConfigTable.key eq key }.singleOrNull()?.toRow() }
 
     fun upsert(
         key: String,
         value: String,
         updatedBy: UUID,
-    ): PointsConfigRow =
+    ): PointsConfigEntity =
         transaction {
             val now = LocalDateTime.now()
             val exists = PointsConfigTable.selectAll().where { PointsConfigTable.key eq key }.any()
@@ -53,8 +47,8 @@ class PointsConfigRepository {
             PointsConfigTable.selectAll().where { PointsConfigTable.key eq key }.single().toRow()
         }
 
-    private fun ResultRow.toRow(): PointsConfigRow =
-        PointsConfigRow(
+    private fun ResultRow.toRow(): PointsConfigEntity =
+        PointsConfigEntity(
             key = this[PointsConfigTable.key],
             value = this[PointsConfigTable.value],
             updatedBy = this[PointsConfigTable.updatedBy]?.value,

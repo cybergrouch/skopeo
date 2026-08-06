@@ -15,6 +15,7 @@ import org.skopeo.model.PointClass
 import org.skopeo.model.PointSourceType
 import org.skopeo.model.RankingPointAward
 import org.skopeo.model.RankingPointAwardWrite
+import org.skopeo.persistence.RankingPointAwardEntity
 import java.math.BigDecimal
 import java.time.LocalDateTime
 import java.util.UUID
@@ -187,23 +188,46 @@ class RankingPointRepository {
         }.value
 }
 
-internal fun ResultRow.toRankingPointAward(): RankingPointAward =
-    RankingPointAward(
+internal fun ResultRow.toRankingPointAward(): RankingPointAward = toRankingPointAwardEntity().toDomain()
+
+internal fun ResultRow.toRankingPointAwardEntity(): RankingPointAwardEntity =
+    RankingPointAwardEntity(
         id = this[RankingPointAwardsTable.id].value,
         userId = this[RankingPointAwardsTable.userId].value,
         points = this[RankingPointAwardsTable.points],
-        pointClass = PointClass.valueOf(value = this[RankingPointAwardsTable.pointClass]),
-        sourceType = PointSourceType.valueOf(value = this[RankingPointAwardsTable.sourceType]),
+        pointClass = this[RankingPointAwardsTable.pointClass],
+        sourceType = this[RankingPointAwardsTable.sourceType],
         sourceId = this[RankingPointAwardsTable.sourceId],
         band = this[RankingPointAwardsTable.band],
         sex = this[RankingPointAwardsTable.sex],
         reason = this[RankingPointAwardsTable.reason],
         validFrom = this[RankingPointAwardsTable.validFrom],
         validUntil = this[RankingPointAwardsTable.validUntil],
-        status = AwardStatus.valueOf(value = this[RankingPointAwardsTable.status]),
+        status = this[RankingPointAwardsTable.status],
         revokesAwardId = this[RankingPointAwardsTable.revokesAwardId],
         grantedBy = this[RankingPointAwardsTable.grantedBy]?.value,
         awardedAt = this[RankingPointAwardsTable.awardedAt],
         eventId = this[RankingPointAwardsTable.eventId]?.value,
         matchId = this[RankingPointAwardsTable.matchId]?.value,
+    )
+
+internal fun RankingPointAwardEntity.toDomain(): RankingPointAward =
+    RankingPointAward(
+        id = id,
+        userId = userId,
+        points = points,
+        pointClass = PointClass.valueOf(value = pointClass),
+        sourceType = PointSourceType.valueOf(value = sourceType),
+        sourceId = sourceId,
+        band = band,
+        sex = sex,
+        reason = reason,
+        validFrom = validFrom,
+        validUntil = validUntil,
+        status = AwardStatus.valueOf(value = status),
+        revokesAwardId = revokesAwardId,
+        grantedBy = grantedBy,
+        awardedAt = awardedAt,
+        eventId = eventId,
+        matchId = matchId,
     )

@@ -20,6 +20,7 @@ import org.skopeo.model.ContactSource
 import org.skopeo.model.ContactType
 import org.skopeo.model.VerificationMethod
 import org.skopeo.model.VerificationStatus
+import org.skopeo.persistence.ContactEntity
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -173,18 +174,43 @@ class ContactRepository {
 }
 
 /** Map a contact_information row to the [Contact] domain type. Shared with [UserRepository]. */
-internal fun ResultRow.toContact(): Contact =
-    Contact(
+internal fun ResultRow.toContact(): Contact = toContactEntity().toDomain()
+
+/** Map a contact_information row to the raw persistence entity (#633) — no derivations, no child rows. */
+internal fun ResultRow.toContactEntity(): ContactEntity =
+    ContactEntity(
         id = this[ContactInformationTable.id].value,
         userId = this[ContactInformationTable.userId].value,
-        type = ContactType.valueOf(value = this[ContactInformationTable.contactType]),
+        type = this[ContactInformationTable.contactType],
         value = this[ContactInformationTable.value],
-        source = ContactSource.valueOf(value = this[ContactInformationTable.contactSource]),
-        status = VerificationStatus.valueOf(value = this[ContactInformationTable.verificationStatus]),
-        method = this[ContactInformationTable.verificationMethod]?.let(block = VerificationMethod::valueOf),
+        source = this[ContactInformationTable.contactSource],
+        status = this[ContactInformationTable.verificationStatus],
+        method = this[ContactInformationTable.verificationMethod],
         isPrimary = this[ContactInformationTable.isPrimary],
         isActive = this[ContactInformationTable.isActive],
         verifiedAt = this[ContactInformationTable.verifiedAt],
         verifiedBy = this[ContactInformationTable.verifiedBy]?.value,
         disabledAt = this[ContactInformationTable.disabledAt],
+    )
+
+/**
+ * Convert the raw persistence [ContactEntity] to the domain [Contact] (#633): the single boundary where
+ * the stored enum strings are parsed into their [ContactType]/[ContactSource]/[VerificationStatus]/
+ * [VerificationMethod] values. Lives in the repository (which may reference both `persistence` and
+ * `model`) rather than a mapper, since `repository ↛ mapper` is enforced.
+ */
+internal fun ContactEntity.toDomain(): Contact =
+    Contact(
+        id = id,
+        userId = userId,
+        type = ContactType.valueOf(value = type),
+        value = value,
+        source = ContactSource.valueOf(value = source),
+        status = VerificationStatus.valueOf(value = status),
+        method = method?.let(block = VerificationMethod::valueOf),
+        isPrimary = isPrimary,
+        isActive = isActive,
+        verifiedAt = verifiedAt,
+        verifiedBy = verifiedBy,
+        disabledAt = disabledAt,
     )

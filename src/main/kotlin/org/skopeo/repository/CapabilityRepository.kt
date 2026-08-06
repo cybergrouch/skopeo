@@ -11,6 +11,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.common.security.Capability
 import org.skopeo.model.CapabilityGrant
+import org.skopeo.persistence.CapabilityGrantEntity
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -101,8 +102,11 @@ class CapabilityRepository {
             .toCapabilityGrant()
 }
 
-internal fun ResultRow.toCapabilityGrant(): CapabilityGrant =
-    CapabilityGrant(
+internal fun ResultRow.toCapabilityGrant(): CapabilityGrant = toCapabilityGrantEntity().toDomain()
+
+/** Map a `user_capabilities` row to the raw persistence entity (#633) — no derivations, no child rows. */
+internal fun ResultRow.toCapabilityGrantEntity(): CapabilityGrantEntity =
+    CapabilityGrantEntity(
         id = this[UserCapabilitiesTable.id].value,
         userId = this[UserCapabilitiesTable.userId].value,
         capability = Capability.valueOf(value = this[UserCapabilitiesTable.capability]),
@@ -111,4 +115,17 @@ internal fun ResultRow.toCapabilityGrant(): CapabilityGrant =
         grantedAt = this[UserCapabilitiesTable.grantedAt],
         revokedBy = this[UserCapabilitiesTable.revokedBy]?.value,
         revokedAt = this[UserCapabilitiesTable.revokedAt],
+    )
+
+/** Convert the raw persistence [CapabilityGrantEntity] to the domain [CapabilityGrant] (#633). Flat: field-for-field copy. */
+internal fun CapabilityGrantEntity.toDomain(): CapabilityGrant =
+    CapabilityGrant(
+        id = id,
+        userId = userId,
+        capability = capability,
+        isActive = isActive,
+        grantedBy = grantedBy,
+        grantedAt = grantedAt,
+        revokedBy = revokedBy,
+        revokedAt = revokedAt,
     )

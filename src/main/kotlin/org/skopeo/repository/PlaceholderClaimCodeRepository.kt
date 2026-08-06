@@ -11,6 +11,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.model.ClaimCode
 import org.skopeo.model.ClaimCodeStatus
+import org.skopeo.persistence.ClaimCodeEntity
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -85,15 +86,30 @@ class PlaceholderClaimCodeRepository {
         PlaceholderClaimCodesTable.selectAll().where { PlaceholderClaimCodesTable.id eq id }.single().toClaimCode()
 }
 
-internal fun ResultRow.toClaimCode(): ClaimCode =
-    ClaimCode(
+internal fun ResultRow.toClaimCode(): ClaimCode = toClaimCodeEntity().toDomain()
+
+internal fun ResultRow.toClaimCodeEntity(): ClaimCodeEntity =
+    ClaimCodeEntity(
         id = this[PlaceholderClaimCodesTable.id].value,
         placeholderUserId = this[PlaceholderClaimCodesTable.placeholderUserId].value,
         codeHash = this[PlaceholderClaimCodesTable.codeHash],
         expiresAt = this[PlaceholderClaimCodesTable.expiresAt],
-        status = ClaimCodeStatus.valueOf(value = this[PlaceholderClaimCodesTable.status]),
+        status = this[PlaceholderClaimCodesTable.status],
         createdBy = this[PlaceholderClaimCodesTable.createdBy]?.value,
         createdAt = this[PlaceholderClaimCodesTable.createdAt],
         consumedAt = this[PlaceholderClaimCodesTable.consumedAt],
         consumedBy = this[PlaceholderClaimCodesTable.consumedBy]?.value,
+    )
+
+internal fun ClaimCodeEntity.toDomain(): ClaimCode =
+    ClaimCode(
+        id = id,
+        placeholderUserId = placeholderUserId,
+        codeHash = codeHash,
+        expiresAt = expiresAt,
+        status = ClaimCodeStatus.valueOf(value = status),
+        createdBy = createdBy,
+        createdAt = createdAt,
+        consumedAt = consumedAt,
+        consumedBy = consumedBy,
     )
