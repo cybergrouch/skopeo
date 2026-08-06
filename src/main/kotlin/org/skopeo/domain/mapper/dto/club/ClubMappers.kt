@@ -3,13 +3,13 @@
 
 package org.skopeo.domain.mapper.dto.club
 
+import org.skopeo.common.dto.club.ClubOwnerDto
+import org.skopeo.common.dto.club.ClubPublicEventDto
+import org.skopeo.common.dto.club.ClubPublicResponse
+import org.skopeo.common.dto.club.ClubResponse
 import org.skopeo.domain.model.ClubPublicEvent
 import org.skopeo.domain.model.ClubPublicView
 import org.skopeo.domain.model.ClubView
-import org.skopeo.dto.club.ClubOwnerDto
-import org.skopeo.dto.club.ClubPublicEventDto
-import org.skopeo.dto.club.ClubPublicResponse
-import org.skopeo.dto.club.ClubResponse
 
 fun ClubView.toResponse(): ClubResponse =
     ClubResponse(

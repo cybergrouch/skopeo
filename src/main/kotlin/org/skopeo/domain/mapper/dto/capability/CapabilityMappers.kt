@@ -3,8 +3,8 @@
 
 package org.skopeo.domain.mapper.dto.capability
 
+import org.skopeo.common.dto.capability.CapabilityResponse
 import org.skopeo.domain.model.CapabilityGrant
-import org.skopeo.dto.capability.CapabilityResponse
 
 fun CapabilityGrant.toResponse(): CapabilityResponse =
     CapabilityResponse(

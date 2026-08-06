@@ -9,6 +9,11 @@ import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.skopeo.common.dto.event.EventParticipantResponse
+import org.skopeo.common.dto.event.EventPublicResponse
+import org.skopeo.common.dto.event.EventResponse
+import org.skopeo.common.dto.event.MyEventResponse
+import org.skopeo.common.dto.match.MatchPublicPlayer
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.dto.event.toResponse
@@ -38,11 +43,6 @@ import org.skopeo.domain.service.rating.RatingAssembler
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.domain.service.user.displayName
 import org.skopeo.domain.service.user.isDeleted
-import org.skopeo.dto.event.EventParticipantResponse
-import org.skopeo.dto.event.EventPublicResponse
-import org.skopeo.dto.event.EventResponse
-import org.skopeo.dto.event.MyEventResponse
-import org.skopeo.dto.match.MatchPublicPlayer
 import org.skopeo.repository.CircuitRepository
 import org.skopeo.repository.ClubRepository
 import org.skopeo.repository.EventRepository

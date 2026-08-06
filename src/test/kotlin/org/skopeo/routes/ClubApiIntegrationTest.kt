@@ -23,6 +23,10 @@ import io.ktor.server.testing.testApplication
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.common.dto.club.AssignOwnerRequest
+import org.skopeo.common.dto.club.ClubPublicResponse
+import org.skopeo.common.dto.club.ClubResponse
+import org.skopeo.common.dto.club.CreateClubRequest
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuthProvider
@@ -31,10 +35,6 @@ import org.skopeo.domain.model.ProvisionUserCommand
 import org.skopeo.domain.model.User
 import org.skopeo.domain.model.UserIdentity
 import org.skopeo.domain.model.UserName
-import org.skopeo.dto.club.AssignOwnerRequest
-import org.skopeo.dto.club.ClubPublicResponse
-import org.skopeo.dto.club.ClubResponse
-import org.skopeo.dto.club.CreateClubRequest
 import org.skopeo.module
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase

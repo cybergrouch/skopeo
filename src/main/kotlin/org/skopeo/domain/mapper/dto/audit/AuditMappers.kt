@@ -3,15 +3,15 @@
 
 package org.skopeo.domain.mapper.dto.audit
 
+import org.skopeo.common.dto.audit.AuditEntryResponse
+import org.skopeo.common.dto.audit.AuditLogResponse
+import org.skopeo.common.dto.audit.AuditMatchResponse
+import org.skopeo.common.dto.audit.AuditPersonResponse
 import org.skopeo.domain.model.AuditEntryView
 import org.skopeo.domain.model.AuditLogViewPage
 import org.skopeo.domain.model.AuditMatchRef
 import org.skopeo.domain.model.AuditPersonRef
 import org.skopeo.domain.model.category
-import org.skopeo.dto.audit.AuditEntryResponse
-import org.skopeo.dto.audit.AuditLogResponse
-import org.skopeo.dto.audit.AuditMatchResponse
-import org.skopeo.dto.audit.AuditPersonResponse
 import java.time.ZoneOffset
 
 fun AuditLogViewPage.toResponse(): AuditLogResponse = AuditLogResponse(items = items.map { it.toResponse() }, total = total)

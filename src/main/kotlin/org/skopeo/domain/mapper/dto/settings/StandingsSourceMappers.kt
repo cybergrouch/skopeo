@@ -3,8 +3,8 @@
 
 package org.skopeo.domain.mapper.dto.settings
 
+import org.skopeo.common.dto.settings.StandingsSourceResponse
 import org.skopeo.domain.model.StandingsSourceValue
-import org.skopeo.dto.settings.StandingsSourceResponse
 
 fun StandingsSourceValue.toResponse(): StandingsSourceResponse =
     StandingsSourceResponse(

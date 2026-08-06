@@ -14,8 +14,10 @@ import org.junit.jupiter.api.Test
  *  - repository is the foundation — it never reaches up to routes/service/dto/mapper;
  *  - model is the domain — it never reaches routes/service/repository/dto/mapper; it MAY depend on the
  *    neutral `common` foundation (e.g. the `Capability` enum);
- *  - dto is a pure boundary record — it never reaches routes/repository/service, and never model
- *    (save for a small allowlist of shared `@Serializable` value types used as a wire contract, below);
+ *  - dto (`common.dto`) is a pure boundary record — it never reaches routes/repository/service, and never
+ *    model (save for a small allowlist of shared `@Serializable` value types used as a wire contract, below).
+ *    It lives UNDER `common` as the shared wire boundary both routes and service depend on, but is NOT a
+ *    pure leaf (the allowlisted DTOs embed model), so the `common`-leaf rule below excludes `common.dto`;
  *  - mapper owns the dto↔model translation — it depends on dto + model only, never routes/repository/service;
  *  - service never depends on the transport (routes); it MAY call mapper (one-way, acyclic);
  *  - routes never depend on mapper OR model — translation is hidden behind the service (services
@@ -50,7 +52,7 @@ class LayeredArchitectureTest {
         noClasses()
             .that().resideInAPackage("..repository..")
             .should().dependOnClassesThat()
-            .resideInAnyPackage("..routes..", "..service..", "org.skopeo.dto..", "..mapper..")
+            .resideInAnyPackage("..routes..", "..service..", "org.skopeo.common.dto..", "..mapper..")
             .check(classes)
     }
 
@@ -63,7 +65,7 @@ class LayeredArchitectureTest {
                 "..routes..",
                 "..service..",
                 "..repository..",
-                "org.skopeo.dto..",
+                "org.skopeo.common.dto..",
                 "..mapper..",
                 "org.skopeo.repository.persistence..",
             )
@@ -85,7 +87,7 @@ class LayeredArchitectureTest {
                 "..routes..",
                 "..service..",
                 "org.skopeo.repository",
-                "org.skopeo.dto..",
+                "org.skopeo.common.dto..",
                 "..mapper..",
                 "org.skopeo.domain.model..",
             )
@@ -94,18 +96,21 @@ class LayeredArchitectureTest {
 
     @Test
     fun `common is a cross-cutting foundation and never depends on model or any app layer`() {
-        // `common` holds shared, dependency-free value types — ServiceError (#115), the auth principals
-        // + the Capability enum (#597/#106), and the serializable points-config contracts (#552). ANY
-        // layer (including model) may depend on common; common itself depends on nothing above it — not
-        // even model. This is the sanctioned cross-cutting package.
+        // `common.{error,security,contract}` hold shared, dependency-free value types — ServiceError (#115),
+        // the auth principals + the Capability enum (#597/#106), and the serializable points-config
+        // contracts (#552). ANY layer (including model) may depend on them; they depend on nothing above,
+        // not even model. This rule EXCLUDES `common.dto` (`resideOutsideOfPackage`): the DTO wire boundary
+        // lives under `common` but is NOT a pure leaf — the three wire-contract DTOs embed `domain.model`
+        // value types (see the dto↔model allowlist rule). `common.dto` is governed by the dto rules below.
         noClasses()
             .that().resideInAPackage("org.skopeo.common..")
+            .and().resideOutsideOfPackage("org.skopeo.common.dto..")
             .should().dependOnClassesThat()
             .resideInAnyPackage(
                 "..routes..",
                 "..service..",
                 "..repository..",
-                "org.skopeo.dto..",
+                "org.skopeo.common.dto..",
                 "..mapper..",
                 "org.skopeo.domain.model..",
                 "org.skopeo.repository.persistence..",
@@ -116,7 +121,7 @@ class LayeredArchitectureTest {
     @Test
     fun `dto does not depend on routes or repository`() {
         noClasses()
-            .that().resideInAPackage("org.skopeo.dto..")
+            .that().resideInAPackage("org.skopeo.common.dto..")
             .should().dependOnClassesThat().resideInAnyPackage("..routes..", "..repository..")
             .check(classes)
     }
@@ -124,7 +129,7 @@ class LayeredArchitectureTest {
     @Test
     fun `dto does not depend on service`() {
         noClasses()
-            .that().resideInAPackage("org.skopeo.dto..")
+            .that().resideInAPackage("org.skopeo.common.dto..")
             .should().dependOnClassesThat().resideInAnyPackage("..service..")
             .check(classes)
     }
@@ -132,7 +137,7 @@ class LayeredArchitectureTest {
     @Test
     fun `dto is a pure record and does not depend on model, save the wire-contract value types`() {
         noClasses()
-            .that().resideInAPackage("org.skopeo.dto..")
+            .that().resideInAPackage("org.skopeo.common.dto..")
             .and().haveNameNotMatching(wireContractDtos)
             .should().dependOnClassesThat().resideInAPackage("org.skopeo.domain.model..")
             .check(classes)
@@ -167,7 +172,7 @@ class LayeredArchitectureTest {
         // package is intentionally empty until the #633 flip PRs populate it (this rule guards it early).
         noClasses()
             .that().resideInAPackage("org.skopeo.domain.mapper.entity..")
-            .should().dependOnClassesThat().resideInAPackage("org.skopeo.dto..")
+            .should().dependOnClassesThat().resideInAPackage("org.skopeo.common.dto..")
             .allowEmptyShould(true)
             .check(classes)
     }

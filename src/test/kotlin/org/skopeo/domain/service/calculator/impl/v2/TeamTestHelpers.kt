@@ -3,6 +3,7 @@
 
 package org.skopeo.domain.service.calculator.impl.v2
 
+import org.skopeo.common.dto.RankingCalculationRequest
 import org.skopeo.domain.model.MatchScore
 import org.skopeo.domain.model.PlayerProfile
 import org.skopeo.domain.model.Rating
@@ -11,7 +12,6 @@ import org.skopeo.domain.model.SetScore
 import org.skopeo.domain.model.Team
 import org.skopeo.domain.model.TeamType
 import org.skopeo.domain.model.TiebreakScore
-import org.skopeo.dto.RankingCalculationRequest
 
 /**
  * Helper function to create a singles match request with team-based structure.

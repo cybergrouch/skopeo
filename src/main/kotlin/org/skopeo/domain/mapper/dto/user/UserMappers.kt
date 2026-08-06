@@ -3,18 +3,18 @@
 
 package org.skopeo.domain.mapper.dto.user
 
+import org.skopeo.common.dto.user.ContactDto
+import org.skopeo.common.dto.user.IdentityDto
+import org.skopeo.common.dto.user.NameDto
+import org.skopeo.common.dto.user.PublicRatingDto
+import org.skopeo.common.dto.user.UserResponse
+import org.skopeo.common.dto.user.UserSummaryResponse
+import org.skopeo.common.dto.user.WinLossDto
 import org.skopeo.domain.model.NameType
 import org.skopeo.domain.model.User
 import org.skopeo.domain.model.UserRating
 import org.skopeo.domain.model.WinLossRecord
 import org.skopeo.domain.model.ageInYears
-import org.skopeo.dto.user.ContactDto
-import org.skopeo.dto.user.IdentityDto
-import org.skopeo.dto.user.NameDto
-import org.skopeo.dto.user.PublicRatingDto
-import org.skopeo.dto.user.UserResponse
-import org.skopeo.dto.user.UserSummaryResponse
-import org.skopeo.dto.user.WinLossDto
 import java.time.LocalDate
 
 fun User.toResponse(): UserResponse =

@@ -3,7 +3,7 @@
 
 package org.skopeo.domain.service.calculator
 
-import org.skopeo.dto.RankingCalculationResponse
+import org.skopeo.common.dto.RankingCalculationResponse
 
 /**
  * Result of a ranking calculation containing both the response and audit trail.

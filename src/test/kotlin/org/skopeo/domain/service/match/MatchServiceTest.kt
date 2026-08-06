@@ -20,6 +20,10 @@ import org.jetbrains.exposed.sql.update
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.common.dto.match.CreateFixtureRequest
+import org.skopeo.common.dto.match.MatchResponse
+import org.skopeo.common.dto.match.MatchResultRequest
+import org.skopeo.common.dto.match.SetScoreRequest
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.event.toDomain
@@ -40,10 +44,6 @@ import org.skopeo.domain.model.UserName
 import org.skopeo.domain.service.rating.RatingAssembler
 import org.skopeo.domain.service.rating.RatingCalculationService
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
-import org.skopeo.dto.match.CreateFixtureRequest
-import org.skopeo.dto.match.MatchResponse
-import org.skopeo.dto.match.MatchResultRequest
-import org.skopeo.dto.match.SetScoreRequest
 import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository

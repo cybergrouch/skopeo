@@ -8,6 +8,9 @@ import arrow.core.left
 import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.right
+import org.skopeo.common.dto.report.BandHopBucket
+import org.skopeo.common.dto.report.BandHopReportResponse
+import org.skopeo.common.dto.report.BandHopUserRow
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.user.toDomain
@@ -18,9 +21,6 @@ import org.skopeo.domain.service.rating.RatingAssembler
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.domain.service.user.displayName
 import org.skopeo.domain.service.user.isDeleted
-import org.skopeo.dto.report.BandHopBucket
-import org.skopeo.dto.report.BandHopReportResponse
-import org.skopeo.dto.report.BandHopUserRow
 import org.skopeo.repository.UserRepository
 import java.math.BigDecimal
 import java.time.LocalDate

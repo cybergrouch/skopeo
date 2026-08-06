@@ -3,13 +3,13 @@
 
 package org.skopeo.domain.mapper.dto.rating
 
+import org.skopeo.common.dto.audit.AuditPersonResponse
+import org.skopeo.common.dto.rating.RatingRequestPageResponse
+import org.skopeo.common.dto.rating.RatingRequestResponse
 import org.skopeo.domain.model.Level
 import org.skopeo.domain.model.RatingRequest
 import org.skopeo.domain.model.RatingRequestPage
 import org.skopeo.domain.model.RatingRequestView
-import org.skopeo.dto.audit.AuditPersonResponse
-import org.skopeo.dto.rating.RatingRequestPageResponse
-import org.skopeo.dto.rating.RatingRequestResponse
 import java.time.ZoneOffset
 
 private fun RatingRequest.toResponse(requester: AuditPersonResponse? = null): RatingRequestResponse =

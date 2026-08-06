@@ -9,6 +9,8 @@ import arrow.core.raise.either
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.skopeo.common.dto.RankingCalculationRequest
+import org.skopeo.common.dto.rating.CalculationResponse
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.dto.rating.toResponse
@@ -39,8 +41,6 @@ import org.skopeo.domain.service.calculator.AuditEntry
 import org.skopeo.domain.service.calculator.RankingCalculator
 import org.skopeo.domain.service.calculator.impl.v2.PerformanceBasedRankingCalculatorImpl
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
-import org.skopeo.dto.RankingCalculationRequest
-import org.skopeo.dto.rating.CalculationResponse
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository
 import java.math.BigDecimal
@@ -329,7 +329,7 @@ class RatingCalculationService(
 
     private fun playerChange(
         userId: UUID,
-        response: org.skopeo.dto.RankingCalculationResponse,
+        response: org.skopeo.common.dto.RankingCalculationResponse,
         breakdowns: Map<String, CalculationBreakdown>,
     ): Either<ServiceError, PlayerChange> =
         either {

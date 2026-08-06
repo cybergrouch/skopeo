@@ -3,10 +3,10 @@
 
 package org.skopeo.routes
 
-import org.skopeo.dto.event.EventPublicResponse
-import org.skopeo.dto.match.MatchPublicPlayer
-import org.skopeo.dto.match.MatchPublicResponse
-import org.skopeo.dto.user.PublicPlayerResponse
+import org.skopeo.common.dto.event.EventPublicResponse
+import org.skopeo.common.dto.match.MatchPublicPlayer
+import org.skopeo.common.dto.match.MatchPublicResponse
+import org.skopeo.common.dto.user.PublicPlayerResponse
 
 /*
  * Pure Open Graph helpers for per-page rich link previews (#238). The public pages are a client-rendered

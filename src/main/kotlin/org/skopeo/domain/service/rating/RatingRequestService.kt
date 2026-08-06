@@ -9,6 +9,8 @@ import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
+import org.skopeo.common.dto.rating.RatingRequestPageResponse
+import org.skopeo.common.dto.rating.RatingRequestResponse
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.dto.rating.toResponse
@@ -27,8 +29,6 @@ import org.skopeo.domain.service.audit.AuditService
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.domain.service.user.displayName
 import org.skopeo.domain.service.user.isDeleted
-import org.skopeo.dto.rating.RatingRequestPageResponse
-import org.skopeo.dto.rating.RatingRequestResponse
 import org.skopeo.repository.RatingRequestRepository
 import org.skopeo.repository.UserRepository
 import java.math.BigDecimal

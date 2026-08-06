@@ -8,6 +8,7 @@ import arrow.core.left
 import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.right
+import org.skopeo.common.dto.contact.ContactResponse
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.dto.contact.toResponse
@@ -23,7 +24,6 @@ import org.skopeo.domain.model.VerificationMethod
 import org.skopeo.domain.model.VerificationStatus
 import org.skopeo.domain.service.audit.AuditService
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
-import org.skopeo.dto.contact.ContactResponse
 import org.skopeo.repository.ContactRepository
 import org.skopeo.repository.DuplicateCandidateRepository
 import org.skopeo.repository.UserRepository

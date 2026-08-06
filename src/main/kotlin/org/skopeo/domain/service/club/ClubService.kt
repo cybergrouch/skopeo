@@ -9,6 +9,8 @@ import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
+import org.skopeo.common.dto.club.ClubPublicResponse
+import org.skopeo.common.dto.club.ClubResponse
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.dto.club.toResponse
@@ -28,8 +30,6 @@ import org.skopeo.domain.model.CreateClubCommand
 import org.skopeo.domain.service.audit.AuditService
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.domain.service.user.displayName
-import org.skopeo.dto.club.ClubPublicResponse
-import org.skopeo.dto.club.ClubResponse
 import org.skopeo.repository.ClubRepository
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository

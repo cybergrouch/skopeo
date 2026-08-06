@@ -5,6 +5,7 @@ package org.skopeo.domain.service.seeding
 
 import arrow.core.Either
 import arrow.core.raise.either
+import org.skopeo.common.dto.seeding.SeedingResponse
 import org.skopeo.common.error.ServiceError
 import org.skopeo.domain.mapper.dto.seeding.toResponse
 import org.skopeo.domain.mapper.entity.seeding.toDomain
@@ -17,7 +18,6 @@ import org.skopeo.domain.service.user.UserService
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.domain.service.user.displayName
 import org.skopeo.domain.service.user.isDeleted
-import org.skopeo.dto.seeding.SeedingResponse
 import org.skopeo.repository.SeedingRepository
 import org.skopeo.repository.UserRepository
 import java.time.LocalDate

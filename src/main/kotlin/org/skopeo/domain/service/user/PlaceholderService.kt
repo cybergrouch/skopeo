@@ -9,6 +9,9 @@ import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
+import org.skopeo.common.dto.user.ClaimCodeResponse
+import org.skopeo.common.dto.user.UserResponse
+import org.skopeo.common.dto.user.UserSummaryResponse
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.dto.user.toResponse
@@ -23,9 +26,6 @@ import org.skopeo.domain.model.Level
 import org.skopeo.domain.model.Rating
 import org.skopeo.domain.service.audit.AuditService
 import org.skopeo.domain.service.rating.RatingService
-import org.skopeo.dto.user.ClaimCodeResponse
-import org.skopeo.dto.user.UserResponse
-import org.skopeo.dto.user.UserSummaryResponse
 import org.skopeo.repository.PlaceholderClaimCodeRepository
 import org.skopeo.repository.UserRepository
 import java.math.BigDecimal

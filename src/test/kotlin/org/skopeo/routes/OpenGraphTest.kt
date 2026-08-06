@@ -7,11 +7,11 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Test
-import org.skopeo.dto.event.EventPublicResponse
-import org.skopeo.dto.match.MatchPublicPlayer
-import org.skopeo.dto.match.MatchPublicResponse
-import org.skopeo.dto.match.MatchPublicSet
-import org.skopeo.dto.user.PublicPlayerResponse
+import org.skopeo.common.dto.event.EventPublicResponse
+import org.skopeo.common.dto.match.MatchPublicPlayer
+import org.skopeo.common.dto.match.MatchPublicResponse
+import org.skopeo.common.dto.match.MatchPublicSet
+import org.skopeo.common.dto.user.PublicPlayerResponse
 
 /** Unit tests for the pure Open Graph helpers (#238): tag injection, escaping, and per-entity metadata. */
 class OpenGraphTest {

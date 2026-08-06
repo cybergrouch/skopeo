@@ -3,11 +3,11 @@
 
 package org.skopeo.domain.mapper.dto.duplicate
 
+import org.skopeo.common.dto.duplicate.DuplicateCandidatePageResponse
+import org.skopeo.common.dto.duplicate.DuplicateCandidateResponse
 import org.skopeo.domain.mapper.dto.user.toSummary
 import org.skopeo.domain.model.DuplicateCandidateView
 import org.skopeo.domain.model.DuplicateCandidateViewPage
-import org.skopeo.dto.duplicate.DuplicateCandidatePageResponse
-import org.skopeo.dto.duplicate.DuplicateCandidateResponse
 
 fun DuplicateCandidateView.toResponse(): DuplicateCandidateResponse =
     DuplicateCandidateResponse(

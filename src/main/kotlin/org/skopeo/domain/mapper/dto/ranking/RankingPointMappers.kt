@@ -3,6 +3,11 @@
 
 package org.skopeo.domain.mapper.dto.ranking
 
+import org.skopeo.common.dto.ranking.AdjustRankingPointsRequest
+import org.skopeo.common.dto.ranking.AwardedPointRow
+import org.skopeo.common.dto.ranking.AwardedPointsPageResponse
+import org.skopeo.common.dto.ranking.GrantRankingPointsRequest
+import org.skopeo.common.dto.ranking.RankingPointAwardResponse
 import org.skopeo.domain.model.AdjustRankingPointCommand
 import org.skopeo.domain.model.AwardsPage
 import org.skopeo.domain.model.GrantRankingPointCommand
@@ -10,11 +15,6 @@ import org.skopeo.domain.model.PointClass
 import org.skopeo.domain.model.PointSourceType
 import org.skopeo.domain.model.RankingPointAward
 import org.skopeo.domain.model.ResolvedAward
-import org.skopeo.dto.ranking.AdjustRankingPointsRequest
-import org.skopeo.dto.ranking.AwardedPointRow
-import org.skopeo.dto.ranking.AwardedPointsPageResponse
-import org.skopeo.dto.ranking.GrantRankingPointsRequest
-import org.skopeo.dto.ranking.RankingPointAwardResponse
 import java.math.BigDecimal
 import java.time.LocalDateTime
 import java.util.UUID

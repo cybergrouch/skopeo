@@ -3,8 +3,8 @@
 
 package org.skopeo.domain.mapper.dto.circuit
 
+import org.skopeo.common.dto.circuit.CircuitResponse
 import org.skopeo.domain.model.Circuit
-import org.skopeo.dto.circuit.CircuitResponse
 
 fun Circuit.toResponse(): CircuitResponse =
     CircuitResponse(

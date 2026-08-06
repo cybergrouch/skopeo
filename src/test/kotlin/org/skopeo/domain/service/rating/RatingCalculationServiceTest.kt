@@ -19,6 +19,10 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.common.dto.RankingCalculationRequest
+import org.skopeo.common.dto.RankingCalculationResponse
+import org.skopeo.common.dto.match.MatchResultRequest
+import org.skopeo.common.dto.match.SetScoreRequest
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.dto.rating.toResponse
@@ -41,10 +45,6 @@ import org.skopeo.domain.service.calculator.impl.v2.PerformanceBasedRankingCalcu
 import org.skopeo.domain.service.match.FixtureInput
 import org.skopeo.domain.service.match.MatchService
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
-import org.skopeo.dto.RankingCalculationRequest
-import org.skopeo.dto.RankingCalculationResponse
-import org.skopeo.dto.match.MatchResultRequest
-import org.skopeo.dto.match.SetScoreRequest
 import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository

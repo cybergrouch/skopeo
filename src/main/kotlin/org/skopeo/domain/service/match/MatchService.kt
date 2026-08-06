@@ -8,6 +8,18 @@ import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
+import org.skopeo.common.dto.match.CreateFixtureRequest
+import org.skopeo.common.dto.match.MatchPublicEvent
+import org.skopeo.common.dto.match.MatchPublicHeadToHead
+import org.skopeo.common.dto.match.MatchPublicHeadToHeadEntry
+import org.skopeo.common.dto.match.MatchPublicPlayer
+import org.skopeo.common.dto.match.MatchPublicRatingChange
+import org.skopeo.common.dto.match.MatchPublicResponse
+import org.skopeo.common.dto.match.MatchPublicSet
+import org.skopeo.common.dto.match.MatchResponse
+import org.skopeo.common.dto.match.MatchResultRequest
+import org.skopeo.common.dto.match.UpcomingMatchResponse
+import org.skopeo.common.dto.rating.MatchCalculationDetailResponse
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.dto.match.toPublicResponse
@@ -39,18 +51,6 @@ import org.skopeo.domain.service.rating.RatingAssembler
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.domain.service.user.displayName
 import org.skopeo.domain.service.user.isDeleted
-import org.skopeo.dto.match.CreateFixtureRequest
-import org.skopeo.dto.match.MatchPublicEvent
-import org.skopeo.dto.match.MatchPublicHeadToHead
-import org.skopeo.dto.match.MatchPublicHeadToHeadEntry
-import org.skopeo.dto.match.MatchPublicPlayer
-import org.skopeo.dto.match.MatchPublicRatingChange
-import org.skopeo.dto.match.MatchPublicResponse
-import org.skopeo.dto.match.MatchPublicSet
-import org.skopeo.dto.match.MatchResponse
-import org.skopeo.dto.match.MatchResultRequest
-import org.skopeo.dto.match.UpcomingMatchResponse
-import org.skopeo.dto.rating.MatchCalculationDetailResponse
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository
@@ -764,7 +764,7 @@ private fun deriveOutcome(
 private fun setWinner(
     team1Id: UUID,
     team2Id: UUID,
-    set: org.skopeo.dto.match.SetScoreRequest,
+    set: org.skopeo.common.dto.match.SetScoreRequest,
     setNumber: Int,
 ): Either<ServiceError, UUID> =
     when {

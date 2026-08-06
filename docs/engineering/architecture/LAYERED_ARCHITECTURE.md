@@ -4,10 +4,12 @@ The backend is organised into layers by package under `org.skopeo`. Their depend
 **enforced** by `src/test/.../LayeredArchitectureTest.kt` (ArchUnit) so they don't erode silently. The
 build fails if a rule is broken.
 
-Package roots: `routes`, `repository` (with its `repository.persistence` entity leaf), `dto`, and
-`common` sit directly under `org.skopeo`; the domain-side layers — `model`, `service`, and `mapper`
-(`mapper.dto` + `mapper.entity`) — are grouped under **`org.skopeo.domain`**. The layer names below use
-the short form for brevity.
+Package roots: `routes` and `repository` (with its `repository.persistence` entity leaf) sit directly
+under `org.skopeo`; **`common`** groups the cross-cutting leaves (`common.{error,security,contract}`)
+plus the shared **`dto`** wire boundary (`common.dto`); the domain-side layers — `model`, `service`, and
+`mapper` (`mapper.dto` + `mapper.entity`) — are grouped under **`org.skopeo.domain`**. The layer names
+below use the short form for brevity (so `dto` = `common.dto`, `model`/`service`/`mapper` = `domain.*`,
+`persistence` = `repository.persistence`).
 
 ## Layers and the rules that hold
 
@@ -44,8 +46,11 @@ Enforced invariants (each is true in the codebase today):
   serializable points-config contracts (`OpenPlayPointsConfig`/`TournamentPointsConfig`, #552). **Any**
   layer — including `model` (which uses `Capability`) — may depend on it; `common` depends on nothing
   above it, not even `model`. It is the one package referenced from every layer.
-- **`dto`** is a **pure serializable boundary record**: it never depends on `routes`, `repository`,
-  `service`, or `model` — with one sanctioned exception (below).
+- **`dto`** (`org.skopeo.common.dto`) is a **pure serializable boundary record**: it never depends on
+  `routes`, `repository`, `service`, or `model` — with one sanctioned exception (below). It lives under
+  `common` as the shared wire boundary both `routes` and `service` depend on (the dto↔model transform is
+  service-side, so placing it in `routes` would create a routes↔service cycle); it is exempt from the
+  `common`-is-a-pure-leaf rule because the allowlisted DTOs embed `model`.
 - **`mapper`** is two sibling sub-packages, both consumed only by `service` and both forbidden from
   `routes`/`repository`/`service`:
   - **`mapper.dto`** owns the dto↔model translation (`toResponse`/`toCommand`); depends on `dto` + `model`

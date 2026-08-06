@@ -3,7 +3,7 @@
 
 package org.skopeo.domain.service.calculator
 
-import org.skopeo.dto.RankingCalculationRequest
+import org.skopeo.common.dto.RankingCalculationRequest
 
 /**
  * Interface for calculating tennis ranking updates based on match results.

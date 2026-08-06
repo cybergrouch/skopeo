@@ -3,18 +3,18 @@
 
 package org.skopeo.domain.mapper.dto.client
 
+import org.skopeo.common.dto.client.ApiClientResponse
+import org.skopeo.common.dto.client.ApiKeyResponse
+import org.skopeo.common.dto.client.ClientEffectiveCapabilitiesResponse
+import org.skopeo.common.dto.client.ClientIdentityResponse
+import org.skopeo.common.dto.client.IssuedApiKeyResponse
+import org.skopeo.common.dto.client.PartnerPlayerResponse
 import org.skopeo.common.security.ClientPrincipal
 import org.skopeo.domain.model.ApiClient
 import org.skopeo.domain.model.ApiKey
 import org.skopeo.domain.model.ClientEffectiveCapabilities
 import org.skopeo.domain.model.IssuedApiKey
 import org.skopeo.domain.model.PublicPlayer
-import org.skopeo.dto.client.ApiClientResponse
-import org.skopeo.dto.client.ApiKeyResponse
-import org.skopeo.dto.client.ClientEffectiveCapabilitiesResponse
-import org.skopeo.dto.client.ClientIdentityResponse
-import org.skopeo.dto.client.IssuedApiKeyResponse
-import org.skopeo.dto.client.PartnerPlayerResponse
 
 fun ApiKey.toResponse(): ApiKeyResponse =
     ApiKeyResponse(

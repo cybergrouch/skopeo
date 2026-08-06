@@ -8,6 +8,8 @@ import arrow.core.left
 import arrow.core.raise.either
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
+import org.skopeo.common.dto.settings.LocalThemeResponse
+import org.skopeo.common.dto.settings.ThemeResponse
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.dto.settings.toResponse
@@ -19,8 +21,6 @@ import org.skopeo.domain.model.ThemeSetting
 import org.skopeo.domain.model.ThemeSettingValue
 import org.skopeo.domain.service.audit.AuditService
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
-import org.skopeo.dto.settings.LocalThemeResponse
-import org.skopeo.dto.settings.ThemeResponse
 import org.skopeo.repository.AppSettingsRepository
 import org.skopeo.repository.UserRepository
 import java.time.LocalDateTime

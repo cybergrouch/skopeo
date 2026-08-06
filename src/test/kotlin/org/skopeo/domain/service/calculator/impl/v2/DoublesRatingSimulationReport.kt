@@ -6,6 +6,7 @@ package org.skopeo.domain.service.calculator.impl.v2
 import io.kotest.matchers.doubles.shouldBeGreaterThan
 import io.kotest.matchers.doubles.shouldBeLessThan
 import org.junit.jupiter.api.Test
+import org.skopeo.common.dto.RankingCalculationRequest
 import org.skopeo.domain.model.MatchScore
 import org.skopeo.domain.model.PlayerProfile
 import org.skopeo.domain.model.Rating
@@ -13,7 +14,6 @@ import org.skopeo.domain.model.RatingCalculationOptions
 import org.skopeo.domain.model.SetScore
 import org.skopeo.domain.model.Team
 import org.skopeo.domain.model.TeamType
-import org.skopeo.dto.RankingCalculationRequest
 import java.math.RoundingMode
 import kotlin.math.abs
 import kotlin.math.exp

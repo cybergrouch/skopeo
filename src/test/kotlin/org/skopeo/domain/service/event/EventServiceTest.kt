@@ -19,6 +19,7 @@ import org.jetbrains.exposed.sql.update
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.common.dto.event.EventResponse
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.club.toDomain
@@ -49,7 +50,6 @@ import org.skopeo.domain.model.UserIdentity
 import org.skopeo.domain.model.UserName
 import org.skopeo.domain.model.ageInYears
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
-import org.skopeo.dto.event.EventResponse
 import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.CircuitRepository
 import org.skopeo.repository.ClubRepository

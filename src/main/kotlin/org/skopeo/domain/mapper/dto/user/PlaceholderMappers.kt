@@ -3,8 +3,8 @@
 
 package org.skopeo.domain.mapper.dto.user
 
+import org.skopeo.common.dto.user.ClaimCodeResponse
 import org.skopeo.domain.model.GeneratedClaimCode
-import org.skopeo.dto.user.ClaimCodeResponse
 
 fun GeneratedClaimCode.toResponse(): ClaimCodeResponse =
     ClaimCodeResponse(

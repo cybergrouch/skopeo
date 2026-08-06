@@ -23,6 +23,8 @@ import io.ktor.server.testing.testApplication
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.common.dto.event.CreateEventRequest
+import org.skopeo.common.dto.event.EventResponse
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.match.toDomain
 import org.skopeo.domain.mapper.entity.user.toDomain
@@ -42,8 +44,6 @@ import org.skopeo.domain.service.event.EventService
 import org.skopeo.domain.service.rating.RatingAssembler
 import org.skopeo.domain.service.rating.RatingCalculationService
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
-import org.skopeo.dto.event.CreateEventRequest
-import org.skopeo.dto.event.EventResponse
 import org.skopeo.module
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository

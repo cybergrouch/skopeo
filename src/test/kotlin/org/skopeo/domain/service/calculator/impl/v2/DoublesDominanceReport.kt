@@ -3,6 +3,7 @@
 
 package org.skopeo.domain.service.calculator.impl.v2
 
+import org.skopeo.common.dto.RankingCalculationRequest
 import org.skopeo.domain.model.MatchScore
 import org.skopeo.domain.model.PlayerProfile
 import org.skopeo.domain.model.Rating
@@ -10,7 +11,6 @@ import org.skopeo.domain.model.RatingCalculationOptions
 import org.skopeo.domain.model.SetScore
 import org.skopeo.domain.model.Team
 import org.skopeo.domain.model.TeamType
-import org.skopeo.dto.RankingCalculationRequest
 import java.io.File
 import java.math.RoundingMode
 import java.util.Locale

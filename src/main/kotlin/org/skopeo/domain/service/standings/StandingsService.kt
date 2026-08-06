@@ -3,6 +3,8 @@
 
 package org.skopeo.domain.service.standings
 
+import org.skopeo.common.dto.standings.StandingsLocateResponse
+import org.skopeo.common.dto.standings.StandingsPageResponse
 import org.skopeo.domain.mapper.dto.standings.toResponse
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.GroupRef
@@ -22,8 +24,6 @@ import org.skopeo.domain.service.settings.SettingsService
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.domain.service.user.displayName
 import org.skopeo.domain.service.user.isDeleted
-import org.skopeo.dto.standings.StandingsLocateResponse
-import org.skopeo.dto.standings.StandingsPageResponse
 import org.skopeo.repository.StandingsSnapshotRepository
 import org.skopeo.repository.UserRepository
 import java.time.LocalDate
