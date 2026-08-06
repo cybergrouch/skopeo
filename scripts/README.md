@@ -57,6 +57,20 @@ Automated test suite for all API endpoints.
 ...
 ```
 
+#### `test-partner-api.sh`
+End-to-end test + living documentation for third-party (partner) **API-key** access (#225/#596/#597/#598/#603, issue #695). Provisions a partner client + key, then exercises the partner endpoints and prints the exact method / URL / headers / body of each request. Proves a third party authenticates with the `X-Api-Key` header alone (no Firebase bearer), and that user-oriented `/me` endpoints reject an API-key-only request. Bootstrap (create client + issue key) is ADMINISTRATOR-only, so supply an admin Firebase token (see `grant-admin-local.sh`).
+
+**Usage:**
+```bash
+# paste an admin token (browser → DevTools → Network → Authorization: Bearer <jwt>)
+ADMIN_TOKEN=<firebase-id-token-of-an-admin> ./scripts/test-partner-api.sh
+
+# …or mint tokens via the Firebase REST API, and enable the delegated 200 case:
+WEB_API_KEY=AIza… ADMIN_EMAIL=admin@skopeo.dev ADMIN_PASSWORD=… \
+  USER_EMAIL=player@skopeo.dev USER_PASSWORD=… ./scripts/test-partner-api.sh
+```
+Config: `BASE_URL` (default `http://localhost:8080`), `ADMIN_TOKEN`, `USER_TOKEN`, `WEB_API_KEY`, `ADMIN_EMAIL`/`ADMIN_PASSWORD`, `USER_EMAIL`/`USER_PASSWORD`, `KEEP=1` (skip cleanup). Requires `curl`, `jq`, and a running server.
+
 ---
 
 ### 🐳 Docker
