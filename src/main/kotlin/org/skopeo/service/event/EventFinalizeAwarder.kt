@@ -4,6 +4,7 @@
 package org.skopeo.service.event
 
 import org.skopeo.common.contract.OpenPlayPointsConfig
+import org.skopeo.mapper.entity.club.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -97,7 +98,7 @@ class EventFinalizeAwarder(
         now: LocalDateTime,
     ): AwardSummary {
         val tournament = pointsConfig.getTournament().value
-        val sanctioned = event.clubId?.let { clubs.findById(id = it)?.tournamentsSanctioned } ?: false
+        val sanctioned = event.clubId?.let { clubs.findById(id = it)?.toDomain()?.tournamentsSanctioned } ?: false
         val schedule = tournament.schedule(sanctioned = sanctioned)
         // Validity runs from the event end for the configured tournament window (#559: no per-event override).
         val start = event.endDate

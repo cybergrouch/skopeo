@@ -14,6 +14,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.mapper.entity.club.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.CreateClubCommand
 import org.skopeo.model.NameType
@@ -53,9 +54,9 @@ class ClubRepositoryTest {
     @Test
     fun `create round-trips and findById is null for a missing club`() {
         val admin = newUser(uid = "admin")
-        val club = clubs.create(command = CreateClubCommand(name = "Downtown", createdBy = admin))
+        val club = clubs.create(command = CreateClubCommand(name = "Downtown", createdBy = admin)).toDomain()
 
-        clubs.findById(id = club.id)!!.let {
+        clubs.findById(id = club.id)!!.toDomain().let {
             it.name shouldBe "Downtown"
             it.createdBy shouldBe admin
             it.ownerIds shouldHaveSize 0
@@ -67,14 +68,14 @@ class ClubRepositoryTest {
     fun `addOwner is idempotent, removeOwner is a no-op when absent, and both are null for a missing club`() {
         val admin = newUser(uid = "admin")
         val owner = newUser(uid = "owner")
-        val club = clubs.create(command = CreateClubCommand(name = "West End", createdBy = admin))
+        val club = clubs.create(command = CreateClubCommand(name = "West End", createdBy = admin)).toDomain()
 
-        clubs.addOwner(clubId = club.id, userId = owner)!!.ownerIds shouldBe listOf(element = owner)
+        clubs.addOwner(clubId = club.id, userId = owner)!!.toDomain().ownerIds shouldBe listOf(element = owner)
         // Re-adding is idempotent (the already-owner branch).
-        clubs.addOwner(clubId = club.id, userId = owner)!!.ownerIds shouldHaveSize 1
+        clubs.addOwner(clubId = club.id, userId = owner)!!.toDomain().ownerIds shouldHaveSize 1
         // Removing a non-owner is a no-op.
-        clubs.removeOwner(clubId = club.id, userId = UUID.randomUUID())!!.ownerIds shouldHaveSize 1
-        clubs.removeOwner(clubId = club.id, userId = owner)!!.ownerIds shouldHaveSize 0
+        clubs.removeOwner(clubId = club.id, userId = UUID.randomUUID())!!.toDomain().ownerIds shouldHaveSize 1
+        clubs.removeOwner(clubId = club.id, userId = owner)!!.toDomain().ownerIds shouldHaveSize 0
 
         // A missing club yields null from either mutation.
         clubs.addOwner(clubId = UUID.randomUUID(), userId = owner).shouldBeNull()
@@ -84,26 +85,26 @@ class ClubRepositoryTest {
     @Test
     fun `create generates a unique public code and findByPublicCode round-trips it (#327)`() {
         val admin = newUser(uid = "admin")
-        val a = clubs.create(command = CreateClubCommand(name = "A", createdBy = admin))
-        val b = clubs.create(command = CreateClubCommand(name = "B", createdBy = admin))
+        val a = clubs.create(command = CreateClubCommand(name = "A", createdBy = admin)).toDomain()
+        val b = clubs.create(command = CreateClubCommand(name = "B", createdBy = admin)).toDomain()
 
         a.publicCode shouldHaveLength 6
         // Each club gets its own code.
         (a.publicCode == b.publicCode) shouldBe false
 
         // findByPublicCode resolves the right club, and is null for an unknown code.
-        clubs.findByPublicCode(code = a.publicCode).shouldNotBeNull().id shouldBe a.id
+        clubs.findByPublicCode(code = a.publicCode).shouldNotBeNull().toDomain().id shouldBe a.id
         clubs.findByPublicCode(code = "ZZZZZZ").shouldBeNull()
     }
 
     @Test
     fun `a club whose creator was deleted loads with a null creator`() {
         val admin = newUser(uid = "admin")
-        val club = clubs.create(command = CreateClubCommand(name = "Orphan", createdBy = admin))
+        val club = clubs.create(command = CreateClubCommand(name = "Orphan", createdBy = admin)).toDomain()
 
         // Hard-delete the creator; the clubs.created_by FK is ON DELETE SET NULL.
         transaction { UsersTable.deleteWhere { UsersTable.id eq admin } }
 
-        clubs.findById(id = club.id)!!.createdBy.shouldBeNull()
+        clubs.findById(id = club.id)!!.toDomain().createdBy.shouldBeNull()
     }
 }

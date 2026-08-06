@@ -13,6 +13,7 @@ import org.skopeo.dto.seeding.PlayerListResponse
 import org.skopeo.dto.seeding.PlayerListSummaryResponse
 import org.skopeo.mapper.dto.seeding.toSummaryResponse
 import org.skopeo.mapper.dto.user.toSummary
+import org.skopeo.mapper.entity.seeding.toDomain
 import org.skopeo.model.PlayerList
 import org.skopeo.model.canSeeRawRatingOrFalse
 import org.skopeo.repository.PlayerListRepository
@@ -42,13 +43,13 @@ class PlayerListService(
         either {
             val ownerId = requireSeeder(token = token).bind()
             ensure(condition = name.isNotBlank()) { ServiceError.Validation(message = "A list name is required") }
-            lists.create(ownerId = ownerId, name = name.trim()).toSummaryResponse()
+            lists.create(ownerId = ownerId, name = name.trim()).toDomain().toSummaryResponse()
         }
 
     fun listMine(token: VerifiedFirebaseToken): Either<ServiceError, List<PlayerListSummaryResponse>> =
         either {
             val ownerId = requireSeeder(token = token).bind()
-            lists.listByOwner(ownerId = ownerId).map { it.toSummaryResponse() }
+            lists.listByOwner(ownerId = ownerId).map { it.toDomain().toSummaryResponse() }
         }
 
     /** A single owned list (with members). Surfaces [ServiceError.Forbidden] for someone else's list. */
@@ -58,7 +59,7 @@ class PlayerListService(
     ): Either<ServiceError, PlayerList> =
         either {
             val ownerId = requireSeeder(token = token).bind()
-            val list = lists.findById(id = listId).bind()
+            val list = lists.findById(id = listId).bind().toDomain()
             ensure(condition = list.ownerId == ownerId) { ServiceError.Forbidden() }
             list
         }

@@ -15,6 +15,7 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
+import org.skopeo.mapper.entity.seeding.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
@@ -70,7 +71,7 @@ class SeedingRepositoryTest {
     @Test
     fun `replace stores entries and findByListId reads them back`() {
         val owner = newUser(uid = "owner")
-        val list = lists.create(ownerId = owner.id, name = "L")
+        val list = lists.create(ownerId = owner.id, name = "L").toDomain()
         val player = newUser(uid = "p1")
 
         seedings.replace(listId = list.id, generatedBy = owner.id, entries = listOf(element = entryFor(user = player, displayName = "P1")))
@@ -85,14 +86,14 @@ class SeedingRepositoryTest {
     @Test
     fun `findByListId is not found when no seeding exists`() {
         val owner = newUser(uid = "owner")
-        val list = lists.create(ownerId = owner.id, name = "Empty")
+        val list = lists.create(ownerId = owner.id, name = "Empty").toDomain()
         seedings.findByListId(listId = list.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
     @Test
     fun `a deleted user's entry keeps its snapshot but drops the user link (SET NULL)`() {
         val owner = newUser(uid = "owner")
-        val list = lists.create(ownerId = owner.id, name = "L")
+        val list = lists.create(ownerId = owner.id, name = "L").toDomain()
         val victim = newUser(uid = "victim")
         seedings.replace(
             listId = list.id,

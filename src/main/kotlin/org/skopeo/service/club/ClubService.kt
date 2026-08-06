@@ -14,6 +14,7 @@ import org.skopeo.common.security.Capability
 import org.skopeo.dto.club.ClubPublicResponse
 import org.skopeo.dto.club.ClubResponse
 import org.skopeo.mapper.dto.club.toResponse
+import org.skopeo.mapper.entity.club.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -61,7 +62,7 @@ class ClubService(
         either {
             val adminId = requireCapability(token = token, allowed = ADMIN_ONLY).bind()
             ensure(condition = name.isNotBlank()) { ServiceError.Validation(message = "Club name is required") }
-            val club = clubs.create(command = CreateClubCommand(name = name.trim(), createdBy = adminId))
+            val club = clubs.create(command = CreateClubCommand(name = name.trim(), createdBy = adminId)).toDomain()
             audit.record(
                 write =
                     AuditWrite(
@@ -80,7 +81,7 @@ class ClubService(
     fun list(token: VerifiedFirebaseToken): Either<ServiceError, List<ClubResponse>> =
         either {
             requireCapability(token = token, allowed = CLUB_STAFF_ROLES).bind()
-            clubs.list().map { toView(club = it).toResponse() }
+            clubs.list().map { toView(club = it.toDomain()).toResponse() }
         }
 
     /** Rename a club (#325). ADMINISTRATOR-only; the name is validated (non-blank) and trimmed. */
@@ -95,7 +96,7 @@ class ClubService(
             val updated =
                 ensureNotNull(value = clubs.rename(id = clubId, name = name.trim())) {
                     ServiceError.NotFound(message = "Club $clubId not found")
-                }
+                }.toDomain()
             audit.record(
                 write =
                     AuditWrite(
@@ -125,7 +126,8 @@ class ClubService(
     ): Either<ServiceError, Unit> =
         either {
             val adminId = requireCapability(token = token, allowed = ADMIN_ONLY).bind()
-            val club = ensureNotNull(value = clubs.findById(id = clubId)) { ServiceError.NotFound(message = "Club $clubId not found") }
+            val club =
+                ensureNotNull(value = clubs.findById(id = clubId)) { ServiceError.NotFound(message = "Club $clubId not found") }.toDomain()
             ensure(condition = clubs.disable(id = clubId)) { ServiceError.NotFound(message = "Club $clubId not found") }
             val now = LocalDateTime.now()
             events.listByClub(clubId = clubId).forEach { event ->
@@ -163,7 +165,7 @@ class ClubService(
             val updated =
                 ensureNotNull(value = clubs.addOwner(clubId = clubId, userId = userId)) {
                     ServiceError.NotFound(message = "Club $clubId not found")
-                }
+                }.toDomain()
             audit.record(
                 write =
                     AuditWrite(
@@ -188,7 +190,7 @@ class ClubService(
             val updated =
                 ensureNotNull(value = clubs.removeOwner(clubId = clubId, userId = userId)) {
                     ServiceError.NotFound(message = "Club $clubId not found")
-                }
+                }.toDomain()
             audit.record(
                 write =
                     AuditWrite(
@@ -214,7 +216,7 @@ class ClubService(
             val club =
                 ensureNotNull(value = clubs.findByPublicCode(code = code)) {
                     ServiceError.NotFound(message = "Club $code not found")
-                }
+                }.toDomain()
             val today = LocalDate.now()
             // Active events under the club; a deleted club's events are soft-deleted too, so this is
             // empty for one (mirrors listByClub in the delete cascade).
@@ -268,7 +270,7 @@ class ClubService(
             val updated =
                 ensureNotNull(value = clubs.setSanction(id = clubId, sanctioned = sanctioned)) {
                     ServiceError.NotFound(message = "Club $clubId not found")
-                }
+                }.toDomain()
             audit.record(
                 write =
                     AuditWrite(
