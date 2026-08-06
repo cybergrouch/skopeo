@@ -13,6 +13,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.postgresql.util.PGobject
 import org.skopeo.common.security.Capability
+import org.skopeo.mapper.entity.client.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -82,7 +83,7 @@ class AuditRepositoryTest {
 
     @Test
     fun `records the API client behind a client-driven action (#599)`() {
-        val client = ApiClientRepository().createClient(name = "Partner A", createdBy = null)
+        val client = ApiClientRepository().createClient(name = "Partner A", createdBy = null).toDomain()
         audit.record(
             write =
                 AuditWrite(

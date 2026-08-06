@@ -7,12 +7,10 @@ import java.time.LocalDateTime
 import java.util.UUID
 
 /**
- * Raw persistence view of a `seedings` row (#633): only the root-row scalar columns, no child rows
- * (the frozen entries live in `seeding_entries`) and no derived fields. Model-free leaf — the
- * repository's `toDomain` attaches the separately-loaded, status-resolved entries to build the
- * domain `Seeding`. The child entries stay domain and are assembled by the repository because their
- * `placeholder`/`deleted` flags (and name/rating context) are resolved on read from the live user
- * rows, so there is no clean single-row entity to extract for them.
+ * Raw persistence view of a `seedings` root row (#633): only the root-row scalar columns, no child
+ * rows (the frozen entries live in `seeding_entries`, modelled by [SeedingEntryEntity]) and no derived
+ * fields. Model-free leaf — the repository bundles this with the separately-loaded, status-resolved
+ * entries into a [SeedingAggregateEntity], and the `mapper.entity` `toDomain` builds the domain `Seeding`.
  */
 data class SeedingEntity(
     val id: UUID,

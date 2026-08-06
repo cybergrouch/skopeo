@@ -21,6 +21,8 @@ import org.skopeo.dto.client.ClientIdentityResponse
 import org.skopeo.dto.client.IssuedApiKeyResponse
 import org.skopeo.dto.client.PartnerPlayerResponse
 import org.skopeo.mapper.dto.client.toResponse
+import org.skopeo.mapper.entity.client.toDomain
+import org.skopeo.mapper.entity.client.toResolved
 import org.skopeo.model.ApiClientStatus
 import org.skopeo.model.ApiKeyEnvironment
 import org.skopeo.model.ApiKeyStatus
@@ -67,7 +69,7 @@ class ApiClientService(
             ensure(condition = trimmed.length <= CLIENT_NAME_MAX) {
                 ServiceError.Validation(message = "Client name must be at most $CLIENT_NAME_MAX characters")
             }
-            val client = clients.createClient(name = trimmed, createdBy = adminId)
+            val client = clients.createClient(name = trimmed, createdBy = adminId).toDomain()
             audit.record(
                 write =
                     AuditWrite(
@@ -85,7 +87,7 @@ class ApiClientService(
     fun listClients(token: VerifiedFirebaseToken): Either<ServiceError, List<ApiClientResponse>> =
         either {
             requireAdmin(token = token).bind()
-            clients.listClients().map { it.toResponse() }
+            clients.listClients().map { it.toDomain().toResponse() }
         }
 
     /**
@@ -109,7 +111,7 @@ class ApiClientService(
             val client =
                 ensureNotNull(value = clients.findClientById(id = clientId)) {
                     ServiceError.NotFound(message = "API client $clientId not found")
-                }
+                }.toDomain()
             val generated = ApiKeyCrypto.generate(environment = environment)
             val key =
                 clients.insertKey(
@@ -122,7 +124,7 @@ class ApiClientService(
                             createdBy = adminId,
                             expiresAt = expiresInDays?.let { LocalDateTime.now().plusDays(it) },
                         ),
-                )
+                ).toDomain()
             audit.record(
                 write =
                     AuditWrite(
@@ -183,7 +185,7 @@ class ApiClientService(
             val client =
                 ensureNotNull(value = clients.setRateLimit(clientId = clientId, rateLimitPerMin = rateLimitPerMin)) {
                     ServiceError.NotFound(message = "API client $clientId not found")
-                }
+                }.toDomain()
             audit.record(
                 write =
                     AuditWrite(
@@ -211,7 +213,7 @@ class ApiClientService(
         default: Int,
     ): Int {
         val clientId = runCatching { UUID.fromString(key) }.getOrNull() ?: return default
-        return clients.findClientById(id = clientId)?.rateLimitPerMin ?: default
+        return clients.findClientById(id = clientId)?.client?.rateLimitPerMin ?: default
     }
 
     /**
@@ -249,7 +251,8 @@ class ApiClientService(
      * suspended client → Forbidden; otherwise Authenticated. Side-effect-free.
      */
     private fun resolve(raw: String): ClientAuthResult {
-        val resolved = clients.findKeyByHash(hash = ApiKeyCrypto.hash(plaintext = raw)) ?: return ClientAuthResult.Invalid
+        val found = clients.findKeyByHash(hash = ApiKeyCrypto.hash(plaintext = raw)) ?: return ClientAuthResult.Invalid
+        val resolved = found.first.toResolved(clientStatusRaw = found.second)
         val key = resolved.key
         val rejected =
             key.status == ApiKeyStatus.REVOKED ||

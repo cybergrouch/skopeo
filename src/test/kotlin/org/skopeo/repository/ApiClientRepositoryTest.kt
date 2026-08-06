@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.security.Capability
+import org.skopeo.mapper.entity.client.toDomain
 import org.skopeo.model.ApiClientStatus
 import org.skopeo.model.ApiKeyStatus
 import org.skopeo.model.InsertApiKeyCommand
@@ -54,7 +55,7 @@ class ApiClientRepositoryTest {
 
     @Test
     fun `creates an active client with no keys`() {
-        val client = repo.createClient(name = "Partner A", createdBy = null)
+        val client = repo.createClient(name = "Partner A", createdBy = null).toDomain()
         client.name shouldBe "Partner A"
         client.status shouldBe ApiClientStatus.ACTIVE
         client.keys shouldHaveSize 0
@@ -62,11 +63,11 @@ class ApiClientRepositoryTest {
 
     @Test
     fun `issues keys under a client, round-tripping scopes, and supports two active keys`() {
-        val client = repo.createClient(name = "Partner A", createdBy = null)
+        val client = repo.createClient(name = "Partner A", createdBy = null).toDomain()
         insertKey(clientId = client.id, hash = "hash-1", scopes = setOf(Capability.PLAYER, Capability.HOST))
         insertKey(clientId = client.id, hash = "hash-2")
 
-        val loaded = repo.findClientById(id = client.id).shouldNotBeNull()
+        val loaded = repo.findClientById(id = client.id).shouldNotBeNull().toDomain()
         loaded.keys shouldHaveSize 2
         loaded.keys.map { it.status }.toSet() shouldBe setOf(element = ApiKeyStatus.ACTIVE)
         val scoped = loaded.keys.first { it.scopes.isNotEmpty() }
@@ -75,20 +76,20 @@ class ApiClientRepositoryTest {
 
     @Test
     fun `finds a key by hash with its client status, and returns null for an unknown hash`() {
-        val client = repo.createClient(name = "Partner A", createdBy = null)
+        val client = repo.createClient(name = "Partner A", createdBy = null).toDomain()
         insertKey(clientId = client.id, hash = "hash-1")
 
-        val resolved = repo.findKeyByHash(hash = "hash-1").shouldNotBeNull()
-        resolved.key.clientId shouldBe client.id
-        resolved.clientStatus shouldBe ApiClientStatus.ACTIVE
+        val (keyEntity, clientStatusRaw) = repo.findKeyByHash(hash = "hash-1").shouldNotBeNull()
+        keyEntity.clientId shouldBe client.id
+        clientStatusRaw shouldBe ApiClientStatus.ACTIVE.name
 
         repo.findKeyByHash(hash = "missing").shouldBeNull()
     }
 
     @Test
     fun `revokes an active key of the owning client, and refuses otherwise`() {
-        val client = repo.createClient(name = "Partner A", createdBy = null)
-        val other = repo.createClient(name = "Partner B", createdBy = null)
+        val client = repo.createClient(name = "Partner A", createdBy = null).toDomain()
+        val other = repo.createClient(name = "Partner B", createdBy = null).toDomain()
         val key = insertKey(clientId = client.id, hash = "hash-1")
         val now = LocalDateTime.now()
 
@@ -99,30 +100,30 @@ class ApiClientRepositoryTest {
         // …and a second revoke is a no-op (already revoked).
         repo.revokeKey(clientId = client.id, keyId = key.id, revokedAt = now) shouldBe false
 
-        val resolved = repo.findKeyByHash(hash = "hash-1").shouldNotBeNull()
-        resolved.key.status shouldBe ApiKeyStatus.REVOKED
-        resolved.key.revokedAt.shouldNotBeNull()
+        val (keyEntity, _) = repo.findKeyByHash(hash = "hash-1").shouldNotBeNull()
+        keyEntity.status shouldBe ApiKeyStatus.REVOKED.name
+        keyEntity.revokedAt.shouldNotBeNull()
     }
 
     @Test
     fun `records last-used time`() {
-        val client = repo.createClient(name = "Partner A", createdBy = null)
+        val client = repo.createClient(name = "Partner A", createdBy = null).toDomain()
         val key = insertKey(clientId = client.id, hash = "hash-1")
-        repo.findKeyByHash(hash = "hash-1")!!.key.lastUsedAt.shouldBeNull()
+        repo.findKeyByHash(hash = "hash-1")!!.first.lastUsedAt.shouldBeNull()
 
         repo.touchLastUsed(keyId = key.id, usedAt = LocalDateTime.now())
-        repo.findKeyByHash(hash = "hash-1")!!.key.lastUsedAt.shouldNotBeNull()
+        repo.findKeyByHash(hash = "hash-1")!!.first.lastUsedAt.shouldNotBeNull()
     }
 
     @Test
     fun `sets and clears a client's rate-limit override`() {
-        val client = repo.createClient(name = "Partner A", createdBy = null)
+        val client = repo.createClient(name = "Partner A", createdBy = null).toDomain()
         client.rateLimitPerMin.shouldBeNull()
 
-        repo.setRateLimit(clientId = client.id, rateLimitPerMin = 250).shouldNotBeNull().rateLimitPerMin shouldBe 250
-        repo.findClientById(id = client.id).shouldNotBeNull().rateLimitPerMin shouldBe 250
+        repo.setRateLimit(clientId = client.id, rateLimitPerMin = 250).shouldNotBeNull().toDomain().rateLimitPerMin shouldBe 250
+        repo.findClientById(id = client.id).shouldNotBeNull().toDomain().rateLimitPerMin shouldBe 250
 
-        repo.setRateLimit(clientId = client.id, rateLimitPerMin = null).shouldNotBeNull().rateLimitPerMin.shouldBeNull()
+        repo.setRateLimit(clientId = client.id, rateLimitPerMin = null).shouldNotBeNull().toDomain().rateLimitPerMin.shouldBeNull()
 
         // A missing client returns null.
         repo.setRateLimit(clientId = UUID.randomUUID(), rateLimitPerMin = 10).shouldBeNull()
@@ -130,8 +131,8 @@ class ApiClientRepositoryTest {
 
     @Test
     fun `lists clients newest first`() {
-        val first = repo.createClient(name = "First", createdBy = null)
-        val second = repo.createClient(name = "Second", createdBy = null)
-        repo.listClients().map { it.id } shouldContainExactly listOf(second.id, first.id)
+        val first = repo.createClient(name = "First", createdBy = null).toDomain()
+        val second = repo.createClient(name = "Second", createdBy = null).toDomain()
+        repo.listClients().map { it.toDomain().id } shouldContainExactly listOf(second.id, first.id)
     }
 }
