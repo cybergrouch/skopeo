@@ -1,6 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Lange Pantoja
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+// Cohesive user-aggregate persistence: the repository class plus its private row/entity/domain mapping
+// helpers. The entity⟷domain split (#633) pushed the file just over detekt's per-file function cap.
+@file:Suppress("TooManyFunctions")
+
 package org.skopeo.repository
 
 import arrow.core.Either
