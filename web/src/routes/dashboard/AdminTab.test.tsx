@@ -8,9 +8,6 @@ vi.mock("./admin/PendingCalculationSection", () => ({
 vi.mock("./admin/BuildInfoSection", () => ({
   BuildInfoSection: () => <div>build info section</div>,
 }));
-vi.mock("./admin/ClubsSection", () => ({
-  ClubsSection: () => <div>clubs section</div>,
-}));
 vi.mock("./admin/CircuitsSection", () => ({
   CircuitsSection: () => <div>circuits section</div>,
 }));
@@ -30,7 +27,6 @@ vi.mock("./admin/ApiClientsSection", () => ({
 describe("AdminTab", () => {
   it("renders the admin sections (invites #135 and activity log #134 now live in their own tabs)", () => {
     render(<AdminTab />);
-    expect(screen.getByText("clubs section")).toBeInTheDocument();
     expect(screen.getByText("circuits section")).toBeInTheDocument();
     expect(screen.getByText("pending calculation section")).toBeInTheDocument();
     expect(screen.getByText("theme section")).toBeInTheDocument();
@@ -44,6 +40,8 @@ describe("AdminTab", () => {
     expect(
       screen.queryByText("points management section"),
     ).not.toBeInTheDocument();
+    // Clubs administration moved to the Club Management tab (#698).
+    expect(screen.queryByText("clubs section")).not.toBeInTheDocument();
     // Player/account administration moved to the Account Management tab (#648).
     expect(screen.queryByText("manage player section")).not.toBeInTheDocument();
     expect(

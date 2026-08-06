@@ -236,6 +236,7 @@ gates above:
 | Reports | `ReportTab` | `isAdministrator` |
 | Points Management | `PointsManagementSection` | `canManagePointsBudget` |
 | Account Management | `AccountManagementTab` | `isAdministrator` |
+| Club Management | `ClubManagementTab` | `isAdministrator` |
 | Admin | `AdminTab` | `isAdministrator` |
 | About | `AboutTab` | Always |
 
@@ -269,7 +270,7 @@ flowchart TD
     Pred -->|canRate| Ratings[Ratings]
     Pred -->|isResearcher| Research[Research]
     Pred -->|canManagePointsBudget| Points[Points Management]
-    Pred -->|isAdministrator| Adm["Invites, Activity Log, Reports, Account Management, Admin"]
+    Pred -->|isAdministrator| Adm["Invites, Activity Log, Reports, Account Management, Club Management, Admin"]
     Always --> Sec["Section array: nav + active content"]
     Settings --> Sec
     Org --> Sec
@@ -289,11 +290,18 @@ split out of the Admin tab (#648):
 - **Duplicates** (`DuplicatesSection`) — mark/replace confirmed duplicate records.
 - **Duplicate Candidates** (`DuplicateCandidatesSection`) — suspected duplicates for triage.
 
+### Club Management tab sections
+
+`ClubManagementTab.tsx` composes the clubs administration section (`src/routes/dashboard/admin/`),
+split out of the Admin tab (#698):
+
+- **Clubs** (`ClubsSection`) — create/rename/delete clubs, owners, sanction toggle.
+
 ### Admin tab sections
 
 `AdminTab.tsx` composes the remaining administrator-only sections (`src/routes/dashboard/admin/`):
 
-- **Clubs** / **Circuits** — club and circuit management.
+- **Circuits** (`CircuitsSection`) — circuit management.
 - **Pending Calculation** (`PendingCalculationSection`) — matches awaiting a rating calculation;
   triggers the dry-run/commit calculation.
 - **Standings Source** / **Feature Flags** / **Theme** — app-wide settings.
