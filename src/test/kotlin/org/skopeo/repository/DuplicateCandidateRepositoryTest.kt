@@ -96,8 +96,8 @@ class DuplicateCandidateRepositoryTest {
                     resolvedBy = a,
                     resolvedAt = LocalDateTime.now(),
                 ).shouldBeRight()
-        resolved.status shouldBe DuplicateCandidateStatus.RESOLVED
-        candidates.findById(id = candidate.id).shouldBeRight().status shouldBe DuplicateCandidateStatus.RESOLVED
+        resolved.status shouldBe DuplicateCandidateStatus.RESOLVED.name
+        candidates.findById(id = candidate.id).shouldBeRight().status shouldBe DuplicateCandidateStatus.RESOLVED.name
         candidates.findById(id = UUID.randomUUID()).shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
     }
 }

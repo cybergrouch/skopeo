@@ -12,6 +12,7 @@ import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.dto.audit.AuditLogResponse
 import org.skopeo.mapper.dto.audit.toResponse
+import org.skopeo.mapper.entity.audit.toDomain
 import org.skopeo.model.AuditCategory
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditEntry
@@ -62,12 +63,13 @@ class AuditService(
         either {
             requireAdmin(token = token).bind()
             val category = categoryRaw?.let { raw -> parseCategory(raw = raw).bind() }
-            val (items, total) =
+            val (entities, total) =
                 audit.list(
                     actions = category?.actions(),
                     limit = limit.coerceIn(minimumValue = 1, maximumValue = MAX_PAGE_SIZE),
                     offset = offset.coerceAtLeast(minimumValue = 0),
                 )
+            val items = entities.map { it.toDomain() }
             val refs = resolveRefs(entries = items)
             val matchRefs = resolveMatchRefs(entries = items)
             val views =

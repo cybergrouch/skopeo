@@ -21,6 +21,7 @@ import org.skopeo.dto.user.PublicPlayerResponse
 import org.skopeo.dto.user.PublicRatingDto
 import org.skopeo.dto.user.ResultsBucket
 import org.skopeo.mapper.dto.rating.toResponse
+import org.skopeo.mapper.entity.ranking.toDomain
 import org.skopeo.model.ContactType
 import org.skopeo.model.Match
 import org.skopeo.model.TeamType
@@ -360,7 +361,7 @@ class PlayerService(
             val allowed = caller != null && (caller.id == user.id || Capability.ADMINISTRATOR in caller.capabilities)
             ensure(condition = allowed) { ServiceError.Forbidden() }
 
-            val active = awards.listActiveByUser(userId = user.id, asOf = LocalDateTime.now())
+            val active = awards.listActiveByUser(userId = user.id, asOf = LocalDateTime.now()).map { it.toDomain() }
             val matchCodes = matches.publicRefsByIds(ids = active.mapNotNull { it.matchId }).mapValues { it.value.publicCode }
             val eventCodes = events.publicCodesByIds(ids = active.mapNotNull { it.eventId })
             // Prefer the match link; fall back to the event only when there is no match (manual / pre-V19).

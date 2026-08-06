@@ -12,7 +12,6 @@ import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.common.error.ServiceError
-import org.skopeo.model.RatingRequest
 import org.skopeo.model.RatingRequestStatus
 import org.skopeo.persistence.RatingRequestEntity
 import java.math.BigDecimal
@@ -25,7 +24,7 @@ class RatingRequestRepository {
     fun create(
         userId: UUID,
         justification: String,
-    ): Either<ServiceError, RatingRequest> =
+    ): Either<ServiceError, RatingRequestEntity> =
         conflictAware(message = "You already have an open re-rate request") {
             transaction {
                 val id =
@@ -39,11 +38,11 @@ class RatingRequestRepository {
             }
         }
 
-    fun findById(id: UUID): RatingRequest? =
-        transaction { RatingRequestsTable.selectAll().where { RatingRequestsTable.id eq id }.singleOrNull()?.toRatingRequest() }
+    fun findById(id: UUID): RatingRequestEntity? =
+        transaction { RatingRequestsTable.selectAll().where { RatingRequestsTable.id eq id }.singleOrNull()?.toRatingRequestEntity() }
 
     /** The player's most recent request (any status) — what the Profile tab shows. */
-    fun findLatestByUser(userId: UUID): RatingRequest? =
+    fun findLatestByUser(userId: UUID): RatingRequestEntity? =
         transaction {
             RatingRequestsTable
                 .selectAll()
@@ -51,7 +50,7 @@ class RatingRequestRepository {
                 .orderBy(RatingRequestsTable.createdAt to SortOrder.DESC)
                 .limit(n = 1)
                 .singleOrNull()
-                ?.toRatingRequest()
+                ?.toRatingRequestEntity()
         }
 
     /** A page of requests, newest first, optionally filtered by [status]. */
@@ -59,7 +58,7 @@ class RatingRequestRepository {
         limit: Int,
         offset: Int,
         status: RatingRequestStatus?,
-    ): Pair<List<RatingRequest>, Long> =
+    ): Pair<List<RatingRequestEntity>, Long> =
         transaction {
             val base = RatingRequestsTable.selectAll()
             val filtered = if (status != null) base.where { RatingRequestsTable.status eq status.name } else base
@@ -68,7 +67,7 @@ class RatingRequestRepository {
                 filtered
                     .orderBy(RatingRequestsTable.createdAt to SortOrder.DESC)
                     .limit(n = limit, offset = offset.toLong())
-                    .map { it.toRatingRequest() }
+                    .map { it.toRatingRequestEntity() }
             items to total
         }
 
@@ -79,7 +78,7 @@ class RatingRequestRepository {
         newRating: BigDecimal?,
         reason: String?,
         resolvedBy: UUID,
-    ): RatingRequest? =
+    ): RatingRequestEntity? =
         transaction {
             val updated =
                 RatingRequestsTable.update(
@@ -94,11 +93,9 @@ class RatingRequestRepository {
             if (updated == 0) null else loadById(id = id)
         }
 
-    private fun loadById(id: UUID): RatingRequest =
-        RatingRequestsTable.selectAll().where { RatingRequestsTable.id eq id }.single().toRatingRequest()
+    private fun loadById(id: UUID): RatingRequestEntity =
+        RatingRequestsTable.selectAll().where { RatingRequestsTable.id eq id }.single().toRatingRequestEntity()
 }
-
-internal fun ResultRow.toRatingRequest(): RatingRequest = toRatingRequestEntity().toDomain()
 
 internal fun ResultRow.toRatingRequestEntity(): RatingRequestEntity =
     RatingRequestEntity(
@@ -111,17 +108,4 @@ internal fun ResultRow.toRatingRequestEntity(): RatingRequestEntity =
         resolvedBy = this[RatingRequestsTable.resolvedBy]?.value,
         resolvedAt = this[RatingRequestsTable.resolvedAt],
         createdAt = this[RatingRequestsTable.createdAt],
-    )
-
-internal fun RatingRequestEntity.toDomain(): RatingRequest =
-    RatingRequest(
-        id = id,
-        userId = userId,
-        justification = justification,
-        status = RatingRequestStatus.valueOf(value = status),
-        newRating = newRating,
-        reason = reason,
-        resolvedBy = resolvedBy,
-        resolvedAt = resolvedAt,
-        createdAt = createdAt,
     )

@@ -16,6 +16,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
+import org.skopeo.mapper.entity.ranking.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.AwardStatus
 import org.skopeo.model.CreateFixtureCommand
@@ -133,7 +134,7 @@ class StandingsCalculationServiceTest {
                     grantedBy = null,
                     awardedAt = LocalDateTime.now(),
                 ),
-        )
+        ).toDomain()
     }
 
     /** Record a COMPLETED in-window match so the player accrues rating confidence (#459). */

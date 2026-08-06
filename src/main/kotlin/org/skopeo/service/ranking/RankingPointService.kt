@@ -17,6 +17,7 @@ import org.skopeo.dto.ranking.GrantRankingPointsRequest
 import org.skopeo.dto.ranking.RankingPointAwardResponse
 import org.skopeo.mapper.dto.ranking.toCommand
 import org.skopeo.mapper.dto.ranking.toResponse
+import org.skopeo.mapper.entity.ranking.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -121,7 +122,7 @@ class RankingPointService(
                             grantedBy = adminId,
                             awardedAt = LocalDateTime.now(),
                         ),
-                )
+                ).toDomain()
             audit.record(write = grantAudit(actorId = adminId, award = award))
             award.toResponse()
         }
@@ -192,7 +193,7 @@ class RankingPointService(
                             grantedBy = adminId,
                             awardedAt = LocalDateTime.now(),
                         ),
-                )
+                ).toDomain()
             audit.record(write = grantAudit(actorId = adminId, award = award))
             award.toResponse()
         }
@@ -270,7 +271,7 @@ class RankingPointService(
         either {
             requireAdmin(token = token).bind()
             users.findById(id = userId).mapLeft { ServiceError.NotFound(message = "User $userId not found") }.bind()
-            awards.listByUser(userId = userId).map { it.toResponse() }
+            awards.listByUser(userId = userId).map { it.toDomain().toResponse() }
         }
 
     /**
@@ -288,7 +289,8 @@ class RankingPointService(
             requirePointsManager(token = token).bind()
             val pageSize = (limit ?: DEFAULT_PAGE_SIZE).coerceIn(minimumValue = 1, maximumValue = MAX_PAGE_SIZE)
             val pageOffset = (offset ?: 0).coerceAtLeast(minimumValue = 0)
-            val (rows, total) = awards.listAwards(limit = pageSize, offset = pageOffset)
+            val (rowEntities, total) = awards.listAwards(limit = pageSize, offset = pageOffset)
+            val rows = rowEntities.map { it.toDomain() }
 
             val usersById = users.findAllByIds(ids = rows.map { it.userId }).associateBy { it.id }
             val matchRefs = matches.publicRefsByIds(ids = rows.mapNotNull { it.matchId })

@@ -13,6 +13,7 @@ import org.skopeo.common.security.Capability
 import org.skopeo.dto.duplicate.DuplicateCandidatePageResponse
 import org.skopeo.dto.duplicate.DuplicateCandidateResponse
 import org.skopeo.mapper.dto.duplicate.toResponse
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -62,7 +63,7 @@ class DuplicateCandidateService(
             val views =
                 items.map {
                     DuplicateCandidateView(
-                        candidate = it,
+                        candidate = it.toDomain(),
                         userA = byId.getValue(key = it.userAId),
                         userB = byId.getValue(key = it.userBId),
                         userADeleted = byId.getValue(key = it.userAId).isDeleted(),
@@ -91,7 +92,7 @@ class DuplicateCandidateService(
                     signal = DuplicateSignal.MANUAL,
                     detail = reason,
                     flaggedBy = adminId,
-                )
+                ).toDomain()
             audit.record(
                 write =
                     AuditWrite(
@@ -176,7 +177,7 @@ class DuplicateCandidateService(
 
     private fun openCandidate(id: UUID): Either<ServiceError, DuplicateCandidate> =
         either {
-            val candidate = candidates.findById(id = id).bind()
+            val candidate = candidates.findById(id = id).bind().toDomain()
             ensure(condition = candidate.status == DuplicateCandidateStatus.OPEN) {
                 ServiceError.Conflict(message = "Candidate $id is already ${candidate.status.name.lowercase()}")
             }

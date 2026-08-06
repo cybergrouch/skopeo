@@ -237,7 +237,7 @@ class EventReverseRatingsTest {
         awardRepo.listActiveByEvent(eventId = re.eventId).shouldBeEmpty()
         val rows = awardRepo.listByUser(userId = re.p1.id)
         rows shouldHaveSize 2
-        rows.count { it.status == AwardStatus.ACTIVE } shouldBe 0
+        rows.count { it.status == AwardStatus.ACTIVE.name } shouldBe 0
         val marker = rows.single { it.revokesAwardId != null }
         marker.reason.shouldNotBeNull() shouldContain "Reversed on rating reversal"
     }
@@ -266,7 +266,7 @@ class EventReverseRatingsTest {
             .first.single().let {
                 it.actorUserId shouldBe re.admin.id
                 it.entityId shouldBe re.eventId
-                it.entityType shouldBe AuditEntityType.EVENT
+                it.entityType shouldBe AuditEntityType.EVENT.name
                 it.summary shouldContain "Reversed ratings for event Spring Open"
                 it.details["participantsRestored"] shouldBe "2"
                 it.details["awardsRevoked"] shouldBe "2"

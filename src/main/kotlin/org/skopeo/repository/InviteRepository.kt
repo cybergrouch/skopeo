@@ -14,7 +14,6 @@ import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.common.error.ServiceError
-import org.skopeo.model.Invite
 import org.skopeo.model.InviteStatus
 import org.skopeo.persistence.InviteEntity
 import java.time.LocalDateTime
@@ -30,7 +29,7 @@ class InviteRepository {
         email: String,
         invitedBy: UUID?,
         expiresAt: LocalDateTime,
-    ): Invite =
+    ): InviteEntity =
         transaction {
             val existing = pendingRow(email = email)
             val id =
@@ -55,7 +54,7 @@ class InviteRepository {
     fun findOpenByEmail(
         email: String,
         asOf: LocalDateTime,
-    ): Invite? =
+    ): InviteEntity? =
         transaction {
             InvitesTable
                 .selectAll()
@@ -63,7 +62,7 @@ class InviteRepository {
                     (InvitesTable.email eq email) and
                         (InvitesTable.status eq InviteStatus.PENDING.name) and
                         (InvitesTable.expiresAt greater asOf)
-                }.map { it.toInvite() }
+                }.map { it.toInviteEntity() }
                 .firstOrNull()
         }
 
@@ -82,7 +81,7 @@ class InviteRepository {
     }
 
     /** Revoke an invite by id; returns the updated invite, or a [ServiceError.NotFound] if no such invite. */
-    fun revoke(id: UUID): Either<ServiceError, Invite> =
+    fun revoke(id: UUID): Either<ServiceError, InviteEntity> =
         transaction {
             val updated =
                 InvitesTable.update(where = { InvitesTable.id eq id }) {
@@ -104,7 +103,7 @@ class InviteRepository {
         limit: Int,
         offset: Int,
         status: InviteStatus? = null,
-    ): Pair<List<Invite>, Long> =
+    ): Pair<List<InviteEntity>, Long> =
         transaction {
             fun query() =
                 if (status == null) {
@@ -117,7 +116,7 @@ class InviteRepository {
                 query()
                     .orderBy(InvitesTable.createdAt to SortOrder.DESC)
                     .limit(n = limit, offset = offset.toLong())
-                    .map { it.toInvite() }
+                    .map { it.toInviteEntity() }
             items to total
         }
 
@@ -127,10 +126,8 @@ class InviteRepository {
             .where { (InvitesTable.email eq email) and (InvitesTable.status eq InviteStatus.PENDING.name) }
             .firstOrNull()
 
-    private fun loadByIdOrThrow(id: UUID): Invite = InvitesTable.selectAll().where { InvitesTable.id eq id }.single().toInvite()
+    private fun loadByIdOrThrow(id: UUID): InviteEntity = InvitesTable.selectAll().where { InvitesTable.id eq id }.single().toInviteEntity()
 }
-
-internal fun ResultRow.toInvite(): Invite = toInviteEntity().toDomain()
 
 internal fun ResultRow.toInviteEntity(): InviteEntity =
     InviteEntity(
@@ -141,15 +138,4 @@ internal fun ResultRow.toInviteEntity(): InviteEntity =
         expiresAt = this[InvitesTable.expiresAt],
         acceptedAt = this[InvitesTable.acceptedAt],
         createdAt = this[InvitesTable.createdAt],
-    )
-
-internal fun InviteEntity.toDomain(): Invite =
-    Invite(
-        id = id,
-        email = email,
-        status = InviteStatus.valueOf(value = status),
-        invitedBy = invitedBy,
-        expiresAt = expiresAt,
-        acceptedAt = acceptedAt,
-        createdAt = createdAt,
     )

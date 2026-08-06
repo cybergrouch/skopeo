@@ -41,7 +41,7 @@ class InviteRepositoryTest {
     @Test
     fun `createOrRotate inserts a pending invite, then rotates the same row's expiry on re-invite`() {
         val first = invites.createOrRotate(email = "a@x.dev", invitedBy = null, expiresAt = past)
-        first.status shouldBe InviteStatus.PENDING
+        first.status shouldBe InviteStatus.PENDING.name
 
         val rotated = invites.createOrRotate(email = "a@x.dev", invitedBy = null, expiresAt = future)
         rotated.id shouldBe first.id // same row rotated, not a duplicate
@@ -85,7 +85,7 @@ class InviteRepositoryTest {
         val invite = invites.createOrRotate(email = "rev@x.dev", invitedBy = null, expiresAt = future)
 
         val revoked = invites.revoke(id = invite.id).shouldBeRight()
-        revoked.status shouldBe InviteStatus.REVOKED
+        revoked.status shouldBe InviteStatus.REVOKED.name
         invites.findOpenByEmail(email = "rev@x.dev", asOf = LocalDateTime.now()).shouldBeNull()
 
         invites.revoke(id = UUID.randomUUID()).shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()

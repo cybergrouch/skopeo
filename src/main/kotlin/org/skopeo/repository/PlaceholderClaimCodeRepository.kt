@@ -9,7 +9,6 @@ import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
-import org.skopeo.model.ClaimCode
 import org.skopeo.model.ClaimCodeStatus
 import org.skopeo.persistence.ClaimCodeEntity
 import java.time.LocalDateTime
@@ -31,7 +30,7 @@ class PlaceholderClaimCodeRepository {
         codeHash: String,
         expiresAt: LocalDateTime,
         createdBy: UUID?,
-    ): ClaimCode =
+    ): ClaimCodeEntity =
         transaction {
             val now = LocalDateTime.now()
             PlaceholderClaimCodesTable.update(
@@ -56,7 +55,7 @@ class PlaceholderClaimCodeRepository {
         }
 
     /** The ACTIVE code matching [codeHash], if any (the claim lookup). Expiry is checked by the caller. */
-    fun findActiveByHash(codeHash: String): ClaimCode? =
+    fun findActiveByHash(codeHash: String): ClaimCodeEntity? =
         transaction {
             PlaceholderClaimCodesTable
                 .selectAll()
@@ -64,7 +63,7 @@ class PlaceholderClaimCodeRepository {
                     (PlaceholderClaimCodesTable.codeHash eq codeHash) and
                         (PlaceholderClaimCodesTable.status eq ClaimCodeStatus.ACTIVE.name)
                 }.firstOrNull()
-                ?.toClaimCode()
+                ?.toClaimCodeEntity()
         }
 
     /** Mark [id] CONSUMED by [consumedBy] at [consumedAt] — the single-use consumption on a successful claim. */
@@ -82,11 +81,9 @@ class PlaceholderClaimCodeRepository {
         }
     }
 
-    private fun loadByIdOrThrow(id: UUID): ClaimCode =
-        PlaceholderClaimCodesTable.selectAll().where { PlaceholderClaimCodesTable.id eq id }.single().toClaimCode()
+    private fun loadByIdOrThrow(id: UUID): ClaimCodeEntity =
+        PlaceholderClaimCodesTable.selectAll().where { PlaceholderClaimCodesTable.id eq id }.single().toClaimCodeEntity()
 }
-
-internal fun ResultRow.toClaimCode(): ClaimCode = toClaimCodeEntity().toDomain()
 
 internal fun ResultRow.toClaimCodeEntity(): ClaimCodeEntity =
     ClaimCodeEntity(
@@ -99,17 +96,4 @@ internal fun ResultRow.toClaimCodeEntity(): ClaimCodeEntity =
         createdAt = this[PlaceholderClaimCodesTable.createdAt],
         consumedAt = this[PlaceholderClaimCodesTable.consumedAt],
         consumedBy = this[PlaceholderClaimCodesTable.consumedBy]?.value,
-    )
-
-internal fun ClaimCodeEntity.toDomain(): ClaimCode =
-    ClaimCode(
-        id = id,
-        placeholderUserId = placeholderUserId,
-        codeHash = codeHash,
-        expiresAt = expiresAt,
-        status = ClaimCodeStatus.valueOf(value = status),
-        createdBy = createdBy,
-        createdAt = createdAt,
-        consumedAt = consumedAt,
-        consumedBy = consumedBy,
     )

@@ -14,7 +14,6 @@ import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.common.error.ServiceError
-import org.skopeo.model.DuplicateCandidate
 import org.skopeo.model.DuplicateCandidateStatus
 import org.skopeo.model.DuplicateSignal
 import org.skopeo.persistence.DuplicateCandidateEntity
@@ -36,10 +35,10 @@ class DuplicateCandidateRepository {
         signal: DuplicateSignal,
         detail: String?,
         flaggedBy: UUID?,
-    ): DuplicateCandidate =
+    ): DuplicateCandidateEntity =
         transaction {
             val (a, b) = orderedPair(first = userAId, second = userBId)
-            openRow(a = a, b = b)?.let { return@transaction it.toCandidate() }
+            openRow(a = a, b = b)?.let { return@transaction it.toDuplicateCandidateEntity() }
             val flaggedAt = LocalDateTime.now()
             val id =
                 DuplicateCandidatesTable.insertAndGetId {
@@ -50,13 +49,13 @@ class DuplicateCandidateRepository {
                     it[DuplicateCandidatesTable.flaggedBy] = flaggedBy
                     it[DuplicateCandidatesTable.flaggedAt] = flaggedAt
                 }.value
-            DuplicateCandidate(
+            DuplicateCandidateEntity(
                 id = id,
                 userAId = a,
                 userBId = b,
-                signal = signal,
+                signal = signal.name,
                 detail = detail,
-                status = DuplicateCandidateStatus.OPEN,
+                status = DuplicateCandidateStatus.OPEN.name,
                 flaggedBy = flaggedBy,
                 flaggedAt = flaggedAt,
                 resolvedBy = null,
@@ -69,7 +68,7 @@ class DuplicateCandidateRepository {
         limit: Int,
         offset: Int,
         status: DuplicateCandidateStatus?,
-    ): Pair<List<DuplicateCandidate>, Long> =
+    ): Pair<List<DuplicateCandidateEntity>, Long> =
         transaction {
             fun query() =
                 if (status == null) {
@@ -82,11 +81,11 @@ class DuplicateCandidateRepository {
                 query()
                     .orderBy(DuplicateCandidatesTable.flaggedAt to SortOrder.DESC)
                     .limit(n = limit, offset = offset.toLong())
-                    .map { it.toCandidate() }
+                    .map { it.toDuplicateCandidateEntity() }
             items to total
         }
 
-    fun findById(id: UUID): Either<ServiceError, DuplicateCandidate> =
+    fun findById(id: UUID): Either<ServiceError, DuplicateCandidateEntity> =
         transaction {
             val candidate = loadById(id = id)
             if (candidate == null) ServiceError.NotFound(message = "No duplicate candidate $id").left() else candidate.right()
@@ -101,7 +100,7 @@ class DuplicateCandidateRepository {
         status: DuplicateCandidateStatus,
         resolvedBy: UUID?,
         resolvedAt: LocalDateTime?,
-    ): Either<ServiceError, DuplicateCandidate> =
+    ): Either<ServiceError, DuplicateCandidateEntity> =
         transaction {
             val updated =
                 DuplicateCandidatesTable.update(where = { DuplicateCandidatesTable.id eq id }) {
@@ -133,14 +132,16 @@ class DuplicateCandidateRepository {
                     (DuplicateCandidatesTable.status eq DuplicateCandidateStatus.OPEN.name)
             }.firstOrNull()
 
-    private fun loadById(id: UUID): DuplicateCandidate? =
-        DuplicateCandidatesTable.selectAll().where { DuplicateCandidatesTable.id eq id }.map { it.toCandidate() }.firstOrNull()
+    private fun loadById(id: UUID): DuplicateCandidateEntity? =
+        DuplicateCandidatesTable
+            .selectAll()
+            .where { DuplicateCandidatesTable.id eq id }
+            .map { it.toDuplicateCandidateEntity() }
+            .firstOrNull()
 
-    private fun loadByIdOrThrow(id: UUID): DuplicateCandidate =
-        DuplicateCandidatesTable.selectAll().where { DuplicateCandidatesTable.id eq id }.single().toCandidate()
+    private fun loadByIdOrThrow(id: UUID): DuplicateCandidateEntity =
+        DuplicateCandidatesTable.selectAll().where { DuplicateCandidatesTable.id eq id }.single().toDuplicateCandidateEntity()
 }
-
-internal fun ResultRow.toCandidate(): DuplicateCandidate = toDuplicateCandidateEntity().toDomain()
 
 internal fun ResultRow.toDuplicateCandidateEntity(): DuplicateCandidateEntity =
     DuplicateCandidateEntity(
@@ -154,18 +155,4 @@ internal fun ResultRow.toDuplicateCandidateEntity(): DuplicateCandidateEntity =
         flaggedAt = this[DuplicateCandidatesTable.flaggedAt],
         resolvedBy = this[DuplicateCandidatesTable.resolvedBy]?.value,
         resolvedAt = this[DuplicateCandidatesTable.resolvedAt],
-    )
-
-internal fun DuplicateCandidateEntity.toDomain(): DuplicateCandidate =
-    DuplicateCandidate(
-        id = id,
-        userAId = userAId,
-        userBId = userBId,
-        signal = DuplicateSignal.valueOf(value = signal),
-        detail = detail,
-        status = DuplicateCandidateStatus.valueOf(value = status),
-        flaggedBy = flaggedBy,
-        flaggedAt = flaggedAt,
-        resolvedBy = resolvedBy,
-        resolvedAt = resolvedAt,
     )

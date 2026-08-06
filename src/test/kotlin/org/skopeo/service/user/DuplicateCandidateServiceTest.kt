@@ -122,7 +122,7 @@ class DuplicateCandidateServiceTest {
             it.isActive.shouldBeFalse()
             it.canonicalUserId shouldBe UUID.fromString(candidate.userB.id)
         }
-        candidates.findById(id = UUID.fromString(candidate.id)).shouldBeRight().status shouldBe DuplicateCandidateStatus.RESOLVED
+        candidates.findById(id = UUID.fromString(candidate.id)).shouldBeRight().status shouldBe DuplicateCandidateStatus.RESOLVED.name
     }
 
     @Test
@@ -135,7 +135,7 @@ class DuplicateCandidateServiceTest {
 
         service.dismiss(token = token(uid = "root"), id = UUID.fromString(candidate.id)).shouldBeRight()
 
-        candidates.findById(id = UUID.fromString(candidate.id)).shouldBeRight().status shouldBe DuplicateCandidateStatus.DISMISSED
+        candidates.findById(id = UUID.fromString(candidate.id)).shouldBeRight().status shouldBe DuplicateCandidateStatus.DISMISSED.name
         // A second action on a non-open candidate conflicts.
         service.dismiss(
             token = token(uid = "root"),
@@ -159,7 +159,7 @@ class DuplicateCandidateServiceTest {
             it.isActive.shouldBeFalse()
             it.canonicalUserId shouldBe keep.id
         }
-        candidates.findById(id = UUID.fromString(candidate.id)).shouldBeRight().status shouldBe DuplicateCandidateStatus.RESOLVED
+        candidates.findById(id = UUID.fromString(candidate.id)).shouldBeRight().status shouldBe DuplicateCandidateStatus.RESOLVED.name
         val audit = AuditRepository()
         audit.list(actions = listOf(element = AuditAction.DUPLICATE_CANDIDATE_CONFIRMED), limit = 10, offset = 0).second shouldBe 1L
         audit.list(actions = listOf(element = AuditAction.USER_MARKED_DUPLICATE), limit = 10, offset = 0).second shouldBe 1L

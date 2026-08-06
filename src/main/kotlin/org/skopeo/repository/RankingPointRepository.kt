@@ -13,7 +13,6 @@ import org.jetbrains.exposed.sql.update
 import org.skopeo.model.AwardStatus
 import org.skopeo.model.PointClass
 import org.skopeo.model.PointSourceType
-import org.skopeo.model.RankingPointAward
 import org.skopeo.model.RankingPointAwardWrite
 import org.skopeo.persistence.RankingPointAwardEntity
 import java.math.BigDecimal
@@ -27,16 +26,16 @@ import java.util.UUID
  * truthfully append-only while the as-of total stays a simple ACTIVE-in-window sum. Flyway owns DDL.
  */
 class RankingPointRepository {
-    /** Insert an award row from a fully-resolved [write]; returns the persisted award. */
-    fun award(write: RankingPointAwardWrite): RankingPointAward =
+    /** Insert an award row from a fully-resolved [write]; returns the persisted raw entity (#633). */
+    fun award(write: RankingPointAwardWrite): RankingPointAwardEntity =
         transaction {
             val id = insertRow(write = write)
-            RankingPointAwardsTable.selectAll().where { RankingPointAwardsTable.id eq id }.single().toRankingPointAward()
+            RankingPointAwardsTable.selectAll().where { RankingPointAwardsTable.id eq id }.single().toRankingPointAwardEntity()
         }
 
-    fun findById(id: UUID): RankingPointAward? =
+    fun findById(id: UUID): RankingPointAwardEntity? =
         transaction {
-            RankingPointAwardsTable.selectAll().where { RankingPointAwardsTable.id eq id }.singleOrNull()?.toRankingPointAward()
+            RankingPointAwardsTable.selectAll().where { RankingPointAwardsTable.id eq id }.singleOrNull()?.toRankingPointAwardEntity()
         }
 
     /**
@@ -49,7 +48,7 @@ class RankingPointRepository {
         revokedBy: UUID?,
         reason: String?,
         revokedAt: LocalDateTime,
-    ): RankingPointAward? =
+    ): RankingPointAwardEntity? =
         transaction {
             // Split the null-guard from the mapping so there's no chained safe-call+elvis arm that no
             // test can reach (both real outcomes — found / already-revoked — are covered).
@@ -59,7 +58,7 @@ class RankingPointRepository {
                     .where { (RankingPointAwardsTable.id eq awardId) and (RankingPointAwardsTable.status eq AwardStatus.ACTIVE.name) }
                     .singleOrNull()
                     ?: return@transaction null
-            val original = originalRow.toRankingPointAward()
+            val original = originalRow.toRankingPointAwardEntity()
             RankingPointAwardsTable.update(where = { RankingPointAwardsTable.id eq awardId }) {
                 it[status] = AwardStatus.REVOKED.name
             }
@@ -69,8 +68,9 @@ class RankingPointRepository {
                         RankingPointAwardWrite(
                             userId = original.userId,
                             points = BigDecimal.ZERO,
-                            pointClass = original.pointClass,
-                            sourceType = original.sourceType,
+                            // The entity holds the enum columns RAW as Strings; parse back for the write.
+                            pointClass = PointClass.valueOf(value = original.pointClass),
+                            sourceType = PointSourceType.valueOf(value = original.sourceType),
                             sourceId = original.sourceId,
                             band = original.band,
                             sex = original.sex,
@@ -83,7 +83,7 @@ class RankingPointRepository {
                             awardedAt = revokedAt,
                         ),
                 )
-            RankingPointAwardsTable.selectAll().where { RankingPointAwardsTable.id eq markerId }.single().toRankingPointAward()
+            RankingPointAwardsTable.selectAll().where { RankingPointAwardsTable.id eq markerId }.single().toRankingPointAwardEntity()
         }
 
     /**
@@ -94,7 +94,7 @@ class RankingPointRepository {
     fun listAwards(
         limit: Int,
         offset: Int,
-    ): Pair<List<RankingPointAward>, Long> =
+    ): Pair<List<RankingPointAwardEntity>, Long> =
         transaction {
             val total = RankingPointAwardsTable.selectAll().count()
             val rows =
@@ -102,7 +102,7 @@ class RankingPointRepository {
                     .selectAll()
                     .orderBy(RankingPointAwardsTable.awardedAt to SortOrder.DESC)
                     .limit(n = limit, offset = offset.toLong())
-                    .map { it.toRankingPointAward() }
+                    .map { it.toRankingPointAwardEntity() }
             rows to total
         }
 
@@ -111,31 +111,31 @@ class RankingPointRepository {
      * that have not been revoked. Backs un-finalize's reversal, which revokes each one. REVOKED
      * originals and REVOKED markers drop out (only ACTIVE rows carry live points).
      */
-    fun listActiveByEvent(eventId: UUID): List<RankingPointAward> =
+    fun listActiveByEvent(eventId: UUID): List<RankingPointAwardEntity> =
         transaction {
             RankingPointAwardsTable
                 .selectAll()
                 .where {
                     (RankingPointAwardsTable.eventId eq eventId) and
                         (RankingPointAwardsTable.status eq AwardStatus.ACTIVE.name)
-                }.map { it.toRankingPointAward() }
+                }.map { it.toRankingPointAwardEntity() }
         }
 
     /** Every ledger row for [userId], newest first (awarded_at). Includes REVOKED markers for the trail. */
-    fun listByUser(userId: UUID): List<RankingPointAward> =
+    fun listByUser(userId: UUID): List<RankingPointAwardEntity> =
         transaction {
             RankingPointAwardsTable
                 .selectAll()
                 .where { RankingPointAwardsTable.userId eq userId }
                 .orderBy(RankingPointAwardsTable.awardedAt to SortOrder.DESC)
-                .map { it.toRankingPointAward() }
+                .map { it.toRankingPointAwardEntity() }
         }
 
     /**
      * Every award that counts as of [asOf] — ACTIVE and with [asOf] inside [valid_from, valid_until).
      * Backs the phase-2 standings recompute; the REVOKED markers (and revoked originals) drop out.
      */
-    fun activeAsOf(asOf: LocalDateTime): List<RankingPointAward> =
+    fun activeAsOf(asOf: LocalDateTime): List<RankingPointAwardEntity> =
         transaction {
             RankingPointAwardsTable
                 .selectAll()
@@ -143,7 +143,7 @@ class RankingPointRepository {
                     (RankingPointAwardsTable.status eq AwardStatus.ACTIVE.name) and
                         (RankingPointAwardsTable.validFrom lessEq asOf) and
                         (RankingPointAwardsTable.validUntil greater asOf)
-                }.map { it.toRankingPointAward() }
+                }.map { it.toRankingPointAwardEntity() }
         }
 
     /**
@@ -154,7 +154,7 @@ class RankingPointRepository {
     fun listActiveByUser(
         userId: UUID,
         asOf: LocalDateTime,
-    ): List<RankingPointAward> =
+    ): List<RankingPointAwardEntity> =
         transaction {
             RankingPointAwardsTable
                 .selectAll()
@@ -164,7 +164,7 @@ class RankingPointRepository {
                         (RankingPointAwardsTable.validFrom lessEq asOf) and
                         (RankingPointAwardsTable.validUntil greater asOf)
                 }.orderBy(RankingPointAwardsTable.validUntil to SortOrder.ASC)
-                .map { it.toRankingPointAward() }
+                .map { it.toRankingPointAwardEntity() }
         }
 
     private fun insertRow(write: RankingPointAwardWrite): UUID =
@@ -188,8 +188,6 @@ class RankingPointRepository {
         }.value
 }
 
-internal fun ResultRow.toRankingPointAward(): RankingPointAward = toRankingPointAwardEntity().toDomain()
-
 internal fun ResultRow.toRankingPointAwardEntity(): RankingPointAwardEntity =
     RankingPointAwardEntity(
         id = this[RankingPointAwardsTable.id].value,
@@ -209,25 +207,4 @@ internal fun ResultRow.toRankingPointAwardEntity(): RankingPointAwardEntity =
         awardedAt = this[RankingPointAwardsTable.awardedAt],
         eventId = this[RankingPointAwardsTable.eventId]?.value,
         matchId = this[RankingPointAwardsTable.matchId]?.value,
-    )
-
-internal fun RankingPointAwardEntity.toDomain(): RankingPointAward =
-    RankingPointAward(
-        id = id,
-        userId = userId,
-        points = points,
-        pointClass = PointClass.valueOf(value = pointClass),
-        sourceType = PointSourceType.valueOf(value = sourceType),
-        sourceId = sourceId,
-        band = band,
-        sex = sex,
-        reason = reason,
-        validFrom = validFrom,
-        validUntil = validUntil,
-        status = AwardStatus.valueOf(value = status),
-        revokesAwardId = revokesAwardId,
-        grantedBy = grantedBy,
-        awardedAt = awardedAt,
-        eventId = eventId,
-        matchId = matchId,
     )

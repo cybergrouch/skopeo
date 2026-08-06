@@ -70,8 +70,8 @@ class AuditRepositoryTest {
 
         val entry = audit.list(actions = null, limit = 10, offset = 0).first.single()
         entry.actorUserId shouldBe actor
-        entry.action shouldBe AuditAction.RATING_SET
-        entry.entityType shouldBe AuditEntityType.RATING
+        entry.action shouldBe AuditAction.RATING_SET.name
+        entry.entityType shouldBe AuditEntityType.RATING.name
         entry.entityId shouldBe target
         entry.summary shouldBe "Set rating to 4.0"
         entry.details["newRating"] shouldBe "4.000000"
@@ -160,7 +160,7 @@ class AuditRepositoryTest {
         val (granted, grantedTotal) = audit.list(actions = listOf(element = AuditAction.CAPABILITY_GRANTED), limit = 1, offset = 0)
         grantedTotal shouldBe 2L
         granted shouldHaveSize 1
-        granted.single().action shouldBe AuditAction.CAPABILITY_GRANTED
+        granted.single().action shouldBe AuditAction.CAPABILITY_GRANTED.name
 
         audit.list(actions = null, limit = 10, offset = 0).second shouldBe 3L
     }
