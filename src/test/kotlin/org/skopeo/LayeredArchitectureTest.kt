@@ -27,7 +27,7 @@ import org.junit.jupiter.api.Test
  *    shared value types (ServiceError, the auth principals + the `Capability` enum, the serializable
  *    points-config contracts). ANY layer may depend on common; common depends on nothing above it, not even model.
  *
- * dto↔model exemption: three v1 stateless-calculator contract DTOs (`RankingCalculationRequest`/`Response`,
+ * dto↔model exemption: three stateless-calculator contract DTOs (`RankingCalculationRequest`/`Response`,
  * `RatingChange`) still embed shared `@Serializable` domain value types (`Team`, `MatchScore`,
  * `PlayerProfile`, `Rating`, `RatingCalculationOptions`) directly as their wire format, rather than mirroring
  * them. Fully decoupling that contract is a separate, larger change; until then these classes are the only

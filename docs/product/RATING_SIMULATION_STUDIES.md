@@ -290,6 +290,6 @@ the dynamic capability exists only at the constructor boundary for offline
 analysis, while production keeps a single, build-pinned, in-source value.
 
 > Note: this also composes with the algorithm-versioning convention
-> (`service/calculator/impl/v1/`). If K ever needs to change for production, doing
+> (`domain/service/calculator/impl/v2/`). If K ever needs to change for production, doing
 > it as a code change against a new algorithm version gives a clean, auditable
 > before/after boundary for any rating recalculation.

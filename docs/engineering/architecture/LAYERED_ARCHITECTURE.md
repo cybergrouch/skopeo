@@ -71,7 +71,7 @@ Enforced invariants (each is true in the codebase today):
 
 ## The one sanctioned `dto → model` dependency
 
-Three v1 stateless-calculator contract DTOs (`RankingCalculationRequest`/`Response`, `RatingChange`)
+Three stateless-calculator contract DTOs (`RankingCalculationRequest`/`Response`, `RatingChange`)
 deliberately embed shared `@Serializable` domain value types (`Team`, `MatchScore`, `PlayerProfile`,
 `Rating`, `RatingCalculationOptions`) directly as their wire format instead of mirroring them into
 parallel DTOs. The `dto ↛ model` rule exempts exactly these classes (by name). Fully decoupling that
