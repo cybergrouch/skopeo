@@ -7,13 +7,13 @@ import org.skopeo.model.Event
 import org.skopeo.model.EventParticipantStatus
 import org.skopeo.model.EventType
 import org.skopeo.model.MyEvent
-import org.skopeo.persistence.EventAggregateEntity
-import org.skopeo.persistence.MyEventEntity
+import org.skopeo.repository.persistence.EventAggregateEntity
+import org.skopeo.repository.persistence.MyEventEntity
 
 /**
  * Entity→domain mapper (#633): builds the domain [Event] from the raw [EventAggregateEntity] graph the
  * repository returns (the `events` row plus its loaded APPROVED participant ids). The raw
- * [org.skopeo.persistence.EventEntity.type] `String` is parsed into the domain [EventType] enum here —
+ * [org.skopeo.repository.persistence.EventEntity.type] `String` is parsed into the domain [EventType] enum here —
  * the single boundary at which the row becomes a domain object. Lives in `mapper.entity` (which may
  * depend on both `persistence` and `model`); the service calls it, since `repository ↛ mapper`.
  */

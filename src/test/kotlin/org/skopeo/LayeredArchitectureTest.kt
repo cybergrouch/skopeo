@@ -65,23 +65,26 @@ class LayeredArchitectureTest {
                 "..repository..",
                 "org.skopeo.dto..",
                 "..mapper..",
-                "org.skopeo.persistence..",
+                "org.skopeo.repository.persistence..",
             )
             .check(classes)
     }
 
     @Test
     fun `persistence entities are a leaf and depend on no other app layer including model`() {
-        // The entity/data-model layer (#633): dumb raw-row types the repository returns. Kept a leaf like
-        // `model`/`common` — repositories map rows to entities; the `mapper.entity` package converts
-        // entity→domain, so nothing flows the other way. May depend only on `common`.
+        // The entity/data-model layer (#633): dumb raw-row types the repository returns, in the
+        // `org.skopeo.repository.persistence` sub-package. Kept a leaf — the `mapper.entity` package
+        // converts entity→domain, so nothing flows the other way. May depend only on `common` and its own
+        // sibling entities (an aggregate entity references its child entities). The forbidden `repository`
+        // target is the EXACT `org.skopeo.repository` package (the repositories) — NOT `..repository..`,
+        // which would also match this sub-package and wrongly flag those intra-entity references.
         noClasses()
-            .that().resideInAPackage("org.skopeo.persistence..")
+            .that().resideInAPackage("org.skopeo.repository.persistence..")
             .should().dependOnClassesThat()
             .resideInAnyPackage(
                 "..routes..",
                 "..service..",
-                "..repository..",
+                "org.skopeo.repository",
                 "org.skopeo.dto..",
                 "..mapper..",
                 "org.skopeo.model..",
@@ -105,7 +108,7 @@ class LayeredArchitectureTest {
                 "org.skopeo.dto..",
                 "..mapper..",
                 "org.skopeo.model..",
-                "org.skopeo.persistence..",
+                "org.skopeo.repository.persistence..",
             )
             .check(classes)
     }
@@ -137,9 +140,12 @@ class LayeredArchitectureTest {
 
     @Test
     fun `mapper does not depend on routes, repository, or service`() {
+        // The forbidden `repository` target is the EXACT `org.skopeo.repository` package (the repositories),
+        // NOT `..repository..` — the latter would also match `org.skopeo.repository.persistence`, and
+        // `mapper.entity` legitimately depends on those entities to convert them to domain models.
         noClasses()
             .that().resideInAPackage("..mapper..")
-            .should().dependOnClassesThat().resideInAnyPackage("..routes..", "..repository..", "..service..")
+            .should().dependOnClassesThat().resideInAnyPackage("..routes..", "org.skopeo.repository", "..service..")
             .check(classes)
     }
 
@@ -149,7 +155,7 @@ class LayeredArchitectureTest {
         // dto↔model translation and must never see persistence entities — that is `mapper.entity`'s job.
         noClasses()
             .that().resideInAPackage("org.skopeo.mapper.dto..")
-            .should().dependOnClassesThat().resideInAPackage("org.skopeo.persistence..")
+            .should().dependOnClassesThat().resideInAPackage("org.skopeo.repository.persistence..")
             .check(classes)
     }
 

@@ -18,7 +18,7 @@ import org.skopeo.model.StandingsBand
 import org.skopeo.model.StandingsEntryWrite
 import org.skopeo.model.StandingsPage
 import org.skopeo.model.StandingsSnapshotEntry
-import org.skopeo.persistence.StandingsEntryEntity
+import org.skopeo.repository.persistence.StandingsEntryEntity
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID

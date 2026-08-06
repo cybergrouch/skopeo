@@ -15,7 +15,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.common.error.ServiceError
 import org.skopeo.model.InviteStatus
-import org.skopeo.persistence.InviteEntity
+import org.skopeo.repository.persistence.InviteEntity
 import java.time.LocalDateTime
 import java.util.UUID
 

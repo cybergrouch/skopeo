@@ -17,8 +17,8 @@ import org.skopeo.model.SetCalculationBreakdown
 import org.skopeo.model.UserRating
 import org.skopeo.model.WindowMatch
 import org.skopeo.model.confidenceAt
-import org.skopeo.persistence.RatingHistoryEntryEntity
-import org.skopeo.persistence.UserRatingEntity
+import org.skopeo.repository.persistence.RatingHistoryEntryEntity
+import org.skopeo.repository.persistence.UserRatingEntity
 import java.time.LocalDateTime
 
 /**

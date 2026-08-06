@@ -15,7 +15,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.common.error.ServiceError
 import org.skopeo.model.NameType
-import org.skopeo.persistence.NameEntity
+import org.skopeo.repository.persistence.NameEntity
 import java.time.LocalDateTime
 import java.util.UUID
 

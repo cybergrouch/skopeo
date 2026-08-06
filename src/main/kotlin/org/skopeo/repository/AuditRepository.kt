@@ -15,7 +15,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditWrite
-import org.skopeo.persistence.AuditEntryEntity
+import org.skopeo.repository.persistence.AuditEntryEntity
 import java.time.LocalDateTime
 import java.util.UUID
 

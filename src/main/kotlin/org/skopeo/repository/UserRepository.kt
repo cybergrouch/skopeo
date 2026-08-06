@@ -38,11 +38,11 @@ import org.skopeo.model.ProfilePatch
 import org.skopeo.model.ProvisionUserCommand
 import org.skopeo.model.ThemeSetting
 import org.skopeo.model.UserSearchQuery
-import org.skopeo.persistence.ContactEntity
-import org.skopeo.persistence.IdentityEntity
-import org.skopeo.persistence.NameEntity
-import org.skopeo.persistence.UserAggregateEntity
-import org.skopeo.persistence.UserEntity
+import org.skopeo.repository.persistence.ContactEntity
+import org.skopeo.repository.persistence.IdentityEntity
+import org.skopeo.repository.persistence.NameEntity
+import org.skopeo.repository.persistence.UserAggregateEntity
+import org.skopeo.repository.persistence.UserEntity
 import java.text.Normalizer
 import java.time.LocalDateTime
 import java.util.UUID

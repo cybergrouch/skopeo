@@ -5,8 +5,8 @@ package org.skopeo.mapper.entity.seeding
 
 import org.skopeo.model.Seeding
 import org.skopeo.model.SeedingEntry
-import org.skopeo.persistence.SeedingAggregateEntity
-import org.skopeo.persistence.SeedingEntryEntity
+import org.skopeo.repository.persistence.SeedingAggregateEntity
+import org.skopeo.repository.persistence.SeedingEntryEntity
 
 /**
  * Entity→domain mappers (#633): build the domain [Seeding] / [SeedingEntry] from the raw

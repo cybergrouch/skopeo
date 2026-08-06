@@ -18,9 +18,9 @@ import org.jetbrains.exposed.sql.update
 import org.skopeo.model.CreateEventCommand
 import org.skopeo.model.EventParticipantEntry
 import org.skopeo.model.EventParticipantStatus
-import org.skopeo.persistence.EventAggregateEntity
-import org.skopeo.persistence.EventEntity
-import org.skopeo.persistence.MyEventEntity
+import org.skopeo.repository.persistence.EventAggregateEntity
+import org.skopeo.repository.persistence.EventEntity
+import org.skopeo.repository.persistence.MyEventEntity
 import java.time.LocalDateTime
 import java.util.UUID
 

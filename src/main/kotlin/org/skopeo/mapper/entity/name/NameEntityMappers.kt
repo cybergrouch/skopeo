@@ -5,7 +5,7 @@ package org.skopeo.mapper.entity.name
 
 import org.skopeo.model.Name
 import org.skopeo.model.NameType
-import org.skopeo.persistence.NameEntity
+import org.skopeo.repository.persistence.NameEntity
 
 /**
  * Entity→domain mapper (#633): builds the domain [Name] from the raw [NameEntity] the repository returns.

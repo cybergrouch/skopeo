@@ -9,7 +9,7 @@ import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
-import org.skopeo.persistence.AppSettingEntity
+import org.skopeo.repository.persistence.AppSettingEntity
 import java.time.LocalDateTime
 import java.util.UUID
 

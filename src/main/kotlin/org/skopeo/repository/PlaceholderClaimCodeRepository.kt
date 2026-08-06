@@ -10,7 +10,7 @@ import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.model.ClaimCodeStatus
-import org.skopeo.persistence.ClaimCodeEntity
+import org.skopeo.repository.persistence.ClaimCodeEntity
 import java.time.LocalDateTime
 import java.util.UUID
 

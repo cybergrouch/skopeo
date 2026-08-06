@@ -5,7 +5,7 @@ package org.skopeo.mapper.entity.user
 
 import org.skopeo.model.ClaimCode
 import org.skopeo.model.ClaimCodeStatus
-import org.skopeo.persistence.ClaimCodeEntity
+import org.skopeo.repository.persistence.ClaimCodeEntity
 
 /**
  * Entity→domain mapper (#633): builds the domain [ClaimCode] from the raw persistence [ClaimCodeEntity]

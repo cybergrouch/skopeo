@@ -34,10 +34,10 @@ import org.skopeo.model.TeamType
 import org.skopeo.model.WinLossRecord
 import org.skopeo.model.WindowMatch
 import org.skopeo.model.weightClass
-import org.skopeo.persistence.MatchAggregateEntity
-import org.skopeo.persistence.MatchEntity
-import org.skopeo.persistence.MatchSetEntity
-import org.skopeo.persistence.MatchSideEntity
+import org.skopeo.repository.persistence.MatchAggregateEntity
+import org.skopeo.repository.persistence.MatchEntity
+import org.skopeo.repository.persistence.MatchSetEntity
+import org.skopeo.repository.persistence.MatchSideEntity
 import java.time.LocalDateTime
 import java.util.UUID
 

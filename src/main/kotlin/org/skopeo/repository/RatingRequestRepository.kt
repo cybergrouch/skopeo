@@ -13,7 +13,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.common.error.ServiceError
 import org.skopeo.model.RatingRequestStatus
-import org.skopeo.persistence.RatingRequestEntity
+import org.skopeo.repository.persistence.RatingRequestEntity
 import java.math.BigDecimal
 import java.time.LocalDateTime
 import java.util.UUID

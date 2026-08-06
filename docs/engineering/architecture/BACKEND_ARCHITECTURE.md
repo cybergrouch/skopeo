@@ -160,7 +160,7 @@ under one parent) is the sanctioned **cross-cutting foundation** of dependency-f
 contracts. **Every** layer — including `model` (which references `Capability`) — may depend on `common`;
 `common` depends on nothing above it, not even `model`. Note there is **no `routes → model` edge**.
 
-`persistence` (`org.skopeo.persistence`) is the **raw entity / data-model** leaf introduced by the #633
+`persistence` (`org.skopeo.repository.persistence`) is the **raw entity / data-model** leaf introduced by the #633
 split: one dumb `<X>Entity` per aggregate that mirrors a DB row **as stored** — enum columns held as raw
 `String`, JSON columns as the raw text, no derived fields and no behaviour (contrast the domain `model`
 types, which carry derivations like `User.photoUrl` and `UserRating.confidence` and the assembled child

@@ -12,7 +12,7 @@ import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.model.CreateCircuitCommand
-import org.skopeo.persistence.CircuitEntity
+import org.skopeo.repository.persistence.CircuitEntity
 import java.util.UUID
 
 /**

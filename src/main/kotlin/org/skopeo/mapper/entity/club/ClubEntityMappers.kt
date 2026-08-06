@@ -4,7 +4,7 @@
 package org.skopeo.mapper.entity.club
 
 import org.skopeo.model.Club
-import org.skopeo.persistence.ClubAggregateEntity
+import org.skopeo.repository.persistence.ClubAggregateEntity
 
 /**
  * Entity→domain mapper (#633): builds the domain [Club] from the raw [ClubAggregateEntity] graph the

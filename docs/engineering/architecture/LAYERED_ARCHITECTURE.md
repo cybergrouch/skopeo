@@ -26,7 +26,7 @@ Enforced invariants (each is true in the codebase today):
 - **`repository`** is pure data-access: it never depends on `routes`, `service`, `dto`, or `mapper`; it
   maps DB rows to raw **`persistence`** entities and returns them (it MAY depend on `persistence`, `model`
   — for write-command/enum inputs — and `common`).
-- **`persistence`** (`org.skopeo.persistence`) is the **raw entity / data-model** leaf (#633): dumb
+- **`persistence`** (`org.skopeo.repository.persistence`) is the **raw entity / data-model** leaf (#633): dumb
   as-stored `<X>Entity` row types the repository returns. Like `model`/`common` it is a strict leaf —
   it depends only on `common`, and **nothing flows back into it** (`model` and `mapper` may not depend on
   `persistence`). The `entity → domain` conversion lives in `mapper.entity`.

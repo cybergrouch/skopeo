@@ -6,7 +6,7 @@ package org.skopeo.mapper.entity.user
 import org.skopeo.model.DuplicateCandidate
 import org.skopeo.model.DuplicateCandidateStatus
 import org.skopeo.model.DuplicateSignal
-import org.skopeo.persistence.DuplicateCandidateEntity
+import org.skopeo.repository.persistence.DuplicateCandidateEntity
 
 /**
  * Entity→domain mapper (#633): builds the domain [DuplicateCandidate] from the raw persistence
