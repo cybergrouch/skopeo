@@ -14,8 +14,8 @@ import org.skopeo.common.security.Capability
 import org.skopeo.dto.user.ClaimCodeResponse
 import org.skopeo.dto.user.UserResponse
 import org.skopeo.dto.user.UserSummaryResponse
-import org.skopeo.mapper.user.toResponse
-import org.skopeo.mapper.user.toSummary
+import org.skopeo.mapper.dto.user.toResponse
+import org.skopeo.mapper.dto.user.toSummary
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite

@@ -20,7 +20,7 @@ import org.skopeo.dto.client.ClientEffectiveCapabilitiesResponse
 import org.skopeo.dto.client.ClientIdentityResponse
 import org.skopeo.dto.client.IssuedApiKeyResponse
 import org.skopeo.dto.client.PartnerPlayerResponse
-import org.skopeo.mapper.client.toResponse
+import org.skopeo.mapper.dto.client.toResponse
 import org.skopeo.model.ApiClientStatus
 import org.skopeo.model.ApiKeyEnvironment
 import org.skopeo.model.ApiKeyStatus

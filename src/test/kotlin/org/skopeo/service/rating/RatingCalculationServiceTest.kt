@@ -25,7 +25,7 @@ import org.skopeo.dto.RankingCalculationRequest
 import org.skopeo.dto.RankingCalculationResponse
 import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.dto.match.SetScoreRequest
-import org.skopeo.mapper.rating.toResponse
+import org.skopeo.mapper.dto.rating.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.CreateEventCommand

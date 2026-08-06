@@ -5,7 +5,7 @@ package org.skopeo.service.standings
 
 import org.skopeo.dto.standings.StandingsLocateResponse
 import org.skopeo.dto.standings.StandingsPageResponse
-import org.skopeo.mapper.standings.toResponse
+import org.skopeo.mapper.dto.standings.toResponse
 import org.skopeo.model.GroupRef
 import org.skopeo.model.LocateView
 import org.skopeo.model.PlayerStanding

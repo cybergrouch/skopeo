@@ -102,27 +102,36 @@ required); everything else is `authenticate(FIREBASE_AUTH)`.
 
 The layering is enforced by `LayeredArchitectureTest` (ArchUnit) — see
 [LAYERED_ARCHITECTURE](./LAYERED_ARCHITECTURE.md). In short: `model`, `persistence`, and `common` are
-leaf foundations (they depend up on nothing above), `repository` sits directly above them — it maps a DB
-row to a raw **`persistence`** entity, then converts that entity to a `model` type at a single boundary
-(#633; see below) — `service` is transport-agnostic (never imports `routes`), `dto` is a **pure
-serializable boundary record** (no `model`/`service` dependency — save a small allowlist of three v1
-stateless-calculator DTOs), and `mapper` owns the dto↔model translation (`toResponse`/`toCommand`
-extensions), depending on `dto` + `model` only. `service` may call `mapper` (one-way, acyclic). The
-dto↔model translation is **hidden behind the service**: services return response DTOs (and accept
-request DTOs), and routes hand services the **raw** query/path/body strings — services parse + validate
-them (bad enum/band/value → `ServiceError.Validation` → 400). So **`routes` depend only on `service` +
-`dto`** plus the neutral cross-cutting **`common`** package — `common.error` (`ServiceError`),
-`common.security` (auth principals `ClientPrincipal`/`ClientAuthResult` + the `Capability` enum), and
-`common.contract` (`@Serializable` value types shared across the wire + persistence, e.g. the
-points-config schedules) — and **never on `mapper` or `model`**, enforced by a strict `routes ↛ model`
-rule with no exception. `common` is a true foundation: **any** layer — including `model`, which
-references `Capability` — may depend on it, and it depends on nothing above, not even `model`.
+leaf foundations (they depend up on nothing above). **`repository` is pure data-access**: it maps DB rows
+to raw **`persistence`** entities and **returns those entities** — it no longer builds domain models. The
+**`service`** layer is the orchestrator (and transport-agnostic — never imports `routes`): it calls a
+repository, converts the returned entity to a domain `model` via a **`mapper.entity`** mapper, runs
+business logic on the domain model, then converts that to a response DTO via a **`mapper.dto`** mapper.
+There are therefore **two mapper packages, both consumed only by `service`**: `mapper.dto` owns the
+dto↔model translation (`toResponse`/`toCommand`), `mapper.entity` owns the entity↔model translation
+(`<X>Entity.toDomain(...)`). `dto` is a **pure serializable boundary record** (no `model`/`service`
+dependency — save a small allowlist of three v1 stateless-calculator DTOs). Routes hand services the
+**raw** query/path/body strings — services parse + validate them (bad enum/band/value →
+`ServiceError.Validation` → 400). So **`routes` depend only on `service` + `dto`** plus the neutral
+cross-cutting **`common`** package — `common.error` (`ServiceError`), `common.security` (auth principals
+`ClientPrincipal`/`ClientAuthResult` + the `Capability` enum), and `common.contract` (`@Serializable`
+value types shared across the wire + persistence, e.g. the points-config schedules) — and **never on
+`mapper` or `model`**, enforced by a strict `routes ↛ model` rule with no exception. `common` is a true
+foundation: **any** layer — including `model`, which references `Capability` — may depend on it, and it
+depends on nothing above, not even `model`.
+
+> **Rollout note (#633 full separation).** The two-mapper structure and these ArchUnit rules land first;
+> the repository *return-type* flip (domain model → `persistence` entity) then rolls out aggregate-by-
+> aggregate over follow-up PRs. Until an aggregate is flipped, its repository still returns a domain
+> `model` type via an internal conversion (the pre-flip #633 shape). The diagram below shows the target
+> topology.
 
 ```mermaid
 classDiagram
     class routes
     class service
-    class mapper
+    class mapperDto["mapper.dto: dto ⟷ model"]
+    class mapperEntity["mapper.entity: persistence entity ⟷ model"]
     class repository
     class dto
     class model
@@ -133,12 +142,16 @@ classDiagram
     routes --> dto
     routes --> common
     service --> repository
-    service --> mapper
+    service --> mapperDto
+    service --> mapperEntity
     service --> dto
     service --> model
+    service --> persistence
     service --> common
-    mapper --> dto
-    mapper --> model
+    mapperDto --> dto
+    mapperDto --> model
+    mapperEntity --> persistence
+    mapperEntity --> model
     repository --> persistence
     repository --> model
     repository --> common
@@ -157,15 +170,19 @@ contracts. **Every** layer — including `model` (which references `Capability`)
 split: one dumb `<X>Entity` per aggregate that mirrors a DB row **as stored** — enum columns held as raw
 `String`, JSON columns as the raw text, no derived fields and no behaviour (contrast the domain `model`
 types, which carry derivations like `User.photoUrl` and `UserRating.confidence` and the assembled child
-collections). Each `repository` maps `ResultRow → <X>Entity → domain model` and converts the entity to
-its `model` type at a **single boundary** (`XEntity.toDomain(...)`), where derived fields are computed and
-child collections attached. That conversion lives in `repository` because `persistence` is a strict leaf
-— like `model`/`common` it may depend only on `common`, and **`model` may not depend on `persistence`**
-(nor may `mapper`), so the boundary can sit nowhere else. Public repository signatures still return
-`model` types, so the split is invisible to `service`/`routes`/`dto`/`mapper`. The lone exception is the
-two config repositories (`AppSettings`/`PointsConfig`): a settings row is a bare key/value with no domain
-counterpart, so `AppSettingEntity`/`PointsConfigEntity` are returned to and interpreted by their services
-directly.
+collections). A `repository` maps `ResultRow → <X>Entity` (assembling child rows into an entity **graph**
+where an aggregate has children — only the repository can query) and **returns the entity**. The
+`entity → domain` conversion lives in **`mapper.entity`** (`<X>Entity.toDomain(...)`), where derived
+fields are computed and children attached — this is allowed because `mapper.entity` may depend on both
+`persistence` and `model`, whereas `persistence` is a strict leaf (`model`/`mapper` may **not** depend on
+it) and `repository ↛ mapper` is enforced, so the conversion cannot live in either of those. The
+`service` layer owns the round-trip: `repository.findX(): <X>Entity` → `mapper.entity` →
+domain → business logic → `mapper.dto` → DTO. Derivations that need data outside the aggregate's own row
+are supplied by the service (e.g. `UserRating.confidence` needs the player's windowed match rows, which
+the service fetches from `MatchRepository` and passes to the entity mapper — see the rating assembler).
+The two config repositories (`AppSettings`/`PointsConfig`) are the trivial case: a settings row is a bare
+key/value with no domain counterpart, so their entities are used by their services directly with no
+`mapper.entity` step.
 
 ## Error handling & the result convention
 

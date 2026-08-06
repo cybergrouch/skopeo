@@ -15,8 +15,8 @@ import org.skopeo.dto.ranking.AdjustRankingPointsRequest
 import org.skopeo.dto.ranking.AwardedPointsPageResponse
 import org.skopeo.dto.ranking.GrantRankingPointsRequest
 import org.skopeo.dto.ranking.RankingPointAwardResponse
-import org.skopeo.mapper.ranking.toCommand
-import org.skopeo.mapper.ranking.toResponse
+import org.skopeo.mapper.dto.ranking.toCommand
+import org.skopeo.mapper.dto.ranking.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite

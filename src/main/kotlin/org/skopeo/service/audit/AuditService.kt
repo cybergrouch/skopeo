@@ -11,7 +11,7 @@ import arrow.core.right
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.dto.audit.AuditLogResponse
-import org.skopeo.mapper.audit.toResponse
+import org.skopeo.mapper.dto.audit.toResponse
 import org.skopeo.model.AuditCategory
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditEntry

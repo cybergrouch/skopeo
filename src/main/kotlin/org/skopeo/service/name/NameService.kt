@@ -11,7 +11,7 @@ import arrow.core.right
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.dto.name.NameResponse
-import org.skopeo.mapper.name.toResponse
+import org.skopeo.mapper.dto.name.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite

@@ -13,7 +13,7 @@ import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.dto.rating.RatingRequestPageResponse
 import org.skopeo.dto.rating.RatingRequestResponse
-import org.skopeo.mapper.rating.toResponse
+import org.skopeo.mapper.dto.rating.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditPersonRef

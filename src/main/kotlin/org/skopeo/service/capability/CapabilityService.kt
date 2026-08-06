@@ -12,7 +12,7 @@ import arrow.core.right
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.dto.capability.CapabilityResponse
-import org.skopeo.mapper.capability.toResponse
+import org.skopeo.mapper.dto.capability.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite

@@ -16,8 +16,8 @@ import org.skopeo.dto.event.EventPublicResponse
 import org.skopeo.dto.event.EventResponse
 import org.skopeo.dto.event.MyEventResponse
 import org.skopeo.dto.match.MatchPublicPlayer
-import org.skopeo.mapper.event.toResponse
-import org.skopeo.mapper.match.toPublicResponse
+import org.skopeo.mapper.dto.event.toResponse
+import org.skopeo.mapper.dto.match.toPublicResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite

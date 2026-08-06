@@ -13,7 +13,7 @@ import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.dto.RankingCalculationRequest
 import org.skopeo.dto.rating.CalculationResponse
-import org.skopeo.mapper.rating.toResponse
+import org.skopeo.mapper.dto.rating.toResponse
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
