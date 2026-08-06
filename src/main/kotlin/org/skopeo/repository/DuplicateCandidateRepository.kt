@@ -17,6 +17,7 @@ import org.skopeo.common.error.ServiceError
 import org.skopeo.model.DuplicateCandidate
 import org.skopeo.model.DuplicateCandidateStatus
 import org.skopeo.model.DuplicateSignal
+import org.skopeo.persistence.DuplicateCandidateEntity
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -139,16 +140,32 @@ class DuplicateCandidateRepository {
         DuplicateCandidatesTable.selectAll().where { DuplicateCandidatesTable.id eq id }.single().toCandidate()
 }
 
-internal fun ResultRow.toCandidate(): DuplicateCandidate =
-    DuplicateCandidate(
+internal fun ResultRow.toCandidate(): DuplicateCandidate = toDuplicateCandidateEntity().toDomain()
+
+internal fun ResultRow.toDuplicateCandidateEntity(): DuplicateCandidateEntity =
+    DuplicateCandidateEntity(
         id = this[DuplicateCandidatesTable.id].value,
         userAId = this[DuplicateCandidatesTable.userAId].value,
         userBId = this[DuplicateCandidatesTable.userBId].value,
-        signal = DuplicateSignal.valueOf(value = this[DuplicateCandidatesTable.signal]),
+        signal = this[DuplicateCandidatesTable.signal],
         detail = this[DuplicateCandidatesTable.detail],
-        status = DuplicateCandidateStatus.valueOf(value = this[DuplicateCandidatesTable.status]),
+        status = this[DuplicateCandidatesTable.status],
         flaggedBy = this[DuplicateCandidatesTable.flaggedBy]?.value,
         flaggedAt = this[DuplicateCandidatesTable.flaggedAt],
         resolvedBy = this[DuplicateCandidatesTable.resolvedBy]?.value,
         resolvedAt = this[DuplicateCandidatesTable.resolvedAt],
+    )
+
+internal fun DuplicateCandidateEntity.toDomain(): DuplicateCandidate =
+    DuplicateCandidate(
+        id = id,
+        userAId = userAId,
+        userBId = userBId,
+        signal = DuplicateSignal.valueOf(value = signal),
+        detail = detail,
+        status = DuplicateCandidateStatus.valueOf(value = status),
+        flaggedBy = flaggedBy,
+        flaggedAt = flaggedAt,
+        resolvedBy = resolvedBy,
+        resolvedAt = resolvedAt,
     )

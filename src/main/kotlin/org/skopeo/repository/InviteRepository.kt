@@ -16,6 +16,7 @@ import org.jetbrains.exposed.sql.update
 import org.skopeo.common.error.ServiceError
 import org.skopeo.model.Invite
 import org.skopeo.model.InviteStatus
+import org.skopeo.persistence.InviteEntity
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -129,13 +130,26 @@ class InviteRepository {
     private fun loadByIdOrThrow(id: UUID): Invite = InvitesTable.selectAll().where { InvitesTable.id eq id }.single().toInvite()
 }
 
-internal fun ResultRow.toInvite(): Invite =
-    Invite(
+internal fun ResultRow.toInvite(): Invite = toInviteEntity().toDomain()
+
+internal fun ResultRow.toInviteEntity(): InviteEntity =
+    InviteEntity(
         id = this[InvitesTable.id].value,
         email = this[InvitesTable.email],
-        status = InviteStatus.valueOf(value = this[InvitesTable.status]),
+        status = this[InvitesTable.status],
         invitedBy = this[InvitesTable.invitedBy]?.value,
         expiresAt = this[InvitesTable.expiresAt],
         acceptedAt = this[InvitesTable.acceptedAt],
         createdAt = this[InvitesTable.createdAt],
+    )
+
+internal fun InviteEntity.toDomain(): Invite =
+    Invite(
+        id = id,
+        email = email,
+        status = InviteStatus.valueOf(value = status),
+        invitedBy = invitedBy,
+        expiresAt = expiresAt,
+        acceptedAt = acceptedAt,
+        createdAt = createdAt,
     )

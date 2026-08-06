@@ -16,6 +16,7 @@ import org.jetbrains.exposed.sql.update
 import org.skopeo.common.error.ServiceError
 import org.skopeo.model.Name
 import org.skopeo.model.NameType
+import org.skopeo.persistence.NameEntity
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -109,12 +110,30 @@ class NameRepository {
 }
 
 /** Map a user_names row to the [Name] domain type. Shared with [UserRepository]. */
-internal fun ResultRow.toName(): Name =
-    Name(
+internal fun ResultRow.toName(): Name = toNameEntity().toDomain()
+
+/** Map a user_names row to the raw persistence entity (#633) — no derivations, no child rows. */
+internal fun ResultRow.toNameEntity(): NameEntity =
+    NameEntity(
         id = this[UserNamesTable.id].value,
         userId = this[UserNamesTable.userId].value,
-        type = NameType.valueOf(value = this[UserNamesTable.nameType]),
+        type = this[UserNamesTable.nameType],
         value = this[UserNamesTable.value],
         isActive = this[UserNamesTable.isActive],
         disabledAt = this[UserNamesTable.disabledAt],
+    )
+
+/**
+ * Convert the raw persistence [NameEntity] to the domain [Name] (#633): the single boundary where the
+ * stored `nameType` string is parsed into the [NameType] enum. Lives in the repository (which may
+ * reference both `persistence` and `model`) rather than a mapper, since `repository ↛ mapper` is enforced.
+ */
+internal fun NameEntity.toDomain(): Name =
+    Name(
+        id = id,
+        userId = userId,
+        type = NameType.valueOf(value = type),
+        value = value,
+        isActive = isActive,
+        disabledAt = disabledAt,
     )

@@ -14,6 +14,7 @@ import org.jetbrains.exposed.sql.update
 import org.skopeo.common.error.ServiceError
 import org.skopeo.model.RatingRequest
 import org.skopeo.model.RatingRequestStatus
+import org.skopeo.persistence.RatingRequestEntity
 import java.math.BigDecimal
 import java.time.LocalDateTime
 import java.util.UUID
@@ -97,15 +98,30 @@ class RatingRequestRepository {
         RatingRequestsTable.selectAll().where { RatingRequestsTable.id eq id }.single().toRatingRequest()
 }
 
-internal fun ResultRow.toRatingRequest(): RatingRequest =
-    RatingRequest(
+internal fun ResultRow.toRatingRequest(): RatingRequest = toRatingRequestEntity().toDomain()
+
+internal fun ResultRow.toRatingRequestEntity(): RatingRequestEntity =
+    RatingRequestEntity(
         id = this[RatingRequestsTable.id].value,
         userId = this[RatingRequestsTable.userId].value,
         justification = this[RatingRequestsTable.justification],
-        status = RatingRequestStatus.valueOf(value = this[RatingRequestsTable.status]),
+        status = this[RatingRequestsTable.status],
         newRating = this[RatingRequestsTable.newRating],
         reason = this[RatingRequestsTable.reason],
         resolvedBy = this[RatingRequestsTable.resolvedBy]?.value,
         resolvedAt = this[RatingRequestsTable.resolvedAt],
         createdAt = this[RatingRequestsTable.createdAt],
+    )
+
+internal fun RatingRequestEntity.toDomain(): RatingRequest =
+    RatingRequest(
+        id = id,
+        userId = userId,
+        justification = justification,
+        status = RatingRequestStatus.valueOf(value = status),
+        newRating = newRating,
+        reason = reason,
+        resolvedBy = resolvedBy,
+        resolvedAt = resolvedAt,
+        createdAt = createdAt,
     )

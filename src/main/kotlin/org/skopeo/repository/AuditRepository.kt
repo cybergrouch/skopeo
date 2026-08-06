@@ -17,6 +17,7 @@ import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditEntry
 import org.skopeo.model.AuditWrite
+import org.skopeo.persistence.AuditEntryEntity
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -81,14 +82,16 @@ class AuditRepository {
         }
 }
 
-internal fun ResultRow.toAuditEntry(): AuditEntry =
-    AuditEntry(
+internal fun ResultRow.toAuditEntry(): AuditEntry = toAuditEntryEntity().toDomain()
+
+internal fun ResultRow.toAuditEntryEntity(): AuditEntryEntity =
+    AuditEntryEntity(
         id = this[AuditLogTable.id].value,
         occurredAt = this[AuditLogTable.occurredAt],
         actorUserId = this[AuditLogTable.actorUserId]?.value,
         actorClientId = this[AuditLogTable.actorClientId]?.value,
-        action = AuditAction.valueOf(value = this[AuditLogTable.action]),
-        entityType = AuditEntityType.valueOf(value = this[AuditLogTable.entityType]),
+        action = this[AuditLogTable.action],
+        entityType = this[AuditLogTable.entityType],
         entityId = this[AuditLogTable.entityId],
         summary = this[AuditLogTable.summary],
         details =
@@ -96,4 +99,18 @@ internal fun ResultRow.toAuditEntry(): AuditEntry =
                 ?.let { Json.decodeFromString(deserializer = DETAILS_SERIALIZER, string = it) }
                 .orEmpty(),
         comment = this[AuditLogTable.comment],
+    )
+
+internal fun AuditEntryEntity.toDomain(): AuditEntry =
+    AuditEntry(
+        id = id,
+        occurredAt = occurredAt,
+        actorUserId = actorUserId,
+        actorClientId = actorClientId,
+        action = AuditAction.valueOf(value = action),
+        entityType = AuditEntityType.valueOf(value = entityType),
+        entityId = entityId,
+        summary = summary,
+        details = details,
+        comment = comment,
     )
