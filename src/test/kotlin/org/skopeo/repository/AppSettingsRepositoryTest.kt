@@ -9,6 +9,7 @@ import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
@@ -43,7 +44,7 @@ class AppSettingsRepositoryTest {
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                     capabilities = emptySet(),
                 ),
-        ).id
+        ).toDomain().id
 
     @Test
     fun `get returns null for a missing key (#378)`() {

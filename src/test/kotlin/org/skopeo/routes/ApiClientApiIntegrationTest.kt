@@ -35,6 +35,7 @@ import org.skopeo.dto.client.IssueApiKeyRequest
 import org.skopeo.dto.client.IssuedApiKeyResponse
 import org.skopeo.dto.client.PartnerPlayerResponse
 import org.skopeo.dto.client.SetRateLimitRequest
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
@@ -81,7 +82,7 @@ class ApiClientApiIntegrationTest {
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                     capabilities = roles,
                 ),
-        )
+        ).toDomain()
 
     private fun bearer(uid: String) = "Bearer ${TestFirebaseAuth.mintToken(uid = uid)}"
 

@@ -12,6 +12,8 @@ import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.dto.contact.ContactResponse
 import org.skopeo.mapper.dto.contact.toResponse
+import org.skopeo.mapper.entity.contact.toDomain
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -49,7 +51,7 @@ class ContactService(
         either {
             requireUserExists(userId = userId).bind()
             requireUserAccess(token = token, userId = userId).bind()
-            contacts.listByUser(userId = userId).map { it.toResponse() }
+            contacts.listByUser(userId = userId).map { it.toDomain().toResponse() }
         }
 
     fun get(
@@ -94,7 +96,7 @@ class ContactService(
                     ),
             )
             if (type == ContactType.PHONE) flagPhoneDuplicates(newUserId = userId, value = value)
-            contact.toResponse()
+            contact.toDomain().toResponse()
         }
 
     /**
@@ -109,6 +111,7 @@ class ContactService(
         val normalized = normalizePhone(raw = value)
         contacts
             .activePhonesOfOtherActiveUsers(excludeUserId = newUserId)
+            .map { it.toDomain() }
             .filter { normalizePhone(raw = it.value) == normalized }
             .map { it.userId }
             .distinct()
@@ -185,6 +188,7 @@ class ContactService(
                     verifiedBy = adminId,
                     verifiedAt = LocalDateTime.now(),
                 ).bind()
+                .toDomain()
                 .toResponse()
         }
 
@@ -193,7 +197,7 @@ class ContactService(
         contactId: UUID,
     ): Either<ServiceError, Contact> =
         either {
-            val contact = contacts.findById(id = contactId).bind()
+            val contact = contacts.findById(id = contactId).bind().toDomain()
             ensure(condition = contact.userId == userId) { ServiceError.NotFound(message = "Contact $contactId not found") }
             contact
         }
@@ -205,7 +209,7 @@ class ContactService(
         token: VerifiedFirebaseToken,
         userId: UUID,
     ): Either<ServiceError, UUID> {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
         if (caller == null) return ServiceError.Forbidden().left()
         val isSelf = caller.id == userId
         val isAdmin = caller.capabilities.contains(element = Capability.ADMINISTRATOR)
@@ -232,7 +236,7 @@ class ContactService(
 
     /** ADMINISTRATOR-only access; returns the caller's id (the audit actor). */
     private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
         val isAdmin = caller != null && caller.capabilities.contains(element = Capability.ADMINISTRATOR)
         return if (caller == null || !isAdmin) ServiceError.Forbidden().left() else caller.id.right()
     }

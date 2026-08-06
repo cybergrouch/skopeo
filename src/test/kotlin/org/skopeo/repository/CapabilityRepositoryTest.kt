@@ -14,6 +14,7 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.security.Capability
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
@@ -49,7 +50,7 @@ class CapabilityRepositoryTest {
                     names = listOf(UserName(type = NameType.DISPLAY, value = uid)),
                     capabilities = emptySet(),
                 ),
-        ).id
+        ).toDomain().id
 
     @Test
     fun `grant inserts an active grant with audit`() {

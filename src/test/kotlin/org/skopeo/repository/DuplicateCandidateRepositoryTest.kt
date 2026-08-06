@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.DuplicateCandidateStatus
 import org.skopeo.model.DuplicateSignal
@@ -48,7 +49,7 @@ class DuplicateCandidateRepositoryTest {
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                 ),
-        ).id
+        ).toDomain().id
 
     @Test
     fun `flag stores an ordered pair and is idempotent regardless of argument order`() {

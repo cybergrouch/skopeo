@@ -17,6 +17,7 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.security.Capability
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.CreatePlaceholderCommand
 import org.skopeo.model.NameType
@@ -59,10 +60,10 @@ class PlaceholderMergeRepositoryTest {
                     sex = "Male",
                     capabilities = setOf(element = Capability.PLAYER),
                 ),
-        )
+        ).toDomain()
 
     private fun placeholder(name: String): User =
-        users.createPlaceholder(command = CreatePlaceholderCommand(displayName = name, sex = "Male"))
+        users.createPlaceholder(command = CreatePlaceholderCommand(displayName = name, sex = "Male")).toDomain()
 
     @Test
     fun `createPlaceholder writes a login-less PLAYER-only row`() {
@@ -72,7 +73,7 @@ class PlaceholderMergeRepositoryTest {
         created.firebaseUid shouldBe null
         created.isActive.shouldBeTrue()
         created.capabilities shouldBe setOf(element = Capability.PLAYER)
-        users.listPlaceholders().map { it.id } shouldContainExactlyInAnyOrder listOf(element = created.id)
+        users.listPlaceholders().map { it.toDomain().id } shouldContainExactlyInAnyOrder listOf(element = created.id)
     }
 
     @Test
@@ -115,7 +116,7 @@ class PlaceholderMergeRepositoryTest {
         eventsFor(userId = ph.id).shouldBe(expected = emptyList())
 
         // Placeholder retired + linked.
-        val retired = users.findById(id = ph.id).shouldBeRight()
+        val retired = users.findById(id = ph.id).shouldBeRight().toDomain()
         retired.isActive.shouldBeFalse()
         retired.canonicalUserId shouldBe claimant.id
         retired.claimedBy shouldBe claimant.id

@@ -19,6 +19,7 @@ import org.skopeo.common.security.Capability
 import org.skopeo.common.security.ClientAuthResult
 import org.skopeo.common.security.ClientPrincipal
 import org.skopeo.mapper.entity.client.toDomain
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.ApiClientStatus
 import org.skopeo.model.ApiKeyEnvironment
 import org.skopeo.model.AuthProvider
@@ -66,7 +67,7 @@ class ApiClientServiceTest {
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                     capabilities = roles,
                 ),
-        )
+        ).toDomain()
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 

@@ -15,6 +15,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.NameType
@@ -65,7 +66,7 @@ class RatingRequestServiceTest {
                         names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                         capabilities = roles,
                     ),
-            )
+            ).toDomain()
         if (rated) {
             ratings.setRating(userId = user.id, rating = BigDecimal("4.0"), level = "4.0")
         }

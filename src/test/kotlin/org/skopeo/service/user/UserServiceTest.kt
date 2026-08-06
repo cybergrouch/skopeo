@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.dto.user.CreateUserRequest
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.ProfilePatch
 import org.skopeo.model.ProvisionUserCommand
@@ -191,7 +192,7 @@ class UserServiceTest {
 
         // A later login carrying a new provider picture updates the stored value...
         service.currentUser(token = token(uid = "u3", picture = "https://p/new.jpg"))!!.photoUrl shouldBe "https://p/new.jpg"
-        repository.findByFirebaseUid(firebaseUid = "u3")!!.photoUrl shouldBe "https://p/new.jpg" // persisted
+        repository.findByFirebaseUid(firebaseUid = "u3")!!.toDomain().photoUrl shouldBe "https://p/new.jpg" // persisted
 
         // ...an unchanged picture on a later login is a no-op (no write needed)...
         service.currentUser(token = token(uid = "u3", picture = "https://p/new.jpg"))!!.photoUrl shouldBe "https://p/new.jpg"
@@ -219,7 +220,7 @@ class UserServiceTest {
         val afterLogin = service.currentUser(token = token(uid = "u4", picture = "https://p/new.jpg"))!!
         afterLogin.photoUrl shouldBe "https://c/me.png"
         // UserResponse omits the raw provider photo; verify the underlying sync via the persisted row.
-        repository.findByFirebaseUid(firebaseUid = "u4")!!.providerPhotoUrl shouldBe "https://p/new.jpg"
+        repository.findByFirebaseUid(firebaseUid = "u4")!!.toDomain().providerPhotoUrl shouldBe "https://p/new.jpg"
 
         // Clearing the custom photo reverts to the (freshly synced) provider photo.
         service.updatePhotoSettings(token = token(uid = "u4"), id = UUID.fromString(user.id), customPhotoUrl = null, photoHidden = false)
@@ -363,7 +364,7 @@ class UserServiceTest {
                     names = listOf(element = UserName(type = org.skopeo.model.NameType.FIRST, value = uid)),
                     capabilities = setOf(Capability.PLAYER, Capability.ADMINISTRATOR),
                 ),
-        )
+        ).toDomain()
 
     @Test
     fun `setRatingPreview toggles the per-admin flag for an admin, and is forbidden for a non-admin (#583)`() {
@@ -372,9 +373,9 @@ class UserServiceTest {
 
         // The admin turns the preview on then off; the stored flag follows and the return echoes it.
         service.setRatingPreview(token = token(uid = "admin"), previewAsNonAdmin = true).shouldBeRight() shouldBe true
-        repository.findByFirebaseUid(firebaseUid = "admin")!!.previewRatingsAsNonAdmin shouldBe true
+        repository.findByFirebaseUid(firebaseUid = "admin")!!.toDomain().previewRatingsAsNonAdmin shouldBe true
         service.setRatingPreview(token = token(uid = "admin"), previewAsNonAdmin = false).shouldBeRight() shouldBe false
-        repository.findByFirebaseUid(firebaseUid = "admin")!!.previewRatingsAsNonAdmin shouldBe false
+        repository.findByFirebaseUid(firebaseUid = "admin")!!.toDomain().previewRatingsAsNonAdmin shouldBe false
 
         // It's audited as SETTINGS_RATING_PREVIEW_CHANGED.
         AuditRepository()
@@ -396,7 +397,7 @@ class UserServiceTest {
         service.deactivate(token = token(uid = "admin-del"), id = UUID.fromString(target.id)).shouldBeRight()
 
         // The row is retained but inactive; and it is a "deleted" (no canonical) account, not a merge.
-        val reloaded = repository.findById(id = UUID.fromString(target.id)).shouldBeRight()
+        val reloaded = repository.findById(id = UUID.fromString(target.id)).shouldBeRight().toDomain()
         reloaded.isActive.shouldBeFalse()
         reloaded.canonicalUserId.shouldBeNull()
         AuditRepository().list(actions = listOf(element = AuditAction.ACCOUNT_DELETED), limit = 10, offset = 0).first.single().let {
@@ -473,7 +474,7 @@ class UserServiceTest {
         ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
 
         service.reactivate(token = token(uid = "admin-re"), id = UUID.fromString(target.id)).shouldBeRight()
-        repository.findById(id = UUID.fromString(target.id)).shouldBeRight().isActive.shouldBeTrue()
+        repository.findById(id = UUID.fromString(target.id)).shouldBeRight().toDomain().isActive.shouldBeTrue()
         // Login works again.
         service.provision(token = token(uid = "back"), request = request).shouldBeRight()
         AuditRepository().list(actions = listOf(element = AuditAction.ACCOUNT_REACTIVATED), limit = 10, offset = 0).first.single().let {
@@ -537,7 +538,7 @@ class UserServiceTest {
         // A second login does not double-grant.
         bootstrapService.currentUser(token = token(uid = "later", email = "admin@example.com", emailVerified = true))!!
             .capabilities shouldBe listOf("ADMINISTRATOR", "PLAYER", "RESEARCHER")
-        repository.findByFirebaseUid(firebaseUid = "later")!!
+        repository.findByFirebaseUid(firebaseUid = "later")!!.toDomain()
             .capabilities shouldBe setOf(Capability.PLAYER, Capability.RESEARCHER, Capability.ADMINISTRATOR)
     }
 

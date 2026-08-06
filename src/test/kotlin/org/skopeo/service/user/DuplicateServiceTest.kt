@@ -16,6 +16,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.CreateFixtureCommand
@@ -66,7 +67,7 @@ class DuplicateServiceTest {
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                     capabilities = roles,
                 ),
-        )
+        ).toDomain()
 
     private fun admin(uid: String = "root") = provisionUser(uid = uid, roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
 
@@ -111,7 +112,7 @@ class DuplicateServiceTest {
         users.hasMatchParticipation(userId = canonical.id).shouldBeTrue()
         users.hasMatchParticipation(userId = old.id).shouldBeFalse()
         // The old account is deleted (#518 state: inactive + no canonical pointer), not left a merged duplicate.
-        val deletedOld = users.findById(id = old.id).shouldBeRight()
+        val deletedOld = users.findById(id = old.id).shouldBeRight().toDomain()
         deletedOld.isActive.shouldBeFalse()
         deletedOld.isDeleted().shouldBeTrue()
     }
@@ -207,13 +208,13 @@ class DuplicateServiceTest {
 
         result.map { it.id }.toSet() shouldBe setOf(dup1.id.toString(), dup2.id.toString())
         listOf(dup1.id, dup2.id).forEach { id ->
-            users.findById(id = id).shouldBeRight().let {
+            users.findById(id = id).shouldBeRight().toDomain().let {
                 it.isActive.shouldBeFalse()
                 it.canonicalUserId shouldBe canonical.id
             }
         }
         // The canonical itself is untouched.
-        users.findById(id = canonical.id).shouldBeRight().isActive.shouldBeTrue()
+        users.findById(id = canonical.id).shouldBeRight().toDomain().isActive.shouldBeTrue()
 
         val audit = AuditRepository()
         audit.list(actions = listOf(element = AuditAction.USER_MARKED_DUPLICATE), limit = 10, offset = 0).second shouldBe 2L
@@ -230,7 +231,7 @@ class DuplicateServiceTest {
 
         service.restore(token = token(uid = "root"), id = dup.id).shouldBeRight()
 
-        users.findById(id = dup.id).shouldBeRight().let {
+        users.findById(id = dup.id).shouldBeRight().toDomain().let {
             it.isActive.shouldBeTrue()
             it.canonicalUserId.shouldBeNull()
         }

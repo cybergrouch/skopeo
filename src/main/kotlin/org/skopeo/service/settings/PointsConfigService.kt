@@ -16,6 +16,7 @@ import org.skopeo.common.security.Capability
 import org.skopeo.dto.settings.OpenPlayConfigResponse
 import org.skopeo.dto.settings.TournamentConfigResponse
 import org.skopeo.mapper.dto.settings.toResponse
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -153,7 +154,7 @@ class PointsConfigService(
     }
 
     private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
         return if (caller == null || !caller.capabilities.contains(element = Capability.ADMINISTRATOR)) {
             ServiceError.Forbidden().left()
         } else {

@@ -9,6 +9,7 @@ import org.skopeo.common.error.ServiceError
 import org.skopeo.dto.seeding.SeedingResponse
 import org.skopeo.mapper.dto.seeding.toResponse
 import org.skopeo.mapper.entity.seeding.toDomain
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.SeedingEntry
 import org.skopeo.model.User
 import org.skopeo.model.ageInYears
@@ -43,7 +44,7 @@ class SeedingService(
             // Raw rating is ADMINISTRATOR-only (#583): non-admin staff get the band + seed order only.
             val showRaw = userService.callerCanSeeRawRating(token = token)
             val list = lists.get(token = token, listId = listId).bind() // ownership + access
-            val members = users.findAllByIds(ids = list.memberUserIds)
+            val members = users.findAllByIds(ids = list.memberUserIds).map { it.toDomain() }
             val currentRatings = ratings.findCurrentRatings(userIds = list.memberUserIds)
             val today = LocalDate.now()
 

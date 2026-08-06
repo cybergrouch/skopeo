@@ -12,6 +12,8 @@ import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.dto.name.NameResponse
 import org.skopeo.mapper.dto.name.toResponse
+import org.skopeo.mapper.entity.name.toDomain
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -44,7 +46,7 @@ class NameService(
         either {
             requireUserExists(userId = userId).bind()
             requireUserAccess(token = token, userId = userId).bind()
-            names.listByUser(userId = userId).map { it.toResponse() }
+            names.listByUser(userId = userId).map { it.toDomain().toResponse() }
         }
 
     fun get(
@@ -69,7 +71,7 @@ class NameService(
             requireUserExists(userId = userId).bind()
             val actor = requireUserAccess(token = token, userId = userId).bind()
             val type = parseType(raw = typeRaw).bind()
-            val name = names.create(userId = userId, type = type, value = value)
+            val name = names.create(userId = userId, type = type, value = value).toDomain()
             audit.record(
                 write =
                     AuditWrite(
@@ -123,7 +125,7 @@ class NameService(
         nameId: UUID,
     ): Either<ServiceError, Name> =
         either {
-            val name = names.findById(id = nameId).bind()
+            val name = names.findById(id = nameId).bind().toDomain()
             ensure(condition = name.userId == userId) { ServiceError.NotFound(message = "Name $nameId not found") }
             name
         }
@@ -143,7 +145,7 @@ class NameService(
     ): Either<ServiceError, UUID> {
         // capabilities is non-null, so an explicit null check (vs a ?. chain) avoids a dead
         // "present caller but null capabilities" branch that could never be covered.
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid) ?: return ServiceError.Forbidden().left()
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain() ?: return ServiceError.Forbidden().left()
         val isSelf = caller.id == userId
         val isAdmin = caller.capabilities.contains(element = Capability.ADMINISTRATOR)
         return if (!isSelf && !isAdmin) ServiceError.Forbidden().left() else caller.id.right()

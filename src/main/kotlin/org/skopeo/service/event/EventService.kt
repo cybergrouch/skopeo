@@ -20,6 +20,7 @@ import org.skopeo.mapper.dto.event.toResponse
 import org.skopeo.mapper.dto.match.toPublicResponse
 import org.skopeo.mapper.entity.club.toDomain
 import org.skopeo.mapper.entity.event.toDomain
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -93,7 +94,7 @@ class EventService(
      * honoring the per-admin preview toggle. Routes pass the result as `showRawRating` into the DTO.
      */
     fun callerCanSeeRawRating(token: VerifiedFirebaseToken): Boolean =
-        users.findByFirebaseUid(firebaseUid = token.uid).canSeeRawRatingOrFalse()
+        users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain().canSeeRawRatingOrFalse()
 
     fun create(
         token: VerifiedFirebaseToken,
@@ -170,7 +171,7 @@ class EventService(
      */
     fun myEvents(token: VerifiedFirebaseToken): Either<ServiceError, List<MyEventResponse>> =
         either {
-            val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+            val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
             val mine = caller?.let { events.findForParticipant(userId = it.id).map { entry -> entry.toDomain() } }.orEmpty()
             // Batched "has results" counts (#483) assembled here so the route stays thin.
             val counts = completedResultCounts(eventIds = mine.map { it.event.id })
@@ -541,7 +542,7 @@ class EventService(
             val caller =
                 ensureNotNull(value = users.findByFirebaseUid(firebaseUid = token.uid)) {
                     ServiceError.Forbidden(message = "Create your profile before signing up for events")
-                }
+                }.toDomain()
             // A deleted account (#518) is blocked from the sign-in path already, but guard defensively.
             ensure(condition = !caller.isDeleted()) {
                 ServiceError.Validation(message = "A deleted account cannot sign up for events")
@@ -601,14 +602,18 @@ class EventService(
                 }
             // The viewer's own standing (#201), so the page can show Request-to-join vs Pending/On hold.
             // Anonymous viewers (#193) have no standing → null.
-            val caller = token?.let { users.findByFirebaseUid(firebaseUid = it.uid) }
+            val caller = token?.let { users.findByFirebaseUid(firebaseUid = it.uid)?.toDomain() }
             val viewerStatus =
                 caller
                     ?.let { c -> events.participantsOf(eventId = event.id).firstOrNull { it.userId == c.id } }
                     ?.let { it.status.name }
             val eventMatches = matches.listByEvent(eventId = event.id)
             val matchPlayerIds = eventMatches.flatMap { it.team1.userIds + it.team2.userIds }
-            val byId = users.findAllByIds(ids = (event.participantIds + matchPlayerIds).distinct()).associateBy { it.id }
+            val byId =
+                users
+                    .findAllByIds(ids = (event.participantIds + matchPlayerIds).distinct())
+                    .map { it.toDomain() }
+                    .associateBy { it.id }
 
             val participants =
                 event.participantIds.map { id ->
@@ -689,7 +694,11 @@ class EventService(
         // Resolve participants and the filing host (#270) in a single lookup. A participant row always
         // references an existing user (FK), so getValue is safe; the creator is looked up nullably since
         // created_by is nullable (ON DELETE SET NULL) for legacy/orphaned events.
-        val byId = users.findAllByIds(ids = (ids + listOfNotNull(element = event.createdBy)).distinct()).associateBy { it.id }
+        val byId =
+            users
+                .findAllByIds(ids = (ids + listOfNotNull(element = event.createdBy)).distinct())
+                .map { it.toDomain() }
+                .associateBy { it.id }
         val ratingById = ratings.findCurrentRatings(userIds = ids)
         val participants =
             entries.map { entry ->
@@ -724,7 +733,7 @@ private fun staffCaller(
     users: UserRepository,
     token: VerifiedFirebaseToken,
 ): Either<ServiceError, User> {
-    val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+    val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
     return if (caller == null || caller.capabilities.none { it in STAFF_ROLES }) ServiceError.Forbidden().left() else caller.right()
 }
 
@@ -763,7 +772,7 @@ private fun ensureKnownUsers(
     ids: List<UUID>,
 ): Either<ServiceError, Unit> {
     val distinct = ids.distinct()
-    val loaded = users.findAllByIds(ids = distinct)
+    val loaded = users.findAllByIds(ids = distinct).map { it.toDomain() }
     return when {
         !loaded.map { it.id }.toSet().containsAll(elements = distinct) ->
             ServiceError.Validation(message = "One or more participants do not exist").left()

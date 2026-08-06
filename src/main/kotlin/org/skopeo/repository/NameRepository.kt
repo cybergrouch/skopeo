@@ -14,7 +14,6 @@ import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.common.error.ServiceError
-import org.skopeo.model.Name
 import org.skopeo.model.NameType
 import org.skopeo.persistence.NameEntity
 import java.time.LocalDateTime
@@ -24,24 +23,25 @@ import java.util.UUID
 private val SINGLE_VALUED_NAME_TYPES = setOf(NameType.DISPLAY, NameType.FIRST, NameType.LAST)
 
 /**
- * Row-level persistence for individual [Name]s. Names are append-only: created here, never
+ * Row-level persistence for individual names. Names are append-only: created here, never
  * edited; a name is retired by disabling it ([setActive]). A user may hold many active
  * names; the single-valued types (DISPLAY/FIRST/LAST) keep exactly one active — adding a new
- * one atomically disables the previous one of that type.
+ * one atomically disables the previous one of that type. Reads return raw [NameEntity] rows
+ * (#633); the service converts them to the domain `Name` via `mapper.entity`.
  */
 class NameRepository {
-    fun listByUser(userId: UUID): List<Name> =
+    fun listByUser(userId: UUID): List<NameEntity> =
         transaction {
             UserNamesTable
                 .selectAll()
                 .where { UserNamesTable.userId eq userId }
-                .map { it.toName() }
+                .map { it.toNameEntity() }
         }
 
-    fun findById(id: UUID): Either<ServiceError, Name> =
+    fun findById(id: UUID): Either<ServiceError, NameEntity> =
         transaction {
             val row = UserNamesTable.selectAll().where { UserNamesTable.id eq id }.singleOrNull()
-            if (row == null) ServiceError.NotFound(message = "Name $id not found").left() else row.toName().right()
+            if (row == null) ServiceError.NotFound(message = "Name $id not found").left() else row.toNameEntity().right()
         }
 
     /**
@@ -53,7 +53,7 @@ class NameRepository {
         userId: UUID,
         type: NameType,
         value: String,
-    ): Name =
+    ): NameEntity =
         transaction {
             if (type in SINGLE_VALUED_NAME_TYPES) disableActiveOfType(userId = userId, type = type)
             val id =
@@ -73,7 +73,7 @@ class NameRepository {
         id: UUID,
         active: Boolean,
         disabledAt: LocalDateTime?,
-    ): Either<ServiceError, Name> =
+    ): Either<ServiceError, NameEntity> =
         conflictAware(message = "A different active display name already exists") {
             transaction {
                 val updated =
@@ -101,18 +101,15 @@ class NameRepository {
         }
     }
 
-    private fun loadById(id: UUID): Name =
+    private fun loadById(id: UUID): NameEntity =
         UserNamesTable
             .selectAll()
             .where { UserNamesTable.id eq id }
             .single()
-            .toName()
+            .toNameEntity()
 }
 
-/** Map a user_names row to the [Name] domain type. Shared with [UserRepository]. */
-internal fun ResultRow.toName(): Name = toNameEntity().toDomain()
-
-/** Map a user_names row to the raw persistence entity (#633) — no derivations, no child rows. */
+/** Map a user_names row to the raw persistence entity (#633) — no derivations, no child rows. Shared with [UserRepository]. */
 internal fun ResultRow.toNameEntity(): NameEntity =
     NameEntity(
         id = this[UserNamesTable.id].value,
@@ -121,19 +118,4 @@ internal fun ResultRow.toNameEntity(): NameEntity =
         value = this[UserNamesTable.value],
         isActive = this[UserNamesTable.isActive],
         disabledAt = this[UserNamesTable.disabledAt],
-    )
-
-/**
- * Convert the raw persistence [NameEntity] to the domain [Name] (#633): the single boundary where the
- * stored `nameType` string is parsed into the [NameType] enum. Lives in the repository (which may
- * reference both `persistence` and `model`) rather than a mapper, since `repository ↛ mapper` is enforced.
- */
-internal fun NameEntity.toDomain(): Name =
-    Name(
-        id = id,
-        userId = userId,
-        type = NameType.valueOf(value = type),
-        value = value,
-        isActive = isActive,
-        disabledAt = disabledAt,
     )

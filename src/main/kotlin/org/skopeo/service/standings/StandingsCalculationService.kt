@@ -11,6 +11,7 @@ import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.dto.standings.StandingsCalculationResponse
 import org.skopeo.mapper.dto.standings.toResponse
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuditEntityType
 import org.skopeo.model.AuditWrite
@@ -98,7 +99,12 @@ class StandingsCalculationService(
      */
     private fun recompute(asOf: LocalDateTime): List<GroupStanding> {
         val counting = awards.activeAsOf(asOf = asOf)
-        val activeById = users.findAllByIds(ids = counting.map { it.userId }.distinct()).filter { it.isActive }.associateBy { it.id }
+        val activeById =
+            users
+                .findAllByIds(ids = counting.map { it.userId }.distinct())
+                .map { it.toDomain() }
+                .filter { it.isActive }
+                .associateBy { it.id }
         val countingForActive = counting.filter { activeById.containsKey(key = it.userId) }
 
         val ratingsById = ratings.findCurrentRatings(userIds = countingForActive.map { it.userId }.distinct())
@@ -252,7 +258,7 @@ class StandingsCalculationService(
 
     /** ADMINISTRATOR-only access; returns the caller's id (the audit actor). Mirrors ClubService.requireAdmin. */
     private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
-        val caller = users.findByFirebaseUid(firebaseUid = token.uid)
+        val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
         val isAdmin = caller != null && caller.capabilities.contains(element = Capability.ADMINISTRATOR)
         return if (caller == null || !isAdmin) ServiceError.Forbidden().left() else caller.id.right()
     }

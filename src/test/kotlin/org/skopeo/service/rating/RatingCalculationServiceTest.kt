@@ -27,6 +27,7 @@ import org.skopeo.dto.match.MatchResultRequest
 import org.skopeo.dto.match.SetScoreRequest
 import org.skopeo.mapper.dto.rating.toResponse
 import org.skopeo.mapper.entity.event.toDomain
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.CreateEventCommand
@@ -90,7 +91,7 @@ class RatingCalculationServiceTest {
                     names = listOf(UserName(type = NameType.DISPLAY, value = uid)),
                     capabilities = roles,
                 ),
-            )
+            ).toDomain()
         if (rated) {
             ratings.setRating(
                 userId = user.id,
@@ -437,7 +438,7 @@ class RatingCalculationServiceTest {
                         startDate = LocalDate.parse("2026-01-01"),
                         endDate = LocalDate.parse("2026-01-03"),
                         participantIds = listOf(p1.id, p2.id),
-                        createdBy = users.findByFirebaseUid(firebaseUid = "root")!!.id,
+                        createdBy = users.findByFirebaseUid(firebaseUid = "root")!!.toDomain().id,
                     ),
             ).toDomain()
         // An evented match (recorded while the event is open) and an event-less one.
@@ -463,7 +464,7 @@ class RatingCalculationServiceTest {
         matchRepo.findById(matchId = UUID.fromString(eventedFixture.id)).shouldBeRight().ratedAt.shouldBeNull()
 
         // After finalizing the event, its match becomes eligible and a commit rates it.
-        val root = users.findByFirebaseUid(firebaseUid = "root")!!.id
+        val root = users.findByFirebaseUid(firebaseUid = "root")!!.toDomain().id
         eventRepo.finalize(id = event.id, finalizedAt = LocalDateTime.now(), finalizedBy = root)
         calc.calculate(token = token(uid = "root"), dryRun = false).shouldBeRight()
         matchRepo.findById(matchId = UUID.fromString(eventedFixture.id)).shouldBeRight().ratedAt.shouldNotBeNull()
@@ -720,7 +721,7 @@ class RatingCalculationServiceTest {
         a: UUID,
         b: UUID,
     ): UUID {
-        val root = users.findByFirebaseUid(firebaseUid = "root")!!.id
+        val root = users.findByFirebaseUid(firebaseUid = "root")!!.toDomain().id
         val event =
             eventRepo.create(
                 command =

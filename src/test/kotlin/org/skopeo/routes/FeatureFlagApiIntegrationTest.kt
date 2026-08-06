@@ -26,6 +26,7 @@ import org.skopeo.dto.settings.AwardRankingPointsResponse
 import org.skopeo.dto.settings.FacebookLoginResponse
 import org.skopeo.dto.settings.SetAwardRankingPointsRequest
 import org.skopeo.dto.settings.SetFacebookLoginRequest
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
@@ -72,7 +73,7 @@ class FeatureFlagApiIntegrationTest {
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                     capabilities = roles,
                 ),
-        )
+        ).toDomain()
 
     @Test
     fun `the facebook-login flag is publicly readable and defaults to enabled (#647)`() =

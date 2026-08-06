@@ -14,6 +14,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuditAction
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.DuplicateCandidateStatus
@@ -58,7 +59,7 @@ class DuplicateCandidateServiceTest {
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                     capabilities = roles,
                 ),
-        )
+        ).toDomain()
 
     private fun admin(uid: String = "root") = provisionUser(uid = uid, roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
 
@@ -118,7 +119,7 @@ class DuplicateCandidateServiceTest {
             canonicalId = UUID.fromString(candidate.userB.id),
         ).shouldBeRight()
 
-        users.findById(id = UUID.fromString(candidate.userA.id)).shouldBeRight().let {
+        users.findById(id = UUID.fromString(candidate.userA.id)).shouldBeRight().toDomain().let {
             it.isActive.shouldBeFalse()
             it.canonicalUserId shouldBe UUID.fromString(candidate.userB.id)
         }
@@ -155,7 +156,7 @@ class DuplicateCandidateServiceTest {
 
         service.confirm(token = token(uid = "root"), id = UUID.fromString(candidate.id), canonicalId = keep.id).shouldBeRight()
 
-        users.findById(id = dupe.id).shouldBeRight().let {
+        users.findById(id = dupe.id).shouldBeRight().toDomain().let {
             it.isActive.shouldBeFalse()
             it.canonicalUserId shouldBe keep.id
         }

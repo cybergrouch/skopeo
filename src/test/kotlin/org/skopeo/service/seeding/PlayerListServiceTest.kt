@@ -13,6 +13,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
@@ -53,7 +54,7 @@ class PlayerListServiceTest {
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                     capabilities = roles,
                 ),
-        )
+        ).toDomain()
 
     private fun host(uid: String = "host") = provision(uid = uid, roles = setOf(Capability.PLAYER, Capability.HOST))
 

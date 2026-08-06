@@ -11,6 +11,7 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.mapper.entity.event.toDomain
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.CreateEventCommand
 import org.skopeo.model.NameType
@@ -46,7 +47,7 @@ class EventRepositoryTest {
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                     names = listOf(element = UserName(type = NameType.DISPLAY, value = uid)),
                 ),
-        ).id
+        ).toDomain().id
 
     @Test
     fun `an event whose creator was removed (created_by SET NULL) still loads`() {

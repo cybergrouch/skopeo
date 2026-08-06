@@ -27,6 +27,7 @@ import org.skopeo.dto.capability.CapabilityGrantRequest
 import org.skopeo.dto.capability.CapabilityResponse
 import org.skopeo.dto.user.CreateUserRequest
 import org.skopeo.dto.user.UserResponse
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.NameType
 import org.skopeo.model.ProvisionUserCommand
@@ -149,7 +150,7 @@ class CapabilityApiIntegrationTest {
     fun `the last administrator cannot be revoked`() =
         withApp { client ->
             val adminToken = seedAdminToken()
-            val admin = UserRepository().findByFirebaseUid(firebaseUid = "admin")!!
+            val admin = UserRepository().findByFirebaseUid(firebaseUid = "admin")!!.toDomain()
 
             client.delete(urlString = "/api/v1/users/${admin.id}/capabilities/ADMINISTRATOR") {
                 header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")

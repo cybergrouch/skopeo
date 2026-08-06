@@ -14,6 +14,7 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.security.Capability
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.CreatePlaceholderCommand
 import org.skopeo.model.NameType
@@ -111,7 +112,7 @@ class StandingsServiceTest {
                     sex = sex,
                     capabilities = capabilities,
                 ),
-        )
+        ).toDomain()
 
     // A bare override with no in-window matches → confidence 0 (#459); standings order these players by
     // rating alone, with confidence/matches as the (here equal) tie-breaks.
@@ -127,7 +128,7 @@ class StandingsServiceTest {
     private fun placeholder(
         displayName: String,
         sex: String = "Male",
-    ): User = users.createPlaceholder(command = CreatePlaceholderCommand(displayName = displayName, sex = sex))
+    ): User = users.createPlaceholder(command = CreatePlaceholderCommand(displayName = displayName, sex = sex)).toDomain()
 
     private fun page(
         band: String?,

@@ -22,6 +22,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
 import org.skopeo.mapper.entity.event.toDomain
+import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.AuthProvider
 import org.skopeo.model.CreateEventCommand
 import org.skopeo.model.CreateFixtureCommand
@@ -68,7 +69,7 @@ class MatchRepositoryTest {
                     identity = UserIdentity(provider = AuthProvider.PASSWORD, providerUid = uid, isPrimary = true),
                     names = listOf(UserName(type = NameType.DISPLAY, value = uid)),
                 ),
-        ).id
+        ).toDomain().id
 
     private fun fixture(
         u1: UUID,
