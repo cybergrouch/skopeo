@@ -31,9 +31,9 @@ import java.math.RoundingMode
 import java.time.LocalDateTime
 import java.util.UUID
 
-// Only TOURNAMENT (placement points) and OPEN_PLAY (computed per-set points, #525) award on
-// finalize; LEAGUE is intentionally excluded for now (its points model is deferred to a follow-up
-// issue), so finalizing a league event awards nothing. See the `when` in [awardForFinalizedEvent].
+// Both event types award on finalize: TOURNAMENT pays placement points and OPEN_PLAY pays computed
+// per-set points (#525). See the `when` in [awardForFinalizedEvent]. (The LEAGUE type was removed in
+// #669; only OPEN_PLAY and TOURNAMENT remain.)
 
 private const val UNSPECIFIED_SEX = "Unspecified"
 private const val BAND_MEAN_SCALE = 4
@@ -49,8 +49,8 @@ private const val PLACE_FOURTH = 3
  * collaborator of [EventService.finalize] so the awarding logic stays cohesive and testable without
  * bloating EventService. Awarding is by event type: OPEN_PLAY is computed per set from band
  * difference (both winner and loser); TOURNAMENT pays placement points from designated placement
- * matches (Super/Plate Finals), sanction-selected via the event's club; LEAGUE awards nothing for
- * now. A winner/participant with no current rating has no band to tag and is skipped.
+ * matches (Super/Plate Finals), sanction-selected via the event's club. A winner/participant with no
+ * current rating has no band to tag and is skipped.
  */
 class EventFinalizeAwarder(
     private val matches: MatchRepository = MatchRepository(),
@@ -74,13 +74,14 @@ class EventFinalizeAwarder(
         grantedBy: UUID,
         now: LocalDateTime,
     ): AwardSummary =
-        when {
-            // "Award Ranking Points" unchecked (#559): finalizing awards nothing, whatever the type.
-            !event.awardRankingPoints -> AwardSummary(matchCount = 0, awardCount = 0, totalPoints = BigDecimal.ZERO)
-            event.type == EventType.OPEN_PLAY -> awardComputedOpenPlay(event = event, grantedBy = grantedBy, now = now)
-            event.type == EventType.TOURNAMENT -> awardPlacement(event = event, grantedBy = grantedBy, now = now)
-            // LEAGUE and any future type: no awarding yet (#525).
-            else -> AwardSummary(matchCount = 0, awardCount = 0, totalPoints = BigDecimal.ZERO)
+        // "Award Ranking Points" unchecked (#559): finalizing awards nothing, whatever the type.
+        if (!event.awardRankingPoints) {
+            AwardSummary(matchCount = 0, awardCount = 0, totalPoints = BigDecimal.ZERO)
+        } else {
+            when (event.type) {
+                EventType.OPEN_PLAY -> awardComputedOpenPlay(event = event, grantedBy = grantedBy, now = now)
+                EventType.TOURNAMENT -> awardPlacement(event = event, grantedBy = grantedBy, now = now)
+            }
         }
 
     /**

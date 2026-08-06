@@ -5759,7 +5759,7 @@ components:
           enum: [SINGLES, DOUBLES, MIXED_DOUBLES]
         matchType:
           type: string
-          enum: [OPEN_PLAY, LEAGUE_PLAY, LEAGUE_PLAYOFFS, TOURNAMENT]
+          enum: [OPEN_PLAY, TOURNAMENT]
           description: The competitive context; scales the calculated rating change by a per-match-type factor (#108).
         matchDate:
           type: string
@@ -5920,7 +5920,7 @@ components:
           enum: [SINGLES, DOUBLES, MIXED_DOUBLES]
         matchType:
           type: string
-          enum: [OPEN_PLAY, LEAGUE_PLAY, LEAGUE_PLAYOFFS, TOURNAMENT]
+          enum: [OPEN_PLAY, TOURNAMENT]
           description: The competitive context the match was played under (#108).
         matchDate:
           type: string
@@ -6011,7 +6011,7 @@ components:
         type:
           type: string
           nullable: true
-          enum: [OPEN_PLAY, LEAGUE, TOURNAMENT]
+          enum: [OPEN_PLAY, TOURNAMENT]
           description: Event class (#403); omit for the OPEN_PLAY default.
         awardRankingPoints:
           type: boolean
@@ -6222,7 +6222,7 @@ components:
           description: Admin override for calculation processing order (#335); null = order by end date.
         type:
           type: string
-          enum: [OPEN_PLAY, LEAGUE, TOURNAMENT]
+          enum: [OPEN_PLAY, TOURNAMENT]
           description: The event's class (#403).
         finalizedAt:
           type: string
@@ -7133,7 +7133,7 @@ components:
           format: date
         eventType:
           type: string
-          enum: [OPEN_PLAY, LEAGUE, TOURNAMENT]
+          enum: [OPEN_PLAY, TOURNAMENT]
 
     CreateInviteRequest:
       type: object

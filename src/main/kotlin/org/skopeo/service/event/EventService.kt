@@ -638,7 +638,7 @@ class EventService(
     /** Parse an event type name (#403); an unknown name is a [ServiceError.Validation]. */
     private fun parseEventType(raw: String): Either<ServiceError, EventType> =
         EventType.entries.firstOrNull { it.name == raw }?.right()
-            ?: ServiceError.Validation(message = "Invalid event type '$raw'; expected OPEN_PLAY, LEAGUE, or TOURNAMENT").left()
+            ?: ServiceError.Validation(message = "Invalid event type '$raw'; expected OPEN_PLAY or TOURNAMENT").left()
 
     /** Parse a participant-decision status name (#201); an unknown name is a [ServiceError.Validation]. */
     private fun parseParticipantStatus(raw: String): Either<ServiceError, EventParticipantStatus> =

@@ -608,19 +608,18 @@ class MatchRepositoryTest {
         val player = newUser(uid = "wc-p")
         val opponent = newUser(uid = "wc-o")
 
-        // A mix of classes on distinct dates, all in-window: two tournament matches → tournament; a
-        // league round → league; open play → open play. (The MatchType → weight-class mapping is
-        // unit-tested in RatingConfidenceTest.)
+        // A mix of classes on distinct dates, all in-window: three tournament matches → tournament; open
+        // play → open play. (The MatchType → weight-class mapping is unit-tested in RatingConfidenceTest.)
         completedMatch(u1 = player, u2 = opponent, matchDate = today, matchType = MatchType.TOURNAMENT)
         completedMatch(u1 = player, u2 = opponent, matchDate = today.minusDays(3), matchType = MatchType.TOURNAMENT)
-        completedMatch(u1 = player, u2 = opponent, matchDate = today.minusDays(7), matchType = MatchType.LEAGUE_PLAY)
+        completedMatch(u1 = player, u2 = opponent, matchDate = today.minusDays(7), matchType = MatchType.TOURNAMENT)
         completedMatch(u1 = player, u2 = opponent, matchDate = today.minusDays(10), matchType = MatchType.OPEN_PLAY)
 
         matches.windowedMatchesInWindow(userId = player, asOf = asOf) shouldContainExactlyInAnyOrder
             listOf(
                 WindowMatch(matchDate = today, weightClass = WeightClass.TOURNAMENT),
                 WindowMatch(matchDate = today.minusDays(3), weightClass = WeightClass.TOURNAMENT),
-                WindowMatch(matchDate = today.minusDays(7), weightClass = WeightClass.LEAGUE),
+                WindowMatch(matchDate = today.minusDays(7), weightClass = WeightClass.TOURNAMENT),
                 WindowMatch(matchDate = today.minusDays(10), weightClass = WeightClass.OPEN_PLAY),
             )
     }

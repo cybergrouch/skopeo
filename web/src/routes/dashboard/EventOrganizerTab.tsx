@@ -32,11 +32,10 @@ import { PlaceholderTag } from "@/components/PlaceholderTag";
 import { EventDetail } from "./events/EventDetail";
 
 /** The event classes a host can pick at creation (#403); mirrors the backend EventType enum. */
-type EventType = "OPEN_PLAY" | "LEAGUE" | "TOURNAMENT";
+type EventType = "OPEN_PLAY" | "TOURNAMENT";
 
 const EVENT_TYPE_OPTIONS: ReadonlyArray<{ value: EventType; label: string }> = [
   { value: "OPEN_PLAY", label: "Open play" },
-  { value: "LEAGUE", label: "League" },
   { value: "TOURNAMENT", label: "Tournament" },
 ];
 

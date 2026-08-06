@@ -32,7 +32,7 @@ internal object EventsTable : UUIDTable(name = "events") {
     // Admin override for calculation processing order (#335); null = order by end_date.
     val calcPriority = double(name = "calc_priority").nullable()
 
-    // The event's class (#403): OPEN_PLAY | LEAGUE | TOURNAMENT; backfilled to OPEN_PLAY.
+    // The event's class (#403): OPEN_PLAY | TOURNAMENT; backfilled to OPEN_PLAY (#669 removed LEAGUE).
     val type = varchar(name = "type", length = EVENT_TYPE_MAX).default(defaultValue = "OPEN_PLAY")
 
     // Finalize state (#403): an event is finalized iff finalized_at is non-null, stamped with the actor.

@@ -115,7 +115,7 @@ class EventReverseRatingsTest {
                 startDate = LocalDate.now(),
                 endDate = LocalDate.now().plusDays(7),
                 participantIds = participants,
-                // TOURNAMENT is the host-designated awarding type (#525) — LEAGUE no longer awards.
+                // TOURNAMENT is the host-designated awarding type (#525).
                 type = EventType.TOURNAMENT.name,
                 // A tournament must reference a circuit (#525).
                 circuitId = seedCircuit(hostUid = hostUid),
@@ -176,7 +176,7 @@ class EventReverseRatingsTest {
         calc.calculate(token = token(uid = adminUid), dryRun = false).shouldBeRight()
     }
 
-    /** A fully-set-up, rated, at-tip LEAGUE event with two players, ready to reverse. */
+    /** A fully-set-up, rated, at-tip TOURNAMENT event with two players, ready to reverse. */
     private data class RatedEvent(
         val eventId: UUID,
         val host: User,

@@ -18,7 +18,7 @@ data class CreateEventRequest(
     val clubId: String? = null,
     // The circuit a TOURNAMENT event belongs to (#525); required for tournaments, ignored otherwise.
     val circuitId: String? = null,
-    // The event's class (#403): OPEN_PLAY | LEAGUE | TOURNAMENT; omit for the OPEN_PLAY default.
+    // The event's class (#403): OPEN_PLAY | TOURNAMENT; omit for the OPEN_PLAY default.
     val type: String? = null,
     // Whether finalizing this event awards ranking points per the global schedules (#559). Omit for the
     // default (true — "Award Ranking Points" is on unless the organizer unchecks it).
@@ -120,7 +120,7 @@ data class EventResponse(
     val circuitId: String? = null,
     // Admin override for calculation processing order (#335); null = order by end date.
     val calcPriority: Double? = null,
-    // The event's class (#403): "OPEN_PLAY" | "LEAGUE" | "TOURNAMENT".
+    // The event's class (#403): "OPEN_PLAY" | "TOURNAMENT".
     val type: String,
     // When the event was finalized (#403), ISO-8601; null while open.
     val finalizedAt: String? = null,
