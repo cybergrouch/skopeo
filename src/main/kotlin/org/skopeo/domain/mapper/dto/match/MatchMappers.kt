@@ -3,16 +3,16 @@
 
 package org.skopeo.domain.mapper.dto.match
 
+import org.skopeo.common.dto.match.MatchPublicEvent
+import org.skopeo.common.dto.match.MatchPublicHeadToHead
+import org.skopeo.common.dto.match.MatchPublicPlayer
+import org.skopeo.common.dto.match.MatchPublicRatingChange
+import org.skopeo.common.dto.match.MatchPublicResponse
+import org.skopeo.common.dto.match.MatchPublicSet
+import org.skopeo.common.dto.match.MatchResponse
+import org.skopeo.common.dto.match.MatchSetResponse
+import org.skopeo.common.dto.match.MatchSideResponse
 import org.skopeo.domain.model.Match
-import org.skopeo.dto.match.MatchPublicEvent
-import org.skopeo.dto.match.MatchPublicHeadToHead
-import org.skopeo.dto.match.MatchPublicPlayer
-import org.skopeo.dto.match.MatchPublicRatingChange
-import org.skopeo.dto.match.MatchPublicResponse
-import org.skopeo.dto.match.MatchPublicSet
-import org.skopeo.dto.match.MatchResponse
-import org.skopeo.dto.match.MatchSetResponse
-import org.skopeo.dto.match.MatchSideResponse
 import java.util.UUID
 
 fun Match.toResponse(): MatchResponse =

@@ -9,6 +9,11 @@ import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
+import org.skopeo.common.dto.client.ApiClientResponse
+import org.skopeo.common.dto.client.ClientEffectiveCapabilitiesResponse
+import org.skopeo.common.dto.client.ClientIdentityResponse
+import org.skopeo.common.dto.client.IssuedApiKeyResponse
+import org.skopeo.common.dto.client.PartnerPlayerResponse
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.common.security.ClientAuthResult
@@ -33,11 +38,6 @@ import org.skopeo.domain.model.UserSearchQuery
 import org.skopeo.domain.service.audit.AuditService
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.domain.service.user.displayName
-import org.skopeo.dto.client.ApiClientResponse
-import org.skopeo.dto.client.ClientEffectiveCapabilitiesResponse
-import org.skopeo.dto.client.ClientIdentityResponse
-import org.skopeo.dto.client.IssuedApiKeyResponse
-import org.skopeo.dto.client.PartnerPlayerResponse
 import org.skopeo.repository.ApiClientRepository
 import org.skopeo.repository.UserRepository
 import java.time.LocalDateTime

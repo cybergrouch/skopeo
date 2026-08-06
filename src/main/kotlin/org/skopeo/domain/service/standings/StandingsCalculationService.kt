@@ -7,6 +7,7 @@ import arrow.core.Either
 import arrow.core.left
 import arrow.core.raise.either
 import arrow.core.right
+import org.skopeo.common.dto.standings.StandingsCalculationResponse
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.dto.standings.toResponse
@@ -27,7 +28,6 @@ import org.skopeo.domain.service.audit.AuditService
 import org.skopeo.domain.service.rating.RatingAssembler
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.domain.service.user.displayName
-import org.skopeo.dto.standings.StandingsCalculationResponse
 import org.skopeo.repository.RankingPointRepository
 import org.skopeo.repository.StandingsSnapshotRepository
 import org.skopeo.repository.UserRepository

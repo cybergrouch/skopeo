@@ -14,8 +14,8 @@ import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
+import org.skopeo.common.dto.settings.SetStandingsSourceRequest
 import org.skopeo.domain.service.settings.SettingsService
-import org.skopeo.dto.settings.SetStandingsSourceRequest
 
 /**
  * The standings serving-source setting (#146). The GET is readable (so the Admin tab can show the current

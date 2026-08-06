@@ -21,17 +21,17 @@ import io.ktor.server.testing.testApplication
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.common.dto.contact.ContactCreateRequest
+import org.skopeo.common.dto.duplicate.ConfirmCandidateRequest
+import org.skopeo.common.dto.duplicate.DuplicateCandidatePageResponse
+import org.skopeo.common.dto.user.CreateUserRequest
+import org.skopeo.common.dto.user.UserResponse
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.model.AuthProvider
 import org.skopeo.domain.model.NameType
 import org.skopeo.domain.model.ProvisionUserCommand
 import org.skopeo.domain.model.UserIdentity
 import org.skopeo.domain.model.UserName
-import org.skopeo.dto.contact.ContactCreateRequest
-import org.skopeo.dto.duplicate.ConfirmCandidateRequest
-import org.skopeo.dto.duplicate.DuplicateCandidatePageResponse
-import org.skopeo.dto.user.CreateUserRequest
-import org.skopeo.dto.user.UserResponse
 import org.skopeo.module
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
@@ -125,7 +125,7 @@ class DuplicateCandidateApiIntegrationTest {
             client.openCandidates(adminToken = adminToken).items.any { it.id == candidate.id } shouldBe false
             client.get(urlString = "/api/v1/users?name=bob") {
                 header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
-            }.body<List<org.skopeo.dto.user.UserSummaryResponse>>().any { it.id == userB.id } shouldBe false
+            }.body<List<org.skopeo.common.dto.user.UserSummaryResponse>>().any { it.id == userB.id } shouldBe false
         }
 
     @Test

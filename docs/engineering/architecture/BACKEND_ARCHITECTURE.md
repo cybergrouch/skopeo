@@ -107,10 +107,13 @@ to raw **`persistence`** entities and **returns those entities** — it no longe
 **`service`** layer is the orchestrator (and transport-agnostic — never imports `routes`): it calls a
 repository, converts the returned entity to a domain `model` via a **`mapper.entity`** mapper, runs
 business logic on the domain model, then converts that to a response DTO via a **`mapper.dto`** mapper.
-There are therefore **two mapper packages, both consumed only by `service`**: `mapper.dto` owns the
-dto↔model translation (`toResponse`/`toCommand`), `mapper.entity` owns the entity↔model translation
-(`<X>Entity.toDomain(...)`). `dto` is a **pure serializable boundary record** (no `model`/`service`
-dependency — save a small allowlist of three v1 stateless-calculator DTOs). Routes hand services the
+There are therefore **two mapper packages, both consumed only by `service`** and both grouped under
+`org.skopeo.domain` (alongside `model` + `service`): `mapper.dto` (`domain.mapper.dto`) owns the
+dto↔model translation (`toResponse`/`toCommand`), `mapper.entity` (`domain.mapper.entity`) owns the
+entity↔model translation (`<X>Entity.toDomain(...)`). `dto` (`org.skopeo.common.dto`) is a **pure
+serializable boundary record** (no `model`/`service` dependency — save a small allowlist of three v1
+stateless-calculator DTOs) that lives under `common` as the shared wire boundary — the dto↔model
+transform is service-side, so placing it in `routes` would create a routes↔service cycle. Routes hand services the
 **raw** query/path/body strings — services parse + validate them (bad enum/band/value →
 `ServiceError.Validation` → 400). So **`routes` depend only on `service` + `dto`** plus the neutral
 cross-cutting **`common`** package — `common.error` (`ServiceError`), `common.security` (auth principals
@@ -122,15 +125,15 @@ depends on nothing above, not even `model`.
 
 ```mermaid
 classDiagram
-    class routes
-    class service
-    class mapperDto["mapper.dto: dto ⟷ model"]
-    class mapperEntity["mapper.entity: persistence entity ⟷ model"]
-    class repository
-    class dto
-    class model
-    class persistence["persistence: raw as-stored row entities (#633)"]
-    class common["common: ServiceError · auth principals + Capability · value contracts"]
+    class routes["routes"]
+    class service["domain.service"]
+    class mapperDto["domain.mapper.dto: dto ⟷ model"]
+    class mapperEntity["domain.mapper.entity: entity ⟷ model"]
+    class repository["repository"]
+    class dto["common.dto: wire boundary (DTOs)"]
+    class model["domain.model"]
+    class persistence["repository.persistence: raw as-stored row entities (#633)"]
+    class common["common.{error,security,contract}: ServiceError · auth principals + Capability · contracts"]
     class DB["Exposed / PostgreSQL"]
     routes --> service
     routes --> dto
@@ -205,7 +208,7 @@ maps it, via helpers in `routes/RouteSupport.kt`:
 
 ## Domain model (selected)
 
-Pure Kotlin in `model/*Domain.kt` — no framework dependencies. The `User` aggregate is the hub;
+Pure Kotlin in `domain/model/*Domain.kt` — no framework dependencies. The `User` aggregate is the hub;
 per-request calculation results and the client-identity types are the other shapes worth seeing.
 
 ```mermaid
@@ -354,10 +357,10 @@ sequenceDiagram
 | Firebase JWT auth | `Security.kt` |
 | Route helpers, error mapping | `routes/RouteSupport.kt` |
 | Feature transport | `routes/*.kt` |
-| Business logic | `service/**` |
+| Business logic | `domain/service/**` |
 | Persistence (Exposed) | `repository/*Table*.kt`, `repository/*Repository.kt` |
-| Raw as-stored row entities (#633) | `persistence/*Entity.kt` |
-| Pure domain + enums | `model/*Domain.kt` |
-| HTTP request/response records | `dto/**` |
-| dto↔model translation (`toResponse`/`toCommand`) | `mapper/**` |
+| Raw as-stored row entities (#633) | `repository/persistence/*Entity.kt` |
+| Pure domain + enums | `domain/model/*Domain.kt` |
+| HTTP request/response records | `common/dto/**` |
+| dto↔model / entity↔model translation | `domain/mapper/dto/**`, `domain/mapper/entity/**` |
 | DB connection + migrations | `config/DatabaseConfig.kt`, `src/main/resources/db/migration/` |

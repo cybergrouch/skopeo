@@ -15,6 +15,7 @@ import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.common.dto.user.CreateUserRequest
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.user.toDomain
@@ -23,7 +24,6 @@ import org.skopeo.domain.model.ProfilePatch
 import org.skopeo.domain.model.ProvisionUserCommand
 import org.skopeo.domain.model.UserIdentity
 import org.skopeo.domain.model.UserName
-import org.skopeo.dto.user.CreateUserRequest
 import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.InviteRepository
 import org.skopeo.repository.RatingRepository

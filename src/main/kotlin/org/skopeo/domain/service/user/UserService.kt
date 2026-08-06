@@ -8,6 +8,10 @@ import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.right
 import mu.KotlinLogging
+import org.skopeo.common.dto.user.CreateUserRequest
+import org.skopeo.common.dto.user.UserResponse
+import org.skopeo.common.dto.user.UserSummaryPageResponse
+import org.skopeo.common.dto.user.UserSummaryResponse
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.dto.user.toResponse
@@ -28,10 +32,6 @@ import org.skopeo.domain.model.canSeeRawRatingOrFalse
 import org.skopeo.domain.model.effectivePhotoUrl
 import org.skopeo.domain.service.audit.AuditService
 import org.skopeo.domain.service.rating.RatingAssembler
-import org.skopeo.dto.user.CreateUserRequest
-import org.skopeo.dto.user.UserResponse
-import org.skopeo.dto.user.UserSummaryPageResponse
-import org.skopeo.dto.user.UserSummaryResponse
 import org.skopeo.repository.CapabilityRepository
 import org.skopeo.repository.InviteRepository
 import org.skopeo.repository.MatchRepository

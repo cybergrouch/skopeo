@@ -14,9 +14,9 @@ import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
+import org.skopeo.common.dto.settings.SetAwardRankingPointsRequest
+import org.skopeo.common.dto.settings.SetFacebookLoginRequest
 import org.skopeo.domain.service.settings.SettingsService
-import org.skopeo.dto.settings.SetAwardRankingPointsRequest
-import org.skopeo.dto.settings.SetFacebookLoginRequest
 
 /**
  * App-wide feature flags backed by app_settings (#647). Each GET is publicly readable (the flag steers

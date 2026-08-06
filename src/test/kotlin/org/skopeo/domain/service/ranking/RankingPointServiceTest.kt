@@ -11,6 +11,8 @@ import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.common.dto.ranking.AdjustRankingPointsRequest
+import org.skopeo.common.dto.ranking.GrantRankingPointsRequest
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.user.toDomain
@@ -27,8 +29,6 @@ import org.skopeo.domain.model.UserIdentity
 import org.skopeo.domain.model.UserName
 import org.skopeo.domain.service.rating.RatingAssembler
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
-import org.skopeo.dto.ranking.AdjustRankingPointsRequest
-import org.skopeo.dto.ranking.GrantRankingPointsRequest
 import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.RankingPointRepository
 import org.skopeo.repository.UserRepository

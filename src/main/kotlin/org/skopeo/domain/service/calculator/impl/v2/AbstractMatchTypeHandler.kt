@@ -3,6 +3,7 @@
 
 package org.skopeo.domain.service.calculator.impl.v2
 
+import org.skopeo.common.dto.RankingCalculationRequest
 import org.skopeo.domain.model.PlayerProfile
 import org.skopeo.domain.model.SetScore
 import org.skopeo.domain.model.bd
@@ -14,7 +15,6 @@ import org.skopeo.domain.service.calculator.impl.v2.PerformanceBasedRankingCalcu
 import org.skopeo.domain.service.calculator.impl.v2.PerformanceBasedRankingCalculatorImpl.Companion.NTRP_MIN
 import org.skopeo.domain.service.calculator.impl.v2.PerformanceBasedRankingCalculatorImpl.Companion.UPSET_MULTIPLIER
 import org.skopeo.domain.service.calculator.impl.v2.PerformanceBasedRankingCalculatorImpl.SetStep
-import org.skopeo.dto.RankingCalculationRequest
 import java.math.BigDecimal
 
 /**

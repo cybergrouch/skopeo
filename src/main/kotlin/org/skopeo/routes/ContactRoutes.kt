@@ -16,10 +16,10 @@ import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
+import org.skopeo.common.dto.contact.ContactCreateRequest
+import org.skopeo.common.dto.contact.ContactStateRequest
+import org.skopeo.common.dto.contact.VerificationRequest
 import org.skopeo.domain.service.contact.ContactService
-import org.skopeo.dto.contact.ContactCreateRequest
-import org.skopeo.dto.contact.ContactStateRequest
-import org.skopeo.dto.contact.VerificationRequest
 
 /**
  * Contact-information API, nested under the owning user. Editing the address is

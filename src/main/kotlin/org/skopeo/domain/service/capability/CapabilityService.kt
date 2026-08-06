@@ -9,6 +9,7 @@ import arrow.core.raise.Raise
 import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.right
+import org.skopeo.common.dto.capability.CapabilityResponse
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.dto.capability.toResponse
@@ -22,7 +23,6 @@ import org.skopeo.domain.model.User
 import org.skopeo.domain.model.VerificationStatus
 import org.skopeo.domain.service.audit.AuditService
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
-import org.skopeo.dto.capability.CapabilityResponse
 import org.skopeo.repository.CapabilityRepository
 import org.skopeo.repository.UserRepository
 import java.time.LocalDateTime

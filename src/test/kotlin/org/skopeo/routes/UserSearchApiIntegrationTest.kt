@@ -23,6 +23,11 @@ import io.ktor.server.testing.testApplication
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.common.dto.rating.SetRatingRequest
+import org.skopeo.common.dto.user.CreateUserRequest
+import org.skopeo.common.dto.user.UserResponse
+import org.skopeo.common.dto.user.UserSummaryPageResponse
+import org.skopeo.common.dto.user.UserSummaryResponse
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.match.toDomain
 import org.skopeo.domain.model.AuthProvider
@@ -34,11 +39,6 @@ import org.skopeo.domain.model.ProvisionUserCommand
 import org.skopeo.domain.model.TeamType
 import org.skopeo.domain.model.UserIdentity
 import org.skopeo.domain.model.UserName
-import org.skopeo.dto.rating.SetRatingRequest
-import org.skopeo.dto.user.CreateUserRequest
-import org.skopeo.dto.user.UserResponse
-import org.skopeo.dto.user.UserSummaryPageResponse
-import org.skopeo.dto.user.UserSummaryResponse
 import org.skopeo.module
 import org.skopeo.repository.CapabilityRepository
 import org.skopeo.repository.MatchRepository

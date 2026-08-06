@@ -3,19 +3,19 @@
 
 package org.skopeo.domain.mapper.dto.rating
 
+import org.skopeo.common.dto.rating.CalculationBreakdownResponse
+import org.skopeo.common.dto.rating.CalculationResponse
+import org.skopeo.common.dto.rating.MatchCalculationDetailResponse
+import org.skopeo.common.dto.rating.MatchCalculationResponse
+import org.skopeo.common.dto.rating.MatchPlayerCalculationResponse
+import org.skopeo.common.dto.rating.PlayerChangeResponse
+import org.skopeo.common.dto.rating.SetBreakdownResponse
 import org.skopeo.domain.mapper.dto.match.toResponse
 import org.skopeo.domain.model.MatchCalculationDetail
 import org.skopeo.domain.model.MatchPlayerCalculation
 import org.skopeo.domain.model.RatingCalculationOutcome
 import org.skopeo.domain.model.RatingHistoryEntry
 import org.skopeo.domain.model.SetCalculationBreakdown
-import org.skopeo.dto.rating.CalculationBreakdownResponse
-import org.skopeo.dto.rating.CalculationResponse
-import org.skopeo.dto.rating.MatchCalculationDetailResponse
-import org.skopeo.dto.rating.MatchCalculationResponse
-import org.skopeo.dto.rating.MatchPlayerCalculationResponse
-import org.skopeo.dto.rating.PlayerChangeResponse
-import org.skopeo.dto.rating.SetBreakdownResponse
 
 fun RatingCalculationOutcome.toResponse(): CalculationResponse =
     CalculationResponse(

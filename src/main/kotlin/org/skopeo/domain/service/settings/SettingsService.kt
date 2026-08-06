@@ -8,6 +8,9 @@ import arrow.core.left
 import arrow.core.raise.either
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
+import org.skopeo.common.dto.settings.AwardRankingPointsResponse
+import org.skopeo.common.dto.settings.FacebookLoginResponse
+import org.skopeo.common.dto.settings.StandingsSourceResponse
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.dto.settings.toResponse
@@ -21,9 +24,6 @@ import org.skopeo.domain.model.SnapshotSource
 import org.skopeo.domain.model.StandingsSourceValue
 import org.skopeo.domain.service.audit.AuditService
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
-import org.skopeo.dto.settings.AwardRankingPointsResponse
-import org.skopeo.dto.settings.FacebookLoginResponse
-import org.skopeo.dto.settings.StandingsSourceResponse
 import org.skopeo.repository.AppSettingsRepository
 import org.skopeo.repository.UserRepository
 import java.util.UUID

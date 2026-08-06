@@ -20,6 +20,8 @@ import io.ktor.server.testing.testApplication
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.common.dto.standings.StandingsCalculationRequest
+import org.skopeo.common.dto.standings.StandingsCalculationResponse
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuthProvider
@@ -32,8 +34,6 @@ import org.skopeo.domain.model.RankingPointAwardWrite
 import org.skopeo.domain.model.User
 import org.skopeo.domain.model.UserIdentity
 import org.skopeo.domain.model.UserName
-import org.skopeo.dto.standings.StandingsCalculationRequest
-import org.skopeo.dto.standings.StandingsCalculationResponse
 import org.skopeo.module
 import org.skopeo.repository.RankingPointRepository
 import org.skopeo.repository.StandingsSnapshotRepository

@@ -3,11 +3,11 @@
 
 package org.skopeo.domain.mapper.dto.invite
 
+import org.skopeo.common.dto.invite.InvitePageResponse
+import org.skopeo.common.dto.invite.InviteResponse
 import org.skopeo.domain.model.Invite
 import org.skopeo.domain.model.InvitePage
 import org.skopeo.domain.model.InviteStatus
-import org.skopeo.dto.invite.InvitePageResponse
-import org.skopeo.dto.invite.InviteResponse
 import java.time.LocalDateTime
 
 fun Invite.toResponse(): InviteResponse =

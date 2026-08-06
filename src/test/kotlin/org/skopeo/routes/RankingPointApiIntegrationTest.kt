@@ -22,6 +22,10 @@ import io.ktor.server.testing.testApplication
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.common.dto.ranking.AwardedPointsPageResponse
+import org.skopeo.common.dto.ranking.GrantRankingPointsRequest
+import org.skopeo.common.dto.ranking.RankingPointAwardResponse
+import org.skopeo.common.dto.ranking.RevokeRankingPointsRequest
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuthProvider
@@ -30,10 +34,6 @@ import org.skopeo.domain.model.ProvisionUserCommand
 import org.skopeo.domain.model.User
 import org.skopeo.domain.model.UserIdentity
 import org.skopeo.domain.model.UserName
-import org.skopeo.dto.ranking.AwardedPointsPageResponse
-import org.skopeo.dto.ranking.GrantRankingPointsRequest
-import org.skopeo.dto.ranking.RankingPointAwardResponse
-import org.skopeo.dto.ranking.RevokeRankingPointsRequest
 import org.skopeo.module
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository

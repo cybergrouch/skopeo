@@ -26,10 +26,10 @@ import io.ktor.server.testing.testApplication
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.skopeo.dto.user.CreateUserRequest
-import org.skopeo.dto.user.PhotoSettingsRequest
-import org.skopeo.dto.user.ProfileRequest
-import org.skopeo.dto.user.UserResponse
+import org.skopeo.common.dto.user.CreateUserRequest
+import org.skopeo.common.dto.user.PhotoSettingsRequest
+import org.skopeo.common.dto.user.ProfileRequest
+import org.skopeo.common.dto.user.UserResponse
 import org.skopeo.module
 import org.skopeo.testsupport.PostgresTestDatabase
 import org.skopeo.testsupport.TestFirebaseAuth

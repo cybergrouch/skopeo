@@ -3,15 +3,15 @@
 
 package org.skopeo.domain.mapper.dto.rating
 
+import org.skopeo.common.dto.rating.PendingAssessmentPageResponse
+import org.skopeo.common.dto.rating.PendingAssessmentResponse
+import org.skopeo.common.dto.rating.RatingHistoryResponse
+import org.skopeo.common.dto.rating.UserRatingResponse
 import org.skopeo.domain.model.Level
 import org.skopeo.domain.model.PendingAssessment
 import org.skopeo.domain.model.PendingAssessmentPage
 import org.skopeo.domain.model.RatingHistoryEntry
 import org.skopeo.domain.model.UserRating
-import org.skopeo.dto.rating.PendingAssessmentPageResponse
-import org.skopeo.dto.rating.PendingAssessmentResponse
-import org.skopeo.dto.rating.RatingHistoryResponse
-import org.skopeo.dto.rating.UserRatingResponse
 
 /**
  * Map a rating for the API. [revealRawValue] gates the exact rating (#114): only rating managers

@@ -3,12 +3,12 @@
 
 package org.skopeo.domain.mapper.dto.seeding
 
+import org.skopeo.common.dto.seeding.PlayerListSummaryResponse
+import org.skopeo.common.dto.seeding.SeedingEntryResponse
+import org.skopeo.common.dto.seeding.SeedingResponse
 import org.skopeo.domain.model.PlayerList
 import org.skopeo.domain.model.Seeding
 import org.skopeo.domain.model.SeedingEntry
-import org.skopeo.dto.seeding.PlayerListSummaryResponse
-import org.skopeo.dto.seeding.SeedingEntryResponse
-import org.skopeo.dto.seeding.SeedingResponse
 
 fun PlayerList.toSummaryResponse(): PlayerListSummaryResponse =
     PlayerListSummaryResponse(

@@ -3,13 +3,13 @@
 
 package org.skopeo.domain.mapper.dto.event
 
+import org.skopeo.common.dto.event.EventParticipantResponse
+import org.skopeo.common.dto.event.EventResponse
+import org.skopeo.common.dto.event.MyEventResponse
+import org.skopeo.common.dto.user.PublicRatingDto
 import org.skopeo.domain.model.EventParticipantRef
 import org.skopeo.domain.model.EventView
 import org.skopeo.domain.model.MyEvent
-import org.skopeo.dto.event.EventParticipantResponse
-import org.skopeo.dto.event.EventResponse
-import org.skopeo.dto.event.MyEventResponse
-import org.skopeo.dto.user.PublicRatingDto
 
 fun MyEvent.toResponse(completedMatchCount: Int = 0): MyEventResponse =
     MyEventResponse(

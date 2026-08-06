@@ -11,6 +11,8 @@ import arrow.core.right
 import kotlinx.serialization.json.Json
 import org.skopeo.common.contract.OpenPlayPointsConfig
 import org.skopeo.common.contract.TournamentPointsConfig
+import org.skopeo.common.dto.settings.OpenPlayConfigResponse
+import org.skopeo.common.dto.settings.TournamentConfigResponse
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.dto.settings.toResponse
@@ -21,8 +23,6 @@ import org.skopeo.domain.model.AuditWrite
 import org.skopeo.domain.model.StoredConfig
 import org.skopeo.domain.service.audit.AuditService
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
-import org.skopeo.dto.settings.OpenPlayConfigResponse
-import org.skopeo.dto.settings.TournamentConfigResponse
 import org.skopeo.repository.PointsConfigRepository
 import org.skopeo.repository.UserRepository
 import java.util.UUID

@@ -12,8 +12,8 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
+import org.skopeo.common.dto.standings.StandingsCalculationRequest
 import org.skopeo.domain.service.standings.StandingsCalculationService
-import org.skopeo.dto.standings.StandingsCalculationRequest
 
 /**
  * Points-based standings recompute trigger (ADMINISTRATOR only, #146 phase 2). Mirrors the rating

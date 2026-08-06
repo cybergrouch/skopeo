@@ -3,14 +3,14 @@
 
 package org.skopeo.domain.mapper.dto.standings
 
+import org.skopeo.common.dto.standings.StandingEntryResponse
+import org.skopeo.common.dto.standings.StandingsBandResponse
+import org.skopeo.common.dto.standings.StandingsGroupResponse
+import org.skopeo.common.dto.standings.StandingsLocateResponse
+import org.skopeo.common.dto.standings.StandingsPageResponse
 import org.skopeo.domain.model.LocateView
 import org.skopeo.domain.model.StandingEntry
 import org.skopeo.domain.model.StandingsView
-import org.skopeo.dto.standings.StandingEntryResponse
-import org.skopeo.dto.standings.StandingsBandResponse
-import org.skopeo.dto.standings.StandingsGroupResponse
-import org.skopeo.dto.standings.StandingsLocateResponse
-import org.skopeo.dto.standings.StandingsPageResponse
 
 fun StandingsView.toResponse(): StandingsPageResponse =
     StandingsPageResponse(

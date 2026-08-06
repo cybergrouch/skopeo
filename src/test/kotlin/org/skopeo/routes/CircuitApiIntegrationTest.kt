@@ -22,6 +22,8 @@ import io.ktor.server.testing.testApplication
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.common.dto.circuit.CircuitResponse
+import org.skopeo.common.dto.circuit.CreateCircuitRequest
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuthProvider
@@ -30,8 +32,6 @@ import org.skopeo.domain.model.ProvisionUserCommand
 import org.skopeo.domain.model.User
 import org.skopeo.domain.model.UserIdentity
 import org.skopeo.domain.model.UserName
-import org.skopeo.dto.circuit.CircuitResponse
-import org.skopeo.dto.circuit.CreateCircuitRequest
 import org.skopeo.module
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase

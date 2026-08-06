@@ -14,6 +14,7 @@ import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.common.dto.contact.ContactResponse
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.user.toDomain
@@ -28,7 +29,6 @@ import org.skopeo.domain.model.UserName
 import org.skopeo.domain.model.VerificationMethod
 import org.skopeo.domain.model.VerificationStatus
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
-import org.skopeo.dto.contact.ContactResponse
 import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.ContactRepository
 import org.skopeo.repository.DuplicateCandidateRepository

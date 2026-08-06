@@ -15,10 +15,10 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
+import org.skopeo.common.dto.rating.ApproveRatingRequestRequest
+import org.skopeo.common.dto.rating.CreateRatingRequestRequest
+import org.skopeo.common.dto.rating.DenyRatingRequestRequest
 import org.skopeo.domain.service.rating.RatingRequestService
-import org.skopeo.dto.rating.ApproveRatingRequestRequest
-import org.skopeo.dto.rating.CreateRatingRequestRequest
-import org.skopeo.dto.rating.DenyRatingRequestRequest
 
 /**
  * Re-rate requests (issue #140). A player creates a request and reads their own (`/me`); a RATER or

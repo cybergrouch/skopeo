@@ -5,9 +5,9 @@ package org.skopeo.domain.mapper.dto.settings
 
 import org.skopeo.common.contract.OpenPlayPointsConfig
 import org.skopeo.common.contract.TournamentPointsConfig
+import org.skopeo.common.dto.settings.OpenPlayConfigResponse
+import org.skopeo.common.dto.settings.TournamentConfigResponse
 import org.skopeo.domain.model.StoredConfig
-import org.skopeo.dto.settings.OpenPlayConfigResponse
-import org.skopeo.dto.settings.TournamentConfigResponse
 
 fun StoredConfig<OpenPlayPointsConfig>.toResponse(): OpenPlayConfigResponse =
     OpenPlayConfigResponse(config = value, updatedAt = updatedAt?.toString(), updatedBy = updatedBy?.toString())

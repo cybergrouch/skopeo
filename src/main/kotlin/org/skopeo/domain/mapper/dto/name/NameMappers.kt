@@ -3,8 +3,8 @@
 
 package org.skopeo.domain.mapper.dto.name
 
+import org.skopeo.common.dto.name.NameResponse
 import org.skopeo.domain.model.Name
-import org.skopeo.dto.name.NameResponse
 
 fun Name.toResponse(): NameResponse =
     NameResponse(

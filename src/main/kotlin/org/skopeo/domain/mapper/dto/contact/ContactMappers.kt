@@ -3,8 +3,8 @@
 
 package org.skopeo.domain.mapper.dto.contact
 
+import org.skopeo.common.dto.contact.ContactResponse
 import org.skopeo.domain.model.Contact
-import org.skopeo.dto.contact.ContactResponse
 
 fun Contact.toResponse(): ContactResponse =
     ContactResponse(

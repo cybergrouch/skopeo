@@ -6,6 +6,8 @@ package org.skopeo.domain.service.user
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
+import org.skopeo.common.dto.user.CreateUserRequest
+import org.skopeo.common.dto.user.ProfileRequest
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.model.AuthProvider
 import org.skopeo.domain.model.ContactSource
@@ -13,8 +15,6 @@ import org.skopeo.domain.model.ContactType
 import org.skopeo.domain.model.NameType
 import org.skopeo.domain.model.VerificationMethod
 import org.skopeo.domain.model.VerificationStatus
-import org.skopeo.dto.user.CreateUserRequest
-import org.skopeo.dto.user.ProfileRequest
 import java.math.BigDecimal
 import java.time.LocalDate
 import kotlin.test.Test

@@ -3,11 +3,11 @@
 
 package org.skopeo.domain.service.calculator.impl.v2
 
+import org.skopeo.common.dto.RankingCalculationResponse
+import org.skopeo.common.dto.RatingChange
 import org.skopeo.domain.model.Rating
 import org.skopeo.domain.model.SetScore
 import org.skopeo.domain.service.calculator.impl.v2.PerformanceBasedRankingCalculatorImpl.SetStep
-import org.skopeo.dto.RankingCalculationResponse
-import org.skopeo.dto.RatingChange
 import java.math.BigDecimal
 
 /**

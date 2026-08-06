@@ -16,12 +16,12 @@ import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
+import org.skopeo.common.dto.match.CreateFixtureRequest
+import org.skopeo.common.dto.match.MatchResultRequest
+import org.skopeo.common.dto.match.MatchStateRequest
+import org.skopeo.common.dto.match.ReorderMatchesRequest
+import org.skopeo.common.dto.match.SetHandicapsRequest
 import org.skopeo.domain.service.match.MatchService
-import org.skopeo.dto.match.CreateFixtureRequest
-import org.skopeo.dto.match.MatchResultRequest
-import org.skopeo.dto.match.MatchStateRequest
-import org.skopeo.dto.match.ReorderMatchesRequest
-import org.skopeo.dto.match.SetHandicapsRequest
 import java.math.BigDecimal
 import java.util.UUID
 

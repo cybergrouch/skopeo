@@ -15,9 +15,9 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
+import org.skopeo.common.dto.user.ClaimRequest
+import org.skopeo.common.dto.user.CreatePlaceholderRequest
 import org.skopeo.domain.service.user.PlaceholderService
-import org.skopeo.dto.user.ClaimRequest
-import org.skopeo.dto.user.CreatePlaceholderRequest
 import java.time.LocalDate
 
 /**

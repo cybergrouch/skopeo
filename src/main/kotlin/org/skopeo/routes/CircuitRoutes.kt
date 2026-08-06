@@ -17,9 +17,9 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
+import org.skopeo.common.dto.circuit.CreateCircuitRequest
+import org.skopeo.common.dto.circuit.UpdateCircuitRequest
 import org.skopeo.domain.service.circuit.CircuitService
-import org.skopeo.dto.circuit.CreateCircuitRequest
-import org.skopeo.dto.circuit.UpdateCircuitRequest
 
 /**
  * Circuits (#525): admin-defined groupings of tournaments (e.g. NORTH, SOUTH). Create / rename /

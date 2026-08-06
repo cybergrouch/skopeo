@@ -9,6 +9,10 @@ import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
+import org.skopeo.common.dto.ranking.AdjustRankingPointsRequest
+import org.skopeo.common.dto.ranking.AwardedPointsPageResponse
+import org.skopeo.common.dto.ranking.GrantRankingPointsRequest
+import org.skopeo.common.dto.ranking.RankingPointAwardResponse
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.dto.ranking.toCommand
@@ -31,10 +35,6 @@ import org.skopeo.domain.service.rating.RatingAssembler
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.domain.service.user.displayName
 import org.skopeo.domain.service.user.isDeleted
-import org.skopeo.dto.ranking.AdjustRankingPointsRequest
-import org.skopeo.dto.ranking.AwardedPointsPageResponse
-import org.skopeo.dto.ranking.GrantRankingPointsRequest
-import org.skopeo.dto.ranking.RankingPointAwardResponse
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RankingPointRepository

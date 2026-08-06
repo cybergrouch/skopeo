@@ -21,6 +21,10 @@ import io.ktor.server.testing.testApplication
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.common.dto.settings.AwardRankingPointsResponse
+import org.skopeo.common.dto.settings.FacebookLoginResponse
+import org.skopeo.common.dto.settings.SetAwardRankingPointsRequest
+import org.skopeo.common.dto.settings.SetFacebookLoginRequest
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuthProvider
@@ -29,10 +33,6 @@ import org.skopeo.domain.model.ProvisionUserCommand
 import org.skopeo.domain.model.User
 import org.skopeo.domain.model.UserIdentity
 import org.skopeo.domain.model.UserName
-import org.skopeo.dto.settings.AwardRankingPointsResponse
-import org.skopeo.dto.settings.FacebookLoginResponse
-import org.skopeo.dto.settings.SetAwardRankingPointsRequest
-import org.skopeo.dto.settings.SetFacebookLoginRequest
 import org.skopeo.module
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase

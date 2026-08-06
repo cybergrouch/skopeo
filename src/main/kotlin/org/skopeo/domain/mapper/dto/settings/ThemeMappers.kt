@@ -3,10 +3,10 @@
 
 package org.skopeo.domain.mapper.dto.settings
 
+import org.skopeo.common.dto.settings.LocalThemeResponse
+import org.skopeo.common.dto.settings.ThemeResponse
 import org.skopeo.domain.model.LocalThemeValue
 import org.skopeo.domain.model.ThemeSettingValue
-import org.skopeo.dto.settings.LocalThemeResponse
-import org.skopeo.dto.settings.ThemeResponse
 
 fun ThemeSettingValue.toResponse(): ThemeResponse =
     ThemeResponse(

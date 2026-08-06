@@ -6,6 +6,9 @@ import arrow.core.Either
 import arrow.core.left
 import arrow.core.raise.either
 import arrow.core.right
+import org.skopeo.common.dto.rating.PendingAssessmentPageResponse
+import org.skopeo.common.dto.rating.RatingHistoryResponse
+import org.skopeo.common.dto.rating.UserRatingResponse
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.dto.rating.toResponse
@@ -26,9 +29,6 @@ import org.skopeo.domain.model.canSeeRawRating
 import org.skopeo.domain.service.audit.AuditService
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.domain.service.user.displayName
-import org.skopeo.dto.rating.PendingAssessmentPageResponse
-import org.skopeo.dto.rating.RatingHistoryResponse
-import org.skopeo.dto.rating.UserRatingResponse
 import org.skopeo.repository.UserRepository
 import java.math.BigDecimal
 import java.time.LocalDate

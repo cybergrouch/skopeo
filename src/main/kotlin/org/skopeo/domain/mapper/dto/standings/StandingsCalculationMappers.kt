@@ -3,10 +3,10 @@
 
 package org.skopeo.domain.mapper.dto.standings
 
+import org.skopeo.common.dto.standings.StandingsCalculationEntryResponse
+import org.skopeo.common.dto.standings.StandingsCalculationGroupResponse
+import org.skopeo.common.dto.standings.StandingsCalculationResponse
 import org.skopeo.domain.model.StandingsCalculationOutcome
-import org.skopeo.dto.standings.StandingsCalculationEntryResponse
-import org.skopeo.dto.standings.StandingsCalculationGroupResponse
-import org.skopeo.dto.standings.StandingsCalculationResponse
 
 fun StandingsCalculationOutcome.toResponse(): StandingsCalculationResponse =
     StandingsCalculationResponse(

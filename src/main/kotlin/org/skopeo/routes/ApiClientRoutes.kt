@@ -21,12 +21,12 @@ import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.PARTNER_RATE_LIMIT_NAME
+import org.skopeo.common.dto.client.CreateApiClientRequest
+import org.skopeo.common.dto.client.IssueApiKeyRequest
+import org.skopeo.common.dto.client.SetRateLimitRequest
 import org.skopeo.common.security.ClientAuthResult
 import org.skopeo.common.security.ClientPrincipal
 import org.skopeo.domain.service.client.ApiClientService
-import org.skopeo.dto.client.CreateApiClientRequest
-import org.skopeo.dto.client.IssueApiKeyRequest
-import org.skopeo.dto.client.SetRateLimitRequest
 
 /** The header a partner presents its API key in (#225/#596). */
 private const val API_KEY_HEADER = "X-Api-Key"

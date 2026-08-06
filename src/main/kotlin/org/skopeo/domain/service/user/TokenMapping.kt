@@ -3,6 +3,8 @@
 
 package org.skopeo.domain.service.user
 
+import org.skopeo.common.dto.user.CreateUserRequest
+import org.skopeo.common.dto.user.ProfileRequest
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.model.AuthProvider
 import org.skopeo.domain.model.ContactInfo
@@ -16,8 +18,6 @@ import org.skopeo.domain.model.UserIdentity
 import org.skopeo.domain.model.UserName
 import org.skopeo.domain.model.VerificationMethod
 import org.skopeo.domain.model.VerificationStatus
-import org.skopeo.dto.user.CreateUserRequest
-import org.skopeo.dto.user.ProfileRequest
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.format.DateTimeParseException

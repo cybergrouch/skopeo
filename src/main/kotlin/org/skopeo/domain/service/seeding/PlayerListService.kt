@@ -7,6 +7,8 @@ import arrow.core.left
 import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.right
+import org.skopeo.common.dto.seeding.PlayerListResponse
+import org.skopeo.common.dto.seeding.PlayerListSummaryResponse
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.dto.seeding.toSummaryResponse
@@ -18,8 +20,6 @@ import org.skopeo.domain.model.canSeeRawRatingOrFalse
 import org.skopeo.domain.service.rating.RatingAssembler
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.domain.service.user.isDeleted
-import org.skopeo.dto.seeding.PlayerListResponse
-import org.skopeo.dto.seeding.PlayerListSummaryResponse
 import org.skopeo.repository.PlayerListRepository
 import org.skopeo.repository.UserRepository
 import java.util.UUID
