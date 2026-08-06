@@ -33,9 +33,9 @@ import org.skopeo.model.effectivePhotoUrl
 import org.skopeo.repository.CapabilityRepository
 import org.skopeo.repository.InviteRepository
 import org.skopeo.repository.MatchRepository
-import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService
+import org.skopeo.service.rating.RatingAssembler
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
@@ -75,7 +75,7 @@ data class UserSearchFilters(
 class UserService(
     private val repository: UserRepository = UserRepository(),
     private val capabilities: CapabilityRepository = CapabilityRepository(),
-    private val ratings: RatingRepository = RatingRepository(),
+    private val ratings: RatingAssembler = RatingAssembler(),
     private val invites: InviteRepository = InviteRepository(),
     private val matches: MatchRepository = MatchRepository(),
     private val audit: AuditService = AuditService(),

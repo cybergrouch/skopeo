@@ -20,12 +20,8 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.model.MatchRatingWrite
 import org.skopeo.model.PreEventRating
-import org.skopeo.model.RatingHistoryEntry
 import org.skopeo.model.RatingHistoryWrite
 import org.skopeo.model.SetCalculationBreakdown
-import org.skopeo.model.UserRating
-import org.skopeo.model.WindowMatch
-import org.skopeo.model.confidenceAt
 import org.skopeo.persistence.RatingHistoryEntryEntity
 import org.skopeo.persistence.UserRatingEntity
 import java.math.BigDecimal
@@ -34,81 +30,59 @@ import java.time.LocalDateTime
 import java.util.UUID
 
 /**
- * Persistence for the user's (single, NTRP) current rating and rating history. Initial ratings
- * are admin-set (no auto-seed); [setRating] upserts the row. History is read here and written
- * by the match flow.
+ * Persistence for the user's (single, NTRP) current rating and rating history (#633: pure data access,
+ * returns raw `persistence` entities). Initial ratings are admin-set (no auto-seed); [setRating] upserts
+ * the row and returns it. History is read here and written by the match flow.
  *
- * Confidence (#459) is computed on read from each user's windowed match rows (date + weight class),
- * sourced from [matches] — so every rating read that surfaces confidence first fetches those rows
- * (batched for the multi-user reads, one query for the whole page, never N+1).
+ * The domain `UserRating.confidence` (#459) is NOT computed here — it is derived from windowed match rows
+ * at the `mapper.entity.rating` boundary, orchestrated by `RatingAssembler` (which owns that DB fetch,
+ * since `repository ↛ mapper` and the mapper can't hit the DB).
  */
-class RatingRepository(
-    private val matches: MatchRepository = MatchRepository(),
-) {
-    /** The user's ratings as a list (0 or 1) — the API surfaces a collection. */
-    fun findByUser(userId: UUID): List<UserRating> =
+class RatingRepository {
+    /** The user's rating rows as a list (0 or 1) — the API surfaces a collection. */
+    fun findByUser(userId: UUID): List<UserRatingEntity> =
         transaction {
-            val now = LocalDateTime.now()
-            val windowed = matches.windowedMatchesInWindow(userId = userId, asOf = now)
             UserRatingsTable
                 .selectAll()
                 .where { UserRatingsTable.userId eq userId }
-                .map { it.toUserRating(windowed = windowed, now = now) }
+                .map { it.toUserRatingEntity() }
         }
 
-    fun findCurrentRating(userId: UUID): UserRating? =
+    fun findCurrentRating(userId: UUID): UserRatingEntity? =
         transaction {
-            val now = LocalDateTime.now()
-            ratingRow(userId = userId)?.toUserRating(
-                windowed = matches.windowedMatchesInWindow(userId = userId, asOf = now),
-                now = now,
-            )
+            ratingRow(userId = userId)?.toUserRatingEntity()
         }
 
-    /** Every user's current rating — backs the per-band standings (#113). Confidence counts are batched. */
-    fun allCurrentRatings(): List<UserRating> =
+    /** Every user's current rating row — backs the per-band standings (#113). */
+    fun allCurrentRatings(): List<UserRatingEntity> =
         transaction {
-            val now = LocalDateTime.now()
-            val rows = UserRatingsTable.selectAll().toList()
-            val windowedByUser =
-                matches.windowedMatchesInWindow(
-                    userIds = rows.map { it[UserRatingsTable.userId].value },
-                    asOf = now,
-                )
-            rows.map {
-                it.toUserRating(windowed = windowedByUser[it[UserRatingsTable.userId].value].orEmpty(), now = now)
-            }
+            UserRatingsTable.selectAll().map { it.toUserRatingEntity() }
         }
 
-    /** Current ratings for many users at once, keyed by user id; users without a rating are absent. */
-    fun findCurrentRatings(userIds: List<UUID>): Map<UUID, UserRating> =
+    /** Current rating rows for many users at once, keyed by user id; users without a rating are absent. */
+    fun findCurrentRatings(userIds: List<UUID>): Map<UUID, UserRatingEntity> =
         transaction {
             if (userIds.isEmpty()) {
                 emptyMap()
             } else {
-                val now = LocalDateTime.now()
-                val windowedByUser = matches.windowedMatchesInWindow(userIds = userIds, asOf = now)
                 UserRatingsTable
                     .selectAll()
                     .where { UserRatingsTable.userId inList userIds }
-                    .associate { row ->
-                        val uid = row[UserRatingsTable.userId].value
-                        uid to row.toUserRating(windowed = windowedByUser[uid].orEmpty(), now = now)
-                    }
+                    .associate { row -> row[UserRatingsTable.userId].value to row.toUserRatingEntity() }
             }
         }
 
     /**
      * Set a rating directly (admin/RATER assessment or override, #343). This is NOT a match-result
      * calculation, so it clears [UserRatingsTable.matchRatedAt]/[UserRatingsTable.matchesSinceReset]
-     * (both now vestigial for confidence, #459 — left in place, no migration). Confidence is computed
-     * from windowed match counts (#459), so a returned override reflects the user's recent play.
+     * (both now vestigial for confidence, #459 — left in place, no migration). Returns the resulting row
+     * entity; the caller (RatingAssembler) derives confidence from windowed match counts.
      */
     fun setRating(
         userId: UUID,
         rating: BigDecimal,
         level: String?,
-    ): UserRating =
+    ): UserRatingEntity =
         transaction {
             if (ratingRow(userId = userId) == null) {
                 UserRatingsTable.insert {
@@ -126,12 +100,10 @@ class RatingRepository(
                     it[matchesSinceReset] = 0
                 }
             }
-            val now = LocalDateTime.now()
-            val row = UserRatingsTable.selectAll().where { UserRatingsTable.userId eq userId }.single()
-            row.toUserRating(windowed = matches.windowedMatchesInWindow(userId = userId, asOf = now), now = now)
+            UserRatingsTable.selectAll().where { UserRatingsTable.userId eq userId }.single().toUserRatingEntity()
         }
 
-    fun historyByUser(userId: UUID): List<RatingHistoryEntry> =
+    fun historyByUser(userId: UUID): List<RatingHistoryEntryEntity> =
         transaction {
             UserRatingHistoryTable
                 .selectAll()
@@ -143,7 +115,7 @@ class RatingRepository(
                 .orderBy(
                     UserRatingHistoryTable.calculatedAt to SortOrder.DESC,
                     UserRatingHistoryTable.completedAt to SortOrder.DESC_NULLS_LAST,
-                ).map { it.toRatingHistory() }
+                ).map { it.toRatingHistoryEntryEntity() }
         }
 
     /**
@@ -151,21 +123,21 @@ class RatingRepository(
      * report reconstructs each player's band at the window boundaries in memory, so it reads the table
      * in full; revisit with a windowed SQL query if the history grows large.
      */
-    fun allHistory(): List<RatingHistoryEntry> =
+    fun allHistory(): List<RatingHistoryEntryEntity> =
         transaction {
             UserRatingHistoryTable
                 .selectAll()
                 // Exclude rows superseded by an event-scoped reversal (#478) — soft-deleted, not live.
                 .where { UserRatingHistoryTable.reversedAt.isNull() }
                 .orderBy(UserRatingHistoryTable.calculatedAt to SortOrder.ASC)
-                .map { it.toRatingHistory() }
+                .map { it.toRatingHistoryEntryEntity() }
         }
 
     /**
      * Every rating-history row tied to any of [matchIds] (across all users). Used to reconstruct
      * each side's at-the-time band for match history. Returns empty when [matchIds] is empty.
      */
-    fun historyForMatches(matchIds: List<UUID>): List<RatingHistoryEntry> =
+    fun historyForMatches(matchIds: List<UUID>): List<RatingHistoryEntryEntity> =
         transaction {
             if (matchIds.isEmpty()) {
                 emptyList()
@@ -174,7 +146,7 @@ class RatingRepository(
                     .selectAll()
                     // Exclude rows superseded by an event-scoped reversal (#478) — soft-deleted, not live.
                     .where { (UserRatingHistoryTable.matchId inList matchIds) and UserRatingHistoryTable.reversedAt.isNull() }
-                    .map { it.toRatingHistory() }
+                    .map { it.toRatingHistoryEntryEntity() }
             }
         }
 
@@ -381,11 +353,6 @@ class RatingRepository(
             .singleOrNull()
 }
 
-internal fun ResultRow.toUserRating(
-    windowed: List<WindowMatch>,
-    now: LocalDateTime,
-): UserRating = toUserRatingEntity().toDomain(windowed = windowed, now = now)
-
 /** Map a `user_ratings` row to the raw persistence entity (#633) — no derived `confidence`. */
 internal fun ResultRow.toUserRatingEntity(): UserRatingEntity =
     UserRatingEntity(
@@ -396,29 +363,6 @@ internal fun ResultRow.toUserRatingEntity(): UserRatingEntity =
         lastMatchDate = this[UserRatingsTable.lastMatchDate],
         matchRatedAt = this[UserRatingsTable.matchRatedAt],
     )
-
-/**
- * Convert the raw persistence [UserRatingEntity] to the domain [UserRating] (#633): this single boundary
- * is where the *computed* `confidence` is derived (#459) — a 3-factor recency × sparsity × spacing score
- * over the player's [windowed] match rows in the last 30 days, 0 when there is no qualifying play. The
- * direct analogue of `UserEntity.toDomain` computing `photoUrl`. Lives in the repository (which may
- * reference both `persistence` and `model`) rather than a mapper, since `repository ↛ mapper` is enforced.
- */
-internal fun UserRatingEntity.toDomain(
-    windowed: List<WindowMatch>,
-    now: LocalDateTime,
-): UserRating =
-    UserRating(
-        userId = userId,
-        currentRating = currentRating,
-        currentLevel = currentLevel,
-        confidence = confidenceAt(matches = windowed, now = now),
-        matchesPlayed = matchesPlayed,
-        lastMatchDate = lastMatchDate,
-        matchRatedAt = matchRatedAt,
-    )
-
-internal fun ResultRow.toRatingHistory(): RatingHistoryEntry = toRatingHistoryEntryEntity().toDomain()
 
 /** Map a `user_rating_history` row to the raw persistence entity (#633) — `setBreakdown` stays raw JSON. */
 internal fun ResultRow.toRatingHistoryEntryEntity(): RatingHistoryEntryEntity =
@@ -448,42 +392,6 @@ internal fun ResultRow.toRatingHistoryEntryEntity(): RatingHistoryEntryEntity =
         calculatedAt = this[UserRatingHistoryTable.calculatedAt],
     )
 
-/**
- * Convert the raw persistence [RatingHistoryEntryEntity] to the domain [RatingHistoryEntry] (#633): the
- * single boundary where the raw `setBreakdown` JSON (#110) is decoded into `List<SetCalculationBreakdown>`.
- * Lives in the repository (which may reference both `persistence` and `model`), since `repository ↛
- * mapper` is enforced.
- */
-internal fun RatingHistoryEntryEntity.toDomain(): RatingHistoryEntry =
-    RatingHistoryEntry(
-        id = id,
-        userId = userId,
-        matchId = matchId,
-        previousRating = previousRating,
-        newRating = newRating,
-        ratingChange = ratingChange,
-        percentChange = percentChange,
-        previousLevel = previousLevel,
-        newLevel = newLevel,
-        levelChanged = levelChanged,
-        dominanceFactor = dominanceFactor,
-        smoothingApplied = smoothingApplied,
-        smoothingFactor = smoothingFactor,
-        scale = scale,
-        ratingGap = ratingGap,
-        normalizedGap = normalizedGap,
-        competitiveThresholdPct = competitiveThresholdPct,
-        isUpset = isUpset,
-        upsetMultiplier = upsetMultiplier,
-        kFactor = kFactor,
-        setBreakdown =
-            setBreakdown
-                ?.let { RATING_HISTORY_JSON.decodeFromString(deserializer = SET_BREAKDOWN_SERIALIZER, string = it) }
-                .orEmpty(),
-        completedAt = completedAt,
-        calculatedAt = calculatedAt,
-    )
-
-/** JSON codec and serializer for the per-set breakdown column (#110). */
+/** JSON codec and serializer used to ENCODE the per-set breakdown column on write (#110). */
 private val RATING_HISTORY_JSON = Json
 private val SET_BREAKDOWN_SERIALIZER = ListSerializer(elementSerializer = serializer<SetCalculationBreakdown>())

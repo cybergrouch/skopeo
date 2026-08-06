@@ -24,9 +24,9 @@ import org.skopeo.model.UserRating
 import org.skopeo.repository.ClubRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RankingPointRepository
-import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService
+import org.skopeo.service.rating.RatingAssembler
 import org.skopeo.service.settings.PointsConfigService
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -57,7 +57,7 @@ private const val PLACE_FOURTH = 3
 class EventFinalizeAwarder(
     private val matches: MatchRepository = MatchRepository(),
     private val awards: RankingPointRepository = RankingPointRepository(),
-    private val ratings: RatingRepository = RatingRepository(),
+    private val ratings: RatingAssembler = RatingAssembler(),
     private val users: UserRepository = UserRepository(),
     private val clubs: ClubRepository = ClubRepository(),
     private val audit: AuditService = AuditService(),

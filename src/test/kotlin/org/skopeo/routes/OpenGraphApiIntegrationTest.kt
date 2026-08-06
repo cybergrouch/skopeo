@@ -27,12 +27,12 @@ import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.repository.MatchRepository
-import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.event.CreateEventInput
 import org.skopeo.service.event.EventService
 import org.skopeo.service.match.FixtureInput
 import org.skopeo.service.match.MatchService
+import org.skopeo.service.rating.RatingAssembler
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.math.BigDecimal
@@ -57,7 +57,7 @@ class OpenGraphApiIntegrationTest {
     }
 
     private val users = UserRepository()
-    private val ratings = RatingRepository()
+    private val ratings = RatingAssembler()
     private val matches = MatchService(matches = MatchRepository(), ratings = ratings, users = users)
     private val events = EventService()
 

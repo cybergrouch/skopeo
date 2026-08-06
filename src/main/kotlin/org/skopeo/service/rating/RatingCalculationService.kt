@@ -36,7 +36,6 @@ import org.skopeo.model.Team
 import org.skopeo.model.TeamType
 import org.skopeo.model.TiebreakScore
 import org.skopeo.repository.MatchRepository
-import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService
 import org.skopeo.service.calculator.AuditEntry
@@ -58,7 +57,7 @@ import java.util.UUID
  */
 class RatingCalculationService(
     private val matches: MatchRepository = MatchRepository(),
-    private val ratings: RatingRepository = RatingRepository(),
+    private val ratings: RatingAssembler = RatingAssembler(),
     private val users: UserRepository = UserRepository(),
     private val calculator: RankingCalculator = PerformanceBasedRankingCalculatorImpl(),
     private val audit: AuditService = AuditService(),

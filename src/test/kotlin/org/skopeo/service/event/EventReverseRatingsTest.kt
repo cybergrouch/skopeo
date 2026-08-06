@@ -44,8 +44,8 @@ import org.skopeo.repository.CircuitRepository
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RankingPointRepository
-import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
+import org.skopeo.service.rating.RatingAssembler
 import org.skopeo.service.rating.RatingCalculationService
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.testsupport.PostgresTestDatabase
@@ -71,7 +71,7 @@ class EventReverseRatingsTest {
     private val users = UserRepository()
     private val events = EventRepository()
     private val matchRepo = MatchRepository()
-    private val ratings = RatingRepository()
+    private val ratings = RatingAssembler()
     private val awardRepo = RankingPointRepository()
     private val service = EventService(events = events, users = users)
     private val calc = RatingCalculationService()

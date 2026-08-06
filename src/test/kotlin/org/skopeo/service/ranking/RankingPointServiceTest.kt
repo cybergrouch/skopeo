@@ -29,8 +29,8 @@ import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.RankingPointRepository
-import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
+import org.skopeo.service.rating.RatingAssembler
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.math.BigDecimal
@@ -47,7 +47,7 @@ class RankingPointServiceTest {
     }
 
     private val users = UserRepository()
-    private val ratings = RatingRepository()
+    private val ratings = RatingAssembler()
     private val awards = RankingPointRepository()
     private val service = RankingPointService(awards = awards, users = users, ratings = ratings)
 

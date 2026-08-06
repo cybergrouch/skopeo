@@ -17,8 +17,8 @@ import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.Level
 import org.skopeo.model.RatingHistoryEntry
 import org.skopeo.model.UserRating
-import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
+import org.skopeo.service.rating.RatingAssembler
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.service.user.displayName
 import org.skopeo.service.user.isDeleted
@@ -45,7 +45,7 @@ private val NTRP_FLOOR = BigDecimal("1.0")
  */
 class ReportService(
     private val users: UserRepository = UserRepository(),
-    private val ratings: RatingRepository = RatingRepository(),
+    private val ratings: RatingAssembler = RatingAssembler(),
 ) {
     /** One player's farthest band excursion during the window, from their entry band (labels only). */
     private data class Hop(

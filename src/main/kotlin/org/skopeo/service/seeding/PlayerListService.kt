@@ -18,8 +18,8 @@ import org.skopeo.mapper.entity.user.toDomain
 import org.skopeo.model.PlayerList
 import org.skopeo.model.canSeeRawRatingOrFalse
 import org.skopeo.repository.PlayerListRepository
-import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
+import org.skopeo.service.rating.RatingAssembler
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.service.user.isDeleted
 import java.util.UUID
@@ -35,7 +35,7 @@ internal val SEEDING_ROLES = setOf(Capability.HOST, Capability.CLUB_OWNER, Capab
 class PlayerListService(
     private val lists: PlayerListRepository = PlayerListRepository(),
     private val users: UserRepository = UserRepository(),
-    private val ratings: RatingRepository = RatingRepository(),
+    private val ratings: RatingAssembler = RatingAssembler(),
 ) {
     fun create(
         token: VerifiedFirebaseToken,

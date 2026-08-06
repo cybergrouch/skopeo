@@ -42,8 +42,8 @@ import org.skopeo.model.UserName
 import org.skopeo.model.VerificationStatus
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RankingPointRepository
-import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
+import org.skopeo.service.rating.RatingAssembler
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.math.BigDecimal
 import java.time.LocalDate
@@ -61,7 +61,7 @@ class PlayerServiceTest {
     }
 
     private val users = UserRepository()
-    private val ratings = RatingRepository()
+    private val ratings = RatingAssembler()
     private val matches = MatchRepository()
     private val service = PlayerService(users = users, ratings = ratings, matches = matches)
 

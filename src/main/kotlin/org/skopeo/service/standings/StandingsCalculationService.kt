@@ -25,10 +25,10 @@ import org.skopeo.model.StandingsEntryWrite
 import org.skopeo.model.User
 import org.skopeo.model.UserRating
 import org.skopeo.repository.RankingPointRepository
-import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.StandingsSnapshotRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService
+import org.skopeo.service.rating.RatingAssembler
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.service.user.displayName
 import java.math.BigDecimal
@@ -53,7 +53,7 @@ class StandingsCalculationService(
     private val awards: RankingPointRepository = RankingPointRepository(),
     private val snapshots: StandingsSnapshotRepository = StandingsSnapshotRepository(),
     private val users: UserRepository = UserRepository(),
-    private val ratings: RatingRepository = RatingRepository(),
+    private val ratings: RatingAssembler = RatingAssembler(),
     private val audit: AuditService = AuditService(),
 ) {
     /**

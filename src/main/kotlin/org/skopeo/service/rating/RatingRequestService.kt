@@ -25,7 +25,6 @@ import org.skopeo.model.RatingRequest
 import org.skopeo.model.RatingRequestPage
 import org.skopeo.model.RatingRequestStatus
 import org.skopeo.model.RatingRequestView
-import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.RatingRequestRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService
@@ -47,7 +46,7 @@ private const val MAX_PAGE_SIZE = 100
 class RatingRequestService(
     private val requests: RatingRequestRepository = RatingRequestRepository(),
     private val ratingService: RatingService = RatingService(),
-    private val ratings: RatingRepository = RatingRepository(),
+    private val ratings: RatingAssembler = RatingAssembler(),
     private val users: UserRepository = UserRepository(),
     private val audit: AuditService = AuditService(),
 ) {

@@ -25,7 +25,6 @@ import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserName
 import org.skopeo.repository.AuditRepository
-import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.RatingRequestRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.user.VerifiedFirebaseToken
@@ -43,7 +42,7 @@ class RatingRequestServiceTest {
     }
 
     private val users = UserRepository()
-    private val ratings = RatingRepository()
+    private val ratings = RatingAssembler()
     private val requests = RatingRequestRepository()
     private val service = RatingRequestService(requests = requests, ratings = ratings, users = users)
 

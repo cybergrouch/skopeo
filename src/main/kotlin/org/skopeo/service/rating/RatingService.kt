@@ -26,7 +26,6 @@ import org.skopeo.model.User
 import org.skopeo.model.UserRating
 import org.skopeo.model.ageInYears
 import org.skopeo.model.canSeeRawRating
-import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService
 import org.skopeo.service.user.VerifiedFirebaseToken
@@ -47,7 +46,7 @@ private const val MAX_PAGE_SIZE = 100
  * Expected failures are returned as an [Either] left ([ServiceError], issue #115) rather than thrown.
  */
 class RatingService(
-    private val ratings: RatingRepository = RatingRepository(),
+    private val ratings: RatingAssembler = RatingAssembler(),
     private val users: UserRepository = UserRepository(),
     private val audit: AuditService = AuditService(),
 ) {

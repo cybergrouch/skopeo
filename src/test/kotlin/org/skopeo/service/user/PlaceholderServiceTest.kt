@@ -33,10 +33,10 @@ import org.skopeo.model.UserName
 import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.PlaceholderClaimCodeRepository
 import org.skopeo.repository.PlaceholderClaimCodesTable
-import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRatingHistoryTable
 import org.skopeo.repository.UserRepository
 import org.skopeo.repository.UsersTable
+import org.skopeo.service.rating.RatingAssembler
 import org.skopeo.service.rating.RatingService
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.math.BigDecimal
@@ -55,7 +55,7 @@ class PlaceholderServiceTest {
 
     private val users = UserRepository()
     private val claimCodes = PlaceholderClaimCodeRepository()
-    private val ratings = RatingRepository()
+    private val ratings = RatingAssembler()
     private val ratingService = RatingService(ratings = ratings, users = users)
     private val service = PlaceholderService(users = users, claimCodes = claimCodes, ratings = ratingService)
 

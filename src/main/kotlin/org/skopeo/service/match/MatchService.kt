@@ -47,9 +47,9 @@ import org.skopeo.model.canSeeRawRatingOrFalse
 import org.skopeo.model.isExpired
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
-import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.service.audit.AuditService
+import org.skopeo.service.rating.RatingAssembler
 import org.skopeo.service.user.VerifiedFirebaseToken
 import org.skopeo.service.user.displayName
 import org.skopeo.service.user.isDeleted
@@ -107,7 +107,7 @@ data class FixtureInput(
  */
 class MatchService(
     private val matches: MatchRepository = MatchRepository(),
-    private val ratings: RatingRepository = RatingRepository(),
+    private val ratings: RatingAssembler = RatingAssembler(),
     private val users: UserRepository = UserRepository(),
     private val events: EventRepository = EventRepository(),
     private val audit: AuditService = AuditService(),
