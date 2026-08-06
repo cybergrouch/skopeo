@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Avatar } from '@/components/Avatar'
 import { Link } from 'react-router-dom'
 import { PlaceholderTag } from '@/components/PlaceholderTag'
 import {
@@ -94,21 +95,8 @@ export function ResearchTab() {
                         to={`/players/${user.publicCode}`}
                         className="flex items-center gap-3 rounded-lg border p-3 text-sm hover:bg-muted/50"
                       >
-                        {user.photoUrl ? (
-                          <img
-                            src={user.photoUrl}
-                            alt=""
-                            referrerPolicy="no-referrer"
-                            className="h-9 w-9 shrink-0 rounded-full object-cover"
-                          />
-                        ) : (
-                          <div
-                            aria-hidden="true"
-                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-muted-foreground"
-                          >
-                            {(user.displayName ?? 'P').charAt(0).toUpperCase()}
-                          </div>
-                        )}
+                        {/* Non-enlargeable: the avatar sits inside a Link, so it must not be a nested button (#697). */}
+                        <Avatar photoUrl={user.photoUrl} name={user.displayName} size="sm" />
                         <div className="min-w-0 flex-1">
                           <div className="font-medium">
                             {user.displayName ?? user.id}
