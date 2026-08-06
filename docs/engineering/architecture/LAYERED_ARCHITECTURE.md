@@ -17,10 +17,6 @@ model         ──► common                                (e.g. the Capabili
 common        ──► ∅                                      (common: shared value types — a pure cross-cutting leaf)
 ```
 
-> **Rollout note (#633 full separation).** The two mapper packages and the rules below are in place; the
-> repository *return-type* flip (domain model → `persistence` entity) rolls out aggregate-by-aggregate.
-> Until an aggregate is flipped its repository still returns a domain `model` via an internal conversion.
-
 `common` (`org.skopeo.common.{error,security,contract}` — each a distinct sub-package under one parent) is
 the sanctioned cross-cutting foundation: dependency-free value types any layer may use, itself depending
 on nothing above — not even `model`.

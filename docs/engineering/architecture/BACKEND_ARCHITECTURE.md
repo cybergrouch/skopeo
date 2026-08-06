@@ -120,12 +120,6 @@ value types shared across the wire + persistence, e.g. the points-config schedul
 foundation: **any** layer — including `model`, which references `Capability` — may depend on it, and it
 depends on nothing above, not even `model`.
 
-> **Rollout note (#633 full separation).** The two-mapper structure and these ArchUnit rules land first;
-> the repository *return-type* flip (domain model → `persistence` entity) then rolls out aggregate-by-
-> aggregate over follow-up PRs. Until an aggregate is flipped, its repository still returns a domain
-> `model` type via an internal conversion (the pre-flip #633 shape). The diagram below shows the target
-> topology.
-
 ```mermaid
 classDiagram
     class routes
@@ -173,13 +167,16 @@ types, which carry derivations like `User.photoUrl` and `UserRating.confidence` 
 collections). A `repository` maps `ResultRow → <X>Entity` (assembling child rows into an entity **graph**
 where an aggregate has children — only the repository can query) and **returns the entity**. The
 `entity → domain` conversion lives in **`mapper.entity`** (`<X>Entity.toDomain(...)`), where derived
-fields are computed and children attached — this is allowed because `mapper.entity` may depend on both
-`persistence` and `model`, whereas `persistence` is a strict leaf (`model`/`mapper` may **not** depend on
-it) and `repository ↛ mapper` is enforced, so the conversion cannot live in either of those. The
-`service` layer owns the round-trip: `repository.findX(): <X>Entity` → `mapper.entity` →
-domain → business logic → `mapper.dto` → DTO. Derivations that need data outside the aggregate's own row
-are supplied by the service (e.g. `UserRating.confidence` needs the player's windowed match rows, which
-the service fetches from `MatchRepository` and passes to the entity mapper — see the rating assembler).
+fields are computed and children attached — `mapper.entity` is the one place allowed to depend on **both**
+`persistence` and `model`. It cannot live anywhere else: `persistence` is a strict leaf (depends only on
+`common`; **`model` may not depend on `persistence`**), and `repository ↛ mapper` is enforced, so the
+repository can't call it either. The **`service`** layer owns the round-trip: `repository.findX():
+<X>Entity` → `mapper.entity.toDomain()` → domain → business logic → `mapper.dto` → DTO (so a service
+transiently holds the entity to hand it to the mapper; there is no `service ↛ persistence` rule).
+Derivations that need data outside the aggregate's own row are supplied by a service-layer assembler:
+e.g. `UserRating.confidence` needs the player's windowed match rows, so **`RatingAssembler`** (service
+layer) fetches them from `MatchRepository` and passes them to `UserRatingEntity.toDomain(windowed, now)`
+— since the mapper can't run queries.
 The two config repositories (`AppSettings`/`PointsConfig`) are the trivial case: a settings row is a bare
 key/value with no domain counterpart, so their entities are used by their services directly with no
 `mapper.entity` step.
