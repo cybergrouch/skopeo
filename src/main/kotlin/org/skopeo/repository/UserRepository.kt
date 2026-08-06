@@ -40,6 +40,7 @@ import org.skopeo.model.User
 import org.skopeo.model.UserIdentity
 import org.skopeo.model.UserSearchQuery
 import org.skopeo.model.effectivePhotoUrl
+import org.skopeo.persistence.UserEntity
 import java.text.Normalizer
 import java.time.LocalDateTime
 import java.util.UUID
@@ -601,7 +602,7 @@ private fun buildAggregate(
     id: UUID,
     row: ResultRow,
 ): User =
-    row.toUser(
+    row.toUserEntity().toDomain(
         names = namesOf(id = id),
         contacts = contactsOf(id = id),
         identities = identitiesOf(id = id),
@@ -707,22 +708,12 @@ private fun capabilitiesOf(id: UUID): Set<Capability> =
         .map { Capability.valueOf(value = it[UserCapabilitiesTable.capability]) }
         .toSet()
 
-private fun ResultRow.toUser(
-    names: List<Name>,
-    contacts: List<Contact>,
-    identities: List<UserIdentity>,
-    capabilities: Set<Capability>,
-): User =
-    User(
+/** Map a `users` row to the raw persistence entity (#633) — no derivations, no child rows. */
+private fun ResultRow.toUserEntity(): UserEntity =
+    UserEntity(
         id = this[UsersTable.id].value,
         publicCode = this[UsersTable.publicCode],
         firebaseUid = this[UsersTable.firebaseUid],
-        photoUrl =
-            effectivePhotoUrl(
-                providerPhotoUrl = this[UsersTable.providerPhotoUrl],
-                customPhotoUrl = this[UsersTable.customPhotoUrl],
-                photoHidden = this[UsersTable.photoHidden],
-            ),
         providerPhotoUrl = this[UsersTable.providerPhotoUrl],
         customPhotoUrl = this[UsersTable.customPhotoUrl],
         photoHidden = this[UsersTable.photoHidden],
@@ -739,6 +730,46 @@ private fun ResultRow.toUser(
         claimedAt = this[UsersTable.claimedAt],
         claimedBy = this[UsersTable.claimedBy]?.value,
         previewRatingsAsNonAdmin = this[UsersTable.previewRatingsAsNonAdmin],
+    )
+
+/**
+ * Convert the raw persistence [UserEntity] to the domain [User] (#633): this single boundary is where
+ * the derived `photoUrl` is computed (via [effectivePhotoUrl]) and the loaded child sub-objects are
+ * attached. Lives in the repository (which may reference both `persistence` and `model`) rather than a
+ * mapper, since `repository ↛ mapper` is enforced.
+ */
+private fun UserEntity.toDomain(
+    names: List<Name>,
+    contacts: List<Contact>,
+    identities: List<UserIdentity>,
+    capabilities: Set<Capability>,
+): User =
+    User(
+        id = id,
+        publicCode = publicCode,
+        firebaseUid = firebaseUid,
+        photoUrl =
+            effectivePhotoUrl(
+                providerPhotoUrl = providerPhotoUrl,
+                customPhotoUrl = customPhotoUrl,
+                photoHidden = photoHidden,
+            ),
+        providerPhotoUrl = providerPhotoUrl,
+        customPhotoUrl = customPhotoUrl,
+        photoHidden = photoHidden,
+        matchHistoryHidden = matchHistoryHidden,
+        dateOfBirth = dateOfBirth,
+        sex = sex,
+        city = city,
+        country = country,
+        kycVerified = kycVerified,
+        isActive = isActive,
+        proposedRating = proposedRating,
+        canonicalUserId = canonicalUserId,
+        placeholder = placeholder,
+        claimedAt = claimedAt,
+        claimedBy = claimedBy,
+        previewRatingsAsNonAdmin = previewRatingsAsNonAdmin,
         names = names,
         contacts = contacts,
         identities = identities,
