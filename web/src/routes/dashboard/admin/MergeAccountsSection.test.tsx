@@ -120,4 +120,60 @@ describe('MergeAccountsSection (#643)', () => {
 
     expect(toastError).toHaveBeenCalledWith('Could not merge the accounts.', { duration: 8000 })
   })
+
+  it('labels an email/password account’s login status', async () => {
+    pickable.current = {
+      'Survivor account': { ...linkedGoogle, id: 'pw1', publicCode: 'PWD111', linkStatus: 'PASSWORD' },
+      'Retired account': placeholder,
+    }
+    const user = userEvent.setup()
+    renderSection()
+    await user.click(screen.getByText('Pick Survivor account'))
+
+    expect(screen.getByText('Email/password login')).toBeInTheDocument()
+  })
+
+  it('lets the admin change a chosen survivor or retired account', async () => {
+    const user = userEvent.setup()
+    renderSection()
+    await user.click(screen.getByText('Pick Survivor account'))
+    await user.click(screen.getByText('Pick Retired account'))
+    expect(screen.getAllByRole('button', { name: 'Change' })).toHaveLength(2)
+
+    // Changing the survivor brings its search back (fires the reset handler)…
+    await user.click(screen.getAllByRole('button', { name: 'Change' })[0])
+    expect(screen.getByText('Pick Survivor account')).toBeInTheDocument()
+    // …and changing the retired brings its search back too.
+    await user.click(screen.getByRole('button', { name: 'Change' }))
+    expect(screen.getByText('Pick Retired account')).toBeInTheDocument()
+  })
+
+  it('still offers the survivor search (excluding the retired id) when the retired account is picked first', async () => {
+    const user = userEvent.setup()
+    renderSection()
+    await user.click(screen.getByText('Pick Retired account'))
+
+    expect(screen.getByText('Retired (merged away)')).toBeInTheDocument()
+    expect(screen.getByText('Pick Survivor account')).toBeInTheDocument()
+  })
+
+  it('recommends swapping when the retired account is linked but the survivor is not', async () => {
+    pickable.current = { 'Survivor account': placeholder, 'Retired account': linkedGoogle }
+    const user = userEvent.setup()
+    renderSection()
+    await user.click(screen.getByText('Pick Survivor account'))
+    await user.click(screen.getByText('Pick Retired account'))
+
+    expect(screen.getByText(/consider making the linked account the survivor/i)).toBeInTheDocument()
+  })
+
+  it('shows a merging label while the merge is pending', async () => {
+    usePostApiV1UsersIdMerge.mockReturnValue({ isPending: true, mutateAsync: mergeMutateAsync })
+    const user = userEvent.setup()
+    renderSection()
+    await user.click(screen.getByText('Pick Survivor account'))
+    await user.click(screen.getByText('Pick Retired account'))
+
+    expect(screen.getByRole('button', { name: 'Merging…' })).toBeInTheDocument()
+  })
 })

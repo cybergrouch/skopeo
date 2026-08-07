@@ -14,6 +14,7 @@ import org.skopeo.domain.mapper.entity.match.toDomain
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuthProvider
 import org.skopeo.domain.model.CreateFixtureCommand
+import org.skopeo.domain.model.CreatePlaceholderCommand
 import org.skopeo.domain.model.MatchType
 import org.skopeo.domain.model.NameType
 import org.skopeo.domain.model.ProvisionUserCommand
@@ -120,5 +121,20 @@ class UserRepositoryMergeTest {
         val retiredAfter = users.findById(id = retired).getOrNull()!!.toDomain()
         retiredAfter.firebaseUid.shouldBeNull()
         retiredAfter.identities shouldBe emptyList()
+    }
+
+    @Test
+    fun `login transfer is a no-op when the retired account has no login (placeholder retired)`() {
+        // transferLogin is requested, but the retired account is a login-less placeholder — the transfer
+        // short-circuits, leaving the survivor's own login untouched.
+        val survivor = user(uid = "survivor")
+        val retired = users.createPlaceholder(command = CreatePlaceholderCommand(displayName = "Ghost", sex = "Male")).toDomain().id
+
+        shouldNotThrowAny {
+            users.mergeAccounts(retiredId = retired, survivorId = survivor, transferLogin = true)
+        }
+
+        users.findById(id = survivor).getOrNull()!!.toDomain().firebaseUid shouldBe "survivor"
+        users.findById(id = retired).getOrNull()!!.toDomain().firebaseUid.shouldBeNull()
     }
 }
