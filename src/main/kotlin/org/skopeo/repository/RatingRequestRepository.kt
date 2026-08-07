@@ -48,7 +48,7 @@ class RatingRequestRepository {
                 .selectAll()
                 .where { RatingRequestsTable.userId eq userId }
                 .orderBy(RatingRequestsTable.createdAt to SortOrder.DESC)
-                .limit(n = 1)
+                .limit(count = 1)
                 .singleOrNull()
                 ?.toRatingRequestEntity()
         }
@@ -66,7 +66,7 @@ class RatingRequestRepository {
             val items =
                 filtered
                     .orderBy(RatingRequestsTable.createdAt to SortOrder.DESC)
-                    .limit(n = limit, offset = offset.toLong())
+                    .limit(count = limit).offset(start = offset.toLong())
                     .map { it.toRatingRequestEntity() }
             items to total
         }

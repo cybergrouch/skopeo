@@ -186,7 +186,7 @@ class UserRepository {
                 .selectAll()
                 .where { conditionsFor(query = query, includeInactive = includeInactive) }
                 .orderBy(UsersTable.id to SortOrder.ASC)
-                .limit(n = limit, offset = offset.toLong())
+                .limit(count = limit).offset(start = offset.toLong())
                 .map { loadAggregate(id = it[UsersTable.id].value)!! }
         }
 

@@ -101,7 +101,7 @@ class RankingPointRepository {
                 RankingPointAwardsTable
                     .selectAll()
                     .orderBy(RankingPointAwardsTable.awardedAt to SortOrder.DESC)
-                    .limit(n = limit, offset = offset.toLong())
+                    .limit(count = limit).offset(start = offset.toLong())
                     .map { it.toRankingPointAwardEntity() }
             rows to total
         }
