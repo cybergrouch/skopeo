@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Avatar } from '@/components/Avatar'
 import { Link } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import {
@@ -38,21 +39,7 @@ function PendingRow({ user }: { user: PendingAssessmentResponse }) {
   return (
     <li className="rounded-lg border p-3">
       <div className="mb-2 flex items-center gap-3">
-        {user.photoUrl ? (
-          <img
-            src={user.photoUrl}
-            alt=""
-            referrerPolicy="no-referrer"
-            className="h-9 w-9 shrink-0 rounded-full object-cover"
-          />
-        ) : (
-          <div
-            aria-hidden="true"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-muted-foreground"
-          >
-            {(user.displayName ?? 'P').charAt(0).toUpperCase()}
-          </div>
-        )}
+        <Avatar photoUrl={user.photoUrl} name={user.displayName} size="sm" enlargeable />
         <div className="min-w-0">
           <Link
             to={`/players/${user.publicCode}`}

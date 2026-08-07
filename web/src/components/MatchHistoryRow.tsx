@@ -1,4 +1,5 @@
 import type { PlayerMatchHistoryEntry } from '@/api/generated/model'
+import { Avatar } from '@/components/Avatar'
 import { PublicPageLink } from '@/components/PublicPageLink'
 import { PlaceholderTag } from '@/components/PlaceholderTag'
 import { Badge } from '@/components/ui/badge'
@@ -69,21 +70,7 @@ export function MatchHistoryRow({ match }: { match: PlayerMatchHistoryEntry }) {
   return (
     <li className="rounded-lg border p-3 text-sm">
       <div className="flex items-center gap-3">
-        {lead?.photoUrl ? (
-          <img
-            src={lead.photoUrl}
-            alt=""
-            referrerPolicy="no-referrer"
-            className="h-9 w-9 shrink-0 rounded-full object-cover"
-          />
-        ) : (
-          <div
-            aria-hidden="true"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-muted-foreground"
-          >
-            {(lead?.displayName ?? 'P').charAt(0).toUpperCase()}
-          </div>
-        )}
+        <Avatar photoUrl={lead?.photoUrl} name={lead?.displayName} size="sm" enlargeable />
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
             <span className="font-medium">
