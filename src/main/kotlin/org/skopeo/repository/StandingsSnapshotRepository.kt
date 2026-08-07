@@ -76,7 +76,7 @@ class StandingsSnapshotRepository {
                 .selectAll()
                 .where { StandingsSnapshotsTable.status eq SnapshotStatus.PUBLISHED.name }
                 .orderBy(StandingsSnapshotsTable.seq to SortOrder.DESC)
-                .limit(n = 1)
+                .limit(count = 1)
                 .map { it[StandingsSnapshotsTable.id].value }
                 .firstOrNull()
         }
@@ -94,7 +94,7 @@ class StandingsSnapshotRepository {
                     (StandingsSnapshotsTable.status eq SnapshotStatus.PUBLISHED.name) and
                         (StandingsSnapshotsTable.sourceCol eq source.name)
                 }.orderBy(StandingsSnapshotsTable.seq to SortOrder.DESC)
-                .limit(n = 1)
+                .limit(count = 1)
                 .map { it[StandingsSnapshotsTable.id].value }
                 .firstOrNull()
         }
@@ -115,7 +115,7 @@ class StandingsSnapshotRepository {
                 .orderBy(
                     StandingsSnapshotsTable.sourceCol to SortOrder.ASC,
                     StandingsSnapshotsTable.seq to SortOrder.DESC,
-                ).limit(n = 1)
+                ).limit(count = 1)
                 .map { it[StandingsSnapshotsTable.id].value }
                 .firstOrNull()
         }
@@ -146,7 +146,7 @@ class StandingsSnapshotRepository {
             val entries =
                 query()
                     .orderBy(StandingsEntriesTable.rank to SortOrder.ASC)
-                    .limit(n = limit, offset = offset.toLong())
+                    .limit(count = limit).offset(start = offset.toLong())
                     .map { it.toStandingsEntryEntity().toDomain() }
             StandingsPage(entries = entries, total = total.toInt())
         }

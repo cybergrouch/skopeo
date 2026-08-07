@@ -282,7 +282,7 @@ class RatingRepository {
             val ids =
                 pending()
                     .orderBy(UsersTable.id to SortOrder.ASC)
-                    .limit(n = limit, offset = offset.toLong())
+                    .limit(count = limit).offset(start = offset.toLong())
                     .map { it[UsersTable.id].value }
             ids to total
         }
