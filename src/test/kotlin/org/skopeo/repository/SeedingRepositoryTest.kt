@@ -15,9 +15,11 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.error.ServiceError
+import org.skopeo.domain.mapper.entity.event.toDomain
 import org.skopeo.domain.mapper.entity.seeding.toDomain
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuthProvider
+import org.skopeo.domain.model.CreateEventCommand
 import org.skopeo.domain.model.NameType
 import org.skopeo.domain.model.ProvisionUserCommand
 import org.skopeo.domain.model.SeedingEntry
@@ -25,6 +27,7 @@ import org.skopeo.domain.model.User
 import org.skopeo.domain.model.UserIdentity
 import org.skopeo.domain.model.UserName
 import org.skopeo.testsupport.PostgresTestDatabase
+import java.time.LocalDate
 
 class SeedingRepositoryTest {
     companion object {
@@ -37,6 +40,7 @@ class SeedingRepositoryTest {
 
     private val users = UserRepository()
     private val lists = PlayerListRepository()
+    private val events = EventRepository()
     private val seedings = SeedingRepository()
 
     @BeforeEach
@@ -89,6 +93,54 @@ class SeedingRepositoryTest {
         val owner = newUser(uid = "owner")
         val list = lists.create(ownerId = owner.id, name = "Empty").toDomain()
         seedings.findByListId(listId = list.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
+    fun `replaceForEvent stores an event-sourced seeding and findByEventId reads it back (#714)`() {
+        val host = newUser(uid = "host")
+        val player = newUser(uid = "p1")
+        val event =
+            events.create(
+                command =
+                    CreateEventCommand(
+                        name = "Club Open",
+                        startDate = LocalDate.now(),
+                        endDate = LocalDate.now(),
+                        participantIds = listOf(element = player.id),
+                        createdBy = host.id,
+                    ),
+            ).toDomain()
+
+        seedings.replaceForEvent(
+            eventId = event.id,
+            generatedBy = host.id,
+            entries = listOf(element = entryFor(user = player, displayName = "P1")),
+        )
+
+        val found = seedings.findByEventId(eventId = event.id).shouldBeRight().toDomain()
+        found.eventId shouldBe event.id
+        found.listId.shouldBeNull()
+        found.entries.single().let {
+            it.userId shouldBe player.id
+            it.displayName shouldBe "P1"
+        }
+    }
+
+    @Test
+    fun `findByEventId is not found when no event seeding exists (#714)`() {
+        val host = newUser(uid = "host")
+        val event =
+            events.create(
+                command =
+                    CreateEventCommand(
+                        name = "Empty",
+                        startDate = LocalDate.now(),
+                        endDate = LocalDate.now(),
+                        participantIds = emptyList(),
+                        createdBy = host.id,
+                    ),
+            ).toDomain()
+        seedings.findByEventId(eventId = event.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
     @Test

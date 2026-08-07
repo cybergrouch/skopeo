@@ -19,12 +19,15 @@ data class PlayerList(
 )
 
 /**
- * A timestamped, immutable snapshot generated from a [PlayerList] (issue #111): the members that have
- * a rating, sorted highest-first, with the top half seeded. Regenerating a list overwrites its seeding.
+ * A timestamped, immutable snapshot generated from a source roster: a [PlayerList] (issue #111) or an
+ * event's participants (#714). The members that have a rating, sorted highest-first, with the top half
+ * seeded. Regenerating overwrites the source's previous seeding. Exactly one of [listId] / [eventId]
+ * identifies the source.
  */
 data class Seeding(
     val id: UUID,
-    val listId: UUID,
+    val listId: UUID?,
+    val eventId: UUID?,
     val generatedAt: LocalDateTime,
     val entries: List<SeedingEntry>,
 )

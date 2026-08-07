@@ -24,29 +24,67 @@ import org.skopeo.repository.persistence.SeedingEntryEntity
 import java.time.LocalDateTime
 import java.util.UUID
 
-/** Persistence for generated seeding snapshots (issue #111); one current seeding per list. */
+/**
+ * Persistence for generated seeding snapshots (issue #111, extended by #714); one current seeding per
+ * source. A [SeedingSource] discriminator selects the source column — a player list or an event — so
+ * the entry-insert and read logic is shared and both sources produce identical output.
+ */
 class SeedingRepository {
+    /** The source a seeding belongs to (#714): exactly one column is set on the `seedings` row. */
+    sealed interface SeedingSource {
+        data class List(val listId: UUID) : SeedingSource
+
+        data class Event(val eventId: UUID) : SeedingSource
+    }
+
     /** Replace any existing seeding for [listId] with a fresh snapshot (regenerate overwrites). */
     fun replace(
         listId: UUID,
         generatedBy: UUID?,
         entries: List<SeedingEntry>,
+    ): Seeding = replaceForSource(source = SeedingSource.List(listId = listId), generatedBy = generatedBy, entries = entries)
+
+    /** Replace any existing seeding for [eventId] with a fresh snapshot (#714, regenerate overwrites). */
+    fun replaceForEvent(
+        eventId: UUID,
+        generatedBy: UUID?,
+        entries: List<SeedingEntry>,
+    ): Seeding = replaceForSource(source = SeedingSource.Event(eventId = eventId), generatedBy = generatedBy, entries = entries)
+
+    fun findByListId(listId: UUID): Either<ServiceError, SeedingAggregateEntity> =
+        findForSource(source = SeedingSource.List(listId = listId))
+
+    fun findByEventId(eventId: UUID): Either<ServiceError, SeedingAggregateEntity> =
+        findForSource(source = SeedingSource.Event(eventId = eventId))
+
+    /** Delete any existing seeding for the source, then insert the fresh snapshot in one transaction. */
+    private fun replaceForSource(
+        source: SeedingSource,
+        generatedBy: UUID?,
+        entries: List<SeedingEntry>,
     ): Seeding =
         transaction {
-            SeedingsTable.deleteWhere { SeedingsTable.listId eq listId } // cascades existing entries
+            // Delete-by-source cascades the existing entries; a nullable source column keeps FK integrity.
+            when (source) {
+                is SeedingSource.List -> SeedingsTable.deleteWhere { listId eq source.listId }
+                is SeedingSource.Event -> SeedingsTable.deleteWhere { eventId eq source.eventId }
+            }
             val now = LocalDateTime.now()
-            val seedingId =
+            val sourceListId = (source as? SeedingSource.List)?.listId
+            val sourceEventId = (source as? SeedingSource.Event)?.eventId
+            val newSeedingId =
                 SeedingsTable.insertAndGetId {
-                    it[SeedingsTable.listId] = listId
+                    it[listId] = sourceListId
+                    it[eventId] = sourceEventId
                     it[generatedAt] = now
                     it[SeedingsTable.generatedBy] = generatedBy
                 }.value
             entries.forEach { entry ->
                 SeedingEntriesTable.insert {
-                    it[SeedingEntriesTable.seedingId] = seedingId
+                    it[seedingId] = newSeedingId
                     it[seed] = entry.seed
                     it[position] = entry.position
-                    it[SeedingEntriesTable.userId] = entry.userId
+                    it[userId] = entry.userId
                     it[displayName] = entry.displayName
                     it[publicCode] = entry.publicCode
                     it[ntrpBand] = entry.ntrpBand
@@ -55,14 +93,18 @@ class SeedingRepository {
                     it[age] = entry.age
                 }
             }
-            Seeding(id = seedingId, listId = listId, generatedAt = now, entries = entries)
+            Seeding(id = newSeedingId, listId = sourceListId, eventId = sourceEventId, generatedAt = now, entries = entries)
         }
 
-    fun findByListId(listId: UUID): Either<ServiceError, SeedingAggregateEntity> =
+    private fun findForSource(source: SeedingSource): Either<ServiceError, SeedingAggregateEntity> =
         transaction {
-            val row = SeedingsTable.selectAll().where { SeedingsTable.listId eq listId }.singleOrNull()
+            val row =
+                when (source) {
+                    is SeedingSource.List -> SeedingsTable.selectAll().where { SeedingsTable.listId eq source.listId }
+                    is SeedingSource.Event -> SeedingsTable.selectAll().where { SeedingsTable.eventId eq source.eventId }
+                }.singleOrNull()
             if (row == null) {
-                ServiceError.NotFound(message = "No seeding for list $listId").left()
+                ServiceError.NotFound(message = "No seeding for $source").left()
             } else {
                 val id = row[SeedingsTable.id].value
                 val rows =
@@ -125,7 +167,8 @@ class SeedingRepository {
     private fun ResultRow.toSeedingEntity(): SeedingEntity =
         SeedingEntity(
             id = this[SeedingsTable.id].value,
-            listId = this[SeedingsTable.listId].value,
+            listId = this[SeedingsTable.listId]?.value,
+            eventId = this[SeedingsTable.eventId]?.value,
             generatedAt = this[SeedingsTable.generatedAt],
             generatedBy = this[SeedingsTable.generatedBy]?.value,
         )

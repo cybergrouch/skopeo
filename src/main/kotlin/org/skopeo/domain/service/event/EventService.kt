@@ -74,6 +74,16 @@ data class CreateEventInput(
 )
 
 /**
+ * An event's APPROVED roster resolved for seeding (#714): the participant user ids to seed and the
+ * generating owner (the event's creator) recorded on the seeding snapshot. Returned by
+ * [EventService.rosterForSeeding] after the staff + owner-or-admin access check.
+ */
+data class EventSeedingRoster(
+    val participantUserIds: List<UUID>,
+    val generatedBy: UUID?,
+)
+
+/**
  * Events/meets (issue #138): HOST/ADMINISTRATOR create and manage events; an ADMINISTRATOR sees all
  * events while a HOST sees their own. Matches are associated with an event at fixture creation
  * (enforced in MatchService). Expected failures are returned as an [Either] left ([ServiceError]).
@@ -528,6 +538,26 @@ class EventService(
                     ServiceError.NotFound(message = "Event $eventId not found")
                 }
             toView(event = updated).toResponse()
+        }
+
+    /**
+     * Resolve an event's APPROVED roster for seeding (#714), enforcing the same access event management
+     * uses: a STAFF caller, and — as with rename/set-club — a HOST may only touch their own event while
+     * an ADMINISTRATOR/CLUB_OWNER may touch any. Returns the approved participant user ids and the
+     * generating owner (the event's creator, for the seeding's audit column). The seeding computation
+     * itself lives in [org.skopeo.domain.service.seeding.SeedingService].
+     */
+    fun rosterForSeeding(
+        token: VerifiedFirebaseToken,
+        id: UUID,
+    ): Either<ServiceError, EventSeedingRoster> =
+        either {
+            val caller = staffCaller(users = users, token = token).bind()
+            val event =
+                ensureNotNull(value = events.findById(id = id)?.toDomain()) { ServiceError.NotFound(message = "Event $id not found") }
+            val isAdminOrOwner = caller.capabilities.any { it == Capability.ADMINISTRATOR || it == Capability.CLUB_OWNER }
+            ensure(condition = isAdminOrOwner || event.createdBy == caller.id) { ServiceError.Forbidden() }
+            EventSeedingRoster(participantUserIds = event.participantIds, generatedBy = event.createdBy)
         }
 
     /**
