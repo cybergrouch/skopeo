@@ -63,6 +63,9 @@ const {
       reverseFail: false,
       reversePending: false,
       reverseErrorMessage: null as string | null,
+      generateSeedingFail: false,
+      generateSeedingPending: false,
+      generateSeedingErrorMessage: null as string | null,
     },
   }))
 
@@ -73,8 +76,13 @@ vi.mock('@/api/generated/events/events', () => ({
   getGetApiV1EventsIdSeedingQueryKey: () => ['event-seeding'],
   getGetApiV1EventsQueryKey: () => ['events'],
   usePostApiV1EventsIdSeeding: (opts?: { mutation?: { onSuccess?: () => void } }) => ({
-    isPending: false,
+    isPending: state.generateSeedingPending,
     mutateAsync: async (vars: unknown) => {
+      if (state.generateSeedingFail) {
+        throw state.generateSeedingErrorMessage
+          ? { response: { data: { message: state.generateSeedingErrorMessage } } }
+          : new Error('boom')
+      }
       generateSeedingMutate(vars)
       opts?.mutation?.onSuccess?.()
     },
@@ -260,6 +268,9 @@ describe('EventDetail', () => {
     state.reverseFail = false
     state.reversePending = false
     state.reverseErrorMessage = null
+    state.generateSeedingFail = false
+    state.generateSeedingPending = false
+    state.generateSeedingErrorMessage = null
     useGetApiV1EventsId.mockReturnValue({ data: event, isLoading: false })
     useGetApiV1EventsIdSeeding.mockReturnValue({ data: undefined })
     useGetApiV1Clubs.mockReturnValue({ data: [], isLoading: false })
@@ -1179,6 +1190,24 @@ describe('EventDetail', () => {
     ).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Generate seeding' }))
     expect(generateSeedingMutate).toHaveBeenCalledWith({ id: 'e1' })
+  })
+
+  it('shows an error toast when generating the seeding fails (#714)', async () => {
+    state.generateSeedingFail = true
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.click(screen.getByRole('button', { name: 'Generate seeding' }))
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith('Could not generate the seeding.', expect.anything()),
+    )
+  })
+
+  it('disables the action with a generating label while the seeding is pending (#714)', () => {
+    state.generateSeedingPending = true
+    renderDetail()
+
+    expect(screen.getByRole('button', { name: 'Generating…' })).toBeDisabled()
   })
 
   it('renders the seeding table and offers a CSV download when a seeding exists (#714)', () => {
