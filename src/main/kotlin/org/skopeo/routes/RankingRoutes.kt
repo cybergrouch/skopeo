@@ -3,6 +3,7 @@
 
 package org.skopeo.routes
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.plugins.BadRequestException
@@ -10,7 +11,6 @@ import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
-import mu.KotlinLogging
 import org.skopeo.common.dto.RankingCalculationRequest
 import org.skopeo.domain.service.calculator.RankingCalculator
 import org.skopeo.domain.service.calculator.impl.v2.PerformanceBasedRankingCalculatorImpl
@@ -48,10 +48,10 @@ fun Application.configureRankingRoutes() {
                 // Ktor's content negotiation wraps deserialization + DTO `init` validation
                 // failures (SerializationException, IllegalArgumentException) in BadRequestException,
                 // so this single catch handles all malformed/invalid request bodies.
-                logger.warn(t = e) { "Invalid request body in ranking calculation request" }
+                logger.warn(throwable = e) { "Invalid request body in ranking calculation request" }
                 call.respond(status = HttpStatusCode.BadRequest, message = badRequestErrorBody(e = e))
             } catch (e: Exception) {
-                logger.error(t = e) { "Error processing ranking calculation request" }
+                logger.error(throwable = e) { "Error processing ranking calculation request" }
                 call.respond(
                     status = HttpStatusCode.InternalServerError,
                     message = mapOf("error" to "Internal server error", "message" to "An unexpected error occurred"),

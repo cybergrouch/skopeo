@@ -11,7 +11,7 @@ plugins {
 }
 
 group = "org.skopeo"
-version = "1.3.8-SNAPSHOT"
+version = "1.3.9-SNAPSHOT"
 description = "Skopeo - Performance-based tennis rating system"
 
 application {
@@ -96,12 +96,12 @@ dependencies {
 
     // Logging
     implementation("ch.qos.logback:logback-classic:1.5.16")
-    implementation("io.github.microutils:kotlin-logging-jvm:3.0.5")
+    implementation("io.github.oshai:kotlin-logging-jvm:7.0.7")
     implementation("io.ktor:ktor-server-call-logging-jvm:$ktorVersion")
 
     // Metrics
     implementation("io.ktor:ktor-server-metrics-micrometer-jvm:$ktorVersion")
-    implementation("io.micrometer:micrometer-registry-prometheus:1.12.0")
+    implementation("io.micrometer:micrometer-registry-prometheus:1.15.0")
 
     // Testing
     testImplementation("io.ktor:ktor-server-test-host-jvm:$ktorVersion")
