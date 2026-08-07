@@ -14,16 +14,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   getGetApiV1EventsIdQueryKey,
+  getGetApiV1EventsIdSeedingQueryKey,
   getGetApiV1EventsQueryKey,
   useDeleteApiV1EventsId,
   useDeleteApiV1EventsIdParticipantsUserId,
   useGetApiV1EventsId,
+  useGetApiV1EventsIdSeeding,
   usePatchApiV1EventsId,
   usePostApiV1EventsIdFinalize,
   usePostApiV1EventsIdUnfinalize,
   usePostApiV1EventsIdReverseRatings,
   usePostApiV1EventsIdParticipants,
   usePostApiV1EventsIdParticipantsUserIdDecision,
+  usePostApiV1EventsIdSeeding,
   usePutApiV1EventsIdClub,
 } from "@/api/generated/events/events";
 import { useGetApiV1Clubs } from "@/api/generated/clubs/clubs";
@@ -37,6 +40,7 @@ import { PlayerPicker } from "@/components/PlayerPicker";
 import { HandicapField } from "@/components/HandicapField";
 import { playerLabel } from "@/lib/playerLabel";
 import { PlaceholderTag } from "@/components/PlaceholderTag";
+import { SeedingTable } from "@/components/SeedingTable";
 import { formatConfidence } from "@/lib/confidence";
 import type { EventParticipantResponse } from "@/api/generated/model";
 import { ShareCard } from "@/components/ShareCard";
@@ -357,6 +361,31 @@ export function EventDetail({
     }
   }
 
+  // Event seeding (#714): the same deterministic seeding + CSV export as the Seeding tab, sourced from
+  // this event's APPROVED participants. The GET 404s until one is generated, so entries default to [].
+  const eventSeeding = useGetApiV1EventsIdSeeding(eventId);
+  const seedingEntries = eventSeeding.data?.entries ?? [];
+  const hasSeeding = seedingEntries.length > 0;
+  const generateSeeding = usePostApiV1EventsIdSeeding({
+    mutation: {
+      onSuccess: () => {
+        void queryClient.invalidateQueries({
+          queryKey: getGetApiV1EventsIdSeedingQueryKey(eventId),
+        });
+      },
+    },
+  });
+
+  async function onGenerateSeeding() {
+    try {
+      await generateSeeding.mutateAsync({ id: eventId });
+    } catch (e) {
+      toast.error(eventErrorMessage(e, "Could not generate the seeding."), {
+        duration: 8000,
+      });
+    }
+  }
+
   const isDoubles = format !== "SINGLES";
   // Placement-match input is only meaningful for a tournament (#525).
   const isTournament = event?.type === "TOURNAMENT";
@@ -667,6 +696,39 @@ export function EventDetail({
                   ? "This event awards ranking points on finalize."
                   : "This event awards no ranking points."}
               </p>
+            </CardContent>
+          </Card>
+
+          {/* Seeding (#714): generate a deterministic, server-sorted seeding from this event's approved
+              participants and export it as CSV — the same flow as the Seeding tab. */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Seeding</CardTitle>
+              <CardDescription>
+                Generate a rating-sorted seeding from this event's approved
+                participants and export it as CSV. Regenerating refreshes it from
+                the current roster.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Button
+                type="button"
+                size="sm"
+                disabled={generateSeeding.isPending}
+                onClick={onGenerateSeeding}
+              >
+                {generateSeeding.isPending
+                  ? "Generating…"
+                  : hasSeeding
+                    ? "Regenerate seeding"
+                    : "Generate seeding"}
+              </Button>
+              <SeedingTable
+                entries={seedingEntries}
+                generatedAt={eventSeeding.data?.generatedAt ?? ""}
+                name={event.name}
+                emptyMessage="No seeding yet. Generate one from the approved participants above."
+              />
             </CardContent>
           </Card>
 

@@ -26,6 +26,8 @@ import org.skopeo.domain.model.TeamType
 import org.skopeo.domain.model.User
 import org.skopeo.domain.model.UserIdentity
 import org.skopeo.domain.model.UserName
+import org.skopeo.domain.service.event.CreateEventInput
+import org.skopeo.domain.service.event.EventService
 import org.skopeo.domain.service.rating.RatingAssembler
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.repository.MatchRepository
@@ -49,6 +51,7 @@ class SeedingServiceTest {
     private val ratings = RatingAssembler()
     private val matchRepo = MatchRepository()
     private val lists = PlayerListService()
+    private val eventService = EventService()
     private val service = SeedingService()
 
     @BeforeEach
@@ -127,6 +130,22 @@ class SeedingServiceTest {
         val list = lists.create(token = token(uid = "host"), name = "Seeded").shouldBeRight()
         members.forEach { lists.addMember(token = token(uid = "host"), listId = UUID.fromString(list.id), userId = it.id).shouldBeRight() }
         return UUID.fromString(list.id)
+    }
+
+    /** A HOST-owned event with [members] as its APPROVED roster (#714); returns the event id. */
+    private fun eventWith(members: List<User>): UUID {
+        val created =
+            eventService.create(
+                token = token(uid = "host"),
+                input =
+                    CreateEventInput(
+                        name = "Club Open",
+                        startDate = LocalDate.now(),
+                        endDate = LocalDate.now(),
+                        participantIds = members.map { it.id },
+                    ),
+            ).shouldBeRight()
+        return UUID.fromString(created.id)
     }
 
     @Test
@@ -218,6 +237,73 @@ class SeedingServiceTest {
         val listId = listWith(members = emptyList())
 
         service.generate(token = token(uid = "intruder"), listId = listId)
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
+    // ---- Event-sourced seeding (#714) ---------------------------------------------------------
+
+    @Test
+    fun `generateForEvent sorts by rating descending and seeds the top half (round up)`() {
+        // ADMINISTRATOR so the raw rating is surfaced in the DTO (#583) for the exact-rating assertion below.
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST, Capability.ADMINISTRATOR))
+        val a = provision(uid = "alice").also { rate(user = it, value = "4.5") }
+        val b = provision(uid = "bob").also { rate(user = it, value = "3.5") }
+        val c = provision(uid = "carol").also { rate(user = it, value = "4.0") }
+        val eventId = eventWith(members = listOf(a, b, c))
+
+        val seeding = service.generateForEvent(token = token(uid = "host"), eventId = eventId).shouldBeRight()
+        seeding.entries shouldHaveSize 3
+        seeding.entries.map { it.userId } shouldBe listOf(a.id.toString(), c.id.toString(), b.id.toString())
+        seeding.entries.map { it.position } shouldBe listOf(1, 2, 3)
+        seeding.entries.map { it.seed } shouldBe listOf(1, 2, null)
+        seeding.entries.first().rating.shouldNotBeNull().toBigDecimal().compareTo(other = BigDecimal("4.5")) shouldBe 0
+    }
+
+    @Test
+    fun `event and list seedings produce identical ordering for the same players`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val a = provision(uid = "alice").also { rate(user = it, value = "4.5") }
+        val b = provision(uid = "bob").also { rate(user = it, value = "3.5") }
+        val c = provision(uid = "carol").also { rate(user = it, value = "4.0") }
+        val listId = listWith(members = listOf(a, b, c))
+        val eventId = eventWith(members = listOf(a, b, c))
+
+        val fromList = service.generate(token = token(uid = "host"), listId = listId).shouldBeRight()
+        val fromEvent = service.generateForEvent(token = token(uid = "host"), eventId = eventId).shouldBeRight()
+        // The shared sort + snapshot mapping must not diverge between the two sources.
+        fromEvent.entries.map { it.userId } shouldBe fromList.entries.map { it.userId }
+        fromEvent.entries.map { it.seed } shouldBe fromList.entries.map { it.seed }
+    }
+
+    @Test
+    fun `regenerating an event seeding overwrites the previous one`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val a = provision(uid = "alice").also { rate(user = it, value = "4.0") }
+        val b = provision(uid = "bob").also { rate(user = it, value = "3.5") }
+        val eventId = eventWith(members = listOf(a, b))
+
+        service.generateForEvent(token = token(uid = "host"), eventId = eventId).shouldBeRight()
+        rate(user = b, value = "5.0")
+        val regenerated = service.generateForEvent(token = token(uid = "host"), eventId = eventId).shouldBeRight()
+        regenerated.entries.map { it.userId } shouldBe listOf(b.id.toString(), a.id.toString())
+        service.getForEvent(token = token(uid = "host"), eventId = eventId).shouldBeRight().entries shouldHaveSize 2
+    }
+
+    @Test
+    fun `getForEvent returns not-found before a seeding is generated`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val eventId = eventWith(members = emptyList())
+        service.getForEvent(token = token(uid = "host"), eventId = eventId)
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
+    fun `generating a seeding for an event you don't host is forbidden`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        provision(uid = "intruder", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val eventId = eventWith(members = emptyList())
+
+        service.generateForEvent(token = token(uid = "intruder"), eventId = eventId)
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 }

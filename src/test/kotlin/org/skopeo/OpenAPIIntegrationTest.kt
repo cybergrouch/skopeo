@@ -174,6 +174,8 @@ class OpenAPIIntegrationTest {
             body shouldContain "/api/v1/events/{id}/finalize"
             // Un-finalize (#477): the reverse-finalize path is documented.
             body shouldContain "/api/v1/events/{id}/unfinalize"
+            // Event-sourced seeding (#714): the generate/read path from an event's participants.
+            body shouldContain "/api/v1/events/{id}/seeding"
             // Single "Award Ranking Points" flag (#559): the per-event points budget + designation
             // subsystem was removed; awarding is controlled solely by this event-level flag.
             body shouldContain "awardRankingPoints"

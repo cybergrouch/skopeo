@@ -2460,6 +2460,55 @@ paths:
         '404':
           description: No such event
 
+  /api/v1/events/{id}/seeding:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      summary: Generate (or regenerate) a seeding from an event's participants (#714)
+      description: >-
+        Rating-sorted (highest first) over the event's APPROVED participants; the top ⌈N/2⌉ rated
+        members get bracket seeds — the same deterministic seeding + CSV export as the Seeding tab.
+        Regenerating overwrites the event's previous seeding. Staff-only; a HOST may seed only their own
+        event, an ADMINISTRATOR/CLUB_OWNER any. Doubles events are still seeded by player (a known
+        limitation).
+      tags:
+        - Events
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The generated seeding
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SeedingResponse'
+        '403':
+          description: Caller is not staff / not this event's host
+        '404':
+          description: No such event
+    get:
+      summary: Get the current seeding for an event (#714)
+      tags:
+        - Events
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The current seeding
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SeedingResponse'
+        '403':
+          description: Caller is not staff / not this event's host
+        '404':
+          description: No such event, or no seeding generated yet
+
   /api/v1/events/{id}/participants/{userId}/decision:
     parameters:
       - name: id

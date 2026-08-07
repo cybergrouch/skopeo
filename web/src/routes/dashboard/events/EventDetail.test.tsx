@@ -13,6 +13,7 @@ vi.mock('sonner', () => ({ toast: { success: toastSuccess, error: toastError } }
 
 const {
   useGetApiV1EventsId,
+  useGetApiV1EventsIdSeeding,
   useGetApiV1Clubs,
   useGetApiV1UsersMe,
   addMutate,
@@ -25,10 +26,12 @@ const {
   finalizeMutate,
   unfinalizeMutate,
   reverseMutate,
+  generateSeedingMutate,
   state,
 } =
   vi.hoisted(() => ({
     useGetApiV1EventsId: vi.fn(),
+    useGetApiV1EventsIdSeeding: vi.fn(),
     useGetApiV1Clubs: vi.fn(),
     useGetApiV1UsersMe: vi.fn(),
     addMutate: vi.fn(),
@@ -41,6 +44,7 @@ const {
     finalizeMutate: vi.fn(),
     unfinalizeMutate: vi.fn(),
     reverseMutate: vi.fn(),
+    generateSeedingMutate: vi.fn(),
     state: {
       addFail: false,
       fixtureFail: false,
@@ -59,13 +63,30 @@ const {
       reverseFail: false,
       reversePending: false,
       reverseErrorMessage: null as string | null,
+      generateSeedingFail: false,
+      generateSeedingPending: false,
+      generateSeedingErrorMessage: null as string | null,
     },
   }))
 
 vi.mock('@/api/generated/events/events', () => ({
   useGetApiV1EventsId,
+  useGetApiV1EventsIdSeeding,
   getGetApiV1EventsIdQueryKey: () => ['event'],
+  getGetApiV1EventsIdSeedingQueryKey: () => ['event-seeding'],
   getGetApiV1EventsQueryKey: () => ['events'],
+  usePostApiV1EventsIdSeeding: (opts?: { mutation?: { onSuccess?: () => void } }) => ({
+    isPending: state.generateSeedingPending,
+    mutateAsync: async (vars: unknown) => {
+      if (state.generateSeedingFail) {
+        throw state.generateSeedingErrorMessage
+          ? { response: { data: { message: state.generateSeedingErrorMessage } } }
+          : new Error('boom')
+      }
+      generateSeedingMutate(vars)
+      opts?.mutation?.onSuccess?.()
+    },
+  }),
   useDeleteApiV1EventsId: (opts?: { mutation?: { onSuccess?: () => void } }) => ({
     isPending: state.deletePending,
     mutateAsync: async (vars: unknown) => {
@@ -247,7 +268,11 @@ describe('EventDetail', () => {
     state.reverseFail = false
     state.reversePending = false
     state.reverseErrorMessage = null
+    state.generateSeedingFail = false
+    state.generateSeedingPending = false
+    state.generateSeedingErrorMessage = null
     useGetApiV1EventsId.mockReturnValue({ data: event, isLoading: false })
+    useGetApiV1EventsIdSeeding.mockReturnValue({ data: undefined })
     useGetApiV1Clubs.mockReturnValue({ data: [], isLoading: false })
     // Default to an administrator so data-entry controls stay available on the (past-dated) fixture;
     // the #310 tests below override this to a plain HOST.
@@ -1151,5 +1176,81 @@ describe('EventDetail', () => {
     expect(screen.getByTestId('award-ranking-points-summary')).toHaveTextContent(
       'This event awards no ranking points.',
     )
+  })
+
+  // ---- Event seeding (#714) ----
+
+  it('generates an event seeding and calls the mutation (#714)', async () => {
+    const user = userEvent.setup()
+    renderDetail()
+
+    // No seeding yet → the empty prompt and a "Generate seeding" action.
+    expect(
+      screen.getByText('No seeding yet. Generate one from the approved participants above.'),
+    ).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Generate seeding' }))
+    expect(generateSeedingMutate).toHaveBeenCalledWith({ id: 'e1' })
+  })
+
+  it('shows an error toast when generating the seeding fails (#714)', async () => {
+    state.generateSeedingFail = true
+    const user = userEvent.setup()
+    renderDetail()
+
+    await user.click(screen.getByRole('button', { name: 'Generate seeding' }))
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith('Could not generate the seeding.', expect.anything()),
+    )
+  })
+
+  it('disables the action with a generating label while the seeding is pending (#714)', () => {
+    state.generateSeedingPending = true
+    renderDetail()
+
+    expect(screen.getByRole('button', { name: 'Generating…' })).toBeDisabled()
+  })
+
+  it('renders the seeding table and offers a CSV download when a seeding exists (#714)', () => {
+    useGetApiV1EventsIdSeeding.mockReturnValue({
+      data: {
+        generatedAt: '2026-03-02T09:00:00',
+        entries: [
+          {
+            seed: 1,
+            position: 1,
+            userId: 'u1',
+            displayName: 'Ana',
+            publicCode: 'AAA111',
+            ntrpBand: '4.0',
+            rating: '4.000000',
+            sex: 'Female',
+            age: 34,
+          },
+          {
+            seed: null,
+            position: 2,
+            userId: 'u2',
+            displayName: 'Bob',
+            publicCode: 'BBB222',
+            ntrpBand: null,
+            rating: '3.500000',
+            sex: null,
+            age: null,
+          },
+        ],
+      },
+    })
+    renderDetail()
+
+    // With a seeding present the action reads "Regenerate seeding" and the table + CSV export show.
+    expect(screen.getByRole('button', { name: 'Regenerate seeding' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Download CSV' })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'Seed' })).toBeInTheDocument()
+    // The blank-seed row (Bob) renders an empty seed cell.
+    const seedCells = screen
+      .getAllByRole('cell')
+      .filter((c) => (c as HTMLTableCellElement).cellIndex === 0)
+    expect(seedCells[0]).toHaveTextContent('1')
+    expect(seedCells[1]).toHaveTextContent('')
   })
 })

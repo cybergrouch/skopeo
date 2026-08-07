@@ -33,6 +33,7 @@ fun SeedingAggregateEntity.toDomain(): Seeding =
     Seeding(
         id = seeding.id,
         listId = seeding.listId,
+        eventId = seeding.eventId,
         generatedAt = seeding.generatedAt,
         entries = entries.map { it.toDomain() },
     )

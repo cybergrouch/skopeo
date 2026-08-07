@@ -27,9 +27,14 @@ internal object PlayerListMembersTable : UUIDTable(name = "player_list_members")
     val addedAt = datetime(name = "added_at")
 }
 
-/** One current seeding per list (regenerate overwrites) — enforced by a unique index on list_id. */
+/**
+ * One current seeding per source (regenerate overwrites). The source is either a player list (#111)
+ * or an event's participants (#714): exactly one of [listId] / [eventId] is set (a DB CHECK enforces
+ * it), each with its own unique index. See V39__seeding_source.sql.
+ */
 internal object SeedingsTable : UUIDTable(name = "seedings") {
-    val listId = reference(name = "list_id", foreign = PlayerListsTable, onDelete = ReferenceOption.CASCADE)
+    val listId = reference(name = "list_id", foreign = PlayerListsTable, onDelete = ReferenceOption.CASCADE).nullable()
+    val eventId = reference(name = "event_id", foreign = EventsTable, onDelete = ReferenceOption.CASCADE).nullable()
     val generatedAt = datetime(name = "generated_at")
     val generatedBy = reference(name = "generated_by", foreign = UsersTable, onDelete = ReferenceOption.SET_NULL).nullable()
 }

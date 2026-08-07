@@ -14,7 +14,10 @@ import java.util.UUID
  */
 data class SeedingEntity(
     val id: UUID,
-    val listId: UUID,
+    // Exactly one of [listId] / [eventId] is set — the seeding's source (a player list, #111, or an
+    // event's participants, #714).
+    val listId: UUID?,
+    val eventId: UUID?,
     val generatedAt: LocalDateTime,
     // Persisted audit column; not surfaced by the domain `Seeding`, kept here for a faithful raw view.
     val generatedBy: UUID?,

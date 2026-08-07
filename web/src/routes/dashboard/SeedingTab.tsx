@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useGetApiV1Users } from '@/api/generated/users/users'
 import { formatConfidence } from '@/lib/confidence'
-import { seedingCsv } from '@/lib/seedingCsv'
+import { SeedingTable } from '@/components/SeedingTable'
 import {
   getGetApiV1PlayerListsIdQueryKey,
   getGetApiV1PlayerListsIdSeedingQueryKey,
@@ -29,7 +29,6 @@ import {
 } from '@/api/generated/player-lists/player-lists'
 import type {
   GetApiV1UsersParams,
-  SeedingEntryResponse,
   UserSummaryResponse,
 } from '@/api/generated/model'
 
@@ -53,11 +52,6 @@ function interval(min: string, max: string): string | undefined {
   const hi = max.trim()
   if (!lo && !hi) return undefined
   return `${lo ? `[${lo}` : '('},${hi ? `${hi}]` : ')'}`
-}
-
-/** Strip characters that are awkward in filenames; keep it deterministic from the list name. */
-function sanitizeFilename(name: string): string {
-  return name.trim().replace(/[^a-zA-Z0-9-_]+/g, '-').replace(/^-+|-+$/g, '') || 'list'
 }
 
 /**
@@ -169,19 +163,6 @@ export function SeedingTab() {
     } catch {
       toast.error("Couldn't add the selected players.", { duration: 8000 })
     }
-  }
-
-  function onDownloadCsv(listName: string, entries: SeedingEntryResponse[], generatedAt: string) {
-    const csv = seedingCsv(entries)
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const anchor = document.createElement('a')
-    anchor.href = url
-    anchor.download = `${sanitizeFilename(listName)}-seeding-${generatedAt}.csv`
-    document.body.appendChild(anchor)
-    anchor.click()
-    document.body.removeChild(anchor)
-    URL.revokeObjectURL(url)
   }
 
   const allLists = lists.data ?? []
@@ -421,21 +402,6 @@ export function SeedingTab() {
                   <Button type="button" onClick={() => onGenerate(selectedId)}>
                     {hasSeeding ? 'Regenerate' : 'Generate seeding'}
                   </Button>
-                  {seedingData != null && seedingData.entries.length > 0 ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() =>
-                        onDownloadCsv(
-                          detail.data?.name ?? 'List',
-                          seedingData.entries,
-                          seedingData.generatedAt,
-                        )
-                      }
-                    >
-                      Download CSV
-                    </Button>
-                  ) : null}
                   <Button
                     type="button"
                     variant="ghost"
@@ -445,40 +411,12 @@ export function SeedingTab() {
                   </Button>
                 </div>
 
-                {hasSeeding ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b text-left text-muted-foreground">
-                          <th className="p-2">Seed</th>
-                          <th className="p-2">Name</th>
-                          <th className="p-2">Code</th>
-                          <th className="p-2">NTRP</th>
-                          <th className="p-2">Rating</th>
-                          <th className="p-2">Sex</th>
-                          <th className="p-2">Age</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {entries.map((entry) => (
-                          <tr key={entry.position} className="border-b">
-                            <td className="p-2">{entry.seed ?? ''}</td>
-                            <td className="p-2">{entry.displayName ?? entry.publicCode}</td>
-                            <td className="p-2">{entry.publicCode}</td>
-                            <td className="p-2">{entry.ntrpBand ?? ''}</td>
-                            <td className="p-2">{entry.rating}</td>
-                            <td className="p-2">{entry.sex ?? ''}</td>
-                            <td className="p-2">{entry.age ?? ''}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    No seeding yet. Generate one from the members above.
-                  </p>
-                )}
+                <SeedingTable
+                  entries={entries}
+                  generatedAt={seedingData?.generatedAt ?? ''}
+                  name={detail.data?.name ?? 'List'}
+                  emptyMessage="No seeding yet. Generate one from the members above."
+                />
               </section>
             </div>
           </CardContent>

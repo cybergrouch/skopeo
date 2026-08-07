@@ -26,6 +26,7 @@ import org.skopeo.common.dto.event.SetEventClubRequest
 import org.skopeo.common.dto.event.UpdateEventRequest
 import org.skopeo.domain.service.event.CreateEventInput
 import org.skopeo.domain.service.event.EventService
+import org.skopeo.domain.service.seeding.SeedingService
 import java.time.LocalDate
 import java.time.format.DateTimeParseException
 import java.util.UUID
@@ -34,7 +35,10 @@ import java.util.UUID
  * Events/meets (issue #138). Create/list/get and participant management are HOST/ADMINISTRATOR
  * (enforced in [EventService]); an ADMINISTRATOR sees all events while a HOST sees their own.
  */
-fun Application.configureEventRoutes(service: EventService = EventService()) {
+fun Application.configureEventRoutes(
+    service: EventService = EventService(),
+    seedingService: SeedingService = SeedingService(),
+) {
     routing {
         route(path = "/api/v1/events") {
             // The public event page is viewable anonymously (#193); self-signup + the rest stay required.
@@ -47,6 +51,29 @@ fun Application.configureEventRoutes(service: EventService = EventService()) {
                 renameEvent(service = service)
                 finalizeEvent(service = service)
                 byIdAndParticipants(service = service)
+                eventSeeding(service = seedingService)
+            }
+        }
+    }
+}
+
+/**
+ * Event seeding (#714): generate (POST) or read (GET) a deterministic, server-sorted seeding from the
+ * event's APPROVED participants — the same seeding + CSV flow as the Seeding tab. Staff-gated
+ * (HOST/ADMINISTRATOR/CLUB_OWNER; owner-or-admin), enforced in [SeedingService]/[EventService]; thin.
+ */
+private fun Route.eventSeeding(service: SeedingService) {
+    post(path = "/{id}/seeding") {
+        respondMappingErrors {
+            respondEither(result = service.generateForEvent(token = verifiedToken(), eventId = uuidParam(name = "id"))) { seeding ->
+                call.respond(status = HttpStatusCode.OK, message = seeding)
+            }
+        }
+    }
+    get(path = "/{id}/seeding") {
+        respondMappingErrors {
+            respondEither(result = service.getForEvent(token = verifiedToken(), eventId = uuidParam(name = "id"))) { seeding ->
+                call.respond(status = HttpStatusCode.OK, message = seeding)
             }
         }
     }
