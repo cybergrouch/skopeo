@@ -14,6 +14,13 @@ export default defineConfig({
       schemas: 'src/api/generated/model',
       client: 'react-query',
       httpClient: 'axios',
+      // Bundle the axios mutator with esbuild targeting our real TS config
+      // (ES2023) instead of orval's es6 default. Without this, orval finds the
+      // references-only root tsconfig.json (no compilerOptions.target), falls
+      // back to es6, and floods `npm run dev`/`build` startup with
+      // "import.meta is not available (es2015)" warnings for src/api/axios.ts
+      // (which reads import.meta.env.VITE_API_BASE_URL). See issue #707.
+      tsconfig: 'tsconfig.app.json',
       override: {
         // axios mutator injects the Firebase ID token on every request.
         mutator: {
