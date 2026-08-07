@@ -5,8 +5,8 @@ package org.skopeo.config
 
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.server.application.Application
-import mu.KotlinLogging
 import org.flywaydb.core.Flyway
 import org.jetbrains.exposed.sql.Database
 import javax.sql.DataSource
@@ -142,7 +142,7 @@ object DatabaseConfig {
             val migrationsApplied = flyway.migrate()
             logger.info { "Flyway migrations complete. ${migrationsApplied.migrationsExecuted} migrations applied." }
         } catch (e: Exception) {
-            logger.error(t = e) { "Flyway migration failed" }
+            logger.error(throwable = e) { "Flyway migration failed" }
             throw e
         }
     }

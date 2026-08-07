@@ -7,7 +7,7 @@ import arrow.core.left
 import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.right
-import mu.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging
 import org.skopeo.common.dto.user.CreateUserRequest
 import org.skopeo.common.dto.user.UserResponse
 import org.skopeo.common.dto.user.UserSummaryPageResponse
