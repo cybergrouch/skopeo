@@ -63,6 +63,16 @@ private fun Route.publicPlayerReads(service: PlayerService) {
             }
         }
     }
+    // Event-participation history (#704) — parity with the owner dashboard's `/events/mine`, resolved
+    // by public code. Public (events are already shareable via `/events/{code}`); no token needed.
+    get(path = "/{code}/events") {
+        respondMappingErrors {
+            val code = call.parameters["code"].orEmpty()
+            respondEither(result = service.eventHistory(code = code)) { events ->
+                call.respond(status = HttpStatusCode.OK, message = events)
+            }
+        }
+    }
     // Win–loss record over time (#276), split singles/doubles — aggregated server-side.
     get(path = "/{code}/results-summary") {
         respondMappingErrors {

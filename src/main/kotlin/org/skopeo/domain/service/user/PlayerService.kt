@@ -7,6 +7,7 @@ import arrow.core.left
 import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.right
+import org.skopeo.common.dto.event.MyEventResponse
 import org.skopeo.common.dto.rating.RatingHistoryResponse
 import org.skopeo.common.dto.user.ActivePointsAwardResponse
 import org.skopeo.common.dto.user.MatchHistoryParticipant
@@ -20,7 +21,9 @@ import org.skopeo.common.dto.user.PublicRatingDto
 import org.skopeo.common.dto.user.ResultsBucket
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
+import org.skopeo.domain.mapper.dto.event.toResponse
 import org.skopeo.domain.mapper.dto.rating.toResponse
+import org.skopeo.domain.mapper.entity.event.toDomain
 import org.skopeo.domain.mapper.entity.match.toDomain
 import org.skopeo.domain.mapper.entity.ranking.toDomain
 import org.skopeo.domain.mapper.entity.user.toDomain
@@ -289,6 +292,24 @@ class PlayerService(
                 singles = bucketsOf(formatRows = rows.filter { it.singles }),
                 doubles = bucketsOf(formatRows = rows.filterNot { it.singles }),
             )
+        }
+
+    /**
+     * A player's event-participation history by public code (#704) for the public profile's "Events
+     * history" card — parity with the owner dashboard, which reads the caller's own events via
+     * `/events/mine`. Every event the player is on, in any status, with their standing ([status]) and
+     * the batched "has results" [completedMatchCount] the client buckets on — the same DTO shape the
+     * `/events/mine` endpoint returns, so the card renders identically. Events are already publicly
+     * shareable (`/events/{code}` lists their rosters), so this is not further gated; it only resolves
+     * the target player by code instead of the authenticated caller.
+     */
+    fun eventHistory(code: String): Either<ServiceError, List<MyEventResponse>> =
+        either {
+            val user = resolve(code = code).bind()
+            val mine = events.findForParticipant(userId = user.id).map { it.toDomain() }
+            // Batched "has results" counts (#483), matching EventService.myEvents so buckets align.
+            val counts = matches.completedResultCountByEvents(eventIds = mine.map { it.event.id })
+            mine.map { it.toResponse(completedMatchCount = counts[it.event.id] ?: 0) }
         }
 
     /**

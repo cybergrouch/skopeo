@@ -1007,12 +1007,52 @@ class PlayerServiceTest {
         ).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
-    private fun eventCommand(createdBy: UUID) =
-        org.skopeo.domain.model.CreateEventCommand(
-            name = "Points Cup",
-            startDate = LocalDate.now(),
-            endDate = LocalDate.now().plusDays(7),
-            participantIds = emptyList(),
-            createdBy = createdBy,
-        )
+    private fun eventCommand(
+        createdBy: UUID,
+        participantIds: List<UUID> = emptyList(),
+    ) = org.skopeo.domain.model.CreateEventCommand(
+        name = "Points Cup",
+        startDate = LocalDate.now(),
+        endDate = LocalDate.now().plusDays(7),
+        participantIds = participantIds,
+        createdBy = createdBy,
+    )
+
+    @Test
+    fun `event history lists a player's events by code, resolving the code case-insensitively (#704)`() {
+        val ana = newUser(uid = "ana", names = display(name = "Ana"))
+        val event =
+            org.skopeo.repository.EventRepository()
+                .create(command = eventCommand(createdBy = ana.id, participantIds = listOf(element = ana.id)))
+                .toDomain()
+
+        val history = service.eventHistory(code = ana.publicCode.lowercase()).shouldBeRight()
+        history shouldHaveSize 1
+        history.single().let {
+            it.publicCode shouldBe event.publicCode
+            it.name shouldBe event.name
+            // Host-listed participants join APPROVED outright.
+            it.status shouldBe "APPROVED"
+            it.isFinalized shouldBe false
+            it.completedMatchCount shouldBe 0
+        }
+    }
+
+    @Test
+    fun `event history is empty for a player who is on no events (#704)`() {
+        val loner = newUser(uid = "loner", names = display(name = "Loner"))
+        service.eventHistory(code = loner.publicCode).shouldBeRight().shouldBeEmpty()
+    }
+
+    @Test
+    fun `event history 404s an unknown code (#704)`() {
+        service.eventHistory(code = "ZZZZZZ").shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
+    fun `event history 404s a deactivated player (#704)`() {
+        val gone = newUser(uid = "gone", names = display(name = "Gone"))
+        users.deactivate(id = gone.id)
+        service.eventHistory(code = gone.publicCode).shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+    }
 }

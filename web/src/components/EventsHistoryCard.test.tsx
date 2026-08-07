@@ -4,13 +4,17 @@ import { MemoryRouter } from 'react-router-dom'
 import { EventsHistoryCard } from './EventsHistoryCard'
 import type { MyEventResponse } from '@/api/generated/model'
 
-const { useGetApiV1EventsMine } = vi.hoisted(() => ({ useGetApiV1EventsMine: vi.fn() }))
+const { useGetApiV1EventsMine, useGetApiV1PlayersCodeEvents } = vi.hoisted(() => ({
+  useGetApiV1EventsMine: vi.fn(),
+  useGetApiV1PlayersCodeEvents: vi.fn(),
+}))
 vi.mock('@/api/generated/events/events', () => ({ useGetApiV1EventsMine }))
+vi.mock('@/api/generated/users/users', () => ({ useGetApiV1PlayersCodeEvents }))
 
-function renderCard() {
+function renderCard(code?: string) {
   return render(
     <MemoryRouter>
-      <EventsHistoryCard />
+      <EventsHistoryCard code={code} />
     </MemoryRouter>,
   )
 }
@@ -126,6 +130,31 @@ describe('EventsHistoryCard', () => {
     expect(within(autumn).getByText(/Pending approval/)).toBeInTheDocument()
     const winter = screen.getByRole('link', { name: /Winter Open/ })
     expect(within(winter).getByText(/On hold/)).toBeInTheDocument()
+  })
+
+  it('reads the by-code endpoint (not /events/mine) when a code is given (#704)', () => {
+    useGetApiV1EventsMine.mockReturnValue({ data: undefined, isLoading: false })
+    useGetApiV1PlayersCodeEvents.mockReturnValue({ data: [finalizedPast, upcoming], isLoading: false })
+    renderCard('K7Q2MX')
+
+    // The public by-code hook is enabled for the code; the owner /events/mine hook is disabled.
+    expect(useGetApiV1PlayersCodeEvents).toHaveBeenCalledWith('K7Q2MX', { query: { enabled: true } })
+    expect(useGetApiV1EventsMine).toHaveBeenCalledWith({ query: { enabled: false } })
+    // Its events render, bucketed the same way.
+    expect(linksUnder('Finalized').join('|')).toMatch(/Old Champs/)
+    expect(linksUnder('Upcoming').join('|')).toMatch(/Summer Slam/)
+  })
+
+  it('shows a player-oriented empty state on the public profile (#704)', () => {
+    useGetApiV1PlayersCodeEvents.mockReturnValue({ data: [], isLoading: false })
+    renderCard('K7Q2MX')
+    expect(screen.getByText(/This player hasn’t joined any events yet/i)).toBeInTheDocument()
+  })
+
+  it('shows a loading state in by-code mode (#704)', () => {
+    useGetApiV1PlayersCodeEvents.mockReturnValue({ data: undefined, isLoading: true })
+    renderCard('K7Q2MX')
+    expect(screen.getByText('Loading…')).toBeInTheDocument()
   })
 
   it('shows per-section empty messages for empty buckets', () => {
