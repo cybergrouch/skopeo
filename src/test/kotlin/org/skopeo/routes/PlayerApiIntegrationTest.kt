@@ -22,6 +22,7 @@ import io.ktor.server.testing.testApplication
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.common.dto.event.MyEventResponse
 import org.skopeo.common.dto.rating.RatingHistoryResponse
 import org.skopeo.common.dto.user.CreateUserRequest
 import org.skopeo.common.dto.user.PlayerMatchHistoryPage
@@ -146,6 +147,29 @@ class PlayerApiIntegrationTest {
             val token = TestFirebaseAuth.mintToken(uid = "u1")
             val response =
                 client.get(urlString = "/api/v1/players/ZZZZZZ/match-history") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $token")
+                }
+            response.status shouldBe HttpStatusCode.NotFound
+        }
+
+    @Test
+    fun `event history resolves by code, viewable anonymously, and is empty for a player on no events (#704)`() =
+        withApp { client ->
+            val owner = client.createUser(token = TestFirebaseAuth.mintToken(uid = "owner")).body<UserResponse>()
+
+            // No Authorization header → the public event history still serves (optional auth, #193 parity).
+            val response = client.get(urlString = "/api/v1/players/${owner.publicCode.lowercase()}/events")
+
+            response.status shouldBe HttpStatusCode.OK
+            response.body<List<MyEventResponse>>() shouldBe emptyList()
+        }
+
+    @Test
+    fun `event history for an unknown code returns 404 (#704)`() =
+        withApp { client ->
+            val token = TestFirebaseAuth.mintToken(uid = "u1")
+            val response =
+                client.get(urlString = "/api/v1/players/ZZZZZZ/events") {
                     header(key = HttpHeaders.Authorization, value = "Bearer $token")
                 }
             response.status shouldBe HttpStatusCode.NotFound

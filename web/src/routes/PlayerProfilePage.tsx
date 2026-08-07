@@ -13,6 +13,7 @@ import {
   useGetApiV1UsersMe,
 } from '@/api/generated/users/users'
 import { MatchHistoryCard } from '@/components/MatchHistoryCard'
+import { EventsHistoryCard } from '@/components/EventsHistoryCard'
 import { WinLossCard } from '@/components/WinLossCard'
 import { RatingHistoryCard } from '@/components/RatingHistoryCard'
 import { PlayerStandingCard } from '@/components/PlayerStandingCard'
@@ -198,6 +199,11 @@ export function PlayerProfilePage() {
 
         {player && !player.isDisabled ? (
           <WinLossCard code={player.publicCode} />
+        ) : null}
+
+        {/* Event-participation history (#704): parity with the owner Profile tab, resolved by code. */}
+        {player && !player.isDisabled ? (
+          <EventsHistoryCard code={player.publicCode} />
         ) : null}
 
         {player && !player.isDisabled && showRawRatings ? (
