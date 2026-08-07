@@ -4,6 +4,7 @@
 package org.skopeo.routes
 
 import arrow.core.Either
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
 import io.ktor.server.auth.jwt.JWTPrincipal
@@ -14,7 +15,6 @@ import io.ktor.server.request.path
 import io.ktor.server.response.respond
 import io.ktor.server.routing.RoutingContext
 import kotlinx.serialization.SerializationException
-import mu.KotlinLogging
 import org.skopeo.common.error.ServiceError
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import java.util.UUID
@@ -119,17 +119,17 @@ internal suspend fun RoutingContext.respondMappingErrors(block: suspend () -> Un
         block()
     } catch (e: SerializationException) {
         // Must precede IllegalArgumentException: kotlinx SerializationException is a subtype of it.
-        logger.warn(t = e) { "Malformed JSON" }
+        logger.warn(throwable = e) { "Malformed JSON" }
         call.respond(status = HttpStatusCode.BadRequest, message = errorBody(error = "Invalid JSON", message = e.message))
     } catch (e: IllegalArgumentException) {
-        logger.warn(t = e) { "Invalid request" }
+        logger.warn(throwable = e) { "Invalid request" }
         call.respond(status = HttpStatusCode.BadRequest, message = errorBody(error = "Validation error", message = e.message))
     } catch (e: BadRequestException) {
         val rootCause = generateSequence<Throwable>(seed = e) { it.cause }.last()
-        logger.warn(t = e) { "Bad request" }
+        logger.warn(throwable = e) { "Bad request" }
         call.respond(status = HttpStatusCode.BadRequest, message = errorBody(error = "Validation error", message = rootCause.message))
     } catch (e: Exception) {
-        logger.error(t = e) { "Unexpected error handling request" }
+        logger.error(throwable = e) { "Unexpected error handling request" }
         call.respond(
             status = HttpStatusCode.InternalServerError,
             message = errorBody(error = "Internal server error", message = "An unexpected error occurred"),
