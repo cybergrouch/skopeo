@@ -142,6 +142,45 @@ data class User(
 )
 
 /**
+ * The derived login/link status of an account (#643): which login anchor the account currently has,
+ * or [NONE] for a login-less placeholder. Computed (never stored) from [User.firebaseUid] plus the
+ * primary identity's provider — see [User.linkStatus]. Surfaced read-only in the account-management UI
+ * so an admin can see, before an irreversible merge, which account carries the accessible login.
+ */
+enum class AccountLinkStatus { GOOGLE, FACEBOOK, PASSWORD, NONE }
+
+/**
+ * Derive the account's [AccountLinkStatus] (#643) from the login anchor + identities: [NONE] when there
+ * is no login (firebase_uid null — a placeholder or freed account), otherwise the primary identity's
+ * provider (falling back to any identity, then to PASSWORD for a login with no recorded identity row).
+ */
+fun User.linkStatus(): AccountLinkStatus =
+    if (firebaseUid == null) {
+        AccountLinkStatus.NONE
+    } else {
+        when (identities.firstOrNull { it.isPrimary }?.provider ?: identities.firstOrNull()?.provider) {
+            AuthProvider.GOOGLE -> AccountLinkStatus.GOOGLE
+            AuthProvider.FACEBOOK -> AccountLinkStatus.FACEBOOK
+            AuthProvider.PASSWORD, null -> AccountLinkStatus.PASSWORD
+        }
+    }
+
+/**
+ * The outcome of an admin account-merge (#643): the count of each kind of participation/membership record
+ * re-pointed from the retired account onto the survivor, plus whether the retired account's login was
+ * transferred to the survivor. Rating history + ranking points are intentionally NOT moved (the survivor
+ * keeps its own), so they carry no count here. Used for the audit trail and for verifying the merge.
+ */
+data class AccountMergeResult(
+    val teamMemberships: Int,
+    val eventParticipations: Int,
+    val playerListMemberships: Int,
+    val clubOwnerships: Int,
+    val seedingEntries: Int,
+    val loginTransferred: Boolean,
+)
+
+/**
  * The profile photo to actually show (#303): nothing when hidden, otherwise the user's custom URL
  * if set, otherwise the OAuth-provider photo. Centralized so every read site (and the login sync)
  * derives the displayed photo identically.

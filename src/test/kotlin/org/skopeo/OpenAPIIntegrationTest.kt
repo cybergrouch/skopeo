@@ -87,6 +87,21 @@ class OpenAPIIntegrationTest {
             body shouldContain "matchHistoryHidden"
         }
 
+    /** Account merge (#643): the admin merge route, its request schema, and the derived link-status field. */
+    @Test
+    fun testOpenAPISpecIncludesAccountMerge() =
+        testApplication {
+            application {
+                module(initDatabase = false)
+            }
+            val body = client.get(urlString = "/openapi.yaml").bodyAsText()
+            body shouldContain "/api/v1/users/{id}/merge"
+            body shouldContain "MergeAccountsRequest"
+            body shouldContain "retiredAccountId"
+            body shouldContain "verificationNote"
+            body shouldContain "linkStatus"
+        }
+
     /** Tournaments (#525): circuit-on-event, club sanction, and placement-match fields are documented. */
     @Test
     fun testOpenAPISpecIncludesTournamentFields() =

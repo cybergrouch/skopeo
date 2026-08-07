@@ -14,6 +14,9 @@ vi.mock("./admin/DuplicatesSection", () => ({
 vi.mock("./admin/DuplicateCandidatesSection", () => ({
   DuplicateCandidatesSection: () => <div>duplicate candidates section</div>,
 }));
+vi.mock("./admin/MergeAccountsSection", () => ({
+  MergeAccountsSection: () => <div>merge accounts section</div>,
+}));
 
 describe("AccountManagementTab", () => {
   it("renders the player/account administration sections moved out of Admin (#648)", () => {
@@ -24,5 +27,6 @@ describe("AccountManagementTab", () => {
     expect(
       screen.getByText("duplicate candidates section"),
     ).toBeInTheDocument();
+    expect(screen.getByText("merge accounts section")).toBeInTheDocument();
   });
 });

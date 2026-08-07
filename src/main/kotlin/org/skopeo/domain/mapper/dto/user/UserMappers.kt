@@ -15,6 +15,7 @@ import org.skopeo.domain.model.User
 import org.skopeo.domain.model.UserRating
 import org.skopeo.domain.model.WinLossRecord
 import org.skopeo.domain.model.ageInYears
+import org.skopeo.domain.model.linkStatus
 import java.time.LocalDate
 
 fun User.toResponse(): UserResponse =
@@ -92,4 +93,5 @@ fun User.toSummary(
         record = record?.let { WinLossDto(wins = it.wins, losses = it.losses, total = it.total) },
         isPlaceholder = placeholder,
         isDeleted = isDeleted,
+        linkStatus = linkStatus().name,
     )

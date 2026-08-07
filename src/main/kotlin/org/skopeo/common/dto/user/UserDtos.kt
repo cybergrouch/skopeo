@@ -110,6 +110,22 @@ data class MarkDuplicatesRequest(
     val duplicateIds: List<String>,
 )
 
+/**
+ * Body for `POST /api/v1/users/{survivorId}/merge` — the generalized admin account-merge (#643).
+ * [retiredAccountId] is the account whose participation/membership records are consolidated into the
+ * survivor (in the path); [verificationNote] is a required, non-blank note recording how the admin
+ * verified the two accounts are the same person (kept in the audit trail). The merge is irreversible.
+ */
+@Serializable
+data class MergeAccountsRequest(
+    val retiredAccountId: String,
+    val verificationNote: String,
+) {
+    init {
+        require(value = verificationNote.isNotBlank()) { "verificationNote is required" }
+    }
+}
+
 /** Body for `PUT /api/v1/users/me/rating-preview` — the per-admin raw-rating preview toggle (#583). */
 @Serializable
 data class SetRatingPreviewRequest(
@@ -171,6 +187,9 @@ data class UserSummaryResponse(
     val isPlaceholder: Boolean = false,
     // True for an admin-soft-deleted account (#518): search/Research renders a dominant "Deleted" chip.
     val isDeleted: Boolean = false,
+    // Derived login/link status (#643): GOOGLE, FACEBOOK, PASSWORD, or NONE (a login-less placeholder).
+    // Read-only, computed from firebase_uid + the primary identity; the merge UI shows it per account.
+    val linkStatus: String = "NONE",
 )
 
 /** A player's decided win–loss record (#342): singles + doubles combined; [total] = wins + losses. */
