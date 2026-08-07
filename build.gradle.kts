@@ -39,11 +39,11 @@ tasks.named("processResources") {
     dependsOn(generateVersionProperties)
 }
 
-val ktorVersion = "3.0.3"
+val ktorVersion = "3.2.0"
 val exposedVersion = "0.54.0"
 val postgresVersion = "42.7.4"
-val flywayVersion = "10.17.0"
-val hikariVersion = "5.1.0"
+val flywayVersion = "11.8.2"
+val hikariVersion = "6.3.0"
 val arrowVersion = "1.2.4"
 
 java {
@@ -107,17 +107,17 @@ dependencies {
     testImplementation("io.ktor:ktor-server-test-host-jvm:$ktorVersion")
     testImplementation("io.ktor:ktor-client-content-negotiation:$ktorVersion")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
-    testImplementation("io.kotest:kotest-assertions-core:5.8.0")
+    testImplementation("io.kotest:kotest-assertions-core:5.9.1")
     testImplementation("io.kotest.extensions:kotest-assertions-arrow:1.4.0")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
     // Integration tests against a real PostgreSQL (applies the Flyway migration)
-    testImplementation("org.testcontainers:postgresql:1.20.4")
-    testImplementation("org.testcontainers:junit-jupiter:1.20.4")
+    testImplementation("org.testcontainers:postgresql:1.21.3")
+    testImplementation("org.testcontainers:junit-jupiter:1.21.3")
 
     // Architecture tests — enforce layered package dependencies (issue #69). Bytecode-based, so
     // it's robust against Kotlin compiler versions (unlike source-scanning tools).
-    testImplementation("com.tngtech.archunit:archunit:1.3.0")
+    testImplementation("com.tngtech.archunit:archunit:1.4.1")
 
     // YAML parser for OpenAPIIntegrationTest (#401): parse the served spec so a malformed
     // documentation.yaml fails the backend gate instead of only breaking the web orval step.
