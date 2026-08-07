@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/auth/useAuth";
+import { Avatar } from "@/components/Avatar";
 import { MatchHistoryCard } from "@/components/MatchHistoryCard";
 import { WinLossCard } from "@/components/WinLossCard";
 import { UpcomingMatchesCard } from "@/components/UpcomingMatchesCard";
@@ -68,24 +69,13 @@ export function ProfileTab({
       <Card>
         <CardHeader>
           <div className="flex items-center gap-3">
-            {avatarUrl ? (
-              <img
-                src={avatarUrl}
-                alt=""
-                referrerPolicy="no-referrer"
-                className="h-12 w-12 shrink-0 rounded-full object-cover"
-              />
-            ) : (
-              // No photo (hidden, or none set): show the display-name/email initial (#303).
-              <div
-                aria-hidden="true"
-                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-muted text-lg font-medium text-muted-foreground"
-              >
-                {(user?.displayName ?? user?.email ?? "P")
-                  .charAt(0)
-                  .toUpperCase()}
-              </div>
-            )}
+            {/* No photo (hidden, or none set) → the display-name/email initial (#303); click to enlarge (#697). */}
+            <Avatar
+              photoUrl={avatarUrl}
+              name={user?.displayName ?? user?.email}
+              size="md"
+              enlargeable
+            />
             <div className="min-w-0">
               <CardTitle>
                 {user?.displayName ?? user?.email ?? "Player"}

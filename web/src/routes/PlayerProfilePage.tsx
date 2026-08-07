@@ -6,6 +6,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { Avatar } from '@/components/Avatar'
 import {
   useGetApiV1PlayersCode,
   useGetApiV1PlayersCodeRatingHistory,
@@ -103,21 +104,12 @@ export function PlayerProfilePage() {
           <Card>
             <CardHeader>
               <div className="flex items-center gap-3">
-                {player.photoUrl ? (
-                  <img
-                    src={player.photoUrl}
-                    alt=""
-                    referrerPolicy="no-referrer"
-                    className="h-14 w-14 shrink-0 rounded-full object-cover"
-                  />
-                ) : (
-                  <div
-                    aria-hidden="true"
-                    className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-muted text-xl font-medium text-muted-foreground"
-                  >
-                    {(player.displayName ?? 'P').charAt(0).toUpperCase()}
-                  </div>
-                )}
+                <Avatar
+                  photoUrl={player.photoUrl}
+                  name={player.displayName}
+                  size="lg"
+                  enlargeable
+                />
                 <div className="min-w-0">
                   <CardTitle>{player.displayName ?? 'Player'}</CardTitle>
                   {/* Registered email (#630): revealed by the API only to the owner or an elevated
