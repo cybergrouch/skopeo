@@ -80,7 +80,7 @@ class DuplicateCandidateRepository {
             val items =
                 query()
                     .orderBy(DuplicateCandidatesTable.flaggedAt to SortOrder.DESC)
-                    .limit(n = limit, offset = offset.toLong())
+                    .limit(count = limit).offset(start = offset.toLong())
                     .map { it.toDuplicateCandidateEntity() }
             items to total
         }
