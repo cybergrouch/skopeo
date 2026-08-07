@@ -25,6 +25,7 @@ import { ProfileTab } from "./dashboard/ProfileTab";
 import { SettingsTab } from "./dashboard/SettingsTab";
 import { AdminTab } from "./dashboard/AdminTab";
 import { AccountManagementTab } from "./dashboard/AccountManagementTab";
+import { ClubManagementTab } from "./dashboard/ClubManagementTab";
 import { PointsManagementSection } from "./dashboard/admin/PointsManagementSection";
 import { EventOrganizerTab } from "./dashboard/EventOrganizerTab";
 import { PlaceholderPlayersTab } from "./dashboard/PlaceholderPlayersTab";
@@ -60,6 +61,7 @@ export function DashboardPage() {
   const showActivity = isAdministrator(capabilities);
   const showReport = isAdministrator(capabilities);
   const showAccountManagement = isAdministrator(capabilities);
+  const showClubManagement = isAdministrator(capabilities);
   const showAdmin = isAdministrator(capabilities);
   // Points Management is always a standalone tab for anyone who can manage points budgets
   // (POINTS_MANAGER or ADMINISTRATOR); it's no longer embedded in the Admin tab.
@@ -158,6 +160,17 @@ export function DashboardPage() {
             value: "accounts",
             label: "Account Management",
             element: <AccountManagementTab />,
+          },
+        ]
+      : []),
+    // Club Management (#698): clubs administration, split out of Admin. ADMINISTRATOR-gated, placed
+    // just before Admin — mirrors the #648 Account Management split.
+    ...(showClubManagement
+      ? [
+          {
+            value: "club-management",
+            label: "Club Management",
+            element: <ClubManagementTab />,
           },
         ]
       : []),
