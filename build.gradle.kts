@@ -44,7 +44,7 @@ val exposedVersion = "0.54.0"
 val postgresVersion = "42.7.4"
 val flywayVersion = "11.8.2"
 val hikariVersion = "6.3.0"
-val arrowVersion = "1.2.4"
+val arrowVersion = "2.1.2"
 
 java {
     toolchain {
@@ -108,7 +108,7 @@ dependencies {
     testImplementation("io.ktor:ktor-client-content-negotiation:$ktorVersion")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
     testImplementation("io.kotest:kotest-assertions-core:5.9.1")
-    testImplementation("io.kotest.extensions:kotest-assertions-arrow:1.4.0")
+    testImplementation("io.kotest.extensions:kotest-assertions-arrow:2.0.0")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
     // Integration tests against a real PostgreSQL (applies the Flyway migration)
