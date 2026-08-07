@@ -115,7 +115,7 @@ class InviteRepository {
             val items =
                 query()
                     .orderBy(InvitesTable.createdAt to SortOrder.DESC)
-                    .limit(n = limit, offset = offset.toLong())
+                    .limit(count = limit).offset(start = offset.toLong())
                     .map { it.toInviteEntity() }
             items to total
         }
