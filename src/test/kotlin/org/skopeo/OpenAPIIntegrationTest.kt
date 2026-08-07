@@ -168,6 +168,8 @@ class OpenAPIIntegrationTest {
             body shouldContain "PlayerStandingResponse"
             body shouldContain "/api/v1/players/{code}/points"
             body shouldContain "ActivePointsAwardResponse"
+            // Public event-participation history (#704): parity with /events/mine, resolved by code.
+            body shouldContain "/api/v1/players/{code}/events"
             // Event types + finalize state (#403 Phase A): the finalize path is documented.
             body shouldContain "/api/v1/events/{id}/finalize"
             // Un-finalize (#477): the reverse-finalize path is documented.

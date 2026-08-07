@@ -24,6 +24,11 @@ vi.mock('@/api/generated/users/users', () => ({
 vi.mock('@/components/WinLossCard', () => ({
   WinLossCard: ({ code }: { code: string }) => <div>win-loss:{code}</div>,
 }))
+// The events-history card has its own API hooks + tests (#704); stub it, echoing the code so the
+// page test can assert it is wired with the player's public code.
+vi.mock('@/components/EventsHistoryCard', () => ({
+  EventsHistoryCard: ({ code }: { code?: string }) => <div>events-history:{code}</div>,
+}))
 // The standing headline has its own API hook + tests (#448); stub it here.
 vi.mock('@/components/PlayerStandingCard', () => ({
   PlayerStandingCard: ({ code }: { code: string }) => <div>standing:{code}</div>,
@@ -261,6 +266,29 @@ describe('PlayerProfilePage', () => {
     useGetApiV1PlayersCode.mockReturnValue(loadedPlayer)
     renderAt()
     expect(screen.getByText('standing:ABC234')).toBeInTheDocument()
+  })
+
+  it('renders the events-history card wired with the player code (#704)', () => {
+    useGetApiV1PlayersCode.mockReturnValue(loadedPlayer)
+    renderAt()
+    expect(screen.getByText('events-history:ABC234')).toBeInTheDocument()
+  })
+
+  it('suppresses the events-history card for a disabled duplicate (#704)', () => {
+    useGetApiV1PlayersCode.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: {
+        publicCode: 'DUP123',
+        displayName: 'Dupe',
+        photoUrl: null,
+        rating: undefined,
+        isDisabled: true,
+        canonical: { publicCode: 'REAL99', displayName: 'Real', photoUrl: null },
+      },
+    })
+    renderAt('DUP123')
+    expect(screen.queryByText(/events-history:/)).not.toBeInTheDocument()
   })
 
   it('shows the active-points audit to the profile owner (#448)', () => {

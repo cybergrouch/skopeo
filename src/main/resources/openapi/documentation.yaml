@@ -665,6 +665,40 @@ paths:
         '404':
           description: No active player with that code
 
+  /api/v1/players/{code}/events:
+    get:
+      summary: A player's event-participation history by code (viewable without login, #704)
+      description: >-
+        Every event the player is signed up for, in any status, with their standing and a recorded-
+        result count, resolved by public code. Parity with the owner dashboard's /api/v1/events/mine;
+        events are already publicly shareable via /api/v1/events/code/{code}, so this is not further
+        gated. Returns the same MyEventResponse shape so the public profile renders it identically.
+      tags:
+        - Users
+      security:
+        - firebaseAuth: []
+        - {}
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The player's shareable public code (case-insensitive).
+      responses:
+        '200':
+          description: The player's event-participation history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MyEventResponse'
+        '401':
+          description: Missing or invalid Firebase token
+        '404':
+          description: No active player with that code
+
   /api/v1/players/{code}/results-summary:
     get:
       summary: A player's win–loss record over time by code (viewable without login, #193)

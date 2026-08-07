@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { CollapsibleCard } from '@/components/CollapsibleCard'
 import { useGetApiV1EventsMine } from '@/api/generated/events/events'
+import { useGetApiV1PlayersCodeEvents } from '@/api/generated/users/users'
 import type { MyEventResponse } from '@/api/generated/model'
 
 /** Today as yyyy-MM-dd (local), comparable lexicographically with an event's ISO end date. */
@@ -67,15 +68,31 @@ function hasResults(event: MyEventResponse): boolean {
   return (event.completedMatchCount ?? 0) > 0
 }
 
+interface EventsHistoryCardProps {
+  /**
+   * The player's shareable public code (#704). When provided, the card reads the public
+   * events-by-code endpoint (any profile); when omitted it reads the caller's own `/events/mine`
+   * for the owner dashboard. This dual-mode mirrors {@link MatchHistoryCard}.
+   */
+  code?: string
+  /** Start minimized behind a "Show all" toggle (#589) — used on the owner's Profile tab. */
+  collapsible?: boolean
+}
+
 /**
- * The player's "Events history" on their Profile tab (#202): the events they're signed up for, split
- * into three buckets (#483). Finalized status wins over everything — a finalized event is always
- * Finalized, even with a future end date or no results. Otherwise Unfinalized = the event ended OR has
- * recorded results (activity started, not concluded); Upcoming = future and untouched. Mirrors the
- * Match history card. Pending/held requests are labelled so confirmed participation stands out.
+ * The player's "Events history" (#202): the events they're signed up for, split into three buckets
+ * (#483). Finalized status wins over everything — a finalized event is always Finalized, even with a
+ * future end date or no results. Otherwise Unfinalized = the event ended OR has recorded results
+ * (activity started, not concluded); Upcoming = future and untouched. Shown on the owner's Profile tab
+ * (own events via `/events/mine`) and, by code, on the public profile (#704). Mirrors the Match
+ * history card. Pending/held requests are labelled so confirmed participation stands out.
  */
-export function EventsHistoryCard({ collapsible = false }: { collapsible?: boolean } = {}) {
-  const query = useGetApiV1EventsMine()
+export function EventsHistoryCard({ code, collapsible = false }: EventsHistoryCardProps = {}) {
+  // Both hooks run (rules of hooks); only the mode's query is enabled + read. When a code is given we
+  // read the public by-code endpoint, else the caller's own events for the owner dashboard (#704).
+  const mineQuery = useGetApiV1EventsMine({ query: { enabled: !code } })
+  const byCodeQuery = useGetApiV1PlayersCodeEvents(code ?? '', { query: { enabled: Boolean(code) } })
+  const query = code ? byCodeQuery : mineQuery
   const events = query.data ?? []
   const today = todayIso()
 
@@ -96,14 +113,16 @@ export function EventsHistoryCard({ collapsible = false }: { collapsible?: boole
   return (
     <CollapsibleCard
       title="Events history"
-      description="Events you’ve signed up for."
+      description={code ? 'Events this player has signed up for.' : 'Events you’ve signed up for.'}
       contentClassName="space-y-4 text-sm"
       collapsible={collapsible}
     >
       {query.isLoading ? (
         <p className="text-muted-foreground">Loading…</p>
       ) : events.length === 0 ? (
-        <p className="text-muted-foreground">You haven’t joined any events yet.</p>
+        <p className="text-muted-foreground">
+          {code ? 'This player hasn’t joined any events yet.' : 'You haven’t joined any events yet.'}
+        </p>
       ) : (
         <>
           <EventSection title="Upcoming" events={upcomingSorted} emptyLabel="No upcoming events." />
