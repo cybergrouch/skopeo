@@ -299,4 +299,50 @@ class EventTeamServiceTest {
 
         service.list(token = token(uid = "host"), eventId = ev.id).shouldBeRight() shouldHaveSize 1
     }
+
+    @Test
+    fun `update keeps the existing name when the name is null`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "Alice")
+        val p2 = provision(uid = "Bob")
+        val ev = event(host = host.id, participants = listOf(p1.id, p2.id), format = TeamType.SINGLES)
+        val team =
+            service
+                .create(token = token(uid = "host"), eventId = ev.id, memberUserIds = listOf(element = p1.id), name = "Keepers")
+                .shouldBeRight()
+
+        val updated =
+            service.update(
+                token = token(uid = "host"),
+                eventId = ev.id,
+                teamId = UUID.fromString(team.id),
+                memberUserIds = listOf(element = p2.id),
+                name = null,
+            ).shouldBeRight()
+        updated.name shouldBe "Keepers"
+        updated.members.single().userId shouldBe p2.id.toString()
+    }
+
+    @Test
+    fun `a plain host cannot modify teams on an ended event`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "Alice")
+        val ended =
+            events.create(
+                command =
+                    CreateEventCommand(
+                        name = "Old Cup",
+                        startDate = LocalDate.now().minusDays(30),
+                        endDate = LocalDate.now().minusDays(20),
+                        participantIds = listOf(element = p1.id),
+                        createdBy = host.id,
+                        format = TeamType.SINGLES,
+                    ),
+            ).toDomain()
+
+        service
+            .create(token = token(uid = "host"), eventId = ended.id, memberUserIds = listOf(element = p1.id), name = null)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Conflict>()
+    }
 }
