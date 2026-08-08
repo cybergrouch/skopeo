@@ -7,8 +7,9 @@ import type { SeedingEntryResponse } from '@/api/generated/model'
 
 // dnd-kit relies on layout measurement that jsdom can't provide; stub it to passthrough components and
 // capture the DndContext onDragEnd so a test can simulate a drop (same technique as AwaitingResultsSection).
-const { dnd } = vi.hoisted(() => ({
+const { dnd, sortable } = vi.hoisted(() => ({
   dnd: { onDragEnd: undefined as undefined | ((e: unknown) => void) },
+  sortable: { isDragging: false },
 }))
 vi.mock('@dnd-kit/core', () => ({
   DndContext: ({ children, onDragEnd }: { children: ReactNode; onDragEnd: (e: unknown) => void }) => {
@@ -31,7 +32,7 @@ vi.mock('@dnd-kit/sortable', () => ({
     setNodeRef: () => undefined,
     transform: null,
     transition: undefined,
-    isDragging: false,
+    isDragging: sortable.isDragging,
   }),
   arrayMove: <T,>(arr: T[], from: number, to: number): T[] => {
     const copy = [...arr]
@@ -275,5 +276,32 @@ describe('SeedingTable', () => {
     await user.click(screen.getByRole('button', { name: 'Regenerate seeding' }))
     expect(onRegenerate).toHaveBeenCalledTimes(1)
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('shows a pending Save label while an order save is in flight (#718)', () => {
+    render(
+      <SeedingTable entries={entries} generatedAt="now" name="Club Open" onSaveOrder={vi.fn()} savingOrder />,
+    )
+    expect(screen.getByRole('button', { name: 'Saving…' })).toBeInTheDocument()
+  })
+
+  it('shows a pending Regenerate label while regeneration is in flight (#718)', () => {
+    render(
+      <SeedingTable entries={entries} generatedAt="now" name="Club Open" onRegenerate={vi.fn()} regenerating />,
+    )
+    expect(screen.getByRole('button', { name: 'Regenerating…' })).toBeInTheDocument()
+  })
+
+  it('dims a row while it is being dragged (#718)', () => {
+    sortable.isDragging = true
+    try {
+      render(
+        <SeedingTable entries={entries} generatedAt="now" name="Club Open" onSaveOrder={vi.fn()} />,
+      )
+      // The dragged rows render with the reduced-opacity style branch.
+      expect(screen.getByText('Ana').closest('tr')).toHaveStyle({ opacity: '0.6' })
+    } finally {
+      sortable.isDragging = false
+    }
   })
 })

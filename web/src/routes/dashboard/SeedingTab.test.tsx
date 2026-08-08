@@ -70,7 +70,7 @@ const {
   removeMemberMutate: vi.fn(),
   generateMutate: vi.fn(),
   saveOrderMutate: vi.fn(),
-  state: { addFail: false },
+  state: { addFail: false, generatePending: false },
   useGetApiV1Users: vi.fn(),
 }))
 
@@ -100,6 +100,7 @@ vi.mock('@/api/generated/player-lists/player-lists', () => ({
     mutateAsync: async (vars: unknown) => removeMemberMutate(vars),
   }),
   usePostApiV1PlayerListsIdSeeding: () => ({
+    isPending: state.generatePending,
     mutateAsync: async (vars: unknown) => generateMutate(vars),
   }),
   usePutApiV1PlayerListsIdSeeding: () => ({
@@ -192,6 +193,7 @@ describe('SeedingTab', () => {
     vi.restoreAllMocks()
     vi.clearAllMocks()
     state.addFail = false
+    state.generatePending = false
     useGetApiV1PlayerLists.mockReturnValue({ data: lists })
     useGetApiV1PlayerListsId.mockReturnValue({ data: undefined })
     useGetApiV1PlayerListsIdSeeding.mockReturnValue({ data: undefined })
@@ -450,6 +452,16 @@ describe('SeedingTab', () => {
     // Clicking it generates a seeding for the selected list.
     await user.click(screen.getByRole('button', { name: 'Generate seeding' }))
     await waitFor(() => expect(generateMutate).toHaveBeenCalledWith({ id: 'l1' }))
+  })
+
+  it('shows a pending label while a seeding is being generated', async () => {
+    state.generatePending = true
+    useGetApiV1PlayerListsId.mockReturnValue({ data: listDetail })
+    useGetApiV1PlayerListsIdSeeding.mockReturnValue({ data: { generatedAt: 'now', entries: [] } })
+    const user = userEvent.setup()
+    renderTab()
+    await user.click(screen.getByRole('button', { name: /Summer Open/ }))
+    expect(screen.getByRole('button', { name: 'Generating…' })).toBeDisabled()
   })
 
   it('downloads a CSV with the expected filename, header, and escaped fields', async () => {
