@@ -1,23 +1,27 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import { setupUser } from '@/test/user'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { RatingsSearchSection } from './RatingsSearchSection'
 
-const { useGetApiV1UsersSearch, putMutate } = vi.hoisted(() => ({
+const { useGetApiV1UsersSearch, setRatingFormProps } = vi.hoisted(() => ({
   useGetApiV1UsersSearch: vi.fn(),
-  putMutate: vi.fn(),
+  setRatingFormProps: vi.fn(),
 }))
 
 vi.mock('@/api/generated/users/users', () => ({
   useGetApiV1UsersSearch,
   getGetApiV1UsersSearchQueryKey: () => ['users', 'search'],
 }))
-vi.mock('@/api/generated/ratings/ratings', () => ({
-  usePutApiV1UsersUserIdRatings: () => ({
-    isPending: false,
-    mutateAsync: async (vars: unknown) => putMutate(vars),
-  }),
+// Stub the per-row rating form. It renders once per result — 25× in the pagination test — and the real
+// form is a heavy 13-option <select> + mutation. Its own behaviour (band preselect + save) is covered by
+// SetRatingForm.test.tsx; here we only assert the props this section wires to it, which keeps these tests
+// cheap and deterministic under load (they were the render-bound flaky ones).
+vi.mock('@/components/SetRatingForm', () => ({
+  SetRatingForm: (props: { userId: string; initialValue?: string; onSaved?: () => void }) => {
+    setRatingFormProps(props)
+    return <span data-testid={`rate-${props.userId}`} />
+  },
 }))
 
 /** Wrap a page of items + total in the query-result shape the hook returns. */
@@ -76,18 +80,18 @@ describe('RatingsSearchSection', () => {
     ).toHaveTextContent('87%')
   })
 
-  it('rates a player from the results, preselected with their current band (#205)', async () => {
+  it('wires each result to a rating form preselected with the current band (#205)', async () => {
     useGetApiV1UsersSearch.mockReturnValue(page([row]))
     const user = setupUser()
     renderSection()
     await user.type(screen.getByLabelText('Name'), 'ana')
     await user.click(screen.getByRole('button', { name: 'Search' }))
 
-    expect(screen.getByLabelText('Rating')).toHaveValue('4.0') // preselected current band
-    await user.selectOptions(screen.getByLabelText('Rating'), '4.5')
-    await user.click(screen.getByRole('button', { name: 'Set rating' }))
-
-    await waitFor(() => expect(putMutate).toHaveBeenCalledWith({ userId: 'u1', data: { band: '4.5' } }))
+    // The section hands each result to SetRatingForm with the player's band preselected; the form's own
+    // rate-and-save behaviour is covered in SetRatingForm.test.tsx.
+    expect(setRatingFormProps).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'u1', initialValue: '4.0' }),
+    )
   })
 
   it('paginates 25/page with numbered links + total, and shows Unrated (#232)', async () => {
