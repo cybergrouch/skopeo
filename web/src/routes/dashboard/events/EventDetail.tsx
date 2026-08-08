@@ -469,11 +469,23 @@ export function EventDetail({
   const expectedSideSize = isDoubles ? 2 : 1;
   const team1RefObj = teams.find((t) => t.id === team1Ref);
   const team2RefObj = teams.find((t) => t.id === team2Ref);
-  // A team ref must match the fixture's effective format (#720) — a doubles team can't fill a singles side.
-  const teamSizeMismatch =
-    useTeams &&
-    ((team1RefObj != null && team1RefObj.members.length !== expectedSideSize) ||
-      (team2RefObj != null && team2RefObj.members.length !== expectedSideSize));
+  // A team can fill a side only when its size matches the fixture's effective format (#736). Since a
+  // team may now hold 1 *or* 2 members regardless of the event format (#734), a 1-member team simply
+  // can't fill a doubles side. Ineligible teams stay listed but unselectable, labelled with why.
+  const teamFitsFormat = (t: (typeof teams)[number]) =>
+    t.members.length === expectedSideSize;
+  const playerCount = (n: number) => `${n} player${n === 1 ? "" : "s"}`;
+  const teamOptionLabel = (t: (typeof teams)[number]) =>
+    teamFitsFormat(t)
+      ? `${t.name} (${playerCount(t.members.length)})`
+      : `${t.name} (${playerCount(t.members.length)} — needs ${expectedSideSize})`;
+  const eligibleTeams = teams.filter(teamFitsFormat);
+  // Still needed as a backstop: the host can pick a team and *then* switch the fixture format, which
+  // leaves an already-selected team stranded at the wrong size.
+  const mismatchedTeams = [team1RefObj, team2RefObj].filter(
+    (t) => t != null && !teamFitsFormat(t),
+  );
+  const teamSizeMismatch = useTeams && mismatchedTeams.length > 0;
 
   function scheduleFixture(e: FormEvent) {
     e.preventDefault();
@@ -1144,7 +1156,8 @@ export function EventDetail({
                     </select>
                   </div>
                   {/* Players-vs-team toggle (#720): offered once teams exist. When on, each side is a
-                      team ref; the team's size must match the fixture's (overridable) format. */}
+                      team ref; the team's size must match the fixture's (overridable) format. When no
+                      teams exist yet, say so rather than hiding the capability entirely (#736). */}
                   {teams.length > 0 ? (
                     <label className="flex items-center gap-2 text-sm">
                       <input
@@ -1155,54 +1168,70 @@ export function EventDetail({
                       />
                       Pick sides from teams
                     </label>
-                  ) : null}
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Create teams for this event to pick a whole team as a side
+                      instead of individual players.
+                    </p>
+                  )}
                   {useTeams ? (
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1">
-                        <Label htmlFor="fixture-team1" className="text-xs">
-                          Team 1
-                        </Label>
-                        <select
-                          id="fixture-team1"
-                          className="h-9 w-full rounded-md border bg-background px-2 text-sm"
-                          value={team1Ref}
-                          onChange={(e) => setTeam1Ref(e.target.value)}
-                        >
-                          <option value="">Select a team…</option>
-                          {teams.map((t) => (
-                            <option
-                              key={t.id}
-                              value={t.id}
-                              disabled={t.id === team2Ref}
-                            >
-                              {t.name}
-                            </option>
-                          ))}
-                        </select>
+                    <>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label htmlFor="fixture-team1" className="text-xs">
+                            Team 1
+                          </Label>
+                          <select
+                            id="fixture-team1"
+                            className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                            value={team1Ref}
+                            onChange={(e) => setTeam1Ref(e.target.value)}
+                          >
+                            <option value="">Select a team…</option>
+                            {teams.map((t) => (
+                              <option
+                                key={t.id}
+                                value={t.id}
+                                disabled={t.id === team2Ref || !teamFitsFormat(t)}
+                              >
+                                {teamOptionLabel(t)}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor="fixture-team2" className="text-xs">
+                            Team 2
+                          </Label>
+                          <select
+                            id="fixture-team2"
+                            className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                            value={team2Ref}
+                            onChange={(e) => setTeam2Ref(e.target.value)}
+                          >
+                            <option value="">Select a team…</option>
+                            {teams.map((t) => (
+                              <option
+                                key={t.id}
+                                value={t.id}
+                                disabled={t.id === team1Ref || !teamFitsFormat(t)}
+                              >
+                                {teamOptionLabel(t)}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="fixture-team2" className="text-xs">
-                          Team 2
-                        </Label>
-                        <select
-                          id="fixture-team2"
-                          className="h-9 w-full rounded-md border bg-background px-2 text-sm"
-                          value={team2Ref}
-                          onChange={(e) => setTeam2Ref(e.target.value)}
-                        >
-                          <option value="">Select a team…</option>
-                          {teams.map((t) => (
-                            <option
-                              key={t.id}
-                              value={t.id}
-                              disabled={t.id === team1Ref}
-                            >
-                              {t.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
+                      {/* Every team is the wrong size for this format — explain instead of showing two
+                          dropdowns whose every option is disabled (#736). */}
+                      {eligibleTeams.length === 0 ? (
+                        <p className="text-sm text-muted-foreground" role="status">
+                          No team fits {MATCH_FORMAT_LABELS[format]} — it needs{" "}
+                          {playerCount(expectedSideSize)} a side. Pick players
+                          instead, or edit a team’s members below.
+                        </p>
+                      ) : null}
+                    </>
                   ) : (
                   <div className="grid grid-cols-2 gap-2">
                     {isDoubles ? (
@@ -1256,9 +1285,11 @@ export function EventDetail({
                   )}
                   {teamSizeMismatch ? (
                     <p className="text-sm text-destructive" role="alert">
-                      A selected team’s size doesn’t match the fixture format.{" "}
-                      {MATCH_FORMAT_LABELS[format]} needs{" "}
-                      {expectedSideSize === 1 ? "1 player" : "2 players"} a side.
+                      {mismatchedTeams.map((t) => t?.name).join(" and ")}{" "}
+                      {mismatchedTeams.length === 1 ? "doesn’t" : "don’t"} match
+                      the fixture format. {MATCH_FORMAT_LABELS[format]} needs{" "}
+                      {playerCount(expectedSideSize)} a side. Reselect a team, or
+                      change the format back.
                     </p>
                   ) : null}
                   <div className="grid grid-cols-2 gap-2">
