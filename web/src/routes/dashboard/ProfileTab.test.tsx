@@ -430,6 +430,13 @@ describe("ProfileTab", () => {
       ).toHaveAttribute("href", "/players/K7Q2MX");
     });
 
+    it("shows a pending label and disables the button while the claim is in flight", () => {
+      claimState.isPending = true;
+      renderProfile([Capability.PLAYER], "K7Q2MX");
+      const button = screen.getByRole("button", { name: "Claiming…" });
+      expect(button).toBeDisabled();
+    });
+
     it("surfaces the server error message on a failed claim and stays on the form", async () => {
       claimMutate.mockRejectedValue({
         response: { data: { message: "This claim code has expired." } },
