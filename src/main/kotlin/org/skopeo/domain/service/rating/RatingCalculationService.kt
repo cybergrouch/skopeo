@@ -36,6 +36,7 @@ import org.skopeo.domain.model.SetScore
 import org.skopeo.domain.model.Team
 import org.skopeo.domain.model.TeamType
 import org.skopeo.domain.model.TiebreakScore
+import org.skopeo.domain.service.GroupClassifier
 import org.skopeo.domain.service.audit.AuditService
 import org.skopeo.domain.service.calculator.AuditEntry
 import org.skopeo.domain.service.calculator.RankingCalculator
@@ -62,6 +63,8 @@ class RatingCalculationService(
     private val users: UserRepository = UserRepository(),
     private val calculator: RankingCalculator = PerformanceBasedRankingCalculatorImpl(),
     private val audit: AuditService = AuditService(),
+    // Owns all group-classification logic (#719); stamps each PlayerProfile with its opaque `group`.
+    private val classifier: GroupClassifier = GroupClassifier(),
 ) {
     fun calculate(
         token: VerifiedFirebaseToken,
@@ -250,8 +253,12 @@ class RatingCalculationService(
             // picks the format-specific handler, and the audit/response are keyed per player either way.
             val players = match.team1.userIds + match.team2.userIds
             val ratingsByUser = players.map { it to currentRating(userId = it, snapshot = snapshot).bind() }.toMap()
+            // Stamp each player's opaque group (#719) via the classifier, from the user's sex + the match
+            // format. The calculator then applies the binary same-group factor; classification stays here.
+            val groupsByUser =
+                groupsFor(users = users, classifier = classifier, userIds = players, format = match.matchFormat)
 
-            val request = buildRequest(match = match, ratingsByUser = ratingsByUser)
+            val request = buildRequest(match = match, ratingsByUser = ratingsByUser, groupsByUser = groupsByUser)
             val result = calculator.calculate(request = request)
             val breakdowns = breakdownsByPlayer(audit = result.audit)
 
@@ -398,9 +405,25 @@ private fun CalculationBreakdown.toSnapshot(): CalculationBreakdownSnapshot =
         sets = sets,
     )
 
+/**
+ * The opaque group label per player (#719): the classifier maps each user's sex + the match format to a
+ * group. A missing user simply yields no entry (null group downstream → same-group → factor 1, backward
+ * compatible), so classification never blocks a calculation.
+ */
+private fun groupsFor(
+    users: UserRepository,
+    classifier: GroupClassifier,
+    userIds: List<UUID>,
+    format: TeamType,
+): Map<UUID, String?> {
+    val sexByUser = users.findAllByIds(ids = userIds).associate { it.toDomain().let { user -> user.id to user.sex } }
+    return userIds.associateWith { classifier.classify(sex = sexByUser[it], format = format) }
+}
+
 private fun buildRequest(
     match: Match,
     ratingsByUser: Map<UUID, BigDecimal>,
+    groupsByUser: Map<UUID, String?>,
 ): RankingCalculationRequest {
     val t1 = match.team1.teamId.toString()
     val t2 = match.team2.teamId.toString()
@@ -412,6 +435,7 @@ private fun buildRequest(
                     userIds = match.team1.userIds,
                     format = match.matchFormat,
                     ratingsByUser = ratingsByUser,
+                    groupsByUser = groupsByUser,
                     // Per-side handicap (#486): deducted from this side for the delta calc only.
                     handicap = match.team1Handicap,
                 ),
@@ -421,6 +445,7 @@ private fun buildRequest(
                     userIds = match.team2.userIds,
                     format = match.matchFormat,
                     ratingsByUser = ratingsByUser,
+                    groupsByUser = groupsByUser,
                     handicap = match.team2Handicap,
                 ),
         )
@@ -460,6 +485,7 @@ private fun teamOf(
     userIds: List<UUID>,
     format: TeamType,
     ratingsByUser: Map<UUID, BigDecimal>,
+    groupsByUser: Map<UUID, String?>,
     handicap: BigDecimal? = null,
 ): Team =
     Team(
@@ -471,6 +497,8 @@ private fun teamOf(
                     playerId = userId.toString(),
                     name = "Player",
                     rating = Rating.fromValue(value = ratingsByUser.getValue(key = userId).toPlainString()),
+                    // Opaque group (#719) for the calculator's same-group check; null → factor 1.
+                    group = groupsByUser[userId],
                 )
             },
         teamType = format,
