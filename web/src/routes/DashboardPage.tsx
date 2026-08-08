@@ -35,7 +35,6 @@ import { ResearchTab } from "./dashboard/ResearchTab";
 import { StandingsTab } from "./dashboard/StandingsTab";
 import { ActivityTab } from "./dashboard/ActivityTab";
 import { ReportTab } from "./dashboard/ReportTab";
-import { ClaimTab } from "./dashboard/ClaimTab";
 import { AboutTab } from "./dashboard/AboutTab";
 
 interface Section {
@@ -103,9 +102,8 @@ export function DashboardPage() {
       ? [{ value: "research", label: "Research", element: <ResearchTab /> }]
       : []),
     { value: "standings", label: "Standings", element: <StandingsTab /> },
-    // Claiming a placeholder account (#496) is open to any signed-in user; they need only a code from
-    // an administrator, so this tab is always present.
-    { value: "claim", label: "Claim account", element: <ClaimTab /> },
+    // Claiming a placeholder account (#496) now lives conditionally on the Profile tab (#727), shown
+    // only while the owner's account is still claim-eligible — no standalone Claim tab.
     ...(showMatches
       ? [
           {

@@ -1,17 +1,27 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { setupUser } from "@/test/user";
 import { Capability } from "@/auth/capabilities";
 import { ProfileTab } from "./ProfileTab";
+
+const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }));
+vi.mock("sonner", () => ({ toast: { error: toastError } }));
 
 const {
   useGetApiV1UsersUserIdRatings,
   useGetApiV1UsersUserIdRatingHistory,
   useGetApiV1PlayersCodeMatchHistory,
+  claimMutate,
+  claimState,
   useAuthMock,
 } = vi.hoisted(() => ({
   useGetApiV1UsersUserIdRatings: vi.fn(),
   useGetApiV1UsersUserIdRatingHistory: vi.fn(),
   useGetApiV1PlayersCodeMatchHistory: vi.fn(),
+  claimMutate: vi.fn(),
+  claimState: { isPending: false },
   useAuthMock: vi.fn(),
 }));
 
@@ -21,6 +31,11 @@ vi.mock("@/api/generated/ratings/ratings", () => ({
 }));
 vi.mock("@/api/generated/users/users", () => ({
   useGetApiV1PlayersCodeMatchHistory,
+  usePostApiV1UsersClaim: () => ({
+    mutateAsync: claimMutate,
+    isPending: claimState.isPending,
+  }),
+  getGetApiV1UsersMeQueryKey: () => ["me"],
 }));
 // RatingHistoryCard pulls in the matches API (axios → firebase); mock it so the real Firebase
 // client never initializes in tests.
@@ -64,12 +79,16 @@ function renderProfile(
   photoUrl?: string | null,
 ) {
   return render(
-    <ProfileTab
-      userId="u1"
-      capabilities={capabilities}
-      publicCode={publicCode}
-      photoUrl={photoUrl}
-    />,
+    <QueryClientProvider client={new QueryClient()}>
+      <MemoryRouter>
+        <ProfileTab
+          userId="u1"
+          capabilities={capabilities}
+          publicCode={publicCode}
+          photoUrl={photoUrl}
+        />
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 
@@ -90,6 +109,18 @@ describe("ProfileTab", () => {
     useGetApiV1PlayersCodeMatchHistory.mockReturnValue({
       data: { items: [], total: 0 },
       isLoading: false,
+    });
+    claimState.isPending = false;
+    claimMutate.mockResolvedValue({
+      id: "u1",
+      publicCode: "K7Q2MX",
+      country: "PH",
+      kycVerified: false,
+      isActive: true,
+      names: [],
+      contacts: [],
+      identities: [],
+      capabilities: [],
     });
   });
 
@@ -332,5 +363,98 @@ describe("ProfileTab", () => {
     });
     renderProfile();
     expect(screen.getAllByText("Loading…").length).toBe(2);
+  });
+
+  // Claim-a-placeholder card (#727), shown only while the account is claim-eligible (empty).
+  describe("claim a placeholder account (#727)", () => {
+    it("shows the claim form for an eligible, empty account (no rating, no matches)", () => {
+      renderProfile([Capability.PLAYER], "K7Q2MX");
+      expect(
+        screen.getByText("Claim a placeholder account"),
+      ).toBeInTheDocument();
+      expect(screen.getByLabelText("Claim code")).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Claim account" }),
+      ).toBeInTheDocument();
+    });
+
+    it("hides the claim form once the account has a rating", () => {
+      useGetApiV1UsersUserIdRatings.mockReturnValue({
+        data: [{ system: "NTRP", value: "4.000000", level: "4.0" }],
+        isLoading: false,
+      });
+      renderProfile([Capability.PLAYER], "K7Q2MX");
+      expect(
+        screen.queryByText("Claim a placeholder account"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("hides the claim form once the account has match history", () => {
+      useGetApiV1PlayersCodeMatchHistory.mockReturnValue({
+        data: { items: [], total: 3 },
+        isLoading: false,
+      });
+      renderProfile([Capability.PLAYER], "K7Q2MX");
+      expect(
+        screen.queryByText("Claim a placeholder account"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("does not flash the claim form while the eligibility signals are loading", () => {
+      useGetApiV1UsersUserIdRatings.mockReturnValue({
+        data: undefined,
+        isLoading: true,
+      });
+      renderProfile([Capability.PLAYER], "K7Q2MX");
+      expect(
+        screen.queryByText("Claim a placeholder account"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("claims an account and replaces the form with the success state", async () => {
+      const user = setupUser();
+      renderProfile([Capability.PLAYER], "K7Q2MX");
+      await user.type(screen.getByLabelText("Claim code"), "SECRET-1234");
+      await user.click(screen.getByRole("button", { name: "Claim account" }));
+
+      await waitFor(() =>
+        expect(claimMutate).toHaveBeenCalledWith({
+          data: { code: "SECRET-1234" },
+        }),
+      );
+      expect(await screen.findByText("Account claimed")).toBeInTheDocument();
+      // The form itself is gone once claimed.
+      expect(screen.queryByLabelText("Claim code")).not.toBeInTheDocument();
+      expect(
+        screen.getByRole("link", { name: /view your profile/i }),
+      ).toHaveAttribute("href", "/players/K7Q2MX");
+    });
+
+    it("surfaces the server error message on a failed claim and stays on the form", async () => {
+      claimMutate.mockRejectedValue({
+        response: { data: { message: "This claim code has expired." } },
+      });
+      const user = setupUser();
+      renderProfile([Capability.PLAYER], "K7Q2MX");
+      await user.type(screen.getByLabelText("Claim code"), "OLD-CODE");
+      await user.click(screen.getByRole("button", { name: "Claim account" }));
+
+      await waitFor(() =>
+        expect(toastError).toHaveBeenCalledWith("This claim code has expired.", {
+          duration: 8000,
+        }),
+      );
+      expect(screen.queryByText("Account claimed")).not.toBeInTheDocument();
+    });
+
+    it("validates that a code is entered before claiming", async () => {
+      const user = setupUser();
+      renderProfile([Capability.PLAYER], "K7Q2MX");
+      await user.click(screen.getByRole("button", { name: "Claim account" }));
+      expect(
+        await screen.findByText(/enter the claim code you were given/i),
+      ).toBeInTheDocument();
+      expect(claimMutate).not.toHaveBeenCalled();
+    });
   });
 });
