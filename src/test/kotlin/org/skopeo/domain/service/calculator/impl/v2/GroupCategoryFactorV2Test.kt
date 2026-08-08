@@ -72,7 +72,7 @@ class GroupCategoryFactorV2Test {
         val audit = v2.calculate(request = request(p1Group = "Male", p2Group = "Female")).audit
         val groupEntry = audit.single { it.context.containsKey(key = "groupCategoryFactor") }
 
-        groupEntry.context.getValue(key = "groupCategoryFactor") shouldBe "0.0"
+        groupEntry.context.getValue(key = "groupCategoryFactor") shouldBe "0.000000"
         groupEntry.context.getValue(key = "team1Group") shouldBe "Male"
         groupEntry.context.getValue(key = "team2Group") shouldBe "Female"
     }
@@ -82,6 +82,6 @@ class GroupCategoryFactorV2Test {
         val audit = v2.calculate(request = request(p1Group = "Male", p2Group = "Male")).audit
         val groupEntry = audit.single { it.context.containsKey(key = "groupCategoryFactor") }
 
-        groupEntry.context.getValue(key = "groupCategoryFactor") shouldBe "1.0"
+        groupEntry.context.getValue(key = "groupCategoryFactor") shouldBe "1.000000"
     }
 }
