@@ -37,6 +37,7 @@ class EventRepository {
                     it[createdBy] = command.createdBy
                     it[clubId] = command.clubId
                     it[circuitId] = command.circuitId
+                    it[format] = command.format.name
                     it[type] = command.type.name
                     it[awardRankingPoints] = command.awardRankingPoints
                 }.value
@@ -368,6 +369,7 @@ class EventRepository {
             clubId = this[EventsTable.clubId]?.value,
             circuitId = this[EventsTable.circuitId]?.value,
             calcPriority = this[EventsTable.calcPriority],
+            format = this[EventsTable.format],
             type = this[EventsTable.type],
             finalizedAt = this[EventsTable.finalizedAt],
             finalizedBy = this[EventsTable.finalizedBy]?.value,

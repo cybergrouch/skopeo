@@ -41,6 +41,7 @@ fun EventView.toResponse(
         clubName = club?.name,
         circuitId = event.circuitId?.toString(),
         calcPriority = event.calcPriority,
+        format = event.format.name,
         type = event.type.name,
         finalizedAt = event.finalizedAt?.toString(),
         isFinalized = event.isFinalized,

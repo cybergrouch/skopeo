@@ -3,13 +3,15 @@
 
 package org.skopeo.routes
 
-import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
+import io.ktor.client.request.patch
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
@@ -24,8 +26,10 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.dto.event.AddParticipantRequest
 import org.skopeo.common.dto.event.CreateEventRequest
+import org.skopeo.common.dto.event.CreateEventTeamRequest
 import org.skopeo.common.dto.event.EventResponse
-import org.skopeo.common.dto.seeding.SeedingResponse
+import org.skopeo.common.dto.event.EventTeamResponse
+import org.skopeo.common.dto.event.UpdateEventTeamRequest
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuthProvider
@@ -34,16 +38,14 @@ import org.skopeo.domain.model.ProvisionUserCommand
 import org.skopeo.domain.model.User
 import org.skopeo.domain.model.UserIdentity
 import org.skopeo.domain.model.UserName
-import org.skopeo.domain.service.rating.RatingAssembler
 import org.skopeo.module
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
 import org.skopeo.testsupport.TestFirebaseAuth
-import java.math.BigDecimal
 import java.time.LocalDate
 
-/** End-to-end exercise of the event-sourced seeding routes (#714): roster → generate → read back. */
-class EventSeedingApiIntegrationTest {
+/** End-to-end exercise of the durable event-team routes (#720): create → list → update → dissolve. */
+class EventTeamApiIntegrationTest {
     companion object {
         @BeforeAll
         @JvmStatic
@@ -81,76 +83,91 @@ class EventSeedingApiIntegrationTest {
 
     private fun tokenFor(uid: String): String = TestFirebaseAuth.mintToken(uid = uid, emailVerified = true)
 
-    private suspend fun HttpClient.createEvent(token: String): EventResponse =
+    private suspend fun HttpClient.createDoublesEvent(token: String): EventResponse =
         post(urlString = "/api/v1/events") {
             header(key = HttpHeaders.Authorization, value = "Bearer $token")
             contentType(type = ContentType.Application.Json)
             setBody(
                 body =
                     CreateEventRequest(
-                        name = "Spring Open",
+                        name = "Doubles Cup",
                         startDate = LocalDate.now().toString(),
                         endDate = LocalDate.now().plusDays(7).toString(),
-                        format = "SINGLES",
+                        format = "DOUBLES",
                     ),
             )
         }.body()
 
+    private suspend fun HttpClient.addParticipant(
+        token: String,
+        eventId: String,
+        userId: String,
+    ) {
+        post(urlString = "/api/v1/events/$eventId/participants") {
+            header(key = HttpHeaders.Authorization, value = "Bearer $token")
+            contentType(type = ContentType.Application.Json)
+            setBody(body = AddParticipantRequest(userId = userId))
+        }.status shouldBe HttpStatusCode.OK
+    }
+
     @Test
-    fun `a host adds a rated participant, generates the event seeding, and reads it back`() =
+    fun `a host creates, lists, updates, and dissolves a durable team`() =
         withApp { client ->
             seedUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
-            val player = seedUser(uid = "p1", roles = setOf(element = Capability.PLAYER))
-            RatingAssembler().setRating(userId = player.id, rating = BigDecimal("4.0"), level = "4.0")
+            val a = seedUser(uid = "Alice", roles = setOf(element = Capability.PLAYER))
+            val b = seedUser(uid = "Bob", roles = setOf(element = Capability.PLAYER))
+            val c = seedUser(uid = "Cara", roles = setOf(element = Capability.PLAYER))
             val host = tokenFor(uid = "host")
-            val event = client.createEvent(token = host)
+            val event = client.createDoublesEvent(token = host)
+            listOf(a, b, c).forEach { client.addParticipant(token = host, eventId = event.id, userId = it.id.toString()) }
 
-            client.post(urlString = "/api/v1/events/${event.id}/participants") {
+            val created =
+                client.post(urlString = "/api/v1/events/${event.id}/teams") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = CreateEventTeamRequest(memberUserIds = listOf(a.id.toString(), b.id.toString()), name = null))
+                }
+            created.status shouldBe HttpStatusCode.Created
+            val team = created.body<EventTeamResponse>()
+            team.name shouldBe "Alice/Bob"
+            team.members shouldHaveSize 2
+
+            client.get(urlString = "/api/v1/events/${event.id}/teams") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $host")
+            }.body<List<EventTeamResponse>>() shouldHaveSize 1
+
+            val updated =
+                client.patch(urlString = "/api/v1/events/${event.id}/teams/${team.id}") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = UpdateEventTeamRequest(memberUserIds = listOf(a.id.toString(), c.id.toString()), name = "Renamed"))
+                }
+            updated.status shouldBe HttpStatusCode.OK
+            updated.body<EventTeamResponse>().name shouldBe "Renamed"
+
+            client.delete(urlString = "/api/v1/events/${event.id}/teams/${team.id}") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $host")
+            }.status shouldBe HttpStatusCode.NoContent
+
+            client.get(urlString = "/api/v1/events/${event.id}/teams") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $host")
+            }.body<List<EventTeamResponse>>() shouldHaveSize 0
+        }
+
+    @Test
+    fun `creating a team with the wrong size for the event format is rejected`() =
+        withApp { client ->
+            seedUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+            val a = seedUser(uid = "Alice", roles = setOf(element = Capability.PLAYER))
+            val host = tokenFor(uid = "host")
+            val event = client.createDoublesEvent(token = host)
+            client.addParticipant(token = host, eventId = event.id, userId = a.id.toString())
+
+            // A DOUBLES event needs 2 members; a single-member team is a 400.
+            client.post(urlString = "/api/v1/events/${event.id}/teams") {
                 header(key = HttpHeaders.Authorization, value = "Bearer $host")
                 contentType(type = ContentType.Application.Json)
-                setBody(body = AddParticipantRequest(userId = player.id.toString()))
-            }.status shouldBe HttpStatusCode.OK
-
-            val generated =
-                client.post(urlString = "/api/v1/events/${event.id}/seeding") {
-                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
-                }
-            generated.status shouldBe HttpStatusCode.OK
-            generated.body<SeedingResponse>().entries.single().let {
-                it.seed shouldBe 1
-                it.position shouldBe 1
-                it.userId shouldBe player.id.toString()
-                it.ntrpBand shouldBe "4.0"
-                // Raw rating is ADMINISTRATOR-only (#583): a non-admin HOST gets the band + seed, not the value.
-                it.rating.shouldBeNull()
-            }
-
-            client.get(urlString = "/api/v1/events/${event.id}/seeding") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $host")
-            }.body<SeedingResponse>().entries.single().userId shouldBe player.id.toString()
-        }
-
-    @Test
-    fun `a non-owner host cannot seed another host's event, returning 403`() =
-        withApp { client ->
-            seedUser(uid = "owner", roles = setOf(Capability.PLAYER, Capability.HOST))
-            seedUser(uid = "other", roles = setOf(Capability.PLAYER, Capability.HOST))
-            val event = client.createEvent(token = tokenFor(uid = "owner"))
-
-            client.post(urlString = "/api/v1/events/${event.id}/seeding") {
-                header(key = HttpHeaders.Authorization, value = "Bearer ${tokenFor(uid = "other")}")
-            }.status shouldBe HttpStatusCode.Forbidden
-        }
-
-    @Test
-    fun `reading an event seeding before one is generated returns 404`() =
-        withApp { client ->
-            seedUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
-            val host = tokenFor(uid = "host")
-            val event = client.createEvent(token = host)
-
-            client.get(urlString = "/api/v1/events/${event.id}/seeding") {
-                header(key = HttpHeaders.Authorization, value = "Bearer $host")
-            }.status shouldBe HttpStatusCode.NotFound
+                setBody(body = CreateEventTeamRequest(memberUserIds = listOf(element = a.id.toString()), name = null))
+            }.status shouldBe HttpStatusCode.BadRequest
         }
 }

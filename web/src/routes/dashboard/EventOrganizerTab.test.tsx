@@ -356,6 +356,7 @@ describe("EventOrganizerTab", () => {
         startDate: "2026-06-01",
         endDate: "2026-06-02",
         type: "OPEN_PLAY",
+        format: "SINGLES",
         participantIds: ["u1"],
         awardRankingPoints: false,
       },
@@ -384,6 +385,29 @@ describe("EventOrganizerTab", () => {
         startDate: "2026-06-01",
         endDate: "2026-06-02",
         type: "OPEN_PLAY",
+        format: "SINGLES",
+        participantIds: [],
+        awardRankingPoints: false,
+      },
+    });
+  });
+
+  it("includes the chosen organizing format in the create payload (#720)", async () => {
+    const user = userEvent.setup();
+    renderTab();
+    await user.type(screen.getByLabelText("Name"), "Doubles Night");
+    await user.type(screen.getByLabelText("Start date"), "2026-06-01");
+    await user.type(screen.getByLabelText("End date"), "2026-06-02");
+    await user.selectOptions(screen.getByLabelText("Format"), "DOUBLES");
+    await user.click(screen.getByRole("button", { name: "Create event" }));
+
+    expect(createMutate).toHaveBeenCalledWith({
+      data: {
+        name: "Doubles Night",
+        startDate: "2026-06-01",
+        endDate: "2026-06-02",
+        type: "OPEN_PLAY",
+        format: "DOUBLES",
         participantIds: [],
         awardRankingPoints: false,
       },
@@ -482,6 +506,7 @@ describe("EventOrganizerTab", () => {
         startDate: "2026-06-01",
         endDate: "2026-06-02",
         type: "OPEN_PLAY",
+        format: "SINGLES",
         participantIds: [],
         clubId: "c1",
         awardRankingPoints: false,
@@ -685,6 +710,7 @@ describe("EventOrganizerTab", () => {
         startDate: "2026-06-01",
         endDate: "2026-06-02",
         type: "OPEN_PLAY",
+        format: "SINGLES",
         participantIds: [],
         awardRankingPoints: true,
       },
@@ -715,6 +741,7 @@ describe("EventOrganizerTab", () => {
         startDate: "2026-06-01",
         endDate: "2026-06-02",
         type: "TOURNAMENT",
+        format: "SINGLES",
         participantIds: [],
         circuitId: "cir1",
         awardRankingPoints: false,

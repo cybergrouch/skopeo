@@ -120,6 +120,25 @@ class OpenAPIIntegrationTest {
             body shouldContain "placementBracket"
         }
 
+    /** Event format + durable teams (#720): the event-format field, the team paths, and their schemas. */
+    @Test
+    fun testOpenAPISpecIncludesEventFormatAndTeams() =
+        testApplication {
+            application {
+                module(initDatabase = false)
+            }
+            val body = client.get(urlString = "/openapi.yaml").bodyAsText()
+            body shouldContain "/api/v1/events/{id}/teams"
+            body shouldContain "/api/v1/events/{id}/teams/{teamId}"
+            body shouldContain "CreateEventTeamRequest"
+            body shouldContain "UpdateEventTeamRequest"
+            body shouldContain "EventTeamResponse"
+            body shouldContain "EventTeamMemberResponse"
+            // Team refs on fixture creation.
+            body shouldContain "team1Id"
+            body shouldContain "team2Id"
+        }
+
     @Test
     fun testOpenAPISpecEndpoint() =
         testApplication {

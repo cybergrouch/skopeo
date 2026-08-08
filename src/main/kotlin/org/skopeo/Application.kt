@@ -42,6 +42,7 @@ import org.skopeo.routes.configureClubRoutes
 import org.skopeo.routes.configureContactRoutes
 import org.skopeo.routes.configureDuplicateCandidateRoutes
 import org.skopeo.routes.configureEventRoutes
+import org.skopeo.routes.configureEventTeamRoutes
 import org.skopeo.routes.configureFeatureFlagRoutes
 import org.skopeo.routes.configureInviteRoutes
 import org.skopeo.routes.configureMatchRoutes
@@ -122,6 +123,7 @@ fun Application.module(
     configureRatingRequestRoutes()
     configureMatchRoutes()
     configureEventRoutes()
+    configureEventTeamRoutes()
     configureClubRoutes()
     configureApiClientRoutes()
     configureCircuitRoutes()

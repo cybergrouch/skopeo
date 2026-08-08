@@ -25,6 +25,8 @@ data class EventEntity(
     val clubId: UUID?,
     val circuitId: UUID?,
     val calcPriority: Double?,
+    // Raw event-format enum name (#720): SINGLES | DOUBLES | MIXED_DOUBLES; parsed to the domain enum in toDomain.
+    val format: String,
     // Raw event-type enum name (e.g. OPEN_PLAY | TOURNAMENT); parsed to the domain enum in toDomain.
     val type: String,
     val finalizedAt: LocalDateTime?,
