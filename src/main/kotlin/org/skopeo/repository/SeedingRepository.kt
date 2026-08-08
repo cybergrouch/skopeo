@@ -37,19 +37,41 @@ class SeedingRepository {
         data class Event(val eventId: UUID) : SeedingSource
     }
 
-    /** Replace any existing seeding for [listId] with a fresh snapshot (regenerate overwrites). */
+    /**
+     * Replace any existing seeding for [listId] with a fresh snapshot (regenerate overwrites). Pass
+     * [manuallyEdited] = true when persisting a host's hand-reordered order (#718); the generate path
+     * leaves it false.
+     */
     fun replace(
         listId: UUID,
         generatedBy: UUID?,
         entries: List<SeedingEntry>,
-    ): Seeding = replaceForSource(source = SeedingSource.List(listId = listId), generatedBy = generatedBy, entries = entries)
+        manuallyEdited: Boolean = false,
+    ): Seeding =
+        replaceForSource(
+            source = SeedingSource.List(listId = listId),
+            generatedBy = generatedBy,
+            entries = entries,
+            manuallyEdited = manuallyEdited,
+        )
 
-    /** Replace any existing seeding for [eventId] with a fresh snapshot (#714, regenerate overwrites). */
+    /**
+     * Replace any existing seeding for [eventId] with a fresh snapshot (#714, regenerate overwrites).
+     * Pass [manuallyEdited] = true for a host's hand-reordered order (#718); the generate path leaves
+     * it false.
+     */
     fun replaceForEvent(
         eventId: UUID,
         generatedBy: UUID?,
         entries: List<SeedingEntry>,
-    ): Seeding = replaceForSource(source = SeedingSource.Event(eventId = eventId), generatedBy = generatedBy, entries = entries)
+        manuallyEdited: Boolean = false,
+    ): Seeding =
+        replaceForSource(
+            source = SeedingSource.Event(eventId = eventId),
+            generatedBy = generatedBy,
+            entries = entries,
+            manuallyEdited = manuallyEdited,
+        )
 
     fun findByListId(listId: UUID): Either<ServiceError, SeedingAggregateEntity> =
         findForSource(source = SeedingSource.List(listId = listId))
@@ -62,6 +84,7 @@ class SeedingRepository {
         source: SeedingSource,
         generatedBy: UUID?,
         entries: List<SeedingEntry>,
+        manuallyEdited: Boolean,
     ): Seeding =
         transaction {
             // Delete-by-source cascades the existing entries; a nullable source column keeps FK integrity.
@@ -78,6 +101,7 @@ class SeedingRepository {
                     it[eventId] = sourceEventId
                     it[generatedAt] = now
                     it[SeedingsTable.generatedBy] = generatedBy
+                    it[SeedingsTable.manuallyEdited] = manuallyEdited
                 }.value
             entries.forEach { entry ->
                 SeedingEntriesTable.insert {
@@ -93,7 +117,14 @@ class SeedingRepository {
                     it[age] = entry.age
                 }
             }
-            Seeding(id = newSeedingId, listId = sourceListId, eventId = sourceEventId, generatedAt = now, entries = entries)
+            Seeding(
+                id = newSeedingId,
+                listId = sourceListId,
+                eventId = sourceEventId,
+                generatedAt = now,
+                manuallyEdited = manuallyEdited,
+                entries = entries,
+            )
         }
 
     private fun findForSource(source: SeedingSource): Either<ServiceError, SeedingAggregateEntity> =
@@ -171,5 +202,6 @@ class SeedingRepository {
             eventId = this[SeedingsTable.eventId]?.value,
             generatedAt = this[SeedingsTable.generatedAt],
             generatedBy = this[SeedingsTable.generatedBy]?.value,
+            manuallyEdited = this[SeedingsTable.manuallyEdited],
         )
 }

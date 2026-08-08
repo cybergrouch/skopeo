@@ -224,6 +224,69 @@ class SeedingServiceTest {
     }
 
     @Test
+    fun `saveOrder persists the host order, renumbers seeds 1 to N, and marks manually edited`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val a = provision(uid = "alice").also { rate(user = it, value = "4.5") }
+        val b = provision(uid = "bob").also { rate(user = it, value = "3.5") }
+        val c = provision(uid = "carol").also { rate(user = it, value = "4.0") }
+        val listId = listWith(members = listOf(a, b, c))
+        // Generate first (rating-desc = a, c, b), then save a hand order that fully reverses it.
+        service.generate(token = token(uid = "host"), listId = listId).shouldBeRight()
+
+        val saved =
+            service.saveOrder(token = token(uid = "host"), listId = listId, orderedUserIds = listOf(b.id, c.id, a.id))
+                .shouldBeRight()
+        saved.entries.map { it.userId } shouldBe listOf(b.id.toString(), c.id.toString(), a.id.toString())
+        saved.entries.map { it.position } shouldBe listOf(1, 2, 3)
+        // Reordering reassigns seeds 1..N by position — every row is seeded, old numbers not preserved.
+        saved.entries.map { it.seed } shouldBe listOf(1, 2, 3)
+        saved.manuallyEdited shouldBe true
+
+        // The saved order + flag survive a read, and there is still a single current seeding.
+        val readBack = service.get(token = token(uid = "host"), listId = listId).shouldBeRight()
+        readBack.entries.map { it.userId } shouldBe listOf(b.id.toString(), c.id.toString(), a.id.toString())
+        readBack.manuallyEdited shouldBe true
+    }
+
+    @Test
+    fun `saveOrder rejects an order that is not exactly the seedable set`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val a = provision(uid = "alice").also { rate(user = it, value = "4.5") }
+        val b = provision(uid = "bob").also { rate(user = it, value = "3.5") }
+        val listId = listWith(members = listOf(a, b))
+        service.generate(token = token(uid = "host"), listId = listId).shouldBeRight()
+
+        // Missing bob → not a permutation of the seedable set.
+        service.saveOrder(token = token(uid = "host"), listId = listId, orderedUserIds = listOf(element = a.id))
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
+    }
+
+    @Test
+    fun `regenerating after a manual save resets the manually-edited flag`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val a = provision(uid = "alice").also { rate(user = it, value = "4.5") }
+        val b = provision(uid = "bob").also { rate(user = it, value = "3.5") }
+        val listId = listWith(members = listOf(a, b))
+        service.generate(token = token(uid = "host"), listId = listId).shouldBeRight()
+        service.saveOrder(token = token(uid = "host"), listId = listId, orderedUserIds = listOf(b.id, a.id)).shouldBeRight()
+
+        val regenerated = service.generate(token = token(uid = "host"), listId = listId).shouldBeRight()
+        regenerated.manuallyEdited shouldBe false
+    }
+
+    @Test
+    fun `saving order on someone else's list is forbidden`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        provision(uid = "intruder", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val a = provision(uid = "alice").also { rate(user = it, value = "4.0") }
+        val listId = listWith(members = listOf(element = a))
+        service.generate(token = token(uid = "host"), listId = listId).shouldBeRight()
+
+        service.saveOrder(token = token(uid = "intruder"), listId = listId, orderedUserIds = listOf(element = a.id))
+            .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+    }
+
+    @Test
     fun `get returns not-found before a seeding is generated`() {
         provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val listId = listWith(members = emptyList())
@@ -287,6 +350,25 @@ class SeedingServiceTest {
         val regenerated = service.generateForEvent(token = token(uid = "host"), eventId = eventId).shouldBeRight()
         regenerated.entries.map { it.userId } shouldBe listOf(b.id.toString(), a.id.toString())
         service.getForEvent(token = token(uid = "host"), eventId = eventId).shouldBeRight().entries shouldHaveSize 2
+    }
+
+    @Test
+    fun `saveOrderForEvent persists the host order, renumbers seeds, and marks manually edited (#718)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val a = provision(uid = "alice").also { rate(user = it, value = "4.5") }
+        val b = provision(uid = "bob").also { rate(user = it, value = "3.5") }
+        val c = provision(uid = "carol").also { rate(user = it, value = "4.0") }
+        val eventId = eventWith(members = listOf(a, b, c))
+        service.generateForEvent(token = token(uid = "host"), eventId = eventId).shouldBeRight()
+
+        val saved =
+            service.saveOrderForEvent(token = token(uid = "host"), eventId = eventId, orderedUserIds = listOf(c.id, a.id, b.id))
+                .shouldBeRight()
+        saved.entries.map { it.userId } shouldBe listOf(c.id.toString(), a.id.toString(), b.id.toString())
+        saved.entries.map { it.seed } shouldBe listOf(1, 2, 3)
+        saved.manuallyEdited shouldBe true
+
+        service.getForEvent(token = token(uid = "host"), eventId = eventId).shouldBeRight().manuallyEdited shouldBe true
     }
 
     @Test

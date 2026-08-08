@@ -28,6 +28,7 @@ import org.skopeo.common.dto.seeding.AddMemberRequest
 import org.skopeo.common.dto.seeding.CreatePlayerListRequest
 import org.skopeo.common.dto.seeding.PlayerListResponse
 import org.skopeo.common.dto.seeding.PlayerListSummaryResponse
+import org.skopeo.common.dto.seeding.SaveSeedingOrderRequest
 import org.skopeo.common.dto.seeding.SeedingResponse
 import org.skopeo.common.dto.user.CreateUserRequest
 import org.skopeo.common.dto.user.UserResponse
@@ -148,6 +149,69 @@ class PlayerListApiIntegrationTest {
             }.body<SeedingResponse>().entries.single().let {
                 it.userId shouldBe player.id
                 it.rating.shouldBeNull()
+            }
+        }
+
+    @Test
+    fun `a host drag-reorders and saves the seeding, renumbering seeds and flagging it manually edited`() =
+        withApp { client ->
+            val host = seedStaff(uid = "host", roles = setOf(element = Capability.HOST))
+            val admin = seedStaff(uid = "admin", roles = setOf(element = Capability.ADMINISTRATOR))
+            val p1 = client.provisionPlayer(uid = "p1")
+            val p2 = client.provisionPlayer(uid = "p2")
+            client.put(urlString = "/api/v1/users/${p1.id}/ratings") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $admin")
+                contentType(type = ContentType.Application.Json)
+                setBody(body = SetRatingRequest(value = "4.5"))
+            }.status shouldBe HttpStatusCode.OK
+            client.put(urlString = "/api/v1/users/${p2.id}/ratings") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $admin")
+                contentType(type = ContentType.Application.Json)
+                setBody(body = SetRatingRequest(value = "3.5"))
+            }.status shouldBe HttpStatusCode.OK
+
+            val list =
+                client.post(urlString = "/api/v1/player-lists") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = CreatePlayerListRequest(name = "Club Open"))
+                }.body<PlayerListSummaryResponse>()
+            for (id in listOf(p1.id, p2.id)) {
+                client.post(urlString = "/api/v1/player-lists/${list.id}/members") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = AddMemberRequest(userId = id))
+                }.status shouldBe HttpStatusCode.NoContent
+            }
+
+            // Generated order is rating-desc (p1, p2) and not manually edited.
+            val generated =
+                client.post(urlString = "/api/v1/player-lists/${list.id}/seeding") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                }.body<SeedingResponse>()
+            generated.entries.map { it.userId } shouldBe listOf(p1.id, p2.id)
+            generated.manuallyEdited shouldBe false
+
+            // Save a reversed hand order (p2, p1); seeds renumber 1..N by position and the flag flips.
+            val saved =
+                client.put(urlString = "/api/v1/player-lists/${list.id}/seeding") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = SaveSeedingOrderRequest(userIds = listOf(p2.id, p1.id)))
+                }
+            saved.status shouldBe HttpStatusCode.OK
+            saved.body<SeedingResponse>().let {
+                it.entries.map { e -> e.userId } shouldBe listOf(p2.id, p1.id)
+                it.entries.map { e -> e.seed } shouldBe listOf(1, 2)
+                it.manuallyEdited shouldBe true
+            }
+
+            // A read reflects the saved order + flag.
+            client.get(urlString = "/api/v1/player-lists/${list.id}/seeding") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $host")
+            }.body<SeedingResponse>().let {
+                it.entries.map { e -> e.userId } shouldBe listOf(p2.id, p1.id)
+                it.manuallyEdited shouldBe true
             }
         }
 

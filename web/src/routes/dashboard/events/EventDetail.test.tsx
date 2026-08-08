@@ -30,6 +30,7 @@ const {
   unfinalizeMutate,
   reverseMutate,
   generateSeedingMutate,
+  saveSeedingOrderMutate,
   state,
 } =
   vi.hoisted(() => ({
@@ -51,6 +52,7 @@ const {
     unfinalizeMutate: vi.fn(),
     reverseMutate: vi.fn(),
     generateSeedingMutate: vi.fn(),
+    saveSeedingOrderMutate: vi.fn(),
     state: {
       addFail: false,
       fixtureFail: false,
@@ -193,6 +195,13 @@ vi.mock('@/api/generated/events/events', () => ({
           ? { response: { data: { message: state.reverseErrorMessage } } }
           : new Error('boom')
       }
+      opts?.mutation?.onSuccess?.()
+    },
+  }),
+  usePutApiV1EventsIdSeeding: (opts?: { mutation?: { onSuccess?: () => void } }) => ({
+    isPending: false,
+    mutateAsync: async (vars: unknown) => {
+      saveSeedingOrderMutate(vars)
       opts?.mutation?.onSuccess?.()
     },
   }),

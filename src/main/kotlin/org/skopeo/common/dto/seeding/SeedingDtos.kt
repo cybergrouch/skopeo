@@ -64,5 +64,20 @@ data class SeedingEntryResponse(
 @Serializable
 data class SeedingResponse(
     val generatedAt: String,
+    // True when a host drag-reordered and saved this seeding by hand (#718); false for a plain generated
+    // one. The web UI warns before a Regenerate would discard a manual order.
+    val manuallyEdited: Boolean = false,
     val entries: List<SeedingEntryResponse>,
+)
+
+/**
+ * Body for the save-order endpoints (#718), `PUT /player-lists/{id}/seeding` and
+ * `PUT /events/{id}/seeding`: the host's desired order as the seedable players' user ids. The server
+ * renumbers seeds 1..N by this position (reordering reassigns seed numbers) and marks the seeding as
+ * manually edited. The ids must be exactly the current seedable set (a permutation) — no additions or
+ * removals.
+ */
+@Serializable
+data class SaveSeedingOrderRequest(
+    val userIds: List<String>,
 )

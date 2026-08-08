@@ -21,4 +21,6 @@ data class SeedingEntity(
     val generatedAt: LocalDateTime,
     // Persisted audit column; not surfaced by the domain `Seeding`, kept here for a faithful raw view.
     val generatedBy: UUID?,
+    // True when the host drag-reordered and saved this seeding by hand (#718); false for a generated one.
+    val manuallyEdited: Boolean,
 )

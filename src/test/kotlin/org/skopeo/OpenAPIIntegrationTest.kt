@@ -237,6 +237,9 @@ class OpenAPIIntegrationTest {
             body shouldContain "/api/v1/events/{id}/unfinalize"
             // Event-sourced seeding (#714): the generate/read path from an event's participants.
             body shouldContain "/api/v1/events/{id}/seeding"
+            // Manual drag-reorder save (#718): the save-order request schema and the manually-edited flag.
+            body shouldContain "SaveSeedingOrderRequest"
+            body shouldContain "manuallyEdited"
             // Single "Award Ranking Points" flag (#559): the per-event points budget + designation
             // subsystem was removed; awarding is controlled solely by this event-level flag.
             body shouldContain "awardRankingPoints"

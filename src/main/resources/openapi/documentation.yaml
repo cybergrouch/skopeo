@@ -2533,6 +2533,37 @@ paths:
           description: Caller is not staff / not this event's host
         '404':
           description: No such event
+    put:
+      summary: Save a hand-reordered event seeding (#718)
+      description: >-
+        Persist the host's manual drag-and-drop order for the event's seeding. The request lists the
+        seedable participants' user ids in the desired order; seeds are renumbered 1..N by the new
+        position (reordering reassigns seed numbers) and the seeding is marked manually edited. The ids
+        must be exactly the current seedable set (a permutation) — no additions or removals. Same
+        staff/owner gating as generate.
+      tags:
+        - Events
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveSeedingOrderRequest'
+      responses:
+        '200':
+          description: The saved, renumbered seeding
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SeedingResponse'
+        '400':
+          description: The order is not exactly the current seedable set
+        '403':
+          description: Caller is not staff / not this event's host
+        '404':
+          description: No such event
     get:
       summary: Get the current seeding for an event (#714)
       tags:
@@ -4073,6 +4104,43 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SeedingResponse'
+        '403':
+          description: Not the caller's list
+        '404':
+          description: No such list
+    put:
+      summary: Save a hand-reordered list seeding (#718)
+      description: >-
+        Persist the host's manual drag-and-drop order for the list's seeding. The request lists the
+        seedable members' user ids in the desired order; seeds are renumbered 1..N by the new position
+        (reordering reassigns seed numbers) and the seeding is marked manually edited. The ids must be
+        exactly the current seedable set (a permutation) — no additions or removals.
+      tags:
+        - Player Lists
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveSeedingOrderRequest'
+      responses:
+        '200':
+          description: The saved, renumbered seeding
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SeedingResponse'
+        '400':
+          description: The order is not exactly the current seedable set
         '403':
           description: Not the caller's list
         '404':
@@ -8008,10 +8076,24 @@ components:
       properties:
         generatedAt:
           type: string
+        manuallyEdited:
+          type: boolean
+          description: True when a host drag-reordered and saved this seeding by hand (#718); false for a plain generated one. The web UI warns before a Regenerate would discard a manual order.
         entries:
           type: array
           items:
             $ref: '#/components/schemas/SeedingEntryResponse'
+    SaveSeedingOrderRequest:
+      type: object
+      required:
+        - userIds
+      properties:
+        userIds:
+          type: array
+          description: The seedable players' user ids in the host's desired order (#718); a permutation of the current seedable set. Seeds are renumbered 1..N by this position.
+          items:
+            type: string
+            format: uuid
 
     StandingEntryResponse:
       type: object

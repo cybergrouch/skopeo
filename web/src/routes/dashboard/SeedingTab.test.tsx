@@ -21,6 +21,7 @@ const {
   addMemberMutate,
   removeMemberMutate,
   generateMutate,
+  saveOrderMutate,
   state,
   useGetApiV1Users,
 } = vi.hoisted(() => ({
@@ -32,6 +33,7 @@ const {
   addMemberMutate: vi.fn(),
   removeMemberMutate: vi.fn(),
   generateMutate: vi.fn(),
+  saveOrderMutate: vi.fn(),
   state: { addFail: false },
   useGetApiV1Users: vi.fn(),
 }))
@@ -63,6 +65,9 @@ vi.mock('@/api/generated/player-lists/player-lists', () => ({
   }),
   usePostApiV1PlayerListsIdSeeding: () => ({
     mutateAsync: async (vars: unknown) => generateMutate(vars),
+  }),
+  usePutApiV1PlayerListsIdSeeding: () => ({
+    mutateAsync: async (vars: unknown) => saveOrderMutate(vars),
   }),
 }))
 
@@ -348,8 +353,8 @@ describe('SeedingTab', () => {
     renderTab()
     await user.click(screen.getByRole('button', { name: /Summer Open/ }))
 
-    // A seeding already exists, so the button reads "Regenerate".
-    await user.click(screen.getByRole('button', { name: 'Regenerate' }))
+    // A seeding already exists, so the table offers "Regenerate seeding" (a generated one → no confirm).
+    await user.click(screen.getByRole('button', { name: 'Regenerate seeding' }))
     await waitFor(() => expect(generateMutate).toHaveBeenCalledWith({ id: 'l1' }))
 
     const rows = screen.getAllByRole('row')
