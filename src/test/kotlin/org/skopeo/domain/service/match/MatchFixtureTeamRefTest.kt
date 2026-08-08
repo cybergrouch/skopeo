@@ -104,6 +104,24 @@ class MatchFixtureTeamRefTest {
             ).toDomain()
             .id
 
+    private fun singlesEvent(
+        hostId: UUID,
+        participants: List<UUID>,
+    ): UUID =
+        events
+            .create(
+                command =
+                    CreateEventCommand(
+                        name = "Singles Cup",
+                        startDate = LocalDate.now(),
+                        endDate = LocalDate.now().plusDays(7),
+                        participantIds = participants,
+                        createdBy = hostId,
+                        format = TeamType.SINGLES,
+                    ),
+            ).toDomain()
+            .id
+
     private fun team(
         eventId: UUID,
         name: String,
@@ -168,6 +186,59 @@ class MatchFixtureTeamRefTest {
                         ),
                 ).shouldBeLeft()
         error.shouldBeInstanceOf<ServiceError.Validation>().message shouldContain "SINGLES fixture needs 1"
+    }
+
+    @Test
+    fun `a fixture rejects a player appearing on both sides via a team ref`() {
+        val h = host(uid = "host")
+        val p1 = rated(uid = "p1")
+        val eventId = singlesEvent(hostId = h.id, participants = listOf(element = p1.id))
+        val t1 = team(eventId = eventId, name = "A", members = listOf(element = p1.id))
+
+        val error =
+            service
+                .createFixture(
+                    token = token(uid = "host"),
+                    request =
+                        FixtureInput(
+                            matchFormat = TeamType.SINGLES,
+                            matchType = MatchType.OPEN_PLAY,
+                            matchDate = LocalDate.now(),
+                            team1 = emptyList(),
+                            // The same player, raw, on the other side → a duplicate across the match.
+                            team2 = listOf(element = p1.id),
+                            team1Ref = t1,
+                            team2Ref = null,
+                            eventId = eventId,
+                        ),
+                ).shouldBeLeft()
+        error.shouldBeInstanceOf<ServiceError.Validation>().message shouldContain "more than once in a match"
+    }
+
+    @Test
+    fun `a fixture rejects an unknown team ref`() {
+        val h = host(uid = "host")
+        val p1 = rated(uid = "p1")
+        val p2 = rated(uid = "p2")
+        val eventId = singlesEvent(hostId = h.id, participants = listOf(p1.id, p2.id))
+
+        val error =
+            service
+                .createFixture(
+                    token = token(uid = "host"),
+                    request =
+                        FixtureInput(
+                            matchFormat = TeamType.SINGLES,
+                            matchType = MatchType.OPEN_PLAY,
+                            matchDate = LocalDate.now(),
+                            team1 = emptyList(),
+                            team2 = listOf(element = p2.id),
+                            team1Ref = UUID.randomUUID(),
+                            team2Ref = null,
+                            eventId = eventId,
+                        ),
+                ).shouldBeLeft()
+        error.shouldBeInstanceOf<ServiceError.Validation>().message shouldContain "not found"
     }
 
     @Test

@@ -324,6 +324,37 @@ class EventTeamServiceTest {
     }
 
     @Test
+    fun `the exclusive-membership query reports every assigned member when no team is excluded`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "Alice")
+        val ev = event(host = host.id, participants = listOf(element = p1.id), format = TeamType.SINGLES)
+        service.create(token = token(uid = "host"), eventId = ev.id, memberUserIds = listOf(element = p1.id), name = null).shouldBeRight()
+
+        // Called with the default (no excludeTeamId) it returns the whole event's assigned members.
+        teams.memberUserIdsInEvent(eventId = ev.id) shouldBe setOf(element = p1.id)
+    }
+
+    @Test
+    fun `listing teams for an unknown event is a not-found`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        service
+            .list(token = token(uid = "host"), eventId = UUID.randomUUID())
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
+    fun `creating a team on an unknown event is a not-found`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "Alice")
+        // The caller is staff, so we pass the role gate and fail on the missing event itself.
+        service
+            .create(token = token(uid = "host"), eventId = UUID.randomUUID(), memberUserIds = listOf(element = p1.id), name = null)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
     fun `a plain host cannot modify teams on an ended event`() {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val p1 = provision(uid = "Alice")
