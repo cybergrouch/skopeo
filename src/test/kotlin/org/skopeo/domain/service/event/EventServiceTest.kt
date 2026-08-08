@@ -119,6 +119,7 @@ class EventServiceTest {
         clubId: UUID? = null,
         circuitId: UUID? = null,
         type: EventType = EventType.OPEN_PLAY,
+        format: String = "SINGLES",
         awardRankingPoints: Boolean = true,
     ) = CreateEventInput(
         name = name,
@@ -128,6 +129,7 @@ class EventServiceTest {
         clubId = clubId,
         circuitId = circuitId,
         type = type.name,
+        format = format,
         awardRankingPoints = awardRankingPoints,
     )
 
@@ -1831,5 +1833,24 @@ class EventServiceTest {
         // Unsanctioned Plate Finals: winner p1 → 3rd (20); the unrated loser p2 is skipped.
         awardRepo.listByUser(userId = p1.id).single().points shouldBe BigDecimal("20.0000")
         awardRepo.listByUser(userId = p2.id) shouldHaveSize 0
+    }
+
+    @Test
+    fun `create stores the event organizing format (#720)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+
+        val view = service.create(token = token(uid = "host"), input = input(format = "DOUBLES")).shouldBeRight()
+
+        view.format shouldBe "DOUBLES"
+        view.domain().format shouldBe TeamType.DOUBLES
+    }
+
+    @Test
+    fun `create rejects an invalid organizing format (#720)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+
+        val error = service.create(token = token(uid = "host"), input = input(format = "NOPE")).shouldBeLeft()
+
+        error.shouldBeInstanceOf<ServiceError.Validation>().message shouldContain "Invalid format"
     }
 }

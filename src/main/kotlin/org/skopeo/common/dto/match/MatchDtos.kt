@@ -28,8 +28,14 @@ data class CreateFixtureRequest(
     val matchFormat: String,
     val matchType: String,
     val matchDate: String,
-    val team1: List<String>,
-    val team2: List<String>,
+    // A side is specified EITHER as raw player ids ([team1]/[team2]) OR as a durable event team ref
+    // ([team1Id]/[team2Id], #720) — not both. A team ref resolves to that team's members (in slot order)
+    // and requires an [eventId]; the team's size must match the fixture's effective format.
+    val team1: List<String> = emptyList(),
+    val team2: List<String> = emptyList(),
+    // Durable event-team refs (#720); alternative to the raw player-id lists above.
+    val team1Id: String? = null,
+    val team2Id: String? = null,
     val venue: String? = null,
     val tournamentName: String? = null,
     /** When set, the fixture belongs to this event and both sides must be participants (#138). */

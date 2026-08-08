@@ -49,6 +49,9 @@ data class Event(
     val circuitId: UUID? = null,
     // Admin override for calculation processing order (#335); null = order by end date.
     val calcPriority: Double? = null,
+    // The event's organizing format (#720): SINGLES | DOUBLES | MIXED_DOUBLES. NOT NULL in the DB; it
+    // sets durable team size and the default fixture format (overridable). Distinct from [type] (#403).
+    val format: TeamType = TeamType.SINGLES,
     // The event's class (#403): OPEN_PLAY | TOURNAMENT.
     val type: EventType = EventType.OPEN_PLAY,
     // When the event was finalized (#403); null while open. Finalize is terminal and queues rating.
@@ -79,6 +82,9 @@ data class CreateEventCommand(
     val clubId: UUID? = null,
     // The circuit a TOURNAMENT event belongs to (#525); required for tournaments.
     val circuitId: UUID? = null,
+    // The event's organizing format (#720): SINGLES | DOUBLES | MIXED_DOUBLES. Required at create; the
+    // service always supplies it (defaulted here only to keep existing call sites compiling).
+    val format: TeamType = TeamType.SINGLES,
     // The event's class (#403); defaults to OPEN_PLAY for backward compatibility.
     val type: EventType = EventType.OPEN_PLAY,
     // Whether finalizing this event awards ranking points per the global schedules (#559). Default true.

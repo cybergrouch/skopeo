@@ -13,6 +13,8 @@ data class CreateEventRequest(
     val name: String,
     val startDate: String,
     val endDate: String,
+    // The event's organizing format (#720): "SINGLES" | "DOUBLES" | "MIXED_DOUBLES". REQUIRED at create.
+    val format: String,
     val participantIds: List<String> = emptyList(),
     // Optional club (#313) to assign the event to; omit for a clubless ("Open") event.
     val clubId: String? = null,
@@ -120,6 +122,8 @@ data class EventResponse(
     val circuitId: String? = null,
     // Admin override for calculation processing order (#335); null = order by end date.
     val calcPriority: Double? = null,
+    // The event's organizing format (#720): "SINGLES" | "DOUBLES" | "MIXED_DOUBLES".
+    val format: String,
     // The event's class (#403): "OPEN_PLAY" | "TOURNAMENT".
     val type: String,
     // When the event was finalized (#403), ISO-8601; null while open.

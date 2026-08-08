@@ -7,6 +7,7 @@ import org.skopeo.domain.model.Event
 import org.skopeo.domain.model.EventParticipantStatus
 import org.skopeo.domain.model.EventType
 import org.skopeo.domain.model.MyEvent
+import org.skopeo.domain.model.TeamType
 import org.skopeo.repository.persistence.EventAggregateEntity
 import org.skopeo.repository.persistence.MyEventEntity
 
@@ -30,6 +31,7 @@ fun EventAggregateEntity.toDomain(): Event =
         clubId = event.clubId,
         circuitId = event.circuitId,
         calcPriority = event.calcPriority,
+        format = TeamType.valueOf(value = event.format),
         type = EventType.valueOf(value = event.type),
         finalizedAt = event.finalizedAt,
         finalizedBy = event.finalizedBy,

@@ -14,12 +14,15 @@ vi.mock('sonner', () => ({ toast: { success: toastSuccess, error: toastError } }
 const {
   useGetApiV1EventsId,
   useGetApiV1EventsIdSeeding,
+  useGetApiV1EventsIdTeams,
   useGetApiV1Clubs,
   useGetApiV1UsersMe,
   addMutate,
   removeMutate,
   decideMutate,
   createFixtureMutate,
+  createTeamMutate,
+  dissolveTeamMutate,
   deleteMutate,
   renameMutate,
   clubMutate,
@@ -32,12 +35,15 @@ const {
   vi.hoisted(() => ({
     useGetApiV1EventsId: vi.fn(),
     useGetApiV1EventsIdSeeding: vi.fn(),
+    useGetApiV1EventsIdTeams: vi.fn(),
     useGetApiV1Clubs: vi.fn(),
     useGetApiV1UsersMe: vi.fn(),
     addMutate: vi.fn(),
     removeMutate: vi.fn(),
     decideMutate: vi.fn(),
     createFixtureMutate: vi.fn(),
+    createTeamMutate: vi.fn(),
+    dissolveTeamMutate: vi.fn(),
     deleteMutate: vi.fn(),
     renameMutate: vi.fn(),
     clubMutate: vi.fn(),
@@ -48,6 +54,8 @@ const {
     state: {
       addFail: false,
       fixtureFail: false,
+      teamCreateFail: false,
+      teamDissolveFail: false,
       deleteFail: false,
       deletePending: false,
       deleteErrorMessage: null as string | null,
@@ -72,9 +80,27 @@ const {
 vi.mock('@/api/generated/events/events', () => ({
   useGetApiV1EventsId,
   useGetApiV1EventsIdSeeding,
+  useGetApiV1EventsIdTeams,
   getGetApiV1EventsIdQueryKey: () => ['event'],
   getGetApiV1EventsIdSeedingQueryKey: () => ['event-seeding'],
+  getGetApiV1EventsIdTeamsQueryKey: () => ['event-teams'],
   getGetApiV1EventsQueryKey: () => ['events'],
+  usePostApiV1EventsIdTeams: (opts?: { mutation?: { onSuccess?: () => void } }) => ({
+    isPending: false,
+    mutate: (vars: unknown, handlers?: { onError?: (err: unknown) => void }) => {
+      createTeamMutate(vars)
+      if (state.teamCreateFail) handlers?.onError?.(new Error('boom'))
+      else opts?.mutation?.onSuccess?.()
+    },
+  }),
+  useDeleteApiV1EventsIdTeamsTeamId: (opts?: { mutation?: { onSuccess?: () => void } }) => ({
+    isPending: false,
+    mutate: (vars: unknown, handlers?: { onError?: (err: unknown) => void }) => {
+      dissolveTeamMutate(vars)
+      if (state.teamDissolveFail) handlers?.onError?.(new Error('boom'))
+      else opts?.mutation?.onSuccess?.()
+    },
+  }),
   usePostApiV1EventsIdSeeding: (opts?: { mutation?: { onSuccess?: () => void } }) => ({
     isPending: state.generateSeedingPending,
     mutateAsync: async (vars: unknown) => {
@@ -271,8 +297,11 @@ describe('EventDetail', () => {
     state.generateSeedingFail = false
     state.generateSeedingPending = false
     state.generateSeedingErrorMessage = null
+    state.teamCreateFail = false
+    state.teamDissolveFail = false
     useGetApiV1EventsId.mockReturnValue({ data: event, isLoading: false })
     useGetApiV1EventsIdSeeding.mockReturnValue({ data: undefined })
+    useGetApiV1EventsIdTeams.mockReturnValue({ data: [] })
     useGetApiV1Clubs.mockReturnValue({ data: [], isLoading: false })
     // Default to an administrator so data-entry controls stay available on the (past-dated) fixture;
     // the #310 tests below override this to a plain HOST.
@@ -384,6 +413,168 @@ describe('EventDetail', () => {
       },
       expect.anything(),
     )
+  })
+
+  it('creates a durable team from participants (#720)', async () => {
+    const user = setupUser()
+    useGetApiV1EventsId.mockReturnValue({ data: { ...event, format: 'SINGLES' }, isLoading: false })
+    renderDetail()
+
+    // A singles event → one-member team. Create stays disabled until a member is picked.
+    expect(screen.getByRole('button', { name: 'Create team' })).toBeDisabled()
+    await user.selectOptions(screen.getByLabelText('Member'), 'u1')
+    await user.click(screen.getByRole('button', { name: 'Create team' }))
+
+    expect(createTeamMutate).toHaveBeenCalledWith({ id: 'e1', data: { memberUserIds: ['u1'] } })
+  })
+
+  it('schedules a fixture from durable team refs (#720)', async () => {
+    const user = setupUser()
+    const teams = [
+      {
+        id: 't1',
+        eventId: 'e1',
+        name: 'Team A',
+        members: [
+          { userId: 'u1', position: 1, displayName: 'Ana' },
+          { userId: 'u2', position: 2, displayName: 'Bob' },
+        ],
+      },
+      {
+        id: 't2',
+        eventId: 'e1',
+        name: 'Team B',
+        members: [
+          { userId: 'u3', position: 1, displayName: 'Cara' },
+          { userId: 'u4', position: 2, displayName: 'Dan' },
+        ],
+      },
+    ]
+    useGetApiV1EventsId.mockReturnValue({ data: { ...doublesRoster, format: 'DOUBLES' }, isLoading: false })
+    useGetApiV1EventsIdTeams.mockReturnValue({ data: teams })
+    renderDetail()
+
+    // Flip the fixture to team refs, pick both teams, then schedule.
+    await user.click(screen.getByLabelText('Pick sides from teams'))
+    await user.selectOptions(screen.getByLabelText('Team 1'), 't1')
+    await user.selectOptions(screen.getByLabelText('Team 2'), 't2')
+    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-03-02' } })
+
+    await user.click(screen.getByRole('button', { name: 'Schedule fixture' }))
+    expect(createFixtureMutate).toHaveBeenCalledWith(
+      {
+        data: {
+          matchFormat: 'DOUBLES',
+          matchType: 'OPEN_PLAY',
+          matchDate: '2026-03-02',
+          team1Id: 't1',
+          team2Id: 't2',
+          eventId: 'e1',
+        },
+      },
+      expect.anything(),
+    )
+  })
+
+  it('creates a team with a name override (#720)', async () => {
+    const user = setupUser()
+    useGetApiV1EventsId.mockReturnValue({ data: { ...event, format: 'SINGLES' }, isLoading: false })
+    renderDetail()
+
+    await user.selectOptions(screen.getByLabelText('Member'), 'u1')
+    await user.type(screen.getByLabelText('Team name (optional)'), 'Dream Team')
+    await user.click(screen.getByRole('button', { name: 'Create team' }))
+
+    expect(createTeamMutate).toHaveBeenCalledWith({
+      id: 'e1',
+      data: { memberUserIds: ['u1'], name: 'Dream Team' },
+    })
+  })
+
+  it('surfaces an error when creating a team fails (#720)', async () => {
+    const user = setupUser()
+    state.teamCreateFail = true
+    useGetApiV1EventsId.mockReturnValue({ data: { ...event, format: 'SINGLES' }, isLoading: false })
+    renderDetail()
+
+    await user.selectOptions(screen.getByLabelText('Member'), 'u1')
+    await user.click(screen.getByRole('button', { name: 'Create team' }))
+
+    expect(await screen.findByText(/Could not create the team/)).toBeInTheDocument()
+  })
+
+  it('dissolves a team (#720)', async () => {
+    const user = setupUser()
+    useGetApiV1EventsId.mockReturnValue({ data: { ...event, format: 'SINGLES' }, isLoading: false })
+    useGetApiV1EventsIdTeams.mockReturnValue({
+      data: [
+        { id: 't1', eventId: 'e1', name: 'Team A', members: [{ userId: 'u1', position: 1, displayName: 'Ana' }] },
+      ],
+    })
+    renderDetail()
+
+    await user.click(screen.getByRole('button', { name: 'Dissolve' }))
+    expect(dissolveTeamMutate).toHaveBeenCalledWith({ id: 'e1', teamId: 't1' })
+  })
+
+  it('toasts an error when dissolving a team fails (#720)', async () => {
+    const user = setupUser()
+    state.teamDissolveFail = true
+    useGetApiV1EventsId.mockReturnValue({ data: { ...event, format: 'SINGLES' }, isLoading: false })
+    useGetApiV1EventsIdTeams.mockReturnValue({
+      data: [
+        { id: 't1', eventId: 'e1', name: 'Team A', members: [{ userId: 'u1', position: 1, displayName: 'Ana' }] },
+      ],
+    })
+    renderDetail()
+
+    await user.click(screen.getByRole('button', { name: 'Dissolve' }))
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith('Could not dissolve the team.', expect.anything()),
+    )
+  })
+
+  it('warns when a chosen team ref does not fit the fixture format (#720)', async () => {
+    const user = setupUser()
+    useGetApiV1EventsId.mockReturnValue({ data: { ...doublesRoster, format: 'DOUBLES' }, isLoading: false })
+    // A one-member team can't fill a doubles side.
+    useGetApiV1EventsIdTeams.mockReturnValue({
+      data: [
+        { id: 't1', eventId: 'e1', name: 'Team A', members: [{ userId: 'u1', position: 1, displayName: 'Ana' }] },
+      ],
+    })
+    renderDetail()
+
+    await user.click(screen.getByLabelText('Pick sides from teams'))
+    await user.selectOptions(screen.getByLabelText('Team 1'), 't1')
+
+    expect(screen.getByText(/size doesn’t match the fixture format/)).toBeInTheDocument()
+    expect(screen.getByText(/needs/)).toHaveTextContent('2 players')
+  })
+
+  it('warns with the singular side size when a doubles team fills a singles ref (#720)', async () => {
+    const user = setupUser()
+    useGetApiV1EventsId.mockReturnValue({ data: { ...event, format: 'SINGLES' }, isLoading: false })
+    // A two-member team can't fill a singles side.
+    useGetApiV1EventsIdTeams.mockReturnValue({
+      data: [
+        {
+          id: 't1',
+          eventId: 'e1',
+          name: 'Team A',
+          members: [
+            { userId: 'u1', position: 1, displayName: 'Ana' },
+            { userId: 'u2', position: 2, displayName: 'Bob' },
+          ],
+        },
+      ],
+    })
+    renderDetail()
+
+    await user.click(screen.getByLabelText('Pick sides from teams'))
+    await user.selectOptions(screen.getByLabelText('Team 1'), 't1')
+
+    expect(screen.getByText(/needs/)).toHaveTextContent('1 player')
   })
 
   it('pre-fills the fixture date with the event start date (#668)', () => {

@@ -52,6 +52,7 @@ import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.domain.service.user.displayName
 import org.skopeo.domain.service.user.isDeleted
 import org.skopeo.repository.EventRepository
+import org.skopeo.repository.EventTeamRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository
 import java.math.BigDecimal
@@ -79,6 +80,13 @@ data class FixtureInput(
     val matchDate: LocalDate,
     val team1: List<UUID>,
     val team2: List<UUID>,
+    /**
+     * Durable event-team refs (#720): when set for a side, the fixture is populated from that team's
+     * members (in slot order) instead of raw ids in [team1]/[team2]. Resolved + validated (size vs the
+     * effective format, team belongs to the event) in [MatchService.createFixture]. Requires [eventId].
+     */
+    val team1Ref: UUID? = null,
+    val team2Ref: UUID? = null,
     val venue: String? = null,
     val tournamentName: String? = null,
     /** When set, the fixture belongs to this event and both sides must be event participants (#138). */
@@ -111,6 +119,7 @@ class MatchService(
     private val ratings: RatingAssembler = RatingAssembler(),
     private val users: UserRepository = UserRepository(),
     private val events: EventRepository = EventRepository(),
+    private val eventTeams: EventTeamRepository = EventTeamRepository(),
     private val audit: AuditService = AuditService(),
 ) {
     /** Create a fixture from the raw HTTP request (#116): parse/validate enums, date, ids, and composition. */
@@ -126,10 +135,21 @@ class MatchService(
             }
         val team1 = request.team1.map { uuidOf(value = it) }
         val team2 = request.team2.map { uuidOf(value = it) }
-        // Composition check at the boundary: the right count per side and no player appearing twice.
-        val expected = if (matchFormat == TeamType.SINGLES) 1 else 2
-        require(value = team1.size == expected && team2.size == expected) { "$matchFormat needs $expected player(s) per side" }
-        (team1 + team2).let { all -> require(value = all.toSet().size == all.size) { "a player cannot appear more than once in a match" } }
+        val team1Ref = request.team1Id?.let { uuidOf(value = it, field = "team id") }
+        val team2Ref = request.team2Id?.let { uuidOf(value = it, field = "team id") }
+        // Each side is specified exactly one way (#720): a raw player list OR a durable team ref.
+        require(value = (team1Ref != null) != team1.isNotEmpty()) { "team1 must be either players or a teamId, not both or neither" }
+        require(value = (team2Ref != null) != team2.isNotEmpty()) { "team2 must be either players or a teamId, not both or neither" }
+        // Composition check at the boundary for RAW sides only: the right count per side and no repeats.
+        // Team-ref sides are resolved + validated (size vs the effective format) in createFixture (#720).
+        if (team1Ref == null && team2Ref == null) {
+            val expected = if (matchFormat == TeamType.SINGLES) 1 else 2
+            require(value = team1.size == expected && team2.size == expected) { "$matchFormat needs $expected player(s) per side" }
+            (team1 + team2).let {
+                    all ->
+                require(value = all.toSet().size == all.size) { "a player cannot appear more than once in a match" }
+            }
+        }
         return FixtureInput(
             matchFormat = matchFormat,
             matchType =
@@ -139,6 +159,8 @@ class MatchService(
             matchDate = matchDateOf(value = request.matchDate),
             team1 = team1,
             team2 = team2,
+            team1Ref = team1Ref,
+            team2Ref = team2Ref,
             venue = request.venue,
             tournamentName = request.tournamentName,
             eventId = request.eventId?.let { uuidOf(value = it, field = "event id") },
@@ -191,10 +213,12 @@ class MatchService(
         either {
             val caller = staffCaller(token = token).bind()
             val createdBy = caller.id
-            ensureEventParticipants(request = request).bind()
+            // Resolve any durable team refs (#720) into concrete player ids before the participant checks.
+            val resolvedRequest = resolveTeamRefs(request = request).bind()
+            ensureEventParticipants(request = resolvedRequest).bind()
             // A HOST cannot add fixtures to an event that has ended; an ADMINISTRATOR still can (#310).
             val event =
-                request.eventId?.let { eventId ->
+                resolvedRequest.eventId?.let { eventId ->
                     val loaded =
                         ensureNotNull(value = events.findById(id = eventId)?.toDomain()) {
                             ServiceError.Validation(message = "Event $eventId not found")
@@ -203,13 +227,13 @@ class MatchService(
                     ensureEventNotFinalized(event = loaded).bind()
                     loaded
                 }
-            val team1Users = resolveRatedParticipants(ids = request.team1).bind()
-            val team2Users = resolveRatedParticipants(ids = request.team2).bind()
+            val team1Users = resolveRatedParticipants(ids = resolvedRequest.team1).bind()
+            val team2Users = resolveRatedParticipants(ids = resolvedRequest.team2).bind()
             val match =
                 matches.createFixture(
                     command =
                         fixtureCommand(
-                            request = request,
+                            request = resolvedRequest,
                             team1Name = teamName(users = team1Users),
                             team2Name = teamName(users = team2Users),
                             createdBy = createdBy,
@@ -222,16 +246,82 @@ class MatchService(
                         action = AuditAction.MATCH_FIXTURE_CREATED,
                         entityType = AuditEntityType.MATCH,
                         entityId = match.id,
-                        summary = "Created a ${request.matchFormat.name} fixture on ${match.matchDate}",
+                        summary = "Created a ${resolvedRequest.matchFormat.name} fixture on ${match.matchDate}",
                         details =
                             mapOf(
-                                "matchFormat" to request.matchFormat.name,
-                                "matchType" to request.matchType.name,
+                                "matchFormat" to resolvedRequest.matchFormat.name,
+                                "matchType" to resolvedRequest.matchType.name,
                                 "matchDate" to match.matchDate.toString(),
                             ),
                     ),
             )
             match.toResponse()
+        }
+
+    /**
+     * Resolve any durable event-team refs (#720) on a fixture into concrete player ids: each ref'd side
+     * is populated from the team's members (in slot order), the team must belong to the fixture's event,
+     * and its size must match the fixture's effective (possibly host-overridden) format. Returns the
+     * request unchanged when neither side uses a ref. A ref requires an [FixtureInput.eventId].
+     */
+    private fun resolveTeamRefs(request: FixtureInput): Either<ServiceError, FixtureInput> =
+        either {
+            if (request.team1Ref == null && request.team2Ref == null) {
+                request
+            } else {
+                val eventId =
+                    ensureNotNull(value = request.eventId) { ServiceError.Validation(message = "A team fixture requires an event") }
+                val team1 =
+                    resolveSide(
+                        ref = request.team1Ref,
+                        rawIds = request.team1,
+                        eventId = eventId,
+                        format = request.matchFormat,
+                    ).bind()
+                val team2 =
+                    resolveSide(
+                        ref = request.team2Ref,
+                        rawIds = request.team2,
+                        eventId = eventId,
+                        format = request.matchFormat,
+                    ).bind()
+                (team1 + team2).let { all ->
+                    ensure(condition = all.toSet().size == all.size) {
+                        ServiceError.Validation(message = "a player cannot appear more than once in a match")
+                    }
+                }
+                request.copy(team1 = team1, team2 = team2, team1Ref = null, team2Ref = null)
+            }
+        }
+
+    /**
+     * Resolve one fixture side (#720): raw [rawIds] pass through; a [ref] is loaded, verified to belong
+     * to [eventId], and its member count checked against the fixture's effective [format] (1 for singles,
+     * 2 for doubles/mixed) before its members (in slot order) become the side's player ids.
+     */
+    private fun resolveSide(
+        ref: UUID?,
+        rawIds: List<UUID>,
+        eventId: UUID,
+        format: TeamType,
+    ): Either<ServiceError, List<UUID>> =
+        either {
+            if (ref == null) {
+                rawIds
+            } else {
+                val team =
+                    ensureNotNull(
+                        value = eventTeams.findById(id = ref)?.toDomain(),
+                    ) { ServiceError.Validation(message = "Team $ref not found") }
+                ensure(condition = team.eventId == eventId) { ServiceError.Validation(message = "Team $ref does not belong to this event") }
+                val expected = if (format == TeamType.SINGLES) 1 else 2
+                ensure(condition = team.members.size == expected) {
+                    ServiceError.Validation(
+                        message = "Team ${team.name} has ${team.members.size} member(s) but a ${format.name} fixture needs $expected",
+                    )
+                }
+                team.members.sortedBy { it.position }.map { it.userId }
+            }
         }
 
     /** Build the persistence command for a fixture from its validated [request] (#525 placement fields included). */

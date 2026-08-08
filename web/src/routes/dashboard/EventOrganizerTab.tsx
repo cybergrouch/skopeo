@@ -22,6 +22,7 @@ import { useGetApiV1UsersMe } from "@/api/generated/users/users";
 import { useGetApiV1SettingsAwardRankingPoints } from "@/api/generated/settings/settings";
 import type {
   ClubResponse,
+  CreateEventRequestFormat,
   EventResponse,
   UserSummaryResponse,
 } from "@/api/generated/model";
@@ -38,6 +39,16 @@ type EventType = "OPEN_PLAY" | "TOURNAMENT";
 const EVENT_TYPE_OPTIONS: ReadonlyArray<{ value: EventType; label: string }> = [
   { value: "OPEN_PLAY", label: "Open play" },
   { value: "TOURNAMENT", label: "Tournament" },
+];
+
+/** The organizing formats a host can pick at creation (#720); mirrors the backend TeamType enum. */
+const EVENT_FORMAT_OPTIONS: ReadonlyArray<{
+  value: CreateEventRequestFormat;
+  label: string;
+}> = [
+  { value: "SINGLES", label: "Singles" },
+  { value: "DOUBLES", label: "Doubles" },
+  { value: "MIXED_DOUBLES", label: "Mixed doubles" },
 ];
 
 /**
@@ -71,6 +82,8 @@ function NewEventForm() {
   const [roster, setRoster] = useState<UserSummaryResponse[]>([]);
   // The event's class (#403); OPEN_PLAY is the default and the backward-compatible choice.
   const [type, setType] = useState<EventType>("OPEN_PLAY");
+  // The event's organizing format (#720): REQUIRED. Sets durable team size and the default fixture format.
+  const [format, setFormat] = useState<CreateEventRequestFormat>("SINGLES");
   // The circuit a TOURNAMENT belongs to (#525); required for tournaments, ignored otherwise.
   const [circuitId, setCircuitId] = useState("");
   // "Award Ranking Points" checkbox (#559): when set, finalizing the event awards ranking points per the
@@ -109,6 +122,7 @@ function NewEventForm() {
         setClubIdChoice(undefined);
         setRoster([]);
         setType("OPEN_PLAY");
+        setFormat("SINGLES");
         setCircuitId("");
         setAwardRankingPoints(true);
         void queryClient.invalidateQueries({
@@ -127,6 +141,7 @@ function NewEventForm() {
           startDate,
           endDate,
           type,
+          format,
           participantIds: roster.map((u) => u.id),
           ...(clubId ? { clubId } : {}),
           ...(type === "TOURNAMENT" ? { circuitId } : {}),
@@ -148,6 +163,7 @@ function NewEventForm() {
     name.trim() !== "" &&
     startDate !== "" &&
     endDate !== "" &&
+    format !== ("" as CreateEventRequestFormat) &&
     (type !== "TOURNAMENT" || circuitId !== "");
 
   return (
@@ -206,6 +222,26 @@ function NewEventForm() {
               className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
             >
               {EVENT_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          {/* Organizing format (#720): required; sets durable team size and the default fixture format. */}
+          <div className="space-y-1">
+            <Label htmlFor="event-format" className="text-xs">
+              Format
+            </Label>
+            <select
+              id="event-format"
+              value={format}
+              onChange={(e) =>
+                setFormat(e.target.value as CreateEventRequestFormat)
+              }
+              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+            >
+              {EVENT_FORMAT_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>

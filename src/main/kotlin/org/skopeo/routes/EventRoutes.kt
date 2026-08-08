@@ -279,6 +279,7 @@ private fun toCreateEventInput(request: CreateEventRequest): CreateEventInput {
         participantIds = request.participantIds.map { parseEventUuid(value = it) },
         clubId = request.clubId?.let { parseEventUuid(value = it, field = "club id") },
         circuitId = request.circuitId?.let { parseEventUuid(value = it, field = "circuit id") },
+        format = request.format,
         type = request.type,
         // "Award Ranking Points" (#559) defaults to true when the client omits it.
         awardRankingPoints = request.awardRankingPoints ?: true,

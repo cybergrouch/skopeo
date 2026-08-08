@@ -15,11 +15,14 @@ import { Label } from "@/components/ui/label";
 import {
   getGetApiV1EventsIdQueryKey,
   getGetApiV1EventsIdSeedingQueryKey,
+  getGetApiV1EventsIdTeamsQueryKey,
   getGetApiV1EventsQueryKey,
   useDeleteApiV1EventsId,
   useDeleteApiV1EventsIdParticipantsUserId,
+  useDeleteApiV1EventsIdTeamsTeamId,
   useGetApiV1EventsId,
   useGetApiV1EventsIdSeeding,
+  useGetApiV1EventsIdTeams,
   usePatchApiV1EventsId,
   usePostApiV1EventsIdFinalize,
   usePostApiV1EventsIdUnfinalize,
@@ -27,6 +30,7 @@ import {
   usePostApiV1EventsIdParticipants,
   usePostApiV1EventsIdParticipantsUserIdDecision,
   usePostApiV1EventsIdSeeding,
+  usePostApiV1EventsIdTeams,
   usePutApiV1EventsIdClub,
 } from "@/api/generated/events/events";
 import { useGetApiV1Clubs } from "@/api/generated/clubs/clubs";
@@ -142,6 +146,13 @@ export function EventDetail({
     setDateSeededFor(event.startDate);
     if (date === "") setDate(event.startDate);
   }
+  // The fixture format defaults to the event's organizing format (#720), but the host can override it
+  // per fixture. Seeded once per event (React's "adjust state when a prop changes" pattern — no effect).
+  const [formatSeededFor, setFormatSeededFor] = useState<string | undefined>(undefined);
+  if (event?.format && formatSeededFor !== event.id) {
+    setFormatSeededFor(event.id);
+    setFormat(event.format as (typeof MATCH_FORMATS)[number]);
+  }
   // Tournament placement match (#525): mark a fixture as deciding a placement + which bracket.
   const [isPlacement, setIsPlacement] = useState(false);
   const [placementBracket, setPlacementBracket] = useState<
@@ -166,8 +177,47 @@ export function EventDetail({
   const [team1HandicapDraft, setTeam1HandicapDraft] = useState("");
   const [team2HandicapDraft, setTeam2HandicapDraft] = useState("");
 
+  // Durable event teams (#720): fill a fixture side from a team ref instead of raw players. The toggle
+  // is only offered once at least one team exists; each side then picks a team.
+  const [useTeams, setUseTeams] = useState(false);
+  const [team1Ref, setTeam1Ref] = useState("");
+  const [team2Ref, setTeam2Ref] = useState("");
+
+  // New-team form (#720): members are drawn from APPROVED participants; name is optional (auto-named).
+  const [newTeamA, setNewTeamA] = useState("");
+  const [newTeamB, setNewTeamB] = useState("");
+  const [newTeamName, setNewTeamName] = useState("");
+  const [teamError, setTeamError] = useState<string | null>(null);
+
   // Clubs to (re)assign the event to (#319); staff-readable, empty when none exist.
   const clubs = useGetApiV1Clubs().data ?? [];
+
+  // Durable teams for this event (#720). Empty until any are created; drives the fixture team refs.
+  const teamsQuery = useGetApiV1EventsIdTeams(eventId);
+  const teams = teamsQuery.data ?? [];
+  // The event's organizing format sets team size: 1 for singles, 2 for doubles/mixed (#720).
+  const teamSize = event?.format === "SINGLES" ? 1 : 2;
+
+  function refreshTeams() {
+    void queryClient.invalidateQueries({
+      queryKey: getGetApiV1EventsIdTeamsQueryKey(eventId),
+    });
+  }
+
+  const createTeam = usePostApiV1EventsIdTeams({
+    mutation: {
+      onSuccess: () => {
+        setNewTeamA("");
+        setNewTeamB("");
+        setNewTeamName("");
+        setTeamError(null);
+        refreshTeams();
+      },
+    },
+  });
+  const dissolveTeam = useDeleteApiV1EventsIdTeamsTeamId({
+    mutation: { onSuccess: refreshTeams },
+  });
 
   function refreshEvent() {
     void queryClient.invalidateQueries({
@@ -191,6 +241,8 @@ export function EventDetail({
         setTeam1b("");
         setTeam2a("");
         setTeam2b("");
+        setTeam1Ref("");
+        setTeam2Ref("");
         // Reset to the event's start date (#668), not blank, so back-to-back fixtures keep the default.
         setDate(event?.startDate ?? "");
         setIsPlacement(false);
@@ -394,6 +446,16 @@ export function EventDetail({
     ? [team1a, team1b, team2a, team2b]
     : [team1a, team2a];
 
+  // Fixture format sets the effective side size (#720): 2 for doubles/mixed, 1 for singles.
+  const expectedSideSize = isDoubles ? 2 : 1;
+  const team1RefObj = teams.find((t) => t.id === team1Ref);
+  const team2RefObj = teams.find((t) => t.id === team2Ref);
+  // A team ref must match the fixture's effective format (#720) — a doubles team can't fill a singles side.
+  const teamSizeMismatch =
+    useTeams &&
+    ((team1RefObj != null && team1RefObj.members.length !== expectedSideSize) ||
+      (team2RefObj != null && team2RefObj.members.length !== expectedSideSize));
+
   function scheduleFixture(e: FormEvent) {
     e.preventDefault();
     createFixture.mutate(
@@ -402,8 +464,13 @@ export function EventDetail({
           matchFormat: format,
           matchType,
           matchDate: date,
-          team1: isDoubles ? [team1a, team1b] : [team1a],
-          team2: isDoubles ? [team2a, team2b] : [team2a],
+          // A side is EITHER raw players OR a durable team ref (#720), never both.
+          ...(useTeams
+            ? { team1Id: team1Ref, team2Id: team2Ref }
+            : {
+                team1: isDoubles ? [team1a, team1b] : [team1a],
+                team2: isDoubles ? [team2a, team2b] : [team2a],
+              }),
           eventId,
           // Per-side handicap (#486): only sent when the "Apply handicap" box is ticked and non-empty.
           ...(applyHandicap && team1HandicapDraft !== ""
@@ -439,9 +506,12 @@ export function EventDetail({
     applyHandicap &&
     (handicapDraftInvalid(team1HandicapDraft) ||
       handicapDraftInvalid(team2HandicapDraft));
+  const canScheduleTeams =
+    team1Ref !== "" && team2Ref !== "" && team1Ref !== team2Ref && !teamSizeMismatch;
+  const canSchedulePlayers =
+    filled.length === chosen.length && new Set(filled).size === chosen.length;
   const canSchedule =
-    filled.length === chosen.length &&
-    new Set(filled).size === chosen.length &&
+    (useTeams ? canScheduleTeams : canSchedulePlayers) &&
     date !== "" &&
     !handicapOutOfRange;
 
@@ -468,6 +538,81 @@ export function EventDetail({
           {participants
             .filter(
               (p) => p.userId === value || !takenElsewhere.includes(p.userId),
+            )
+            .map((p) => (
+              <option key={p.userId} value={p.userId}>
+                {playerLabel(p.displayName, p.publicCode, p.userId)}
+                {p.isPlaceholder ? " (Unclaimed)" : ""}
+              </option>
+            ))}
+        </select>
+      </div>
+    );
+  }
+
+  // Durable teams (#720): the participants already on some team (exclusive membership), so the new-team
+  // pickers can exclude them. The chosen slots may still show themselves so they don't vanish mid-edit.
+  const takenTeamMemberIds = new Set(
+    teams.flatMap((t) => t.members.map((m) => m.userId)),
+  );
+  const newTeamMembers = (teamSize === 1 ? [newTeamA] : [newTeamA, newTeamB]).filter(
+    (id) => id !== "",
+  );
+  const canCreateTeam =
+    newTeamMembers.length === teamSize &&
+    new Set(newTeamMembers).size === teamSize;
+
+  function submitTeam(e: FormEvent) {
+    e.preventDefault();
+    if (!canCreateTeam) return;
+    setTeamError(null);
+    createTeam.mutate(
+      {
+        id: eventId,
+        data: {
+          memberUserIds: newTeamMembers,
+          // Blank name → the server auto-names from the members' display names.
+          ...(newTeamName.trim() !== "" ? { name: newTeamName.trim() } : {}),
+        },
+      },
+      {
+        onError: (err) =>
+          setTeamError(
+            eventErrorMessage(
+              err,
+              "Could not create the team. Members must be approved participants not already on a team.",
+            ),
+          ),
+      },
+    );
+  }
+
+  // One member dropdown for the new-team form, scoped to APPROVED participants, excluding those already
+  // on a team and whoever's picked in the other slot.
+  function teamMemberSelect(
+    id: string,
+    label: string,
+    value: string,
+    onChange: (v: string) => void,
+    otherValue: string,
+  ) {
+    return (
+      <div className="space-y-1">
+        <Label htmlFor={id} className="text-xs">
+          {label}
+        </Label>
+        <select
+          id={id}
+          className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        >
+          <option value="">Select…</option>
+          {participants
+            .filter(
+              (p) =>
+                p.userId === value ||
+                (!takenTeamMemberIds.has(p.userId) && p.userId !== otherValue),
             )
             .map((p) => (
               <option key={p.userId} value={p.userId}>
@@ -827,6 +972,115 @@ export function EventDetail({
             </p>
           ) : null}
 
+          {/* Durable teams (#720): purely organizational groupings of this event's participants. They
+              don't affect ratings or seeding; they just populate fixtures. Editing/dissolving a team
+              later leaves existing fixtures (which snapshot players) untouched. */}
+          {locked ? null : (
+            <Card>
+              <CardHeader>
+                <CardTitle>Teams</CardTitle>
+                <CardDescription>
+                  Group participants into durable teams for this event (
+                  {teamSize === 1 ? "1 player" : "2 players"} each, matching the
+                  event format). Teams are organizational only — they don’t affect
+                  ratings or seeding, and they help you fill fixtures below.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {teams.length > 0 ? (
+                  <ul className="space-y-1 text-sm" data-testid="team-list">
+                    {teams.map((t) => (
+                      <li
+                        key={t.id}
+                        className="flex items-center justify-between gap-2"
+                      >
+                        <span className="min-w-0">
+                          <span className="block font-medium">{t.name}</span>
+                          <span className="block text-xs text-muted-foreground">
+                            {t.members
+                              .map((m) =>
+                                playerLabel(m.displayName, m.publicCode, m.userId),
+                              )
+                              .join(" / ")}
+                          </span>
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          disabled={dissolveTeam.isPending}
+                          onClick={() =>
+                            dissolveTeam.mutate(
+                              { id: eventId, teamId: t.id },
+                              {
+                                onError: (err) =>
+                                  toast.error(
+                                    eventErrorMessage(
+                                      err,
+                                      "Could not dissolve the team.",
+                                    ),
+                                    { duration: 8000 },
+                                  ),
+                              },
+                            )
+                          }
+                        >
+                          Dissolve
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No teams yet.</p>
+                )}
+                <form onSubmit={submitTeam} className="grid gap-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    {teamMemberSelect(
+                      "team-member-a",
+                      teamSize === 1 ? "Member" : "Member 1",
+                      newTeamA,
+                      setNewTeamA,
+                      newTeamB,
+                    )}
+                    {teamSize === 1
+                      ? null
+                      : teamMemberSelect(
+                          "team-member-b",
+                          "Member 2",
+                          newTeamB,
+                          setNewTeamB,
+                          newTeamA,
+                        )}
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="team-name" className="text-xs">
+                      Team name (optional)
+                    </Label>
+                    <Input
+                      id="team-name"
+                      value={newTeamName}
+                      onChange={(e) => setNewTeamName(e.target.value)}
+                      placeholder="Auto-named from members if left blank"
+                    />
+                  </div>
+                  {teamError ? (
+                    <p className="text-sm text-destructive" role="alert">
+                      {teamError}
+                    </p>
+                  ) : null}
+                  <Button
+                    type="submit"
+                    size="sm"
+                    disabled={!canCreateTeam || createTeam.isPending}
+                  >
+                    Create team
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          )}
+
           {locked ? null : (
             <Card>
               <CardHeader>
@@ -866,6 +1120,67 @@ export function EventDetail({
                       ))}
                     </select>
                   </div>
+                  {/* Players-vs-team toggle (#720): offered once teams exist. When on, each side is a
+                      team ref; the team's size must match the fixture's (overridable) format. */}
+                  {teams.length > 0 ? (
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={useTeams}
+                        onChange={(e) => setUseTeams(e.target.checked)}
+                        aria-label="Pick sides from teams"
+                      />
+                      Pick sides from teams
+                    </label>
+                  ) : null}
+                  {useTeams ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <Label htmlFor="fixture-team1" className="text-xs">
+                          Team 1
+                        </Label>
+                        <select
+                          id="fixture-team1"
+                          className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                          value={team1Ref}
+                          onChange={(e) => setTeam1Ref(e.target.value)}
+                        >
+                          <option value="">Select a team…</option>
+                          {teams.map((t) => (
+                            <option
+                              key={t.id}
+                              value={t.id}
+                              disabled={t.id === team2Ref}
+                            >
+                              {t.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="fixture-team2" className="text-xs">
+                          Team 2
+                        </Label>
+                        <select
+                          id="fixture-team2"
+                          className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                          value={team2Ref}
+                          onChange={(e) => setTeam2Ref(e.target.value)}
+                        >
+                          <option value="">Select a team…</option>
+                          {teams.map((t) => (
+                            <option
+                              key={t.id}
+                              value={t.id}
+                              disabled={t.id === team1Ref}
+                            >
+                              {t.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  ) : (
                   <div className="grid grid-cols-2 gap-2">
                     {isDoubles ? (
                       <>
@@ -915,6 +1230,14 @@ export function EventDetail({
                       </>
                     )}
                   </div>
+                  )}
+                  {teamSizeMismatch ? (
+                    <p className="text-sm text-destructive" role="alert">
+                      A selected team’s size doesn’t match the fixture format.{" "}
+                      {MATCH_FORMAT_LABELS[format]} needs{" "}
+                      {expectedSideSize === 1 ? "1 player" : "2 players"} a side.
+                    </p>
+                  ) : null}
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1">
                       <Label htmlFor="event-matchType" className="text-xs">

@@ -34,6 +34,7 @@ import org.skopeo.domain.model.EventParticipantStatus
 import org.skopeo.domain.model.EventType
 import org.skopeo.domain.model.EventView
 import org.skopeo.domain.model.MatchStatus
+import org.skopeo.domain.model.TeamType
 import org.skopeo.domain.model.User
 import org.skopeo.domain.model.ageInYears
 import org.skopeo.domain.model.canSeeRawRatingOrFalse
@@ -67,6 +68,9 @@ data class CreateEventInput(
     val clubId: UUID? = null,
     // The circuit a TOURNAMENT event belongs to (#525); required for tournaments, ignored otherwise.
     val circuitId: UUID? = null,
+    // The event's organizing format name (#720): SINGLES | DOUBLES | MIXED_DOUBLES. Required at create;
+    // parsed/validated in [EventService.create]. Defaulted to SINGLES only to keep call sites compiling.
+    val format: String = "SINGLES",
     // The event's class name (#403); a null/absent value defaults to OPEN_PLAY. Parsed in [EventService.create].
     val type: String? = null,
     // Whether finalizing this event awards ranking points per the global schedules (#559). Default true.
@@ -118,6 +122,8 @@ class EventService(
                 ServiceError.Validation(message = "End date cannot be before the start date")
             }
             ensureKnownUsers(users = users, ids = input.participantIds).bind()
+            // Parse the required organizing format (#720): one of the TeamType enum names.
+            val format = parseFormat(raw = input.format).bind()
             // Parse the optional event type (#403): one of the enum names, defaulting to OPEN_PLAY when absent.
             val type = input.type?.let { parseEventType(raw = it).bind() } ?: EventType.OPEN_PLAY
             // An optional club must exist (#313); a clubless event is fine.
@@ -137,6 +143,7 @@ class EventService(
                             createdBy = createdBy,
                             clubId = input.clubId,
                             circuitId = circuitId,
+                            format = format,
                             type = type,
                             awardRankingPoints = input.awardRankingPoints,
                         ),
@@ -157,6 +164,7 @@ class EventService(
                                 "endDate" to event.endDate.toString(),
                                 "participants" to event.participantIds.size.toString(),
                                 "clubId" to event.clubId?.toString(),
+                                "format" to event.format.name,
                                 "type" to event.type.name,
                             ),
                     ),
@@ -686,6 +694,11 @@ class EventService(
                 viewerStatus = viewerStatus,
             )
         }
+
+    /** Parse an event organizing format name (#720); an unknown name is a [ServiceError.Validation]. */
+    private fun parseFormat(raw: String): Either<ServiceError, TeamType> =
+        TeamType.entries.firstOrNull { it.name == raw }?.right()
+            ?: ServiceError.Validation(message = "Invalid format '$raw'; expected SINGLES, DOUBLES, or MIXED_DOUBLES").left()
 
     /** Parse an event type name (#403); an unknown name is a [ServiceError.Validation]. */
     private fun parseEventType(raw: String): Either<ServiceError, EventType> =

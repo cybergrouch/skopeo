@@ -103,6 +103,7 @@ class EventFinalizeApiIntegrationTest {
                         name = "Spring Open",
                         startDate = LocalDate.now().toString(),
                         endDate = LocalDate.now().plusDays(7).toString(),
+                        format = "SINGLES",
                     ),
             )
         }.body()

@@ -2626,6 +2626,112 @@ paths:
         '404':
           description: No such event
 
+  /api/v1/events/{id}/teams:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      summary: List an event's durable teams (#720) (HOST/CLUB_OWNER/ADMINISTRATOR)
+      tags:
+        - Events
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The event's teams
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EventTeamResponse'
+        '403':
+          description: Caller is not staff or does not own the event
+        '404':
+          description: No such event
+    post:
+      summary: Create a durable event team (#720) (HOST/CLUB_OWNER/ADMINISTRATOR)
+      tags:
+        - Events
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEventTeamRequest'
+      responses:
+        '201':
+          description: The created team
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventTeamResponse'
+        '400':
+          description: Invalid members (size vs format, not a participant, already in another team)
+        '403':
+          description: Caller is not staff or does not own the event
+        '404':
+          description: No such event
+
+  /api/v1/events/{id}/teams/{teamId}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: teamId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    patch:
+      summary: Update a durable event team (#720) (HOST/CLUB_OWNER/ADMINISTRATOR)
+      tags:
+        - Events
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateEventTeamRequest'
+      responses:
+        '200':
+          description: The updated team
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventTeamResponse'
+        '400':
+          description: Invalid members
+        '403':
+          description: Caller is not staff or does not own the event
+        '404':
+          description: No such event or team
+    delete:
+      summary: Dissolve a durable event team (#720) (HOST/CLUB_OWNER/ADMINISTRATOR)
+      tags:
+        - Events
+      security:
+        - firebaseAuth: []
+      responses:
+        '204':
+          description: Team dissolved (existing fixtures snapshot players, so they are untouched)
+        '403':
+          description: Caller is not staff or does not own the event
+        '404':
+          description: No such event or team
+
   /api/v1/rating-requests:
     post:
       summary: Raise a re-rate request (player, #140)
@@ -5950,8 +6056,6 @@ components:
         - matchFormat
         - matchType
         - matchDate
-        - team1
-        - team2
       properties:
         matchFormat:
           type: string
@@ -5965,14 +6069,30 @@ components:
           format: date
         team1:
           type: array
+          description: >-
+            Raw player ids for side 1. A side is specified EITHER as raw ids here OR as a durable event
+            team ref (team1Id, #720) — not both. Omit when using team1Id.
           items:
             type: string
             format: uuid
         team2:
           type: array
+          description: Raw player ids for side 2; omit when using team2Id (#720).
           items:
             type: string
             format: uuid
+        team1Id:
+          type: string
+          format: uuid
+          nullable: true
+          description: >-
+            Durable event team ref for side 1 (#720); alternative to team1. Resolves to the team's members
+            (in slot order); requires eventId and the team's size must match the effective format.
+        team2Id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Durable event team ref for side 2 (#720); alternative to team2.
         venue:
           type: string
           nullable: true
@@ -6183,6 +6303,7 @@ components:
         - name
         - startDate
         - endDate
+        - format
       properties:
         name:
           type: string
@@ -6192,6 +6313,10 @@ components:
         endDate:
           type: string
           format: date
+        format:
+          type: string
+          enum: [SINGLES, DOUBLES, MIXED_DOUBLES]
+          description: The event's organizing format (#720); REQUIRED. Sets durable team size and the default fixture format.
         participantIds:
           type: array
           items:
@@ -6371,6 +6496,7 @@ components:
         - endDate
         - isActive
         - participants
+        - format
         - type
       properties:
         id:
@@ -6386,6 +6512,10 @@ components:
         endDate:
           type: string
           format: date
+        format:
+          type: string
+          enum: [SINGLES, DOUBLES, MIXED_DOUBLES]
+          description: The event's organizing format (#720).
         isActive:
           type: boolean
         participants:
@@ -6437,6 +6567,86 @@ components:
         awardRankingPoints:
           type: boolean
           description: Whether finalizing this event awards ranking points per the global schedules (#559); default true.
+
+    CreateEventTeamRequest:
+      type: object
+      description: >-
+        Create a durable event team (#720). memberUserIds are the members in slot order (1 for a singles
+        event, 2 for doubles/mixed). Omit name to auto-name from the members' display names.
+      required:
+        - memberUserIds
+      properties:
+        memberUserIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        name:
+          type: string
+          nullable: true
+          description: Optional name override; omit/blank to auto-name from members.
+
+    UpdateEventTeamRequest:
+      type: object
+      description: >-
+        Update a durable event team (#720). Fields left null are unchanged; a blank name re-auto-names
+        from the members.
+      properties:
+        memberUserIds:
+          type: array
+          nullable: true
+          items:
+            type: string
+            format: uuid
+        name:
+          type: string
+          nullable: true
+
+    EventTeamMemberResponse:
+      type: object
+      description: One resolved member of a durable event team (#720).
+      required:
+        - userId
+        - position
+      properties:
+        userId:
+          type: string
+          format: uuid
+        position:
+          type: integer
+          description: Slot within the team (1 = Player 1, 2 = Player 2).
+        displayName:
+          type: string
+          nullable: true
+        publicCode:
+          type: string
+          nullable: true
+        isPlaceholder:
+          type: boolean
+        isDeleted:
+          type: boolean
+
+    EventTeamResponse:
+      type: object
+      description: A durable, event-scoped organizational team (#720).
+      required:
+        - id
+        - eventId
+        - name
+        - members
+      properties:
+        id:
+          type: string
+          format: uuid
+        eventId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/EventTeamMemberResponse'
 
     EventPublicResponse:
       type: object
