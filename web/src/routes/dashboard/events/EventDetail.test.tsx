@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, waitFor, within, fireEvent } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { setupUser } from '@/test/user'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { EventDetail } from './EventDetail'
@@ -351,7 +351,7 @@ describe('EventDetail', () => {
   })
 
   it('adds and removes a participant', async () => {
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDetail()
     await user.click(screen.getByRole('button', { name: 'Search players…' }))
     expect(addMutate).toHaveBeenCalledWith({ id: 'e1', data: { userId: 'u3' } })
@@ -361,7 +361,7 @@ describe('EventDetail', () => {
   })
 
   it('schedules a participant-scoped fixture (disabled until valid)', async () => {
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDetail()
 
     expect(screen.getByRole('button', { name: 'Schedule fixture' })).toBeDisabled()
@@ -396,7 +396,7 @@ describe('EventDetail', () => {
       data: { ...event, type: 'TOURNAMENT' },
       isLoading: false,
     })
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDetail()
 
     await user.selectOptions(screen.getByLabelText('Player 1'), 'u1')
@@ -429,7 +429,7 @@ describe('EventDetail', () => {
   })
 
   it('hides the handicap input until the "Apply handicap" box is ticked, and clears it on un-tick (#486)', async () => {
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDetail()
 
     // Hidden by default (discouraged by design); the checkbox + tooltip trigger are present.
@@ -451,7 +451,7 @@ describe('EventDetail', () => {
   })
 
   it('sends the per-side handicap in the create payload when applied (#486)', async () => {
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDetail()
 
     await user.selectOptions(screen.getByLabelText('Player 1'), 'u1')
@@ -470,7 +470,7 @@ describe('EventDetail', () => {
   })
 
   it('sends both per-side handicaps in the create payload when applied (#486)', async () => {
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDetail()
 
     await user.selectOptions(screen.getByLabelText('Player 1'), 'u1')
@@ -490,7 +490,7 @@ describe('EventDetail', () => {
   })
 
   it('excludes the player chosen in one dropdown from the other', async () => {
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDetail()
     const player1 = screen.getByLabelText('Player 1')
     const player2 = screen.getByLabelText('Player 2')
@@ -528,7 +528,7 @@ describe('EventDetail', () => {
 
   it('schedules a doubles fixture with two players a side (disabled until all four picked)', async () => {
     useGetApiV1EventsId.mockReturnValue({ data: doublesRoster, isLoading: false })
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDetail()
 
     await user.selectOptions(screen.getByLabelText('Format'), 'DOUBLES')
@@ -564,7 +564,7 @@ describe('EventDetail', () => {
 
   it('sends the mixed-doubles format', async () => {
     useGetApiV1EventsId.mockReturnValue({ data: doublesRoster, isLoading: false })
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDetail()
 
     await user.selectOptions(screen.getByLabelText('Format'), 'MIXED_DOUBLES')
@@ -580,7 +580,7 @@ describe('EventDetail', () => {
 
   it('excludes a player picked in any doubles slot from the other three', async () => {
     useGetApiV1EventsId.mockReturnValue({ data: doublesRoster, isLoading: false })
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDetail()
     await user.selectOptions(screen.getByLabelText('Format'), 'DOUBLES')
 
@@ -595,7 +595,7 @@ describe('EventDetail', () => {
 
   it('retires the partner slots when switching back to singles', async () => {
     useGetApiV1EventsId.mockReturnValue({ data: doublesRoster, isLoading: false })
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDetail()
 
     await user.selectOptions(screen.getByLabelText('Format'), 'DOUBLES')
@@ -628,7 +628,7 @@ describe('EventDetail', () => {
 
   it('surfaces a fixture error and lets the match type change', async () => {
     state.fixtureFail = true
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDetail()
     await user.selectOptions(screen.getByLabelText('Match type'), 'TOURNAMENT')
     await user.selectOptions(screen.getByLabelText('Player 1'), 'u1')
@@ -646,7 +646,7 @@ describe('EventDetail', () => {
 
   it('surfaces a roster error when adding a participant fails', async () => {
     state.addFail = true
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDetail()
     await user.click(screen.getByRole('button', { name: 'Search players…' }))
     await waitFor(() =>
@@ -674,7 +674,7 @@ describe('EventDetail', () => {
       },
       isLoading: false,
     })
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDetail()
 
     // The pending player isn't in the fixture pickers (roster = approved only).
@@ -692,7 +692,7 @@ describe('EventDetail', () => {
   })
 
   it('deletes the event after a confirm step and returns to the list (#243)', async () => {
-    const user = userEvent.setup()
+    const user = setupUser()
     const onBack = vi.fn()
     render(
       <MemoryRouter>
@@ -711,7 +711,7 @@ describe('EventDetail', () => {
 
   it('shows a busy label while the delete is in flight', async () => {
     state.deletePending = true
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDetail()
 
     await user.click(screen.getByRole('button', { name: 'Delete event' }))
@@ -719,7 +719,7 @@ describe('EventDetail', () => {
   })
 
   it('cancels a pending delete without calling the API', async () => {
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDetail()
 
     await user.click(screen.getByRole('button', { name: 'Delete event' }))
@@ -731,7 +731,7 @@ describe('EventDetail', () => {
 
   it('shows a generic message when a delete fails without server guidance', async () => {
     state.deleteFail = true
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDetail()
 
     await user.click(screen.getByRole('button', { name: 'Delete event' }))
@@ -745,7 +745,7 @@ describe('EventDetail', () => {
   it('surfaces the server guidance when a delete is refused (#243)', async () => {
     state.deleteFail = true
     state.deleteErrorMessage = "Delete this event's recorded matches first, then delete the event"
-    const user = userEvent.setup()
+    const user = setupUser()
     const onBack = vi.fn()
     render(
       <MemoryRouter>
@@ -768,7 +768,7 @@ describe('EventDetail', () => {
   })
 
   it('renames the event, trimming the name and sending a PATCH (#269)', async () => {
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDetail()
 
     await user.click(screen.getByRole('button', { name: 'Rename' }))
@@ -781,7 +781,7 @@ describe('EventDetail', () => {
   })
 
   it('rejects a blank rename without calling the API', async () => {
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDetail()
 
     await user.click(screen.getByRole('button', { name: 'Rename' }))
@@ -795,7 +795,7 @@ describe('EventDetail', () => {
   it('surfaces a server error when a rename fails', async () => {
     state.renameFail = true
     state.renameErrorMessage = 'Nope'
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDetail()
 
     await user.click(screen.getByRole('button', { name: 'Rename' }))
@@ -806,7 +806,7 @@ describe('EventDetail', () => {
 
   it('shows a busy label while the rename is in flight', async () => {
     state.renamePending = true
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDetail()
 
     await user.click(screen.getByRole('button', { name: 'Rename' }))
@@ -814,7 +814,7 @@ describe('EventDetail', () => {
   })
 
   it('cancels a rename without calling the API', async () => {
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDetail()
 
     await user.click(screen.getByRole('button', { name: 'Rename' }))
@@ -825,7 +825,7 @@ describe('EventDetail', () => {
   })
 
   it('sets and clears the event club (#319)', async () => {
-    const user = userEvent.setup()
+    const user = setupUser()
     useGetApiV1Clubs.mockReturnValue({
       data: [
         { id: 'c1', name: 'Riverside' },
@@ -857,7 +857,7 @@ describe('EventDetail', () => {
   })
 
   it('surfaces a server error when setting the club fails (#319)', async () => {
-    const user = userEvent.setup()
+    const user = setupUser()
     useGetApiV1Clubs.mockReturnValue({ data: [{ id: 'c1', name: 'Riverside' }], isLoading: false })
     clubMutate.mockImplementationOnce(() => {
       throw { response: { data: { message: 'Club not found' } } }
@@ -910,7 +910,7 @@ describe('EventDetail', () => {
       data: { ...event, type: 'TOURNAMENT', endDate: '2999-01-01', isFinalized: false },
       isLoading: false,
     })
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDetail()
 
     await user.click(screen.getByRole('button', { name: 'Finalize event' }))
@@ -924,7 +924,7 @@ describe('EventDetail', () => {
       data: { ...event, type: 'TOURNAMENT', endDate: '2999-01-01', isFinalized: false },
       isLoading: false,
     })
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDetail()
 
     await user.click(screen.getByRole('button', { name: 'Finalize event' }))
@@ -941,7 +941,7 @@ describe('EventDetail', () => {
       data: { ...event, type: 'TOURNAMENT', endDate: '2999-01-01', isFinalized: false },
       isLoading: false,
     })
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDetail()
 
     await user.click(screen.getByRole('button', { name: 'Finalize event' }))
@@ -978,7 +978,7 @@ describe('EventDetail', () => {
     })
     state.finalizeFail = true
     state.finalizeErrorMessage = 'Event is already finalized'
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDetail()
 
     await user.click(screen.getByRole('button', { name: 'Finalize event' }))
@@ -996,7 +996,7 @@ describe('EventDetail', () => {
       data: { ...event, type: 'TOURNAMENT', endDate: '2999-01-01', isFinalized: true },
       isLoading: false,
     })
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDetail()
 
     // The Un-finalize card is shown only when finalized; Finalize is not.
@@ -1012,7 +1012,7 @@ describe('EventDetail', () => {
       data: { ...event, type: 'TOURNAMENT', endDate: '2999-01-01', isFinalized: true },
       isLoading: false,
     })
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDetail()
 
     await user.click(screen.getByRole('button', { name: 'Un-finalize event' }))
@@ -1031,7 +1031,7 @@ describe('EventDetail', () => {
     })
     state.unfinalizeFail = true
     state.unfinalizeErrorMessage = 'This event has already-rated matches'
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDetail()
 
     await user.click(screen.getByRole('button', { name: 'Un-finalize event' }))
@@ -1053,7 +1053,7 @@ describe('EventDetail', () => {
       isLoading: false,
     })
     state.unfinalizePending = true
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDetail()
 
     await user.click(screen.getByRole('button', { name: 'Un-finalize event' }))
@@ -1069,7 +1069,7 @@ describe('EventDetail', () => {
       data: { ...event, type: 'TOURNAMENT', endDate: '2999-01-01', isFinalized: true },
       isLoading: false,
     })
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDetail()
 
     // The destructive Reverse ratings action is shown for an admin on a finalized event.
@@ -1091,7 +1091,7 @@ describe('EventDetail', () => {
     state.reverseFail = true
     state.reverseErrorMessage =
       "This event's ratings can't be reversed because later matches have already been rated on top of them."
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDetail()
 
     await user.click(screen.getByRole('button', { name: 'Reverse ratings' }))
@@ -1128,7 +1128,7 @@ describe('EventDetail', () => {
       isLoading: false,
     })
     state.reversePending = true
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDetail()
 
     await user.click(screen.getByRole('button', { name: 'Reverse ratings' }))
@@ -1140,7 +1140,7 @@ describe('EventDetail', () => {
       data: { ...event, type: 'TOURNAMENT', endDate: '2999-01-01', isFinalized: true },
       isLoading: false,
     })
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDetail()
 
     await user.click(screen.getByRole('button', { name: 'Reverse ratings' }))
@@ -1181,7 +1181,7 @@ describe('EventDetail', () => {
   // ---- Event seeding (#714) ----
 
   it('generates an event seeding and calls the mutation (#714)', async () => {
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDetail()
 
     // No seeding yet → the empty prompt and a "Generate seeding" action.
@@ -1194,7 +1194,7 @@ describe('EventDetail', () => {
 
   it('shows an error toast when generating the seeding fails (#714)', async () => {
     state.generateSeedingFail = true
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDetail()
 
     await user.click(screen.getByRole('button', { name: 'Generate seeding' }))

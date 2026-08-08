@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { setupUser } from '@/test/user'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { DashboardPage } from './DashboardPage'
 
@@ -82,7 +82,7 @@ function renderDashboard(initialEntries: string[] = ['/']) {
 }
 
 /** Open the hamburger menu so its section items (role=button) are queryable. */
-async function openMenu(user: ReturnType<typeof userEvent.setup>) {
+async function openMenu(user: ReturnType<typeof setupUser>) {
   await user.click(screen.getByRole('button', { name: 'Open navigation menu' }))
 }
 
@@ -103,7 +103,7 @@ describe('DashboardPage', () => {
       data: { id: 'u1', capabilities: ['PLAYER', 'RESEARCHER'] },
       isLoading: false,
     })
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDashboard()
     await openMenu(user)
     expect(screen.getByRole('button', { name: 'Profile' })).toBeInTheDocument()
@@ -129,7 +129,7 @@ describe('DashboardPage', () => {
       data: { id: 'u1', capabilities: ['PLAYER'] },
       isLoading: false,
     })
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDashboard()
     await openMenu(user)
     await user.click(screen.getByRole('button', { name: 'Settings' }))
@@ -141,7 +141,7 @@ describe('DashboardPage', () => {
       data: { id: 'u1', capabilities: ['PLAYER'] },
       isLoading: false,
     })
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDashboard()
     await openMenu(user)
     expect(screen.getByRole('button', { name: 'Profile' })).toBeInTheDocument()
@@ -153,7 +153,7 @@ describe('DashboardPage', () => {
       data: { id: 'u1', capabilities: ['PLAYER', 'RATER'] },
       isLoading: false,
     })
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDashboard()
     await openMenu(user)
     expect(screen.getByRole('button', { name: 'Ratings' })).toBeInTheDocument()
@@ -171,7 +171,7 @@ describe('DashboardPage', () => {
       data: { id: 'u1', capabilities: ['PLAYER', 'RESEARCHER', 'HOST'] },
       isLoading: false,
     })
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDashboard()
     await openMenu(user)
     expect(screen.getByRole('button', { name: 'Event Organizer' })).toBeInTheDocument()
@@ -195,7 +195,7 @@ describe('DashboardPage', () => {
       data: { id: 'u1', capabilities: ['PLAYER', 'RESEARCHER', 'CLUB_OWNER'] },
       isLoading: false,
     })
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDashboard()
     await openMenu(user)
     expect(screen.getByRole('button', { name: 'Event Organizer' })).toBeInTheDocument()
@@ -208,7 +208,7 @@ describe('DashboardPage', () => {
       data: { id: 'u1', capabilities: ['PLAYER', 'ADMINISTRATOR'] },
       isLoading: false,
     })
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDashboard()
     await openMenu(user)
     expect(screen.getByRole('button', { name: 'Event Organizer' })).toBeInTheDocument()
@@ -251,7 +251,7 @@ describe('DashboardPage', () => {
       data: { id: 'u1', capabilities: ['PLAYER', 'POINTS_MANAGER'] },
       isLoading: false,
     })
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDashboard()
     await openMenu(user)
     expect(screen.getByRole('button', { name: 'Points Management' })).toBeInTheDocument()
@@ -266,7 +266,7 @@ describe('DashboardPage', () => {
       data: { id: 'u1', capabilities: ['PLAYER'] },
       isLoading: false,
     })
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDashboard()
     // The header doubles as the page title in place of a tab strip.
     expect(screen.getByRole('heading', { name: 'Profile' })).toBeInTheDocument()
@@ -295,7 +295,7 @@ describe('DashboardPage', () => {
       data: { id: 'u1', capabilities: ['PLAYER'] },
       isLoading: false,
     })
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDashboard()
     expect(screen.getByTestId('search')).toHaveTextContent('')
 
@@ -334,7 +334,7 @@ describe('DashboardPage', () => {
       isLoading: false,
     })
     signOut.mockResolvedValue(undefined)
-    const user = userEvent.setup()
+    const user = setupUser()
     renderDashboard()
 
     await user.click(screen.getByRole('button', { name: 'Sign out' }))
