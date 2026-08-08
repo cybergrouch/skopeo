@@ -107,6 +107,34 @@ describe('ReportTab', () => {
     expect(screen.getByText(/2 ended in a different band/)).toBeInTheDocument()
   })
 
+  it('renders singular counts and an empty jump breakdown', () => {
+    const singular = {
+      startDate: '2026-03-01',
+      endDate: '2026-03-31',
+      totalPlayers: 2,
+      excursionStayedCount: 1,
+      excursionJumpedCount: 1,
+      excursionBuckets: [
+        { hopDistance: 0, count: 1, users: [stay01] },
+        { hopDistance: 1, count: 1, users: [drop01] },
+      ],
+      netStayedCount: 2,
+      netJumpedCount: 0,
+      netBuckets: [{ hopDistance: 0, count: 2, users: [stay01, drop01] }],
+    }
+    useGetApiV1ReportsBandHops.mockReturnValue({ data: singular, isLoading: false, isError: false })
+    renderTab()
+
+    // excursionJumpedCount === 1 → singular
+    expect(screen.getByText(/1 player left their band at some point/)).toBeInTheDocument()
+    // the hopDistance-0 bucket has a single player → singular "player"
+    expect(excursionRegion().getByText('Stayed in band — 1 player')).toBeInTheDocument()
+    // the net metric has no jump buckets → the empty note renders
+    expect(
+      netRegion().getByText('No net band changes in this range — everyone ended where they started.'),
+    ).toBeInTheDocument()
+  })
+
   it('shows both the excursion and net bucket breakdowns', () => {
     renderTab()
     const excursion = excursionRegion()
