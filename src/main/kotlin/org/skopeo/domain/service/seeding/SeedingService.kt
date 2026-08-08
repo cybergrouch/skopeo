@@ -5,6 +5,7 @@ package org.skopeo.domain.service.seeding
 
 import arrow.core.Either
 import arrow.core.raise.either
+import arrow.core.raise.ensure
 import org.skopeo.common.dto.seeding.SeedingResponse
 import org.skopeo.common.error.ServiceError
 import org.skopeo.domain.mapper.dto.seeding.toResponse
@@ -52,6 +53,26 @@ class SeedingService(
             seedings.replace(listId = listId, generatedBy = list.ownerId, entries = entries).toResponse(showRawRating = showRaw)
         }
 
+    /**
+     * Persist a host's hand-reordered list seeding (#718). The [orderedUserIds] are the seedable players
+     * in the desired order; the deterministic sort is bypassed — seeds are renumbered 1..N by the new
+     * position and the seeding is marked manually edited. The ids must be a permutation of the current
+     * seedable set (no additions/removals), else [ServiceError.Validation].
+     */
+    fun saveOrder(
+        token: VerifiedFirebaseToken,
+        listId: UUID,
+        orderedUserIds: List<UUID>,
+    ): Either<ServiceError, SeedingResponse> =
+        either {
+            val showRaw = userService.callerCanSeeRawRating(token = token)
+            val list = lists.get(token = token, listId = listId).bind() // ownership + access
+            val reordered =
+                reorderedEntries(entries = buildEntries(memberIds = list.memberUserIds), orderedUserIds = orderedUserIds).bind()
+            seedings.replace(listId = listId, generatedBy = list.ownerId, entries = reordered, manuallyEdited = true)
+                .toResponse(showRawRating = showRaw)
+        }
+
     fun get(
         token: VerifiedFirebaseToken,
         listId: UUID,
@@ -77,6 +98,25 @@ class SeedingService(
             val roster = events.rosterForSeeding(token = token, id = eventId).bind()
             val entries = buildEntries(memberIds = roster.participantUserIds)
             seedings.replaceForEvent(eventId = eventId, generatedBy = roster.generatedBy, entries = entries)
+                .toResponse(showRawRating = showRaw)
+        }
+
+    /**
+     * Persist a host's hand-reordered event seeding (#718) — the event-source twin of [saveOrder],
+     * sharing the exact reorder + renumber logic. Access is the staff + owner-or-admin check enforced by
+     * [EventService.rosterForSeeding]; the ids must be a permutation of the current seedable roster.
+     */
+    fun saveOrderForEvent(
+        token: VerifiedFirebaseToken,
+        eventId: UUID,
+        orderedUserIds: List<UUID>,
+    ): Either<ServiceError, SeedingResponse> =
+        either {
+            val showRaw = userService.callerCanSeeRawRating(token = token)
+            val roster = events.rosterForSeeding(token = token, id = eventId).bind()
+            val reordered =
+                reorderedEntries(entries = buildEntries(memberIds = roster.participantUserIds), orderedUserIds = orderedUserIds).bind()
+            seedings.replaceForEvent(eventId = eventId, generatedBy = roster.generatedBy, entries = reordered, manuallyEdited = true)
                 .toResponse(showRawRating = showRaw)
         }
 
@@ -131,6 +171,26 @@ class SeedingService(
             )
         }
     }
+
+    /**
+     * Apply a host's manual order to the freshly-built [entries] (#718). [orderedUserIds] must be exactly
+     * the seedable set (a permutation — same members, no dupes or unknowns), else [ServiceError.Validation].
+     * Seeds are reassigned 1..N strictly by the new position — reordering *is* reassigning seed numbers,
+     * so old numbers are not preserved and every row is seeded by its rank.
+     */
+    private fun reorderedEntries(
+        entries: List<SeedingEntry>,
+        orderedUserIds: List<UUID>,
+    ): Either<ServiceError, List<SeedingEntry>> =
+        either {
+            val byId = entries.associateBy { it.userId }
+            ensure(condition = orderedUserIds.toSet() == byId.keys && orderedUserIds.size == byId.size) {
+                ServiceError.Validation(message = "The order must list each seedable player exactly once")
+            }
+            orderedUserIds.mapIndexed { index, userId ->
+                byId.getValue(key = userId).copy(seed = index + 1, position = index + 1)
+            }
+        }
 
     /** The name to sort and snapshot by: the display name, falling back to the shareable code. */
     private fun seedName(user: User): String = user.displayName() ?: user.publicCode

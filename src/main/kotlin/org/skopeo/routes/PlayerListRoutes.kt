@@ -13,11 +13,13 @@ import io.ktor.server.routing.Route
 import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
+import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.common.dto.seeding.AddMemberRequest
 import org.skopeo.common.dto.seeding.CreatePlayerListRequest
+import org.skopeo.common.dto.seeding.SaveSeedingOrderRequest
 import org.skopeo.domain.service.seeding.PlayerListService
 import org.skopeo.domain.service.seeding.SeedingService
 import java.util.UUID
@@ -109,6 +111,16 @@ private fun Route.seeding(service: SeedingService) {
     post(path = "/{id}/seeding") {
         respondMappingErrors {
             respondEither(result = service.generate(token = verifiedToken(), listId = uuidParam(name = "id"))) { seeding ->
+                call.respond(status = HttpStatusCode.OK, message = seeding)
+            }
+        }
+    }
+    put(path = "/{id}/seeding") {
+        respondMappingErrors {
+            val orderedUserIds = call.receive<SaveSeedingOrderRequest>().userIds.map { UUID.fromString(it) }
+            respondEither(
+                result = service.saveOrder(token = verifiedToken(), listId = uuidParam(name = "id"), orderedUserIds = orderedUserIds),
+            ) { seeding ->
                 call.respond(status = HttpStatusCode.OK, message = seeding)
             }
         }

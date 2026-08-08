@@ -89,6 +89,22 @@ class SeedingRepositoryTest {
     }
 
     @Test
+    fun `replace defaults manuallyEdited to false and persists it as true when set (#718)`() {
+        val owner = newUser(uid = "owner")
+        val list = lists.create(ownerId = owner.id, name = "L").toDomain()
+        val player = newUser(uid = "p1")
+        val entries = listOf(element = entryFor(user = player, displayName = "P1"))
+
+        // The generate path leaves it false.
+        seedings.replace(listId = list.id, generatedBy = owner.id, entries = entries)
+        seedings.findByListId(listId = list.id).shouldBeRight().toDomain().manuallyEdited shouldBe false
+
+        // A hand-saved order persists it as true (regenerate/overwrite in place).
+        seedings.replace(listId = list.id, generatedBy = owner.id, entries = entries, manuallyEdited = true)
+        seedings.findByListId(listId = list.id).shouldBeRight().toDomain().manuallyEdited shouldBe true
+    }
+
+    @Test
     fun `findByListId is not found when no seeding exists`() {
         val owner = newUser(uid = "owner")
         val list = lists.create(ownerId = owner.id, name = "Empty").toDomain()

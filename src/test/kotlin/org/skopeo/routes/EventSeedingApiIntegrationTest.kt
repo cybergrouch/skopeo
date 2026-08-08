@@ -11,6 +11,7 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
+import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
@@ -25,6 +26,7 @@ import org.junit.jupiter.api.Test
 import org.skopeo.common.dto.event.AddParticipantRequest
 import org.skopeo.common.dto.event.CreateEventRequest
 import org.skopeo.common.dto.event.EventResponse
+import org.skopeo.common.dto.seeding.SaveSeedingOrderRequest
 import org.skopeo.common.dto.seeding.SeedingResponse
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.user.toDomain
@@ -128,6 +130,42 @@ class EventSeedingApiIntegrationTest {
             client.get(urlString = "/api/v1/events/${event.id}/seeding") {
                 header(key = HttpHeaders.Authorization, value = "Bearer $host")
             }.body<SeedingResponse>().entries.single().userId shouldBe player.id.toString()
+        }
+
+    @Test
+    fun `a host saves a hand-reordered event seeding via PUT, renumbering seeds and flagging it (#718)`() =
+        withApp { client ->
+            seedUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+            val p1 = seedUser(uid = "p1", roles = setOf(element = Capability.PLAYER))
+            val p2 = seedUser(uid = "p2", roles = setOf(element = Capability.PLAYER))
+            RatingAssembler().setRating(userId = p1.id, rating = BigDecimal("4.5"), level = "4.5")
+            RatingAssembler().setRating(userId = p2.id, rating = BigDecimal("3.5"), level = "3.5")
+            val host = tokenFor(uid = "host")
+            val event = client.createEvent(token = host)
+            for (id in listOf(p1.id, p2.id)) {
+                client.post(urlString = "/api/v1/events/${event.id}/participants") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = AddParticipantRequest(userId = id.toString()))
+                }.status shouldBe HttpStatusCode.OK
+            }
+
+            client.post(urlString = "/api/v1/events/${event.id}/seeding") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $host")
+            }.body<SeedingResponse>().manuallyEdited shouldBe false
+
+            val saved =
+                client.put(urlString = "/api/v1/events/${event.id}/seeding") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = SaveSeedingOrderRequest(userIds = listOf(p2.id.toString(), p1.id.toString())))
+                }
+            saved.status shouldBe HttpStatusCode.OK
+            saved.body<SeedingResponse>().let {
+                it.entries.map { e -> e.userId } shouldBe listOf(p2.id.toString(), p1.id.toString())
+                it.entries.map { e -> e.seed } shouldBe listOf(1, 2)
+                it.manuallyEdited shouldBe true
+            }
         }
 
     @Test

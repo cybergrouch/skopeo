@@ -1,8 +1,47 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import type { ReactNode } from 'react'
+import { act, render, screen } from '@testing-library/react'
+import { setupUser } from '@/test/user'
 import { SeedingTable } from './SeedingTable'
 import type { SeedingEntryResponse } from '@/api/generated/model'
+
+// dnd-kit relies on layout measurement that jsdom can't provide; stub it to passthrough components and
+// capture the DndContext onDragEnd so a test can simulate a drop (same technique as AwaitingResultsSection).
+const { dnd, sortable } = vi.hoisted(() => ({
+  dnd: { onDragEnd: undefined as undefined | ((e: unknown) => void) },
+  sortable: { isDragging: false },
+}))
+vi.mock('@dnd-kit/core', () => ({
+  DndContext: ({ children, onDragEnd }: { children: ReactNode; onDragEnd: (e: unknown) => void }) => {
+    dnd.onDragEnd = onDragEnd
+    return children
+  },
+  closestCenter: () => undefined,
+  KeyboardSensor: function KeyboardSensor() {},
+  PointerSensor: function PointerSensor() {},
+  useSensor: () => ({}),
+  useSensors: () => [],
+}))
+vi.mock('@dnd-kit/sortable', () => ({
+  SortableContext: ({ children }: { children: ReactNode }) => children,
+  verticalListSortingStrategy: {},
+  sortableKeyboardCoordinates: () => undefined,
+  useSortable: () => ({
+    attributes: {},
+    listeners: {},
+    setNodeRef: () => undefined,
+    transform: null,
+    transition: undefined,
+    isDragging: sortable.isDragging,
+  }),
+  arrayMove: <T,>(arr: T[], from: number, to: number): T[] => {
+    const copy = [...arr]
+    const [moved] = copy.splice(from, 1)
+    copy.splice(to, 0, moved)
+    return copy
+  },
+}))
+vi.mock('@dnd-kit/utilities', () => ({ CSS: { Transform: { toString: () => undefined } } }))
 
 const entries: SeedingEntryResponse[] = [
   {
@@ -77,7 +116,7 @@ describe('SeedingTable', () => {
         return el
       })
 
-    const user = userEvent.setup()
+    const user = setupUser()
     render(<SeedingTable entries={entries} generatedAt="2026-06-23T10:00:00" name="Club Open" />)
     await user.click(screen.getByRole('button', { name: 'Download CSV' }))
 
@@ -109,7 +148,7 @@ describe('SeedingTable', () => {
       })
     vi.stubGlobal('URL', { ...URL, createObjectURL: () => 'blob:url', revokeObjectURL: vi.fn() })
 
-    const user = userEvent.setup()
+    const user = setupUser()
     render(<SeedingTable entries={entries} generatedAt="2026-06-23T10:00:00" name="***" />)
     await user.click(screen.getByRole('button', { name: 'Download CSV' }))
 
@@ -117,5 +156,152 @@ describe('SeedingTable', () => {
 
     createElementSpy.mockRestore()
     vi.unstubAllGlobals()
+  })
+
+  it('shows no Save/Reset/Regenerate controls when it is read-only', () => {
+    render(<SeedingTable entries={entries} generatedAt="now" name="Club Open" />)
+    expect(screen.queryByRole('button', { name: 'Save order' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Reset' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Reorder/ })).not.toBeInTheDocument()
+  })
+
+  it('reorders a draft and Saves the new order to the mutation (#718)', async () => {
+    const onSaveOrder = vi.fn<(userIds: string[]) => Promise<void>>(() => Promise.resolve())
+    const user = setupUser()
+    render(
+      <SeedingTable entries={entries} generatedAt="now" name="Club Open" onSaveOrder={onSaveOrder} />,
+    )
+
+    // Save/Reset start disabled: no unsaved changes yet.
+    expect(screen.getByRole('button', { name: 'Save order' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Reset' })).toBeDisabled()
+
+    // Drag u2 above u1 via the captured DndContext onDragEnd.
+    act(() => dnd.onDragEnd?.({ active: { id: 'u2' }, over: { id: 'u1' } }))
+
+    // The draft is now dirty → Save/Reset enabled.
+    expect(screen.getByRole('button', { name: 'Save order' })).toBeEnabled()
+    await user.click(screen.getByRole('button', { name: 'Save order' }))
+    expect(onSaveOrder).toHaveBeenCalledWith(['u2', 'u1'])
+  })
+
+  it('Reset reverts the draft and is disabled again once unchanged (#718)', async () => {
+    const user = setupUser()
+    render(
+      <SeedingTable entries={entries} generatedAt="now" name="Club Open" onSaveOrder={vi.fn()} />,
+    )
+
+    act(() => dnd.onDragEnd?.({ active: { id: 'u2' }, over: { id: 'u1' } }))
+    const reset = screen.getByRole('button', { name: 'Reset' })
+    expect(reset).toBeEnabled()
+
+    await user.click(reset)
+    // Back to the original order → Reset (and Save) disabled again.
+    expect(screen.getByRole('button', { name: 'Reset' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Save order' })).toBeDisabled()
+  })
+
+  it('warns before regenerating over a manually-edited order, then confirms (#718)', async () => {
+    const onRegenerate = vi.fn()
+    const user = setupUser()
+    render(
+      <SeedingTable
+        entries={entries}
+        generatedAt="now"
+        name="Club Open"
+        onRegenerate={onRegenerate}
+        manuallyEdited
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Regenerate seeding' }))
+    // First click warns instead of regenerating.
+    expect(onRegenerate).not.toHaveBeenCalled()
+    expect(screen.getByRole('alert')).toHaveTextContent('discard the manual order')
+
+    await user.click(screen.getByRole('button', { name: 'Discard manual order and regenerate' }))
+    expect(onRegenerate).toHaveBeenCalledTimes(1)
+  })
+
+  it('re-syncs the draft to fresh entries when the underlying order changes (#718)', async () => {
+    const user = setupUser()
+    const { rerender } = render(
+      <SeedingTable entries={entries} generatedAt="now" name="Club Open" onSaveOrder={vi.fn()} />,
+    )
+
+    // Dirty the draft so a re-sync is observable.
+    act(() => dnd.onDragEnd?.({ active: { id: 'u2' }, over: { id: 'u1' } }))
+    expect(screen.getByRole('button', { name: 'Reset' })).toBeEnabled()
+
+    // A regenerate elsewhere hands down new entries + a new generatedAt → the key changes and the draft
+    // re-syncs, dropping the stale manual order (Save/Reset disabled again).
+    const regenerated: SeedingEntryResponse[] = [entries[1], entries[0]]
+    rerender(
+      <SeedingTable entries={regenerated} generatedAt="later" name="Club Open" onSaveOrder={vi.fn()} />,
+    )
+    expect(screen.getByRole('button', { name: 'Reset' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Save order' })).toBeDisabled()
+    void user
+  })
+
+  it('cancels the regenerate confirmation without regenerating (#718)', async () => {
+    const onRegenerate = vi.fn()
+    const user = setupUser()
+    render(
+      <SeedingTable
+        entries={entries}
+        generatedAt="now"
+        name="Club Open"
+        onRegenerate={onRegenerate}
+        manuallyEdited
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Regenerate seeding' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('discard the manual order')
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(onRegenerate).not.toHaveBeenCalled()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Regenerate seeding' })).toBeInTheDocument()
+  })
+
+  it('regenerates immediately when the order was not manually edited (#718)', async () => {
+    const onRegenerate = vi.fn()
+    const user = setupUser()
+    render(
+      <SeedingTable entries={entries} generatedAt="now" name="Club Open" onRegenerate={onRegenerate} />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Regenerate seeding' }))
+    expect(onRegenerate).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('shows a pending Save label while an order save is in flight (#718)', () => {
+    render(
+      <SeedingTable entries={entries} generatedAt="now" name="Club Open" onSaveOrder={vi.fn()} savingOrder />,
+    )
+    expect(screen.getByRole('button', { name: 'Saving…' })).toBeInTheDocument()
+  })
+
+  it('shows a pending Regenerate label while regeneration is in flight (#718)', () => {
+    render(
+      <SeedingTable entries={entries} generatedAt="now" name="Club Open" onRegenerate={vi.fn()} regenerating />,
+    )
+    expect(screen.getByRole('button', { name: 'Regenerating…' })).toBeInTheDocument()
+  })
+
+  it('dims a row while it is being dragged (#718)', () => {
+    sortable.isDragging = true
+    try {
+      render(
+        <SeedingTable entries={entries} generatedAt="now" name="Club Open" onSaveOrder={vi.fn()} />,
+      )
+      // The dragged rows render with the reduced-opacity style branch.
+      expect(screen.getByText('Ana').closest('tr')).toHaveStyle({ opacity: '0.6' })
+    } finally {
+      sortable.isDragging = false
+    }
   })
 })

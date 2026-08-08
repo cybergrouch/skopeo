@@ -32,6 +32,7 @@ import {
   usePostApiV1EventsIdSeeding,
   usePostApiV1EventsIdTeams,
   usePutApiV1EventsIdClub,
+  usePutApiV1EventsIdSeeding,
 } from "@/api/generated/events/events";
 import { useGetApiV1Clubs } from "@/api/generated/clubs/clubs";
 import {
@@ -433,6 +434,26 @@ export function EventDetail({
       await generateSeeding.mutateAsync({ id: eventId });
     } catch (e) {
       toast.error(eventErrorMessage(e, "Could not generate the seeding."), {
+        duration: 8000,
+      });
+    }
+  }
+
+  const saveSeedingOrder = usePutApiV1EventsIdSeeding({
+    mutation: {
+      onSuccess: () => {
+        void queryClient.invalidateQueries({
+          queryKey: getGetApiV1EventsIdSeedingQueryKey(eventId),
+        });
+      },
+    },
+  });
+
+  async function onSaveSeedingOrder(userIds: string[]) {
+    try {
+      await saveSeedingOrder.mutateAsync({ id: eventId, data: { userIds } });
+    } catch (e) {
+      toast.error(eventErrorMessage(e, "Could not save the seeding order."), {
         duration: 8000,
       });
     }
@@ -856,23 +877,28 @@ export function EventDetail({
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Button
-                type="button"
-                size="sm"
-                disabled={generateSeeding.isPending}
-                onClick={onGenerateSeeding}
-              >
-                {generateSeeding.isPending
-                  ? "Generating…"
-                  : hasSeeding
-                    ? "Regenerate seeding"
+              {!hasSeeding ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={generateSeeding.isPending}
+                  onClick={onGenerateSeeding}
+                >
+                  {generateSeeding.isPending
+                    ? "Generating…"
                     : "Generate seeding"}
-              </Button>
+                </Button>
+              ) : null}
               <SeedingTable
                 entries={seedingEntries}
                 generatedAt={eventSeeding.data?.generatedAt ?? ""}
                 name={event.name}
                 emptyMessage="No seeding yet. Generate one from the approved participants above."
+                onSaveOrder={onSaveSeedingOrder}
+                savingOrder={saveSeedingOrder.isPending}
+                onRegenerate={onGenerateSeeding}
+                regenerating={generateSeeding.isPending}
+                manuallyEdited={eventSeeding.data?.manuallyEdited ?? false}
               />
             </CardContent>
           </Card>

@@ -26,6 +26,7 @@ import {
   usePostApiV1PlayerLists,
   usePostApiV1PlayerListsIdMembers,
   usePostApiV1PlayerListsIdSeeding,
+  usePutApiV1PlayerListsIdSeeding,
 } from '@/api/generated/player-lists/player-lists'
 import type {
   GetApiV1UsersParams,
@@ -78,6 +79,7 @@ export function SeedingTab() {
   const addMember = usePostApiV1PlayerListsIdMembers()
   const removeMember = useDeleteApiV1PlayerListsIdMembersUserId()
   const generate = usePostApiV1PlayerListsIdSeeding()
+  const saveOrder = usePutApiV1PlayerListsIdSeeding()
 
   const hasSelection = selectedId != null
   const detail = useGetApiV1PlayerListsId(selectedId ?? '', {
@@ -125,6 +127,15 @@ export function SeedingTab() {
   async function onGenerate(listId: string) {
     await generate.mutateAsync({ id: listId })
     invalidateSeeding(listId)
+  }
+
+  async function onSaveOrder(listId: string, userIds: string[]) {
+    try {
+      await saveOrder.mutateAsync({ id: listId, data: { userIds } })
+      invalidateSeeding(listId)
+    } catch {
+      toast.error("Couldn't save the seeding order.", { duration: 8000 })
+    }
   }
 
   /** The combined search params (name + sex/age/rating), or null when no filter is set. */
@@ -399,9 +410,15 @@ export function SeedingTab() {
 
               <section className="space-y-3 border-t pt-4">
                 <div className="flex flex-wrap gap-2">
-                  <Button type="button" onClick={() => onGenerate(selectedId)}>
-                    {hasSeeding ? 'Regenerate' : 'Generate seeding'}
-                  </Button>
+                  {!hasSeeding ? (
+                    <Button
+                      type="button"
+                      disabled={generate.isPending}
+                      onClick={() => onGenerate(selectedId)}
+                    >
+                      {generate.isPending ? 'Generating…' : 'Generate seeding'}
+                    </Button>
+                  ) : null}
                   <Button
                     type="button"
                     variant="ghost"
@@ -416,6 +433,11 @@ export function SeedingTab() {
                   generatedAt={seedingData?.generatedAt ?? ''}
                   name={detail.data?.name ?? 'List'}
                   emptyMessage="No seeding yet. Generate one from the members above."
+                  onSaveOrder={(userIds) => onSaveOrder(selectedId, userIds)}
+                  savingOrder={saveOrder.isPending}
+                  onRegenerate={() => onGenerate(selectedId)}
+                  regenerating={generate.isPending}
+                  manuallyEdited={seedingData?.manuallyEdited ?? false}
                 />
               </section>
             </div>

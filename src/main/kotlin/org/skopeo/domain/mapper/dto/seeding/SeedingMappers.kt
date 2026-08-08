@@ -21,6 +21,7 @@ fun PlayerList.toSummaryResponse(): PlayerListSummaryResponse =
 fun Seeding.toResponse(showRawRating: Boolean = false): SeedingResponse =
     SeedingResponse(
         generatedAt = generatedAt.toString(),
+        manuallyEdited = manuallyEdited,
         entries = entries.map { it.toResponse(showRawRating = showRawRating) },
     )
 

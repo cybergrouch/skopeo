@@ -35,5 +35,6 @@ fun SeedingAggregateEntity.toDomain(): Seeding =
         listId = seeding.listId,
         eventId = seeding.eventId,
         generatedAt = seeding.generatedAt,
+        manuallyEdited = seeding.manuallyEdited,
         entries = entries.map { it.toDomain() },
     )

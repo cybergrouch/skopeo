@@ -24,6 +24,7 @@ import org.skopeo.common.dto.event.DecideParticipantRequest
 import org.skopeo.common.dto.event.SetCalcPriorityRequest
 import org.skopeo.common.dto.event.SetEventClubRequest
 import org.skopeo.common.dto.event.UpdateEventRequest
+import org.skopeo.common.dto.seeding.SaveSeedingOrderRequest
 import org.skopeo.domain.service.event.CreateEventInput
 import org.skopeo.domain.service.event.EventService
 import org.skopeo.domain.service.seeding.SeedingService
@@ -66,6 +67,21 @@ private fun Route.eventSeeding(service: SeedingService) {
     post(path = "/{id}/seeding") {
         respondMappingErrors {
             respondEither(result = service.generateForEvent(token = verifiedToken(), eventId = uuidParam(name = "id"))) { seeding ->
+                call.respond(status = HttpStatusCode.OK, message = seeding)
+            }
+        }
+    }
+    put(path = "/{id}/seeding") {
+        respondMappingErrors {
+            val orderedUserIds = call.receive<SaveSeedingOrderRequest>().userIds.map { UUID.fromString(it) }
+            respondEither(
+                result =
+                    service.saveOrderForEvent(
+                        token = verifiedToken(),
+                        eventId = uuidParam(name = "id"),
+                        orderedUserIds = orderedUserIds,
+                    ),
+            ) { seeding ->
                 call.respond(status = HttpStatusCode.OK, message = seeding)
             }
         }

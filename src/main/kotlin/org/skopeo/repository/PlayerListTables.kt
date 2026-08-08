@@ -37,6 +37,9 @@ internal object SeedingsTable : UUIDTable(name = "seedings") {
     val eventId = reference(name = "event_id", foreign = EventsTable, onDelete = ReferenceOption.CASCADE).nullable()
     val generatedAt = datetime(name = "generated_at")
     val generatedBy = reference(name = "generated_by", foreign = UsersTable, onDelete = ReferenceOption.SET_NULL).nullable()
+
+    // True once a host drag-reorders and saves this seeding by hand (#718); regenerate resets it. See V42.
+    val manuallyEdited = bool(name = "manually_edited")
 }
 
 /** A frozen seeding row — names/ratings captured at generation so the CSV is reproducible. */

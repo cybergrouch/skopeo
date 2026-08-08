@@ -29,6 +29,9 @@ data class Seeding(
     val listId: UUID?,
     val eventId: UUID?,
     val generatedAt: LocalDateTime,
+    // True when a host drag-reordered and saved this seeding by hand (#718); a plain generated one is
+    // false, and regenerating resets it. The web UI warns before a Regenerate would discard a manual order.
+    val manuallyEdited: Boolean = false,
     val entries: List<SeedingEntry>,
 )
 
