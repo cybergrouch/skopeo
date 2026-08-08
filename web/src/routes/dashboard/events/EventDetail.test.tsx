@@ -552,6 +552,31 @@ describe('EventDetail', () => {
     expect(screen.getByText(/needs/)).toHaveTextContent('2 players')
   })
 
+  it('warns with the singular side size when a doubles team fills a singles ref (#720)', async () => {
+    const user = setupUser()
+    useGetApiV1EventsId.mockReturnValue({ data: { ...event, format: 'SINGLES' }, isLoading: false })
+    // A two-member team can't fill a singles side.
+    useGetApiV1EventsIdTeams.mockReturnValue({
+      data: [
+        {
+          id: 't1',
+          eventId: 'e1',
+          name: 'Team A',
+          members: [
+            { userId: 'u1', position: 1, displayName: 'Ana' },
+            { userId: 'u2', position: 2, displayName: 'Bob' },
+          ],
+        },
+      ],
+    })
+    renderDetail()
+
+    await user.click(screen.getByLabelText('Pick sides from teams'))
+    await user.selectOptions(screen.getByLabelText('Team 1'), 't1')
+
+    expect(screen.getByText(/needs/)).toHaveTextContent('1 player')
+  })
+
   it('pre-fills the fixture date with the event start date (#668)', () => {
     renderDetail()
     expect(screen.getByLabelText('Date')).toHaveValue('2026-03-01')
