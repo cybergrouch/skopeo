@@ -156,20 +156,39 @@ class EventTeamApiIntegrationTest {
         }
 
     @Test
-    fun `creating a team with the wrong size for the event format is rejected`() =
+    fun `a one-member team is accepted on a doubles event, but a three-member team is rejected`() =
         withApp { client ->
             seedUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
             val a = seedUser(uid = "Alice", roles = setOf(element = Capability.PLAYER))
+            val b = seedUser(uid = "Bob", roles = setOf(element = Capability.PLAYER))
+            val c = seedUser(uid = "Cara", roles = setOf(element = Capability.PLAYER))
             val host = tokenFor(uid = "host")
             val event = client.createDoublesEvent(token = host)
-            client.addParticipant(token = host, eventId = event.id, userId = a.id.toString())
+            listOf(a, b, c).forEach { client.addParticipant(token = host, eventId = event.id, userId = it.id.toString()) }
 
-            // A DOUBLES event needs 2 members; a single-member team is a 400.
+            // 2 is the hard cap, so a third member is a 400. Asserted before any team exists, so the
+            // rejection can only be about size — not membership exclusivity.
             client.post(urlString = "/api/v1/events/${event.id}/teams") {
                 header(key = HttpHeaders.Authorization, value = "Bearer $host")
                 contentType(type = ContentType.Application.Json)
-                setBody(body = CreateEventTeamRequest(memberUserIds = listOf(element = a.id.toString()), name = null))
+                setBody(
+                    body =
+                        CreateEventTeamRequest(
+                            memberUserIds = listOf(a.id.toString(), b.id.toString(), c.id.toString()),
+                            name = null,
+                        ),
+                )
             }.status shouldBe HttpStatusCode.BadRequest
+
+            // Team size is independent of the event format (#734): 1 member is allowed, if degenerate.
+            val single =
+                client.post(urlString = "/api/v1/events/${event.id}/teams") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                    contentType(type = ContentType.Application.Json)
+                    setBody(body = CreateEventTeamRequest(memberUserIds = listOf(element = a.id.toString()), name = null))
+                }
+            single.status shouldBe HttpStatusCode.Created
+            single.body<EventTeamResponse>().members shouldHaveSize 1
         }
 
     @Test
