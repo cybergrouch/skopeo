@@ -4,6 +4,9 @@
 package org.skopeo
 
 import io.kotest.assertions.throwables.shouldNotThrowAny
+import io.kotest.assertions.withClue
+import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.maps.shouldContainKey
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -256,6 +259,53 @@ class OpenAPIIntegrationTest {
         val components = document["components"] as? Map<String, Any>
         components.shouldNotBeNull()
         components.shouldContainKey(key = "schemas")
+    }
+
+    @Test
+    fun testOpenAPISpecHasNoDanglingRefs() {
+        // Every internal $ref (e.g. "#/components/schemas/Foo") must resolve to a node that exists in the
+        // document. A ref to a deleted/renamed schema is still valid YAML — it passes the parse test above
+        // but breaks web orval generation. Walk the parsed spec, collect all $refs, and assert each resolves,
+        // so the backend gate catches dangling refs at the source (#401).
+        val specStream = javaClass.classLoader.getResourceAsStream("openapi/documentation.yaml")
+        val specText = requireNotNull(value = specStream).bufferedReader().use { reader -> reader.readText() }
+
+        @Suppress("UNCHECKED_CAST")
+        val document = Yaml().load<Any>(specText) as Map<String, Any>
+
+        val refs = collectRefs(node = document)
+        refs.shouldNotBeEmpty() // sanity: the spec does use $ref, so an empty result means a broken walker
+
+        val dangling = refs.filter { ref -> !refResolves(document = document, ref = ref) }
+        withClue(clue = { "Dangling \$ref(s) in documentation.yaml: $dangling" }) {
+            dangling.shouldBeEmpty()
+        }
+    }
+
+    /** Recursively collect every `$ref` string value in the parsed spec. */
+    private fun collectRefs(node: Any?): List<String> =
+        when (node) {
+            is Map<*, *> ->
+                node.entries.flatMap { (key, value) ->
+                    if (key == "\$ref" && value is String) listOf(element = value) else collectRefs(node = value)
+                }
+            is List<*> -> node.flatMap { element -> collectRefs(node = element) }
+            else -> emptyList()
+        }
+
+    /** Whether an internal JSON-pointer `$ref` (`#/a/b/c`) resolves to an existing node. External refs pass. */
+    private fun refResolves(
+        document: Map<String, Any>,
+        ref: String,
+    ): Boolean {
+        if (!ref.startsWith(prefix = "#/")) return true
+        val segments =
+            ref.removePrefix(prefix = "#/")
+                .split("/")
+                .map { segment -> segment.replace(oldValue = "~1", newValue = "/").replace(oldValue = "~0", newValue = "~") }
+        val target =
+            segments.fold(initial = document as Any?) { node, segment -> (node as? Map<*, *>)?.get(key = segment) }
+        return target != null
     }
 
     @Test
