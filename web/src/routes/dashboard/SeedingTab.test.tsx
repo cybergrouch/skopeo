@@ -446,6 +446,10 @@ describe('SeedingTab', () => {
     await user.click(screen.getByRole('button', { name: /Summer Open/ }))
     expect(screen.getByRole('button', { name: 'Generate seeding' })).toBeInTheDocument()
     expect(screen.getByText('No seeding yet. Generate one from the members above.')).toBeInTheDocument()
+
+    // Clicking it generates a seeding for the selected list.
+    await user.click(screen.getByRole('button', { name: 'Generate seeding' }))
+    await waitFor(() => expect(generateMutate).toHaveBeenCalledWith({ id: 'l1' }))
   })
 
   it('downloads a CSV with the expected filename, header, and escaped fields', async () => {

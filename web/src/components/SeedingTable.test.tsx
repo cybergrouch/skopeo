@@ -222,6 +222,49 @@ describe('SeedingTable', () => {
     expect(onRegenerate).toHaveBeenCalledTimes(1)
   })
 
+  it('re-syncs the draft to fresh entries when the underlying order changes (#718)', async () => {
+    const user = setupUser()
+    const { rerender } = render(
+      <SeedingTable entries={entries} generatedAt="now" name="Club Open" onSaveOrder={vi.fn()} />,
+    )
+
+    // Dirty the draft so a re-sync is observable.
+    act(() => dnd.onDragEnd?.({ active: { id: 'u2' }, over: { id: 'u1' } }))
+    expect(screen.getByRole('button', { name: 'Reset' })).toBeEnabled()
+
+    // A regenerate elsewhere hands down new entries + a new generatedAt → the key changes and the draft
+    // re-syncs, dropping the stale manual order (Save/Reset disabled again).
+    const regenerated: SeedingEntryResponse[] = [entries[1], entries[0]]
+    rerender(
+      <SeedingTable entries={regenerated} generatedAt="later" name="Club Open" onSaveOrder={vi.fn()} />,
+    )
+    expect(screen.getByRole('button', { name: 'Reset' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Save order' })).toBeDisabled()
+    void user
+  })
+
+  it('cancels the regenerate confirmation without regenerating (#718)', async () => {
+    const onRegenerate = vi.fn()
+    const user = setupUser()
+    render(
+      <SeedingTable
+        entries={entries}
+        generatedAt="now"
+        name="Club Open"
+        onRegenerate={onRegenerate}
+        manuallyEdited
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Regenerate seeding' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('discard the manual order')
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(onRegenerate).not.toHaveBeenCalled()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Regenerate seeding' })).toBeInTheDocument()
+  })
+
   it('regenerates immediately when the order was not manually edited (#718)', async () => {
     const onRegenerate = vi.fn()
     const user = setupUser()
