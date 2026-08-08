@@ -37,7 +37,11 @@ WHERE e.id = ranked.event_id;
 -- Events with no matches to derive from default to SINGLES.
 UPDATE events SET format = 'SINGLES' WHERE format IS NULL;
 
+-- NOT NULL, with a DB-level default of SINGLES so any insert path that omits format (raw test inserts,
+-- internal helpers) is safe. Requiredness is still enforced at the API boundary (CreateEventRequest.format
+-- + service validation); the default is only a safety net.
 ALTER TABLE events ALTER COLUMN format SET NOT NULL;
+ALTER TABLE events ALTER COLUMN format SET DEFAULT 'SINGLES';
 
 ALTER TABLE events
     ADD CONSTRAINT chk_event_format CHECK (format IN ('SINGLES', 'DOUBLES', 'MIXED_DOUBLES'));
