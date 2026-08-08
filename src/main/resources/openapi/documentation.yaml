@@ -2704,7 +2704,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/EventTeamResponse'
         '400':
-          description: Invalid members (size vs format, not a participant, already in another team)
+          description: Invalid members (0 or 3+ members, not a participant, already in another team)
         '403':
           description: Caller is not staff or does not own the event
         '404':
@@ -6386,7 +6386,7 @@ components:
         format:
           type: string
           enum: [SINGLES, DOUBLES, MIXED_DOUBLES]
-          description: The event's organizing format (#720); REQUIRED. Sets durable team size and the default fixture format.
+          description: The event's organizing format (#720); REQUIRED. Sets the default fixture format (team size is 1-2, independent of it, #734).
         participantIds:
           type: array
           items:
@@ -6641,8 +6641,9 @@ components:
     CreateEventTeamRequest:
       type: object
       description: >-
-        Create a durable event team (#720). memberUserIds are the members in slot order (1 for a singles
-        event, 2 for doubles/mixed). Omit name to auto-name from the members' display names.
+        Create a durable event team (#720, #734). memberUserIds are the members in slot order: 1 or 2
+        members (max 2, 2 is the normal case), independent of the event format. Omit name to auto-name
+        from the members' display names.
       required:
         - memberUserIds
       properties:

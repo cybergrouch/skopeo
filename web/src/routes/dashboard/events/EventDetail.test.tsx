@@ -460,17 +460,31 @@ describe('EventDetail', () => {
     )
   })
 
-  it('creates a durable team from participants (#720)', async () => {
+  it('creates a degenerate one-member team from a single member (#734)', async () => {
     const user = setupUser()
-    useGetApiV1EventsId.mockReturnValue({ data: { ...event, format: 'SINGLES' }, isLoading: false })
+    // Format is irrelevant to team size now (#734); a one-member team is allowed but degenerate.
+    useGetApiV1EventsId.mockReturnValue({ data: { ...event, format: 'DOUBLES' }, isLoading: false })
     renderDetail()
 
-    // A singles event → one-member team. Create stays disabled until a member is picked.
+    // Create stays disabled until at least one member is picked; member 2 is optional.
     expect(screen.getByRole('button', { name: 'Create team' })).toBeDisabled()
-    await user.selectOptions(screen.getByLabelText('Member'), 'u1')
+    await user.selectOptions(screen.getByLabelText('Member 1'), 'u1')
     await user.click(screen.getByRole('button', { name: 'Create team' }))
 
     expect(createTeamMutate).toHaveBeenCalledWith({ id: 'e1', data: { memberUserIds: ['u1'] } })
+  })
+
+  it('creates a two-member team regardless of event format (#734)', async () => {
+    const user = setupUser()
+    // Even on a SINGLES event the organizer can build a two-member team (#734).
+    useGetApiV1EventsId.mockReturnValue({ data: { ...event, format: 'SINGLES' }, isLoading: false })
+    renderDetail()
+
+    await user.selectOptions(screen.getByLabelText('Member 1'), 'u1')
+    await user.selectOptions(screen.getByLabelText('Member 2 (optional)'), 'u2')
+    await user.click(screen.getByRole('button', { name: 'Create team' }))
+
+    expect(createTeamMutate).toHaveBeenCalledWith({ id: 'e1', data: { memberUserIds: ['u1', 'u2'] } })
   })
 
   it('schedules a fixture from durable team refs (#720)', async () => {
@@ -526,7 +540,7 @@ describe('EventDetail', () => {
     useGetApiV1EventsId.mockReturnValue({ data: { ...event, format: 'SINGLES' }, isLoading: false })
     renderDetail()
 
-    await user.selectOptions(screen.getByLabelText('Member'), 'u1')
+    await user.selectOptions(screen.getByLabelText('Member 1'), 'u1')
     await user.type(screen.getByLabelText('Team name (optional)'), 'Dream Team')
     await user.click(screen.getByRole('button', { name: 'Create team' }))
 
@@ -542,7 +556,7 @@ describe('EventDetail', () => {
     useGetApiV1EventsId.mockReturnValue({ data: { ...event, format: 'SINGLES' }, isLoading: false })
     renderDetail()
 
-    await user.selectOptions(screen.getByLabelText('Member'), 'u1')
+    await user.selectOptions(screen.getByLabelText('Member 1'), 'u1')
     await user.click(screen.getByRole('button', { name: 'Create team' }))
 
     expect(await screen.findByText(/Could not create the team/)).toBeInTheDocument()
