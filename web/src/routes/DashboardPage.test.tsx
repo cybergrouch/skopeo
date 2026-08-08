@@ -50,9 +50,6 @@ vi.mock('./dashboard/ResearchTab', () => ({
 vi.mock('./dashboard/StandingsTab', () => ({
   StandingsTab: () => <div>standings content</div>,
 }))
-vi.mock('./dashboard/InvitesTab', () => ({
-  InvitesTab: () => <div>invites content</div>,
-}))
 vi.mock('./dashboard/ActivityTab', () => ({
   ActivityTab: () => <div>activity content</div>,
 }))
@@ -115,7 +112,6 @@ describe('DashboardPage', () => {
     expect(screen.queryByRole('button', { name: 'Seeding' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Placeholder Players' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Ratings' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Invites' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Activity Log' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Reports' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Points Management' })).not.toBeInTheDocument()
@@ -158,7 +154,6 @@ describe('DashboardPage', () => {
     await openMenu(user)
     expect(screen.getByRole('button', { name: 'Ratings' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Event Organizer' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Invites' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Activity Log' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Admin' })).not.toBeInTheDocument()
 
@@ -214,7 +209,8 @@ describe('DashboardPage', () => {
     expect(screen.getByRole('button', { name: 'Event Organizer' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Ratings' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Standings' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Invites' })).toBeInTheDocument()
+    // Invites no longer has its own tab (#725) — it lives under Account Management now.
+    expect(screen.queryByRole('button', { name: 'Invites' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Activity Log' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Reports' })).toBeInTheDocument()
     // Points Management is now a standalone tab administrators see too (#444).

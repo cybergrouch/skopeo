@@ -33,7 +33,6 @@ import { SeedingTab } from "./dashboard/SeedingTab";
 import { RatingsTab } from "./dashboard/RatingsTab";
 import { ResearchTab } from "./dashboard/ResearchTab";
 import { StandingsTab } from "./dashboard/StandingsTab";
-import { InvitesTab } from "./dashboard/InvitesTab";
 import { ActivityTab } from "./dashboard/ActivityTab";
 import { ReportTab } from "./dashboard/ReportTab";
 import { ClaimTab } from "./dashboard/ClaimTab";
@@ -57,7 +56,6 @@ export function DashboardPage() {
   const showRatings = canRate(capabilities);
   const showSettings = isPlayer(capabilities);
   const showResearch = isResearcher(capabilities);
-  const showInvites = isAdministrator(capabilities);
   const showActivity = isAdministrator(capabilities);
   const showReport = isAdministrator(capabilities);
   const showAccountManagement = isAdministrator(capabilities);
@@ -133,9 +131,6 @@ export function DashboardPage() {
       : []),
     ...(showRatings
       ? [{ value: "ratings", label: "Ratings", element: <RatingsTab /> }]
-      : []),
-    ...(showInvites
-      ? [{ value: "invites", label: "Invites", element: <InvitesTab /> }]
       : []),
     ...(showActivity
       ? [{ value: "activity", label: "Activity Log", element: <ActivityTab /> }]
