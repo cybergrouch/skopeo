@@ -9,6 +9,8 @@ import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.types.shouldBeInstanceOf
+import io.mockk.every
+import io.mockk.spyk
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -321,6 +323,33 @@ class EventTeamServiceTest {
             ).shouldBeRight()
         updated.name shouldBe "Keepers"
         updated.members.single().userId shouldBe p2.id.toString()
+    }
+
+    @Test
+    fun `update is a not-found when the team is deleted between the existence check and the write`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "Alice")
+        val ev = event(host = host.id, participants = listOf(element = p1.id), format = TeamType.SINGLES)
+        val created =
+            service
+                .create(token = token(uid = "host"), eventId = ev.id, memberUserIds = listOf(element = p1.id), name = "Keepers")
+                .shouldBeRight()
+
+        // The existence check (findById) still sees the team, but the write loses the race and returns null —
+        // a concurrent dissolve a sequential test can't otherwise produce. A spy stubs only that one call.
+        val teamsSpy = spyk(objToCopy = teams)
+        every { teamsSpy.update(command = any()) } returns null
+        val racyService = EventTeamService(events = events, teams = teamsSpy, users = users)
+
+        racyService
+            .update(
+                token = token(uid = "host"),
+                eventId = ev.id,
+                teamId = UUID.fromString(created.id),
+                memberUserIds = listOf(element = p1.id),
+                name = "New",
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
     @Test

@@ -109,6 +109,9 @@ dependencies {
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
     testImplementation("io.kotest:kotest-assertions-core:5.9.1")
     testImplementation("io.kotest.extensions:kotest-assertions-arrow:2.0.0")
+    // Mocking for the rare defensive path a real DB can't produce (e.g. a row deleted between an
+    // existence check and its update); used sparingly — most service tests run against real Testcontainers.
+    testImplementation("io.mockk:mockk:1.13.13")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
     // Integration tests against a real PostgreSQL (applies the Flyway migration)
