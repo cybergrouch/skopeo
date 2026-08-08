@@ -4679,6 +4679,14 @@ components:
           type: string
         rating:
           $ref: '#/components/schemas/Rating'
+        group:
+          type: string
+          nullable: true
+          description: >-
+            Optional opaque group label for the binary group-category factor (#719). The calculator
+            only compares the two sides' groups for equality: same group (or either side absent/null)
+            yields factor 1 (normal rating change), a different group yields factor 0 (zeroed change).
+            The value carries no meaning to the algorithm; classification is performed upstream.
 
     Team:
       type: object

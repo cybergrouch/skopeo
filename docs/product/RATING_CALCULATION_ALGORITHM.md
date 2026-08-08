@@ -43,6 +43,7 @@ Two consequences worth internalizing before reading further:
 - **Any factor at zero kills the change.** A result exactly at expectation (`scale = 0`) changes nothing, no matter how dominant the score.
 - **Before boundary clamping the result is [zero-sum](#zero-sum)**: the winner's gain equals the loser's loss, because both players share the same `K × dominance × scale` and differ only in `sign`.
 - **Match type rescales everything.** `scale` is multiplied by a per-match-type factor (open play … tournament playoffs) *before* the formula runs, so the competitive context amplifies or dampens the whole change — see [§2.5](#25-matchtype--the-competitive-context-multiplier).
+- **A cross-group match changes nothing.** `scale` is also multiplied by a binary [group-category factor](#27-groupcategory--the-cross-group-gate-optional) (1 same group, 0 different), so a matchup between two different groups is zeroed out — see [§2.7](#27-groupcategory--the-cross-group-gate-optional).
 
 The raw `change` then passes through a short [post-processing pipeline](#5-the-post-processing-pipeline) (optional smoothing → boundary clamping) before becoming the player's new rating.
 
@@ -232,6 +233,29 @@ effectiveRating = trueRating − h        (singles: the player; doubles: the sid
 The resulting `change` is then applied to the **true** (non-adjusted) rating. So the handicap only widens the *perceived* gap — scaling the delta's magnitude — while the true rating continues to drive band, ranking points, and confidence. For doubles the side **mean** is deducted and the team delta is split by each partner's **true** rating share (the existing proportional split), preserving rating conservation.
 
 There is **no special-casing**: because a handicap widens the gap, values near `1.0` can push it past the `0.5` [competitive threshold](#32-the-competitive-threshold-83--05-ntrp), so an as-expected dominant win yields **zero** change — an accepted, intended outcome. The applied handicap is recorded in the audit/breakdown context (`appliedHandicap`) so a history row's handicapped gap stays interpretable against its true previous/new ratings. Full design: [RATING_HANDICAP.md](./RATING_HANDICAP.md).
+
+### 2.7 `groupCategory` — the cross-group gate (optional)
+
+Some matchups shouldn't move ratings at all because the two sides belong to **different comparison groups** (issue #719). Rather than teach the algorithm what a "group" is, each player carries a **pre-computed, opaque `group` label** and the calculator applies one **binary factor** folded into `scale`, right alongside the match-type factor:
+
+```
+scale = baseScale × matchTypeFactor × groupCategoryFactor
+```
+
+The factor is derived by a trivial same-group check on the two teams' groups (a team's group is its players' group):
+
+$$
+\text{groupCategoryFactor} = \begin{cases} 1 & \text{same group (or either side unclassified)} \\ 0 & \text{different groups} \end{cases}
+$$
+
+A `0` zeroes `scale` and therefore the entire delta — the cross-group match is recorded but leaves both ratings untouched. An **absent/`null`** group on either side is treated as the *same* group → factor `1`, so existing callers and the stateless what-if endpoint are unchanged by default (fully backward compatible).
+
+**The algorithm never classifies.** It attaches no meaning to a group's value; it only compares two labels for equality. All classification lives upstream in a dedicated **`GroupClassifier`** (`domain.service`), which maps a player's attributes + the match format to a label:
+
+- **Singles** → the player's **sex** (later combined with age brackets).
+- **Doubles & mixed doubles** → a single shared `"doubles"` group, so any doubles match matches itself (nothing is zeroed today). Mixed doubles is deliberately treated the same as ordinary doubles for now; splitting it out later is a localized change in the classifier alone — the formula and factor logic do not change.
+
+`RatingCalculationService` calls the classifier to stamp each player's `group` before invoking the calculator. The decision is surfaced to the audit trail (`team1Group` / `team2Group` / `groupCategoryFactor`) so a zeroed delta is explainable.
 
 ---
 

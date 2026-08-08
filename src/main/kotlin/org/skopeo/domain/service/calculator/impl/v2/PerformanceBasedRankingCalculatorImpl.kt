@@ -8,12 +8,14 @@ import org.skopeo.common.dto.RatingChange
 import org.skopeo.domain.model.MatchScore
 import org.skopeo.domain.model.Rating
 import org.skopeo.domain.model.RatingCalculationOptions
+import org.skopeo.domain.model.Team
 import org.skopeo.domain.model.TeamType
 import org.skopeo.domain.model.asRating
 import org.skopeo.domain.model.bd
 import org.skopeo.domain.model.calculateDominanceFactor
 import org.skopeo.domain.model.divideBy
 import org.skopeo.domain.model.toStringPrecise
+import org.skopeo.domain.service.calculator.AuditEntry
 import org.skopeo.domain.service.calculator.AuditTrail
 import org.skopeo.domain.service.calculator.RankingCalculationResult
 import org.skopeo.domain.service.calculator.RankingCalculator
@@ -60,6 +62,18 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
         val options = request.options ?: RatingCalculationOptions()
         val matchTypeFactor = options.matchTypeFactor.bd
 
+        // Binary group-category factor (#719): 1 when both sides share a group (or either is unclassified),
+        // else 0 — a mismatch zeroes the whole delta. The group is an opaque, pre-computed input per player;
+        // classification lives in GroupClassifier upstream, so the algorithm only does this equality check.
+        // It folds into the same pre-formula scale multiplier as the match-type factor (§2.5/§2.7).
+        val groupCategoryFactor =
+            groupCategoryFactor(
+                team1 = request.teams.getValue(key = team1Id),
+                team2 = request.teams.getValue(key = team2Id),
+                audit = audit,
+            )
+        val externalScaleFactor = matchTypeFactor * groupCategoryFactor
+
         // TRUE pre-calculation ratings drive previous/new and (for doubles) the split ratio.
         val team1PreCalculationRatingBD =
             matchTypeHandler.getTeamPreCalculationRating(teamId = team1Id).value.bd
@@ -88,7 +102,7 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
                     oppositionCurrentCalculatedRating = currentTeam2CalculatedRatingBD,
                     set = setScore,
                     teamId = team1Id,
-                    matchTypeFactor = matchTypeFactor,
+                    externalScaleFactor = externalScaleFactor,
                 )
             val step2 =
                 stepFor(
@@ -96,7 +110,7 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
                     oppositionCurrentCalculatedRating = currentTeam1CalculatedRatingBD,
                     set = setScore,
                     teamId = team2Id,
-                    matchTypeFactor = matchTypeFactor,
+                    externalScaleFactor = externalScaleFactor,
                 )
             // The effective running rating carries the (handicapped) gap forward set-to-set.
             currentTeam1CalculatedRatingBD = clamp(value = currentTeam1CalculatedRatingBD + step1.delta)
@@ -177,14 +191,16 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
         oppositionCurrentCalculatedRating: BigDecimal,
         set: MatchScore,
         teamId: String,
-        matchTypeFactor: BigDecimal,
+        externalScaleFactor: BigDecimal,
     ): SetStep {
         val dominance = set.calculateDominanceFactor(teamId = teamId)
         val advantage = subjectCurrentCalculatedRating - oppositionCurrentCalculatedRating
         val isWinner = set.winnerTeamId == teamId
         val normalizedGap = advantage.abs().divideBy(divisor = NTRP_RANGE)
         val isUpset = (isWinner && advantage < ZERO) || (!isWinner && advantage > ZERO)
-        val scale = scaleFor(isUpset = isUpset, normalizedGap = normalizedGap) * matchTypeFactor
+        // The pre-formula scale multipliers — the match-type factor (§2.5) and the binary group-category
+        // factor (#719, §2.7) — arrive pre-combined; a 0 group factor zeroes the whole per-set delta.
+        val scale = scaleFor(isUpset = isUpset, normalizedGap = normalizedGap) * externalScaleFactor
         val sign = if (isWinner) ONE else -ONE
         val delta = K_FACTOR_NTRP * dominance.abs() * scale * sign
         return SetStep(
@@ -195,6 +211,39 @@ class PerformanceBasedRankingCalculatorImpl : RankingCalculator {
             isUpset = isUpset,
             delta = delta,
         )
+    }
+
+    /**
+     * The binary same-group factor (#719): `1` when the two sides share a group (or either side is
+     * unclassified — a null group, kept for backward compatibility), else `0`. A team's group is its
+     * players' group (the caller guarantees a team's players share one), read off the first player. The
+     * decision is surfaced to the [audit] trail so a zeroed delta is explainable.
+     */
+    private fun groupCategoryFactor(
+        team1: Team,
+        team2: Team,
+        audit: AuditTrail,
+    ): BigDecimal {
+        val group1 = team1.players.firstOrNull()?.group
+        val group2 = team2.players.firstOrNull()?.group
+        val sameGroup = group1 == null || group2 == null || group1 == group2
+        val factor = if (sameGroup) ONE else ZERO
+        audit.add(
+            entry =
+                AuditEntry(
+                    message =
+                        "Group category: team1=${group1 ?: "unclassified"}, team2=${group2 ?: "unclassified"} " +
+                            "-> groupCategoryFactor ${factor.toStringPrecise()}" +
+                            if (factor == ZERO) " (different groups; rating change zeroed)" else "",
+                    context =
+                        mapOf(
+                            "team1Group" to group1.orEmpty(),
+                            "team2Group" to group2.orEmpty(),
+                            "groupCategoryFactor" to factor.toStringPrecise(),
+                        ),
+                ),
+        )
+        return factor
     }
 
     /** Scale: upsets grow with the gap (×multiplier); expected/competitive results shrink toward zero. */
