@@ -16,6 +16,7 @@ import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.Level
 import org.skopeo.domain.model.RatingHistoryEntry
+import org.skopeo.domain.model.User
 import org.skopeo.domain.model.UserRating
 import org.skopeo.domain.service.rating.RatingAssembler
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
@@ -34,25 +35,28 @@ private val BAND_WIDTH = BigDecimal("0.5")
 private val NTRP_FLOOR = BigDecimal("1.0")
 
 /**
- * Admin reports (#216). The first report is NTRP band hops over a date range: for each rated player,
- * compare the band they were in entering the window with the FARTHEST band they reached during it, and
- * bucket players by the absolute number of 0.5-wide bands moved. Using the farthest excursion (not the
- * window's closing band) means a crossing that later reverses within the window still counts — a player
- * who dips into another band and comes back is a real, qualified hop, not a stayer (#289). The intent is
- * to confirm that most players stay within their band (hop 0) and to surface the exceptions who jumped.
- * Band labels only — never exact ratings. ADMINISTRATOR only; expected failures are returned as an
- * [Either] left ([ServiceError]).
+ * Admin reports (#216/#724). The first report is NTRP band hops over a date range: for each rated player,
+ * compare the band they were in entering the window against TWO endpoints and bucket players by the
+ * absolute number of 0.5-wide bands moved for each. The EXCURSION metric uses the FARTHEST band reached
+ * in-window, so a crossing that later reverses still counts — a player who dips into another band and
+ * comes back is a real, qualified hop (#289). The NET metric uses the window's CLOSING band, so that same
+ * round-tripper reads net 0, a stayer (#724). Reporting both keeps the transient-crossing signal while
+ * also answering whether the player ended where they started. The intent is to confirm that most players
+ * stay within their band (hop 0) and to surface the exceptions who jumped. Band labels only — never exact
+ * ratings. ADMINISTRATOR only; expected failures are returned as an [Either] left ([ServiceError]).
  */
 class ReportService(
     private val users: UserRepository = UserRepository(),
     private val ratings: RatingAssembler = RatingAssembler(),
 ) {
-    /** One player's farthest band excursion during the window, from their entry band (labels only). */
+    /** One player's band movement during the window: both the farthest excursion and the net (labels only). */
     private data class Hop(
         val userId: UUID,
         val fromBand: String,
-        val toBand: String,
-        val distance: Int,
+        val excursionToBand: String,
+        val excursionDistance: Int,
+        val netToBand: String,
+        val netDistance: Int,
     )
 
     fun bandHops(
@@ -89,47 +93,67 @@ class ReportService(
             // Exclude soft-deleted accounts (#550) before bucketing/counting, so a deleted account never
             // appears in the report and the totals/percentages reflect only live accounts.
             val hops = allHops.filter { namesById[it.userId]?.isDeleted() == false }
-            val buckets =
-                hops
-                    .groupBy { it.distance }
-                    .toSortedMap()
-                    .map { (distance, list) ->
-                        BandHopBucket(
-                            hopDistance = distance,
-                            count = list.size,
-                            users =
-                                list
-                                    .map { hop ->
-                                        // Every hop came from a rating row (FK-backed user), so it resolves.
-                                        val user = namesById.getValue(key = hop.userId)
-                                        BandHopUserRow(
-                                            publicCode = user.publicCode,
-                                            displayName = user.displayName(),
-                                            fromBand = hop.fromBand,
-                                            toBand = hop.toBand,
-                                            isPlaceholder = user.placeholder,
-                                            isDeleted = user.isDeleted(),
-                                        )
-                                    }.sortedBy { it.publicCode },
-                        )
-                    }
-
-            val stayed = hops.count { it.distance == 0 }
-            BandHopReportResponse(
-                startDate = startDate.toString(),
-                endDate = endDate.toString(),
-                totalPlayers = hops.size,
-                stayedCount = stayed,
-                jumpedCount = hops.size - stayed,
-                buckets = buckets,
-            )
+            assemble(hops = hops, namesById = namesById, startDate = startDate, endDate = endDate)
         }
 
+    /** Bucket the [hops] by BOTH metrics (excursion + net) into the response; each row carries both (#724). */
+    private fun assemble(
+        hops: List<Hop>,
+        namesById: Map<UUID, User>,
+        startDate: LocalDate,
+        endDate: LocalDate,
+    ): BandHopReportResponse {
+        // Each row carries BOTH metrics; the same row is reused across both bucketings (#724).
+        val rowById =
+            hops.associate { hop ->
+                // Every hop came from a rating row (FK-backed user), so it resolves.
+                val user = namesById.getValue(key = hop.userId)
+                hop.userId to
+                    BandHopUserRow(
+                        publicCode = user.publicCode,
+                        displayName = user.displayName(),
+                        fromBand = hop.fromBand,
+                        excursionToBand = hop.excursionToBand,
+                        excursionDistance = hop.excursionDistance,
+                        netToBand = hop.netToBand,
+                        netDistance = hop.netDistance,
+                        isPlaceholder = user.placeholder,
+                        isDeleted = user.isDeleted(),
+                    )
+            }
+        val bucketsBy = { distanceOf: (Hop) -> Int ->
+            hops
+                .groupBy(keySelector = distanceOf)
+                .toSortedMap()
+                .map { (distance, list) ->
+                    BandHopBucket(
+                        hopDistance = distance,
+                        count = list.size,
+                        users = list.map { rowById.getValue(key = it.userId) }.sortedBy { it.publicCode },
+                    )
+                }
+        }
+        val excursionStayed = hops.count { it.excursionDistance == 0 }
+        val netStayed = hops.count { it.netDistance == 0 }
+        return BandHopReportResponse(
+            startDate = startDate.toString(),
+            endDate = endDate.toString(),
+            totalPlayers = hops.size,
+            excursionStayedCount = excursionStayed,
+            excursionJumpedCount = hops.size - excursionStayed,
+            excursionBuckets = bucketsBy { it.excursionDistance },
+            netStayedCount = netStayed,
+            netJumpedCount = hops.size - netStayed,
+            netBuckets = bucketsBy { it.netDistance },
+        )
+    }
+
     /**
-     * One player's band excursion during the window, or null if they have no current band (the only
-     * skip). Guards on the current band but derives bands from RAW ratings via [Level.fromValue] (#257):
-     * the entry band vs the FARTHEST band reached in-window, so a crossing that later reverses still
-     * counts (#289) rather than netting to zero at the window's close.
+     * One player's band movement during the window, or null if they have no current band (the only skip).
+     * Guards on the current band but derives bands from RAW ratings via [Level.fromValue] (#257). Reports
+     * BOTH the EXCURSION (entry band vs the FARTHEST band reached in-window — a crossing that later
+     * reverses still counts, #289) and the NET (entry band vs the window's CLOSING band — the same
+     * round-tripper nets to zero, #724).
      */
     private fun hopFor(
         rating: UserRating,
@@ -138,7 +162,8 @@ class ReportService(
         windowClose: LocalDateTime,
     ): Hop? {
         if (rating.currentLevel == null) return null
-        val fromLevel = entryBand(rows = history, windowOpen = windowOpen, fallback = rating.currentRating)
+        val entryRating = entryRatingOf(rows = history, windowOpen = windowOpen, fallback = rating.currentRating)
+        val fromLevel = Level.fromValue(value = entryRating.toPlainString())
         val fromIndex = bandIndex(level = fromLevel)
         val peakLevel =
             history
@@ -146,20 +171,20 @@ class ReportService(
                 .map { Level.fromValue(value = it.newRating.toPlainString()) }
                 .maxByOrNull { abs(n = bandIndex(level = it) - fromIndex) }
                 ?: fromLevel
+        // The band at the window CLOSE: the newRating of the latest change at or before it, else the entry
+        // rating (a player with no in-window change closes where they entered — a net stayer).
+        val closingRating =
+            history.filter { !it.calculatedAt.isAfter(windowClose) }.maxByOrNull { it.calculatedAt }?.newRating ?: entryRating
+        val closingLevel = Level.fromValue(value = closingRating.toPlainString())
         return Hop(
             userId = rating.userId,
             fromBand = fromLevel.value,
-            toBand = peakLevel.value,
-            distance = abs(n = bandIndex(level = peakLevel) - fromIndex),
+            excursionToBand = peakLevel.value,
+            excursionDistance = abs(n = bandIndex(level = peakLevel) - fromIndex),
+            netToBand = closingLevel.value,
+            netDistance = abs(n = bandIndex(level = closingLevel) - fromIndex),
         )
     }
-
-    /** The band a player was in ENTERING the window: their raw rating just before it, snapped via [Level.fromValue]. */
-    private fun entryBand(
-        rows: List<RatingHistoryEntry>,
-        windowOpen: LocalDateTime,
-        fallback: BigDecimal,
-    ): Level = Level.fromValue(value = entryRatingOf(rows = rows, windowOpen = windowOpen, fallback = fallback).toPlainString())
 
     /**
      * The player's raw rating entering the window: the newRating of their latest change strictly before

@@ -3714,10 +3714,12 @@ paths:
     get:
       summary: NTRP band-hop report over a date range (ADMINISTRATOR only)
       description: >-
-        For each rated player (#216), compares the NTRP band they were in entering the window with the
-        band at its close and buckets players by the absolute number of 0.5-wide bands moved (0 = stayed
-        in band). Confirms that most players stay in band and surfaces the exceptions who jumped. Band
-        labels only — never exact ratings.
+        For each rated player (#216/#724), reports two band-movement metrics against the band they were in
+        entering the window: the EXCURSION (vs the farthest band reached in-window, so a transient crossing
+        counts, #289) and the NET (vs the window's closing band, so a round-tripper reads 0, #724). Players
+        are bucketed by the absolute number of 0.5-wide bands moved under each metric (0 = stayed in band).
+        Confirms that most players stay in band and surfaces the exceptions who jumped. Band labels only —
+        never exact ratings.
       tags:
         - Reports
       security:
@@ -7813,7 +7815,10 @@ components:
       required:
         - publicCode
         - fromBand
-        - toBand
+        - excursionToBand
+        - excursionDistance
+        - netToBand
+        - netDistance
       properties:
         publicCode:
           type: string
@@ -7822,10 +7827,19 @@ components:
           nullable: true
         fromBand:
           type: string
-          description: NTRP band entering the window (label only), e.g. "3.0".
-        toBand:
+          description: NTRP band entering the window (label only), e.g. "3.0"; shared by both metrics.
+        excursionToBand:
           type: string
-          description: NTRP band at the window close (label only).
+          description: Farthest NTRP band reached in-window (label only) — the excursion endpoint (#289).
+        excursionDistance:
+          type: integer
+          description: Absolute number of 0.5-wide bands from the entry band to the farthest band reached (#289).
+        netToBand:
+          type: string
+          description: NTRP band at the window close (label only) — the net endpoint (#724).
+        netDistance:
+          type: integer
+          description: Absolute number of 0.5-wide bands from the entry band to the closing band; a round-tripper reads 0 (#724).
         isPlaceholder:
           type: boolean
           description: True for a login-less, not-yet-claimed placeholder player (#496/#505); the report shows an "Unclaimed" tag beside the name.
@@ -7842,7 +7856,7 @@ components:
       properties:
         hopDistance:
           type: integer
-          description: Absolute number of 0.5-wide bands moved (0 = stayed in band).
+          description: Absolute number of 0.5-wide bands moved under this bucketing (0 = stayed in band).
         count:
           type: integer
         users:
@@ -7856,9 +7870,12 @@ components:
         - startDate
         - endDate
         - totalPlayers
-        - stayedCount
-        - jumpedCount
-        - buckets
+        - excursionStayedCount
+        - excursionJumpedCount
+        - excursionBuckets
+        - netStayedCount
+        - netJumpedCount
+        - netBuckets
       properties:
         startDate:
           type: string
@@ -7868,14 +7885,26 @@ components:
           format: date
         totalPlayers:
           type: integer
-        stayedCount:
+        excursionStayedCount:
           type: integer
-          description: Players whose band did not change over the window (hopDistance 0).
-        jumpedCount:
+          description: Players whose farthest-band excursion was 0 (stayed within their band) (#289).
+        excursionJumpedCount:
           type: integer
-          description: Players who moved at least one band (hopDistance >= 1).
-        buckets:
+          description: Players whose farthest-band excursion was at least one band (#289).
+        excursionBuckets:
           type: array
+          description: Players bucketed by farthest-band excursion distance, ascending (includes the 0 bucket).
+          items:
+            $ref: '#/components/schemas/BandHopBucket'
+        netStayedCount:
+          type: integer
+          description: Players whose net (closing-band) movement was 0; includes round-trippers (#724).
+        netJumpedCount:
+          type: integer
+          description: Players whose net (closing-band) movement was at least one band (#724).
+        netBuckets:
+          type: array
+          description: Players bucketed by net (closing-band) distance, ascending (includes the 0 bucket).
           items:
             $ref: '#/components/schemas/BandHopBucket'
 

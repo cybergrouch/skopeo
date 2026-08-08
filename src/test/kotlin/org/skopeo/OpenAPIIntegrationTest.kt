@@ -139,6 +139,30 @@ class OpenAPIIntegrationTest {
             body shouldContain "team2Id"
         }
 
+    /** Band-hop report (#724): the response surfaces BOTH the excursion and net metrics per player. */
+    @Test
+    fun testOpenAPISpecIncludesBandHopBothMetrics() =
+        testApplication {
+            application {
+                module(initDatabase = false)
+            }
+            val body = client.get(urlString = "/openapi.yaml").bodyAsText()
+            body shouldContain "/api/v1/reports/band-hops"
+            body shouldContain "BandHopReportResponse"
+            // Excursion (#289) and net (#724) endpoints on each user row.
+            body shouldContain "excursionToBand"
+            body shouldContain "excursionDistance"
+            body shouldContain "netToBand"
+            body shouldContain "netDistance"
+            // Both bucketings and both stayed/jumped counts on the response.
+            body shouldContain "excursionBuckets"
+            body shouldContain "excursionStayedCount"
+            body shouldContain "excursionJumpedCount"
+            body shouldContain "netBuckets"
+            body shouldContain "netStayedCount"
+            body shouldContain "netJumpedCount"
+        }
+
     @Test
     fun testOpenAPISpecEndpoint() =
         testApplication {
