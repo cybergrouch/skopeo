@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { setupUser } from '@/test/user'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { RatingsSearchSection } from './RatingsSearchSection'
 
@@ -49,7 +49,7 @@ describe('RatingsSearchSection', () => {
   })
 
   it('only searches after a filter is applied (#205)', async () => {
-    const user = userEvent.setup({ delay: null })
+    const user = setupUser()
     renderSection()
     expect(screen.queryByText('No matching players.')).not.toBeInTheDocument()
 
@@ -66,7 +66,7 @@ describe('RatingsSearchSection', () => {
   })
 
   it('appends the computed rating confidence as a percentage (#343)', async () => {
-    const user = userEvent.setup({ delay: null })
+    const user = setupUser()
     renderSection()
     useGetApiV1UsersSearch.mockReturnValue(page([{ ...row, rating: { value: '4.000000', level: '4.0', confidence: '0.87' } }]))
     await user.type(screen.getByLabelText('Name'), 'ana')
@@ -78,7 +78,7 @@ describe('RatingsSearchSection', () => {
 
   it('rates a player from the results, preselected with their current band (#205)', async () => {
     useGetApiV1UsersSearch.mockReturnValue(page([row]))
-    const user = userEvent.setup({ delay: null })
+    const user = setupUser()
     renderSection()
     await user.type(screen.getByLabelText('Name'), 'ana')
     await user.click(screen.getByRole('button', { name: 'Search' }))
@@ -98,7 +98,7 @@ describe('RatingsSearchSection', () => {
       rating: undefined,
     }))
     useGetApiV1UsersSearch.mockReturnValue(page(rows, 60)) // 25 shown, 60 total → 3 pages
-    const user = userEvent.setup({ delay: null })
+    const user = setupUser()
     renderSection()
     await user.type(screen.getByLabelText('Name'), 'p')
     await user.click(screen.getByRole('button', { name: 'Search' }))
@@ -125,7 +125,7 @@ describe('RatingsSearchSection', () => {
     useGetApiV1UsersSearch.mockReturnValue(
       page([{ id: 'u9', publicCode: 'CODE9', displayName: undefined, rating: { value: '3.500000' } }]),
     )
-    const user = userEvent.setup({ delay: null })
+    const user = setupUser()
     renderSection()
     await user.type(screen.getByLabelText('Name'), 'x')
     await user.click(screen.getByRole('button', { name: 'Search' }))
@@ -136,7 +136,7 @@ describe('RatingsSearchSection', () => {
 
   it('shows a loading state while searching', async () => {
     useGetApiV1UsersSearch.mockReturnValue({ data: undefined, isLoading: true, isError: false })
-    const user = userEvent.setup({ delay: null })
+    const user = setupUser()
     renderSection()
     await user.type(screen.getByLabelText('Name'), 'p')
     await user.click(screen.getByRole('button', { name: 'Search' }))
@@ -145,7 +145,7 @@ describe('RatingsSearchSection', () => {
 
   it('shows an error when the filters are rejected', async () => {
     useGetApiV1UsersSearch.mockReturnValue({ data: undefined, isLoading: false, isError: true })
-    const user = userEvent.setup({ delay: null })
+    const user = setupUser()
     renderSection()
     await user.type(screen.getByLabelText('Name'), 'p')
     await user.click(screen.getByRole('button', { name: 'Search' }))
@@ -154,7 +154,7 @@ describe('RatingsSearchSection', () => {
 
   it('shows an empty state when nothing matches', async () => {
     useGetApiV1UsersSearch.mockReturnValue(page([], 0))
-    const user = userEvent.setup({ delay: null })
+    const user = setupUser()
     renderSection()
     await user.type(screen.getByLabelText('Name'), 'zzz')
     await user.click(screen.getByRole('button', { name: 'Search' }))

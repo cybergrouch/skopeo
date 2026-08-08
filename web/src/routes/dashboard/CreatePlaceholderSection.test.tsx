@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { setupUser } from "@/test/user";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CreatePlaceholderSection } from "./CreatePlaceholderSection";
 
@@ -42,7 +42,7 @@ describe("CreatePlaceholderSection", () => {
     const invalidate = vi
       .spyOn(queryClient, "invalidateQueries")
       .mockResolvedValue(undefined);
-    const user = userEvent.setup();
+    const user = setupUser();
     render(
       <QueryClientProvider client={queryClient}>
         <CreatePlaceholderSection capabilities={["HOST"] as never} />
@@ -68,7 +68,7 @@ describe("CreatePlaceholderSection", () => {
   });
 
   it("includes date of birth and initial rating when provided (rater)", async () => {
-    const user = userEvent.setup();
+    const user = setupUser();
     renderSection(["ADMINISTRATOR"]);
 
     await user.type(screen.getByLabelText("Display name"), "Sam Q.");
@@ -100,7 +100,7 @@ describe("CreatePlaceholderSection", () => {
   });
 
   it("requires a display name", async () => {
-    const user = userEvent.setup();
+    const user = setupUser();
     renderSection();
     await user.click(screen.getByRole("button", { name: "Create placeholder" }));
     expect(screen.getByRole("alert")).toHaveTextContent(/display name is required/i);
@@ -108,7 +108,7 @@ describe("CreatePlaceholderSection", () => {
   });
 
   it("requires a sex", async () => {
-    const user = userEvent.setup();
+    const user = setupUser();
     renderSection();
     await user.type(screen.getByLabelText("Display name"), "Nameless");
     await user.click(screen.getByRole("button", { name: "Create placeholder" }));
@@ -124,7 +124,7 @@ describe("CreatePlaceholderSection", () => {
 
   it("shows an error toast when creation fails (#661)", async () => {
     createMutate.mockRejectedValue(new Error("boom"));
-    const user = userEvent.setup();
+    const user = setupUser();
     renderSection();
     await user.type(screen.getByLabelText("Display name"), "Alex P.");
     await user.selectOptions(screen.getByLabelText("Sex"), "Female");

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { setupUser } from "@/test/user";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PhotoSettingsForm } from "./PhotoSettingsForm";
 
@@ -77,7 +77,7 @@ describe("PhotoSettingsForm", () => {
   });
 
   it("saves a new custom URL and the hide flag", async () => {
-    const user = userEvent.setup();
+    const user = setupUser();
     renderForm();
     const url = screen.getByLabelText("Custom photo URL");
     await user.clear(url);
@@ -95,7 +95,7 @@ describe("PhotoSettingsForm", () => {
   });
 
   it("sends null to clear the custom URL when left blank", async () => {
-    const user = userEvent.setup();
+    const user = setupUser();
     renderForm();
     await user.clear(screen.getByLabelText("Custom photo URL"));
     await user.click(screen.getByRole("button", { name: "Save photo" }));
@@ -109,7 +109,7 @@ describe("PhotoSettingsForm", () => {
   });
 
   it("rejects a non-http(s) URL without calling the API", async () => {
-    const user = userEvent.setup();
+    const user = setupUser();
     renderForm();
     const url = screen.getByLabelText("Custom photo URL");
     await user.clear(url);
@@ -141,7 +141,7 @@ describe("PhotoSettingsForm", () => {
         throw new Error("boom");
       },
     });
-    const user = userEvent.setup();
+    const user = setupUser();
     renderForm();
     await user.click(screen.getByRole("button", { name: "Save photo" }));
 
