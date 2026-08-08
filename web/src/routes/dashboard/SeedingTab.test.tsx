@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import type { ReactNode } from 'react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { SeedingTab } from './SeedingTab'
@@ -11,6 +12,41 @@ const { toastSuccess, toastError } = vi.hoisted(() => ({
   toastError: vi.fn(),
 }))
 vi.mock('sonner', () => ({ toast: { success: toastSuccess, error: toastError } }))
+
+// dnd-kit needs layout measurement jsdom lacks; stub to passthrough + capture DndContext onDragEnd so a
+// test can simulate a drop (same technique as SeedingTable.test).
+const { dnd } = vi.hoisted(() => ({ dnd: { onDragEnd: undefined as undefined | ((e: unknown) => void) } }))
+vi.mock('@dnd-kit/core', () => ({
+  DndContext: ({ children, onDragEnd }: { children: ReactNode; onDragEnd: (e: unknown) => void }) => {
+    dnd.onDragEnd = onDragEnd
+    return children
+  },
+  closestCenter: () => undefined,
+  KeyboardSensor: function KeyboardSensor() {},
+  PointerSensor: function PointerSensor() {},
+  useSensor: () => ({}),
+  useSensors: () => [],
+}))
+vi.mock('@dnd-kit/sortable', () => ({
+  SortableContext: ({ children }: { children: ReactNode }) => children,
+  verticalListSortingStrategy: {},
+  sortableKeyboardCoordinates: () => undefined,
+  useSortable: () => ({
+    attributes: {},
+    listeners: {},
+    setNodeRef: () => undefined,
+    transform: null,
+    transition: undefined,
+    isDragging: false,
+  }),
+  arrayMove: <T,>(arr: T[], from: number, to: number): T[] => {
+    const copy = [...arr]
+    const [moved] = copy.splice(from, 1)
+    copy.splice(to, 0, moved)
+    return copy
+  },
+}))
+vi.mock('@dnd-kit/utilities', () => ({ CSS: { Transform: { toString: () => undefined } } }))
 
 const {
   useGetApiV1PlayerLists,
@@ -367,6 +403,39 @@ describe('SeedingTab', () => {
       .filter((c) => (c as HTMLTableCellElement).cellIndex === 0)
     expect(seedCells[0]).toHaveTextContent('1')
     expect(seedCells[1]).toHaveTextContent('')
+  })
+
+  it('saves a reordered seeding order to the mutation (#718)', async () => {
+    useGetApiV1PlayerListsId.mockReturnValue({ data: listDetail })
+    useGetApiV1PlayerListsIdSeeding.mockReturnValue({ data: seeding })
+    const user = userEvent.setup()
+    renderTab()
+    await user.click(screen.getByRole('button', { name: /Summer Open/ }))
+
+    act(() => dnd.onDragEnd?.({ active: { id: 'u2' }, over: { id: 'u1' } }))
+    await user.click(screen.getByRole('button', { name: 'Save order' }))
+
+    await waitFor(() =>
+      expect(saveOrderMutate).toHaveBeenCalledWith({ id: 'l1', data: { userIds: ['u2', 'u1'] } }),
+    )
+  })
+
+  it('shows an error toast when saving the reordered seeding fails (#718)', async () => {
+    useGetApiV1PlayerListsId.mockReturnValue({ data: listDetail })
+    useGetApiV1PlayerListsIdSeeding.mockReturnValue({ data: seeding })
+    saveOrderMutate.mockImplementationOnce(() => {
+      throw new Error('boom')
+    })
+    const user = userEvent.setup()
+    renderTab()
+    await user.click(screen.getByRole('button', { name: /Summer Open/ }))
+
+    act(() => dnd.onDragEnd?.({ active: { id: 'u2' }, over: { id: 'u1' } }))
+    await user.click(screen.getByRole('button', { name: 'Save order' }))
+
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith("Couldn't save the seeding order.", { duration: 8000 }),
+    )
   })
 
   it('labels the generate button "Generate seeding" when none exists yet', async () => {

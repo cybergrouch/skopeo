@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, waitFor, within, fireEvent } from '@testing-library/react'
+import type { ReactNode } from 'react'
+import { act, render, screen, waitFor, within, fireEvent } from '@testing-library/react'
 import { setupUser } from '@/test/user'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -10,6 +11,41 @@ const { toastSuccess, toastError } = vi.hoisted(() => ({
   toastError: vi.fn(),
 }))
 vi.mock('sonner', () => ({ toast: { success: toastSuccess, error: toastError } }))
+
+// dnd-kit needs layout measurement jsdom lacks; stub to passthrough + capture DndContext onDragEnd so a
+// test can simulate a seeding drop (same technique as SeedingTable.test).
+const { dnd } = vi.hoisted(() => ({ dnd: { onDragEnd: undefined as undefined | ((e: unknown) => void) } }))
+vi.mock('@dnd-kit/core', () => ({
+  DndContext: ({ children, onDragEnd }: { children: ReactNode; onDragEnd: (e: unknown) => void }) => {
+    dnd.onDragEnd = onDragEnd
+    return children
+  },
+  closestCenter: () => undefined,
+  KeyboardSensor: function KeyboardSensor() {},
+  PointerSensor: function PointerSensor() {},
+  useSensor: () => ({}),
+  useSensors: () => [],
+}))
+vi.mock('@dnd-kit/sortable', () => ({
+  SortableContext: ({ children }: { children: ReactNode }) => children,
+  verticalListSortingStrategy: {},
+  sortableKeyboardCoordinates: () => undefined,
+  useSortable: () => ({
+    attributes: {},
+    listeners: {},
+    setNodeRef: () => undefined,
+    transform: null,
+    transition: undefined,
+    isDragging: false,
+  }),
+  arrayMove: <T,>(arr: T[], from: number, to: number): T[] => {
+    const copy = [...arr]
+    const [moved] = copy.splice(from, 1)
+    copy.splice(to, 0, moved)
+    return copy
+  },
+}))
+vi.mock('@dnd-kit/utilities', () => ({ CSS: { Transform: { toString: () => undefined } } }))
 
 const {
   useGetApiV1EventsId,
@@ -1452,5 +1488,42 @@ describe('EventDetail', () => {
       .filter((c) => (c as HTMLTableCellElement).cellIndex === 0)
     expect(seedCells[0]).toHaveTextContent('1')
     expect(seedCells[1]).toHaveTextContent('')
+  })
+
+  const eventSeeding = {
+    generatedAt: '2026-03-02T09:00:00',
+    entries: [
+      { seed: 1, position: 1, userId: 'u1', displayName: 'Ana', publicCode: 'AAA111', ntrpBand: '4.0', rating: null, sex: 'Female', age: 34 },
+      { seed: 2, position: 2, userId: 'u2', displayName: 'Bob', publicCode: 'BBB222', ntrpBand: null, rating: null, sex: null, age: null },
+    ],
+  }
+
+  it('saves a reordered event seeding order (#718)', async () => {
+    useGetApiV1EventsIdSeeding.mockReturnValue({ data: eventSeeding })
+    const user = setupUser()
+    renderDetail()
+
+    act(() => dnd.onDragEnd?.({ active: { id: 'u2' }, over: { id: 'u1' } }))
+    await user.click(screen.getByRole('button', { name: 'Save order' }))
+
+    await waitFor(() =>
+      expect(saveSeedingOrderMutate).toHaveBeenCalledWith({ id: 'e1', data: { userIds: ['u2', 'u1'] } }),
+    )
+  })
+
+  it('shows an error toast when saving the event seeding order fails (#718)', async () => {
+    useGetApiV1EventsIdSeeding.mockReturnValue({ data: eventSeeding })
+    saveSeedingOrderMutate.mockImplementationOnce(() => {
+      throw new Error('boom')
+    })
+    const user = setupUser()
+    renderDetail()
+
+    act(() => dnd.onDragEnd?.({ active: { id: 'u2' }, over: { id: 'u1' } }))
+    await user.click(screen.getByRole('button', { name: 'Save order' }))
+
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith('Could not save the seeding order.', expect.anything()),
+    )
   })
 })
