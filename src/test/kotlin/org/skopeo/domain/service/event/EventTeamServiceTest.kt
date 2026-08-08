@@ -236,4 +236,67 @@ class EventTeamServiceTest {
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
     }
+
+    @Test
+    fun `a team needs at least one member`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val ev = event(host = host.id, participants = emptyList(), format = TeamType.SINGLES)
+
+        service
+            .create(token = token(uid = "host"), eventId = ev.id, memberUserIds = emptyList(), name = null)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+            .message shouldContain "at least one member"
+    }
+
+    @Test
+    fun `a player cannot appear twice in one team`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "Alice")
+        val ev = event(host = host.id, participants = listOf(element = p1.id), format = TeamType.DOUBLES)
+
+        service
+            .create(token = token(uid = "host"), eventId = ev.id, memberUserIds = listOf(p1.id, p1.id), name = null)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+            .message shouldContain "more than once"
+    }
+
+    @Test
+    fun `updating a team that is not in the event is a not-found`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "Alice")
+        val ev = event(host = host.id, participants = listOf(element = p1.id), format = TeamType.SINGLES)
+
+        service
+            .update(
+                token = token(uid = "host"),
+                eventId = ev.id,
+                teamId = UUID.randomUUID(),
+                memberUserIds = listOf(element = p1.id),
+                name = null,
+            ).shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
+    fun `dissolving a team that is not in the event is a not-found`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val ev = event(host = host.id, participants = emptyList(), format = TeamType.SINGLES)
+
+        service
+            .dissolve(token = token(uid = "host"), eventId = ev.id, teamId = UUID.randomUUID())
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.NotFound>()
+    }
+
+    @Test
+    fun `list returns an event's teams`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "Alice")
+        val ev = event(host = host.id, participants = listOf(element = p1.id), format = TeamType.SINGLES)
+        service.create(token = token(uid = "host"), eventId = ev.id, memberUserIds = listOf(element = p1.id), name = null).shouldBeRight()
+
+        service.list(token = token(uid = "host"), eventId = ev.id).shouldBeRight() shouldHaveSize 1
+    }
 }

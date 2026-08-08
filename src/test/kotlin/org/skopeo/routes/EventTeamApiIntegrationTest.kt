@@ -43,6 +43,7 @@ import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
 import org.skopeo.testsupport.TestFirebaseAuth
 import java.time.LocalDate
+import java.util.UUID
 
 /** End-to-end exercise of the durable event-team routes (#720): create → list → update → dissolve. */
 class EventTeamApiIntegrationTest {
@@ -169,5 +170,52 @@ class EventTeamApiIntegrationTest {
                 contentType(type = ContentType.Application.Json)
                 setBody(body = CreateEventTeamRequest(memberUserIds = listOf(element = a.id.toString()), name = null))
             }.status shouldBe HttpStatusCode.BadRequest
+        }
+
+    @Test
+    fun `a non-owner host cannot create a team (403)`() =
+        withApp { client ->
+            seedUser(uid = "owner", roles = setOf(Capability.PLAYER, Capability.HOST))
+            seedUser(uid = "intruder", roles = setOf(Capability.PLAYER, Capability.HOST))
+            val a = seedUser(uid = "Alice", roles = setOf(element = Capability.PLAYER))
+            val b = seedUser(uid = "Bob", roles = setOf(element = Capability.PLAYER))
+            val owner = tokenFor(uid = "owner")
+            val event = client.createDoublesEvent(token = owner)
+            listOf(a, b).forEach { client.addParticipant(token = owner, eventId = event.id, userId = it.id.toString()) }
+
+            client.post(urlString = "/api/v1/events/${event.id}/teams") {
+                header(key = HttpHeaders.Authorization, value = "Bearer ${tokenFor(uid = "intruder")}")
+                contentType(type = ContentType.Application.Json)
+                setBody(body = CreateEventTeamRequest(memberUserIds = listOf(a.id.toString(), b.id.toString()), name = null))
+            }.status shouldBe HttpStatusCode.Forbidden
+        }
+
+    @Test
+    fun `updating a non-existent team is a 404`() =
+        withApp { client ->
+            seedUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+            val a = seedUser(uid = "Alice", roles = setOf(element = Capability.PLAYER))
+            val b = seedUser(uid = "Bob", roles = setOf(element = Capability.PLAYER))
+            val host = tokenFor(uid = "host")
+            val event = client.createDoublesEvent(token = host)
+            listOf(a, b).forEach { client.addParticipant(token = host, eventId = event.id, userId = it.id.toString()) }
+
+            client.patch(urlString = "/api/v1/events/${event.id}/teams/${UUID.randomUUID()}") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $host")
+                contentType(type = ContentType.Application.Json)
+                setBody(body = UpdateEventTeamRequest(memberUserIds = listOf(a.id.toString(), b.id.toString()), name = null))
+            }.status shouldBe HttpStatusCode.NotFound
+        }
+
+    @Test
+    fun `dissolving a non-existent team is a 404`() =
+        withApp { client ->
+            seedUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+            val host = tokenFor(uid = "host")
+            val event = client.createDoublesEvent(token = host)
+
+            client.delete(urlString = "/api/v1/events/${event.id}/teams/${UUID.randomUUID()}") {
+                header(key = HttpHeaders.Authorization, value = "Bearer $host")
+            }.status shouldBe HttpStatusCode.NotFound
         }
 }
