@@ -20,7 +20,6 @@ import org.skopeo.domain.model.Event
 import org.skopeo.domain.model.EventTeam
 import org.skopeo.domain.model.EventTeamMemberRef
 import org.skopeo.domain.model.EventTeamView
-import org.skopeo.domain.model.TeamType
 import org.skopeo.domain.model.UpdateEventTeamCommand
 import org.skopeo.domain.model.User
 import org.skopeo.domain.model.isExpired
@@ -35,6 +34,9 @@ import java.util.UUID
 
 private val TEAM_STAFF_ROLES = setOf(Capability.HOST, Capability.CLUB_OWNER, Capability.ADMINISTRATOR)
 
+// A team is primarily a doubles construct: 1 or 2 members, hard-capped at 2 (#734).
+private const val MAX_TEAM_SIZE = 2
+
 // Roles exempt from the expired-event data-entry gate (#310): admins and club owners may still manage
 // teams after an event has ended; a plain host may not.
 private val TEAM_EXPIRY_EXEMPT_ROLES = setOf(Capability.CLUB_OWNER, Capability.ADMINISTRATOR)
@@ -42,9 +44,9 @@ private val TEAM_EXPIRY_EXEMPT_ROLES = setOf(Capability.CLUB_OWNER, Capability.A
 /**
  * Durable, event-scoped teams (#720): purely organizational groupings of an event's APPROVED
  * participants. Staff-managed (HOST owns / ADMINISTRATOR or CLUB_OWNER any). Membership is exclusive —
- * a participant is in at most one team per event — and team size is validated against the event's
- * organizing format (1 for singles, 2 for doubles/mixed). Teams do NOT affect rating calculation or
- * seeding. Expected failures are returned as an [Either] left ([ServiceError]).
+ * a participant is in at most one team per event — and a team has 1 or 2 members, capped at 2, with 2
+ * being the normal case (#734); size is independent of the event format. Teams do NOT affect rating
+ * calculation or seeding. Expected failures are returned as an [Either] left ([ServiceError]).
  */
 class EventTeamService(
     private val events: EventRepository = EventRepository(),
@@ -135,8 +137,10 @@ class EventTeamService(
         }
 
     /**
-     * Validate a proposed roster for a team (#720): non-empty, no repeats, exactly the event format's
-     * size (1 singles / 2 doubles-mixed), all APPROVED participants, and none already in another team.
+     * Validate a proposed roster for a team (#734): 1 or 2 members (2 is the normal case; a 1-member
+     * team is allowed but degenerate), independent of the event format, no repeats, all APPROVED
+     * participants, and none already in another team. Fixture-side size is still checked at fixture
+     * time (#736): a 1-member team simply can't fill a doubles side.
      */
     private fun validateMembers(
         event: Event,
@@ -148,9 +152,8 @@ class EventTeamService(
             ensure(condition = memberIds.size == memberIds.distinct().size) {
                 ServiceError.Validation(message = "A player cannot appear more than once in a team")
             }
-            val expected = if (event.format == TeamType.SINGLES) 1 else 2
-            ensure(condition = memberIds.size == expected) {
-                ServiceError.Validation(message = "A ${event.format.name} team needs exactly $expected member(s)")
+            ensure(condition = memberIds.size <= MAX_TEAM_SIZE) {
+                ServiceError.Validation(message = "A team can have at most $MAX_TEAM_SIZE members")
             }
             val roster = event.participantIds.toSet()
             ensure(condition = memberIds.all { it in roster }) {

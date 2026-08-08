@@ -141,15 +141,47 @@ class EventTeamServiceTest {
     }
 
     @Test
-    fun `team size must match the event format`() {
+    fun `a two-member team is allowed on a singles event, independent of format`() {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val p1 = provision(uid = "Alice")
         val p2 = provision(uid = "Bob")
         val ev = event(host = host.id, participants = listOf(p1.id, p2.id), format = TeamType.SINGLES)
 
+        val team =
+            service
+                .create(token = token(uid = "host"), eventId = ev.id, memberUserIds = listOf(p1.id, p2.id), name = null)
+                .shouldBeRight()
+        team.members shouldHaveSize 2
+        team.members.map { it.userId } shouldBe listOf(p1.id.toString(), p2.id.toString())
+    }
+
+    @Test
+    fun `a one-member team is allowed on a doubles event, independent of format`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "Alice")
+        val ev = event(host = host.id, participants = listOf(element = p1.id), format = TeamType.DOUBLES)
+
+        val team =
+            service
+                .create(token = token(uid = "host"), eventId = ev.id, memberUserIds = listOf(element = p1.id), name = null)
+                .shouldBeRight()
+        team.members shouldHaveSize 1
+        team.members.single().userId shouldBe p1.id.toString()
+    }
+
+    @Test
+    fun `a team cannot have more than two members`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "Alice")
+        val p2 = provision(uid = "Bob")
+        val p3 = provision(uid = "Carol")
+        val ev = event(host = host.id, participants = listOf(p1.id, p2.id, p3.id), format = TeamType.DOUBLES)
+
         val error =
-            service.create(token = token(uid = "host"), eventId = ev.id, memberUserIds = listOf(p1.id, p2.id), name = null).shouldBeLeft()
-        error.shouldBeInstanceOf<ServiceError.Validation>().message shouldContain "exactly 1"
+            service
+                .create(token = token(uid = "host"), eventId = ev.id, memberUserIds = listOf(p1.id, p2.id, p3.id), name = null)
+                .shouldBeLeft()
+        error.shouldBeInstanceOf<ServiceError.Validation>().message shouldContain "at most 2 members"
     }
 
     @Test

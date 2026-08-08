@@ -196,8 +196,6 @@ export function EventDetail({
   // Durable teams for this event (#720). Empty until any are created; drives the fixture team refs.
   const teamsQuery = useGetApiV1EventsIdTeams(eventId);
   const teams = teamsQuery.data ?? [];
-  // The event's organizing format sets team size: 1 for singles, 2 for doubles/mixed (#720).
-  const teamSize = event?.format === "SINGLES" ? 1 : 2;
 
   function refreshTeams() {
     void queryClient.invalidateQueries({
@@ -576,12 +574,13 @@ export function EventDetail({
   const takenTeamMemberIds = new Set(
     teams.flatMap((t) => t.members.map((m) => m.userId)),
   );
-  const newTeamMembers = (teamSize === 1 ? [newTeamA] : [newTeamA, newTeamB]).filter(
-    (id) => id !== "",
-  );
+  // A team may have 1 or 2 members, capped at 2, independent of the event format (#734). Two is the
+  // normal case; a one-member team is allowed but degenerate. Build the roster from the non-empty slots.
+  const newTeamMembers = [newTeamA, newTeamB].filter((id) => id !== "");
   const canCreateTeam =
-    newTeamMembers.length === teamSize &&
-    new Set(newTeamMembers).size === teamSize;
+    newTeamMembers.length >= 1 &&
+    newTeamMembers.length <= 2 &&
+    new Set(newTeamMembers).size === newTeamMembers.length;
 
   function submitTeam(e: FormEvent) {
     e.preventDefault();
@@ -1006,10 +1005,10 @@ export function EventDetail({
               <CardHeader>
                 <CardTitle>Teams</CardTitle>
                 <CardDescription>
-                  Group participants into durable teams for this event (
-                  {teamSize === 1 ? "1 player" : "2 players"} each, matching the
-                  event format). Teams are organizational only — they don’t affect
-                  ratings or seeding, and they help you fill fixtures below.
+                  Group participants into durable teams for this event (1 or 2
+                  players each — 2 is the usual case). Teams are organizational
+                  only — they don’t affect ratings or seeding, and they help you
+                  fill fixtures below.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -1064,20 +1063,18 @@ export function EventDetail({
                   <div className="grid grid-cols-2 gap-2">
                     {teamMemberSelect(
                       "team-member-a",
-                      teamSize === 1 ? "Member" : "Member 1",
+                      "Member 1",
                       newTeamA,
                       setNewTeamA,
                       newTeamB,
                     )}
-                    {teamSize === 1
-                      ? null
-                      : teamMemberSelect(
-                          "team-member-b",
-                          "Member 2",
-                          newTeamB,
-                          setNewTeamB,
-                          newTeamA,
-                        )}
+                    {teamMemberSelect(
+                      "team-member-b",
+                      "Member 2 (optional)",
+                      newTeamB,
+                      setNewTeamB,
+                      newTeamA,
+                    )}
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor="team-name" className="text-xs">
