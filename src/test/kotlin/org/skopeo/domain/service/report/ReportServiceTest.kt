@@ -5,6 +5,7 @@ package org.skopeo.domain.service.report
 
 import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
+import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
@@ -123,25 +124,25 @@ class ReportServiceTest {
     }
 
     @Test
-    fun `buckets players by their farthest band excursion during the window, counting stayers as the majority`() {
+    fun `buckets players by both excursion and net band movement, counting stayers as the majority`() {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
 
         // Stayed: no rating changes at all.
         ratedPlayer(uid = "stayer", currentLevel = "3.0")
-        // Hopped: dipped to 3.5 and returned to 3.0 within the window — a reversing excursion still counts (#289).
+        // Round-trip: dipped to 3.5 and returned to 3.0 within the window — excursion 1 but net 0 (#289/#724).
         val roundtrip = ratedPlayer(uid = "roundtrip", currentLevel = "3.0")
         change(userId = roundtrip.id, at = "2026-03-05T10:00", from = "3.0", to = "3.5")
         change(userId = roundtrip.id, at = "2026-03-15T10:00", from = "3.5", to = "3.0")
         // Stayed: moved a band BEFORE the window; unchanged during it.
         val preMover = ratedPlayer(uid = "preMover", currentLevel = "3.5")
         change(userId = preMover.id, at = "2026-02-01T10:00", from = "3.0", to = "3.5")
-        // Jumped up two bands within the window (3.0 -> 4.0).
+        // Jumped up two bands within the window (3.0 -> 4.0) and stayed — excursion 2 == net 2.
         val jumper = ratedPlayer(uid = "jumper", currentLevel = "4.0")
         change(userId = jumper.id, at = "2026-03-10T10:00", from = "3.0", to = "3.5")
         change(userId = jumper.id, at = "2026-03-20T10:00", from = "3.5", to = "4.0")
-        // A change AFTER the window close is excluded (peak stays 4.0, not 4.5).
+        // A change AFTER the window close is excluded (both endpoints stay 4.0, not 4.5).
         change(userId = jumper.id, at = "2026-04-05T10:00", from = "4.0", to = "4.5")
-        // Dropped one band within the window: entered at 3.5, reached 3.0.
+        // Dropped one band within the window and stayed: entered at 3.5, closed at 3.0 — excursion 1 == net 1.
         val dropper = ratedPlayer(uid = "dropper", currentLevel = "3.0")
         change(userId = dropper.id, at = "2026-02-10T10:00", from = "3.0", to = "3.5")
         change(userId = dropper.id, at = "2026-03-12T10:00", from = "3.5", to = "3.0")
@@ -149,21 +150,83 @@ class ReportServiceTest {
         val result: BandHopReportResponse = report().shouldBeRight()
 
         result.totalPlayers shouldBe 5
-        result.stayedCount shouldBe 2 // stayer + preMover
-        result.jumpedCount shouldBe 3 // roundtrip + jumper + dropper
-        result.buckets.associate { it.hopDistance to it.count } shouldBe mapOf(0 to 2, 1 to 2, 2 to 1)
+        // Excursion counts the round-tripper as a hop; net counts it as a stayer.
+        result.excursionStayedCount shouldBe 2 // stayer + preMover
+        result.excursionJumpedCount shouldBe 3 // roundtrip + jumper + dropper
+        result.excursionBuckets.associate { it.hopDistance to it.count } shouldBe mapOf(0 to 2, 1 to 2, 2 to 1)
+        result.netStayedCount shouldBe 3 // stayer + preMover + roundtrip
+        result.netJumpedCount shouldBe 2 // jumper + dropper
+        result.netBuckets.associate { it.hopDistance to it.count } shouldBe mapOf(0 to 3, 1 to 1, 2 to 1)
 
-        val jumped = result.buckets.single { it.hopDistance == 2 }.users.single()
+        val jumped = result.excursionBuckets.single { it.hopDistance == 2 }.users.single()
         jumped.publicCode shouldBe jumper.publicCode
         jumped.fromBand shouldBe "3.0"
-        jumped.toBand shouldBe "4.0"
+        jumped.excursionToBand shouldBe "4.0"
+        jumped.excursionDistance shouldBe 2
+        jumped.netToBand shouldBe "4.0"
+        jumped.netDistance shouldBe 2
 
-        val hop1 = result.buckets.single { it.hopDistance == 1 }.users.associateBy { it.publicCode }
-        // The reversing roundtrip is surfaced as a hop (from its entry band to the farthest band reached).
+        val hop1 = result.excursionBuckets.single { it.hopDistance == 1 }.users.associateBy { it.publicCode }
+        // The reversing roundtrip is surfaced as an excursion hop but a net stayer (back to its entry band).
         hop1.getValue(key = roundtrip.publicCode).fromBand shouldBe "3.0"
-        hop1.getValue(key = roundtrip.publicCode).toBand shouldBe "3.5"
+        hop1.getValue(key = roundtrip.publicCode).excursionToBand shouldBe "3.5"
+        hop1.getValue(key = roundtrip.publicCode).netToBand shouldBe "3.0"
+        hop1.getValue(key = roundtrip.publicCode).netDistance shouldBe 0
+        result.netBuckets.single { it.hopDistance == 0 }.users.map { it.publicCode } shouldContain roundtrip.publicCode
+        // The dropper is a straight one-band drop: excursion and net agree.
         hop1.getValue(key = dropper.publicCode).fromBand shouldBe "3.5"
-        hop1.getValue(key = dropper.publicCode).toBand shouldBe "3.0"
+        hop1.getValue(key = dropper.publicCode).excursionToBand shouldBe "3.0"
+        hop1.getValue(key = dropper.publicCode).netToBand shouldBe "3.0"
+        hop1.getValue(key = dropper.publicCode).netDistance shouldBe 1
+    }
+
+    @Test
+    fun `reports both farthest excursion and net closing movement per player (#724)`() {
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+
+        // Straight hop up two bands and stays: excursion 2 == net 2.
+        val straight = ratedPlayer(uid = "straight", currentLevel = "4.0")
+        change(userId = straight.id, at = "2026-03-05T10:00", from = "3.0", to = "3.5")
+        change(userId = straight.id, at = "2026-03-18T10:00", from = "3.5", to = "4.0")
+        // Round-trip up and back: excursion 1, net 0.
+        val roundTrip = ratedPlayer(uid = "roundTrip", currentLevel = "3.0")
+        change(userId = roundTrip.id, at = "2026-03-06T10:00", from = "3.0", to = "3.5")
+        change(userId = roundTrip.id, at = "2026-03-20T10:00", from = "3.5", to = "3.0")
+        // Partial return: up two bands then back one — excursion 2, net 1 (net < excursion, net > 0).
+        val partial = ratedPlayer(uid = "partial", currentLevel = "3.5")
+        change(userId = partial.id, at = "2026-03-07T10:00", from = "3.0", to = "4.0")
+        change(userId = partial.id, at = "2026-03-21T10:00", from = "4.0", to = "3.5")
+        // Hop-0 stayer: no change at all.
+        val stayer = ratedPlayer(uid = "stayer", currentLevel = "3.0")
+
+        val result = report().shouldBeRight()
+
+        result.totalPlayers shouldBe 4
+        val rows = result.excursionBuckets.flatMap { it.users }.associateBy { it.publicCode }
+
+        rows.getValue(key = straight.publicCode).fromBand shouldBe "3.0"
+        rows.getValue(key = straight.publicCode).excursionToBand shouldBe "4.0"
+        rows.getValue(key = straight.publicCode).excursionDistance shouldBe 2
+        rows.getValue(key = straight.publicCode).netToBand shouldBe "4.0"
+        rows.getValue(key = straight.publicCode).netDistance shouldBe 2
+
+        rows.getValue(key = roundTrip.publicCode).excursionToBand shouldBe "3.5"
+        rows.getValue(key = roundTrip.publicCode).excursionDistance shouldBe 1
+        rows.getValue(key = roundTrip.publicCode).netToBand shouldBe "3.0"
+        rows.getValue(key = roundTrip.publicCode).netDistance shouldBe 0
+
+        rows.getValue(key = partial.publicCode).excursionToBand shouldBe "4.0"
+        rows.getValue(key = partial.publicCode).excursionDistance shouldBe 2
+        rows.getValue(key = partial.publicCode).netToBand shouldBe "3.5"
+        rows.getValue(key = partial.publicCode).netDistance shouldBe 1
+
+        rows.getValue(key = stayer.publicCode).excursionDistance shouldBe 0
+        rows.getValue(key = stayer.publicCode).netDistance shouldBe 0
+
+        result.excursionStayedCount shouldBe 1 // stayer only
+        result.netStayedCount shouldBe 2 // roundTrip + stayer
+        result.excursionBuckets.associate { it.hopDistance to it.count } shouldBe mapOf(0 to 1, 1 to 1, 2 to 2)
+        result.netBuckets.associate { it.hopDistance to it.count } shouldBe mapOf(0 to 2, 1 to 1, 2 to 1)
     }
 
     @Test
@@ -179,9 +242,12 @@ class ReportServiceTest {
 
         // Only the live stayer remains — the deleted jumper's bucket is gone and the counts exclude it.
         result.totalPlayers shouldBe 1
-        result.stayedCount shouldBe 1
-        result.jumpedCount shouldBe 0
-        result.buckets.flatMap { it.users }.map { it.publicCode } shouldBe listOf(element = live.publicCode)
+        result.excursionStayedCount shouldBe 1
+        result.excursionJumpedCount shouldBe 0
+        result.netStayedCount shouldBe 1
+        result.netJumpedCount shouldBe 0
+        result.excursionBuckets.flatMap { it.users }.map { it.publicCode } shouldBe listOf(element = live.publicCode)
+        result.netBuckets.flatMap { it.users }.map { it.publicCode } shouldBe listOf(element = live.publicCode)
     }
 
     @Test
@@ -195,7 +261,7 @@ class ReportServiceTest {
         val result = report().shouldBeRight()
 
         result.totalPlayers shouldBe 1
-        result.buckets.single { it.hopDistance == 0 }.users.single().publicCode shouldBe
+        result.excursionBuckets.single { it.hopDistance == 0 }.users.single().publicCode shouldBe
             users.findByFirebaseUid(firebaseUid = "banded")!!.toDomain().publicCode
     }
 
@@ -226,7 +292,9 @@ class ReportServiceTest {
         val result = report().shouldBeRight()
 
         result.totalPlayers shouldBe 1
-        result.buckets.single { it.hopDistance == 0 }.users.single().toBand shouldBe "3.0"
+        val row = result.excursionBuckets.single { it.hopDistance == 0 }.users.single()
+        row.excursionToBand shouldBe "3.0"
+        row.netToBand shouldBe "3.0"
     }
 
     /** Append a raw-rating change at [at]; the stored band labels are computed from the raw ratings. */
@@ -270,11 +338,14 @@ class ReportServiceTest {
         val result = report().shouldBeRight()
 
         result.totalPlayers shouldBe 1
-        result.jumpedCount shouldBe 1
-        val hop = result.buckets.single { it.hopDistance == 1 }.users.single()
+        result.excursionJumpedCount shouldBe 1
+        result.netJumpedCount shouldBe 1
+        val hop = result.excursionBuckets.single { it.hopDistance == 1 }.users.single()
         hop.publicCode shouldBe crosser.publicCode
         hop.fromBand shouldBe "3.0" // 3.49 snaps down to the 3.0 band
-        hop.toBand shouldBe "3.5" // 3.51 snaps to the 3.5 band
+        hop.excursionToBand shouldBe "3.5" // 3.51 snaps to the 3.5 band
+        hop.netToBand shouldBe "3.5" // it closes there too — excursion and net agree
+        hop.netDistance shouldBe 1
     }
 
     @Test
@@ -297,8 +368,11 @@ class ReportServiceTest {
         val result = report().shouldBeRight()
 
         result.totalPlayers shouldBe 4
-        result.buckets.associate { it.hopDistance to it.count } shouldBe mapOf(0 to 1, 1 to 2, 3 to 1)
-        result.buckets.single { it.hopDistance == 3 }.users.single().publicCode shouldBe leaper.publicCode
+        // Each of these players ended where their excursion peaked, so excursion and net bucketings agree.
+        result.excursionBuckets.associate { it.hopDistance to it.count } shouldBe mapOf(0 to 1, 1 to 2, 3 to 1)
+        result.netBuckets.associate { it.hopDistance to it.count } shouldBe mapOf(0 to 1, 1 to 2, 3 to 1)
+        result.excursionBuckets.single { it.hopDistance == 3 }.users.single().publicCode shouldBe leaper.publicCode
+        result.netBuckets.single { it.hopDistance == 3 }.users.single().publicCode shouldBe leaper.publicCode
     }
 
     @Test
@@ -314,11 +388,16 @@ class ReportServiceTest {
         val result = report().shouldBeRight()
 
         result.totalPlayers shouldBe 1
-        result.stayedCount shouldBe 0
-        val hop = result.buckets.single { it.hopDistance == 1 }.users.single()
+        // Excursion sees the hop into 2.5; net sees the recovery back to 3.0 (a net stayer).
+        result.excursionStayedCount shouldBe 0
+        result.netStayedCount shouldBe 1
+        val hop = result.excursionBuckets.single { it.hopDistance == 1 }.users.single()
         hop.publicCode shouldBe wobbler.publicCode
         hop.fromBand shouldBe "3.0" // entered in the 3.0 band
-        hop.toBand shouldBe "2.5" // the farthest band reached — surfaced even though it recovered to 3.0
+        hop.excursionToBand shouldBe "2.5" // the farthest band reached — surfaced even though it recovered
+        hop.netToBand shouldBe "3.0" // closed back in the entry band
+        hop.netDistance shouldBe 0
+        result.netBuckets.single { it.hopDistance == 0 }.users.single().publicCode shouldBe wobbler.publicCode
     }
 
     @Test
@@ -329,9 +408,11 @@ class ReportServiceTest {
         val result = report().shouldBeRight()
 
         result.totalPlayers shouldBe 1
-        val stayed = result.buckets.single { it.hopDistance == 0 }.users.single()
+        val stayed = result.excursionBuckets.single { it.hopDistance == 0 }.users.single()
         stayed.publicCode shouldBe user.publicCode
         stayed.fromBand shouldBe "4.5"
-        stayed.toBand shouldBe "4.5"
+        stayed.excursionToBand shouldBe "4.5"
+        stayed.netToBand shouldBe "4.5"
+        stayed.netDistance shouldBe 0
     }
 }

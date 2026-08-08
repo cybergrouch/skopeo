@@ -24,7 +24,10 @@ function playerName(user: BandHopUserRow): string {
   return user.displayName ?? user.publicCode
 }
 
-/** A player's row within a bucket: name → public profile, showing the band move. */
+/**
+ * A player's row: name → public profile, showing BOTH band-movement metrics (#724) — the farthest
+ * excursion reached in-window and the net move to the closing band. A round-tripper reads net 0.
+ */
 function UserRow({ user }: { user: BandHopUserRow }) {
   return (
     <li className="flex items-center justify-between gap-2 py-1 text-sm">
@@ -33,7 +36,8 @@ function UserRow({ user }: { user: BandHopUserRow }) {
         <PlaceholderTag show={user.isPlaceholder} deleted={user.isDeleted} />
       </span>
       <span className="font-mono text-xs text-muted-foreground">
-        {user.fromBand} → {user.toBand}
+        excursion {user.excursionDistance} ({user.fromBand} → {user.excursionToBand}) · net{' '}
+        {user.netDistance} ({user.fromBand} → {user.netToBand})
       </span>
     </li>
   )
@@ -62,9 +66,50 @@ function JumpBucket({ bucket }: { bucket: BandHopBucket }) {
 }
 
 /**
- * Admin Report tab (#216): NTRP band-hop report over a date range. The headline is how many players
- * stayed within their band (the healthy majority); jumps are the exceptions, listed per hop distance
- * with a link to each player's public profile. Band labels only — no exact ratings.
+ * One bucketing (excursion or net): the jump buckets to inspect, plus the stayed-in-band players
+ * collapsed behind a disclosure. Wrapped in a labelled region so each metric can be scoped.
+ */
+function MetricBreakdown({
+  heading,
+  buckets,
+  emptyNote,
+}: {
+  heading: string
+  buckets: BandHopBucket[]
+  emptyNote: string
+}) {
+  const jumpBuckets = buckets.filter((b) => b.hopDistance > 0)
+  const stayedBucket = buckets.find((b) => b.hopDistance === 0)
+  return (
+    <section aria-label={heading} className="space-y-4">
+      <h3 className="text-sm font-semibold text-muted-foreground">{heading}</h3>
+      {jumpBuckets.length > 0 ? (
+        jumpBuckets.map((b) => <JumpBucket key={b.hopDistance} bucket={b} />)
+      ) : (
+        <p className="text-sm text-muted-foreground">{emptyNote}</p>
+      )}
+      {stayedBucket && stayedBucket.count > 0 ? (
+        <details className="rounded-lg border p-3">
+          <summary className="cursor-pointer text-sm font-medium">
+            Stayed in band — {stayedBucket.count}{' '}
+            {stayedBucket.count === 1 ? 'player' : 'players'}
+          </summary>
+          <ul className="mt-2 divide-y">
+            {stayedBucket.users.map((u) => (
+              <UserRow key={u.publicCode} user={u} />
+            ))}
+          </ul>
+        </details>
+      ) : null}
+    </section>
+  )
+}
+
+/**
+ * Admin Report tab (#216/#724): NTRP band-hop report over a date range, reported with BOTH metrics —
+ * the farthest EXCURSION reached in-window (a transient crossing counts, #289) and the NET move to the
+ * closing band (a round-tripper reads net 0). Both bucket breakdowns are shown, and each player row
+ * carries both distances. Band labels only — no exact ratings.
  */
 export function ReportTab() {
   const [startDate, setStartDate] = useState(() => isoDaysAgo(30))
@@ -76,12 +121,10 @@ export function ReportTab() {
   )
   const report = query.data
 
-  const stayedPct =
+  const netStayedPct =
     report && report.totalPlayers > 0
-      ? Math.round((report.stayedCount / report.totalPlayers) * 100)
+      ? Math.round((report.netStayedCount / report.totalPlayers) * 100)
       : 0
-  const jumpBuckets = (report?.buckets ?? []).filter((b) => b.hopDistance > 0)
-  const stayedBucket = (report?.buckets ?? []).find((b) => b.hopDistance === 0)
 
   return (
     <div className="space-y-4">
@@ -89,8 +132,9 @@ export function ReportTab() {
         <CardHeader>
           <CardTitle>NTRP band-hop report</CardTitle>
           <CardDescription>
-            Over the chosen range, how many players stayed within their NTRP band versus jumped. Most
-            players should stay in band; jumps are the exceptions to review.
+            Over the chosen range, how far players moved from their starting NTRP band — both the
+            farthest excursion they reached and where they ended (net). Most players should end in
+            band; excursions and net jumps are the exceptions to review.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap items-end gap-3">
@@ -130,37 +174,28 @@ export function ReportTab() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base">
-                {report.stayedCount} of {report.totalPlayers} players ({stayedPct}%) stayed within
-                their band
+                {report.netStayedCount} of {report.totalPlayers} players ({netStayedPct}%) ended in
+                their starting band
               </CardTitle>
               <CardDescription>
-                {report.jumpedCount} {report.jumpedCount === 1 ? 'player' : 'players'} moved at least
-                one band over {report.startDate} → {report.endDate}.
+                {report.excursionJumpedCount}{' '}
+                {report.excursionJumpedCount === 1 ? 'player' : 'players'} left their band at some
+                point (excursion); {report.netJumpedCount} ended in a different band (net) over{' '}
+                {report.startDate} → {report.endDate}.
               </CardDescription>
             </CardHeader>
           </Card>
 
-          {jumpBuckets.length > 0 ? (
-            jumpBuckets.map((b) => <JumpBucket key={b.hopDistance} bucket={b} />)
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              No band jumps in this range — everyone stayed within their band.
-            </p>
-          )}
-
-          {stayedBucket && stayedBucket.count > 0 ? (
-            <details className="rounded-lg border p-3">
-              <summary className="cursor-pointer text-sm font-medium">
-                Stayed in band — {stayedBucket.count}{' '}
-                {stayedBucket.count === 1 ? 'player' : 'players'}
-              </summary>
-              <ul className="mt-2 divide-y">
-                {stayedBucket.users.map((u) => (
-                  <UserRow key={u.publicCode} user={u} />
-                ))}
-              </ul>
-            </details>
-          ) : null}
+          <MetricBreakdown
+            heading="By farthest excursion"
+            buckets={report.excursionBuckets}
+            emptyNote="No excursions in this range — no one left their band at any point."
+          />
+          <MetricBreakdown
+            heading="By net movement"
+            buckets={report.netBuckets}
+            emptyNote="No net band changes in this range — everyone ended where they started."
+          />
         </>
       ) : null}
     </div>
