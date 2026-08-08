@@ -593,28 +593,103 @@ describe('EventDetail', () => {
     )
   })
 
-  it('warns when a chosen team ref does not fit the fixture format (#720)', async () => {
+  it('lists a wrong-sized team as an unselectable option explaining the size it needs (#736)', async () => {
     const user = setupUser()
     useGetApiV1EventsId.mockReturnValue({ data: { ...doublesRoster, format: 'DOUBLES' }, isLoading: false })
-    // A one-member team can't fill a doubles side.
+    // A one-member team can't fill a doubles side (#734 allows teams of 1).
     useGetApiV1EventsIdTeams.mockReturnValue({
       data: [
         { id: 't1', eventId: 'e1', name: 'Team A', members: [{ userId: 'u1', position: 1, displayName: 'Ana' }] },
+        {
+          id: 't2',
+          eventId: 'e1',
+          name: 'Team B',
+          members: [
+            { userId: 'u3', position: 1, displayName: 'Cara' },
+            { userId: 'u4', position: 2, displayName: 'Dan' },
+          ],
+        },
+      ],
+    })
+    renderDetail()
+
+    await user.click(screen.getByLabelText('Pick sides from teams'))
+    const side1 = screen.getByLabelText('Team 1')
+
+    // The 1-member team is offered but disabled, and says what it would need; the 2-member team is free.
+    const tooSmall = within(side1).getByRole('option', { name: 'Team A (1 player — needs 2)' })
+    expect(tooSmall).toBeDisabled()
+    expect(within(side1).getByRole('option', { name: 'Team B (2 players)' })).not.toBeDisabled()
+    // Nothing was selected, so no stale-selection alert yet.
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('says no team fits when every team is the wrong size for the format (#736)', async () => {
+    const user = setupUser()
+    useGetApiV1EventsId.mockReturnValue({ data: { ...event, format: 'SINGLES' }, isLoading: false })
+    // A two-member team can't fill a singles side, and it's the only team there is.
+    useGetApiV1EventsIdTeams.mockReturnValue({
+      data: [
+        {
+          id: 't1',
+          eventId: 'e1',
+          name: 'Team A',
+          members: [
+            { userId: 'u1', position: 1, displayName: 'Ana' },
+            { userId: 'u2', position: 2, displayName: 'Bob' },
+          ],
+        },
+      ],
+    })
+    renderDetail()
+
+    await user.click(screen.getByLabelText('Pick sides from teams'))
+
+    expect(screen.getByRole('status')).toHaveTextContent('No team fits Singles')
+    expect(screen.getByRole('status')).toHaveTextContent('1 player a side')
+  })
+
+  it('names the stranded team when the format changes after a team was picked (#736)', async () => {
+    const user = setupUser()
+    useGetApiV1EventsId.mockReturnValue({ data: { ...doublesRoster, format: 'DOUBLES' }, isLoading: false })
+    useGetApiV1EventsIdTeams.mockReturnValue({
+      data: [
+        {
+          id: 't1',
+          eventId: 'e1',
+          name: 'Team A',
+          members: [
+            { userId: 'u1', position: 1, displayName: 'Ana' },
+            { userId: 'u2', position: 2, displayName: 'Bob' },
+          ],
+        },
+        {
+          id: 't2',
+          eventId: 'e1',
+          name: 'Team B',
+          members: [
+            { userId: 'u3', position: 1, displayName: 'Cara' },
+            { userId: 'u4', position: 2, displayName: 'Dan' },
+          ],
+        },
       ],
     })
     renderDetail()
 
     await user.click(screen.getByLabelText('Pick sides from teams'))
     await user.selectOptions(screen.getByLabelText('Team 1'), 't1')
+    await user.selectOptions(screen.getByLabelText('Team 2'), 't2')
+    // Both sides were valid for doubles; dropping the fixture to singles strands them at 2 members.
+    await user.selectOptions(screen.getByLabelText('Format'), 'SINGLES')
 
-    expect(screen.getByText(/size doesn’t match the fixture format/)).toBeInTheDocument()
-    expect(screen.getByText(/needs/)).toHaveTextContent('2 players')
+    expect(screen.getByRole('alert')).toHaveTextContent('Team A and Team B don’t match the fixture format')
+    expect(screen.getByRole('alert')).toHaveTextContent('1 player a side')
+    expect(screen.getByRole('button', { name: 'Schedule fixture' })).toBeDisabled()
   })
 
-  it('warns with the singular side size when a doubles team fills a singles ref (#720)', async () => {
+  it('uses the singular when only one picked team is stranded by a format change (#736)', async () => {
     const user = setupUser()
-    useGetApiV1EventsId.mockReturnValue({ data: { ...event, format: 'SINGLES' }, isLoading: false })
-    // A two-member team can't fill a singles side.
+    useGetApiV1EventsId.mockReturnValue({ data: { ...doublesRoster, format: 'DOUBLES' }, isLoading: false })
     useGetApiV1EventsIdTeams.mockReturnValue({
       data: [
         {
@@ -632,8 +707,20 @@ describe('EventDetail', () => {
 
     await user.click(screen.getByLabelText('Pick sides from teams'))
     await user.selectOptions(screen.getByLabelText('Team 1'), 't1')
+    await user.selectOptions(screen.getByLabelText('Format'), 'SINGLES')
 
-    expect(screen.getByText(/needs/)).toHaveTextContent('1 player')
+    expect(screen.getByRole('alert')).toHaveTextContent('Team A doesn’t match the fixture format')
+  })
+
+  it('shows how to get teams when the event has none (#736)', () => {
+    useGetApiV1EventsId.mockReturnValue({ data: { ...event, format: 'SINGLES' }, isLoading: false })
+    useGetApiV1EventsIdTeams.mockReturnValue({ data: [] })
+    renderDetail()
+
+    expect(screen.queryByLabelText('Pick sides from teams')).not.toBeInTheDocument()
+    expect(
+      screen.getByText(/Create teams for this event to pick a whole team as a side/),
+    ).toBeInTheDocument()
   })
 
   it('pre-fills the fixture date with the event start date (#668)', () => {
