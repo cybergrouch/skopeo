@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import type { ReactNode } from 'react'
-import { act, render, screen } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import { setupUser } from '@/test/user'
 import { SeedingTable } from './SeedingTable'
 import type { SeedingEntryResponse } from '@/api/generated/model'
@@ -183,6 +183,29 @@ describe('SeedingTable', () => {
     expect(screen.getByRole('button', { name: 'Save order' })).toBeEnabled()
     await user.click(screen.getByRole('button', { name: 'Save order' }))
     expect(onSaveOrder).toHaveBeenCalledWith(['u2', 'u1'])
+  })
+
+  it('shows seeds by draft position while editing, renumbering a dragged row (#733)', () => {
+    render(
+      <SeedingTable entries={entries} generatedAt="now" name="Club Open" onSaveOrder={vi.fn()} />,
+    )
+    const seedCells = () =>
+      screen.getAllByRole('cell').filter((c) => (c as HTMLTableCellElement).cellIndex === 0)
+
+    // In edit mode every row's Seed cell shows its position — even u2, whose stored seed was blank.
+    expect(seedCells()[0]).toHaveTextContent('1')
+    expect(seedCells()[1]).toHaveTextContent('2')
+
+    // Drag u2 above u1: the moved row takes seed 1 by its new position and u1 becomes seed 2.
+    act(() => dnd.onDragEnd?.({ active: { id: 'u2' }, over: { id: 'u1' } }))
+    const cellsOf = (row: HTMLElement) => within(row).getAllByRole('cell') // Seed, Name, Code, …
+    const bodyRows = screen.getAllByRole('row').slice(1) // drop the header row
+    // u2 is now first: seed 1, code BBB222.
+    expect(cellsOf(bodyRows[0])[2]).toHaveTextContent('BBB222')
+    expect(cellsOf(bodyRows[0])[0]).toHaveTextContent('1')
+    // u1 is now second: seed 2, code ABC123.
+    expect(cellsOf(bodyRows[1])[2]).toHaveTextContent('ABC123')
+    expect(cellsOf(bodyRows[1])[0]).toHaveTextContent('2')
   })
 
   it('Reset reverts the draft and is disabled again once unchanged (#718)', async () => {

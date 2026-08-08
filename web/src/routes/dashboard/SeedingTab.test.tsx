@@ -384,7 +384,7 @@ describe('SeedingTab', () => {
     await waitFor(() => expect(deleteListMutate).toHaveBeenCalledWith({ id: 'l1' }))
   })
 
-  it('generates a seeding and renders the table including a blank seed', async () => {
+  it('generates a seeding and renders the editable table numbered by position (#733)', async () => {
     useGetApiV1PlayerListsId.mockReturnValue({ data: listDetail })
     useGetApiV1PlayerListsIdSeeding.mockReturnValue({ data: seeding })
     const user = userEvent.setup()
@@ -399,12 +399,13 @@ describe('SeedingTab', () => {
     // header + 2 entries
     expect(rows).toHaveLength(3)
     expect(screen.getByRole('columnheader', { name: 'Seed' })).toBeInTheDocument()
-    // The second entry has a null seed, rendered blank.
+    // The host-editable table numbers every row by its draft position (#733) — even the second entry,
+    // whose stored seed was blank — previewing the 1..N renumber that Save applies.
     const seedCells = screen
       .getAllByRole('cell')
       .filter((c) => (c as HTMLTableCellElement).cellIndex === 0)
     expect(seedCells[0]).toHaveTextContent('1')
-    expect(seedCells[1]).toHaveTextContent('')
+    expect(seedCells[1]).toHaveTextContent('2')
   })
 
   it('saves a reordered seeding order to the mutation (#718)', async () => {

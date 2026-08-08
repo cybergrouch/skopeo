@@ -1482,12 +1482,12 @@ describe('EventDetail', () => {
     expect(screen.getByRole('button', { name: 'Regenerate seeding' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Download CSV' })).toBeInTheDocument()
     expect(screen.getByRole('columnheader', { name: 'Seed' })).toBeInTheDocument()
-    // The blank-seed row (Bob) renders an empty seed cell.
+    // The staff-editable table numbers rows by draft position (#733), so Bob (stored seed blank) shows 2.
     const seedCells = screen
       .getAllByRole('cell')
       .filter((c) => (c as HTMLTableCellElement).cellIndex === 0)
     expect(seedCells[0]).toHaveTextContent('1')
-    expect(seedCells[1]).toHaveTextContent('')
+    expect(seedCells[1]).toHaveTextContent('2')
   })
 
   const eventSeeding = {

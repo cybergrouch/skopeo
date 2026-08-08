@@ -39,14 +39,17 @@ function orderKey(entries: SeedingEntryResponse[], generatedAt: string): string 
 /**
  * One rendered seeding row. When [editable] a grip handle (keyboard-accessible drag listeners) sits in
  * the Seed cell — kept in that first cell rather than a separate column so the table shape (and the CSV)
- * is unchanged. The Seed value stays the server's until Save, which renumbers 1..N server-side (#718).
+ * is unchanged. [displaySeed] is the number shown in the Seed cell: while editing it tracks the row's
+ * current draft position (so a dragged row renumbers live, #733), else it's the server's stored seed.
  */
 function SeedingRow({
   entry,
   editable,
+  displaySeed,
 }: {
   entry: SeedingEntryResponse
   editable: boolean
+  displaySeed: number | null
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: rowId(entry),
@@ -70,7 +73,7 @@ function SeedingRow({
               <GripVertical className="h-4 w-4" />
             </button>
           ) : null}
-          {entry.seed ?? ''}
+          {displaySeed ?? ''}
         </span>
       </td>
       <td className="p-2">{entry.displayName ?? entry.publicCode}</td>
@@ -139,7 +142,8 @@ export function SeedingTable({
 
   const hasSeeding = entries.length > 0
   // Rows to render/export: the draft when editing (so the visible order + CSV reflect the pending
-  // reorder), else the server rows. Seeds stay the server's until Save renumbers them 1..N server-side.
+  // reorder), else the server rows. While editing, the Seed cell shows each row's live draft position
+  // (#733) — a preview of the 1..N renumber Save applies — instead of the row's stale stored seed.
   const rows = editable ? draft : entries
   const dirty = editable && draft.map(rowId).join(',') !== entries.map(rowId).join(',')
 
@@ -203,8 +207,13 @@ export function SeedingTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map((entry) => (
-            <SeedingRow key={rowId(entry)} entry={entry} editable={editable} />
+          {rows.map((entry, index) => (
+            <SeedingRow
+              key={rowId(entry)}
+              entry={entry}
+              editable={editable}
+              displaySeed={editable ? index + 1 : entry.seed ?? null}
+            />
           ))}
         </tbody>
       </table>
