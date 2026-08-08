@@ -231,11 +231,10 @@ gates above:
 | Seeding | `SeedingTab` | `canManageMatches` |
 | Placeholder Players | `PlaceholderPlayersTab` | `canManageMatches` |
 | Ratings | `RatingsTab` | `canRate` |
-| Invites | `InvitesTab` | `isAdministrator` |
 | Activity Log | `ActivityTab` | `isAdministrator` |
 | Reports | `ReportTab` | `isAdministrator` |
 | Points Management | `PointsManagementSection` | `canManagePointsBudget` |
-| Account Management | `AccountManagementTab` | `isAdministrator` |
+| Account Management | `AccountManagementTab` (includes onboarding invites, #725) | `isAdministrator` |
 | Club Management | `ClubManagementTab` | `isAdministrator` |
 | Admin | `AdminTab` | `isAdministrator` |
 | About | `AboutTab` | Always |
@@ -270,7 +269,7 @@ flowchart TD
     Pred -->|canRate| Ratings[Ratings]
     Pred -->|isResearcher| Research[Research]
     Pred -->|canManagePointsBudget| Points[Points Management]
-    Pred -->|isAdministrator| Adm["Invites, Activity Log, Reports, Account Management, Club Management, Admin"]
+    Pred -->|isAdministrator| Adm["Activity Log, Reports, Account Management (incl. invites), Club Management, Admin"]
     Always --> Sec["Section array: nav + active content"]
     Settings --> Sec
     Org --> Sec
@@ -286,6 +285,8 @@ flowchart TD
 split out of the Admin tab (#648):
 
 - **Manage Player** (`ManagePlayerSection`) — administer an individual player.
+- **Invites** (`InvitesSection`) — onboarding-invite management, with the #132 duplicate-email guard;
+  folded back in here from its own standalone tab (#725, reversing #135).
 - **Deleted Accounts** (`DeletedAccountsSection`) — restore soft-deleted accounts.
 - **Duplicates** (`DuplicatesSection`) — mark/replace confirmed duplicate records.
 - **Duplicate Candidates** (`DuplicateCandidatesSection`) — suspected duplicates for triage.
