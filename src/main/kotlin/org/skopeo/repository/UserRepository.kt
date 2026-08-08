@@ -30,6 +30,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
+import org.skopeo.domain.model.AccountMergeResult
 import org.skopeo.domain.model.CreatePlaceholderCommand
 import org.skopeo.domain.model.LocalThemeValue
 import org.skopeo.domain.model.NameType
@@ -473,6 +474,128 @@ class UserRepository {
                 it[canonicalUserId] = null
             }
         }
+
+    /**
+     * Generalized admin account-merge (#643): consolidate the retired account into an admin-chosen [survivorId]
+     * in one transaction. Moves **all participation/membership records** (matches/team_users, event participants,
+     * player-list members, club owners, seeding entries) from [retiredId] onto the survivor via [absorbParticipationRecords],
+     * but **NOT** rating history, the current rating, or ranking points — the survivor keeps its own, with no
+     * recompute (the retired's rating/points stay on its now-inactive row, orphaned and harmless). When [transferLogin]
+     * is true the retired account's login is moved onto the survivor first (see [transferLogin]); the survivor then keeps
+     * the best available login. Finally the retired account is retired via the canonical-merge pattern (#124):
+     * is_active = false + canonical_user_id = survivor, so its public code reads as a "merged → survivor" card.
+     * Irreversible (the record absorb physically re-points rows). Returns a per-table count of what moved.
+     */
+    fun mergeAccounts(
+        retiredId: UUID,
+        survivorId: UUID,
+        transferLogin: Boolean,
+    ): AccountMergeResult =
+        transaction {
+            // Free-then-set the login FIRST (uniqueness): the survivor ends up with the accessible login.
+            if (transferLogin) transferLogin(fromUserId = retiredId, intoUserId = survivorId)
+            val moved = absorbParticipationRecords(fromUserId = retiredId, intoUserId = survivorId)
+            // Retire the merged-away account via the canonical-link pattern (#124): it becomes a
+            // "merged → survivor" card rather than a plain soft-delete.
+            UsersTable.update(where = { UsersTable.id eq retiredId }) {
+                it[canonicalUserId] = survivorId
+                it[isActive] = false
+            }
+            moved.copy(loginTransferred = transferLogin)
+        }
+
+    /**
+     * Move the retired account's login onto the survivor (#643) so the survivor keeps the accessible login. Order is
+     * load-bearing for the UNIQUE constraints (`users.firebase_uid`, `uq_identity_provider_uid(provider, provider_uid)`):
+     * FIRST free the retired account — null out its `firebase_uid` and delete its primary identity row (freeing the
+     * `(provider, provider_uid)` pair) — THEN set the survivor's `firebase_uid` and re-home that same `(provider, provider_uid)`
+     * as the survivor's primary identity. Doing it in the reverse order would collide on those UNIQUEs. A survivor that was
+     * a placeholder gains an identity row here and stops being a placeholder. Must run inside a transaction; no-op if the
+     * retired account has no login.
+     */
+    private fun transferLogin(
+        fromUserId: UUID,
+        intoUserId: UUID,
+    ) {
+        val uid =
+            UsersTable.selectAll().where { UsersTable.id eq fromUserId }.singleOrNull()?.let { it[UsersTable.firebaseUid] }
+                ?: return
+        val primaryIdentity =
+            UserIdentitiesTable
+                .selectAll()
+                .where { UserIdentitiesTable.userId eq fromUserId }
+                .toList()
+                .let { rows -> rows.firstOrNull { it[UserIdentitiesTable.isPrimary] } ?: rows.firstOrNull() }
+
+        // 1. FREE the retired account (release both UNIQUE anchors before re-using them on the survivor).
+        UsersTable.update(where = { UsersTable.id eq fromUserId }) { it[firebaseUid] = null }
+        if (primaryIdentity != null) {
+            UserIdentitiesTable.deleteWhere { UserIdentitiesTable.id eq primaryIdentity[UserIdentitiesTable.id] }
+        }
+
+        // 2. Put the login on the survivor: firebase_uid + the primary identity (update the existing primary
+        // in place, or insert one when the survivor was a placeholder). Clear the placeholder flag — an account
+        // with a login is no longer a login-less placeholder.
+        UsersTable.update(where = { UsersTable.id eq intoUserId }) {
+            it[firebaseUid] = uid
+            it[placeholder] = false
+        }
+        if (primaryIdentity != null) {
+            val existingPrimary =
+                UserIdentitiesTable
+                    .selectAll()
+                    .where { (UserIdentitiesTable.userId eq intoUserId) and (UserIdentitiesTable.isPrimary eq true) }
+                    .firstOrNull()
+            if (existingPrimary != null) {
+                UserIdentitiesTable.update(where = { UserIdentitiesTable.id eq existingPrimary[UserIdentitiesTable.id] }) {
+                    it[provider] = primaryIdentity[UserIdentitiesTable.provider]
+                    it[providerUid] = primaryIdentity[UserIdentitiesTable.providerUid]
+                    it[isPrimary] = true
+                }
+            } else {
+                UserIdentitiesTable.insert {
+                    it[userId] = intoUserId
+                    it[provider] = primaryIdentity[UserIdentitiesTable.provider]
+                    it[providerUid] = primaryIdentity[UserIdentitiesTable.providerUid]
+                    it[isPrimary] = true
+                }
+            }
+        }
+    }
+
+    /**
+     * Move only participation/membership records from [fromUserId] onto [intoUserId] (#643) — the selective variant of
+     * [absorbUserRecords]. Re-points matches (team_users), event participants, player-list members, club owners, and
+     * seeding entries (deduping per-(parent, user) UNIQUE rows exactly as the full absorb does), but deliberately SKIPS
+     * rating history, the current rating, and ranking points, so the survivor keeps its own rating + standings with no
+     * recompute. Returns a per-table count of what was moved (counted before re-pointing, so it includes deduped rows).
+     * Must run inside a transaction.
+     */
+    private fun absorbParticipationRecords(
+        fromUserId: UUID,
+        intoUserId: UUID,
+    ): AccountMergeResult {
+        val teamMemberships = TeamUsersTable.selectAll().where { TeamUsersTable.userId eq fromUserId }.count().toInt()
+        val eventParticipations = EventParticipantsTable.selectAll().where { EventParticipantsTable.userId eq fromUserId }.count().toInt()
+        val playerListMemberships = PlayerListMembersTable.selectAll().where { PlayerListMembersTable.userId eq fromUserId }.count().toInt()
+        val clubOwnerships = ClubOwnersTable.selectAll().where { ClubOwnersTable.userId eq fromUserId }.count().toInt()
+        val seedingEntries = SeedingEntriesTable.selectAll().where { SeedingEntriesTable.userId eq fromUserId }.count().toInt()
+
+        repointTeamUsers(fromUserId = fromUserId, intoUserId = intoUserId)
+        repointEventParticipants(fromUserId = fromUserId, intoUserId = intoUserId)
+        repointPlayerListMembers(fromUserId = fromUserId, intoUserId = intoUserId)
+        repointClubOwners(fromUserId = fromUserId, intoUserId = intoUserId)
+        SeedingEntriesTable.update(where = { SeedingEntriesTable.userId eq fromUserId }) { it[userId] = intoUserId }
+
+        return AccountMergeResult(
+            teamMemberships = teamMemberships,
+            eventParticipations = eventParticipations,
+            playerListMemberships = playerListMemberships,
+            clubOwnerships = clubOwnerships,
+            seedingEntries = seedingEntries,
+            loginTransferred = false,
+        )
+    }
 
     /**
      * Absorb every record owned by [fromUserId] into [intoUserId] — the shared consolidation primitive behind

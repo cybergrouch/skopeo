@@ -22,6 +22,7 @@ import org.skopeo.FIREBASE_AUTH
 import org.skopeo.common.dto.user.CreateUserRequest
 import org.skopeo.common.dto.user.MarkDuplicatesRequest
 import org.skopeo.common.dto.user.MatchHistoryVisibilityRequest
+import org.skopeo.common.dto.user.MergeAccountsRequest
 import org.skopeo.common.dto.user.PhotoSettingsRequest
 import org.skopeo.common.dto.user.ProfileRequest
 import org.skopeo.common.dto.user.RatingPreviewResponse
@@ -49,6 +50,7 @@ fun Application.configureUserRoutes(
                 createUser(service = service)
                 currentUser(service = service)
                 duplicateRoutes(service = duplicates)
+                mergeRoutes(service = duplicates)
                 userById(service = service)
             }
         }
@@ -99,6 +101,28 @@ private fun Route.duplicateRoutes(service: DuplicateService) {
             respondEither(result = service.restore(token = verifiedToken(), id = uuidParam(name = "id"))) {
                 call.respond(status = HttpStatusCode.NoContent, message = "")
             }
+        }
+    }
+}
+
+/**
+ * Generalized admin account-merge (#643) — ADMINISTRATOR-only (enforced in [DuplicateService]). Registered
+ * before [userById] so `/{id}/merge` resolves ahead of `/{id}`. Consolidates the retired account into the
+ * survivor ({id}), keeping the survivor's rating/points and best login; irreversible.
+ */
+private fun Route.mergeRoutes(service: DuplicateService) {
+    post(path = "/{id}/merge") {
+        respondMappingErrors {
+            val request = call.receive<MergeAccountsRequest>()
+            respondEither(
+                result =
+                    service.mergeAccounts(
+                        token = verifiedToken(),
+                        survivorId = uuidParam(name = "id"),
+                        retiredAccountId = UUID.fromString(request.retiredAccountId),
+                        verificationNote = request.verificationNote,
+                    ),
+            ) { survivor -> call.respond(status = HttpStatusCode.OK, message = survivor) }
         }
     }
 }

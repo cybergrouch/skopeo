@@ -2,6 +2,7 @@ import { DeletedAccountsSection } from "./admin/DeletedAccountsSection";
 import { DuplicateCandidatesSection } from "./admin/DuplicateCandidatesSection";
 import { DuplicatesSection } from "./admin/DuplicatesSection";
 import { ManagePlayerSection } from "./admin/ManagePlayerSection";
+import { MergeAccountsSection } from "./admin/MergeAccountsSection";
 
 /**
  * Account Management tab (#648): the player/account administration surface, split out of the Admin tab
@@ -15,6 +16,7 @@ export function AccountManagementTab() {
       <ManagePlayerSection />
       <DeletedAccountsSection />
       <DuplicatesSection />
+      <MergeAccountsSection />
       <DuplicateCandidatesSection />
     </div>
   );

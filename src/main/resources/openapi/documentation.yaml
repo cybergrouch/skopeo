@@ -1164,6 +1164,48 @@ paths:
         '409':
           description: The canonical is itself a duplicate, the target is not a duplicate of it, or the canonical is not empty
 
+  /api/v1/users/{id}/merge:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: The survivor account that keeps its rating, ranking points, and records.
+        schema:
+          type: string
+          format: uuid
+    post:
+      summary: Merge accounts into this survivor (#643)
+      description: >-
+        ADMINISTRATOR only. Consolidates the retired account into this survivor: moves all
+        participation/membership records (matches, event participants, player-list members, club owners,
+        seeding entries) onto the survivor while the survivor keeps its own rating and ranking points (no
+        recompute). The survivor keeps the best available login — when the retired account has one it is
+        transferred to the survivor. The retired account is retired as a "merged → survivor" card. A
+        required, non-blank verification note is recorded in the audit trail. Irreversible; audit-logged.
+      tags:
+        - Users
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MergeAccountsRequest'
+      responses:
+        '200':
+          description: The survivor account after the merge
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSummaryResponse'
+        '400':
+          description: A blank verification note, a malformed id, or the survivor equals the retired account
+        '403':
+          description: Caller is not an ADMINISTRATOR
+        '404':
+          description: No such survivor or retired account
+
   /api/v1/users/{userId}/contacts:
     parameters:
       - name: userId
@@ -4884,6 +4926,23 @@ components:
             type: string
             format: uuid
 
+    MergeAccountsRequest:
+      type: object
+      description: >-
+        The retired account to consolidate into the survivor (in the path) plus a required, non-blank
+        verification note recording how the admin confirmed the two accounts are the same person (#643).
+      required:
+        - retiredAccountId
+        - verificationNote
+      properties:
+        retiredAccountId:
+          type: string
+          format: uuid
+          description: The account whose participation/membership records are moved onto the survivor.
+        verificationNote:
+          type: string
+          description: Required, non-blank note kept in the audit trail; the merge is irreversible.
+
     CreateUserRequest:
       type: object
       description: |
@@ -5390,6 +5449,12 @@ components:
         isDeleted:
           type: boolean
           description: True for an admin-soft-deleted account (#518); rendered as a dominant "Deleted" chip wherever the name appears.
+        linkStatus:
+          type: string
+          enum: [GOOGLE, FACEBOOK, PASSWORD, NONE]
+          description: >-
+            Derived login/link status (#643): the account's login anchor (GOOGLE, FACEBOOK, or PASSWORD) or
+            NONE for a login-less placeholder. Read-only; the account-merge UI shows it per account.
     UserResponse:
       type: object
       required:

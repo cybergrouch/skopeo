@@ -137,6 +137,71 @@ class DuplicateService(
             updated.toSummary(isDeleted = updated.isDeleted())
         }
 
+    /**
+     * Generalized admin account-merge (#643) — the "Merge accounts" operation. Consolidate the [retiredAccountId]
+     * into the admin-chosen [survivorId], moving **all participation/membership records** (matches, event
+     * participants, player-list members, club owners, seeding entries) onto the survivor while the survivor **keeps
+     * its own rating + ranking points, with no recompute**. The survivor keeps the best available login: when the
+     * retired account has one it is transferred to the survivor (freeing the retired account's login first so the
+     * UNIQUE anchors don't collide). The retired account is then retired as a "merged → survivor" card. A required,
+     * non-blank [verificationNote] records how the admin confirmed the two accounts are the same person and is kept
+     * in the audit trail. Irreversible; audited. Guards: both accounts exist and survivor ≠ retired.
+     */
+    fun mergeAccounts(
+        token: VerifiedFirebaseToken,
+        survivorId: UUID,
+        retiredAccountId: UUID,
+        verificationNote: String,
+    ): Either<ServiceError, UserSummaryResponse> =
+        either {
+            val adminId = requireAdmin(token = token).bind()
+            ensure(condition = verificationNote.isNotBlank()) {
+                ServiceError.Validation(message = "A verification note is required")
+            }
+            ensure(condition = survivorId != retiredAccountId) {
+                ServiceError.Validation(message = "An account cannot be merged into itself")
+            }
+            val survivor = users.findById(id = survivorId).bind().toDomain()
+            val retired = users.findById(id = retiredAccountId).bind().toDomain()
+            // The retired account's login (if any) transfers to the survivor — the survivor keeps the accessible login.
+            val transferLogin = retired.firebaseUid != null
+
+            val moved =
+                users.mergeAccounts(
+                    retiredId = retiredAccountId,
+                    survivorId = survivorId,
+                    transferLogin = transferLogin,
+                )
+            audit.record(
+                write =
+                    AuditWrite(
+                        actorUserId = adminId,
+                        action = AuditAction.USER_ACCOUNTS_MERGED,
+                        entityType = AuditEntityType.USER,
+                        entityId = survivorId,
+                        summary =
+                            "Merged ${retired.publicCode} into ${survivor.publicCode} " +
+                                "(moved participation/memberships; kept the survivor's rating + points)",
+                        details =
+                            mapOf(
+                                "survivorUserId" to survivorId.toString(),
+                                "survivorPublicCode" to survivor.publicCode,
+                                "retiredUserId" to retiredAccountId.toString(),
+                                "retiredPublicCode" to retired.publicCode,
+                                "loginTransferred" to moved.loginTransferred.toString(),
+                                "movedTeamMemberships" to moved.teamMemberships.toString(),
+                                "movedEventParticipations" to moved.eventParticipations.toString(),
+                                "movedPlayerListMemberships" to moved.playerListMemberships.toString(),
+                                "movedClubOwnerships" to moved.clubOwnerships.toString(),
+                                "movedSeedingEntries" to moved.seedingEntries.toString(),
+                                "verificationNote" to verificationNote,
+                            ),
+                    ),
+            )
+            val updated = users.findById(id = survivorId).bind().toDomain()
+            updated.toSummary(isDeleted = updated.isDeleted())
+        }
+
     /** Reverse a duplicate marking on [id]: reactivate and clear its canonical pointer. */
     fun restore(
         token: VerifiedFirebaseToken,
