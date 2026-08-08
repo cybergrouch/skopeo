@@ -1,3 +1,7 @@
+import { useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
+import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Card,
   CardContent,
@@ -6,6 +10,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useAuth } from "@/auth/useAuth";
 import { Avatar } from "@/components/Avatar";
 import { MatchHistoryCard } from "@/components/MatchHistoryCard";
@@ -24,6 +31,123 @@ import {
   useGetApiV1UsersUserIdRatingHistory,
   useGetApiV1UsersUserIdRatings,
 } from "@/api/generated/ratings/ratings";
+import {
+  getGetApiV1UsersMeQueryKey,
+  useGetApiV1PlayersCodeMatchHistory,
+  usePostApiV1UsersClaim,
+} from "@/api/generated/users/users";
+import type { UserResponse } from "@/api/generated/model";
+
+/** Prefer the server's message (e.g. "code expired", "account not empty"), else a generic fallback. */
+function claimErrorMessage(err: unknown, fallback: string): string {
+  const message = (err as { response?: { data?: { message?: string } } })
+    ?.response?.data?.message;
+  return message && message.trim() !== "" ? message : fallback;
+}
+
+/**
+ * "Claim a placeholder account" (#496, relocated to Profile in #727): any signed-in user pastes the
+ * secret code an administrator handed them; on success the placeholder's history is merged into their
+ * account. Rejections (bad/expired/consumed code, a non-empty account, etc.) are surfaced from the
+ * server message. This card is only rendered while the owner's account is still claim-eligible (empty),
+ * so a successful claim — which fills the account with history — makes it disappear.
+ */
+function ClaimAccountCard() {
+  const queryClient = useQueryClient();
+  const [code, setCode] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [claimed, setClaimed] = useState<UserResponse | null>(null);
+  const claim = usePostApiV1UsersClaim();
+
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault();
+    setError(null);
+    const trimmed = code.trim();
+    if (trimmed === "") {
+      setError("Enter the claim code you were given.");
+      return;
+    }
+    try {
+      const user = await claim.mutateAsync({ data: { code: trimmed } });
+      setClaimed(user);
+      setCode("");
+      // The caller's profile (and its now-merged history) has changed — refresh it everywhere.
+      await queryClient.invalidateQueries({
+        queryKey: getGetApiV1UsersMeQueryKey(),
+      });
+    } catch (err) {
+      toast.error(
+        claimErrorMessage(
+          err,
+          "That code could not be used. It may be wrong, expired, or already claimed — or your account already has activity.",
+        ),
+        { duration: 8000 },
+      );
+    }
+  }
+
+  if (claimed) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Account claimed</CardTitle>
+          <CardDescription>
+            The placeholder&rsquo;s match and rating history is now part of your
+            account.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <p className="text-sm" role="status">
+            You&rsquo;re all set.
+          </p>
+          <Link
+            to={`/players/${claimed.publicCode}`}
+            className="text-sm text-primary hover:underline"
+          >
+            View your profile →
+          </Link>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Claim a placeholder account</CardTitle>
+        <CardDescription>
+          Were you added to matches before you had an account? Ask an
+          administrator for your one-time claim code and paste it here to adopt
+          that player and its history.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={onSubmit} className="grid gap-3">
+          <div className="space-y-1">
+            <Label htmlFor="claim-code" className="text-xs">
+              Claim code
+            </Label>
+            <Input
+              id="claim-code"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              placeholder="Paste your code"
+              autoComplete="off"
+            />
+          </div>
+          {error ? (
+            <p className="text-sm text-destructive" role="alert">
+              {error}
+            </p>
+          ) : null}
+          <Button type="submit" size="sm" disabled={claim.isPending}>
+            {claim.isPending ? "Claiming…" : "Claim account"}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
 
 interface ProfileTabProps {
   userId: string;
@@ -55,6 +179,13 @@ export function ProfileTab({
   const historyQuery = useGetApiV1UsersUserIdRatingHistory(userId, {
     query: { enabled },
   });
+  // Claim eligibility (#727) mirrors the backend precondition (#496): the account must be empty —
+  // no rating AND no match history. We only need the total count here, so ask for the smallest page.
+  const matchHistoryQuery = useGetApiV1PlayersCodeMatchHistory(
+    publicCode ?? "",
+    { limit: 1 },
+    { query: { enabled: Boolean(publicCode) } },
+  );
 
   const shareUrl = publicCode
     ? `${window.location.origin}/players/${publicCode}`
@@ -63,6 +194,15 @@ export function ProfileTab({
   const ratings = ratingsQuery.data ?? [];
   const history = historyQuery.data ?? [];
   const hasRating = ratings.length > 0;
+  const matchCount = matchHistoryQuery.data?.total ?? 0;
+  // Show the claim form only once we know the account is empty — don't flash it while either signal is
+  // still loading. An established account (any rating or match) never sees it; a successful claim fills
+  // the account, so it disappears on the next render.
+  const claimEligible =
+    !ratingsQuery.isLoading &&
+    !matchHistoryQuery.isLoading &&
+    !hasRating &&
+    matchCount === 0;
 
   return (
     <div className="grid gap-4">
@@ -155,6 +295,10 @@ export function ProfileTab({
           ) : null}
         </CardContent>
       </Card>
+
+      {/* Claim a placeholder account (#727) — self-service, shown only while this account is still
+          claim-eligible (empty). Relocated here from the standalone Claim tab. */}
+      {claimEligible ? <ClaimAccountCard /> : null}
 
       <UpcomingMatchesCard />
 

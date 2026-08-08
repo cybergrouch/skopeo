@@ -226,7 +226,6 @@ gates above:
 | Settings | `SettingsTab` | `isPlayer` (every signed-in user) |
 | Research | `ResearchTab` | `isResearcher` |
 | Standings | `StandingsTab` | Always |
-| Claim account | `ClaimTab` | Always |
 | Event Organizer | `EventOrganizerTab` | `canManageMatches` |
 | Seeding | `SeedingTab` | `canManageMatches` |
 | Placeholder Players | `PlaceholderPlayersTab` | `canManageMatches` |
@@ -241,6 +240,12 @@ gates above:
 
 (The "Event Organizer" tab is keyed `matches` internally and lives under
 `src/routes/dashboard/matches/`.)
+
+Claiming a placeholder account (#496) has no standalone tab. The claim form is embedded in
+`ProfileTab` and rendered only while the owner's account is **claim-eligible** — derived client-side
+from existing profile data (no rating **and** no match history, mirroring the backend precondition
+#496). An established account never sees it, and a successful claim (which fills the account) hides it
+(#727).
 
 `DashboardPage` builds a single `Section[]` from `me.capabilities` — the one source of truth for
 both the nav list and the rendered `activeSection.element`. The active tab lives in the URL
@@ -263,7 +268,7 @@ classDiagram
 ```mermaid
 flowchart TD
     Me["me.capabilities (GET /users/me)"] --> Pred["capabilities.ts predicates"]
-    Pred -->|always| Always["Profile, Standings, Claim, About"]
+    Pred -->|always| Always["Profile, Standings, About"]
     Pred -->|isPlayer| Settings[Settings]
     Pred -->|canManageMatches| Org["Event Organizer, Seeding, Placeholder Players"]
     Pred -->|canRate| Ratings[Ratings]

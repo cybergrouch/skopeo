@@ -59,9 +59,6 @@ vi.mock('./dashboard/ReportTab', () => ({
 vi.mock('./dashboard/admin/PointsManagementSection', () => ({
   PointsManagementSection: () => <div>points management content</div>,
 }))
-vi.mock('./dashboard/ClaimTab', () => ({
-  ClaimTab: () => <div>claim content</div>,
-}))
 
 /** Surfaces the current query string so a test can assert the tab is synced into the URL (#323). */
 function SearchProbe() {
@@ -108,6 +105,8 @@ describe('DashboardPage', () => {
     expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Research' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Standings' })).toBeInTheDocument()
+    // Claiming a placeholder account now lives conditionally on Profile (#727) — no standalone tab.
+    expect(screen.queryByRole('button', { name: 'Claim account' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Event Organizer' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Seeding' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Placeholder Players' })).not.toBeInTheDocument()
@@ -211,6 +210,8 @@ describe('DashboardPage', () => {
     expect(screen.getByRole('button', { name: 'Standings' })).toBeInTheDocument()
     // Invites no longer has its own tab (#725) — it lives under Account Management now.
     expect(screen.queryByRole('button', { name: 'Invites' })).not.toBeInTheDocument()
+    // Claim account no longer has its own tab (#727) — it lives conditionally on Profile now.
+    expect(screen.queryByRole('button', { name: 'Claim account' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Activity Log' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Reports' })).toBeInTheDocument()
     // Points Management is now a standalone tab administrators see too (#444).
