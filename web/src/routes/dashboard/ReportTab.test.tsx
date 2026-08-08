@@ -175,6 +175,26 @@ describe('ReportTab', () => {
     expect(net.getByRole('link', { name: 'STAY03' })).toHaveAttribute('href', '/players/STAY03')
   })
 
+  it('omits the stayed disclosure for a metric where no one stayed', () => {
+    useGetApiV1ReportsBandHops.mockReturnValue({
+      data: {
+        ...report,
+        totalPlayers: 2,
+        excursionStayedCount: 0,
+        excursionJumpedCount: 2,
+        excursionBuckets: [{ hopDistance: 1, count: 2, users: [drop01, jump01] }],
+        netStayedCount: 0,
+        netJumpedCount: 2,
+        netBuckets: [{ hopDistance: 1, count: 2, users: [drop01, jump01] }],
+      },
+      isLoading: false,
+      isError: false,
+    })
+    renderTab()
+    // Every player moved in both metrics → no "Stayed in band" disclosure at all.
+    expect(screen.queryByText(/Stayed in band/)).not.toBeInTheDocument()
+  })
+
   it('refetches with the chosen date range', () => {
     renderTab()
     fireEvent.change(screen.getByLabelText('Start date'), { target: { value: '2026-02-01' } })
