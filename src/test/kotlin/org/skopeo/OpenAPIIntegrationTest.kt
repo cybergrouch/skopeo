@@ -139,6 +139,23 @@ class OpenAPIIntegrationTest {
             body shouldContain "team2Id"
         }
 
+    /**
+     * The unified event view (#741): the by-code manager lookup is documented, and the public event
+     * payload carries the lifecycle facts the single page renders for every audience.
+     */
+    @Test
+    fun testOpenAPISpecIncludesUnifiedEventView() =
+        testApplication {
+            application {
+                module(initDatabase = false)
+            }
+            val body = client.get(urlString = "/openapi.yaml").bodyAsText()
+            body shouldContain "/api/v1/events/code/{code}/manage"
+            // The widened public payload: format/class/finalized/ranking-points now travel publicly.
+            body shouldContain "The event's class (#403/#741)."
+            body shouldContain "The event's organizing format (#720/#741)."
+        }
+
     /** Band-hop report (#724): the response surfaces BOTH the excursion and net metrics per player. */
     @Test
     fun testOpenAPISpecIncludesBandHopBothMetrics() =

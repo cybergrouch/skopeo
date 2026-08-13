@@ -2207,10 +2207,42 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/EventPublicResponse'
+        '400':
+          description: The event is finalized or deleted, so it is not accepting sign-ups (#741)
         '403':
           description: Caller has no Skopeo profile yet
         '404':
           description: No active event with that code
+
+  /api/v1/events/code/{code}/manage:
+    parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      summary: Get the manager view of an event by code (#741)
+      description: >-
+        The organizer payload for an event addressed by its public code — the same body and staff
+        gating as GET /api/v1/events/{id}. `/events/{code}` is the single event view for every
+        audience, so a staff viewer loads the organizer fields (and the event id every mutation route
+        is keyed by) from here alongside the public read.
+      tags:
+        - Events
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: The event
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventResponse'
+        '403':
+          description: Caller is not staff
+        '404':
+          description: No event with that code
 
   /api/v1/events/{id}:
     parameters:
@@ -6760,6 +6792,22 @@ components:
           nullable: true
           enum: [APPROVED, PENDING, HOLD]
           description: The viewer's own standing on this event (#201); null if not signed up.
+        format:
+          type: string
+          enum: [SINGLES, DOUBLES, MIXED_DOUBLES]
+          description: The event's organizing format (#720/#741).
+        type:
+          type: string
+          enum: [OPEN_PLAY, TOURNAMENT]
+          description: The event's class (#403/#741).
+        isFinalized:
+          type: boolean
+          description: >-
+            True once the event has been finalized (#403/#741). The public page renders the Finalized
+            badge from this and withholds "Request to join" — a finalized event takes no joiners.
+        awardRankingPoints:
+          type: boolean
+          description: Whether finalizing this event awards ranking points per the global schedules (#559/#741).
 
     MatchPublicPlayer:
       type: object

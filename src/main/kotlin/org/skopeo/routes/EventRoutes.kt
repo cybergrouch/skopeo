@@ -49,6 +49,7 @@ fun Application.configureEventRoutes(
             authenticate(FIREBASE_AUTH) {
                 listAndCreate(service = service)
                 eventSelfSignup(service = service)
+                manageEventByCode(service = service)
                 renameEvent(service = service)
                 finalizeEvent(service = service)
                 byIdAndParticipants(service = service)
@@ -117,34 +118,6 @@ private fun Route.listAndCreate(service: EventService) {
         respondMappingErrors {
             respondEither(result = service.myEvents(token = verifiedToken())) { events ->
                 call.respond(status = HttpStatusCode.OK, message = events)
-            }
-        }
-    }
-}
-
-/**
- * Public event page lookup by code (#138), viewable anonymously (#193) — a token only personalizes
- * the viewer status. The literal `code` segment matches before `/{id}`, so it never collides with the
- * UUID route.
- */
-private fun Route.publicEventByCode(service: EventService) {
-    get(path = "/code/{code}") {
-        respondMappingErrors {
-            val code = call.parameters["code"].orEmpty()
-            respondEither(result = service.publicByCode(token = optionalVerifiedToken(), code = code)) { event ->
-                call.respond(status = HttpStatusCode.OK, message = event)
-            }
-        }
-    }
-}
-
-/** Self-signup (#201): any authenticated player requests to join the event by its public code. */
-private fun Route.eventSelfSignup(service: EventService) {
-    post(path = "/code/{code}/signup") {
-        respondMappingErrors {
-            val code = call.parameters["code"].orEmpty()
-            respondEither(result = service.selfSignup(token = verifiedToken(), code = code)) { event ->
-                call.respond(status = HttpStatusCode.OK, message = event)
             }
         }
     }
