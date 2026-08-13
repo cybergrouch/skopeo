@@ -24,15 +24,21 @@ function renderAbout() {
 describe("AboutPage", () => {
   it("renders for a logged-out visitor with the Skopeo overview", () => {
     renderAbout();
-    expect(screen.getByRole("heading", { name: "Skopeo", level: 1 })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Skopeo", level: 1 }),
+    ).toBeInTheDocument();
     // Logged-out CTA from PublicPageNav is present (no auth redirect).
-    expect(screen.getByText(/Sign up to track your own ratings/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Sign up to track your own ratings/i),
+    ).toBeInTheDocument();
   });
 
   it("has the NTRP and Rating-vs-Ranking sections", () => {
     renderAbout();
     expect(screen.getByText("NTRP")).toBeInTheDocument();
-    expect(screen.getByText(/Why NTRP, and not something else/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Why NTRP, and not something else/),
+    ).toBeInTheDocument();
     expect(screen.getByText("Rating vs Ranking")).toBeInTheDocument();
     expect(screen.getByText(/your game.s level/i)).toBeInTheDocument();
     expect(screen.getByText(/the game within the game/i)).toBeInTheDocument();

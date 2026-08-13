@@ -36,6 +36,7 @@ import { StandingsTab } from "./dashboard/StandingsTab";
 import { ActivityTab } from "./dashboard/ActivityTab";
 import { ReportTab } from "./dashboard/ReportTab";
 import { AboutTab } from "./dashboard/AboutTab";
+import { PageContainer } from "@/components/PageContainer";
 
 interface Section {
   value: string;
@@ -197,72 +198,76 @@ export function DashboardPage() {
 
   return (
     <div className="min-h-svh bg-muted/40">
-      <header className="flex items-center justify-between border-b bg-background px-4 py-3">
-        <BrandLogo className="text-lg" />
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Sign out"
-          onClick={onSignOut}
-        >
-          <LogOut />
-        </Button>
+      <header className="border-b bg-background py-3">
+        <PageContainer className="flex items-center justify-between">
+          <BrandLogo className="text-lg" />
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Sign out"
+            onClick={onSignOut}
+          >
+            <LogOut />
+          </Button>
+        </PageContainer>
       </header>
 
-      <main className="mx-auto max-w-3xl p-4">
-        {meQuery.isLoading ? (
-          <p className="text-sm text-muted-foreground">
-            Loading your dashboard…
-          </p>
-        ) : (
-          <>
-            {/* A single hamburger menu drives navigation everywhere; the current section's name is
+      <main className="py-4">
+        <PageContainer>
+          {meQuery.isLoading ? (
+            <p className="text-sm text-muted-foreground">
+              Loading your dashboard…
+            </p>
+          ) : (
+            <>
+              {/* A single hamburger menu drives navigation everywhere; the current section's name is
                 the page header in place of a tab strip. */}
-            <div className="mb-4 flex items-center gap-3">
-              <Sheet open={navOpen} onOpenChange={setNavOpen}>
-                <SheetTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    aria-label="Open navigation menu"
+              <div className="mb-4 flex items-center gap-3">
+                <Sheet open={navOpen} onOpenChange={setNavOpen}>
+                  <SheetTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      aria-label="Open navigation menu"
+                    >
+                      <Menu />
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent
+                    side="left"
+                    className="w-72"
+                    aria-describedby={undefined}
                   >
-                    <Menu />
-                  </Button>
-                </SheetTrigger>
-                <SheetContent
-                  side="left"
-                  className="w-72"
-                  aria-describedby={undefined}
-                >
-                  <SheetHeader>
-                    <SheetTitle>Menu</SheetTitle>
-                  </SheetHeader>
-                  <nav className="mt-4 flex flex-col gap-1">
-                    {sections.map((section) => (
-                      <button
-                        key={section.value}
-                        type="button"
-                        onClick={() => selectSection(section.value)}
-                        aria-current={
-                          section.value === active ? "page" : undefined
-                        }
-                        className={cn(
-                          "rounded-md px-3 py-2 text-left text-sm font-medium transition-colors hover:bg-muted",
-                          section.value === active && "bg-muted",
-                        )}
-                      >
-                        {section.label}
-                      </button>
-                    ))}
-                  </nav>
-                </SheetContent>
-              </Sheet>
-              <h1 className="text-lg font-semibold">{activeSection.label}</h1>
-            </div>
+                    <SheetHeader>
+                      <SheetTitle>Menu</SheetTitle>
+                    </SheetHeader>
+                    <nav className="mt-4 flex flex-col gap-1">
+                      {sections.map((section) => (
+                        <button
+                          key={section.value}
+                          type="button"
+                          onClick={() => selectSection(section.value)}
+                          aria-current={
+                            section.value === active ? "page" : undefined
+                          }
+                          className={cn(
+                            "rounded-md px-3 py-2 text-left text-sm font-medium transition-colors hover:bg-muted",
+                            section.value === active && "bg-muted",
+                          )}
+                        >
+                          {section.label}
+                        </button>
+                      ))}
+                    </nav>
+                  </SheetContent>
+                </Sheet>
+                <h1 className="text-lg font-semibold">{activeSection.label}</h1>
+              </div>
 
-            {activeSection.element}
-          </>
-        )}
+              {activeSection.element}
+            </>
+          )}
+        </PageContainer>
       </main>
     </div>
   );

@@ -1,5 +1,6 @@
 import { PublicPageNav } from "@/components/PublicPageNav";
 import { AboutContent } from "@/components/AboutContent";
+import { PageContainer } from "@/components/PageContainer";
 
 /**
  * Public "About" page (#556) — reachable at `/about` without logging in. Explains what Skopeo is and
@@ -11,10 +12,10 @@ import { AboutContent } from "@/components/AboutContent";
 export function AboutPage() {
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <div className="mx-auto max-w-3xl space-y-6 px-4 py-8">
+      <PageContainer size="prose" className="space-y-6 py-8">
         <PublicPageNav />
         <AboutContent showAuthActions />
-      </div>
+      </PageContainer>
     </div>
   );
 }

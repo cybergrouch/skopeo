@@ -1,20 +1,20 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useQueryClient } from '@tanstack/react-query'
-import { AuthLayout } from '@/components/AuthLayout'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { useAuth } from '@/auth/useAuth'
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
+import { AuthLayout } from "@/components/AuthLayout";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useAuth } from "@/auth/useAuth";
 import {
   getGetApiV1UsersMeQueryKey,
   usePostApiV1Users,
-} from '@/api/generated/users/users'
-import type { CreateUserRequestSex } from '@/api/generated/model'
-import { NtrpSelfRatingSelect } from '@/components/NtrpSelfRatingSelect'
-import { authErrorMessage } from '@/lib/firebase-errors'
+} from "@/api/generated/users/users";
+import type { CreateUserRequestSex } from "@/api/generated/model";
+import { NtrpSelfRatingSelect } from "@/components/NtrpSelfRatingSelect";
+import { authErrorMessage } from "@/lib/firebase-errors";
 
-const SEXES = ['Male', 'Female'] as const
+const SEXES = ["Male", "Female"] as const;
 
 /**
  * Invite-acceptance landing page reached from a Firebase email-link (issue #74). It completes
@@ -23,54 +23,63 @@ const SEXES = ['Male', 'Female'] as const
  * works cross-device without relying on localStorage.
  */
 export function InviteAcceptPage() {
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
-  const { isSignInLink, completeSignInLink, setPassword } = useAuth()
-  const provision = usePostApiV1Users()
-  const [params] = useSearchParams()
-  const email = params.get('email') ?? ''
-  const href = window.location.href
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { isSignInLink, completeSignInLink, setPassword } = useAuth();
+  const provision = usePostApiV1Users();
+  const [params] = useSearchParams();
+  const email = params.get("email") ?? "";
+  const href = window.location.href;
   // Derived so the effect never sets state synchronously: a link is valid only with an email param.
-  const linkValid = Boolean(email) && isSignInLink(href)
+  const linkValid = Boolean(email) && isSignInLink(href);
 
   // 'verifying' → completing the email-link sign-in; 'ready' → show the form; 'error' → completion failed.
-  const [status, setStatus] = useState<'verifying' | 'ready' | 'error'>('verifying')
-  const started = useRef(false)
+  const [status, setStatus] = useState<"verifying" | "ready" | "error">(
+    "verifying",
+  );
+  const started = useRef(false);
 
   useEffect(() => {
-    if (!linkValid || started.current) return // the email-link is single-use; complete it exactly once
-    started.current = true
+    if (!linkValid || started.current) return; // the email-link is single-use; complete it exactly once
+    started.current = true;
     completeSignInLink(email, href)
-      .then(() => setStatus('ready'))
-      .catch(() => setStatus('error'))
-  }, [linkValid, email, href, completeSignInLink])
+      .then(() => setStatus("ready"))
+      .catch(() => setStatus("error"));
+  }, [linkValid, email, href, completeSignInLink]);
 
-  const [name, setName] = useState('')
-  const [sex, setSex] = useState('')
-  const [dateOfBirth, setDateOfBirth] = useState('')
-  const [proposedRating, setProposedRating] = useState('')
-  const [password, setPasswordValue] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
+  const [name, setName] = useState("");
+  const [sex, setSex] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
+  const [proposedRating, setProposedRating] = useState("");
+  const [password, setPasswordValue] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   async function onSubmit(event: FormEvent) {
-    event.preventDefault()
-    setError(null)
-    setBusy(true)
+    event.preventDefault();
+    setError(null);
+    setBusy(true);
     try {
-      await setPassword(password)
+      await setPassword(password);
       await provision.mutateAsync({
-        data: { displayName: name.trim(), sex: sex as CreateUserRequestSex, dateOfBirth, proposedRating },
-      })
-      await queryClient.invalidateQueries({ queryKey: getGetApiV1UsersMeQueryKey() })
-      navigate('/dashboard', { replace: true })
+        data: {
+          displayName: name.trim(),
+          sex: sex as CreateUserRequestSex,
+          dateOfBirth,
+          proposedRating,
+        },
+      });
+      await queryClient.invalidateQueries({
+        queryKey: getGetApiV1UsersMeQueryKey(),
+      });
+      navigate("/dashboard", { replace: true });
     } catch (err) {
-      setError(authErrorMessage(err))
-      setBusy(false)
+      setError(authErrorMessage(err));
+      setBusy(false);
     }
   }
 
-  if (!linkValid || status === 'error') {
+  if (!linkValid || status === "error") {
     return (
       <AuthLayout
         title="Invite link invalid"
@@ -80,15 +89,15 @@ export function InviteAcceptPage() {
           Ask an administrator to send you a fresh invitation.
         </p>
       </AuthLayout>
-    )
+    );
   }
 
-  if (status === 'verifying') {
+  if (status === "verifying") {
     return (
       <div className="flex min-h-svh items-center justify-center text-muted-foreground">
         Verifying your invite…
       </div>
-    )
+    );
   }
 
   return (
@@ -137,7 +146,10 @@ export function InviteAcceptPage() {
             ))}
           </select>
         </div>
-        <NtrpSelfRatingSelect value={proposedRating} onChange={setProposedRating} />
+        <NtrpSelfRatingSelect
+          value={proposedRating}
+          onChange={setProposedRating}
+        />
         <div className="space-y-2">
           <Label htmlFor="password">Password</Label>
           <Input
@@ -156,9 +168,9 @@ export function InviteAcceptPage() {
           </p>
         ) : null}
         <Button type="submit" className="w-full" disabled={busy}>
-          {busy ? 'Finishing…' : 'Finish sign-up'}
+          {busy ? "Finishing…" : "Finish sign-up"}
         </Button>
       </form>
     </AuthLayout>
-  )
+  );
 }
