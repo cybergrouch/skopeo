@@ -6,6 +6,7 @@ import { AuthProvider } from "@/auth/AuthProvider";
 import { RequireAuth } from "@/auth/RequireAuth";
 import { RequireProfile } from "@/auth/RequireProfile";
 import { ThemeProvider, LocalThemeApplier } from "@/theme/ThemeProvider";
+import { NewVersionBanner } from "@/components/NewVersionBanner";
 
 // Route components are code-split (#277): each becomes its own chunk, loaded on demand behind the
 // <Suspense> boundary below, so the initial bundle no longer carries every page. React.lazy needs a
@@ -78,6 +79,9 @@ function App() {
           {/* App-wide toast notifications (#661): richColors gives success/error styling, closeButton a
               manual dismiss; toasts also auto-dismiss. Sonner renders an aria live region for a11y. */}
           <Toaster richColors closeButton position="top-center" />
+          {/* Offers a reload when a newer bundle has been deployed (#752), so a long-lived tab doesn't
+              keep rendering options the server has since started rejecting. */}
+          <NewVersionBanner />
           <BrowserRouter>
             <Suspense fallback={<PageFallback />}>
               <Routes>
