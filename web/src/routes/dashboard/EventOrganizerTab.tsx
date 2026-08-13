@@ -1,4 +1,5 @@
 import { useMemo, useState, type FormEvent } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -31,7 +32,6 @@ import { PlayerPicker } from "@/components/PlayerPicker";
 import { plural } from "@/lib/plural";
 import { playerLabel } from "@/lib/playerLabel";
 import { PlaceholderTag } from "@/components/PlaceholderTag";
-import { EventDetail } from "./events/EventDetail";
 
 /** The event classes a host can pick at creation (#403); mirrors the backend EventType enum. */
 type EventType = "OPEN_PLAY" | "TOURNAMENT";
@@ -468,7 +468,7 @@ function EventSection({
   events: EventResponse[];
   upcoming: boolean;
   emptyLabel: string;
-  onSelect: (id: string) => void;
+  onSelect: (publicCode: string) => void;
 }) {
   return (
     <div>
@@ -482,7 +482,7 @@ function EventSection({
               key={event.id}
               event={event}
               upcoming={upcoming}
-              onSelect={() => onSelect(event.id)}
+              onSelect={() => onSelect(event.publicCode)}
             />
           ))}
         </ul>
@@ -509,7 +509,7 @@ function ClubGroupSection({
   today: string;
   isOpen: boolean;
   onToggle: () => void;
-  onSelect: (id: string) => void;
+  onSelect: (publicCode: string) => void;
 }) {
   const { upcoming, unfinalized, finalized } = splitByBucket(group.events, today);
   return (
@@ -562,7 +562,7 @@ function ClubGroupSection({
  * scoped fixtures + results).
  */
 export function EventOrganizerTab() {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const navigate = useNavigate();
   const eventsQuery = useGetApiV1Events();
   const events = eventsQuery.data ?? [];
   // Today counts as upcoming; the split mirrors the Profile Events history card (#271).
@@ -580,12 +580,6 @@ export function EventOrganizerTab() {
       return next;
     });
 
-  if (selectedId) {
-    return (
-      <EventDetail eventId={selectedId} onBack={() => setSelectedId(null)} />
-    );
-  }
-
   return (
     <div className="grid gap-4">
       <NewEventForm />
@@ -595,7 +589,8 @@ export function EventOrganizerTab() {
           <CardTitle>Events</CardTitle>
           <CardDescription>
             Grouped by club; clubless events are under “Open”. Select an
-            event to manage its participants, fixtures, and results.
+            event to open its page, where you manage its participants,
+            fixtures, and results.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -609,7 +604,7 @@ export function EventOrganizerTab() {
                 today={today}
                 isOpen={expanded.has(group.key)}
                 onToggle={() => toggle(group.key)}
-                onSelect={setSelectedId}
+                onSelect={(code) => navigate(`/events/${code}`)}
               />
             ))
           ) : (

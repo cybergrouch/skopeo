@@ -1,8 +1,17 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { EventOrganizerTab } from "./EventOrganizerTab";
+
+// Selecting an event navigates to its page (#741) rather than swapping in a detail pane.
+const { navigate } = vi.hoisted(() => ({ navigate: vi.fn() }));
+vi.mock("react-router-dom", async () => {
+  const actual =
+    await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
+  return { ...actual, useNavigate: () => navigate };
+});
 
 const {
   useGetApiV1Events,
@@ -69,28 +78,14 @@ vi.mock("@/components/PlayerPicker", () => ({
     </button>
   ),
 }));
-vi.mock("./events/EventDetail", () => ({
-  EventDetail: ({
-    eventId,
-    onBack,
-  }: {
-    eventId: string;
-    onBack: () => void;
-  }) => (
-    <div>
-      detail:{eventId}
-      <button type="button" onClick={onBack}>
-        back
-      </button>
-    </div>
-  ),
-}));
 
 function renderTab() {
   return render(
-    <QueryClientProvider client={new QueryClient()}>
-      <EventOrganizerTab />
-    </QueryClientProvider>,
+    <MemoryRouter>
+      <QueryClientProvider client={new QueryClient()}>
+        <EventOrganizerTab />
+      </QueryClientProvider>
+    </MemoryRouter>,
   );
 }
 
@@ -138,14 +133,16 @@ describe("EventOrganizerTab", () => {
 
     useGetApiV1Events.mockReturnValue({ data: [], isLoading: false });
     rerender(
-      <QueryClientProvider client={new QueryClient()}>
-        <EventOrganizerTab />
-      </QueryClientProvider>,
+      <MemoryRouter>
+        <QueryClientProvider client={new QueryClient()}>
+          <EventOrganizerTab />
+        </QueryClientProvider>
+      </MemoryRouter>,
     );
     expect(screen.getByText(/No events yet/)).toBeInTheDocument();
   });
 
-  it("lists events and opens the detail when a row is clicked", async () => {
+  it("lists events and opens the event's page when a row is clicked (#741)", async () => {
     const twoPlayers = {
       ...event,
       id: "e2",
@@ -170,11 +167,10 @@ describe("EventOrganizerTab", () => {
     // Regression guard: never the mis-pluralized "playeres" (#307).
     expect(screen.queryByText(/playeres/)).not.toBeInTheDocument();
 
+    // The row navigates to the shared event page, keyed by public code — there is no in-dashboard
+    // detail destination any more (#741).
     await user.click(screen.getByText("Spring Open"));
-    expect(screen.getByText("detail:e1")).toBeInTheDocument();
-    // Going back returns to the list.
-    await user.click(screen.getByRole("button", { name: "back" }));
-    expect(screen.getByText("Events")).toBeInTheDocument();
+    expect(navigate).toHaveBeenCalledWith("/events/EV1");
   });
 
   it("shows the filing host on each event card, omitting it when unknown (#270)", () => {

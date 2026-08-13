@@ -4,7 +4,15 @@ import { act, render, screen, waitFor, within, fireEvent } from '@testing-librar
 import { setupUser } from '@/test/user'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { EventDetail } from './EventDetail'
+import { EventManagerView } from './EventManagerView'
+
+// The view now lives on the public event route (#741), so "back to the list" is navigation, not a
+// callback prop; capture it to assert the post-delete return.
+const { navigate } = vi.hoisted(() => ({ navigate: vi.fn() }))
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
+  return { ...actual, useNavigate: () => navigate }
+})
 
 const { toastSuccess, toastError } = vi.hoisted(() => ({
   toastSuccess: vi.fn(),
@@ -268,7 +276,7 @@ vi.mock('@/components/PlayerPicker', () => ({
   ),
 }))
 vi.mock('@/api/generated/users/users', () => ({ useGetApiV1UsersMe }))
-vi.mock('../matches/AwaitingResultsSection', () => ({
+vi.mock('@/routes/dashboard/matches/AwaitingResultsSection', () => ({
   AwaitingResultsSection: ({ eventId, readOnly }: { eventId?: string; readOnly?: boolean }) => (
     <div>awaiting:{eventId}:{String(readOnly ?? false)}</div>
   ),
@@ -313,13 +321,13 @@ function renderDetail() {
   return render(
     <MemoryRouter>
       <QueryClientProvider client={new QueryClient()}>
-        <EventDetail eventId="e1" onBack={() => {}} />
+        <EventManagerView eventId="e1" />
       </QueryClientProvider>
     </MemoryRouter>,
   )
 }
 
-describe('EventDetail', () => {
+describe('EventManagerView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     state.addFail = false
@@ -361,7 +369,7 @@ describe('EventDetail', () => {
     useGetApiV1EventsId.mockReturnValue({ data: undefined, isLoading: false })
     rerender(
       <QueryClientProvider client={new QueryClient()}>
-        <EventDetail eventId="e1" onBack={() => {}} />
+        <EventManagerView eventId="e1" />
       </QueryClientProvider>,
     )
     expect(screen.getByText(/could not be loaded/)).toBeInTheDocument()
@@ -1028,22 +1036,15 @@ describe('EventDetail', () => {
     expect(decideMutate).toHaveBeenCalledWith({ id: 'e1', userId: 'u6', data: { status: 'HOLD' } })
   })
 
-  it('deletes the event after a confirm step and returns to the list (#243)', async () => {
+  it('deletes the event after a confirm step and returns to the organizer list (#243)', async () => {
     const user = setupUser()
-    const onBack = vi.fn()
-    render(
-      <MemoryRouter>
-        <QueryClientProvider client={new QueryClient()}>
-          <EventDetail eventId="e1" onBack={onBack} />
-        </QueryClientProvider>
-      </MemoryRouter>,
-    )
+    renderDetail()
 
     await user.click(screen.getByRole('button', { name: 'Delete event' }))
     await user.click(screen.getByRole('button', { name: 'Confirm delete' }))
 
     expect(deleteMutate).toHaveBeenCalledWith({ id: 'e1' })
-    expect(onBack).toHaveBeenCalled()
+    expect(navigate).toHaveBeenCalledWith('/dashboard')
   })
 
   it('shows a busy label while the delete is in flight', async () => {
@@ -1083,14 +1084,7 @@ describe('EventDetail', () => {
     state.deleteFail = true
     state.deleteErrorMessage = "Delete this event's recorded matches first, then delete the event"
     const user = setupUser()
-    const onBack = vi.fn()
-    render(
-      <MemoryRouter>
-        <QueryClientProvider client={new QueryClient()}>
-          <EventDetail eventId="e1" onBack={onBack} />
-        </QueryClientProvider>
-      </MemoryRouter>,
-    )
+    renderDetail()
 
     await user.click(screen.getByRole('button', { name: 'Delete event' }))
     await user.click(screen.getByRole('button', { name: 'Confirm delete' }))
@@ -1101,7 +1095,7 @@ describe('EventDetail', () => {
         expect.anything(),
       ),
     )
-    expect(onBack).not.toHaveBeenCalled()
+    expect(navigate).not.toHaveBeenCalled()
   })
 
   it('renames the event, trimming the name and sending a PATCH (#269)', async () => {
