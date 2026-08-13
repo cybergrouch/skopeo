@@ -154,6 +154,14 @@ describe('EventPage', () => {
     expect(screen.getByTestId('finalized-badge')).toBeInTheDocument()
   })
 
+  it('drops the class separator when the payload carries no event class (#741)', () => {
+    useGetApiV1EventsCodeCode.mockReturnValue({ data: { ...event, type: undefined } })
+    renderAt()
+
+    // No leading " · " before the date range when there's no class to label it with.
+    expect(screen.getByText(/^2026-03-01 – 2026-03-03/)).toBeInTheDocument()
+  })
+
   it('withholds Request to join on a finalized event, explaining why (#741)', () => {
     useGetApiV1EventsCodeCode.mockReturnValue({ data: { ...event, isFinalized: true } })
     renderAt()

@@ -1,6 +1,6 @@
 import type { EventPublicResponse } from '@/api/generated/model'
 import { CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { EVENT_TYPE_LABELS } from './eventFacets'
+import { eventTypeLabel } from './eventFacets'
 
 /**
  * The event header for a viewer without match-management rights (#741) — including anonymous ones.
@@ -11,6 +11,7 @@ import { EVENT_TYPE_LABELS } from './eventFacets'
  * no manager-only affordance or field.
  */
 export function EventHeaderPublic({ event }: { event: EventPublicResponse }) {
+  const typeLabel = eventTypeLabel(event.type)
   return (
     <CardHeader>
       <div className="flex items-center gap-2">
@@ -25,8 +26,7 @@ export function EventHeaderPublic({ event }: { event: EventPublicResponse }) {
         ) : null}
       </div>
       <CardDescription>
-        {event.type ? (EVENT_TYPE_LABELS[event.type] ?? event.type) : null}
-        {' · '}
+        {typeLabel ? `${typeLabel} · ` : null}
         {event.startDate} – {event.endDate} · Event ID:{' '}
         <code className="select-all font-mono font-medium text-foreground">{event.publicCode}</code>
       </CardDescription>
