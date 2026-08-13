@@ -16,6 +16,8 @@ axiosInstance.interceptors.request.use(async (config) => {
   }
   // Which bundle is talking (#752): lets the server see which builds are still live, and gives a
   // support conversation a fact instead of "try refreshing".
+  // Named on the server too (CLIENT_VERSION_HEADER) and allowed there in CORS — a custom header the
+  // backend hasn't allowed fails the preflight and takes down every cross-origin call, not just this one.
   config.headers['X-Client-Version'] = APP_BUILD_ID
   return config
 })

@@ -20,6 +20,7 @@ class CorsTest {
      */
     private fun preflightStatus(
         method: String,
+        requestHeaders: String? = null,
         assert: suspend (io.ktor.client.statement.HttpResponse) -> Unit,
     ) = testApplication {
         application { module(initDatabase = false, firebaseAuth = TestFirebaseAuth.settings) }
@@ -27,6 +28,7 @@ class CorsTest {
             client.options(urlString = "/api/v1/clubs/00000000-0000-0000-0000-000000000000") {
                 header(key = HttpHeaders.Origin, value = "http://localhost:5173")
                 header(key = HttpHeaders.AccessControlRequestMethod, value = method)
+                requestHeaders?.let { header(key = HttpHeaders.AccessControlRequestHeaders, value = it) }
             }
         assert(response)
     }
@@ -44,4 +46,16 @@ class CorsTest {
             preflightStatus(method = method) { response -> response.status shouldBe HttpStatusCode.OK }
         }
     }
+
+    /**
+     * Every request from the web bundle carries its build id (#752). Ktor 403s a preflight listing any
+     * header it hasn't been told to allow, so an un-allowed custom header breaks not one route but the
+     * entire cross-origin API — which is exactly how it reached production once.
+     */
+    @Test
+    fun `CORS preflight allows the client-version header the web bundle always sends (#752)`() =
+        preflightStatus(method = "GET", requestHeaders = "authorization,x-client-version") { response ->
+            response.status shouldBe HttpStatusCode.OK
+            response.headers[HttpHeaders.AccessControlAllowHeaders].orEmpty() shouldContain "X-Client-Version"
+        }
 }
