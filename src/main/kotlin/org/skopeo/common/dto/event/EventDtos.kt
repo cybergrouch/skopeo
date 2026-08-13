@@ -157,4 +157,13 @@ data class EventPublicResponse(
     // The viewer's own standing on this event (#201): "APPROVED" | "PENDING" | "HOLD", or null if
     // they haven't signed up (so the page can offer "Request to join").
     val viewerStatus: String? = null,
+    // The event's organizing format (#720): "SINGLES" | "DOUBLES" | "MIXED_DOUBLES" (#741).
+    val format: String = "SINGLES",
+    // The event's class (#403): "OPEN_PLAY" | "TOURNAMENT" (#741).
+    val type: String = "OPEN_PLAY",
+    // True once the event has been finalized (#403) — closed to changes (#741). The page renders the
+    // Finalized badge from this, and withholds "Request to join": a finalized event takes no joiners.
+    val isFinalized: Boolean = false,
+    // Whether finalizing this event awards ranking points per the global schedules (#559/#741).
+    val awardRankingPoints: Boolean = true,
 )

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 package org.skopeo.domain.service.event
+
 import arrow.core.Either
 import arrow.core.left
 import arrow.core.raise.either
@@ -14,6 +15,7 @@ import org.skopeo.common.dto.event.EventPublicResponse
 import org.skopeo.common.dto.event.EventResponse
 import org.skopeo.common.dto.event.MyEventResponse
 import org.skopeo.common.dto.match.MatchPublicPlayer
+import org.skopeo.common.dto.match.MatchPublicResponse
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.dto.event.toResponse
@@ -33,6 +35,7 @@ import org.skopeo.domain.model.EventParticipantRef
 import org.skopeo.domain.model.EventParticipantStatus
 import org.skopeo.domain.model.EventType
 import org.skopeo.domain.model.EventView
+import org.skopeo.domain.model.Match
 import org.skopeo.domain.model.MatchStatus
 import org.skopeo.domain.model.TeamType
 import org.skopeo.domain.model.User
@@ -213,6 +216,25 @@ class EventService(
             staffCaller(users = users, token = token).bind().id
             val event =
                 ensureNotNull(value = events.findById(id = id)?.toDomain()) { ServiceError.NotFound(message = "Event $id not found") }
+            toView(event = event).toResponse()
+        }
+
+    /**
+     * The manager view of an event resolved by its PUBLIC CODE (#741) — the same payload and staff
+     * gating as [get], keyed the way the unified event page is addressed. `/events/{code}` is now the
+     * single event view for every audience, so a staff viewer needs the organizer payload (and the
+     * event's id, which every mutation route is keyed by) without first knowing that id.
+     */
+    fun manageByCode(
+        token: VerifiedFirebaseToken,
+        code: String,
+    ): Either<ServiceError, EventResponse> =
+        either {
+            staffCaller(users = users, token = token).bind().id
+            val event =
+                ensureNotNull(value = events.findByPublicCode(code = code)?.toDomain()) {
+                    ServiceError.NotFound(message = "Event $code not found")
+                }
             toView(event = event).toResponse()
         }
 
@@ -572,6 +594,7 @@ class EventService(
      * Self-signup (#201): the authenticated player adds themselves to the event (by public code) as a
      * PENDING request a host then approves/holds. Any provisioned player may do this — not staff-gated.
      * Idempotent: a no-op if they're already on the event in any status. Returns the public summary.
+     * Rejected for a finalized or soft-deleted event (#741) — neither takes joiners.
      */
     fun selfSignup(
         token: VerifiedFirebaseToken,
@@ -590,6 +613,13 @@ class EventService(
                 ensureNotNull(value = events.findByPublicCode(code = code)?.toDomain()) {
                     ServiceError.NotFound(message = "Event $code not found")
                 }
+            // Lifecycle guards (#741): a finalized event is closed to roster changes and a soft-deleted one
+            // survives only for traceability, so neither takes joiners. The page hides the button in both
+            // cases; this guard is what makes it true for a direct POST.
+            ensure(condition = event.isActive) {
+                ServiceError.Validation(message = "A deleted event is not accepting sign-ups")
+            }
+            ensureNotFinalized(event = event).bind()
             events.selfSignup(eventId = event.id, userId = caller.id)
             publicByCode(token = token, code = code).bind()
         }
@@ -654,31 +684,8 @@ class EventService(
                     .map { it.toDomain() }
                     .associateBy { it.id }
 
-            val participants =
-                event.participantIds.map { id ->
-                    val user = byId.getValue(key = id)
-                    EventParticipantResponse(
-                        userId = id.toString(),
-                        displayName = user.displayName(),
-                        publicCode = user.publicCode,
-                        isPlaceholder = user.placeholder,
-                        isDeleted = user.isDeleted(),
-                    )
-                }
-            val matchResponses =
-                eventMatches.map { match ->
-                    val players =
-                        (match.team1.userIds + match.team2.userIds).associateWith { id ->
-                            val user = byId.getValue(key = id)
-                            MatchPublicPlayer(
-                                displayName = user.displayName(),
-                                publicCode = user.publicCode,
-                                isPlaceholder = user.placeholder,
-                                isDeleted = user.isDeleted(),
-                            )
-                        }
-                    match.toPublicResponse(players = players)
-                }
+            val participants = publicParticipants(participantIds = event.participantIds, byId = byId)
+            val matchResponses = publicMatches(eventMatches = eventMatches, byId = byId)
             // Surface the organizing club's name (#313), read-only; null for a clubless event.
             val clubEntity = event.clubId?.let { clubs.findById(id = it)?.toDomain() }
             val clubName = clubEntity?.name
@@ -692,6 +699,10 @@ class EventService(
                 participants = participants,
                 matches = matchResponses,
                 viewerStatus = viewerStatus,
+                format = event.format.name,
+                type = event.type.name,
+                isFinalized = event.isFinalized,
+                awardRankingPoints = event.awardRankingPoints,
             )
         }
 
@@ -795,6 +806,44 @@ private fun ensureHostMayEnter(
         ensure(condition = exempt || !event.isExpired(asOf = LocalDate.now())) {
             ServiceError.Conflict(message = "This event has ended; only an administrator or club owner can modify it.")
         }
+    }
+
+/**
+ * The public roster (#138): name + shareable code only. The disambiguating facets an organizer sees —
+ * sex, age, rating — are withheld from the public payload (#741) rather than gated at render time.
+ */
+private fun publicParticipants(
+    participantIds: List<UUID>,
+    byId: Map<UUID, User>,
+): List<EventParticipantResponse> =
+    participantIds.map { id ->
+        val user = byId.getValue(key = id)
+        EventParticipantResponse(
+            userId = id.toString(),
+            displayName = user.displayName(),
+            publicCode = user.publicCode,
+            isPlaceholder = user.placeholder,
+            isDeleted = user.isDeleted(),
+        )
+    }
+
+/** The event's fixtures resolved for their public match pages (#138/#361). */
+private fun publicMatches(
+    eventMatches: List<Match>,
+    byId: Map<UUID, User>,
+): List<MatchPublicResponse> =
+    eventMatches.map { match ->
+        val players =
+            (match.team1.userIds + match.team2.userIds).associateWith { id ->
+                val user = byId.getValue(key = id)
+                MatchPublicPlayer(
+                    displayName = user.displayName(),
+                    publicCode = user.publicCode,
+                    isPlaceholder = user.placeholder,
+                    isDeleted = user.isDeleted(),
+                )
+            }
+        match.toPublicResponse(players = players)
     }
 
 /**
