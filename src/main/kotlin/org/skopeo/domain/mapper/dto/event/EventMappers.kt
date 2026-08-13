@@ -24,6 +24,8 @@ fun MyEvent.toResponse(completedMatchCount: Int = 0): MyEventResponse =
 
 fun EventView.toResponse(
     completedMatchCount: Int = 0,
+    // Rated results in this event (#772); compared with [completedMatchCount] to decide the badge.
+    ratedMatchCount: Int = 0,
     // Raw NTRP values on the roster are ADMINISTRATOR-only (#583); default false = band only.
     showRawRating: Boolean = false,
     // Finalize outcome only (#752): the global award flag suppressed this finalize's payout.
@@ -48,6 +50,8 @@ fun EventView.toResponse(
         finalizedAt = event.finalizedAt?.toString(),
         isFinalized = event.isFinalized,
         completedMatchCount = completedMatchCount,
+        // Every recorded result rated — and at least one to rate (#772).
+        isRated = completedMatchCount > 0 && ratedMatchCount >= completedMatchCount,
         awardRankingPoints = event.awardRankingPoints,
         awardingSuppressedByGlobalFlag = awardingSuppressedByGlobalFlag,
     )

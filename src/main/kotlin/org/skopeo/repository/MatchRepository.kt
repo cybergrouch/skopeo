@@ -407,6 +407,34 @@ class MatchRepository {
         }
 
     /**
+     * The number of RATED recorded results per event for a set of event ids at once (#772) — the twin of
+     * [completedResultCountByEvents], batched the same way for the same reason (one grouped scan per page,
+     * not one query per event). Compared against that count, it tells a caller whether an event's rating
+     * run has covered everything. Events with no rated results are absent from the map; callers default
+     * them to 0.
+     */
+    fun ratedResultCountByEvents(eventIds: List<UUID>): Map<UUID, Int> =
+        transaction {
+            if (eventIds.isEmpty()) {
+                return@transaction emptyMap()
+            }
+            val countAlias = MatchesTable.id.count()
+            MatchesTable
+                .select(columns = listOf(MatchesTable.eventId, countAlias))
+                .where {
+                    MatchesTable.isActive and
+                        (MatchesTable.status eq MatchStatus.COMPLETED.name) and
+                        MatchesTable.winnerTeamId.isNotNull() and
+                        MatchesTable.ratedAt.isNotNull() and
+                        (MatchesTable.eventId inList eventIds)
+                }.groupBy(MatchesTable.eventId)
+                .mapNotNull { row ->
+                    // event_id is non-null for every row (the inList filter above excludes null keys).
+                    row[MatchesTable.eventId]?.value?.let { it to row[countAlias].toInt() }
+                }.toMap()
+        }
+
+    /**
      * All of an event's active, completed fixtures — rated or not (#138). Lets the event page keep a
      * rated match on view as a read-only record alongside the recorded-but-unrated ones.
      */

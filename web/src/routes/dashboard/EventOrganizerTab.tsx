@@ -29,6 +29,7 @@ import type {
 } from "@/api/generated/model";
 import { Capability, canRate, hasCapability } from "@/auth/capabilities";
 import { PlayerPicker } from "@/components/PlayerPicker";
+import { Badge } from "@/components/ui/badge";
 import { plural } from "@/lib/plural";
 import { playerLabel } from "@/lib/playerLabel";
 import { PlaceholderTag } from "@/components/PlaceholderTag";
@@ -380,8 +381,14 @@ function EventRow({
         className="flex w-full items-start justify-between gap-2 rounded-lg border p-3 text-left text-sm hover:bg-muted/50"
         onClick={onSelect}
       >
-        <span className="flex flex-col">
-          <span className="font-medium">{event.name}</span>
+        <span className="flex min-w-0 flex-col">
+          <span className="flex flex-wrap items-center gap-2 font-medium">
+            {event.name}
+            {/* Finalizing only QUEUES an event's matches for rating (#403); the ratings land later, when
+                an administrator runs the calculation. This badge is the difference between the two —
+                and the precondition for Reverse Ratings (#478), which a not-yet-rated event refuses. */}
+            {event.isRated ? <Badge variant="default">Rated</Badge> : null}
+          </span>
           {/* The filing host (#270), shown as text — the whole card is a button, so no nested link. */}
           {event.creatorDisplayName ? (
             <span className="text-xs text-muted-foreground">

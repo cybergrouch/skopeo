@@ -666,6 +666,36 @@ class EventServiceTest {
         events.findById(id = event.id)!!.toDomain().isActive.shouldBeTrue()
     }
 
+    /**
+     * The event list's "Rated" badge (#772). Binary on purpose: a rating run finishes in seconds, so a
+     * half-covered event is transient and reads as not-yet-rated rather than as a third state.
+     */
+    @Test
+    fun `list reports isRated only once every recorded result in the event is rated (#772)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        val event = service.create(token = token(uid = "host"), input = input(participants = listOf(p1.id, p2.id))).shouldBeRight().domain()
+        val first = seedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2)
+        val second = seedFixture(eventId = event.id, host = host, p1 = p1, p2 = p2)
+
+        fun listed() = service.list(token = token(uid = "host")).shouldBeRight().single { it.id == event.id.toString() }
+
+        // No results yet: nothing to rate is not the same as everything rated.
+        listed().isRated.shouldBeFalse()
+
+        recordResult(match = first)
+        recordResult(match = second)
+        listed().isRated.shouldBeFalse()
+
+        // One of two rated — a run in progress still reads as not rated.
+        matchRepo.markRated(matchId = first.id, ratedAt = LocalDateTime.now(), ratedBy = host.id)
+        listed().isRated.shouldBeFalse()
+
+        matchRepo.markRated(matchId = second.id, ratedAt = LocalDateTime.now(), ratedBy = host.id)
+        listed().isRated.shouldBeTrue()
+    }
+
     @Test
     fun `a host cannot delete another host's event, but an administrator can`() {
         val owner = provision(uid = "owner", roles = setOf(Capability.PLAYER, Capability.HOST))
