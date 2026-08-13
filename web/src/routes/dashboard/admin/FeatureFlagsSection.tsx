@@ -27,7 +27,7 @@ import {
  *   sign-in/sign-up pages for everyone (interim, while the Meta app is misconfigured).
  * - Award ranking points (#641): a GLOBAL flag — off hides the "Award Ranking Points" checkbox on the
  *   event-create form so hosts can't opt an event into awarding.
- * - Show raw NTRP ratings (#583): a PER-ADMIN preference — lets this admin preview the non-admin
+ * - Hide raw NTRP ratings (#583/#743): a PER-ADMIN preference — lets this admin preview the non-admin
  *   experience on production without affecting anyone else.
  * The Admin tab is already ADMINISTRATOR-gated, so no extra gating here.
  */
@@ -145,16 +145,20 @@ function FacebookLoginToggle() {
 }
 
 /**
- * Per-admin "Show raw NTRP ratings" toggle (#583). Raw NTRP values are visible to ADMINISTRATORs only;
- * this lets an admin preview the non-admin experience on LIVE (band + confidence + speedometer only,
- * band-jump-only rating history, no calculation breakdown) without affecting anyone else. It's a
- * per-admin preference — checked = raw shown (normal); unchecked = preview as a non-admin.
+ * Per-admin "Hide raw NTRP ratings" toggle (#583/#743). Seeing raw NTRP values is the default for an
+ * ADMINISTRATOR; this flag is the opt-out, letting an admin preview the non-admin experience on LIVE
+ * (band + confidence + speedometer only, band-jump-only rating history, no calculation breakdown)
+ * without affecting anyone else.
+ *
+ * Phrased as the negative so the checkbox reads the same way the stored field does
+ * (`previewRatingsAsNonAdmin`, default false) and starts unchecked. It used to be phrased positively
+ * and inverted twice — once on read, once on write — which shipped a default-checked opt-in and made
+ * the UI state the opposite polarity to the persisted one.
  */
 function RawRatingsToggle() {
   const queryClient = useQueryClient();
   const meQuery = useGetApiV1UsersMe({ query: { retry: false } });
-  // "Show raw ratings" is the inverse of the stored previewAsNonAdmin flag.
-  const showRaw = !(meQuery.data?.previewRatingsAsNonAdmin ?? false);
+  const previewAsNonAdmin = meQuery.data?.previewRatingsAsNonAdmin ?? false;
 
   const setPreview = usePutApiV1UsersMeRatingPreview({
     mutation: {
@@ -170,28 +174,27 @@ function RawRatingsToggle() {
   });
 
   const onToggle = (checked: boolean) => {
-    // checked = show raw → previewAsNonAdmin false; unchecked = preview as non-admin → true.
-    setPreview.mutate({ data: { previewAsNonAdmin: !checked } });
+    setPreview.mutate({ data: { previewAsNonAdmin: checked } });
   };
 
   return (
     <div className="space-y-2">
-      <p className="text-sm font-medium">Show raw NTRP ratings for administrators (per-admin)</p>
+      <p className="text-sm font-medium">Hide raw NTRP ratings for administrators (per-admin)</p>
       <p className="text-xs text-muted-foreground">
-        Raw NTRP values (full precision) are shown to administrators only. Uncheck to preview the
-        non-admin experience on production — bands and confidence only, band-change-only rating history,
-        and no calculation breakdown. Only affects your own account.
+        Raw NTRP values (full precision) are shown to administrators by default. Check this to preview
+        the non-admin experience on production — bands and confidence only, band-change-only rating
+        history, and no calculation breakdown. Only affects your own account.
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
-            checked={showRaw}
+            checked={previewAsNonAdmin}
             disabled={meQuery.isLoading || setPreview.isPending}
             onChange={(e) => onToggle(e.target.checked)}
-            aria-label="Show raw NTRP ratings"
+            aria-label="Hide raw NTRP ratings"
           />
-          Show raw NTRP ratings
+          Hide raw NTRP ratings
         </label>
       </div>
     </div>
