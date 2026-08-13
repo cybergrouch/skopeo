@@ -15,6 +15,7 @@ import { ShareCard } from "@/components/ShareCard";
 import { PublicPageShell } from "@/components/PublicPageShell";
 import { useAuth } from "@/auth/useAuth";
 import { EventHeaderPublic } from "@/features/event/EventHeaderPublic";
+import { EventClubSection } from "@/features/event/EventClubSection";
 import { EventMatchSections } from "@/features/event/EventMatchSections";
 import { EventParticipantList } from "@/features/event/EventParticipantList";
 import { EventManagerView } from "@/features/event/EventManagerView";
@@ -161,15 +162,7 @@ export function EventPage() {
                   This event has been deleted. It’s kept for reference only.
                 </p>
               ) : null}
-              {/* The organizing club (#313), read-only; omitted for a clubless ("Open") event. */}
-              {event.clubName ? (
-                <div>
-                  <div className="text-xs font-medium uppercase text-muted-foreground">
-                    Club
-                  </div>
-                  <p className="mt-1">{event.clubName}</p>
-                </div>
-              ) : null}
+                <EventClubSection clubName={event.clubName} />
               <div>
                 <div className="text-xs font-medium uppercase text-muted-foreground">
                   Participants
