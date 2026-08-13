@@ -14,12 +14,32 @@ vi.mock('sonner', () => ({ toast: { success: toastSuccess, error: toastError } }
 const { useGetApiV1EventsCodeCode, signupMutate, state } = vi.hoisted(() => ({
   useGetApiV1EventsCodeCode: vi.fn(),
   signupMutate: vi.fn(),
-  state: { signupFail: false, signupPending: false, user: { uid: 'u1' } as { uid: string } | null },
+  state: {
+    signupFail: false,
+    signupPending: false,
+    user: { uid: 'u1' } as { uid: string } | null,
+    // The viewer's capabilities (#741): a plain player by default, so these cases exercise the
+    // read-only composition. EventManagerView has its own suite.
+    capabilities: ['PLAYER'] as string[],
+    // The organizer payload, resolved only for a match manager (#741).
+    managedId: undefined as string | undefined,
+  },
 }))
 // JoinCard + PublicPageNav read auth (#193); default to a logged-in user, overridden per test.
 vi.mock('@/auth/useAuth', () => ({ useAuth: () => ({ user: state.user }) }))
+// /me drives the capability gate on the unified event page (#741).
+vi.mock('@/features/event/EventManagerView', () => ({
+  EventManagerView: ({ eventId }: { eventId: string }) => <div>organizer:{eventId}</div>,
+}))
+vi.mock('@/api/generated/users/users', () => ({
+  useGetApiV1UsersMe: () => ({ data: { capabilities: state.capabilities } }),
+}))
 vi.mock('@/api/generated/events/events', () => ({
   useGetApiV1EventsCodeCode,
+  // The manager payload is only fetched for a match manager; a plain viewer never resolves one.
+  useGetApiV1EventsCodeCodeManage: () => ({
+    data: state.managedId ? { id: state.managedId } : undefined,
+  }),
   getGetApiV1EventsCodeCodeQueryKey: (code: string) => ['event', code],
   usePostApiV1EventsCodeCodeSignup: (opts?: {
     mutation?: { onSuccess?: () => void; onError?: () => void }
@@ -101,6 +121,53 @@ describe('EventPage', () => {
     state.signupFail = false
     state.signupPending = false
     state.user = { uid: 'u1' } // logged in by default
+    state.capabilities = ['PLAYER']
+    state.managedId = undefined
+  })
+
+  it('renders the organizer surface in place of the read-only one for a match manager (#741)', () => {
+    state.capabilities = ['PLAYER', 'HOST']
+    state.managedId = 'e1'
+    useGetApiV1EventsCodeCode.mockReturnValue({ data: event })
+    renderAt()
+
+    // One route, two compositions: the manager gets the organizer surface here, not a second page.
+    expect(screen.getByText('organizer:e1')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Request to join' })).not.toBeInTheDocument()
+  })
+
+  it('keeps the read-only composition for a plain player (#741)', () => {
+    useGetApiV1EventsCodeCode.mockReturnValue({ data: event })
+    renderAt()
+
+    expect(screen.queryByText(/^organizer:/)).not.toBeInTheDocument()
+    expect(screen.getByText('Spring Open')).toBeInTheDocument()
+  })
+
+  it('shows the event class and a Finalized badge once finalized (#741)', () => {
+    useGetApiV1EventsCodeCode.mockReturnValue({
+      data: { ...event, type: 'TOURNAMENT', isFinalized: true },
+    })
+    renderAt()
+
+    expect(screen.getByText(/Tournament/)).toBeInTheDocument()
+    expect(screen.getByTestId('finalized-badge')).toBeInTheDocument()
+  })
+
+  it('withholds Request to join on a finalized event, explaining why (#741)', () => {
+    useGetApiV1EventsCodeCode.mockReturnValue({ data: { ...event, isFinalized: true } })
+    renderAt()
+
+    expect(screen.queryByRole('button', { name: 'Request to join' })).not.toBeInTheDocument()
+    expect(screen.getByText('This event is closed to new participants.')).toBeInTheDocument()
+  })
+
+  it('withholds Request to join on a deleted event (#741)', () => {
+    useGetApiV1EventsCodeCode.mockReturnValue({ data: { ...event, isActive: false } })
+    renderAt()
+
+    expect(screen.queryByRole('button', { name: 'Request to join' })).not.toBeInTheDocument()
+    expect(screen.getByText('This event is closed to new participants.')).toBeInTheDocument()
   })
 
   it('shows a loading state', () => {

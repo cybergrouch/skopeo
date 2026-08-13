@@ -1,30 +1,38 @@
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import {
   getGetApiV1EventsCodeCodeQueryKey,
   useGetApiV1EventsCodeCode,
+  useGetApiV1EventsCodeCodeManage,
   usePostApiV1EventsCodeCodeSignup,
 } from '@/api/generated/events/events'
-import type { EventParticipantResponse, MatchPublicResponse } from '@/api/generated/model'
+import { useGetApiV1UsersMe } from '@/api/generated/users/users'
+import { canManageMatches } from '@/auth/capabilities'
 import { ShareCard } from '@/components/ShareCard'
-import { ContentLink } from '@/components/ContentLink'
-import { PlaceholderTag } from '@/components/PlaceholderTag'
 import { PublicPageNav } from '@/components/PublicPageNav'
 import { useAuth } from '@/auth/useAuth'
-import { playerLabel } from '@/lib/playerLabel'
+import { EventHeaderPublic } from '@/features/event/EventHeaderPublic'
+import { EventMatchSections } from '@/features/event/EventMatchSections'
+import { EventParticipantList } from '@/features/event/EventParticipantList'
+import { EventManagerView } from '@/features/event/EventManagerView'
 
-/** The join card on the public event page (#201): request to join, or the viewer's current standing. */
-function JoinCard({ code, viewerStatus }: { code: string; viewerStatus?: string | null }) {
+/**
+ * The join card (#201): request to join, or the viewer's current standing. Withheld once the event is
+ * finalized or deleted (#741) — neither takes joiners, and the server rejects the request outright, so
+ * offering the button would only produce an error.
+ */
+function JoinCard({
+  code,
+  viewerStatus,
+  closed,
+}: {
+  code: string
+  viewerStatus?: string | null
+  closed: boolean
+}) {
   const queryClient = useQueryClient()
   const { user } = useAuth()
   const location = useLocation()
@@ -46,6 +54,9 @@ function JoinCard({ code, viewerStatus }: { code: string; viewerStatus?: string 
   }
   if (viewerStatus === 'HOLD') {
     return <p className="text-sm text-muted-foreground">Your request is on hold — the host will review it.</p>
+  }
+  if (closed) {
+    return <p className="text-sm text-muted-foreground">This event is closed to new participants.</p>
   }
   // Joining needs an account (#193): prompt an anonymous viewer to log in / sign up first.
   if (!user) {
@@ -76,105 +87,32 @@ function JoinCard({ code, viewerStatus }: { code: string; viewerStatus?: string 
   )
 }
 
-/** A participant as a link to their public profile, falling back to the code / "Unknown". */
-function ParticipantLink({ p }: { p: EventParticipantResponse }) {
-  const label = playerLabel(p.displayName, p.publicCode, p.userId)
-  if (!p.publicCode)
-    return (
-      <span>
-        {label}
-        <PlaceholderTag show={p.isPlaceholder} deleted={p.isDeleted} />
-      </span>
-    )
-  return (
-    <>
-      <ContentLink to={`/players/${p.publicCode}`}>{label}</ContentLink>
-      <PlaceholderTag show={p.isPlaceholder} deleted={p.isDeleted} />
-    </>
-  )
-}
-
-type StatusBadge = { label: string; variant: 'default' | 'secondary' | 'outline' }
-
 /**
- * The read-only lifecycle status of a fixture on the public event page (#361), mirroring the
- * organizer's derivation: a match the calculation has committed is "Rated"; one with a recorded
- * result but not yet rated is "Awaiting rating"; anything else is still "Scheduled". Compact — the
- * public match page carries the full detail — so no scores or edit affordances live here.
- */
-function statusBadge(match: MatchPublicResponse): StatusBadge {
-  if (match.rated) return { label: 'Rated', variant: 'default' }
-  if (match.status === 'COMPLETED') return { label: 'Awaiting rating', variant: 'secondary' }
-  return { label: 'Scheduled', variant: 'outline' }
-}
-
-/** A one-line, read-only match summary with a status badge, linking to its public page. */
-function MatchRow({ match }: { match: MatchPublicResponse }) {
-  const side = (players: MatchPublicResponse['team1']) =>
-    players.map((pl) => playerLabel(pl.displayName, pl.publicCode, '')).join(' & ')
-  const score = match.sets.map((s) => `${s.team1Games}-${s.team2Games}`).join(' ')
-  const badge = statusBadge(match)
-  return (
-    <li>
-      <Link to={`/matches/${match.publicCode}`} className="block rounded-lg border p-2 hover:bg-muted/50">
-        <span className="flex items-center gap-2">
-          <span className="flex-1">
-            {side(match.team1)} vs {side(match.team2)}
-          </span>
-          <Badge variant={badge.variant}>{badge.label}</Badge>
-        </span>
-        <span className="block text-xs text-muted-foreground">
-          {match.matchDate}
-          {score ? ` · ${score}` : ''}
-          {match.winner === 'TEAM1' ? ' · Winner: side 1' : match.winner === 'TEAM2' ? ' · Winner: side 2' : ''}
-        </span>
-      </Link>
-    </li>
-  )
-}
-
-/**
- * A read-only list of matches under a heading, mirroring the private organizer view's
- * "Awaiting results" / "Recorded results" split (#321) — but without any data-entry controls.
- */
-function MatchSection({
-  title,
-  matches,
-  emptyText,
-}: {
-  title: string
-  matches: MatchPublicResponse[]
-  emptyText: string
-}) {
-  return (
-    <div>
-      <div className="text-xs font-medium uppercase text-muted-foreground">{title}</div>
-      {matches.length > 0 ? (
-        <ul className="mt-1 space-y-1">
-          {matches.map((m) => (
-            <MatchRow key={m.publicCode} match={m} />
-          ))}
-        </ul>
-      ) : (
-        <p className="text-muted-foreground">{emptyText}</p>
-      )}
-    </div>
-  )
-}
-
-/**
- * Public, read-only event page reached via `/events/:code` (issue #138). Resolves the event by its
- * shareable code and shows its details, participants (linking to profiles), and matches (linking to
- * their public pages), with a QR for sharing. Viewable without login (#193); joining prompts sign-in.
+ * `/events/{code}` — the single event view (#741), reached from a shared link and from the Event
+ * Organizer list alike. There is no second, in-dashboard event page: a match manager gets the
+ * organizer surface here, gated by capability, and everyone else (including anonymous viewers, #193)
+ * gets the read-only one. The two differ by composition, not by route.
  */
 export function EventPage() {
   const { code = '' } = useParams()
   const query = useGetApiV1EventsCodeCode(code)
   const event = query.data
 
+  // The organizer payload is fetched by the same public code (#741) and yields the event id every
+  // mutation route is keyed by. Only requested for a viewer who could act on it; a HOST who doesn't
+  // own this event gets a 403 and simply falls through to the read-only view.
+  const me = useGetApiV1UsersMe({ query: { retry: false } }).data
+  const canManage = canManageMatches(me?.capabilities)
+  const manageQuery = useGetApiV1EventsCodeCodeManage(code, {
+    query: { enabled: canManage && code !== '', retry: false },
+  })
+  const managedId = manageQuery.data?.id
+
   return (
     <div className="flex min-h-svh items-start justify-center bg-muted/40 p-4">
-      <div className="w-full max-w-sm space-y-4 pt-10">
+      {/* The organizer surface carries tables and forms, so it gets the dashboard's width; the
+          read-only view keeps the narrow shareable-page column. Both are superseded by #742. */}
+      <div className={`w-full space-y-4 pt-10 ${managedId ? "max-w-3xl" : "max-w-sm"}`}>
         <PublicPageNav />
 
         {query.isLoading ? (
@@ -187,72 +125,53 @@ export function EventPage() {
           </p>
         ) : null}
 
-        {event ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>{event.name}</CardTitle>
-              <CardDescription>
-                {event.startDate} – {event.endDate} · Event ID:{' '}
-                <code className="select-all font-mono font-medium text-foreground">{event.publicCode}</code>
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4 text-sm">
-              {/* A soft-deleted event stays reachable by link for traceability (#325) — flag it. */}
-              {event.isActive === false ? (
-                <p
-                  role="status"
-                  className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-                >
-                  This event has been deleted. It’s kept for reference only.
-                </p>
-              ) : null}
-              {/* The organizing club (#313), read-only; omitted for a clubless ("Open") event. */}
-              {event.clubName ? (
+        {event && managedId ? (
+          <EventManagerView eventId={managedId} />
+        ) : event ? (
+          <>
+            <Card>
+              <EventHeaderPublic event={event} />
+              <CardContent className="space-y-4 text-sm">
+                {/* A soft-deleted event stays reachable by link for traceability (#325) — flag it. */}
+                {event.isActive === false ? (
+                  <p
+                    role="status"
+                    className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                  >
+                    This event has been deleted. It’s kept for reference only.
+                  </p>
+                ) : null}
+                {/* The organizing club (#313), read-only; omitted for a clubless ("Open") event. */}
+                {event.clubName ? (
+                  <div>
+                    <div className="text-xs font-medium uppercase text-muted-foreground">Club</div>
+                    <p className="mt-1">{event.clubName}</p>
+                  </div>
+                ) : null}
                 <div>
-                  <div className="text-xs font-medium uppercase text-muted-foreground">Club</div>
-                  <p className="mt-1">{event.clubName}</p>
+                  <div className="text-xs font-medium uppercase text-muted-foreground">Participants</div>
+                  <div className="mt-1">
+                    <EventParticipantList participants={event.participants} />
+                  </div>
                 </div>
-              ) : null}
-              <div>
-                <div className="text-xs font-medium uppercase text-muted-foreground">Participants</div>
-                {event.participants.length > 0 ? (
-                  <ul className="mt-1 flex flex-wrap gap-x-2 gap-y-1">
-                    {event.participants.map((p) => (
-                      <li key={p.userId}>
-                        <ParticipantLink p={p} />
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-muted-foreground">No participants yet.</p>
-                )}
-              </div>
-              {/* Matches, grouped like the private organizer view but read-only (#321): a fixture
-                  with recorded set scores is a result; one without is still awaiting play. */}
-              <MatchSection
-                title="Awaiting results"
-                matches={event.matches.filter((m) => m.sets.length === 0)}
-                emptyText="No fixtures awaiting results."
-              />
-              <MatchSection
-                title="Recorded results"
-                matches={event.matches.filter((m) => m.sets.length > 0)}
-                emptyText="No recorded results yet."
-              />
-              <div className="border-t pt-3">
-                <JoinCard code={event.publicCode} viewerStatus={event.viewerStatus} />
-              </div>
-            </CardContent>
-          </Card>
-        ) : null}
+                <EventMatchSections matches={event.matches} />
+                <div className="border-t pt-3">
+                  <JoinCard
+                    code={event.publicCode}
+                    viewerStatus={event.viewerStatus}
+                    closed={event.isFinalized === true || event.isActive === false}
+                  />
+                </div>
+              </CardContent>
+            </Card>
 
-        {event ? (
-          <ShareCard
-            url={`${window.location.origin}/events/${event.publicCode}`}
-            title="Share this event"
-            description="Scan this code or copy the link to open this event."
-            shareText={`${event.name} on Skopeo`}
-          />
+            <ShareCard
+              url={`${window.location.origin}/events/${event.publicCode}`}
+              title="Share this event"
+              description="Scan this code or copy the link to open this event."
+              shareText={`${event.name} on Skopeo`}
+            />
+          </>
         ) : null}
       </div>
     </div>

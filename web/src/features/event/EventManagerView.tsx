@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PublicPageLink } from "@/components/PublicPageLink";
 import {
   Card,
   CardContent,
@@ -46,34 +46,16 @@ import { HandicapField } from "@/components/HandicapField";
 import { playerLabel } from "@/lib/playerLabel";
 import { PlaceholderTag } from "@/components/PlaceholderTag";
 import { SeedingTable } from "@/components/SeedingTable";
-import { formatConfidence } from "@/lib/confidence";
-import type { EventParticipantResponse } from "@/api/generated/model";
 import { ShareCard } from "@/components/ShareCard";
 import {
   AwaitingResultsSection,
   RecordedResultsSection,
-} from "../matches/AwaitingResultsSection";
-
-/** "Female · 34 · NTRP 4.0" — a participant's sex, age, and NTRP band, omitting whatever is missing. */
-function participantMeta(p: EventParticipantResponse): string {
-  const parts: string[] = [];
-  if (p.sex) parts.push(p.sex);
-  if (p.age != null) parts.push(String(p.age));
-  if (p.rating) {
-    const pct = formatConfidence(p.rating.confidence);
-    parts.push(`NTRP ${p.rating.level ?? p.rating.value}${pct ? ` · ${pct}` : ""}`);
-  }
-  return parts.join(" · ");
-}
+} from "@/routes/dashboard/matches/AwaitingResultsSection";
+import { EVENT_TYPE_LABELS, participantMeta } from "./eventFacets";
+import { EventParticipantList } from "./EventParticipantList";
 
 const MATCH_TYPES = ["OPEN_PLAY", "TOURNAMENT"] as const;
 const MATCH_TYPE_LABELS: Record<(typeof MATCH_TYPES)[number], string> = {
-  OPEN_PLAY: "Open play",
-  TOURNAMENT: "Tournament",
-};
-
-/** Human labels for the event's class (#403). */
-const EVENT_TYPE_LABELS: Record<string, string> = {
   OPEN_PLAY: "Open play",
   TOURNAMENT: "Tournament",
 };
@@ -97,13 +79,8 @@ function eventErrorMessage(err: unknown, fallback: string): string {
   return message && message.trim() !== "" ? message : fallback;
 }
 
-export function EventDetail({
-  eventId,
-  onBack,
-}: {
-  eventId: string;
-  onBack: () => void;
-}) {
+export function EventManagerView({ eventId }: { eventId: string }) {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const eventQuery = useGetApiV1EventsId(eventId);
   const event = eventQuery.data;
@@ -316,7 +293,8 @@ export function EventDetail({
         void queryClient.invalidateQueries({
           queryKey: getGetApiV1EventsQueryKey(),
         });
-        onBack();
+        // The event is gone, so its page is too — return to the organizer list.
+        void navigate("/dashboard");
       },
     },
   });
@@ -659,16 +637,6 @@ export function EventDetail({
 
   return (
     <div className="grid gap-4">
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        className="w-fit"
-        onClick={onBack}
-      >
-        ← All events
-      </Button>
-
       {eventQuery.isLoading ? (
         <p className="text-sm text-muted-foreground">Loading event…</p>
       ) : !event ? (
@@ -751,10 +719,6 @@ export function EventDetail({
                 <code className="font-mono font-medium text-foreground">
                   {event.publicCode}
                 </code>
-                {" · "}
-                <PublicPageLink to={`/events/${event.publicCode}`}>
-                  Public page
-                </PublicPageLink>
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -785,55 +749,16 @@ export function EventDetail({
               <div className="text-xs font-medium uppercase text-muted-foreground">
                 Participants
               </div>
-              {participants.length > 0 ? (
-                <ul className="space-y-1 text-sm">
-                  {participants.map((p) => {
-                    const meta = participantMeta(p);
-                    return (
-                      <li
-                        key={p.userId}
-                        className="flex items-center justify-between gap-2"
-                      >
-                        <span className="min-w-0">
-                          <span className="block">
-                            {playerLabel(p.displayName, p.publicCode, p.userId)}
-                            <PlaceholderTag show={p.isPlaceholder} deleted={p.isDeleted} />
-                            {p.publicCode ? (
-                              <span className="text-muted-foreground">
-                                {" "}
-                                ({p.publicCode})
-                              </span>
-                            ) : null}
-                          </span>
-                          {meta ? (
-                            <span className="block text-xs text-muted-foreground">
-                              {meta}
-                            </span>
-                          ) : null}
-                        </span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          disabled={removeParticipant.isPending}
-                          onClick={() =>
-                            removeParticipant.mutate({
-                              id: eventId,
-                              userId: p.userId,
-                            })
-                          }
-                        >
-                          Remove
-                        </Button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No participants yet.
-                </p>
-              )}
+              <EventParticipantList
+                participants={participants}
+                showCodes
+                removing={removeParticipant.isPending}
+                onRemove={
+                  locked
+                    ? undefined
+                    : (userId) => removeParticipant.mutate({ id: eventId, userId })
+                }
+              />
               {locked ? null : (
                 <div className="space-y-1">
                   <PlayerPicker
