@@ -300,6 +300,10 @@ tasks.jacocoTestReport {
                         "**/routes/RatingRequestRoutes*.*",
                         "**/routes/MatchRoutes*.*",
                         "**/routes/EventRoutes*.*",
+                        // Same story as EventRoutes: the by-code handlers ARE tested
+                        // (EventPublicViewApiIntegrationTest), but JaCoCo can't attribute coverage to the
+                        // Ktor suspend route lambdas run in testApplication (see RankingRoutes).
+                        "**/routes/EventByCodeRoutes*.*",
                         "**/routes/EventTeamRoutes*.*",
                         "**/routes/ClubRoutes*.*",
                         "**/routes/CircuitRoutes*.*",
