@@ -361,6 +361,11 @@ tasks.jacocoTestCoverageVerification {
             excludes =
                 listOf(
                     "*.configureRankingRoutes.*",
+                    // The by-code event handlers (#741). Excluded by class name as well as by class
+                    // directory: JaCoCo reports the Ktor suspend route lambdas under synthesized names
+                    // (EventByCodeRoutesKt.publicEventByCode.1.1) that the path-based exclusion below
+                    // does not always reach. Covered by EventPublicViewApiIntegrationTest.
+                    "*.EventByCodeRoutesKt.*",
                 )
         }
     }
