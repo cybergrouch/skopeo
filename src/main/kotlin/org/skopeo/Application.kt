@@ -207,6 +207,9 @@ fun Application.configurePlugins() {
     logger.info { "Content negotiation configured with JSON support" }
 }
 
+/** The web bundle's build id, sent by the SPA on every request (#752) — see [configureCORS]. */
+const val CLIENT_VERSION_HEADER = "X-Client-Version"
+
 /**
  * Cross-Origin Resource Sharing for the decoupled web UI.
  *
@@ -217,6 +220,7 @@ fun Application.configurePlugins() {
  * Production web origins are supplied via config (`cors.origins`, env `WEB_ORIGINS`) as a
  * comma-separated list of `scheme://host[:port]`, so a new deploy origin needs no code change.
  */
+
 fun Application.configureCORS() {
     // Read config on the Application receiver — `environment` isn't reachable inside the install lambda.
     val webOrigins = parseWebOrigins(raw = environment.config.propertyOrNull(path = "cors.origins")?.getString())
@@ -237,6 +241,12 @@ fun Application.configureCORS() {
 
         allowHeader(header = HttpHeaders.ContentType)
         allowHeader(header = HttpHeaders.Authorization)
+        // The web bundle reports its build on every request (#752). A custom header is not a "simple"
+        // one, so the browser lists it in the preflight's Access-Control-Request-Headers — and Ktor's
+        // CORS plugin 403s the whole preflight when any listed header is unknown. Omitting it here took
+        // production down: every API call from https://skopeo.co failed before routing, while local dev
+        // was unaffected because the Vite proxy makes /api same-origin and never preflights.
+        allowHeader(header = CLIENT_VERSION_HEADER)
     }
     logger.info { "CORS configured for web UI origins" }
 }
