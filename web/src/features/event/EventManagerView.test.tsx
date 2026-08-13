@@ -131,12 +131,20 @@ vi.mock('@/api/generated/events/events', () => ({
   getGetApiV1EventsIdSeedingQueryKey: () => ['event-seeding'],
   getGetApiV1EventsIdTeamsQueryKey: () => ['event-teams'],
   getGetApiV1EventsQueryKey: () => ['events'],
+  // react-query runs the hook-level callback *and* the per-call one; both matter here, since the
+  // section that owns the draft learns a create landed from the per-call `onSuccess` (#741).
   usePostApiV1EventsIdTeams: (opts?: { mutation?: { onSuccess?: () => void } }) => ({
     isPending: false,
-    mutate: (vars: unknown, handlers?: { onError?: (err: unknown) => void }) => {
+    mutate: (
+      vars: unknown,
+      handlers?: { onSuccess?: () => void; onError?: (err: unknown) => void },
+    ) => {
       createTeamMutate(vars)
       if (state.teamCreateFail) handlers?.onError?.(new Error('boom'))
-      else opts?.mutation?.onSuccess?.()
+      else {
+        opts?.mutation?.onSuccess?.()
+        handlers?.onSuccess?.()
+      }
     },
   }),
   useDeleteApiV1EventsIdTeamsTeamId: (opts?: { mutation?: { onSuccess?: () => void } }) => ({
@@ -255,10 +263,13 @@ vi.mock('@/api/generated/matches/matches', () => ({
   getGetApiV1MatchesQueryKey: () => ['matches'],
   usePostApiV1Matches: (opts?: { mutation?: { onSuccess?: () => void } }) => ({
     isPending: false,
-    mutate: (vars: unknown, handlers?: { onError?: () => void }) => {
+    mutate: (vars: unknown, handlers?: { onSuccess?: () => void; onError?: () => void }) => {
       createFixtureMutate(vars, handlers)
       if (state.fixtureFail) handlers?.onError?.()
-      else opts?.mutation?.onSuccess?.()
+      else {
+        opts?.mutation?.onSuccess?.()
+        handlers?.onSuccess?.()
+      }
     },
   }),
 }))
@@ -468,6 +479,36 @@ describe('EventManagerView', () => {
     )
   })
 
+  it('clears the fixture draft once the create lands, back to the event start date (#668)', async () => {
+    // The form owns the draft and the caller owns the mutation (#741), so "it landed" is what the
+    // caller reports back — only then are the picks dropped, ready for the next fixture.
+    const user = setupUser()
+    renderDetail()
+
+    await user.selectOptions(screen.getByLabelText('Player 1'), 'u1')
+    await user.selectOptions(screen.getByLabelText('Player 2'), 'u2')
+    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-03-02' } })
+    await user.click(screen.getByRole('button', { name: 'Schedule fixture' }))
+
+    expect(screen.getByLabelText('Player 1')).toHaveValue('')
+    expect(screen.getByLabelText('Player 2')).toHaveValue('')
+    expect(screen.getByLabelText('Date')).toHaveValue('2026-03-01')
+  })
+
+  it('keeps the fixture draft when the create is refused (#741)', async () => {
+    // A refused fixture leaves the picks in place: the host has something to correct, not re-enter.
+    state.fixtureFail = true
+    const user = setupUser()
+    renderDetail()
+
+    await user.selectOptions(screen.getByLabelText('Player 1'), 'u1')
+    await user.selectOptions(screen.getByLabelText('Player 2'), 'u2')
+    await user.click(screen.getByRole('button', { name: 'Schedule fixture' }))
+
+    expect(screen.getByLabelText('Player 1')).toHaveValue('u1')
+    expect(screen.getByLabelText('Player 2')).toHaveValue('u2')
+  })
+
   it('creates a degenerate one-member team from a single member (#734)', async () => {
     const user = setupUser()
     // Format is irrelevant to team size now (#734); a one-member team is allowed but degenerate.
@@ -493,6 +534,20 @@ describe('EventManagerView', () => {
     await user.click(screen.getByRole('button', { name: 'Create team' }))
 
     expect(createTeamMutate).toHaveBeenCalledWith({ id: 'e1', data: { memberUserIds: ['u1', 'u2'] } })
+  })
+
+  it('clears the new-team form once the create lands (#720)', async () => {
+    const user = setupUser()
+    useGetApiV1EventsId.mockReturnValue({ data: { ...event, format: 'SINGLES' }, isLoading: false })
+    renderDetail()
+
+    await user.selectOptions(screen.getByLabelText('Member 1'), 'u1')
+    await user.type(screen.getByLabelText('Team name (optional)'), 'Dream Team')
+    await user.click(screen.getByRole('button', { name: 'Create team' }))
+
+    expect(screen.getByLabelText('Member 1')).toHaveValue('')
+    expect(screen.getByLabelText('Team name (optional)')).toHaveValue('')
+    expect(screen.getByRole('button', { name: 'Create team' })).toBeDisabled()
   })
 
   it('schedules a fixture from durable team refs (#720)', async () => {
