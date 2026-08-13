@@ -854,4 +854,67 @@ class MatchRepositoryTest {
         val loner = newUser(uid = "loner")
         matches.latestRatedMatchDatesByUsers(userIds = listOf(element = loner)).shouldBeEmpty()
     }
+
+    /**
+     * The point of the function is *latest*, and that only bites once a user has more than one rated
+     * match (#478/#755). Asserted with the later match rated both first and last: a "whichever row the
+     * scan saw last wins" regression passes one ordering and fails the other, so one direction alone
+     * would not catch it.
+     */
+    @Test
+    fun `latestRatedMatchDatesByUsers keeps the later date whichever order the rows arrive in (#478)`() {
+        val early = LocalDate.of(2026, 1, 10)
+        val late = LocalDate.of(2026, 3, 20)
+
+        fun latestFor(
+            first: LocalDate,
+            second: LocalDate,
+            tag: String,
+        ): LocalDate {
+            val p1 = newUser(uid = "$tag-p1")
+            val p2 = newUser(uid = "$tag-p2")
+            for (date in listOf(first, second)) {
+                val id = completedMatch(u1 = p1, u2 = p2, matchDate = date)
+                matches.markRated(matchId = id, ratedAt = LocalDateTime.now(), ratedBy = p1)
+            }
+            return matches.latestRatedMatchDatesByUsers(userIds = listOf(p1, p2)).getValue(key = p1)
+        }
+
+        latestFor(first = early, second = late, tag = "ascending") shouldBe late
+        latestFor(first = late, second = early, tag = "descending") shouldBe late
+    }
+
+    /**
+     * A match is scanned when EITHER side holds a queried user, so the other side's team lookup misses
+     * (#478/#755). The opponent must contribute nothing — they weren't asked about, and reporting a
+     * date for them would restore `last_match_date` on an account the reversal never touched.
+     */
+    @Test
+    fun `latestRatedMatchDatesByUsers reports only the queried side of a rated match (#478)`() {
+        val queried = newUser(uid = "queried")
+        val opponent = newUser(uid = "opponent")
+        val played = LocalDate.of(2026, 2, 14)
+        // The queried user is on team2 here, so the team1 lookup finds no queried member.
+        val id = completedMatch(u1 = opponent, u2 = queried, matchDate = played)
+        matches.markRated(matchId = id, ratedAt = LocalDateTime.now(), ratedBy = opponent)
+
+        val dates = matches.latestRatedMatchDatesByUsers(userIds = listOf(element = queried))
+
+        dates shouldBe mapOf(pairs = arrayOf(queried to played))
+    }
+
+    /** An unrated match is invisible here even when the user has one: only rated_at counts (#478). */
+    @Test
+    fun `latestRatedMatchDatesByUsers ignores a completed but unrated match (#478)`() {
+        val p1 = newUser(uid = "p1-unrated")
+        val p2 = newUser(uid = "p2-unrated")
+        val rated = LocalDate.of(2026, 1, 5)
+        val unrated = LocalDate.of(2026, 6, 30)
+        val ratedId = completedMatch(u1 = p1, u2 = p2, matchDate = rated)
+        matches.markRated(matchId = ratedId, ratedAt = LocalDateTime.now(), ratedBy = p1)
+        completedMatch(u1 = p1, u2 = p2, matchDate = unrated)
+
+        // The later match is unrated, so the earlier rated one is still the answer.
+        matches.latestRatedMatchDatesByUsers(userIds = listOf(element = p1)).getValue(key = p1) shouldBe rated
+    }
 }
