@@ -44,14 +44,16 @@ import { canEditEndedEvents, canRate, isAdministrator } from "@/auth/capabilitie
 import { PlayerPicker } from "@/components/PlayerPicker";
 import { HandicapField } from "@/components/HandicapField";
 import { playerLabel } from "@/lib/playerLabel";
-import { PlaceholderTag } from "@/components/PlaceholderTag";
 import { SeedingTable } from "@/components/SeedingTable";
 import { ShareCard } from "@/components/ShareCard";
 import {
   AwaitingResultsSection,
   RecordedResultsSection,
 } from "@/routes/dashboard/matches/AwaitingResultsSection";
-import { EVENT_TYPE_LABELS, participantMeta } from "./eventFacets";
+import { EventClubSection } from "./EventClubSection";
+import { EventHeaderManager } from "./EventHeaderManager";
+import { EventJoinRequestsSection } from "./EventJoinRequestsSection";
+import { EventRankingPointsCard } from "./EventRankingPointsCard";
 import { EventParticipantList } from "./EventParticipantList";
 
 const MATCH_TYPES = ["OPEN_PLAY", "TOURNAMENT"] as const;
@@ -140,9 +142,6 @@ export function EventManagerView({ eventId }: { eventId: string }) {
     | "PLATE_FINALS"
   >("CHAMPIONSHIP_FINALS");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [renaming, setRenaming] = useState(false);
-  const [nameDraft, setNameDraft] = useState("");
-  const [renameError, setRenameError] = useState<string | null>(null);
   const [confirmingFinalize, setConfirmingFinalize] = useState(false);
   const [confirmingUnfinalize, setConfirmingUnfinalize] = useState(false);
   // Reverse Ratings (#478): a distinct, destructive, ADMINISTRATOR-only action for an already-rated event.
@@ -238,7 +237,6 @@ export function EventManagerView({ eventId }: { eventId: string }) {
         void queryClient.invalidateQueries({
           queryKey: getGetApiV1EventsQueryKey(),
         });
-        setRenaming(false);
       },
     },
   });
@@ -269,19 +267,16 @@ export function EventManagerView({ eventId }: { eventId: string }) {
     }
   }
 
-  async function saveRename() {
-    const name = nameDraft.trim();
-    if (name === "") {
-      setRenameError("Event name is required.");
-      return;
-    }
-    setRenameError(null);
+  // Reports whether the rename landed so the header can keep its editor open on failure.
+  async function saveRename(name: string): Promise<boolean> {
     try {
       await renameEvent.mutateAsync({ id: eventId, data: { name } });
+      return true;
     } catch (e) {
       toast.error(eventErrorMessage(e, "Could not rename this event."), {
         duration: 8000,
       });
+      return false;
     }
   }
 
@@ -646,105 +641,20 @@ export function EventManagerView({ eventId }: { eventId: string }) {
       ) : (
         <>
           <Card>
-            <CardHeader>
-              {renaming ? (
-                <div className="space-y-2">
-                  <Label htmlFor="event-name" className="text-xs">
-                    Event name
-                  </Label>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Input
-                      id="event-name"
-                      value={nameDraft}
-                      onChange={(e) => setNameDraft(e.target.value)}
-                      className="max-w-xs"
-                    />
-                    <Button
-                      type="button"
-                      size="sm"
-                      disabled={renameEvent.isPending}
-                      onClick={saveRename}
-                    >
-                      {renameEvent.isPending ? "Saving…" : "Save"}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      disabled={renameEvent.isPending}
-                      onClick={() => setRenaming(false)}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                  {renameError ? (
-                    <p className="text-sm text-destructive" role="alert">
-                      {renameError}
-                    </p>
-                  ) : null}
-                </div>
-              ) : (
-                <div className="flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-2">
-                    <CardTitle>{event.name}</CardTitle>
-                    {finalized ? (
-                      <span
-                        className="rounded-full border border-emerald-500/50 bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-400"
-                        data-testid="finalized-badge"
-                      >
-                        Finalized
-                      </span>
-                    ) : null}
-                  </span>
-                  {finalized ? null : (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setRenameError(null);
-                        setNameDraft(event.name);
-                        setRenaming(true);
-                      }}
-                    >
-                      Rename
-                    </Button>
-                  )}
-                </div>
-              )}
-              <CardDescription>
-                {EVENT_TYPE_LABELS[event.type]}
-                {" · "}
-                {event.startDate} – {event.endDate} · Event ID:{" "}
-                <code className="font-mono font-medium text-foreground">
-                  {event.publicCode}
-                </code>
-              </CardDescription>
-            </CardHeader>
+            <EventHeaderManager
+              event={event}
+              finalized={finalized}
+              onRename={saveRename}
+              renaming={renameEvent.isPending}
+            />
             <CardContent className="space-y-3">
               {/* Club (#319): set, change, or clear the event's club. */}
-              <div className="space-y-1">
-                <Label
-                  htmlFor="event-club-edit"
-                  className="text-xs font-medium uppercase text-muted-foreground"
-                >
-                  Club
-                </Label>
-                <select
-                  id="event-club-edit"
-                  value={event.clubId ?? ""}
-                  disabled={setClub.isPending || locked}
-                  onChange={(e) => saveClub(e.target.value)}
-                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-                >
-                  <option value="">No club (Open)</option>
-                  {clubs.map((club) => (
-                    <option key={club.id} value={club.id}>
-                      {club.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <EventClubSection
+                clubId={event.clubId}
+                clubs={clubs}
+                disabled={setClub.isPending || locked}
+                onChange={saveClub}
+              />
 
               <div className="text-xs font-medium uppercase text-muted-foreground">
                 Participants
@@ -784,22 +694,7 @@ export function EventManagerView({ eventId }: { eventId: string }) {
           </Card>
 
           {/* Ranking points (#559): a single per-event flag, set at creation. Read-only here. */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Ranking points</CardTitle>
-              <CardDescription>
-                Whether finalizing this event awards ranking points per the
-                global schedules.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm" data-testid="award-ranking-points-summary">
-                {event.awardRankingPoints
-                  ? "This event awards ranking points on finalize."
-                  : "This event awards no ranking points."}
-              </p>
-            </CardContent>
-          </Card>
+          <EventRankingPointsCard awards={event.awardRankingPoints} />
 
           {/* Seeding (#714): generate a deterministic, server-sorted seeding from this event's approved
               participants and export it as CSV — the same flow as the Seeding tab. */}
@@ -839,82 +734,13 @@ export function EventManagerView({ eventId }: { eventId: string }) {
             </CardContent>
           </Card>
 
-          {requests.length > 0 ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Join requests</CardTitle>
-                <CardDescription>
-                  Players who signed up from the shared link. Approve to add
-                  them to the roster, or hold to set aside (you can approve a
-                  held request later).
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-1 text-sm">
-                  {requests.map((p) => {
-                    const meta = participantMeta(p);
-                    return (
-                      <li
-                        key={p.userId}
-                        className="flex items-center justify-between gap-2"
-                      >
-                        <span className="min-w-0">
-                          <span className="block">
-                            {playerLabel(p.displayName, p.publicCode, p.userId)}
-                            <PlaceholderTag show={p.isPlaceholder} deleted={p.isDeleted} />
-                            {p.status === "HOLD" ? (
-                              <span className="text-muted-foreground">
-                                {" "}
-                                · on hold
-                              </span>
-                            ) : null}
-                          </span>
-                          {meta ? (
-                            <span className="block text-xs text-muted-foreground">
-                              {meta}
-                            </span>
-                          ) : null}
-                        </span>
-                        <span className="flex shrink-0 items-center gap-2">
-                          <Button
-                            type="button"
-                            size="sm"
-                            disabled={decideParticipant.isPending || locked}
-                            onClick={() =>
-                              decideParticipant.mutate({
-                                id: eventId,
-                                userId: p.userId,
-                                data: { status: "APPROVED" },
-                              })
-                            }
-                          >
-                            Approve
-                          </Button>
-                          {p.status === "HOLD" ? null : (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              disabled={decideParticipant.isPending || locked}
-                              onClick={() =>
-                                decideParticipant.mutate({
-                                  id: eventId,
-                                  userId: p.userId,
-                                  data: { status: "HOLD" },
-                                })
-                              }
-                            >
-                              Hold
-                            </Button>
-                          )}
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </CardContent>
-            </Card>
-          ) : null}
+          <EventJoinRequestsSection
+            requests={requests}
+            disabled={decideParticipant.isPending || locked}
+            onDecide={(userId, status) =>
+              decideParticipant.mutate({ id: eventId, userId, data: { status } })
+            }
+          />
 
           {finalized ? (
             <p
