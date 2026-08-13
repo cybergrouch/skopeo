@@ -85,30 +85,34 @@ export function WinLossCard({ code }: WinLossCardProps) {
               Total matches played:{' '}
               <span className="font-medium tabular-nums">{overall.played}</span>
             </p>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-xs uppercase text-muted-foreground">
-                  <th scope="col" className="pb-1 pr-4 text-left font-medium" />
-                  <th scope="col" className="pb-1 pr-4 text-right font-medium">
-                    Played
-                  </th>
-                  <th scope="col" className="pb-1 pr-4 text-right font-medium">
-                    Wins
-                  </th>
-                  <th scope="col" className="pb-1 pr-4 text-right font-medium">
-                    Losses
-                  </th>
-                  <th scope="col" className="pb-1 text-right font-medium">
-                    Win rate
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                <SummaryRow label="Singles" totals={singles} />
-                <SummaryRow label="Doubles" totals={doubles} />
-                <SummaryRow label="Overall" totals={overall} />
-              </tbody>
-            </table>
+            {/* Five columns on a phone: let the table scroll inside the card rather than widening it
+                (#768). Every other table in the app already does this. */}
+            <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-xs uppercase text-muted-foreground">
+                    <th scope="col" className="pb-1 pr-4 text-left font-medium" />
+                    <th scope="col" className="pb-1 pr-4 text-right font-medium">
+                      Played
+                    </th>
+                    <th scope="col" className="pb-1 pr-4 text-right font-medium">
+                      Wins
+                    </th>
+                    <th scope="col" className="pb-1 pr-4 text-right font-medium">
+                      Losses
+                    </th>
+                    <th scope="col" className="pb-1 text-right font-medium">
+                      Win rate
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <SummaryRow label="Singles" totals={singles} />
+                  <SummaryRow label="Doubles" totals={doubles} />
+                  <SummaryRow label="Overall" totals={overall} />
+                </tbody>
+              </table>
+            </div>
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">No completed matches yet.</p>

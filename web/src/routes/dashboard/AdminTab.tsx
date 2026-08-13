@@ -10,7 +10,7 @@ import { ThemeSection } from "./admin/ThemeSection";
 // moved to the Account Management tab (#648). Clubs moved to the Club Management tab (#698).
 export function AdminTab() {
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
       <CircuitsSection />
       <PendingCalculationSection />
       <StandingsSourceSection />

@@ -7,7 +7,7 @@ import { ClubsSection } from "./admin/ClubsSection";
  */
 export function ClubManagementTab() {
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
       <ClubsSection />
     </div>
   );

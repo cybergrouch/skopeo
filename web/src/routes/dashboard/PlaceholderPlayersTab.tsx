@@ -13,7 +13,7 @@ export function PlaceholderPlayersTab({
   capabilities: readonly Capability[] | undefined;
 }) {
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
       <CreatePlaceholderSection capabilities={capabilities} />
       <PlaceholderPlayersSection capabilities={capabilities} />
     </div>
