@@ -60,6 +60,7 @@ import org.skopeo.repository.RankingPointRepository
 import org.skopeo.repository.RatingRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
+import org.skopeo.testsupport.TestAppSettings
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -1312,21 +1313,32 @@ class EventServiceTest {
         // TOURNAMENT exercises placement awarding (#525); OPEN_PLAY is computed per set (#553).
         type: EventType = EventType.TOURNAMENT,
         awardRankingPoints: Boolean = true,
-    ) = service.create(
-        token = token(uid = hostUid),
-        input =
-            input(
-                // Ends today, so award validity (#559: from the event end) is active as of now — events
-                // are finalized once they have ended.
-                start = LocalDate.now().toString(),
-                end = LocalDate.now().toString(),
-                type = type,
-                participants = participants,
-                // A TOURNAMENT must belong to a circuit (#525); other types carry none.
-                circuitId = if (type == EventType.TOURNAMENT) seedCircuit(hostUid = hostUid) else null,
-                awardRankingPoints = awardRankingPoints,
-            ),
-    ).shouldBeRight().domain()
+    ): Event {
+        // The global award flag (#641) gates awarding at create AND at finalize (#752), and defaults off,
+        // so an event that is meant to pay out has to be created with it on.
+        enableGlobalAwarding(hostUid = hostUid)
+        return service.create(
+            token = token(uid = hostUid),
+            input =
+                input(
+                    // Ends today, so award validity (#559: from the event end) is active as of now — events
+                    // are finalized once they have ended.
+                    start = LocalDate.now().toString(),
+                    end = LocalDate.now().toString(),
+                    type = type,
+                    participants = participants,
+                    // A TOURNAMENT must belong to a circuit (#525); other types carry none.
+                    circuitId = if (type == EventType.TOURNAMENT) seedCircuit(hostUid = hostUid) else null,
+                    awardRankingPoints = awardRankingPoints,
+                ),
+        ).shouldBeRight().domain()
+    }
+
+    /** Turn the global "award ranking points" flag (#641) on, attributed to [hostUid] (#752). */
+    private fun enableGlobalAwarding(hostUid: String) {
+        val actor = requireNotNull(value = UserRepository().findByFirebaseUid(firebaseUid = hostUid)) { "unknown host $hostUid" }
+        TestAppSettings.setAwardRankingPoints(enabled = true, updatedBy = actor.toDomain().id)
+    }
 
     /** Seed a circuit (#525) attributed to [hostUid], returning its id — tournaments must reference one. */
     private fun seedCircuit(hostUid: String): UUID {
@@ -1517,6 +1529,138 @@ class EventServiceTest {
         awardRepo.listByUser(userId = p2.id) shouldHaveSize 0
     }
 
+    // --- Global "award ranking points" flag enforced server-side (#752). ---
+
+    @Test
+    fun `create coerces an award opt-in to false while the global flag is off, and audits it (#752)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+
+        // The global flag defaults off, so this opt-in — a stale bundle, a partner client, or curl —
+        // must not produce an event that awards.
+        val created = service.create(token = token(uid = "host"), input = input(awardRankingPoints = true)).shouldBeRight()
+
+        created.awardRankingPoints.shouldBeFalse()
+        created.domain().awardRankingPoints.shouldBeFalse()
+        // The coercion is spelled out in the Activity Log rather than applied silently.
+        val entry =
+            AuditRepository().list(actions = listOf(element = AuditAction.EVENT_CREATED), limit = 10, offset = 0).first.single()
+        entry.details["awardRankingPoints"] shouldBe "false"
+        entry.details["awardRankingPointsCoercedByGlobalFlag"] shouldBe "true"
+    }
+
+    @Test
+    fun `create keeps the award opt-in while the global flag is on (#752)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        enableGlobalAwarding(hostUid = "host")
+
+        val created = service.create(token = token(uid = "host"), input = input(awardRankingPoints = true)).shouldBeRight()
+
+        created.awardRankingPoints.shouldBeTrue()
+        created.domain().awardRankingPoints.shouldBeTrue()
+        val entry =
+            AuditRepository().list(actions = listOf(element = AuditAction.EVENT_CREATED), limit = 10, offset = 0).first.single()
+        entry.details["awardRankingPoints"] shouldBe "true"
+        entry.details["awardRankingPointsCoercedByGlobalFlag"] shouldBe "false"
+    }
+
+    @Test
+    fun `create with the award opt-out is untouched by the global flag being off (#752)`() {
+        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+
+        val created = service.create(token = token(uid = "host"), input = input(awardRankingPoints = false)).shouldBeRight()
+
+        // Nothing to coerce: the organizer already opted out, so no coercion is reported.
+        created.awardRankingPoints.shouldBeFalse()
+        val entry =
+            AuditRepository().list(actions = listOf(element = AuditAction.EVENT_CREATED), limit = 10, offset = 0).first.single()
+        entry.details["awardRankingPointsCoercedByGlobalFlag"] shouldBe "false"
+    }
+
+    @Test
+    fun `turning the global flag off after create suppresses the payout at finalize, and says so (#752)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        rate(userId = p1.id, level = "4.0")
+        rate(userId = p2.id, level = "4.0")
+        // Created while the flag was ON, so the event's own flag is set and stays set.
+        val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id))
+        seedCompletedFixture(
+            eventId = event.id,
+            host = host,
+            p1 = p1,
+            p2 = p2,
+            placementBracket = PlacementBracket.CHAMPIONSHIP_FINALS,
+        )
+        TestAppSettings.setAwardRankingPoints(enabled = false, updatedBy = host.id)
+
+        val finalized = service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+
+        // The kill switch: zero awards despite the event's own opt-in, and the suppression is reported.
+        finalized.isFinalized.shouldBeTrue()
+        finalized.awardingSuppressedByGlobalFlag.shouldBeTrue()
+        awardRepo.listByUser(userId = p1.id) shouldHaveSize 0
+        awardRepo.listByUser(userId = p2.id) shouldHaveSize 0
+        val entry =
+            AuditRepository().list(actions = listOf(element = AuditAction.EVENT_POINTS_AWARDED), limit = 10, offset = 0).first.single()
+        entry.details["suppressedByGlobalFlag"] shouldBe "true"
+        entry.details["awards"] shouldBe "0"
+        entry.summary shouldContain "disabled by the global flag"
+    }
+
+    @Test
+    fun `finalizing with the global flag on reports no suppression and still pays out (#752)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        rate(userId = p1.id, level = "4.0")
+        rate(userId = p2.id, level = "4.0")
+        val event = budgetedEvent(hostUid = "host", participants = listOf(p1.id, p2.id))
+        seedCompletedFixture(
+            eventId = event.id,
+            host = host,
+            p1 = p1,
+            p2 = p2,
+            placementBracket = PlacementBracket.CHAMPIONSHIP_FINALS,
+        )
+
+        val finalized = service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+
+        finalized.awardingSuppressedByGlobalFlag.shouldBeFalse()
+        awardRepo.listByUser(userId = p1.id).single().points shouldBe BigDecimal("40.0000")
+        AuditRepository()
+            .list(actions = listOf(element = AuditAction.EVENT_POINTS_AWARDED), limit = 10, offset = 0)
+            .first.single().details["suppressedByGlobalFlag"] shouldBe "false"
+    }
+
+    @Test
+    fun `a per-event opt-out is not reported as a global-flag suppression (#752)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        rate(userId = p1.id, level = "4.0")
+        rate(userId = p2.id, level = "4.0")
+        // Global flag on, per-event flag off (#559): nothing is awarded, but the global flag is blameless.
+        val event =
+            budgetedEvent(
+                hostUid = "host",
+                participants = listOf(p1.id, p2.id),
+                awardRankingPoints = false,
+            )
+        seedCompletedFixture(
+            eventId = event.id,
+            host = host,
+            p1 = p1,
+            p2 = p2,
+            placementBracket = PlacementBracket.CHAMPIONSHIP_FINALS,
+        )
+
+        val finalized = service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+
+        finalized.awardingSuppressedByGlobalFlag.shouldBeFalse()
+        awardRepo.listByUser(userId = p1.id) shouldHaveSize 0
+    }
+
     @Test
     fun `finalize records one per-player audit entry targeting each awarded player (#471)`() {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
@@ -1596,6 +1740,7 @@ class EventServiceTest {
         // Equal entry bands (both 4.0): the set winner scores 3, the loser 0 (design table).
         rate(userId = p1.id, level = "4.0")
         rate(userId = p2.id, level = "4.0")
+        enableGlobalAwarding(hostUid = "host")
         val event =
             service.create(
                 token = token(uid = "host"),
@@ -1786,6 +1931,7 @@ class EventServiceTest {
         rate(userId = p2.id, level = "4.0")
         val club = clubs.create(command = CreateClubCommand(name = "Downtown TC", createdBy = host.id)).toDomain()
         clubs.setSanction(id = club.id, sanctioned = true)
+        enableGlobalAwarding(hostUid = "host")
         val event =
             service.create(
                 token = token(uid = "host"),

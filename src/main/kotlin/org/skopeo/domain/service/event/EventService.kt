@@ -44,6 +44,7 @@ import org.skopeo.domain.model.canSeeRawRatingOrFalse
 import org.skopeo.domain.model.isExpired
 import org.skopeo.domain.service.audit.AuditService
 import org.skopeo.domain.service.rating.RatingAssembler
+import org.skopeo.domain.service.settings.SettingsService
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.domain.service.user.displayName
 import org.skopeo.domain.service.user.isDeleted
@@ -106,6 +107,7 @@ class EventService(
     private val reverser: EventFinalizeReverser = EventFinalizeReverser(),
     private val ratingsReverser: EventRatingsReverser = EventRatingsReverser(),
     private val audit: AuditService = AuditService(),
+    private val settings: SettingsService = SettingsService(),
 ) {
     /**
      * Whether the caller may see raw NTRP values on the event roster (#583): ADMINISTRATOR only,
@@ -114,6 +116,13 @@ class EventService(
     fun callerCanSeeRawRating(token: VerifiedFirebaseToken): Boolean =
         users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain().canSeeRawRatingOrFalse()
 
+    /**
+     * Create an event (#116). Beyond the shape checks, this is where the global "Award ranking points"
+     * flag (#641) is enforced server-side (#752): with the flag off, an `awardRankingPoints = true`
+     * from a stale bundle, a partner API client, or plain curl is COERCED to false rather than
+     * rejected — a caller whose UI legitimately offered the checkbox a minute ago shouldn't eat a 400 —
+     * and the coercion is spelled out in the EVENT_CREATED audit entry so it isn't silent.
+     */
     fun create(
         token: VerifiedFirebaseToken,
         input: CreateEventInput,
@@ -135,6 +144,10 @@ class EventService(
             }
             // A TOURNAMENT must belong to a circuit (#525); it must exist. Non-tournaments carry none.
             val circuitId = resolveCircuit(type = type, circuitId = input.circuitId).bind()
+            // Server-side enforcement of the global award flag (#752): opting in while it is off is coerced.
+            val awardingEnabled = settings.getAwardRankingPoints().enabled
+            val awardRankingPoints = input.awardRankingPoints && awardingEnabled
+            val awardCoerced = input.awardRankingPoints && !awardingEnabled
             val event =
                 events.create(
                     command =
@@ -148,7 +161,7 @@ class EventService(
                             circuitId = circuitId,
                             format = format,
                             type = type,
-                            awardRankingPoints = input.awardRankingPoints,
+                            awardRankingPoints = awardRankingPoints,
                         ),
                 ).toDomain()
             // Activity Log entry for the creation (#334); rename/set-club/delete are follow-ups.
@@ -159,6 +172,9 @@ class EventService(
                         action = AuditAction.EVENT_CREATED,
                         entityType = AuditEntityType.EVENT,
                         entityId = event.id,
+                        // The summary stays constant: `awardRankingPoints` defaults to true when the client
+                        // omits it, so while the global flag is off EVERY create would otherwise carry a
+                        // coercion notice. The two details below carry the signal instead.
                         summary = "Created event ${event.name}",
                         details =
                             mapOf(
@@ -169,6 +185,9 @@ class EventService(
                                 "clubId" to event.clubId?.toString(),
                                 "format" to event.format.name,
                                 "type" to event.type.name,
+                                "awardRankingPoints" to event.awardRankingPoints.toString(),
+                                // The request asked to award but the global flag (#641) was off (#752).
+                                "awardRankingPointsCoercedByGlobalFlag" to awardCoerced.toString(),
                             ),
                     ),
             )
@@ -350,6 +369,11 @@ class EventService(
      * row per winning-team member. The finalize state change and all awards share one DB transaction
      * for atomicity; a summary is audited as EVENT_POINTS_AWARDED. The idempotency guard (finalize is
      * terminal) means awarding runs exactly once per event, so there is no double-award path.
+     *
+     * The global "Award ranking points" flag (#641) is a kill switch (#752): with it off, awarding is
+     * suppressed here even for an event whose own flag is set (it may have been created while the flag
+     * was on). The suppression is surfaced — [EventResponse.awardingSuppressedByGlobalFlag] plus the
+     * EVENT_POINTS_AWARDED audit entry — so a host never reads "finalized" as "points were paid".
      */
     fun finalize(
         token: VerifiedFirebaseToken,
@@ -393,8 +417,13 @@ class EventService(
                         entityType = AuditEntityType.EVENT,
                         entityId = event.id,
                         summary =
-                            "Awarded ${summary.totalPoints.toPlainString()} points across " +
-                                "${summary.matchCount} matches for event ${event.name}",
+                            if (summary.suppressedByGlobalFlag) {
+                                "Awarded no points for event ${event.name}: ranking-point awarding is " +
+                                    "disabled by the global flag"
+                            } else {
+                                "Awarded ${summary.totalPoints.toPlainString()} points across " +
+                                    "${summary.matchCount} matches for event ${event.name}"
+                            },
                         details =
                             mapOf(
                                 "publicCode" to event.publicCode,
@@ -402,10 +431,13 @@ class EventService(
                                 "matches" to summary.matchCount.toString(),
                                 "awards" to summary.awardCount.toString(),
                                 "totalPoints" to summary.totalPoints.toPlainString(),
+                                // The event opted in but the global flag (#641) suppressed the payout (#752).
+                                "suppressedByGlobalFlag" to summary.suppressedByGlobalFlag.toString(),
                             ),
                     ),
             )
-            toView(event = event.copy(finalizedAt = now, finalizedBy = caller.id)).toResponse()
+            toView(event = event.copy(finalizedAt = now, finalizedBy = caller.id))
+                .toResponse(awardingSuppressedByGlobalFlag = summary.suppressedByGlobalFlag)
         }
 
     /**

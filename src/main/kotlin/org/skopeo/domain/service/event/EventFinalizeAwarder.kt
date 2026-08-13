@@ -25,6 +25,7 @@ import org.skopeo.domain.model.UserRating
 import org.skopeo.domain.service.audit.AuditService
 import org.skopeo.domain.service.rating.RatingAssembler
 import org.skopeo.domain.service.settings.PointsConfigService
+import org.skopeo.domain.service.settings.SettingsService
 import org.skopeo.repository.ClubRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RankingPointRepository
@@ -63,29 +64,46 @@ class EventFinalizeAwarder(
     private val clubs: ClubRepository = ClubRepository(),
     private val audit: AuditService = AuditService(),
     private val pointsConfig: PointsConfigService = PointsConfigService(),
+    private val settings: SettingsService = SettingsService(),
 ) {
     /** Summary of one finalize's awarding, for the audit trail: how many fixtures paid out and the total. */
     data class AwardSummary(
         val matchCount: Int,
         val awardCount: Int,
         val totalPoints: BigDecimal,
+        // True when the event opted into awarding but the global "Award ranking points" flag (#641)
+        // suppressed the payout (#752). Nothing was written; the caller must say so rather than let a
+        // host read "finalized" as "points paid".
+        val suppressedByGlobalFlag: Boolean = false,
     )
 
-    /** Award [event]'s finalized fixtures by type (see class doc). Returns an [AwardSummary]. */
+    /**
+     * Award [event]'s finalized fixtures by type (see class doc). Returns an [AwardSummary].
+     *
+     * Two gates, both of which award nothing: the per-event "Award Ranking Points" flag (#559, the
+     * organizer's own opt-out) and the global `award_ranking_points_enabled` app-setting (#641). The
+     * global one is a kill switch (#752) — it is checked HERE, at payout time, not only at create, so
+     * an event created while the flag was on stops paying out the moment it is turned off. A payout
+     * suppressed that way is reported via [AwardSummary.suppressedByGlobalFlag], never silently.
+     */
     fun awardForFinalizedEvent(
         event: Event,
         grantedBy: UUID,
         now: LocalDateTime,
-    ): AwardSummary =
-        // "Award Ranking Points" unchecked (#559): finalizing awards nothing, whatever the type.
-        if (!event.awardRankingPoints) {
-            AwardSummary(matchCount = 0, awardCount = 0, totalPoints = BigDecimal.ZERO)
-        } else {
-            when (event.type) {
-                EventType.OPEN_PLAY -> awardComputedOpenPlay(event = event, grantedBy = grantedBy, now = now)
-                EventType.TOURNAMENT -> awardPlacement(event = event, grantedBy = grantedBy, now = now)
-            }
+    ): AwardSummary {
+        val nothing = AwardSummary(matchCount = 0, awardCount = 0, totalPoints = BigDecimal.ZERO)
+        return when {
+            // "Award Ranking Points" unchecked (#559): finalizing awards nothing, whatever the type.
+            !event.awardRankingPoints -> nothing
+            // Global kill switch off (#752): award nothing regardless of the per-event opt-in, and flag it.
+            !settings.getAwardRankingPoints().enabled -> nothing.copy(suppressedByGlobalFlag = true)
+            else ->
+                when (event.type) {
+                    EventType.OPEN_PLAY -> awardComputedOpenPlay(event = event, grantedBy = grantedBy, now = now)
+                    EventType.TOURNAMENT -> awardPlacement(event = event, grantedBy = grantedBy, now = now)
+                }
         }
+    }
 
     /**
      * Placement-based tournament awarding (#525). Each COMPLETED placement match (Super Finals →
