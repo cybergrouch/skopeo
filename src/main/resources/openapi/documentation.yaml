@@ -2408,6 +2408,12 @@ paths:
         event's matches for rating (moving the rating-queue trigger from result-upload time to finalize
         time; event-less matches keep queuing immediately). A HOST may finalize only their own event; an
         ADMINISTRATOR or CLUB_OWNER any. There is no un-finalize in Phase A.
+
+
+        Awarding: when the global "Award ranking points" flag (#641) is off, finalizing awards nothing
+        even for an event whose own awardRankingPoints is true — the flag is a kill switch (#752). That
+        case is reported as awardingSuppressedByGlobalFlag on the response, so a caller never reads a
+        successful finalize as "points were paid".
       tags:
         - Events
       security:
@@ -3500,8 +3506,10 @@ paths:
     get:
       summary: Get the award-ranking-points feature flag (#641)
       description: >-
-        Whether the event-create form offers the "Award Ranking Points" checkbox. Defaults to disabled
-        (checkbox hidden) when unset, so hosts can't opt an event into awarding until an admin enables it.
+        Whether ranking-point awarding is enabled app-wide. Defaults to disabled when unset, so nothing
+        awards until an admin enables it. This is a server-enforced kill switch, not just a UI toggle
+        (#752): while it is off, an event-create request opting into awarding is coerced to
+        awardRankingPoints=false, and finalizing an event whose own flag is set awards nothing.
       tags:
         - Settings
       security:
@@ -3516,7 +3524,9 @@ paths:
                 $ref: '#/components/schemas/AwardRankingPointsResponse'
     put:
       summary: Set the award-ranking-points feature flag (#641)
-      description: ADMINISTRATOR only. Shows or hides the event award-ranking-points checkbox; the write is audit-logged.
+      description: >-
+        ADMINISTRATOR only. Enables or disables ranking-point awarding app-wide; the write is audit-logged.
+        Turning it off takes effect immediately for events that have not yet been finalized (#752).
       tags:
         - Settings
       security:
@@ -6444,7 +6454,9 @@ components:
           nullable: true
           description: >-
             Whether finalizing this event awards ranking points per the global schedules (#559). Omit for
-            the default (true — "Award Ranking Points" is on unless the organizer unchecks it).
+            the default (true — "Award Ranking Points" is on unless the organizer unchecks it). Coerced to
+            false when the global "Award ranking points" flag (#641) is off (#752): the request is
+            accepted, the created event simply reports awardRankingPoints false.
 
     SetHandicapsRequest:
       type: object
@@ -6669,6 +6681,12 @@ components:
         awardRankingPoints:
           type: boolean
           description: Whether finalizing this event awards ranking points per the global schedules (#559); default true.
+        awardingSuppressedByGlobalFlag:
+          type: boolean
+          description: >-
+            Finalize outcome only (#752): true when the finalize awarded nothing because the global
+            "Award ranking points" flag (#641) is off, even though the event's own flag is set. Always
+            false on the other event reads — it describes what a finalize just did, not event state.
 
     CreateEventTeamRequest:
       type: object

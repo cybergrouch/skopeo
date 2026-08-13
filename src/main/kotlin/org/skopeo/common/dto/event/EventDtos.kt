@@ -135,6 +135,10 @@ data class EventResponse(
     val completedMatchCount: Int = 0,
     // Whether finalizing this event awards ranking points per the global schedules (#559). Default true.
     val awardRankingPoints: Boolean = true,
+    // Finalize outcome only (#752): true when this finalize awarded nothing because the global
+    // "Award ranking points" flag (#641) is off, even though the event's own flag is set. Always false
+    // on the other event reads — it describes what a finalize just did, not durable event state.
+    val awardingSuppressedByGlobalFlag: Boolean = false,
 )
 
 /**

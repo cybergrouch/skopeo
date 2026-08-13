@@ -34,7 +34,7 @@ private const val STANDINGS_SOURCE_KEY = "standings_source"
 /** The app_settings key toggling the Facebook sign-in buttons (#647); absent ⇒ enabled. */
 private const val FACEBOOK_LOGIN_KEY = "facebook_login_enabled"
 
-/** The app_settings key toggling the event "Award Ranking Points" checkbox (#641); absent ⇒ disabled. */
+/** The app_settings key gating ranking-point awarding app-wide (#641); absent ⇒ disabled. */
 private const val AWARD_RANKING_POINTS_KEY = "award_ranking_points_enabled"
 
 /**
@@ -136,9 +136,15 @@ class SettingsService(
         }
 
     /**
-     * Whether the event-create form offers the "Award Ranking Points" checkbox (#641). Defaults to
-     * DISABLED (checkbox hidden) when the `award_ranking_points_enabled` row is absent or non-boolean — so
-     * hosts can't opt an event into awarding until an admin turns it on. Public read — no auth.
+     * Whether ranking-point awarding is enabled app-wide (#641). Defaults to DISABLED when the
+     * `award_ranking_points_enabled` row is absent or non-boolean — so nothing awards until an admin turns
+     * it on. Public read — no auth.
+     *
+     * This is a KILL SWITCH, not merely a create-time gate or a UI affordance (#752). It is enforced
+     * server-side in two places, and the browser (which hides the event-create checkbox) is only a
+     * convenience: [org.skopeo.domain.service.event.EventService.create] coerces an award opt-in to false
+     * while it is off, and [org.skopeo.domain.service.event.EventFinalizeAwarder] awards nothing while it
+     * is off — so an event created while the flag was ON also stops paying out the moment it goes off.
      */
     fun getAwardRankingPoints(): AwardRankingPointsValue {
         val row = settings.get(key = AWARD_RANKING_POINTS_KEY)
@@ -150,8 +156,9 @@ class SettingsService(
     fun getAwardRankingPointsResponse(): AwardRankingPointsResponse = getAwardRankingPoints().toResponse()
 
     /**
-     * Show or hide the event "Award Ranking Points" checkbox (ADMINISTRATOR only, #641). Upserts the
-     * app-setting as the boolean's string form and records a provenance/audit row.
+     * Enable or disable ranking-point awarding app-wide (ADMINISTRATOR only, #641). Upserts the
+     * app-setting as the boolean's string form and records a provenance/audit row. Turning it off takes
+     * effect immediately for events that have not yet been finalized (#752): see [getAwardRankingPoints].
      */
     fun setAwardRankingPoints(
         token: VerifiedFirebaseToken,

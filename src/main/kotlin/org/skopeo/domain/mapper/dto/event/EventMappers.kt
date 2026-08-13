@@ -26,6 +26,8 @@ fun EventView.toResponse(
     completedMatchCount: Int = 0,
     // Raw NTRP values on the roster are ADMINISTRATOR-only (#583); default false = band only.
     showRawRating: Boolean = false,
+    // Finalize outcome only (#752): the global award flag suppressed this finalize's payout.
+    awardingSuppressedByGlobalFlag: Boolean = false,
 ): EventResponse =
     EventResponse(
         id = event.id.toString(),
@@ -47,6 +49,7 @@ fun EventView.toResponse(
         isFinalized = event.isFinalized,
         completedMatchCount = completedMatchCount,
         awardRankingPoints = event.awardRankingPoints,
+        awardingSuppressedByGlobalFlag = awardingSuppressedByGlobalFlag,
     )
 
 internal fun EventParticipantRef.toResponse(showRawRating: Boolean = false): EventParticipantResponse =

@@ -5,6 +5,8 @@ package org.skopeo.routes
 
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.ktor.client.HttpClient
@@ -12,6 +14,7 @@ import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.header
 import io.ktor.client.request.post
+import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
@@ -25,6 +28,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skopeo.common.dto.event.CreateEventRequest
 import org.skopeo.common.dto.event.EventResponse
+import org.skopeo.common.dto.settings.SetAwardRankingPointsRequest
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.match.toDomain
 import org.skopeo.domain.mapper.entity.user.toDomain
@@ -46,6 +50,7 @@ import org.skopeo.domain.service.rating.RatingCalculationService
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.module
 import org.skopeo.repository.MatchRepository
+import org.skopeo.repository.RankingPointRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
 import org.skopeo.testsupport.TestFirebaseAuth
@@ -93,7 +98,11 @@ class EventFinalizeApiIntegrationTest {
 
     private fun tokenFor(uid: String): String = TestFirebaseAuth.mintToken(uid = uid, emailVerified = true)
 
-    private suspend fun HttpClient.createEvent(token: String): EventResponse =
+    private suspend fun HttpClient.createEvent(
+        token: String,
+        awardRankingPoints: Boolean? = null,
+        participantIds: List<UUID> = emptyList(),
+    ): EventResponse =
         post(urlString = "/api/v1/events") {
             header(key = HttpHeaders.Authorization, value = "Bearer $token")
             contentType(type = ContentType.Application.Json)
@@ -104,9 +113,23 @@ class EventFinalizeApiIntegrationTest {
                         startDate = LocalDate.now().toString(),
                         endDate = LocalDate.now().plusDays(7).toString(),
                         format = "SINGLES",
+                        participantIds = participantIds.map { it.toString() },
+                        awardRankingPoints = awardRankingPoints,
                     ),
             )
         }.body()
+
+    /** Flip the global "award ranking points" flag (#641) through the admin route, as a real client would. */
+    private suspend fun HttpClient.setGlobalAwarding(
+        adminToken: String,
+        enabled: Boolean,
+    ) {
+        put(urlString = "/api/v1/settings/award-ranking-points") {
+            header(key = HttpHeaders.Authorization, value = "Bearer $adminToken")
+            contentType(type = ContentType.Application.Json)
+            setBody(body = SetAwardRankingPointsRequest(enabled = enabled))
+        }.status shouldBe HttpStatusCode.OK
+    }
 
     @Test
     fun `an admin finalizes then un-finalizes an event, ending open`() =
@@ -159,6 +182,129 @@ class EventFinalizeApiIntegrationTest {
                 header(key = HttpHeaders.Authorization, value = "Bearer $host")
             }.body<EventResponse>().isFinalized.shouldBeTrue()
         }
+
+    // --- Global "award ranking points" flag enforced server-side (#752). ---
+
+    @Test
+    fun `creating an event with awardRankingPoints true is coerced to false while the global flag is off (#752)`() =
+        withApp { client ->
+            seedUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+
+            // A direct API call — no browser involved — opting in while the global flag is off.
+            val event = client.createEvent(token = tokenFor(uid = "host"), awardRankingPoints = true)
+
+            // Accepted, but the stored intent matches what was permitted: this event awards nothing.
+            event.awardRankingPoints.shouldBeFalse()
+        }
+
+    @Test
+    fun `creating an event with awardRankingPoints true keeps the opt-in while the global flag is on (#752)`() =
+        withApp { client ->
+            seedUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+            seedUser(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+            client.setGlobalAwarding(adminToken = tokenFor(uid = "admin"), enabled = true)
+
+            val event = client.createEvent(token = tokenFor(uid = "host"), awardRankingPoints = true)
+
+            event.awardRankingPoints.shouldBeTrue()
+        }
+
+    @Test
+    fun `finalizing an event created while the flag was on awards nothing once it is off, and says so (#752)`() =
+        withApp { client ->
+            val host = seedUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+            seedUser(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+            val p1 = seedUser(uid = "p1", roles = setOf(element = Capability.PLAYER))
+            val p2 = seedUser(uid = "p2", roles = setOf(element = Capability.PLAYER))
+            val admin = tokenFor(uid = "admin")
+            client.setGlobalAwarding(adminToken = admin, enabled = true)
+            // Rated players, so this fixture WOULD pay out (see the flag-on test) if nothing suppressed it.
+            RatingAssembler().setRating(userId = p1.id, rating = BigDecimal("4.0"), level = "4.0")
+            RatingAssembler().setRating(userId = p2.id, rating = BigDecimal("4.0"), level = "4.0")
+            val event =
+                client.createEvent(
+                    token = tokenFor(uid = "host"),
+                    awardRankingPoints = true,
+                    participantIds = listOf(p1.id, p2.id),
+                )
+            event.awardRankingPoints.shouldBeTrue()
+            seedCompletedOpenPlayFixture(eventId = UUID.fromString(event.id), host = host, p1 = p1, p2 = p2)
+            // The kill switch is thrown AFTER the event was created with awarding on (issue #752, case 2).
+            client.setGlobalAwarding(adminToken = admin, enabled = false)
+
+            val response =
+                client.post(urlString = "/api/v1/events/${event.id}/finalize") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $admin")
+                }
+
+            response.status shouldBe HttpStatusCode.OK
+            val finalized = response.body<EventResponse>()
+            finalized.isFinalized.shouldBeTrue()
+            // The host is told the payout was suppressed rather than left to assume points were paid.
+            finalized.awardingSuppressedByGlobalFlag.shouldBeTrue()
+            RankingPointRepository().listActiveByEvent(eventId = UUID.fromString(event.id)).shouldBeEmpty()
+        }
+
+    @Test
+    fun `finalizing with the flag left on still awards, and reports no suppression (#752)`() =
+        withApp { client ->
+            val host = seedUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+            seedUser(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+            val p1 = seedUser(uid = "p1", roles = setOf(element = Capability.PLAYER))
+            val p2 = seedUser(uid = "p2", roles = setOf(element = Capability.PLAYER))
+            val admin = tokenFor(uid = "admin")
+            client.setGlobalAwarding(adminToken = admin, enabled = true)
+            RatingAssembler().setRating(userId = p1.id, rating = BigDecimal("4.0"), level = "4.0")
+            RatingAssembler().setRating(userId = p2.id, rating = BigDecimal("4.0"), level = "4.0")
+            val event =
+                client.createEvent(
+                    token = tokenFor(uid = "host"),
+                    awardRankingPoints = true,
+                    participantIds = listOf(p1.id, p2.id),
+                )
+            seedCompletedOpenPlayFixture(eventId = UUID.fromString(event.id), host = host, p1 = p1, p2 = p2)
+
+            val finalized =
+                client.post(urlString = "/api/v1/events/${event.id}/finalize") {
+                    header(key = HttpHeaders.Authorization, value = "Bearer $admin")
+                }.body<EventResponse>()
+
+            finalized.awardingSuppressedByGlobalFlag.shouldBeFalse()
+            // Open-play pays both sides (winner 3, loser 0) — the flag-on path is unchanged.
+            RankingPointRepository().listActiveByEvent(eventId = UUID.fromString(event.id)) shouldHaveSize 2
+        }
+
+    /** Seed a COMPLETED open-play singles fixture on [eventId] won by [p1] — the thing a finalize pays out on. */
+    private fun seedCompletedOpenPlayFixture(
+        eventId: UUID,
+        host: User,
+        p1: User,
+        p2: User,
+    ) {
+        val matchRepo = MatchRepository()
+        val fixture =
+            matchRepo.createFixture(
+                command =
+                    CreateFixtureCommand(
+                        matchFormat = TeamType.SINGLES,
+                        matchType = MatchType.OPEN_PLAY,
+                        matchDate = LocalDate.now(),
+                        team1UserIds = listOf(element = p1.id),
+                        team2UserIds = listOf(element = p2.id),
+                        team1Name = "t1",
+                        team2Name = "t2",
+                        createdBy = host.id,
+                        eventId = eventId,
+                    ),
+            ).toDomain()
+        matchRepo.addResult(
+            matchId = fixture.id,
+            sets = listOf(element = MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 4, winnerTeamId = fixture.team1.teamId)),
+            winnerTeamId = fixture.team1.teamId,
+            recordedBy = host.id,
+            completedAt = LocalDateTime.now(),
+        )
+    }
 
     // --- Reverse Ratings (#478). ---
 

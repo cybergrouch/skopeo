@@ -50,6 +50,7 @@ import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RankingPointRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
+import org.skopeo.testsupport.TestAppSettings
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.util.UUID
@@ -110,20 +111,26 @@ class EventReverseRatingsTest {
     private fun budgetedEvent(
         hostUid: String,
         participants: List<UUID>,
-    ) = service.create(
-        token = token(uid = hostUid),
-        input =
-            CreateEventInput(
-                name = "Spring Open",
-                startDate = LocalDate.now(),
-                endDate = LocalDate.now().plusDays(7),
-                participantIds = participants,
-                // TOURNAMENT is the host-designated awarding type (#525).
-                type = EventType.TOURNAMENT.name,
-                // A tournament must reference a circuit (#525).
-                circuitId = seedCircuit(hostUid = hostUid),
-            ),
-    ).shouldBeRight().domain()
+    ): Event {
+        // The global award flag (#641) gates awarding at create AND at finalize (#752) and defaults off;
+        // these fixtures need a finalize that actually pays out (so a reversal has awards to revoke).
+        val actor = requireNotNull(value = users.findByFirebaseUid(firebaseUid = hostUid)) { "unknown host $hostUid" }
+        TestAppSettings.setAwardRankingPoints(enabled = true, updatedBy = actor.toDomain().id)
+        return service.create(
+            token = token(uid = hostUid),
+            input =
+                CreateEventInput(
+                    name = "Spring Open",
+                    startDate = LocalDate.now(),
+                    endDate = LocalDate.now().plusDays(7),
+                    participantIds = participants,
+                    // TOURNAMENT is the host-designated awarding type (#525).
+                    type = EventType.TOURNAMENT.name,
+                    // A tournament must reference a circuit (#525).
+                    circuitId = seedCircuit(hostUid = hostUid),
+                ),
+        ).shouldBeRight().domain()
+    }
 
     /** Seed a circuit (#525) attributed to [hostUid]; a tournament must reference one. */
     private fun seedCircuit(hostUid: String): UUID {

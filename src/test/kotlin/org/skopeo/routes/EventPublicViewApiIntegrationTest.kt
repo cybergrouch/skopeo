@@ -37,6 +37,7 @@ import org.skopeo.domain.model.UserName
 import org.skopeo.module
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
+import org.skopeo.testsupport.TestAppSettings
 import org.skopeo.testsupport.TestFirebaseAuth
 import java.time.LocalDate
 
@@ -108,7 +109,10 @@ class EventPublicViewApiIntegrationTest {
     @Test
     fun `the public event payload carries the format, class, finalized state, and ranking-points flag (#741)`() =
         withApp { client ->
-            seedUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+            val hostUser = seedUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+            // The global award flag (#641) is enforced at create (#752) and defaults off; turn it on so the
+            // event keeps the awardRankingPoints opt-in this payload assertion is about.
+            TestAppSettings.setAwardRankingPoints(enabled = true, updatedBy = hostUser.id)
             val host = tokenFor(uid = "host")
             val event = client.createEvent(token = host, format = "DOUBLES")
 

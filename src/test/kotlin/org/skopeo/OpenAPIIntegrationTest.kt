@@ -260,6 +260,9 @@ class OpenAPIIntegrationTest {
             // Single "Award Ranking Points" flag (#559): the per-event points budget + designation
             // subsystem was removed; awarding is controlled solely by this event-level flag.
             body shouldContain "awardRankingPoints"
+            // Server-side enforcement of the global award flag (#752): a finalize whose payout the flag
+            // suppressed reports it, so the contract can't be read as "finalized ⇒ points paid".
+            body shouldContain "awardingSuppressedByGlobalFlag"
         }
 
     /** The removed points budget + designation subsystem (#559/#561) leaves no trace in the spec. */
