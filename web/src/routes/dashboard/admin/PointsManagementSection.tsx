@@ -35,7 +35,7 @@ export function PointsManagementSection({
   capabilities: readonly Capability[];
 }) {
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
       <PointsSchedulesSection />
       {canManagePointsBudget(capabilities) ? <AwardedPointsCard /> : null}
       <StandingsCalculationSection capabilities={capabilities} />

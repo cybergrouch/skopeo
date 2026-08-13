@@ -6,7 +6,7 @@ import { ActivityLogSection } from './admin/ActivityLogSection'
  */
 export function ActivityTab() {
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
       <ActivityLogSection />
     </div>
   )

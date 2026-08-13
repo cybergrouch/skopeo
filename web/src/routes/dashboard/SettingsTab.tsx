@@ -29,7 +29,7 @@ export function SettingsTab({ userId }: SettingsTabProps) {
   const hasRating = (ratingsQuery.data ?? []).length > 0;
 
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
       {/* Rating reconsideration only makes sense once a starting rating has been assigned. */}
       {hasRating ? <ReRateRequestCard /> : null}
 
