@@ -1,17 +1,17 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { AuthLayout } from '@/components/AuthLayout'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { useAuth } from '@/auth/useAuth'
-import { useGetApiV1SettingsFacebookLogin } from '@/api/generated/settings/settings'
-import { usePostApiV1Users } from '@/api/generated/users/users'
-import type { CreateUserRequestSex } from '@/api/generated/model'
-import { NtrpSelfRatingSelect } from '@/components/NtrpSelfRatingSelect'
-import { authErrorMessage } from '@/lib/firebase-errors'
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { AuthLayout } from "@/components/AuthLayout";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useAuth } from "@/auth/useAuth";
+import { useGetApiV1SettingsFacebookLogin } from "@/api/generated/settings/settings";
+import { usePostApiV1Users } from "@/api/generated/users/users";
+import type { CreateUserRequestSex } from "@/api/generated/model";
+import { NtrpSelfRatingSelect } from "@/components/NtrpSelfRatingSelect";
+import { authErrorMessage } from "@/lib/firebase-errors";
 
-const SEXES = ['Male', 'Female'] as const
+const SEXES = ["Male", "Female"] as const;
 
 /**
  * Self-serve sign-up is OAuth-only (Google/Facebook), which arrives email-verified. Manual
@@ -19,31 +19,34 @@ const SEXES = ['Male', 'Female'] as const
  * onboard via the email-link on the /invite page, then sign in with email+password thereafter.
  */
 export function SignUpPage() {
-  const navigate = useNavigate()
-  const { signInWithGoogle, signInWithFacebook } = useAuth()
+  const navigate = useNavigate();
+  const { signInWithGoogle, signInWithFacebook } = useAuth();
   // Facebook login can be turned off app-wide (#647); show the button unless the flag is explicitly false.
   const facebookEnabled =
-    useGetApiV1SettingsFacebookLogin({ query: { retry: false } }).data?.enabled !== false
-  const provision = usePostApiV1Users()
+    useGetApiV1SettingsFacebookLogin({ query: { retry: false } }).data
+      ?.enabled !== false;
+  const provision = usePostApiV1Users();
 
-  const [name, setName] = useState('')
-  const [sex, setSex] = useState('')
-  const [dateOfBirth, setDateOfBirth] = useState('')
-  const [proposedRating, setProposedRating] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
+  const [name, setName] = useState("");
+  const [sex, setSex] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
+  const [proposedRating, setProposedRating] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   // Sex + date of birth are required up front (the OAuth popup yields neither), then the profile
   // is provisioned from the verified token.
   async function onOAuth(signIn: () => Promise<unknown>, provider: string) {
     if (!sex || !dateOfBirth || !proposedRating) {
-      setError(`Please enter your date of birth, sex, and NTRP self-rating before continuing with ${provider}.`)
-      return
+      setError(
+        `Please enter your date of birth, sex, and NTRP self-rating before continuing with ${provider}.`,
+      );
+      return;
     }
-    setError(null)
-    setBusy(true)
+    setError(null);
+    setBusy(true);
     try {
-      await signIn()
+      await signIn();
       await provision.mutateAsync({
         data: {
           displayName: name.trim() || null,
@@ -51,11 +54,11 @@ export function SignUpPage() {
           dateOfBirth,
           proposedRating,
         },
-      })
-      navigate('/dashboard', { replace: true })
+      });
+      navigate("/dashboard", { replace: true });
     } catch (err) {
-      setError(authErrorMessage(err))
-      setBusy(false)
+      setError(authErrorMessage(err));
+      setBusy(false);
     }
   }
 
@@ -65,8 +68,11 @@ export function SignUpPage() {
       description="Sign up with Google or Facebook to track your tennis rating."
       footer={
         <>
-          Already have an account?{' '}
-          <Link to="/login" className="font-medium text-primary hover:underline">
+          Already have an account?{" "}
+          <Link
+            to="/login"
+            className="font-medium text-primary hover:underline"
+          >
             Sign in
           </Link>
         </>
@@ -112,7 +118,10 @@ export function SignUpPage() {
             ))}
           </select>
         </div>
-        <NtrpSelfRatingSelect value={proposedRating} onChange={setProposedRating} />
+        <NtrpSelfRatingSelect
+          value={proposedRating}
+          onChange={setProposedRating}
+        />
         {error ? (
           <p className="text-sm text-destructive" role="alert">
             {error}
@@ -123,7 +132,7 @@ export function SignUpPage() {
           type="button"
           variant="outline"
           className="w-full"
-          onClick={() => void onOAuth(signInWithGoogle, 'Google')}
+          onClick={() => void onOAuth(signInWithGoogle, "Google")}
           disabled={busy}
         >
           Continue with Google
@@ -133,7 +142,7 @@ export function SignUpPage() {
             type="button"
             variant="outline"
             className="w-full"
-            onClick={() => void onOAuth(signInWithFacebook, 'Facebook')}
+            onClick={() => void onOAuth(signInWithFacebook, "Facebook")}
             disabled={busy}
           >
             Continue with Facebook
@@ -145,5 +154,5 @@ export function SignUpPage() {
         </p>
       </div>
     </AuthLayout>
-  )
+  );
 }

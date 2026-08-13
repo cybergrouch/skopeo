@@ -1,125 +1,153 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Routes, Route } from 'react-router-dom'
-import { PlayerMatchesPage } from './PlayerMatchesPage'
-import type { PlayerMatchHistoryEntry } from '@/api/generated/model'
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { MemoryRouter, Routes, Route } from "react-router-dom";
+import { PlayerMatchesPage } from "./PlayerMatchesPage";
+import type { PlayerMatchHistoryEntry } from "@/api/generated/model";
 
 const { useGetApiV1PlayersCodeMatchHistory } = vi.hoisted(() => ({
   useGetApiV1PlayersCodeMatchHistory: vi.fn(),
-}))
-vi.mock('@/api/generated/users/users', () => ({ useGetApiV1PlayersCodeMatchHistory }))
+}));
+vi.mock("@/api/generated/users/users", () => ({
+  useGetApiV1PlayersCodeMatchHistory,
+}));
 // Make the search debounce a pass-through so typing flows straight to the query in tests.
-vi.mock('@/hooks/useDebouncedValue', () => ({ useDebouncedValue: (v: string) => v }))
+vi.mock("@/hooks/useDebouncedValue", () => ({
+  useDebouncedValue: (v: string) => v,
+}));
 // PublicPageNav reads auth; stub it so Firebase never initializes.
-vi.mock('@/components/PublicPageNav', () => ({ PublicPageNav: () => <nav>nav</nav> }))
+vi.mock("@/components/PublicPageNav", () => ({
+  PublicPageNav: () => <nav>nav</nav>,
+}));
 
 function match(id: string, opponent: string): PlayerMatchHistoryEntry {
   return {
     matchId: id,
     publicCode: id.toUpperCase(),
-    matchDate: '2026-01-01',
-    status: 'COMPLETED',
+    matchDate: "2026-01-01",
+    status: "COMPLETED",
     rated: false,
-    result: 'WIN',
-    setScores: ['6-4'],
+    result: "WIN",
+    setScores: ["6-4"],
     partners: [],
-    opponents: [{ publicCode: `${opponent}1`, displayName: opponent, photoUrl: null, levelAtMatch: null }],
+    opponents: [
+      {
+        publicCode: `${opponent}1`,
+        displayName: opponent,
+        photoUrl: null,
+        levelAtMatch: null,
+      },
+    ],
     playerLevelAtMatch: null,
-  }
+  };
 }
 
 function renderPage() {
   return render(
-    <MemoryRouter initialEntries={['/players/K7Q2MX/matches']}>
+    <MemoryRouter initialEntries={["/players/K7Q2MX/matches"]}>
       <Routes>
         <Route path="/players/:code/matches" element={<PlayerMatchesPage />} />
       </Routes>
     </MemoryRouter>,
-  )
+  );
 }
 
-describe('PlayerMatchesPage', () => {
+describe("PlayerMatchesPage", () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    vi.clearAllMocks();
     useGetApiV1PlayersCodeMatchHistory.mockReturnValue({
-      data: { items: [match('a', 'Ben'), match('b', 'Cara')], total: 45 },
+      data: { items: [match("a", "Ben"), match("b", "Cara")], total: 45 },
       isLoading: false,
-    })
-  })
+    });
+  });
 
-  it('renders a page of matches with the pager and requests the first page', () => {
-    renderPage()
-    expect(screen.getByText('Ben')).toBeInTheDocument()
-    expect(screen.getByText('Cara')).toBeInTheDocument()
-    expect(screen.getByText('Showing 1–20 of 45')).toBeInTheDocument()
+  it("renders a page of matches with the pager and requests the first page", () => {
+    renderPage();
+    expect(screen.getByText("Ben")).toBeInTheDocument();
+    expect(screen.getByText("Cara")).toBeInTheDocument();
+    expect(screen.getByText("Showing 1–20 of 45")).toBeInTheDocument();
     expect(useGetApiV1PlayersCodeMatchHistory).toHaveBeenLastCalledWith(
-      'K7Q2MX',
+      "K7Q2MX",
       { limit: 20, offset: 0, search: undefined },
       { query: { enabled: true } },
-    )
-  })
+    );
+  });
 
-  it('requests the next page by offset', async () => {
-    const user = userEvent.setup()
-    renderPage()
-    await user.click(screen.getByRole('button', { name: 'Next' }))
+  it("requests the next page by offset", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole("button", { name: "Next" }));
     expect(useGetApiV1PlayersCodeMatchHistory).toHaveBeenLastCalledWith(
-      'K7Q2MX',
+      "K7Q2MX",
       { limit: 20, offset: 20, search: undefined },
       { query: { enabled: true } },
-    )
-  })
+    );
+  });
 
-  it('searches server-side and resets to the first page', async () => {
-    const user = userEvent.setup()
-    renderPage()
-    await user.click(screen.getByRole('button', { name: 'Next' })) // move off page 0 first
-    await user.type(screen.getByPlaceholderText('Search opponent…'), 'ben')
+  it("searches server-side and resets to the first page", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole("button", { name: "Next" })); // move off page 0 first
+    await user.type(screen.getByPlaceholderText("Search opponent…"), "ben");
     expect(useGetApiV1PlayersCodeMatchHistory).toHaveBeenLastCalledWith(
-      'K7Q2MX',
-      { limit: 20, offset: 0, search: 'ben' },
+      "K7Q2MX",
+      { limit: 20, offset: 0, search: "ben" },
       { query: { enabled: true } },
-    )
-  })
+    );
+  });
 
-  it('filters by opponent NTRP band server-side and resets to the first page (#563)', async () => {
-    const user = userEvent.setup()
-    renderPage()
-    await user.click(screen.getByRole('button', { name: 'Next' })) // move off page 0 first
-    await user.selectOptions(screen.getByLabelText('Filter by opponent NTRP band'), '4.0')
+  it("filters by opponent NTRP band server-side and resets to the first page (#563)", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole("button", { name: "Next" })); // move off page 0 first
+    await user.selectOptions(
+      screen.getByLabelText("Filter by opponent NTRP band"),
+      "4.0",
+    );
     expect(useGetApiV1PlayersCodeMatchHistory).toHaveBeenLastCalledWith(
-      'K7Q2MX',
-      { limit: 20, offset: 0, search: undefined, opponentBand: '4.0' },
+      "K7Q2MX",
+      { limit: 20, offset: 0, search: undefined, opponentBand: "4.0" },
       { query: { enabled: true } },
-    )
-  })
+    );
+  });
 
-  it('shows a loading state', () => {
-    useGetApiV1PlayersCodeMatchHistory.mockReturnValue({ data: undefined, isLoading: true })
-    renderPage()
-    expect(screen.getByText('Loading…')).toBeInTheDocument()
-  })
-
-  it('shows a search-specific empty state', async () => {
-    useGetApiV1PlayersCodeMatchHistory.mockReturnValue({ data: { items: [], total: 0 }, isLoading: false })
-    const user = userEvent.setup()
-    renderPage()
-    expect(screen.getByText('No matches yet.')).toBeInTheDocument()
-    await user.type(screen.getByPlaceholderText('Search opponent…'), 'zzz')
-    expect(screen.getByText('No matches for that filter.')).toBeInTheDocument()
-  })
-
-  it('shows a privacy notice when the owner has hidden their match history (#622)', () => {
+  it("shows a loading state", () => {
     useGetApiV1PlayersCodeMatchHistory.mockReturnValue({
-      data: { items: [match('a', 'Ben'), match('b', 'Cara')], total: 45, hidden: true },
+      data: undefined,
+      isLoading: true,
+    });
+    renderPage();
+    expect(screen.getByText("Loading…")).toBeInTheDocument();
+  });
+
+  it("shows a search-specific empty state", async () => {
+    useGetApiV1PlayersCodeMatchHistory.mockReturnValue({
+      data: { items: [], total: 0 },
       isLoading: false,
-    })
-    renderPage()
-    expect(screen.getByText('This player has hidden their match history.')).toBeInTheDocument()
+    });
+    const user = userEvent.setup();
+    renderPage();
+    expect(screen.getByText("No matches yet.")).toBeInTheDocument();
+    await user.type(screen.getByPlaceholderText("Search opponent…"), "zzz");
+    expect(screen.getByText("No matches for that filter.")).toBeInTheDocument();
+  });
+
+  it("shows a privacy notice when the owner has hidden their match history (#622)", () => {
+    useGetApiV1PlayersCodeMatchHistory.mockReturnValue({
+      data: {
+        items: [match("a", "Ben"), match("b", "Cara")],
+        total: 45,
+        hidden: true,
+      },
+      isLoading: false,
+    });
+    renderPage();
+    expect(
+      screen.getByText("This player has hidden their match history."),
+    ).toBeInTheDocument();
     // The match rows and pager are suppressed even though items are present.
-    expect(screen.queryByText('Ben')).not.toBeInTheDocument()
-    expect(screen.queryByText('Cara')).not.toBeInTheDocument()
-    expect(screen.queryByText('Showing 1–20 of 45')).not.toBeInTheDocument()
-  })
-})
+    expect(screen.queryByText("Ben")).not.toBeInTheDocument();
+    expect(screen.queryByText("Cara")).not.toBeInTheDocument();
+    expect(screen.queryByText("Showing 1–20 of 45")).not.toBeInTheDocument();
+  });
+});

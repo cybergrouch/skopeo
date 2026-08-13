@@ -1,21 +1,21 @@
-import { useState, type FormEvent } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
-import { useQueryClient } from '@tanstack/react-query'
-import { AuthLayout } from '@/components/AuthLayout'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { useAuth } from '@/auth/useAuth'
+import { useState, type FormEvent } from "react";
+import { Navigate, useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
+import { AuthLayout } from "@/components/AuthLayout";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useAuth } from "@/auth/useAuth";
 import {
   useGetApiV1UsersMe,
   getGetApiV1UsersMeQueryKey,
   usePostApiV1Users,
-} from '@/api/generated/users/users'
-import type { CreateUserRequestSex } from '@/api/generated/model'
-import { NtrpSelfRatingSelect } from '@/components/NtrpSelfRatingSelect'
-import { authErrorMessage } from '@/lib/firebase-errors'
+} from "@/api/generated/users/users";
+import type { CreateUserRequestSex } from "@/api/generated/model";
+import { NtrpSelfRatingSelect } from "@/components/NtrpSelfRatingSelect";
+import { authErrorMessage } from "@/lib/firebase-errors";
 
-const SEXES = ['Male', 'Female'] as const
+const SEXES = ["Male", "Female"] as const;
 
 /**
  * Profile-completion step for an authenticated user with no Skopeo profile yet
@@ -25,23 +25,23 @@ const SEXES = ['Male', 'Female'] as const
  * `RequireProfile` routes unprovisioned users here.
  */
 export function CompleteProfilePage() {
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
-  const { user } = useAuth()
-  const meQuery = useGetApiV1UsersMe()
-  const provision = usePostApiV1Users()
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const meQuery = useGetApiV1UsersMe();
+  const provision = usePostApiV1Users();
 
-  const [name, setName] = useState(user?.displayName ?? '')
-  const [sex, setSex] = useState('')
-  const [dateOfBirth, setDateOfBirth] = useState('')
-  const [proposedRating, setProposedRating] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
+  const [name, setName] = useState(user?.displayName ?? "");
+  const [sex, setSex] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
+  const [proposedRating, setProposedRating] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   async function onSubmit(event: FormEvent) {
-    event.preventDefault()
-    setError(null)
-    setBusy(true)
+    event.preventDefault();
+    setError(null);
+    setBusy(true);
     try {
       await provision.mutateAsync({
         data: {
@@ -50,12 +50,14 @@ export function CompleteProfilePage() {
           dateOfBirth,
           proposedRating,
         },
-      })
-      await queryClient.invalidateQueries({ queryKey: getGetApiV1UsersMeQueryKey() })
-      navigate('/dashboard', { replace: true })
+      });
+      await queryClient.invalidateQueries({
+        queryKey: getGetApiV1UsersMeQueryKey(),
+      });
+      navigate("/dashboard", { replace: true });
     } catch (err) {
-      setError(authErrorMessage(err))
-      setBusy(false)
+      setError(authErrorMessage(err));
+      setBusy(false);
     }
   }
 
@@ -64,11 +66,11 @@ export function CompleteProfilePage() {
       <div className="flex min-h-svh items-center justify-center text-muted-foreground">
         Loading…
       </div>
-    )
+    );
   }
   // Already provisioned (e.g. navigated here directly) — nothing to complete.
   if (meQuery.isSuccess) {
-    return <Navigate to="/dashboard" replace />
+    return <Navigate to="/dashboard" replace />;
   }
 
   return (
@@ -116,16 +118,19 @@ export function CompleteProfilePage() {
             ))}
           </select>
         </div>
-        <NtrpSelfRatingSelect value={proposedRating} onChange={setProposedRating} />
+        <NtrpSelfRatingSelect
+          value={proposedRating}
+          onChange={setProposedRating}
+        />
         {error ? (
           <p className="text-sm text-destructive" role="alert">
             {error}
           </p>
         ) : null}
         <Button type="submit" className="w-full" disabled={busy}>
-          {busy ? 'Saving…' : 'Save and continue'}
+          {busy ? "Saving…" : "Save and continue"}
         </Button>
       </form>
     </AuthLayout>
-  )
+  );
 }

@@ -1,48 +1,49 @@
-import { useState, type FormEvent } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { AuthLayout } from '@/components/AuthLayout'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { useAuth } from '@/auth/useAuth'
-import { useGetApiV1SettingsFacebookLogin } from '@/api/generated/settings/settings'
-import { authErrorMessage } from '@/lib/firebase-errors'
+import { useState, type FormEvent } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { AuthLayout } from "@/components/AuthLayout";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useAuth } from "@/auth/useAuth";
+import { useGetApiV1SettingsFacebookLogin } from "@/api/generated/settings/settings";
+import { authErrorMessage } from "@/lib/firebase-errors";
 
 interface LocationState {
-  from?: { pathname?: string }
+  from?: { pathname?: string };
 }
 
 export function LoginPage() {
-  const navigate = useNavigate()
-  const location = useLocation()
-  const { signInWithEmail, signInWithGoogle, signInWithFacebook } = useAuth()
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { signInWithEmail, signInWithGoogle, signInWithFacebook } = useAuth();
   // Facebook login can be turned off app-wide (#647); show the button unless the flag is explicitly false.
   const facebookEnabled =
-    useGetApiV1SettingsFacebookLogin({ query: { retry: false } }).data?.enabled !== false
+    useGetApiV1SettingsFacebookLogin({ query: { retry: false } }).data
+      ?.enabled !== false;
 
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const from =
-    (location.state as LocationState | null)?.from?.pathname ?? '/dashboard'
+    (location.state as LocationState | null)?.from?.pathname ?? "/dashboard";
 
   async function run(action: () => Promise<unknown>) {
-    setError(null)
-    setBusy(true)
+    setError(null);
+    setBusy(true);
     try {
-      await action()
-      navigate(from, { replace: true })
+      await action();
+      navigate(from, { replace: true });
     } catch (err) {
-      setError(authErrorMessage(err))
-      setBusy(false)
+      setError(authErrorMessage(err));
+      setBusy(false);
     }
   }
 
   function onSubmit(event: FormEvent) {
-    event.preventDefault()
-    void run(() => signInWithEmail(email, password))
+    event.preventDefault();
+    void run(() => signInWithEmail(email, password));
   }
 
   return (
@@ -51,13 +52,19 @@ export function LoginPage() {
       description="Sign in to your Skopeo account"
       footer={
         <>
-          Don&apos;t have an account?{' '}
-          <Link to="/signup" className="font-medium text-primary hover:underline">
+          Don&apos;t have an account?{" "}
+          <Link
+            to="/signup"
+            className="font-medium text-primary hover:underline"
+          >
             Sign up
           </Link>
           <span className="mt-1 block text-muted-foreground">
-            New to Skopeo?{' '}
-            <Link to="/about" className="font-medium text-primary hover:underline">
+            New to Skopeo?{" "}
+            <Link
+              to="/about"
+              className="font-medium text-primary hover:underline"
+            >
               What is Skopeo?
             </Link>
           </span>
@@ -94,7 +101,7 @@ export function LoginPage() {
           </p>
         ) : null}
         <Button type="submit" className="w-full" disabled={busy}>
-          {busy ? 'Signing in…' : 'Sign in'}
+          {busy ? "Signing in…" : "Sign in"}
         </Button>
       </form>
 
@@ -129,5 +136,5 @@ export function LoginPage() {
         </Button>
       ) : null}
     </AuthLayout>
-  )
+  );
 }
