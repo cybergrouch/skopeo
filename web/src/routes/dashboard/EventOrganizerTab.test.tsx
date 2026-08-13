@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -191,6 +197,34 @@ describe("EventOrganizerTab", () => {
     expect(screen.getByText("Filed by Hank")).toBeInTheDocument();
     // The creator-less event renders no "Filed by" line — only the one with a known creator does.
     expect(screen.getAllByText(/Filed by/)).toHaveLength(1);
+  });
+
+  it("badges a rated event, and only once the whole event is rated (#772)", async () => {
+    // Finalizing only queues the matches; the badge marks the run having actually landed.
+    const rated = {
+      ...event,
+      id: "r1",
+      name: "Rated Champs",
+      isFinalized: true,
+      completedMatchCount: 2,
+      isRated: true,
+    };
+    const awaiting = {
+      ...event,
+      id: "r2",
+      name: "Queued Champs",
+      isFinalized: true,
+      completedMatchCount: 2,
+      isRated: false,
+    };
+    useGetApiV1Events.mockReturnValue({ data: [rated, awaiting], isLoading: false });
+    renderTab();
+    expandGroup("Open");
+
+    const ratedRow = screen.getByText("Rated Champs").closest("button");
+    const awaitingRow = screen.getByText("Queued Champs").closest("button");
+    expect(within(ratedRow as HTMLElement).getByText("Rated")).toBeInTheDocument();
+    expect(within(awaitingRow as HTMLElement).queryByText("Rated")).not.toBeInTheDocument();
   });
 
   it("buckets events into Upcoming / Unfinalized / Finalized (#483)", () => {

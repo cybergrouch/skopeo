@@ -133,6 +133,11 @@ data class EventResponse(
     // Number of recorded results (COMPLETED with a decided winner) in this event (#483); the client's
     // "has results" signal for the Unfinalized bucket. Zero when no result has been recorded yet.
     val completedMatchCount: Int = 0,
+    // True once EVERY recorded result in this event has been rated (#772) — the event list's "Rated"
+    // badge. Deliberately binary: a rating run completes in seconds, so a partly-rated event is
+    // transient and reads as not-yet-rated. False for an event with no recorded results at all — "all
+    // results are rated" is vacuously true of none, which is not what a reader would take it to mean.
+    val isRated: Boolean = false,
     // Whether finalizing this event awards ranking points per the global schedules (#559). Default true.
     val awardRankingPoints: Boolean = true,
     // Finalize outcome only (#752): true when this finalize awarded nothing because the global

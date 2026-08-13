@@ -201,9 +201,18 @@ class EventService(
             val views = events.list(createdBy = scopedTo).map { toView(event = it.toDomain()) }
             // Batched "has results" counts (#483) + the raw-rating reveal flag, assembled here so the route
             // stays thin and never touches the mapper: an ADMINISTRATOR sees raw NTRP values on the roster.
-            val counts = completedResultCounts(eventIds = views.map { it.event.id })
+            val eventIds = views.map { it.event.id }
+            val counts = completedResultCounts(eventIds = eventIds)
+            // The rated twin (#772), batched the same way, so the list can badge a fully rated event.
+            val rated = ratedResultCounts(eventIds = eventIds)
             val showRaw = callerCanSeeRawRating(token = token)
-            views.map { it.toResponse(completedMatchCount = counts[it.event.id] ?: 0, showRawRating = showRaw) }
+            views.map {
+                it.toResponse(
+                    completedMatchCount = counts[it.event.id] ?: 0,
+                    ratedMatchCount = rated[it.event.id] ?: 0,
+                    showRawRating = showRaw,
+                )
+            }
         }
 
     /**
@@ -226,6 +235,13 @@ class EventService(
      * lists — the "has results" signal that keeps a not-yet-finalized event with results out of Upcoming.
      */
     fun completedResultCounts(eventIds: List<UUID>): Map<UUID, Int> = matches.completedResultCountByEvents(eventIds = eventIds)
+
+    /**
+     * The RATED recorded-result count per event id for a page of events (#772), batched in the same
+     * single grouped query style as [completedResultCounts]. Compared against that count it yields the
+     * event list's "Rated" badge; ids with no rated results are absent and default to 0.
+     */
+    fun ratedResultCounts(eventIds: List<UUID>): Map<UUID, Int> = matches.ratedResultCountByEvents(eventIds = eventIds)
 
     fun get(
         token: VerifiedFirebaseToken,

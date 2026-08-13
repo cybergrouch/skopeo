@@ -6678,6 +6678,13 @@ components:
         completedMatchCount:
           type: integer
           description: Recorded results (COMPLETED with a decided winner) in the event (#483); the client's has-results signal.
+        isRated:
+          type: boolean
+          description: >-
+            True once every recorded result in the event has been rated (#772) — the event list's
+            "Rated" badge. Binary by design: a partly-rated event reads as not rated, since a rating run
+            completes in seconds. False for an event with no recorded results. Populated on the event
+            list payload only, like completedMatchCount.
         awardRankingPoints:
           type: boolean
           description: Whether finalizing this event awards ranking points per the global schedules (#559); default true.
