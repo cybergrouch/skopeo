@@ -59,3 +59,51 @@ jobs:
             --set-env-vars "^##^FIREBASE_PROJECT_ID=${{ vars.FIREBASE_PROJECT_ID }}##DATABASE_URL=${{ vars.DATABASE_URL }}##DATABASE_USER=${{ vars.DATABASE_USER }}##WEB_ORIGINS=${{ vars.WEB_ORIGINS }}" \
             --set-secrets "DATABASE_PASSWORD=skopeo-db-password:latest,ADMIN_EMAILS=skopeo-admin-emails:latest" \
             --quiet
+
+      # Post-deploy smoke check: does the browser's CORS preflight actually pass?
+      #
+      # The SPA calls the API cross-origin, so every request is gated by a preflight the server must
+      # approve. Ktor's CORS plugin rejects the WHOLE preflight when any requested header or method is
+      # unknown, which takes down every API call at once rather than degrading one route. This has now
+      # bitten twice — PATCH once, then the X-Client-Version header (#752) — and neither was reachable
+      # locally, because the Vite dev proxy makes /api same-origin and never preflights.
+      #
+      # So assert it against the deployed revision, from the real browser origin, with the headers the
+      # bundle actually sends. A 403 (or a missing Access-Control-Allow-Origin) fails the deploy.
+      - name: Verify CORS preflight from the web origin
+        run: |
+          set -euo pipefail
+          SERVICE_URL=$(gcloud run services describe "${{ vars.CLOUD_RUN_SERVICE || 'skopeo' }}" \
+            --project "${{ vars.GCP_PROJECT_ID }}" \
+            --region "${{ vars.GCP_REGION || 'asia-southeast1' }}" \
+            --format='value(status.url)')
+          # The first configured web origin is the one the browser will actually send.
+          ORIGIN="${WEB_ORIGINS%%,*}"
+          if [ -z "${ORIGIN}" ]; then
+            echo "::error::WEB_ORIGINS is empty, so the API allows no browser origin at all."
+            exit 1
+          fi
+          echo "Preflighting ${SERVICE_URL}/api/v1/theme from ${ORIGIN}"
+
+          RESPONSE=$(curl -sS -o /dev/null -D - -X OPTIONS "${SERVICE_URL}/api/v1/theme" \
+            -H "Origin: ${ORIGIN}" \
+            -H "Access-Control-Request-Method: GET" \
+            -H "Access-Control-Request-Headers: ${REQUEST_HEADERS}" \
+            --max-time 30)
+          echo "${RESPONSE}"
+
+          STATUS=$(printf '%s' "${RESPONSE}" | head -n 1 | awk '{print $2}')
+          if [ "${STATUS}" != "200" ]; then
+            echo "::error::CORS preflight returned ${STATUS} — the browser will block every API call from ${ORIGIN}."
+            exit 1
+          fi
+          if ! printf '%s' "${RESPONSE}" | grep -qi '^access-control-allow-origin:'; then
+            echo "::error::CORS preflight passed with 200 but carried no Access-Control-Allow-Origin header."
+            exit 1
+          fi
+          echo "CORS preflight OK."
+        env:
+          WEB_ORIGINS: ${{ vars.WEB_ORIGINS }}
+          # Every non-simple header the web bundle sends. Add to this list when the client does
+          # (web/src/api/axios.ts), so the deploy fails here rather than in someone's browser.
+          REQUEST_HEADERS: authorization,content-type,x-client-version
