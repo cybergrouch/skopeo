@@ -110,17 +110,34 @@ describe("FeatureFlagsSection", () => {
     );
   });
 
-  it("shows the raw-ratings toggle checked when not previewing as non-admin", () => {
+  it("shows the hide-raw-ratings toggle unchecked by default (#743)", () => {
+    // Seeing raw values is the default for an admin, so the opt-out starts off.
     renderSection();
-    expect(screen.getByLabelText("Show raw NTRP ratings")).toBeChecked();
+    expect(screen.getByLabelText("Hide raw NTRP ratings")).not.toBeChecked();
   });
 
-  it("unchecking raw ratings sends previewAsNonAdmin=true and shows Saved", async () => {
+  it("reflects the stored flag without inverting it (#743)", () => {
+    useMe.mockReturnValue({ data: { previewRatingsAsNonAdmin: true }, isLoading: false });
+    renderSection();
+    expect(screen.getByLabelText("Hide raw NTRP ratings")).toBeChecked();
+  });
+
+  it("checking hide-raw-ratings sends previewAsNonAdmin=true and shows Saved (#743)", async () => {
     const user = userEvent.setup();
     renderSection();
-    await user.click(screen.getByLabelText("Show raw NTRP ratings"));
+    await user.click(screen.getByLabelText("Hide raw NTRP ratings"));
     await waitFor(() => expect(rawMutate).toHaveBeenCalledWith({ data: { previewAsNonAdmin: true } }));
     await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith("Saved"));
+  });
+
+  it("unchecking it sends previewAsNonAdmin=false, restoring raw values (#743)", async () => {
+    useMe.mockReturnValue({ data: { previewRatingsAsNonAdmin: true }, isLoading: false });
+    const user = userEvent.setup();
+    renderSection();
+    await user.click(screen.getByLabelText("Hide raw NTRP ratings"));
+    await waitFor(() =>
+      expect(rawMutate).toHaveBeenCalledWith({ data: { previewAsNonAdmin: false } }),
+    );
   });
 
   it("surfaces an error when saving the raw-ratings preference fails", async () => {
@@ -130,7 +147,7 @@ describe("FeatureFlagsSection", () => {
     }));
     const user = userEvent.setup();
     renderSection();
-    await user.click(screen.getByLabelText("Show raw NTRP ratings"));
+    await user.click(screen.getByLabelText("Hide raw NTRP ratings"));
     await waitFor(() =>
       expect(toastError).toHaveBeenCalledWith("Could not update the setting. Try again.", {
         duration: 8000,
