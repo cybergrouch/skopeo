@@ -7066,6 +7066,13 @@ components:
         - winner
         - sets
       properties:
+        id:
+          type: string
+          format: uuid
+          nullable: true
+          description: >-
+            The internal match id, revealed to ADMINISTRATOR viewers only (#776) so the public page's
+            score-correction action can address the match. Null for every other viewer.
         publicCode:
           type: string
         matchFormat:

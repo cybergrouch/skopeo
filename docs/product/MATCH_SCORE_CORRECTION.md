@@ -1,6 +1,6 @@
 # Match Score Correction — How Changing a Rated Score Affects Ratings, Points, Confidence, and Clamping
 
-**Status:** Specified, not yet implemented (#776) · **Tracking issue:** [#776](https://github.com/cybergrouch/skopeo/issues/776) · Related: event-scoped reversal [#478](https://github.com/cybergrouch/skopeo/issues/478) (`service/event/EventRatingsReverser.kt`), persisted calculation breakdown [#97](https://github.com/cybergrouch/skopeo/issues/97), confidence [#459](https://github.com/cybergrouch/skopeo/issues/459).
+**Status:** Implemented (#776) · **Tracking issue:** [#776](https://github.com/cybergrouch/skopeo/issues/776) · Related: event-scoped reversal [#478](https://github.com/cybergrouch/skopeo/issues/478) (`service/event/EventRatingsReverser.kt`), persisted calculation breakdown [#97](https://github.com/cybergrouch/skopeo/issues/97), confidence [#459](https://github.com/cybergrouch/skopeo/issues/459).
 
 This is the reference for **what happens when an already-rated match's score is corrected**. Read it before changing anything in the correction path — several of the decisions here are deliberate approximations, and one of the open questions people keep re-asking (confidence) is already settled by the code.
 
@@ -92,14 +92,15 @@ Its **only** inputs are match **dates**, match **weight class**, and **`now`**. 
 
 ## 4. Who can do it, and where
 
-- **The public match page** (`/matches/:code`, `web/src/routes/MatchPage.tsx`) — not a dashboard tab.
-- **ADMINISTRATOR capability only.** That page is otherwise fully anonymous, so capability awareness there must be optional and must not break or delay the public render. The correction endpoint enforces ADMINISTRATOR server-side regardless; the UI gate is convenience, not security.
+- **The public match page** (`/matches/:code`, `web/src/routes/MatchPage.tsx`) — not a dashboard tab. The editor is `web/src/components/MatchScoreCorrectionCard.tsx`.
+- **ADMINISTRATOR capability only.** That page is otherwise fully anonymous, so the viewer lookup is best-effort: no token simply means no capabilities and no editor, and the public render is never blocked or delayed by it. `POST /api/v1/matches/{id}/score-correction` enforces ADMINISTRATOR server-side regardless; the UI gate is convenience, not security.
+- The endpoint is keyed by the match's internal UUID, which the public page does not otherwise expose. `MatchPublicResponse.id` is therefore **revealed to ADMINISTRATOR viewers only** — the same viewer-conditional shape the precise rating rates already use — and is null for everyone else. The editor renders nothing without it.
 - Editing the score runs the reversal **and** recalculation as **one operation** in **one transaction** — the admin does not separately reverse and re-rate.
-- **Dry-run preview is the confirmation surface.** The admin sees the per-player impact (current rating, delta reversed, new delta, resulting rating, level change, winner flip) and must explicitly confirm. Nothing commits on a single click, because the operation is destructive to rating state.
+- **Dry-run preview is the confirmation surface.** "Preview correction" calls the endpoint with `dryRun: true` (which writes nothing) and shows the per-player impact — current rating, delta reversed, new delta, net adjustment, resulting rating, band change, and a warning when the winner flips. Only the separate "Apply correction" sends `dryRun: false`. Editing any field after previewing retracts the Apply button, so an admin can never apply numbers they did not preview.
 
 ## 5. Visibility and audit
 
-- A corrected match carries a persisted marker driving a **"Re-rated" badge**, exposed on the public match response so the badge renders for everyone — a transparency signal that the score was corrected after rating.
+- A corrected match carries a persisted marker (`matches.re_rated_at`, alongside `re_rated_count`) driving a **"Re-rated" badge**, exposed on the public match response as `reRated` so the badge renders for everyone — a transparency signal that the score was corrected after rating, not a staff-only detail.
 - Both halves are written to the **Activity Log** (`GET /api/v1/audit` → Admin tab), mapped onto existing audit categories: the score edit under `MATCH_RESULT`, the re-rating under `RATING_CALCULATION`. Entry details carry the match public code, old → new score, any winner change, and per-player `oldDelta` / `newDelta` / net adjustment — the same payload shape as `EVENT_RATINGS_REVERSED`.
 
 ## 6. The accepted approximation — and why

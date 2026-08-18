@@ -6,6 +6,7 @@ package org.skopeo.routes
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -211,6 +212,24 @@ class MatchScoreCorrectionApiIntegrationTest {
                     it.reRated.shouldBeTrue()
                     it.sets.single().team2Games shouldBe 0
                 }
+        }
+
+    @Test
+    fun `the public match page reveals the internal match id to an administrator only (#776)`() =
+        withApp { client ->
+            val (adminToken, hostToken, match) = client.ratedMatch()
+
+            suspend fun idSeenBy(token: String?): String? =
+                client
+                    .get(urlString = "/api/v1/matches/code/${match.publicCode}") {
+                        token?.let { header(key = HttpHeaders.Authorization, value = "Bearer $it") }
+                    }.body<MatchPublicResponse>()
+                    .id
+
+            // Only an ADMINISTRATOR can act on the correction endpoint, so only they are handed the id.
+            idSeenBy(token = adminToken) shouldBe match.id
+            idSeenBy(token = hostToken).shouldBeNull()
+            idSeenBy(token = null).shouldBeNull()
         }
 
     @Test

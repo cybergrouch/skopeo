@@ -205,6 +205,9 @@ data class MatchPublicSet(
  */
 @Serializable
 data class MatchPublicResponse(
+    // The internal match id, revealed to ADMINISTRATOR viewers only (#776) so the public page's
+    // score-correction action can address the match; null for every other viewer.
+    val id: String? = null,
     val publicCode: String,
     val matchFormat: String,
     val matchType: String,

@@ -19,6 +19,10 @@ import { ShareCard } from "@/components/ShareCard";
 import { PublicPageShell } from "@/components/PublicPageShell";
 import { formatConfidence } from "@/lib/confidence";
 import { ConfidenceValue } from "@/components/ConfidenceValue";
+import { Badge } from "@/components/ui/badge";
+import { MatchScoreCorrectionCard } from "@/components/MatchScoreCorrectionCard";
+import { useGetApiV1UsersMe } from "@/api/generated/users/users";
+import { isAdministrator } from "@/auth/capabilities";
 
 /** A player's name as a link to their public profile, falling back to the code or "Unknown". */
 function PlayerLink({ player }: { player: MatchPublicPlayer }) {
@@ -217,6 +221,15 @@ export function MatchPage() {
   const query = useGetApiV1MatchesCodeCode(code);
   const match = query.data;
 
+  // This page renders for anonymous visitors, so the viewer lookup is best-effort: no token simply means
+  // no capabilities, and the admin-only score correction (#776) stays hidden. The server enforces the
+  // rule regardless — this gate only decides whether to offer the action.
+  const meQuery = useGetApiV1UsersMe();
+  const canCorrectScore =
+    isAdministrator(meQuery.data?.capabilities) &&
+    match?.rated === true &&
+    match?.isActive !== false;
+
   const score = match?.sets
     .map((s) => `${s.team1Games}-${s.team2Games}`)
     .join(" ");
@@ -237,7 +250,19 @@ export function MatchPage() {
       {match ? (
         <Card>
           <CardHeader>
-            <CardTitle>Match</CardTitle>
+            <CardTitle className="flex flex-wrap items-center gap-2">
+              Match
+              {/* A corrected score is flagged to everyone (#776), not just staff — the recorded result
+                  changed after it had been rated, and the players deserve to see that. */}
+              {match.reRated ? (
+                <Badge
+                  variant="secondary"
+                  title="This match's score was corrected after it had been rated."
+                >
+                  Re-rated
+                </Badge>
+              ) : null}
+            </CardTitle>
             <CardDescription>
               Match ID:{" "}
               <code className="select-all font-mono font-medium text-foreground">
@@ -307,6 +332,10 @@ export function MatchPage() {
             ) : null}
           </CardContent>
         </Card>
+      ) : null}
+
+      {match && canCorrectScore ? (
+        <MatchScoreCorrectionCard match={match} />
       ) : null}
 
       {match ? <HeadToHeadCard match={match} /> : null}

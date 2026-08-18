@@ -541,7 +541,14 @@ class MatchService(
                     val owning = events.getById(id = eventId).toDomain()
                     MatchPublicEvent(publicCode = owning.publicCode, name = owning.name)
                 }
-            match.toPublicResponse(players = players, ratingChanges = ratingChanges, headToHead = headToHead, event = event)
+            match.toPublicResponse(
+                players = players,
+                ratingChanges = ratingChanges,
+                headToHead = headToHead,
+                event = event,
+                // Only an ADMINISTRATOR may correct a rated score (#776), so only they get the id to act on.
+                revealId = callerIsAdministrator(token = token),
+            )
         }
 
     /**
@@ -689,6 +696,16 @@ class MatchService(
      * toggle; anonymous/non-admin (#193) ⇒ false, bands only. */
     private fun callerCanSeeRates(token: VerifiedFirebaseToken?): Boolean =
         token?.let { users.findByFirebaseUid(firebaseUid = it.uid)?.toDomain() }.canSeeRawRatingOrFalse()
+
+    /**
+     * Whether the (possibly absent) caller holds ADMINISTRATOR (#776). An anonymous or unprovisioned
+     * caller is simply not one, so the public page stays fully renderable without a token.
+     */
+    private fun callerIsAdministrator(token: VerifiedFirebaseToken?): Boolean =
+        token
+            ?.let { users.findByFirebaseUid(firebaseUid = it.uid)?.toDomain() }
+            ?.capabilities
+            ?.contains(element = Capability.ADMINISTRATOR) == true
 
     /**
      * The match result plus the stored per-player calculation behind it (#97), for the detail view

@@ -3,11 +3,18 @@ import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { MatchPage } from "./MatchPage";
 
-const { useGetApiV1MatchesCodeCode } = vi.hoisted(() => ({
+const { useGetApiV1MatchesCodeCode, useGetApiV1UsersMe } = vi.hoisted(() => ({
   useGetApiV1MatchesCodeCode: vi.fn(),
+  useGetApiV1UsersMe: vi.fn(),
 }));
 vi.mock("@/api/generated/matches/matches", () => ({
   useGetApiV1MatchesCodeCode,
+}));
+// The viewer lookup that gates the admin-only score correction (#776); anonymous by default.
+vi.mock("@/api/generated/users/users", () => ({ useGetApiV1UsersMe }));
+// The correction card is exercised in its own test; here we only assert the gating decision.
+vi.mock("@/components/MatchScoreCorrectionCard", () => ({
+  MatchScoreCorrectionCard: () => <div>Correct this score</div>,
 }));
 // The page renders PublicPageNav (#193), which reads auth; default to anonymous here.
 vi.mock("@/auth/useAuth", () => ({ useAuth: () => ({ user: null }) }));
@@ -39,7 +46,11 @@ function renderAt(code = "MTCH01") {
 }
 
 describe("MatchPage", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Anonymous by default: no capabilities, so no admin affordance.
+    useGetApiV1UsersMe.mockReturnValue({ data: undefined });
+  });
 
   it("shows a loading state", () => {
     useGetApiV1MatchesCodeCode.mockReturnValue({
@@ -505,5 +516,77 @@ describe("MatchPage", () => {
     renderAt();
 
     expect(screen.queryByText(/Part of event:/)).not.toBeInTheDocument();
+  });
+
+  describe("score correction (#776)", () => {
+    const ratedMatch = { ...match, id: "m-1", rated: true };
+
+    function showMatch(data: unknown) {
+      useGetApiV1MatchesCodeCode.mockReturnValue({ data, isLoading: false });
+    }
+
+    function asAdmin() {
+      useGetApiV1UsersMe.mockReturnValue({
+        data: { capabilities: ["PLAYER", "ADMINISTRATOR"] },
+      });
+    }
+
+    it("offers the correction to an administrator on a rated match", () => {
+      asAdmin();
+      showMatch(ratedMatch);
+      renderAt();
+
+      expect(screen.getByText("Correct this score")).toBeInTheDocument();
+    });
+
+    it("hides the correction from an anonymous visitor, leaving the page intact", () => {
+      // The default `me` mock is anonymous — the page must still render normally.
+      showMatch(ratedMatch);
+      renderAt();
+
+      expect(screen.queryByText("Correct this score")).not.toBeInTheDocument();
+      expect(screen.getByText("MTCH01")).toBeInTheDocument();
+    });
+
+    it("hides the correction from a signed-in non-administrator", () => {
+      useGetApiV1UsersMe.mockReturnValue({
+        data: { capabilities: ["PLAYER", "HOST"] },
+      });
+      showMatch(ratedMatch);
+      renderAt();
+
+      expect(screen.queryByText("Correct this score")).not.toBeInTheDocument();
+    });
+
+    it("hides the correction on an unrated match — that is the normal edit path", () => {
+      asAdmin();
+      showMatch({ ...ratedMatch, rated: false });
+      renderAt();
+
+      expect(screen.queryByText("Correct this score")).not.toBeInTheDocument();
+    });
+
+    it("hides the correction on a deleted match", () => {
+      asAdmin();
+      showMatch({ ...ratedMatch, isActive: false });
+      renderAt();
+
+      expect(screen.queryByText("Correct this score")).not.toBeInTheDocument();
+    });
+
+    it("badges a corrected match as Re-rated for everyone, not just admins", () => {
+      // Anonymous viewer: the badge is a public transparency signal.
+      showMatch({ ...ratedMatch, reRated: true });
+      renderAt();
+
+      expect(screen.getByText("Re-rated")).toBeInTheDocument();
+    });
+
+    it("shows no Re-rated badge on a match that was never corrected", () => {
+      showMatch(ratedMatch);
+      renderAt();
+
+      expect(screen.queryByText("Re-rated")).not.toBeInTheDocument();
+    });
   });
 });
