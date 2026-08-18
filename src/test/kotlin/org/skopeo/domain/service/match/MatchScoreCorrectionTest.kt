@@ -15,6 +15,9 @@ import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.types.shouldBeInstanceOf
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.deleteWhere
+import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -41,6 +44,7 @@ import org.skopeo.domain.service.rating.RatingCalculationService
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.repository.AuditRepository
 import org.skopeo.repository.MatchRepository
+import org.skopeo.repository.UserRatingsTable
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
 import java.math.BigDecimal
@@ -428,6 +432,50 @@ class MatchScoreCorrectionTest {
                 .shouldBeLeft()
                 .shouldBeInstanceOf<ServiceError.Conflict>()
         error.message shouldContain "not rated yet"
+    }
+
+    @Test
+    fun `a rated match whose history rows were already reversed cannot be corrected (#776)`() {
+        val r = ratedScenario()
+        // Simulate a match left rated but with its rating history already superseded: there is then no
+        // stored delta to reverse, so the correction must refuse rather than invent one.
+        ratings.markMatchHistoryReversed(matchId = r.match.id, reversedAt = LocalDateTime.now())
+        val before = currentRating(userId = r.p1.id)
+
+        val error =
+            service
+                .correctScore(
+                    token = token(uid = "admin"),
+                    matchId = r.match.id,
+                    request = correction(team1Games = 6, team2Games = 0, dryRun = false),
+                ).shouldBeLeft()
+                .shouldBeInstanceOf<ServiceError.Conflict>()
+        error.message shouldContain "no live rating history"
+
+        currentRating(userId = r.p1.id) shouldBe before
+        matchRepo.findById(matchId = r.match.id).shouldBeRight().toDomain().reRatedAt.shouldBeNull()
+    }
+
+    @Test
+    fun `a player left without a current rating row is refused rather than crashing (#776)`() {
+        val r = ratedScenario()
+        // A rated match always implies both players had a rating, so this is a defensive guard against
+        // inconsistent state. Drop the row directly to prove the guard refuses instead of throwing.
+        transaction {
+            UserRatingsTable.deleteWhere { UserRatingsTable.userId eq r.p1.id }
+        }
+
+        val error =
+            service
+                .correctScore(
+                    token = token(uid = "admin"),
+                    matchId = r.match.id,
+                    request = correction(team1Games = 6, team2Games = 0, dryRun = false),
+                ).shouldBeLeft()
+                .shouldBeInstanceOf<ServiceError.Conflict>()
+        error.message shouldContain "no current rating"
+
+        matchRepo.findById(matchId = r.match.id).shouldBeRight().toDomain().reRatedAt.shouldBeNull()
     }
 
     @Test

@@ -216,6 +216,96 @@ class MatchScoreCorrectionPointsTest {
         p2After.single() shouldBe p1Before
     }
 
+    /**
+     * A finalized + rated OPEN_PLAY event with one ordinary (non-placement) fixture. Open play pays per
+     * match from band difference, so a correction here revokes and re-issues **only that match's** awards —
+     * the [RankingPointRepository.listActiveByMatch] path, distinct from the event-wide placement path.
+     */
+    private fun ratedOpenPlay(): RatedTournament {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val p1 = provision(uid = "p1")
+        val p2 = provision(uid = "p2")
+        // A band gap gives open-play points something to compute from.
+        ratings.setRating(userId = p1.id, rating = BigDecimal("4.5"), level = "4.5")
+        ratings.setRating(userId = p2.id, rating = BigDecimal("3.5"), level = "3.5")
+        TestAppSettings.setAwardRankingPoints(enabled = true, updatedBy = admin.id)
+        val event =
+            eventService
+                .create(
+                    token = token(uid = "host"),
+                    input =
+                        CreateEventInput(
+                            name = "Weekend Social",
+                            startDate = LocalDate.now(),
+                            endDate = LocalDate.now().plusDays(1),
+                            participantIds = listOf(p1.id, p2.id),
+                            type = EventType.OPEN_PLAY.name,
+                        ),
+                ).shouldBeRight()
+                .domain()
+        val match =
+            matchRepo
+                .createFixture(
+                    command =
+                        CreateFixtureCommand(
+                            matchFormat = TeamType.SINGLES,
+                            matchType = MatchType.OPEN_PLAY,
+                            matchDate = LocalDate.now(),
+                            team1UserIds = listOf(element = p1.id),
+                            team2UserIds = listOf(element = p2.id),
+                            team1Name = "t1",
+                            team2Name = "t2",
+                            createdBy = host.id,
+                            eventId = event.id,
+                        ),
+                ).toDomain()
+        matchRepo.addResult(
+            matchId = match.id,
+            sets = listOf(element = MatchSetResult(setNumber = 1, team1Games = 6, team2Games = 4, winnerTeamId = match.team1.teamId)),
+            winnerTeamId = match.team1.teamId,
+            recordedBy = host.id,
+            completedAt = LocalDateTime.now(),
+        )
+        eventService.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+        calc.calculate(token = token(uid = "admin"), dryRun = false).shouldBeRight()
+        return RatedTournament(
+            eventId = event.id,
+            p1 = p1,
+            p2 = p2,
+            match = matchRepo.findById(matchId = match.id).shouldBeRight().toDomain(),
+        )
+    }
+
+    @Test
+    fun `correcting an ordinary open-play match re-issues only that match's awards (#776)`() {
+        val t = ratedOpenPlay()
+        val revokedBefore =
+            awards.listByUser(userId = t.p1.id).count { it.status == AwardStatus.REVOKED.name }
+
+        val outcome =
+            service
+                .correctScore(
+                    token = token(uid = "admin"),
+                    matchId = t.match.id,
+                    request =
+                        MatchScoreCorrectionRequest(
+                            sets = listOf(element = SetScoreRequest(team1Games = 6, team2Games = 0)),
+                            dryRun = false,
+                        ),
+                ).shouldBeRight()
+
+        // Open play pays both sides per match, so the match's own awards are revoked and re-issued.
+        (outcome.awardsRevoked > 0).shouldBeTrue()
+        (outcome.awardsReissued > 0).shouldBeTrue()
+        outcome.pointsSuppressedByGlobalFlag shouldBe false
+        // Revocation is append-only: the old award survives as a REVOKED marker rather than vanishing.
+        val revokedAfter = awards.listByUser(userId = t.p1.id).count { it.status == AwardStatus.REVOKED.name }
+        (revokedAfter > revokedBefore).shouldBeTrue()
+        // And exactly one ACTIVE award remains for the corrected fixture.
+        activePoints(userId = t.p1.id) shouldHaveSize 1
+    }
+
     @Test
     fun `a dry-run correction of a placement match touches no awards (#776)`() {
         val t = ratedTournament()

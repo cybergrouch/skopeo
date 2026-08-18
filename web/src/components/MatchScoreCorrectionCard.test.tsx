@@ -209,6 +209,79 @@ describe("MatchScoreCorrectionCard (#776)", () => {
     expect(toastSuccess).not.toHaveBeenCalled();
   });
 
+  it("surfaces a failed preview with its own message and offers no apply", async () => {
+    const user = userEvent.setup();
+    correctMutate.mockRejectedValue(new Error("boom"));
+    renderCard();
+
+    await user.click(screen.getByRole("button", { name: /preview correction/i }));
+
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(
+        expect.stringMatching(/could not preview/i),
+        expect.anything(),
+      ),
+    );
+    expect(
+      screen.queryByRole("button", { name: /apply correction/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("edits the first side's games too, not just the second", async () => {
+    const user = userEvent.setup();
+    renderCard();
+
+    await user.clear(screen.getByLabelText("Set 1 side 1 games"));
+    await user.type(screen.getByLabelText("Set 1 side 1 games"), "7");
+    await user.click(screen.getByRole("button", { name: /preview correction/i }));
+
+    await waitFor(() =>
+      expect(correctMutate).toHaveBeenCalledWith({
+        id: "m-1",
+        data: { sets: [{ team1Games: 7, team2Games: 4 }], dryRun: true },
+      }),
+    );
+  });
+
+  it("shows the band move when the correction changes a player's NTRP band", async () => {
+    const user = userEvent.setup();
+    correctMutate.mockResolvedValue({
+      ...preview,
+      impacts: [
+        {
+          ...preview.impacts[0],
+          // No display name: the preview falls back to the id rather than rendering a blank row.
+          displayName: undefined,
+          levelChanged: true,
+          previousLevel: "4.0",
+          resultingLevel: "4.5",
+        },
+      ],
+    });
+    renderCard();
+
+    await user.click(screen.getByRole("button", { name: /preview correction/i }));
+
+    await waitFor(() => expect(screen.getByText("u-1")).toBeInTheDocument());
+    expect(screen.getByText(/Band:/)).toBeInTheDocument();
+    expect(screen.getByText(/4\.0/)).toBeInTheDocument();
+    expect(screen.getByText(/4\.5/)).toBeInTheDocument();
+  });
+
+  it("shows a working indicator and disables the inputs while a request is in flight", () => {
+    usePostApiV1MatchesIdScoreCorrection.mockReturnValue({
+      isPending: true,
+      mutateAsync: async (vars: unknown) => correctMutate(vars),
+    });
+    renderCard();
+
+    expect(screen.getByText("Working…")).toBeInTheDocument();
+    expect(screen.getByLabelText("Set 1 side 1 games")).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /preview correction/i }),
+    ).toBeDisabled();
+  });
+
   it("renders nothing when the match id was not revealed to this viewer", () => {
     renderCard({ ...match, id: undefined } as MatchPublicResponse);
 

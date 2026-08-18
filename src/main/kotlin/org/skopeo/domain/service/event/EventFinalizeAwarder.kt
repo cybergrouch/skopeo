@@ -267,7 +267,8 @@ class EventFinalizeAwarder(
         grantedBy: UUID,
         now: LocalDateTime,
         // Narrow the payout to a single fixture (#776 score correction); null = the whole event, as on finalize.
-        onlyMatchId: UUID? = null,
+        // No default: the sole caller always passes it, so a default would be dead code.
+        onlyMatchId: UUID?,
     ): AwardSummary {
         val config: OpenPlayPointsConfig = pointsConfig.getOpenPlay().value
         // Validity runs from the event end for the configured open-play window (#559: no per-event override).
