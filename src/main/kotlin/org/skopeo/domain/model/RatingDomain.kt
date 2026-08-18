@@ -81,6 +81,10 @@ data class RatingHistoryEntry(
     // for ordering history newest-first. Null for match-less rows (initial assessments), which sort last.
     val completedAt: LocalDateTime? = null,
     val calculatedAt: LocalDateTime,
+    // Score-correction marker (#776): non-null on the replacement row a correction writes, alongside the
+    // net amount it applied to the current rating (newDelta - oldDelta). Both null for an ordinary row.
+    val correctedAt: LocalDateTime? = null,
+    val netAdjustment: BigDecimal? = null,
 )
 
 /**
@@ -158,6 +162,10 @@ data class RatingHistoryWrite(
     // Identity of the calc batch that produced this row (#481); one id per run, shared by all its
     // rows — a deterministic ordering/grouping key. Null for admin/self-set rows (not calc batches).
     val ratingRunId: UUID?,
+    // Score correction (#776): stamps this row as the replacement for a reversed one, and records the
+    // net applied to the current rating (newDelta - oldDelta). Both null for an ordinary rating row.
+    val correctedAt: LocalDateTime? = null,
+    val netAdjustment: BigDecimal? = null,
 )
 
 /**

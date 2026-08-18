@@ -55,6 +55,10 @@ fun Match.toPublicResponse(
     ratingChanges: List<MatchPublicRatingChange>? = null,
     headToHead: MatchPublicHeadToHead? = null,
     event: MatchPublicEvent? = null,
+    // Reveal the internal match id to ADMINISTRATOR viewers only (#776), so the score-correction action on
+    // the public page can address `/matches/{id}/score-correction`. Null for everyone else — the same
+    // viewer-conditional shape the precise rating rates already use.
+    revealId: Boolean = false,
 ): MatchPublicResponse {
     fun side(userIds: List<UUID>) = userIds.map { players[it] ?: MatchPublicPlayer() }
     val winnerSide =
@@ -64,12 +68,15 @@ fun Match.toPublicResponse(
             else -> "NONE"
         }
     return MatchPublicResponse(
+        id = if (revealId) id.toString() else null,
         publicCode = publicCode,
         matchFormat = matchFormat.name,
         matchType = matchType.name,
         matchDate = matchDate.toString(),
         status = status.name,
         rated = ratedAt != null,
+        // Public transparency signal (#776): this match's score was corrected after it had been rated.
+        reRated = reRatedAt != null,
         isActive = isActive,
         team1 = side(userIds = team1.userIds),
         team2 = side(userIds = team2.userIds),

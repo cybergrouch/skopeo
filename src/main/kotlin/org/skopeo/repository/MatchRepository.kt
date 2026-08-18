@@ -10,6 +10,7 @@ import org.jetbrains.exposed.sql.ISqlExpressionBuilder
 import org.jetbrains.exposed.sql.Op
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
+import org.jetbrains.exposed.sql.SqlExpressionBuilder
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.greaterEq
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.inSubQuery
@@ -234,6 +235,24 @@ class MatchRepository {
             MatchesTable.update(where = { MatchesTable.id eq matchId }) {
                 it[MatchesTable.ratedAt] = ratedAt
                 it[MatchesTable.ratedBy] = ratedBy
+            }
+        }
+    }
+
+    /**
+     * Stamp a score correction on an already-rated match (#776): set `re_rated_at` and bump
+     * `re_rated_count`. Deliberately leaves `rated_at`/`rated_by` alone — a corrected match stays RATED so
+     * it never re-enters the pending-calculation queue (which would double-apply the delta). Drives the
+     * public "Re-rated" badge.
+     */
+    fun markReRated(
+        matchId: UUID,
+        reRatedAt: LocalDateTime,
+    ) {
+        transaction {
+            MatchesTable.update(where = { MatchesTable.id eq matchId }) {
+                with(receiver = SqlExpressionBuilder) { it[reRatedCount] = reRatedCount + 1 }
+                it[MatchesTable.reRatedAt] = reRatedAt
             }
         }
     }
@@ -766,6 +785,8 @@ private fun ResultRow.toMatchEntity(): MatchEntity =
         calcSequence = this[MatchesTable.calcSequence],
         team1Handicap = this[MatchesTable.team1Handicap],
         team2Handicap = this[MatchesTable.team2Handicap],
+        reRatedAt = this[MatchesTable.reRatedAt],
+        reRatedCount = this[MatchesTable.reRatedCount],
         isPlacementMatch = this[MatchesTable.isPlacementMatch],
         placementBracket = this[MatchesTable.placementBracket],
     )

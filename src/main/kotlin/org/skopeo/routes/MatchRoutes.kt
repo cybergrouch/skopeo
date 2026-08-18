@@ -18,9 +18,11 @@ import io.ktor.server.routing.routing
 import org.skopeo.FIREBASE_AUTH
 import org.skopeo.common.dto.match.CreateFixtureRequest
 import org.skopeo.common.dto.match.MatchResultRequest
+import org.skopeo.common.dto.match.MatchScoreCorrectionRequest
 import org.skopeo.common.dto.match.MatchStateRequest
 import org.skopeo.common.dto.match.ReorderMatchesRequest
 import org.skopeo.common.dto.match.SetHandicapsRequest
+import org.skopeo.domain.service.match.MatchScoreCorrectionService
 import org.skopeo.domain.service.match.MatchService
 import java.math.BigDecimal
 import java.util.UUID
@@ -30,7 +32,10 @@ import java.util.UUID
  * (`?filter=…`) is ADMINISTRATOR-only; reading a match is restricted to participants/staff
  * (enforced in [MatchService]). Recording a result does not compute ratings.
  */
-fun Application.configureMatchRoutes(service: MatchService = MatchService()) {
+fun Application.configureMatchRoutes(
+    service: MatchService = MatchService(),
+    corrections: MatchScoreCorrectionService = MatchScoreCorrectionService(),
+) {
     routing {
         route(path = "/api/v1/matches") {
             // The public-by-code page is viewable anonymously (#193): a token is used if present
@@ -42,7 +47,24 @@ fun Application.configureMatchRoutes(service: MatchService = MatchService()) {
                 listAndCreate(service = service)
                 upcoming(service = service)
                 byId(service = service)
+                scoreCorrection(corrections = corrections)
             }
+        }
+    }
+}
+
+/**
+ * Correct the score of an already-rated match (#776). ADMINISTRATOR-only (enforced in the service), and
+ * dry-run by default — the request must say `"dryRun": false` to write, since the correction reverses and
+ * re-applies rating deltas and re-issues ranking points.
+ */
+private fun Route.scoreCorrection(corrections: MatchScoreCorrectionService) {
+    post(path = "/{id}/score-correction") {
+        respondMappingErrors {
+            val request = call.receive<MatchScoreCorrectionRequest>()
+            respondEither(
+                result = corrections.correctScore(token = verifiedToken(), matchId = uuidParam(name = "id"), request = request),
+            ) { outcome -> call.respond(status = HttpStatusCode.OK, message = outcome) }
         }
     }
 }

@@ -541,7 +541,14 @@ class MatchService(
                     val owning = events.getById(id = eventId).toDomain()
                     MatchPublicEvent(publicCode = owning.publicCode, name = owning.name)
                 }
-            match.toPublicResponse(players = players, ratingChanges = ratingChanges, headToHead = headToHead, event = event)
+            match.toPublicResponse(
+                players = players,
+                ratingChanges = ratingChanges,
+                headToHead = headToHead,
+                event = event,
+                // Only an ADMINISTRATOR may correct a rated score (#776), so only they get the id to act on.
+                revealId = callerIsAdministrator(token = token),
+            )
         }
 
     /**
@@ -691,6 +698,16 @@ class MatchService(
         token?.let { users.findByFirebaseUid(firebaseUid = it.uid)?.toDomain() }.canSeeRawRatingOrFalse()
 
     /**
+     * Whether the (possibly absent) caller holds ADMINISTRATOR (#776). An anonymous or unprovisioned
+     * caller is simply not one, so the public page stays fully renderable without a token.
+     */
+    private fun callerIsAdministrator(token: VerifiedFirebaseToken?): Boolean =
+        token
+            ?.let { users.findByFirebaseUid(firebaseUid = it.uid)?.toDomain() }
+            ?.capabilities
+            ?.contains(element = Capability.ADMINISTRATOR) == true
+
+    /**
      * The match result plus the stored per-player calculation behind it (#97), for the detail view
      * a rating-history entry links to. Same participant-or-staff access as [getById]. Reads the
      * breakdown persisted at commit time — never recomputed — so it stays faithful even if the
@@ -825,8 +842,11 @@ class MatchService(
  * games, at least one set) is validated at the boundary (#116, in the DTO); what remains here is
  * outcome derivation against the persisted match — each set must have a decisive score, and the sets
  * must not be tied (whoever wins more sets wins the match).
+ *
+ * `internal` so the score-correction path (#776) derives a corrected outcome through exactly the same
+ * validation a first-time upload goes through.
  */
-private fun deriveOutcome(
+internal fun deriveOutcome(
     team1Id: UUID,
     team2Id: UUID,
     request: MatchResultRequest,

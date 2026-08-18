@@ -121,6 +121,21 @@ class RankingPointRepository {
                 }.map { it.toRankingPointAwardEntity() }
         }
 
+    /**
+     * Every ACTIVE award attributed to ONE match (#776) — the per-match sibling of [listActiveByEvent], for
+     * a score correction that has to revoke and re-issue just that match's points. Awards written on
+     * finalize always carry a match id; the manual/EXTERNAL paths (which don't) are never returned here.
+     */
+    fun listActiveByMatch(matchId: UUID): List<RankingPointAwardEntity> =
+        transaction {
+            RankingPointAwardsTable
+                .selectAll()
+                .where {
+                    (RankingPointAwardsTable.matchId eq matchId) and
+                        (RankingPointAwardsTable.status eq AwardStatus.ACTIVE.name)
+                }.map { it.toRankingPointAwardEntity() }
+        }
+
     /** Every ledger row for [userId], newest first (awarded_at). Includes REVOKED markers for the trail. */
     fun listByUser(userId: UUID): List<RankingPointAwardEntity> =
         transaction {

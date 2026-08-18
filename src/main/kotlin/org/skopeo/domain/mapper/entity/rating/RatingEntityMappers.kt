@@ -74,6 +74,8 @@ fun RatingHistoryEntryEntity.toDomain(): RatingHistoryEntry =
                 .orEmpty(),
         completedAt = completedAt,
         calculatedAt = calculatedAt,
+        correctedAt = correctedAt,
+        netAdjustment = netAdjustment,
     )
 
 /** JSON codec and serializer for the per-set breakdown column (#110). */

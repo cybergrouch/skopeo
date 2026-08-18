@@ -6,6 +6,7 @@ Docs are grouped by audience, then by topic.
 
 - [RATING_CALCULATION_ALGORITHM.md](product/RATING_CALCULATION_ALGORITHM.md) — the NTRP rating algorithm: formulas, dominance, upsets, worked examples.
 - [RATING_SMOOTHING.md](product/RATING_SMOOTHING.md) — optional USTA-style smoothing of rating changes.
+- [MATCH_SCORE_CORRECTION.md](product/MATCH_SCORE_CORRECTION.md) — how correcting an already-rated match's score affects ratings, ranking points, confidence, and clamping (#776).
 - [USTA_FEATURE_COMPARISON.md](product/USTA_FEATURE_COMPARISON.md) — roadmap study comparing Skopeo to USTA NTRP (adopted / in-pipeline / not-planned).
 - [RATING_SIMULATION_STUDIES.md](product/RATING_SIMULATION_STUDIES.md) — matchup-matrix + Monte Carlo findings, K-factor sensitivity (0.16 vs 0.016), and where a configurable K should reside.
 - [PLACEHOLDER_ACCOUNTS.md](product/PLACEHOLDER_ACCOUNTS.md) — login-less "dummy" players + the secret-code claim/adopt (merge-into-empty) flow (#496).

@@ -38,4 +38,8 @@ data class RatingHistoryEntryEntity(
     val setBreakdown: String?,
     val completedAt: LocalDateTime?,
     val calculatedAt: LocalDateTime,
+    // Score-correction marker (#776): set on the replacement row a correction writes, with the net amount
+    // it applied to the current rating (newDelta - oldDelta). Both null for an ordinary rating row.
+    val correctedAt: LocalDateTime?,
+    val netAdjustment: BigDecimal?,
 )

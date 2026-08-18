@@ -342,9 +342,52 @@ class RatingRepository {
                 it[calculatedAt] = write.calculatedAt
                 it[completedAt] = write.completedAt
                 it[ratingRunId] = write.ratingRunId
+                // Score-correction marker + the net applied to the current rating (#776); null on ordinary rows.
+                it[correctedAt] = write.correctedAt
+                it[netAdjustment] = write.netAdjustment
             }
         }
     }
+
+    /**
+     * Soft-delete (supersede) every live rating-history row for ONE match (#776) by stamping [reversedAt] —
+     * the per-match sibling of [markEventHistoryReversed], for a score correction. Does NOT hard-delete:
+     * the ledger stays append-only and the read paths already exclude reversed rows. Rows already reversed
+     * are left untouched, so a repeated correction cannot re-reverse them. Returns the rows marked.
+     */
+    fun markMatchHistoryReversed(
+        matchId: UUID,
+        reversedAt: LocalDateTime,
+    ): Int =
+        transaction {
+            UserRatingHistoryTable.update(
+                where = { (UserRatingHistoryTable.matchId eq matchId) and UserRatingHistoryTable.reversedAt.isNull() },
+            ) {
+                it[UserRatingHistoryTable.reversedAt] = reversedAt
+            }
+        }
+
+    /**
+     * Apply a score correction's net adjustment to a player's current rating (#776): set current_rating and
+     * current_level ONLY.
+     *
+     * Deliberately narrower than [applyMatchRating]: a correction re-rates a match that was ALREADY counted,
+     * so `matches_played`, `last_match_date`, `match_rated_at` and `matches_since_reset` must not move. In
+     * particular confidence (#459) is computed on read from windowed match dates, so a score-only correction
+     * leaves it untouched by construction — see docs/product/MATCH_SCORE_CORRECTION.md §3.5.
+     */
+    fun applyCorrectedRating(
+        userId: UUID,
+        rating: BigDecimal,
+        level: String?,
+    ): Unit =
+        transaction {
+            UserRatingsTable.update(where = { UserRatingsTable.userId eq userId }) {
+                it[currentRating] = rating
+                it[currentLevel] = level
+            }
+            Unit
+        }
 
     private fun ratingRow(userId: UUID): ResultRow? =
         UserRatingsTable
@@ -390,6 +433,8 @@ internal fun ResultRow.toRatingHistoryEntryEntity(): RatingHistoryEntryEntity =
         setBreakdown = this[UserRatingHistoryTable.setBreakdown],
         completedAt = this[UserRatingHistoryTable.completedAt],
         calculatedAt = this[UserRatingHistoryTable.calculatedAt],
+        correctedAt = this[UserRatingHistoryTable.correctedAt],
+        netAdjustment = this[UserRatingHistoryTable.netAdjustment],
     )
 
 /** JSON codec and serializer used to ENCODE the per-set breakdown column on write (#110). */

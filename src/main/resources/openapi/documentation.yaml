@@ -2014,6 +2014,62 @@ paths:
         '409':
           description: The match is disabled, or already rated (the result is frozen)
 
+  /api/v1/matches/{id}/score-correction:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      summary: Correct the score of an already-rated match (ADMINISTRATOR only)
+      description: >-
+        Correct the score of a match that has ALREADY been rated (#776) — the rated-path complement of
+        POST /result, which freezes a match once rated. Built for the mid-history case, where later matches
+        have already been rated on top: rather than cascading a recalculation, each player's rating is moved
+        by `current - oldDelta + newDelta`. `oldDelta` is the rating_change on the match's live history row,
+        reversed verbatim; `newDelta` is recomputed for the corrected score from the player's rating AT THE
+        TIME (that row's previous_rating), not from their present-day rating. Matches rated after this one
+        are deliberately NOT re-rated — an accepted approximation, documented in
+        docs/product/MATCH_SCORE_CORRECTION.md. In one transaction the score is replaced, the match's
+        rating-history rows are superseded (soft-deleted via reversed_at) and replaced with rows stamped
+        corrected_at, each player's current rating/level is adjusted, and a re-rated marker is stamped —
+        while rated_at deliberately STAYS set so the match never re-enters the pending-calculation queue.
+        The match's ranking points are revoked and re-issued (for a placement match, the event's whole
+        placement set, since a player earns only their best placement). matches_played, last_match_date and
+        the confidence bookkeeping are untouched; confidence (#459) is computed from match dates, so a
+        score-only correction cannot move it. Dry-run is the DEFAULT — send `"dryRun": false` to write.
+        Audited as MATCH_SCORE_CORRECTED (category MATCH_RESULT) plus MATCH_RATINGS_RE_RATED (category
+        RATING_CALCULATION).
+      tags:
+        - Matches
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MatchScoreCorrectionRequest'
+      responses:
+        '200':
+          description: The correction preview (dryRun) or the applied correction
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchScoreCorrectionResponse'
+        '400':
+          description: Invalid scores or no clear winner
+        '403':
+          description: Caller is not an ADMINISTRATOR
+        '404':
+          description: No such match
+        '409':
+          description: >-
+            The match is disabled, is not rated yet (edit the result normally instead), has no live rating
+            history to reverse, or a player has no current rating
+
   /api/v1/matches/{id}/state:
     parameters:
       - name: id
@@ -6267,6 +6323,107 @@ components:
           items:
             $ref: '#/components/schemas/SetScoreRequest'
 
+    MatchScoreCorrectionRequest:
+      type: object
+      description: >-
+        Corrected set scores for an already-rated match (#776). dryRun defaults to TRUE — a full preview
+        with no writes — because the correction is destructive to rating state; send false to apply.
+      required:
+        - sets
+      properties:
+        sets:
+          type: array
+          items:
+            $ref: '#/components/schemas/SetScoreRequest'
+        dryRun:
+          type: boolean
+          default: true
+          description: Preview only (default). Send false to persist the correction.
+
+    MatchCorrectionPlayerImpact:
+      type: object
+      description: >-
+        One player's rating impact from a score correction (#776): reversedChange comes off and newChange
+        goes on, so netAdjustment (newChange - reversedChange) is what moves the current rating.
+      required:
+        - userId
+        - currentRating
+        - reversedChange
+        - newChange
+        - netAdjustment
+        - resultingRating
+      properties:
+        userId:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+          nullable: true
+        currentRating:
+          type: string
+          description: The player's rating before the correction is applied.
+        reversedChange:
+          type: string
+          description: The delta originally applied for this match, taken verbatim from its live history row.
+        newChange:
+          type: string
+          description: >-
+            The delta recomputed for the corrected score from the player's rating AT THE TIME (the history
+            row's previous_rating), not from their present-day rating.
+        netAdjustment:
+          type: string
+          description: newChange - reversedChange — the signed amount applied to the current rating.
+        resultingRating:
+          type: string
+        previousLevel:
+          type: string
+          nullable: true
+        resultingLevel:
+          type: string
+          nullable: true
+        levelChanged:
+          type: boolean
+
+    MatchScoreCorrectionResponse:
+      type: object
+      description: >-
+        The outcome of a score correction (#776). With dryRun true nothing was written and this is the
+        confirmation surface the admin approves; with dryRun false it reports what was applied.
+      required:
+        - dryRun
+        - matchPublicCode
+        - previousScore
+        - newScore
+        - winnerChanged
+        - impacts
+      properties:
+        dryRun:
+          type: boolean
+        matchPublicCode:
+          type: string
+        previousScore:
+          type: string
+          description: The score as recorded before the correction, e.g. "6-4, 3-6, 7-5".
+        newScore:
+          type: string
+        winnerChanged:
+          type: boolean
+          description: True when the corrected score moves the win to the other side.
+        impacts:
+          type: array
+          items:
+            $ref: '#/components/schemas/MatchCorrectionPlayerImpact'
+        awardsRevoked:
+          type: integer
+          description: Ranking-point awards revoked by this correction; 0 when the match pays no points.
+        awardsReissued:
+          type: integer
+        pointsSuppressedByGlobalFlag:
+          type: boolean
+          description: >-
+            True when the event opted into points but the global kill switch (#641/#752) suppressed the
+            re-issue, so zero re-issued awards is reported rather than looking silently correct.
+
     MatchStateRequest:
       type: object
       required:
@@ -6909,6 +7066,13 @@ components:
         - winner
         - sets
       properties:
+        id:
+          type: string
+          format: uuid
+          nullable: true
+          description: >-
+            The internal match id, revealed to ADMINISTRATOR viewers only (#776) so the public page's
+            score-correction action can address the match. Null for every other viewer.
         publicCode:
           type: string
         matchFormat:
@@ -6925,6 +7089,12 @@ components:
           description: >-
             True once the rating calculation has committed this match (#361); lets a list view
             derive the Scheduled / Awaiting rating / Rated status without the precise rating changes.
+        reRated:
+          type: boolean
+          description: >-
+            True once an ADMINISTRATOR has corrected this match's score AFTER it was rated (#776).
+            Public on purpose — a transparency signal that the recorded score changed, shown to
+            everyone rather than only to staff. Drives the "Re-rated" badge.
         isActive:
           type: boolean
           description: False once the match is soft-deleted (#325); the public page flags it as deleted.

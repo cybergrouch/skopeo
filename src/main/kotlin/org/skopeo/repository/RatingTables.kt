@@ -74,4 +74,14 @@ internal object UserRatingHistoryTable : UUIDTable(name = "user_rating_history")
     // action supersedes (does not hard-delete) this event's rows by stamping this; the rating-history
     // read paths exclude any row where it is non-null so the ledger stays append-only.
     val reversedAt = datetime(name = "reversed_at").nullable()
+
+    // Score-correction marker (#776). Set on the REPLACEMENT row a correction writes, so a history read
+    // can label it a correction instead of an ordinary match rating; the row it replaces carries
+    // [reversedAt]. Null = ordinary row.
+    val correctedAt = datetime(name = "corrected_at").nullable()
+
+    // The signed amount a correction applied to the player's CURRENT rating: newDelta - oldDelta (#776).
+    // [ratingChange] stays the historically-faithful delta for the corrected score; this records the net
+    // in-place adjustment so the two are never conflated. Null for ordinary rows.
+    val netAdjustment = decimal(name = "net_adjustment", precision = RATING_PRECISION, scale = RATING_SCALE).nullable()
 }

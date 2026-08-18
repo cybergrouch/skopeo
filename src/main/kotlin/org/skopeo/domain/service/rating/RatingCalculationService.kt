@@ -262,7 +262,7 @@ class RatingCalculationService(
             val result = calculator.calculate(request = request)
             val breakdowns = breakdownsByPlayer(audit = result.audit)
 
-            val changes = players.map { playerChange(userId = it, response = result.response, breakdowns = breakdowns).bind() }
+            val changes = players.map { playerChangeFrom(userId = it, response = result.response, breakdowns = breakdowns).bind() }
             changes.forEach { snapshot[it.userId] = it.newRating }
             MatchCalculation(matchId = match.id, matchDate = match.matchDate, completedAt = match.completedAt, changes = changes)
         }
@@ -273,52 +273,7 @@ class RatingCalculationService(
      * #110). Per-set entries are grouped into an ordered [SetCalculationBreakdown] list with the net
      * fields left null; net entries keep the existing net breakdown with no sets.
      */
-    internal fun breakdownsByPlayer(audit: List<AuditEntry>): Map<String, CalculationBreakdown> {
-        // Every breakdown entry (v1 net or v2 per-set) carries a "dominance" key alongside "playerId";
-        // match-level audit entries carry neither. Filtering on the one key avoids a permanently dead
-        // "playerId without dominance" branch (the two keys are always emitted together).
-        val relevant = audit.filter { it.context.containsKey(key = "dominance") }
-        val (perSet, net) = relevant.partition { it.context.containsKey(key = "setIndex") }
-
-        val perSetByPlayer =
-            perSet
-                .groupBy { it.context.getValue(key = "playerId") as String }
-                .mapValues { (_, entries) ->
-                    val steps =
-                        entries
-                            .sortedBy { it.context.factor(key = "setIndex").toInt() }
-                            .map { it.context.toSetBreakdown() }
-                    CalculationBreakdown(
-                        dominance = null,
-                        scale = null,
-                        ratingGap = null,
-                        normalizedGap = null,
-                        competitiveThresholdPct = null,
-                        isUpset = null,
-                        upsetMultiplier = null,
-                        kFactor = null,
-                        sets = steps,
-                    )
-                }
-
-        val netByPlayer =
-            net.associate { entry ->
-                val ctx = entry.context
-                (ctx.getValue(key = "playerId") as String) to
-                    CalculationBreakdown(
-                        dominance = ctx.factor(key = "dominance"),
-                        scale = ctx.factor(key = "scale"),
-                        ratingGap = ctx.factor(key = "ratingGap"),
-                        normalizedGap = ctx.factor(key = "normalizedGap"),
-                        competitiveThresholdPct = ctx.factor(key = "competitiveThresholdPct"),
-                        isUpset = ctx.factor(key = "isUpset").toBoolean(),
-                        upsetMultiplier = ctx.factor(key = "upsetMultiplier"),
-                        kFactor = ctx.factor(key = "kFactor"),
-                    )
-            }
-
-        return netByPlayer + perSetByPlayer
-    }
+    internal fun breakdownsByPlayer(audit: List<AuditEntry>): Map<String, CalculationBreakdown> = breakdownsFromAudit(audit = audit)
 
     private fun currentRating(
         userId: UUID,
@@ -334,33 +289,6 @@ class RatingCalculationService(
             }
         }
 
-    private fun playerChange(
-        userId: UUID,
-        response: org.skopeo.common.dto.RankingCalculationResponse,
-        breakdowns: Map<String, CalculationBreakdown>,
-    ): Either<ServiceError, PlayerChange> =
-        either {
-            val rc = response.ratingChanges[userId.toString()]
-            ensureNotNull(value = rc) {
-                ServiceError.Validation(message = "calculator returned no change for player $userId")
-            }
-            val breakdown = breakdowns[userId.toString()]
-            ensureNotNull(value = breakdown) {
-                ServiceError.Validation(message = "calculator returned no breakdown for player $userId")
-            }
-            PlayerChange(
-                userId = userId,
-                previousRating = BigDecimal(rc.previousRating.value),
-                newRating = BigDecimal(rc.newRating.value),
-                change = BigDecimal(rc.change),
-                percentChange = BigDecimal(rc.percentChange.removeSuffix(suffix = "%")),
-                previousLevel = rc.previousRating.publishedLevel.value,
-                newLevel = rc.newRating.publishedLevel.value,
-                levelChanged = rc.levelChanged,
-                breakdown = breakdown,
-            )
-        }
-
     private fun requireAdmin(token: VerifiedFirebaseToken): Either<ServiceError, UUID> {
         val caller = users.findByFirebaseUid(firebaseUid = token.uid)?.toDomain()
         return if (caller == null || !caller.capabilities.contains(element = Capability.ADMINISTRATOR)) {
@@ -370,6 +298,93 @@ class RatingCalculationService(
         }
     }
 }
+
+/**
+ * Pull the per-player calculator derivatives out of the audit trail, keyed by player id. v1 emits one net
+ * entry per player (no `setIndex`); v2 emits one entry per set per player (with `setIndex`, #110). Per-set
+ * entries are grouped into an ordered [SetCalculationBreakdown] list with the net fields left null; net
+ * entries keep the existing net breakdown with no sets.
+ *
+ * A top-level `internal` function so the score-correction path (#776) reads a recomputed audit trail
+ * through exactly the same grouping, without instantiating this service.
+ */
+internal fun breakdownsFromAudit(audit: List<AuditEntry>): Map<String, CalculationBreakdown> {
+    // Every breakdown entry (v1 net or v2 per-set) carries a "dominance" key alongside "playerId";
+    // match-level audit entries carry neither. Filtering on the one key avoids a permanently dead
+    // "playerId without dominance" branch (the two keys are always emitted together).
+    val relevant = audit.filter { it.context.containsKey(key = "dominance") }
+    val (perSet, net) = relevant.partition { it.context.containsKey(key = "setIndex") }
+
+    val perSetByPlayer =
+        perSet
+            .groupBy { it.context.getValue(key = "playerId") as String }
+            .mapValues { (_, entries) ->
+                val steps =
+                    entries
+                        .sortedBy { it.context.factor(key = "setIndex").toInt() }
+                        .map { it.context.toSetBreakdown() }
+                CalculationBreakdown(
+                    dominance = null,
+                    scale = null,
+                    ratingGap = null,
+                    normalizedGap = null,
+                    competitiveThresholdPct = null,
+                    isUpset = null,
+                    upsetMultiplier = null,
+                    kFactor = null,
+                    sets = steps,
+                )
+            }
+
+    val netByPlayer =
+        net.associate { entry ->
+            val ctx = entry.context
+            (ctx.getValue(key = "playerId") as String) to
+                CalculationBreakdown(
+                    dominance = ctx.factor(key = "dominance"),
+                    scale = ctx.factor(key = "scale"),
+                    ratingGap = ctx.factor(key = "ratingGap"),
+                    normalizedGap = ctx.factor(key = "normalizedGap"),
+                    competitiveThresholdPct = ctx.factor(key = "competitiveThresholdPct"),
+                    isUpset = ctx.factor(key = "isUpset").toBoolean(),
+                    upsetMultiplier = ctx.factor(key = "upsetMultiplier"),
+                    kFactor = ctx.factor(key = "kFactor"),
+                )
+        }
+
+    return netByPlayer + perSetByPlayer
+}
+
+/**
+ * Map one player's slice of a calculator response into a [PlayerChange]. `internal` so the
+ * score-correction path (#776) reads a recomputed delta through the same mapping.
+ */
+internal fun playerChangeFrom(
+    userId: UUID,
+    response: org.skopeo.common.dto.RankingCalculationResponse,
+    breakdowns: Map<String, CalculationBreakdown>,
+): Either<ServiceError, PlayerChange> =
+    either {
+        val rc = response.ratingChanges[userId.toString()]
+        ensureNotNull(value = rc) {
+            ServiceError.Validation(message = "calculator returned no change for player $userId")
+        }
+        val breakdown = breakdowns[userId.toString()]
+        ensureNotNull(value = breakdown) {
+            ServiceError.Validation(message = "calculator returned no breakdown for player $userId")
+        }
+        PlayerChange(
+            userId = userId,
+            previousRating = BigDecimal(rc.previousRating.value),
+            newRating = BigDecimal(rc.newRating.value),
+            change = BigDecimal(rc.change),
+            percentChange = BigDecimal(rc.percentChange.removeSuffix(suffix = "%")),
+            previousLevel = rc.previousRating.publishedLevel.value,
+            newLevel = rc.newRating.publishedLevel.value,
+            levelChanged = rc.levelChanged,
+            breakdown = breakdown,
+        )
+    }
 
 /** Read an audit-context value (always a precise string for the adjustment-factor entries). */
 private fun Map<String, Any>.factor(key: String): String = this.getValue(key = key) as String
@@ -392,7 +407,7 @@ private fun Map<String, Any>.toSetBreakdown(): SetCalculationBreakdown =
     )
 
 /** Persist-ready form of the in-memory breakdown (#97/#110): net strings become [BigDecimal] columns, sets carry through. */
-private fun CalculationBreakdown.toSnapshot(): CalculationBreakdownSnapshot =
+internal fun CalculationBreakdown.toSnapshot(): CalculationBreakdownSnapshot =
     CalculationBreakdownSnapshot(
         dominance = dominance?.let { BigDecimal(it) },
         scale = scale?.let { BigDecimal(it) },
@@ -410,7 +425,7 @@ private fun CalculationBreakdown.toSnapshot(): CalculationBreakdownSnapshot =
  * group. A missing user simply yields no entry (null group downstream → same-group → factor 1, backward
  * compatible), so classification never blocks a calculation.
  */
-private fun groupsFor(
+internal fun groupsFor(
     users: UserRepository,
     classifier: GroupClassifier,
     userIds: List<UUID>,
@@ -420,7 +435,13 @@ private fun groupsFor(
     return userIds.associateWith { classifier.classify(sex = sexByUser[it], format = format) }
 }
 
-private fun buildRequest(
+/**
+ * Build the calculator request for [match] from the players' PRE-match ratings. `internal` so the
+ * score-correction path (#776) can recompute a delta through the identical request shape — it passes the
+ * ratings recorded on the match's own history rows, so the recomputation is faithful to the original
+ * calculation rather than to the players' present-day ratings.
+ */
+internal fun buildRequest(
     match: Match,
     ratingsByUser: Map<UUID, BigDecimal>,
     groupsByUser: Map<UUID, String?>,
