@@ -268,6 +268,31 @@ describe("MatchScoreCorrectionCard (#776)", () => {
     expect(screen.getByText(/4\.5/)).toBeInTheDocument();
   });
 
+  it("falls back to an em dash for a band change whose labels are missing", async () => {
+    const user = userEvent.setup();
+    // An older history row can carry no band label, so a level change can be reported without both
+    // sides being named. The row must still read sensibly rather than rendering blanks.
+    correctMutate.mockResolvedValue({
+      ...preview,
+      impacts: [
+        {
+          ...preview.impacts[0],
+          levelChanged: true,
+          previousLevel: undefined,
+          resultingLevel: undefined,
+        },
+      ],
+    });
+    renderCard();
+
+    await user.click(screen.getByRole("button", { name: /preview correction/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/Band:/)).toBeInTheDocument(),
+    );
+    expect(screen.getByText(/— →/)).toBeInTheDocument();
+  });
+
   it("shows a working indicator and disables the inputs while a request is in flight", () => {
     usePostApiV1MatchesIdScoreCorrection.mockReturnValue({
       isPending: true,
@@ -280,6 +305,62 @@ describe("MatchScoreCorrectionCard (#776)", () => {
     expect(
       screen.getByRole("button", { name: /preview correction/i }),
     ).toBeDisabled();
+  });
+
+  it("keeps the minus sign on a negative net adjustment rather than prefixing a plus", async () => {
+    const user = userEvent.setup();
+    // One side of a correction almost always moves down, so this is the common case, not an edge one.
+    correctMutate.mockResolvedValue({
+      ...preview,
+      impacts: [{ ...preview.impacts[0], netAdjustment: "-0.060000" }],
+    });
+    renderCard();
+
+    await user.click(screen.getByRole("button", { name: /preview correction/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/-0\.060000/)).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/\+-/)).not.toBeInTheDocument();
+  });
+
+  it("edits one set without disturbing the others", async () => {
+    const user = userEvent.setup();
+    renderCard({
+      ...match,
+      sets: [
+        { setNumber: 1, team1Games: 6, team2Games: 4 },
+        { setNumber: 2, team1Games: 3, team2Games: 6 },
+      ],
+    } as MatchPublicResponse);
+
+    await user.clear(screen.getByLabelText("Set 1 side 2 games"));
+    await user.type(screen.getByLabelText("Set 1 side 2 games"), "0");
+    await user.click(screen.getByRole("button", { name: /preview correction/i }));
+
+    await waitFor(() =>
+      expect(correctMutate).toHaveBeenCalledWith({
+        id: "m-1",
+        data: {
+          sets: [
+            { team1Games: 6, team2Games: 0 },
+            // Set 2 must survive the edit to set 1 untouched.
+            { team1Games: 3, team2Games: 6 },
+          ],
+          dryRun: true,
+        },
+      }),
+    );
+  });
+
+  it("refuses to submit a match that somehow has no sets", async () => {
+    const user = userEvent.setup();
+    renderCard({ ...match, sets: [] } as MatchPublicResponse);
+
+    await user.click(screen.getByRole("button", { name: /preview correction/i }));
+
+    expect(correctMutate).not.toHaveBeenCalled();
+    expect(toastError).toHaveBeenCalled();
   });
 
   it("renders nothing when the match id was not revealed to this viewer", () => {
