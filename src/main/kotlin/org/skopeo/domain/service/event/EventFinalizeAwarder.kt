@@ -85,11 +85,24 @@ class EventFinalizeAwarder(
      * global one is a kill switch (#752) — it is checked HERE, at payout time, not only at create, so
      * an event created while the flag was on stops paying out the moment it is turned off. A payout
      * suppressed that way is reported via [AwardSummary.suppressedByGlobalFlag], never silently.
+     *
+     * Also the re-award path for a post-rating score correction (#776), via [correctedMatchId] — the
+     * caller has already revoked the awards being replaced, and routing back through here means the two
+     * gates above are re-checked, so a correction never resurrects a payout that has since been turned
+     * off. What that id narrows differs by event type, deliberately:
+     * - **OPEN_PLAY** pays per match from band difference with no cross-match coupling, so only the
+     *   corrected fixture is re-priced. Re-running the whole event would re-price unrelated matches at
+     *   today's bands rather than the bands they were finalized at.
+     * - **TOURNAMENT** pays by placement, and a player earns only their BEST placement across the event's
+     *   placement matches ([awardPlacement]'s `ctx.awarded` guard). That guard spans matches, so the id is
+     *   ignored and the whole placement set is recomputed — otherwise a winner flip could leave a player
+     *   holding two placement awards, or one that is no longer their best.
      */
     fun awardForFinalizedEvent(
         event: Event,
         grantedBy: UUID,
         now: LocalDateTime,
+        correctedMatchId: UUID? = null,
     ): AwardSummary {
         val nothing = AwardSummary(matchCount = 0, awardCount = 0, totalPoints = BigDecimal.ZERO)
         return when {
@@ -99,7 +112,8 @@ class EventFinalizeAwarder(
             !settings.getAwardRankingPoints().enabled -> nothing.copy(suppressedByGlobalFlag = true)
             else ->
                 when (event.type) {
-                    EventType.OPEN_PLAY -> awardComputedOpenPlay(event = event, grantedBy = grantedBy, now = now)
+                    EventType.OPEN_PLAY ->
+                        awardComputedOpenPlay(event = event, grantedBy = grantedBy, now = now, onlyMatchId = correctedMatchId)
                     EventType.TOURNAMENT -> awardPlacement(event = event, grantedBy = grantedBy, now = now)
                 }
         }
@@ -252,6 +266,8 @@ class EventFinalizeAwarder(
         event: Event,
         grantedBy: UUID,
         now: LocalDateTime,
+        // Narrow the payout to a single fixture (#776 score correction); null = the whole event, as on finalize.
+        onlyMatchId: UUID? = null,
     ): AwardSummary {
         val config: OpenPlayPointsConfig = pointsConfig.getOpenPlay().value
         // Validity runs from the event end for the configured open-play window (#559: no per-event override).
@@ -262,6 +278,7 @@ class EventFinalizeAwarder(
                 .listByEvent(eventId = event.id)
                 .map { it.toDomain() }
                 .filter { it.status == MatchStatus.COMPLETED && it.winnerTeamId != null }
+                .filter { onlyMatchId == null || it.id == onlyMatchId }
         val userIds = completed.flatMap { it.team1.userIds + it.team2.userIds }.distinct()
         val bands = ratings.findCurrentRatings(userIds = userIds)
         val sexes = users.findAllByIds(ids = userIds).map { it.toDomain() }.associate { it.id to (it.sex ?: UNSPECIFIED_SEX) }

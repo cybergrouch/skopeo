@@ -825,8 +825,11 @@ class MatchService(
  * games, at least one set) is validated at the boundary (#116, in the DTO); what remains here is
  * outcome derivation against the persisted match — each set must have a decisive score, and the sets
  * must not be tied (whoever wins more sets wins the match).
+ *
+ * `internal` so the score-correction path (#776) derives a corrected outcome through exactly the same
+ * validation a first-time upload goes through.
  */
-private fun deriveOutcome(
+internal fun deriveOutcome(
     team1Id: UUID,
     team2Id: UUID,
     request: MatchResultRequest,

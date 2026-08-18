@@ -40,4 +40,6 @@ data class MatchEntity(
     val team2Handicap: BigDecimal?,
     val isPlacementMatch: Boolean,
     val placementBracket: String?,
+    val reRatedAt: LocalDateTime?,
+    val reRatedCount: Int,
 )

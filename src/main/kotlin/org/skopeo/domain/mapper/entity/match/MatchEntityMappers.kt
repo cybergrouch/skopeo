@@ -67,4 +67,6 @@ fun MatchAggregateEntity.toDomain(): Match =
         team2Handicap = match.team2Handicap,
         isPlacementMatch = match.isPlacementMatch,
         placementBracket = match.placementBracket?.let { PlacementBracket.valueOf(value = it) },
+        reRatedAt = match.reRatedAt,
+        reRatedCount = match.reRatedCount,
     )

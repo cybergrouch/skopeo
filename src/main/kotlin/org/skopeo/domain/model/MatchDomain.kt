@@ -109,6 +109,10 @@ data class Match(
     // says which (Super/Plate Finals). Regular fixtures are false/null and award no tournament points.
     val isPlacementMatch: Boolean = false,
     val placementBracket: PlacementBracket? = null,
+    // Score correction after rating (#776): when the score was last corrected + how many times. Null/0 =
+    // never corrected. [ratedAt] stays set through a correction, so the match never re-enters the queue.
+    val reRatedAt: LocalDateTime? = null,
+    val reRatedCount: Int = 0,
 )
 
 /** Everything needed to create a fixture (the result is uploaded separately). */

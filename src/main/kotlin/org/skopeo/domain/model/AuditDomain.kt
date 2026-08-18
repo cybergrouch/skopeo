@@ -26,6 +26,8 @@ enum class AuditAction {
     INVITE_REVOKED,
     MATCH_FIXTURE_CREATED,
     MATCH_RESULT_RECORDED,
+    MATCH_SCORE_CORRECTED,
+    MATCH_RATINGS_RE_RATED,
     EVENT_CREATED,
     EVENT_RENAMED,
     EVENT_CLUB_CHANGED,
@@ -138,7 +140,11 @@ val AuditAction.category: AuditCategory
             AuditAction.MATCH_FIXTURE_CREATED,
             AuditAction.FIXTURE_HANDICAP_SET,
             -> AuditCategory.MATCH_FIXTURE
-            AuditAction.MATCH_RESULT_RECORDED -> AuditCategory.MATCH_RESULT
+            // The score half of a post-rating correction (#776) belongs with results; its rating half
+            // (MATCH_RATINGS_RE_RATED) rolls up under RATING_CALCULATION so each can be filtered alone.
+            AuditAction.MATCH_RESULT_RECORDED,
+            AuditAction.MATCH_SCORE_CORRECTED,
+            -> AuditCategory.MATCH_RESULT
             AuditAction.EVENT_CREATED,
             AuditAction.EVENT_RENAMED,
             AuditAction.EVENT_CLUB_CHANGED,
@@ -151,6 +157,7 @@ val AuditAction.category: AuditCategory
             AuditAction.RATING_CALCULATION_PREVIEWED,
             AuditAction.RATING_CALCULATION_MATCH_RATED,
             AuditAction.RATING_CALCULATION_COMMITTED,
+            AuditAction.MATCH_RATINGS_RE_RATED,
             -> AuditCategory.RATING_CALCULATION
             AuditAction.USER_MARKED_DUPLICATE,
             AuditAction.USER_UNMARKED_DUPLICATE,

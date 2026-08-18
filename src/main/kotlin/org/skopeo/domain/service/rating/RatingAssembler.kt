@@ -110,6 +110,17 @@ class RatingAssembler(
         lastMatchDate: LocalDate?,
     ): Unit = ratings.restoreCurrentRating(userId = userId, rating = rating, level = level, lastMatchDate = lastMatchDate)
 
+    fun markMatchHistoryReversed(
+        matchId: UUID,
+        reversedAt: LocalDateTime,
+    ): Int = ratings.markMatchHistoryReversed(matchId = matchId, reversedAt = reversedAt)
+
+    fun applyCorrectedRating(
+        userId: UUID,
+        rating: BigDecimal,
+        level: String?,
+    ): Unit = ratings.applyCorrectedRating(userId = userId, rating = rating, level = level)
+
     fun applyMatchRating(write: MatchRatingWrite): Unit = ratings.applyMatchRating(write = write)
 
     fun appendHistory(write: RatingHistoryWrite): Unit = ratings.appendHistory(write = write)

@@ -66,6 +66,11 @@ internal object MatchesTable : UUIDTable(name = "matches") {
     // Tournament placement match (#525): flag + which bracket it decides (CHAMPIONSHIP_FINALS / PLATE_FINALS).
     val isPlacementMatch = bool(name = "is_placement_match").default(defaultValue = false)
     val placementBracket = varchar(name = "placement_bracket", length = WIDE_TYPE_MAX).nullable()
+
+    // Score correction after rating (#776): when the score was last corrected + how many times. Null/0 =
+    // never corrected. Drives the public "Re-rated" badge; [ratedAt] stays set through a correction.
+    val reRatedAt = datetime(name = "re_rated_at").nullable()
+    val reRatedCount = integer(name = "re_rated_count").default(defaultValue = 0)
 }
 
 internal object MatchSetsTable : UUIDTable(name = "match_sets") {
