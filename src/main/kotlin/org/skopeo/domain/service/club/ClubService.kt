@@ -34,7 +34,6 @@ import org.skopeo.repository.ClubRepository
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository
-import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -220,29 +219,31 @@ class ClubService(
                 ensureNotNull(value = clubs.findByPublicCode(code = code)) {
                     ServiceError.NotFound(message = "Club $code not found")
                 }.toDomain()
-            val today = LocalDate.now()
             // Active events under the club; a deleted club's events are soft-deleted too, so this is
             // empty for one (mirrors listByClub in the delete cascade).
-            val (upcoming, past) =
-                events
-                    .listByClub(clubId = club.id)
-                    .map { it.toDomain() }
-                    .map { event ->
-                        ClubPublicEvent(
-                            publicCode = event.publicCode,
-                            name = event.name,
-                            startDate = event.startDate,
-                            endDate = event.endDate,
-                            eventType = event.type,
-                        )
-                    }.partition { !it.endDate.isBefore(today) }
+            val clubEvents = events.listByClub(clubId = club.id).map { it.toDomain() }
+            // Batched "has results" counts (#483) — the signal that separates Unfinalized from Upcoming.
+            val counts = matches.completedResultCountByEvents(eventIds = clubEvents.map { it.id })
             ClubPublicView(
                 publicCode = club.publicCode,
                 name = club.name,
                 isActive = club.isActive,
-                // Upcoming soonest-first; past most-recent-first.
-                upcoming = upcoming.sortedBy { it.startDate },
-                past = past.sortedByDescending { it.endDate },
+                // One flat list, newest-ending first (#780). The client applies the Event Organizer's
+                // Upcoming / Unfinalized / Finalized rules, so they are not duplicated here.
+                events =
+                    clubEvents
+                        .map { event ->
+                            ClubPublicEvent(
+                                publicCode = event.publicCode,
+                                name = event.name,
+                                startDate = event.startDate,
+                                endDate = event.endDate,
+                                eventType = event.type,
+                                isFinalized = event.isFinalized,
+                                finalizedAt = event.finalizedAt,
+                                completedMatchCount = counts[event.id] ?: 0,
+                            )
+                        }.sortedByDescending { it.endDate },
             ).toResponse()
         }
 

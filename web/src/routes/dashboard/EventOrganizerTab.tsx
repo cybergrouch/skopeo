@@ -1,7 +1,5 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 import {
   Card,
   CardContent,
@@ -9,354 +7,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  getGetApiV1EventsQueryKey,
-  useGetApiV1Events,
-  usePostApiV1Events,
-} from "@/api/generated/events/events";
-import { useGetApiV1Clubs } from "@/api/generated/clubs/clubs";
-import { useGetApiV1Circuits } from "@/api/generated/circuits/circuits";
-import { useGetApiV1UsersMe } from "@/api/generated/users/users";
-import { useGetApiV1SettingsAwardRankingPoints } from "@/api/generated/settings/settings";
-import type {
-  ClubResponse,
-  CreateEventRequestFormat,
-  EventResponse,
-  UserSummaryResponse,
-} from "@/api/generated/model";
-import { Capability, canRate, hasCapability } from "@/auth/capabilities";
-import { PlayerPicker } from "@/components/PlayerPicker";
+import { useGetApiV1Events } from "@/api/generated/events/events";
+import type { EventResponse } from "@/api/generated/model";
 import { Badge } from "@/components/ui/badge";
 import { plural } from "@/lib/plural";
-import { playerLabel } from "@/lib/playerLabel";
-import { PlaceholderTag } from "@/components/PlaceholderTag";
-
-/** The event classes a host can pick at creation (#403); mirrors the backend EventType enum. */
-type EventType = "OPEN_PLAY" | "TOURNAMENT";
-
-const EVENT_TYPE_OPTIONS: ReadonlyArray<{ value: EventType; label: string }> = [
-  { value: "OPEN_PLAY", label: "Open play" },
-  { value: "TOURNAMENT", label: "Tournament" },
-];
-
-/** The organizing formats a host can pick at creation (#720); mirrors the backend TeamType enum. */
-const EVENT_FORMAT_OPTIONS: ReadonlyArray<{
-  value: CreateEventRequestFormat;
-  label: string;
-}> = [
-  { value: "SINGLES", label: "Singles" },
-  { value: "DOUBLES", label: "Doubles" },
-  { value: "MIXED_DOUBLES", label: "Mixed doubles" },
-];
-
-/**
- * The single club a CLUB_OWNER should default the create-event Club selector to (#364), or "" when
- * there is no unambiguous default: own exactly one club → that club's id; own multiple → "" (don't
- * guess); own zero, or not a CLUB_OWNER → "". Non-owners are unaffected.
- */
-function defaultOwnedClubId(
-  clubs: ClubResponse[],
-  meId: string | undefined,
-  capabilities: readonly Capability[] | undefined,
-): string {
-  if (!meId || !hasCapability(capabilities, Capability.CLUB_OWNER)) return "";
-  const owned = clubs.filter((club) =>
-    club.owners.some((owner) => owner.userId === meId),
-  );
-  return owned.length === 1 ? owned[0].id : "";
-}
-
-/** The new-event roster being assembled before the event is created. */
-function NewEventForm() {
-  const queryClient = useQueryClient();
-  const [name, setName] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  // Undefined until the user picks a club; that keeps the CLUB_OWNER default (#364) from clobbering
-  // an explicit choice (including clearing to "Open", i.e. an empty string the user chose).
-  const [clubIdChoice, setClubIdChoice] = useState<string | undefined>(
-    undefined,
-  );
-  const [roster, setRoster] = useState<UserSummaryResponse[]>([]);
-  // The event's class (#403); OPEN_PLAY is the default and the backward-compatible choice.
-  const [type, setType] = useState<EventType>("OPEN_PLAY");
-  // The event's organizing format (#720): REQUIRED. Sets durable team size and the default fixture format.
-  const [format, setFormat] = useState<CreateEventRequestFormat>("SINGLES");
-  // The circuit a TOURNAMENT belongs to (#525); required for tournaments, ignored otherwise.
-  const [circuitId, setCircuitId] = useState("");
-  // "Award Ranking Points" checkbox (#559): when set, finalizing the event awards ranking points per the
-  // global schedules; unticking opts the whole event out of awarding.
-  // TEMPORARY (#567): defaulted OFF during the testing phase so new events don't award points while we
-  // validate finalize behaviour. Revert this default back to `true` once we're ready to go live.
-  const [awardRankingPoints, setAwardRankingPoints] = useState(false);
-
-  // Clubs to optionally file the event under (#313). Readable by staff; empty when none exist.
-  const clubsData = useGetApiV1Clubs().data;
-  const clubs = clubsData ?? [];
-  // Circuits to file a TOURNAMENT under (#525). Staff-readable; empty when none exist.
-  const circuits = useGetApiV1Circuits().data ?? [];
-  const me = useGetApiV1UsersMe().data;
-  // Award-points checkbox is gated behind a feature flag (#641), default off — only show it when an
-  // admin has explicitly enabled it; while loading / unset it stays hidden (matching the backend default).
-  const awardPointsEnabled =
-    useGetApiV1SettingsAwardRankingPoints({ query: { retry: false } }).data?.enabled === true;
-
-  // Default the selector to a CLUB_OWNER's own club (#364), but only while the field is untouched;
-  // once the user selects anything (including "Open") their choice wins.
-  const ownerDefault = useMemo(
-    () => defaultOwnedClubId(clubsData ?? [], me?.id, me?.capabilities),
-    [clubsData, me?.id, me?.capabilities],
-  );
-  const clubId = clubIdChoice ?? ownerDefault;
-
-  const create = usePostApiV1Events({
-    mutation: {
-      onSuccess: () => {
-        // Confirm the create (#667) before the fields reset — `name` is still the submitted value here.
-        toast.success(`Created event “${name.trim()}”.`);
-        setName("");
-        setStartDate("");
-        setEndDate("");
-        setClubIdChoice(undefined);
-        setRoster([]);
-        setType("OPEN_PLAY");
-        setFormat("SINGLES");
-        setCircuitId("");
-        setAwardRankingPoints(true);
-        void queryClient.invalidateQueries({
-          queryKey: getGetApiV1EventsQueryKey(),
-        });
-      },
-    },
-  });
-
-  function submit(e: FormEvent) {
-    e.preventDefault();
-    create.mutate(
-      {
-        data: {
-          name,
-          startDate,
-          endDate,
-          type,
-          format,
-          participantIds: roster.map((u) => u.id),
-          ...(clubId ? { clubId } : {}),
-          ...(type === "TOURNAMENT" ? { circuitId } : {}),
-          // A single "Award Ranking Points" flag (#559) replaces the old per-event points config.
-          awardRankingPoints,
-        },
-      },
-      {
-        onError: () =>
-          toast.error(
-            "Could not create the event. Check the name and dates.",
-            { duration: 8000 },
-          ),
-      },
-    );
-  }
-
-  const canCreate =
-    name.trim() !== "" &&
-    startDate !== "" &&
-    endDate !== "" &&
-    format !== ("" as CreateEventRequestFormat) &&
-    (type !== "TOURNAMENT" || circuitId !== "");
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>New event</CardTitle>
-        <CardDescription>
-          Name it, set a date range, and add participants.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={submit} className="grid gap-3">
-          <div className="space-y-1">
-            <Label htmlFor="event-name" className="text-xs">
-              Name
-            </Label>
-            <Input
-              id="event-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Summer Open"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-1">
-              <Label htmlFor="event-start" className="text-xs">
-                Start date
-              </Label>
-              <Input
-                id="event-start"
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="event-end" className="text-xs">
-                End date
-              </Label>
-              <Input
-                id="event-end"
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-              />
-            </div>
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="event-type" className="text-xs">
-              Type
-            </Label>
-            <select
-              id="event-type"
-              value={type}
-              onChange={(e) => setType(e.target.value as EventType)}
-              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-            >
-              {EVENT_TYPE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          {/* Organizing format (#720): required; sets durable team size and the default fixture format. */}
-          <div className="space-y-1">
-            <Label htmlFor="event-format" className="text-xs">
-              Format
-            </Label>
-            <select
-              id="event-format"
-              value={format}
-              onChange={(e) =>
-                setFormat(e.target.value as CreateEventRequestFormat)
-              }
-              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-            >
-              {EVENT_FORMAT_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          {/* Circuit picker (#525): a tournament must belong to a circuit; shown only for TOURNAMENT. */}
-          {type === "TOURNAMENT" ? (
-            <div className="space-y-1">
-              <Label htmlFor="event-circuit" className="text-xs">
-                Circuit
-              </Label>
-              <select
-                id="event-circuit"
-                value={circuitId}
-                onChange={(e) => setCircuitId(e.target.value)}
-                className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-              >
-                <option value="">Select a circuit…</option>
-                {circuits.map((circuit) => (
-                  <option key={circuit.id} value={circuit.id}>
-                    {circuit.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : null}
-          {clubs.length > 0 ? (
-            <div className="space-y-1">
-              <Label htmlFor="event-club" className="text-xs">
-                Club
-              </Label>
-              <select
-                id="event-club"
-                value={clubId}
-                onChange={(e) => setClubIdChoice(e.target.value)}
-                className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-              >
-                <option value="">No club (Open)</option>
-                {clubs.map((club) => (
-                  <option key={club.id} value={club.id}>
-                    {club.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : null}
-          {/* "Award Ranking Points" checkbox (#559): when set, finalizing the event awards ranking points
-              per the global schedules. Gated behind an admin feature flag (#641, default off) so hosts
-              can't opt an event into awarding until it's enabled; hidden → the payload stays false. */}
-          {awardPointsEnabled ? (
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={awardRankingPoints}
-                onChange={(e) => setAwardRankingPoints(e.target.checked)}
-                aria-label="Award Ranking Points"
-              />
-              Award Ranking Points
-            </label>
-          ) : null}
-          <div className="space-y-1">
-            <Label className="text-xs">Participants</Label>
-            {roster.length > 0 ? (
-              <ul className="flex flex-wrap gap-1">
-                {roster.map((u) => (
-                  <li key={u.id}>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={() =>
-                        setRoster((r) => r.filter((x) => x.id !== u.id))
-                      }
-                    >
-                      {playerLabel(u.displayName, u.publicCode, u.id)}
-                      <PlaceholderTag show={u.isPlaceholder} deleted={u.isDeleted} /> ✕
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-            <PlayerPicker
-              label="Add participant"
-              placeholder="Search players to add…"
-              excludeIds={roster.map((u) => u.id)}
-              canSetRating={canRate(me?.capabilities)}
-              onSelect={(user) =>
-                setRoster((r) =>
-                  r.some((x) => x.id === user.id) ? r : [...r, user],
-                )
-              }
-            />
-          </div>
-          <Button
-            type="submit"
-            size="sm"
-            disabled={!canCreate || create.isPending}
-          >
-            Create event
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
-  );
-}
-
-/** Today as yyyy-MM-dd (local), comparable lexicographically with an event's ISO end date. */
-function todayIso(): string {
-  const now = new Date();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${now.getFullYear()}-${month}-${day}`;
-}
+import { ContentLink } from "@/components/ContentLink";
+import { EventBuckets } from "@/features/event/EventBucketSections";
+import { NewEventForm } from "@/features/event/NewEventForm";
+import { todayIso } from "@/features/event/eventBuckets";
 
 /**
  * One selectable event row: name, filing host, the relevant date, and participant count; opens the event
@@ -370,8 +28,7 @@ function EventRow({
   event: EventResponse;
   upcoming: boolean;
   onSelect: () => void;
-}) {
-  const date = upcoming
+}) {  const date = upcoming
     ? `Starts ${event.startDate}`
     : `Ended ${event.endDate}`;
   return (
@@ -409,6 +66,8 @@ function EventRow({
 interface ClubGroup {
   key: string;
   label: string;
+  /** The club's shareable code (#780), for linking to its public page; absent for the "Open" group. */
+  publicCode?: string;
   events: EventResponse[];
 }
 
@@ -423,6 +82,7 @@ function groupByClub(events: EventResponse[]): ClubGroup[] {
     const group = groups.get(key) ?? {
       key,
       label: event.club?.name ?? "Open",
+      publicCode: event.club?.publicCode,
       events: [],
     };
     group.events.push(event);
@@ -437,69 +97,6 @@ function groupByClub(events: EventResponse[]): ClubGroup[] {
     }))
     .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
     .map((entry) => entry.group);
-}
-
-/** Recorded results present (#483) — the "has results" signal for the Unfinalized bucket. */
-function hasResults(event: EventResponse): boolean {
-  return (event.completedMatchCount ?? 0) > 0;
-}
-
-/**
- * Split a group's events into three buckets (#483). Finalized status wins over everything: a finalized
- * event is always Finalized, even with a future end date or no results. Otherwise Unfinalized = the
- * event ended OR has recorded results (activity started, not concluded); Upcoming = future + untouched.
- * Sort: Upcoming by start date asc, Unfinalized by end date desc, Finalized by finalizedAt desc
- * (falling back to end date desc when a finalized row somehow lacks the timestamp).
- */
-function splitByBucket(events: EventResponse[], today: string) {
-  const finalized = events.filter((e) => e.isFinalized);
-  const active = events.filter((e) => !e.isFinalized);
-  const unfinalized = active.filter((e) => e.endDate < today || hasResults(e));
-  const upcoming = active.filter((e) => e.endDate >= today && !hasResults(e));
-  return {
-    upcoming: [...upcoming].sort((a, b) => a.startDate.localeCompare(b.startDate)),
-    unfinalized: [...unfinalized].sort((a, b) => b.endDate.localeCompare(a.endDate)),
-    finalized: [...finalized].sort((a, b) =>
-      (b.finalizedAt ?? b.endDate).localeCompare(a.finalizedAt ?? a.endDate),
-    ),
-  };
-}
-
-/** A labelled subsection (Upcoming / Past) with its own empty state (#271). */
-function EventSection({
-  title,
-  events,
-  upcoming,
-  emptyLabel,
-  onSelect,
-}: {
-  title: string;
-  events: EventResponse[];
-  upcoming: boolean;
-  emptyLabel: string;
-  onSelect: (publicCode: string) => void;
-}) {
-  return (
-    <div>
-      <div className="text-xs font-medium uppercase text-muted-foreground">
-        {title}
-      </div>
-      {events.length > 0 ? (
-        <ul className="mt-1 space-y-2">
-          {events.map((event) => (
-            <EventRow
-              key={event.id}
-              event={event}
-              upcoming={upcoming}
-              onSelect={() => onSelect(event.publicCode)}
-            />
-          ))}
-        </ul>
-      ) : (
-        <p className="mt-1 text-sm text-muted-foreground">{emptyLabel}</p>
-      )}
-    </div>
-  );
 }
 
 /**
@@ -520,46 +117,44 @@ function ClubGroupSection({
   onToggle: () => void;
   onSelect: (publicCode: string) => void;
 }) {
-  const { upcoming, unfinalized, finalized } = splitByBucket(group.events, today);
   return (
     <div className="space-y-3">
-      <button
-        type="button"
-        className="flex w-full items-center justify-between gap-2 text-left text-sm font-semibold hover:text-foreground/80"
-        aria-expanded={isOpen}
-        onClick={onToggle}
-      >
-        <span>
-          {group.label} ({group.events.length})
-        </span>
-        <span aria-hidden className="text-muted-foreground">
-          {isOpen ? "▾" : "▸"}
-        </span>
-      </button>
+      {/* The club name links to its public page (#780) while a separate chevron keeps the collapse
+          (#367). Two distinct controls rather than a link nested inside a button — that markup is
+          invalid and a known screen-reader trap. The clubless "Open" group has no page to link to. */}
+      <div className="flex w-full items-center justify-between gap-2 text-sm font-semibold">
+        {group.publicCode ? (
+          <ContentLink to={`/clubs/${group.publicCode}`}>
+            {group.label} ({group.events.length})
+          </ContentLink>
+        ) : (
+          <span>
+            {group.label} ({group.events.length})
+          </span>
+        )}
+        <button
+          type="button"
+          className="text-muted-foreground hover:text-foreground/80"
+          aria-expanded={isOpen}
+          aria-label={`${isOpen ? "Collapse" : "Expand"} ${group.label}`}
+          onClick={onToggle}
+        >
+          <span aria-hidden>{isOpen ? "▾" : "▸"}</span>
+        </button>
+      </div>
       {isOpen ? (
-        <>
-          <EventSection
-            title="Upcoming"
-            events={upcoming}
-            upcoming
-            emptyLabel="No upcoming events."
-            onSelect={onSelect}
-          />
-          <EventSection
-            title="Unfinalized"
-            events={unfinalized}
-            upcoming={false}
-            emptyLabel="No unfinalized events."
-            onSelect={onSelect}
-          />
-          <EventSection
-            title="Finalized"
-            events={finalized}
-            upcoming={false}
-            emptyLabel="No finalized events."
-            onSelect={onSelect}
-          />
-        </>
+        <EventBuckets
+          events={group.events}
+          today={today}
+          renderRow={(event, { upcoming }) => (
+            <EventRow
+              key={event.id}
+              event={event}
+              upcoming={upcoming}
+              onSelect={() => onSelect(event.publicCode)}
+            />
+          )}
+        />
       ) : null}
     </div>
   );

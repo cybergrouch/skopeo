@@ -96,13 +96,14 @@ function renderTab() {
 }
 
 /**
- * Club groups load collapsed (#591); click a group header to reveal its event rows. Matches the header
- * by its "Club name (count)" label so tests that assert on event content can expand first.
+ * Club groups load collapsed (#591); click a group's chevron to reveal its event rows.
+ *
+ * The header is two controls since #780: the club name links to its public page, and this separate
+ * chevron owns the collapse — so the expander is matched by its "Expand <club>" label rather than by the
+ * "Club name (count)" text, which now belongs to the link.
  */
 function expandGroup(label: string) {
-  fireEvent.click(
-    screen.getByRole("button", { name: new RegExp(`${label} \\(\\d+\\)`) }),
-  );
+  fireEvent.click(screen.getByRole("button", { name: `Expand ${label}` }));
 }
 
 const event = {
@@ -650,9 +651,12 @@ describe("EventOrganizerTab", () => {
     const user = userEvent.setup();
     renderTab();
 
-    // The header shows the club name with its event count and is collapsed by default (#591), so the
-    // event rows are hidden on load.
-    const toggle = screen.getByRole("button", { name: /Alpha TC \(1\)/ });
+    // The header shows the club name with its event count as a link to the club's public page (#780),
+    // and the separate chevron owns the collapse — collapsed by default (#591), so rows are hidden.
+    expect(
+      screen.getByRole("link", { name: /Alpha TC \(1\)/ }),
+    ).toHaveAttribute("href", "/clubs/CLBC1");
+    const toggle = screen.getByRole("button", { name: "Expand Alpha TC" });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByText("Alpha Cup")).not.toBeInTheDocument();
 
@@ -688,10 +692,10 @@ describe("EventOrganizerTab", () => {
 
     // Headers are present but every group starts collapsed — no event rows are rendered on load.
     expect(
-      screen.getByRole("button", { name: /Alpha TC \(1\)/ }),
+      screen.getByRole("button", { name: "Expand Alpha TC" }),
     ).toHaveAttribute("aria-expanded", "false");
     expect(
-      screen.getByRole("button", { name: /Bravo TC \(1\)/ }),
+      screen.getByRole("button", { name: "Expand Bravo TC" }),
     ).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByText("Alpha Cup")).not.toBeInTheDocument();
     expect(screen.queryByText("Bravo Cup")).not.toBeInTheDocument();
