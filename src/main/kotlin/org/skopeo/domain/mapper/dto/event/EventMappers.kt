@@ -3,6 +3,7 @@
 
 package org.skopeo.domain.mapper.dto.event
 
+import org.skopeo.common.dto.event.EventClubDto
 import org.skopeo.common.dto.event.EventParticipantResponse
 import org.skopeo.common.dto.event.EventResponse
 import org.skopeo.common.dto.event.MyEventResponse
@@ -41,8 +42,7 @@ fun EventView.toResponse(
         participants = participants.map { it.toResponse(showRawRating = showRawRating) },
         creatorDisplayName = creator?.displayName,
         creatorPublicCode = creator?.publicCode,
-        clubId = club?.id?.toString(),
-        clubName = club?.name,
+        club = club?.let { EventClubDto(id = it.id.toString(), name = it.name, publicCode = it.publicCode) },
         circuitId = event.circuitId?.toString(),
         calcPriority = event.calcPriority,
         format = event.format.name,

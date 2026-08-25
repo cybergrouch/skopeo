@@ -125,10 +125,15 @@ data class EventView(
     val club: EventClubRef? = null,
 )
 
-/** The club an event belongs to (#313), resolved to its id + name for grouping and display. */
+/**
+ * The club an event belongs to (#313), resolved for grouping and display. [publicCode] is the club's
+ * shareable code (#327) so a club reference beside an event can link straight to that club's public page
+ * (#780) without a second lookup — the events list is read by viewers who cannot list clubs.
+ */
 data class EventClubRef(
     val id: UUID,
     val name: String,
+    val publicCode: String,
 )
 
 /** The host who filed an event (#270), identified the privacy-conscious way — display name + public code. */

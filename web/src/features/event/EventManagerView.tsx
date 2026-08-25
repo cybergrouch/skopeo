@@ -403,7 +403,7 @@ export function EventManagerView({ eventId }: { eventId: string }) {
             <CardContent className="space-y-3">
               {/* Club (#319): set, change, or clear the event's club. */}
               <EventClubSection
-                clubId={event.clubId}
+                clubId={event.club?.id}
                 clubs={clubs}
                 disabled={setClub.isPending || locked}
                 onChange={saveClub}

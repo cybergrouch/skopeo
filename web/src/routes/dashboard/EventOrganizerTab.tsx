@@ -417,10 +417,12 @@ const OPEN_GROUP_KEY = "__open__";
 function groupByClub(events: EventResponse[]): ClubGroup[] {
   const groups = new Map<string, ClubGroup>();
   for (const event of events) {
-    const key = event.clubId ?? OPEN_GROUP_KEY;
+    // One nested `club` object (#780): present with every detail, or absent for a clubless event — so a
+    // single check decides both the grouping key and the label.
+    const key = event.club?.id ?? OPEN_GROUP_KEY;
     const group = groups.get(key) ?? {
       key,
-      label: event.clubName ?? "Open",
+      label: event.club?.name ?? "Open",
       events: [],
     };
     group.events.push(event);
