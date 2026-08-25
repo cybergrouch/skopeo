@@ -76,7 +76,4 @@ data class ClubPublicView(
     val publicCode: String,
     val name: String,
     val isActive: Boolean,
-    // One flat list (#780), newest-ending first. Was `upcoming`/`past`; the client now derives the three
-    // Event Organizer groupings from it, so the rules live in exactly one place.
-    val events: List<ClubPublicEvent>,
 )

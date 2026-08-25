@@ -5,6 +5,7 @@ package org.skopeo.domain.service.club
 
 import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.collections.shouldNotContain
@@ -23,6 +24,7 @@ import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuthProvider
 import org.skopeo.domain.model.CreateEventCommand
 import org.skopeo.domain.model.CreateFixtureCommand
+import org.skopeo.domain.model.EventBucket
 import org.skopeo.domain.model.MatchSetResult
 import org.skopeo.domain.model.MatchType
 import org.skopeo.domain.model.NameType
@@ -55,6 +57,7 @@ class ClubServiceTest {
     private val events = EventRepository()
     private val matchRepo = MatchRepository()
     private val service = ClubService(clubs = clubs, users = users)
+    private val reader = ClubPublicReader(clubs = clubs, events = events, matches = matchRepo)
 
     @BeforeEach
     fun reset() {
@@ -76,6 +79,14 @@ class ClubServiceTest {
         ).toDomain()
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
+
+    /** One page of a club's events in [bucket] (#786); defaults to the first page of ten. */
+    private fun publicEvents(
+        code: String,
+        bucket: EventBucket,
+        limit: Int = 10,
+        offset: Int = 0,
+    ) = reader.publicEventsByCode(code = code, bucket = bucket, limit = limit, offset = offset).shouldBeRight()
 
     @Test
     fun `an admin creates a club and it appears in the list`() {
@@ -411,17 +422,19 @@ class ClubServiceTest {
                 ),
         )
 
-        val view = service.publicByCode(code = club.publicCode).shouldBeRight()
+        val view = reader.publicByCode(code = club.publicCode).shouldBeRight()
         view.name shouldBe "Downtown TC"
         view.isActive shouldBe true
-        // One flat list, newest-ending first (#780); the client groups it into Upcoming / Unfinalized /
-        // Finalized exactly as the Event Organizer does, so the payload carries the inputs, not the split.
-        view.events.map { it.name } shouldBe listOf("Next Month", "Running Now", "Last Week")
-        view.events.forEach {
-            it.isFinalized shouldBe false
-            it.finalizedAt.shouldBeNull()
-            it.completedMatchCount shouldBe 0
-        }
+
+        // The summary itself carries no events (#786) — they are paged per bucket. Ends-today and future
+        // are Upcoming (soonest first); ended-yesterday with no results is Unfinalized.
+        val upcoming = publicEvents(code = club.publicCode, bucket = EventBucket.UPCOMING)
+        upcoming.items.map { it.name } shouldBe listOf("Running Now", "Next Month")
+        upcoming.total shouldBe 2L
+        publicEvents(code = club.publicCode, bucket = EventBucket.UNFINALIZED)
+            .items
+            .map { it.name } shouldBe listOf(element = "Last Week")
+        publicEvents(code = club.publicCode, bucket = EventBucket.FINALIZED).items.shouldBeEmpty()
     }
 
     @Test
@@ -429,11 +442,16 @@ class ClubServiceTest {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val club = service.create(token = token(uid = "admin"), name = "Empty Club").shouldBeRight()
 
-        // A club with no events resolves with an empty list.
-        val view = service.publicByCode(code = club.publicCode).shouldBeRight()
-        view.events shouldHaveSize 0
+        // A club with no events resolves, and every bucket is empty.
+        reader.publicByCode(code = club.publicCode).shouldBeRight()
+        EventBucket.entries.forEach { bucket ->
+            publicEvents(code = club.publicCode, bucket = bucket).let {
+                it.items.shouldBeEmpty()
+                it.total shouldBe 0L
+            }
+        }
 
-        service.publicByCode(code = "ZZZZZZ").shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
+        reader.publicByCode(code = "ZZZZZZ").shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
     }
 
     @Test

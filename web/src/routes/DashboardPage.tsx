@@ -59,7 +59,11 @@ export function DashboardPage() {
   const showActivity = isAdministrator(capabilities);
   const showReport = isAdministrator(capabilities);
   const showAccountManagement = isAdministrator(capabilities);
-  const showClubManagement = isAdministrator(capabilities);
+  // Club Management is a match-manager surface (#786), not admin-only: a HOST/CLUB_OWNER already reads
+  // the club list to file events, so they can see it here too. Every WRITE inside keeps its own server
+  // rule (create/rename/delete/owners are ADMINISTRATOR, sanctioning is CLUB_OWNER/ADMIN) and the section
+  // renders per-operation — so widening visibility never offers a control the API would refuse.
+  const showClubManagement = canManageMatches(capabilities);
   const showAdmin = isAdministrator(capabilities);
   // Points Management is always a standalone tab for anyone who can manage points budgets
   // (POINTS_MANAGER or ADMINISTRATOR); it's no longer embedded in the Admin tab.

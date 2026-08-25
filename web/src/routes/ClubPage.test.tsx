@@ -1,63 +1,48 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ClubPage } from "./ClubPage";
 
-const { useGetApiV1ClubsCodeCode, useGetApiV1UsersMe, state } = vi.hoisted(() => ({
-  useGetApiV1ClubsCodeCode: vi.fn(),
-  useGetApiV1UsersMe: vi.fn(),
-  state: { user: { uid: "u1" } as { uid: string } | null },
-}));
+const { useGetApiV1ClubsCodeCode, useGetApiV1UsersMe, state } = vi.hoisted(
+  () => ({
+    useGetApiV1ClubsCodeCode: vi.fn(),
+    useGetApiV1UsersMe: vi.fn(),
+    state: { user: { uid: "u1" } as { uid: string } | null },
+  }),
+);
 // PublicPageNav reads auth (#193); default to a logged-in user, overridden per test.
 vi.mock("@/auth/useAuth", () => ({ useAuth: () => ({ user: state.user }) }));
-vi.mock("@/api/generated/clubs/clubs", () => ({
-  useGetApiV1ClubsCodeCode,
-}));
+vi.mock("@/api/generated/clubs/clubs", () => ({ useGetApiV1ClubsCodeCode }));
 // The viewer lookup that gates the club's own New Event form (#780); anonymous by default.
 vi.mock("@/api/generated/users/users", () => ({ useGetApiV1UsersMe }));
-// The form is exercised in the Event Organizer's own tests; here we only assert the gating decision.
+// Both are exercised in their own tests; here we only assert the page's wiring and gating.
 vi.mock("@/features/event/NewEventForm", () => ({
   NewEventForm: ({ fixedClubPublicCode }: { fixedClubPublicCode?: string }) => (
     <div>new-event-form:{fixedClubPublicCode}</div>
   ),
 }));
+vi.mock("@/features/club/ClubEventsCard", () => ({
+  ClubEventsCard: ({
+    code,
+    bucket,
+    title,
+  }: {
+    code: string;
+    bucket: string;
+    title: string;
+  }) => (
+    <div>
+      events-card:{bucket}:{code}:{title}
+    </div>
+  ),
+}));
 
+// The summary carries no events at all now (#786) — they are fetched per bucket by the cards.
 const club = {
   publicCode: "CLB001",
   name: "Downtown TC",
   isActive: true,
-  // One event per bucket (#780): a future untouched one, an ended one with results, and a finalized one.
-  events: [
-    {
-      publicCode: "EVT001",
-      name: "Spring Open",
-      startDate: "2999-05-01",
-      endDate: "2999-05-03",
-      eventType: "OPEN_PLAY",
-      isFinalized: false,
-      completedMatchCount: 0,
-    },
-    {
-      publicCode: "EVT002",
-      name: "Autumn Meet",
-      startDate: "2026-09-01",
-      endDate: "2026-09-03",
-      eventType: "OPEN_PLAY",
-      isFinalized: false,
-      completedMatchCount: 2,
-    },
-    {
-      publicCode: "EVT000",
-      name: "Winter Cup",
-      startDate: "2026-01-01",
-      endDate: "2026-01-03",
-      eventType: "TOURNAMENT",
-      isFinalized: true,
-      finalizedAt: "2026-01-04T10:00:00",
-      completedMatchCount: 3,
-    },
-  ],
 };
 
 function renderAt(code = "CLB001") {
@@ -100,82 +85,29 @@ describe("ClubPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("groups events as Upcoming / Unfinalized / Finalized, each linking to its page (#780)", () => {
+  it("renders one paginated card per grouping, wired to this club (#786)", () => {
     useGetApiV1ClubsCodeCode.mockReturnValue({ data: club, isLoading: false });
     renderAt();
 
     expect(screen.getByText("Downtown TC")).toBeInTheDocument();
     expect(screen.getByText("CLB001")).toBeInTheDocument();
 
-    // The same three groupings the Event Organizer uses (#483) — not the old Upcoming/Past pair.
-    const upcoming = screen.getByText("Upcoming").parentElement as HTMLElement;
+    // One separately-paginated card per bucket, in order.
     expect(
-      within(upcoming).getByRole("link", { name: /Spring Open/ }),
-    ).toHaveAttribute("href", "/events/EVT001");
-
-    // Ended with recorded results → Unfinalized, not Finalized.
-    const unfinalized = screen.getByText("Unfinalized")
-      .parentElement as HTMLElement;
+      screen.getByText("events-card:UPCOMING:CLB001:Upcoming events"),
+    ).toBeInTheDocument();
     expect(
-      within(unfinalized).getByRole("link", { name: /Autumn Meet/ }),
-    ).toHaveAttribute("href", "/events/EVT002");
-
-    const finalized = screen.getByText("Finalized")
-      .parentElement as HTMLElement;
+      screen.getByText("events-card:UNFINALIZED:CLB001:Unfinalized events"),
+    ).toBeInTheDocument();
     expect(
-      within(finalized).getByRole("link", { name: /Winter Cup/ }),
-    ).toHaveAttribute("href", "/events/EVT000");
+      screen.getByText("events-card:FINALIZED:CLB001:Finalized events"),
+    ).toBeInTheDocument();
 
     // Share card still points at the public view.
     expect(screen.getByText("Share this club")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Copy link" }),
     ).toBeInTheDocument();
-  });
-
-  it("shows each event's type and the date that matters for its grouping (#296)", () => {
-    useGetApiV1ClubsCodeCode.mockReturnValue({ data: club, isLoading: false });
-    renderAt();
-
-    // Upcoming shows the start date; the rest show the end date.
-    const upcoming = screen.getByText("Upcoming").parentElement as HTMLElement;
-    expect(within(upcoming).getByText("OPEN_PLAY")).toBeInTheDocument();
-    expect(within(upcoming).getByText("Starts 2999-05-01")).toBeInTheDocument();
-
-    const finalized = screen.getByText("Finalized")
-      .parentElement as HTMLElement;
-    expect(within(finalized).getByText("TOURNAMENT")).toBeInTheDocument();
-    expect(within(finalized).getByText("Ended 2026-01-03")).toBeInTheDocument();
-
-    // No designated/awarded points copy anywhere on the page (#559).
-    expect(screen.queryByText(/pts designated/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/pts awarded/)).not.toBeInTheDocument();
-  });
-
-  it("shows a per-bucket empty state when a club has no events", () => {
-    useGetApiV1ClubsCodeCode.mockReturnValue({
-      data: { ...club, events: [] },
-      isLoading: false,
-    });
-    renderAt();
-    expect(screen.getByText("No upcoming events.")).toBeInTheDocument();
-    expect(screen.getByText("No unfinalized events.")).toBeInTheDocument();
-    expect(screen.getByText("No finalized events.")).toBeInTheDocument();
-  });
-
-  it("renders without events when the payload omits them entirely (#780)", () => {
-    // The web and API deploy as separate artifacts, web first, so a freshly-deployed page can briefly
-    // see an API that still returns the old upcoming/past pair. That must not white-screen the page.
-    const withoutEvents: Record<string, unknown> = { ...club };
-    delete withoutEvents.events;
-    useGetApiV1ClubsCodeCode.mockReturnValue({
-      data: withoutEvents,
-      isLoading: false,
-    });
-    renderAt();
-
-    expect(screen.getByText("Downtown TC")).toBeInTheDocument();
-    expect(screen.getByText("No upcoming events.")).toBeInTheDocument();
   });
 
   it("offers a New Event form fixed to this club for a match manager (#780)", () => {
@@ -194,9 +126,11 @@ describe("ClubPage", () => {
     renderAt();
 
     expect(screen.queryByText(/new-event-form/)).not.toBeInTheDocument();
-    // The public page still renders normally.
+    // The public page still renders normally, event cards included.
     expect(screen.getByText("Downtown TC")).toBeInTheDocument();
-    expect(screen.getByText("Upcoming")).toBeInTheDocument();
+    expect(
+      screen.getByText("events-card:UPCOMING:CLB001:Upcoming events"),
+    ).toBeInTheDocument();
   });
 
   it("hides the New Event form from a signed-in non-manager (#780)", () => {
