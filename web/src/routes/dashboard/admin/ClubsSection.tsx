@@ -25,16 +25,32 @@ import {
 } from "@/api/generated/clubs/clubs";
 import type { ClubResponse, UserSummaryResponse } from "@/api/generated/model";
 import { GetApiV1UsersCapability } from "@/api/generated/model";
+import { useGetApiV1UsersMe } from "@/api/generated/users/users";
+import { Capability, hasCapability, isAdministrator } from "@/auth/capabilities";
 
 /**
- * Admin club management (#313): create clubs and assign/remove CLUB_OWNER(s). ADMINISTRATOR-only
- * (this section only renders in the Admin tab, and the API enforces it). Owners are shown by name;
- * assigning an owner records the association — granting the CLUB_OWNER capability is separate.
+ * Club management (#313): create clubs and assign/remove CLUB_OWNER(s).
+ *
+ * The Club Management tab is visible to HOST / CLUB_OWNER / ADMINISTRATOR (#786), but the operations here
+ * are NOT all open to those roles — the API keeps its existing per-operation rules. So this mirrors them
+ * rather than assuming the viewer can do everything:
+ *
+ *  - reading the club list  → HOST / CLUB_OWNER / ADMIN (#313, so event creators can pick a club)
+ *  - create / rename / delete / owners → ADMINISTRATOR
+ *  - tournament sanctioning → CLUB_OWNER / ADMIN (it scales the placement points schedule, #525)
+ *
+ * A viewer without a given right simply doesn't see that control, so the tab never offers an action the
+ * server would refuse. Owners are shown by name; assigning an owner records the association — granting the
+ * CLUB_OWNER capability itself is separate.
  */
 export function ClubsSection() {
   const queryClient = useQueryClient();
   const clubsQuery = useGetApiV1Clubs();
   const clubs = clubsQuery.data ?? [];
+  const capabilities = useGetApiV1UsersMe().data?.capabilities;
+  const isAdmin = isAdministrator(capabilities);
+  // Mirrors the server's OWNER_OR_ADMIN: the CLUB_OWNER capability, not ownership of this particular club.
+  const canSanction = isAdmin || hasCapability(capabilities, Capability.CLUB_OWNER);
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const create = usePostApiV1Clubs();
@@ -72,6 +88,7 @@ export function ClubsSection() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {isAdmin ? (
         <form onSubmit={onCreate} className="flex items-end gap-2">
           <div className="flex-1 space-y-1">
             <Label htmlFor="club-name">New club</Label>
@@ -86,6 +103,7 @@ export function ClubsSection() {
             {create.isPending ? "Creating…" : "Create"}
           </Button>
         </form>
+        ) : null}
         {error ? (
           <p className="text-sm text-destructive" role="alert">
             {error}
@@ -99,7 +117,9 @@ export function ClubsSection() {
         ) : (
           <ul className="space-y-3">
             {clubs.map((club) => (
-              <ClubRow key={club.id} club={club} onChange={invalidate} />
+              <ClubRow
+                  isAdmin={isAdmin}
+                  canSanction={canSanction} key={club.id} club={club} onChange={invalidate} />
             ))}
           </ul>
         )}
@@ -111,9 +131,15 @@ export function ClubsSection() {
 function ClubRow({
   club,
   onChange,
+  isAdmin,
+  canSanction,
 }: {
   club: ClubResponse;
   onChange: () => void;
+  /** Rename, delete, and owner changes are ADMINISTRATOR-only on the server. */
+  isAdmin: boolean;
+  /** Sanctioning is CLUB_OWNER-or-ADMIN; it scales the placement points schedule (#525). */
+  canSanction: boolean;
 }) {
   const assign = usePostApiV1ClubsIdOwners();
   const remove = useDeleteApiV1ClubsIdOwnersUserId();
@@ -213,15 +239,17 @@ function ClubRow({
               >
                 Public page (QR)
               </PublicPageLink>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setEditing(true)}
-              >
-                Edit
-              </Button>
-              {confirmingDelete ? (
+              {isAdmin ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setEditing(true)}
+                >
+                  Edit
+                </Button>
+              ) : null}
+              {!isAdmin ? null : confirmingDelete ? (
                 <>
                   <Button
                     type="button"
@@ -258,12 +286,14 @@ function ClubRow({
           </>
         )}
       </div>
-      {/* Tournament sanction (#525): sanctioned clubs award the full placement table (2× unsanctioned). */}
+      {/* Tournament sanction (#525): sanctioned clubs award the full placement table (2× unsanctioned).
+          CLUB_OWNER-or-ADMIN, matching the server — a plain HOST reads the state without setting it, since
+          flipping it would let them double their own tournament's payout. */}
       <label className="flex items-center gap-2 text-sm text-muted-foreground">
         <input
           type="checkbox"
           checked={club.tournamentsSanctioned ?? false}
-          disabled={sanction.isPending}
+          disabled={sanction.isPending || !canSanction}
           onChange={(e) => toggleSanction(e.target.checked)}
           aria-label="Tournaments sanctioned"
         />
@@ -282,28 +312,32 @@ function ClubRow({
               className="flex items-center justify-between text-sm"
             >
               <span>{owner.displayName ?? owner.publicCode}</span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                disabled={busy}
-                onClick={() => removeOwner(owner.userId)}
-              >
-                Remove
-              </Button>
+              {isAdmin ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => removeOwner(owner.userId)}
+                >
+                  Remove
+                </Button>
+              ) : null}
             </li>
           ))}
         </ul>
       ) : (
         <p className="text-xs text-muted-foreground">No owners yet.</p>
       )}
-      {/* Only surface users who hold the CLUB_OWNER capability (#317). */}
-      <UserSearchSelect
-        label="Assign an owner"
-        excludeIds={club.owners.map((o) => o.userId)}
-        filters={{ capability: GetApiV1UsersCapability.CLUB_OWNER }}
-        onSelect={addOwner}
-      />
+      {/* Only surface users who hold the CLUB_OWNER capability (#317); assigning is ADMINISTRATOR-only. */}
+      {isAdmin ? (
+        <UserSearchSelect
+          label="Assign an owner"
+          excludeIds={club.owners.map((o) => o.userId)}
+          filters={{ capability: GetApiV1UsersCapability.CLUB_OWNER }}
+          onSelect={addOwner}
+        />
+      ) : null}
     </li>
   );
 }

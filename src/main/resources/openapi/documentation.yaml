@@ -3192,6 +3192,59 @@ paths:
         '404':
           description: No club with that code
 
+  /api/v1/clubs/code/{code}/events:
+    parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: bucket
+        in: query
+        required: true
+        schema:
+          type: string
+          enum: [UPCOMING, UNFINALIZED, FINALIZED]
+        description: >-
+          Which grouping to page through (#483). Required — an absent or unknown value is a 400 rather
+          than a silent default to a bucket the caller did not ask for.
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+        description: Page size; coerced to 1..100, default 10.
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+        description: Rows to skip; coerced to at least 0, default 0.
+    get:
+      summary: One page of a club's events in a single bucket
+      description: >-
+        One page of a club's events in a single grouping (#786), for the public club page's paginated
+        cards. Viewable anonymously, like the club summary. The bucket predicates are evaluated in SQL,
+        so this fetches and counts only the requested page rather than every event the club has run —
+        which is the point: the club summary no longer carries an events list at all. FINALIZED is
+        `finalized_at IS NOT NULL` and wins over dates and results; UNFINALIZED is not-finalized AND
+        (ended before today OR has a recorded result); UPCOMING is not-finalized AND ends on/after today
+        AND has no recorded result. Sort matches the Event Organizer: UPCOMING by start date ascending,
+        UNFINALIZED by end date descending, FINALIZED by finalized_at descending.
+      tags:
+        - Clubs
+      responses:
+        '200':
+          description: One page of the bucket, with that bucket's total
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClubPublicEventsResponse'
+        '400':
+          description: Missing or unknown bucket
+        '404':
+          description: No such club
+
   /api/v1/clubs/{id}/sanction:
     parameters:
       - name: id
@@ -7866,14 +7919,12 @@ components:
     ClubPublicResponse:
       type: object
       description: >-
-        Read-only public summary of a club (#327) — its name plus the events it organizes. The client
-        groups those events into Upcoming / Unfinalized / Finalized exactly as the Event Organizer does
-        (#780), so the rules live in one place rather than being duplicated server-side. No owner or
-        roster PII is exposed.
+        Read-only public summary of a club (#327) — just the club itself. Its events moved to the
+        separately-paginated GET /clubs/code/{code}/events (#786), so rendering the page header no longer
+        costs a scan of everything the club has ever run. No owner or roster PII is exposed.
       required:
         - publicCode
         - name
-        - events
       properties:
         publicCode:
           type: string
@@ -7882,13 +7933,27 @@ components:
         isActive:
           type: boolean
           description: False once the club is soft-deleted (#325); the public page flags it as deleted.
-        events:
+
+    ClubPublicEventsResponse:
+      type: object
+      description: >-
+        One page of a club's events in a single bucket (#786). `total` is the size of the whole bucket,
+        not of the page, so a pager can render "Showing 1–10 of 37".
+      required:
+        - bucket
+        - items
+        - total
+      properties:
+        bucket:
+          type: string
+          enum: [UPCOMING, UNFINALIZED, FINALIZED]
+        items:
           type: array
-          description: >-
-            The club's events, newest-ending first. Replaces the previous upcoming/past pair, which could
-            not express the "unfinalized" grouping.
           items:
             $ref: '#/components/schemas/ClubPublicEventResponse'
+        total:
+          type: integer
+          format: int64
 
     ClubPublicEventResponse:
       type: object

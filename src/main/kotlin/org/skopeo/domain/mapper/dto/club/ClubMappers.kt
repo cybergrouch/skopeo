@@ -24,7 +24,7 @@ fun ClubView.toResponse(): ClubResponse =
             },
     )
 
-private fun ClubPublicEvent.toDto(): ClubPublicEventDto =
+fun ClubPublicEvent.toDto(): ClubPublicEventDto =
     ClubPublicEventDto(
         publicCode = publicCode,
         name = name,
@@ -41,5 +41,4 @@ fun ClubPublicView.toResponse(): ClubPublicResponse =
         publicCode = publicCode,
         name = name,
         isActive = isActive,
-        events = events.map { it.toDto() },
     )

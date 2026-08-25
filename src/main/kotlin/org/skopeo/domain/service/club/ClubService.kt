@@ -9,7 +9,6 @@ import arrow.core.raise.either
 import arrow.core.raise.ensure
 import arrow.core.raise.ensureNotNull
 import arrow.core.right
-import org.skopeo.common.dto.club.ClubPublicResponse
 import org.skopeo.common.dto.club.ClubResponse
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
@@ -23,8 +22,6 @@ import org.skopeo.domain.model.AuditEntityType
 import org.skopeo.domain.model.AuditWrite
 import org.skopeo.domain.model.Club
 import org.skopeo.domain.model.ClubOwnerRef
-import org.skopeo.domain.model.ClubPublicEvent
-import org.skopeo.domain.model.ClubPublicView
 import org.skopeo.domain.model.ClubView
 import org.skopeo.domain.model.CreateClubCommand
 import org.skopeo.domain.service.audit.AuditService
@@ -205,46 +202,6 @@ class ClubService(
                     ),
             )
             toView(club = updated).toResponse()
-        }
-
-    /**
-     * Read-only public summary of a club by its shareable code (#327). Viewable by anyone (anonymous
-     * included, like the event/match/player public pages): the club's name plus its events split into
-     * [ClubPublicView.upcoming] (still running or in the future) and [ClubPublicView.past] (already
-     * ended), by end date vs today. Only non-sensitive fields are exposed — no owners/roster.
-     */
-    fun publicByCode(code: String): Either<ServiceError, ClubPublicResponse> =
-        either {
-            val club =
-                ensureNotNull(value = clubs.findByPublicCode(code = code)) {
-                    ServiceError.NotFound(message = "Club $code not found")
-                }.toDomain()
-            // Active events under the club; a deleted club's events are soft-deleted too, so this is
-            // empty for one (mirrors listByClub in the delete cascade).
-            val clubEvents = events.listByClub(clubId = club.id).map { it.toDomain() }
-            // Batched "has results" counts (#483) — the signal that separates Unfinalized from Upcoming.
-            val counts = matches.completedResultCountByEvents(eventIds = clubEvents.map { it.id })
-            ClubPublicView(
-                publicCode = club.publicCode,
-                name = club.name,
-                isActive = club.isActive,
-                // One flat list, newest-ending first (#780). The client applies the Event Organizer's
-                // Upcoming / Unfinalized / Finalized rules, so they are not duplicated here.
-                events =
-                    clubEvents
-                        .map { event ->
-                            ClubPublicEvent(
-                                publicCode = event.publicCode,
-                                name = event.name,
-                                startDate = event.startDate,
-                                endDate = event.endDate,
-                                eventType = event.type,
-                                isFinalized = event.isFinalized,
-                                finalizedAt = event.finalizedAt,
-                                completedMatchCount = counts[event.id] ?: 0,
-                            )
-                        }.sortedByDescending { it.endDate },
-            ).toResponse()
         }
 
     /** Resolve a club's owner ids to display refs (name + public code); findAllByIds drops any missing user. */

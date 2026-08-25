@@ -126,6 +126,25 @@ data class EventView(
 )
 
 /**
+ * The three groupings an event falls into (#483), as evaluated by the SERVER for the paginated club-page
+ * listing (#786).
+ *
+ * Finalized wins over everything: a finalized event is always [FINALIZED], even with a future end date or
+ * no results. Otherwise [UNFINALIZED] = the event ended OR has recorded results (activity started, not
+ * concluded), and [UPCOMING] = still to come and untouched.
+ *
+ * These are the same rules the web's `eventBuckets.ts` applies for the Event Organizer, which loads every
+ * event anyway to group by club. Two implementations is a known cost of paginating per bucket in SQL
+ * (#786); they must be kept in agreement, and the bucket tests mirror the client's cases to pin that.
+ * Migrating the organizer onto this endpoint would collapse them back to one.
+ */
+enum class EventBucket {
+    UPCOMING,
+    UNFINALIZED,
+    FINALIZED,
+}
+
+/**
  * The club an event belongs to (#313), resolved for grouping and display. [publicCode] is the club's
  * shareable code (#327) so a club reference beside an event can link straight to that club's public page
  * (#780) without a second lookup — the events list is read by viewers who cannot list clubs.
