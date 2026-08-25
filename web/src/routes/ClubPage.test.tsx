@@ -4,16 +4,23 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ClubPage } from "./ClubPage";
 
-const { useGetApiV1ClubsCodeCode, useGetApiV1UsersMe, state } = vi.hoisted(
-  () => ({
-    useGetApiV1ClubsCodeCode: vi.fn(),
-    useGetApiV1UsersMe: vi.fn(),
-    state: { user: { uid: "u1" } as { uid: string } | null },
-  }),
-);
+const {
+  useGetApiV1Clubs,
+  useGetApiV1ClubsCodeCode,
+  useGetApiV1UsersMe,
+  state,
+} = vi.hoisted(() => ({
+  useGetApiV1Clubs: vi.fn(),
+  useGetApiV1ClubsCodeCode: vi.fn(),
+  useGetApiV1UsersMe: vi.fn(),
+  state: { user: { uid: "u1" } as { uid: string } | null },
+}));
 // PublicPageNav reads auth (#193); default to a logged-in user, overridden per test.
 vi.mock("@/auth/useAuth", () => ({ useAuth: () => ({ user: state.user }) }));
-vi.mock("@/api/generated/clubs/clubs", () => ({ useGetApiV1ClubsCodeCode }));
+vi.mock("@/api/generated/clubs/clubs", () => ({
+  useGetApiV1Clubs,
+  useGetApiV1ClubsCodeCode,
+}));
 // The viewer lookup that gates the club's own New Event form (#780); anonymous by default.
 vi.mock("@/api/generated/users/users", () => ({ useGetApiV1UsersMe }));
 // Both are exercised in their own tests; here we only assert the page's wiring and gating.
@@ -45,6 +52,21 @@ const club = {
   isActive: true,
 };
 
+/** The staff-readable clubs payload, whose `owners[].userId` is what answers "do I own this?" (#789). */
+const ME = "me-1";
+
+function clubsListOwnedBy(userId: string) {
+  return [
+    {
+      id: "club-1",
+      name: "Downtown TC",
+      publicCode: "CLB001",
+      isActive: true,
+      owners: [{ userId, publicCode: "OWN001" }],
+    },
+  ];
+}
+
 function renderAt(code = "CLB001") {
   return render(
     <QueryClientProvider client={new QueryClient()}>
@@ -63,6 +85,7 @@ describe("ClubPage", () => {
     state.user = { uid: "u1" };
     // Anonymous by default: no capabilities, so no organizer affordances.
     useGetApiV1UsersMe.mockReturnValue({ data: undefined });
+    useGetApiV1Clubs.mockReturnValue({ data: undefined });
   });
 
   it("shows a loading state", () => {
@@ -110,15 +133,48 @@ describe("ClubPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("offers a New Event form fixed to this club for a match manager (#780)", () => {
+  it("offers a New Event form fixed to this club for an owner of THIS club (#780, #789)", () => {
     useGetApiV1UsersMe.mockReturnValue({
-      data: { capabilities: ["PLAYER", "HOST"] },
+      data: { id: ME, capabilities: ["PLAYER", "HOST"] },
     });
+    useGetApiV1Clubs.mockReturnValue({ data: clubsListOwnedBy(ME) });
     useGetApiV1ClubsCodeCode.mockReturnValue({ data: club, isLoading: false });
     renderAt();
 
     // Filed under this club, identified by its public code — no club selector to get wrong.
     expect(screen.getByText("new-event-form:CLB001")).toBeInTheDocument();
+  });
+
+  it("hides the New Event form from a match manager who does not own this club (#789)", () => {
+    useGetApiV1UsersMe.mockReturnValue({
+      data: { id: ME, capabilities: ["PLAYER", "HOST", "CLUB_OWNER"] },
+    });
+    // The club is owned by somebody else — filing under it is refused server-side.
+    useGetApiV1Clubs.mockReturnValue({ data: clubsListOwnedBy("someone-else") });
+    useGetApiV1ClubsCodeCode.mockReturnValue({ data: club, isLoading: false });
+    renderAt();
+
+    expect(screen.queryByText(/new-event-form/)).not.toBeInTheDocument();
+  });
+
+  it("offers the New Event form to an administrator who owns no club (#789)", () => {
+    useGetApiV1UsersMe.mockReturnValue({
+      data: { id: ME, capabilities: ["PLAYER", "ADMINISTRATOR"] },
+    });
+    useGetApiV1Clubs.mockReturnValue({ data: clubsListOwnedBy("someone-else") });
+    useGetApiV1ClubsCodeCode.mockReturnValue({ data: club, isLoading: false });
+    renderAt();
+
+    expect(screen.getByText("new-event-form:CLB001")).toBeInTheDocument();
+  });
+
+  it("only fetches the staff clubs list for a match manager (#789)", () => {
+    useGetApiV1ClubsCodeCode.mockReturnValue({ data: club, isLoading: false });
+    useGetApiV1UsersMe.mockReturnValue({ data: { capabilities: ["PLAYER"] } });
+    renderAt();
+
+    // An anonymous or plain-player visitor never requests the endpoint they'd be refused.
+    expect(useGetApiV1Clubs).toHaveBeenCalledWith({ query: { enabled: false } });
   });
 
   it("hides the New Event form from an anonymous visitor, leaving the page intact (#780)", () => {
@@ -143,7 +199,7 @@ describe("ClubPage", () => {
 
   it("hides the New Event form on a deleted club (#325, #780)", () => {
     useGetApiV1UsersMe.mockReturnValue({
-      data: { capabilities: ["PLAYER", "ADMINISTRATOR"] },
+      data: { id: ME, capabilities: ["PLAYER", "ADMINISTRATOR"] },
     });
     useGetApiV1ClubsCodeCode.mockReturnValue({
       data: { ...club, isActive: false },

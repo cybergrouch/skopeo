@@ -136,9 +136,9 @@ export function NewEventForm({
   const fileableClubs = useMemo(
     () =>
       isAdministrator(me?.capabilities)
-        ? clubs
-        : ownedClubs(clubs, me?.id),
-    [clubs, me?.id, me?.capabilities],
+        ? (clubsData ?? [])
+        : ownedClubs(clubsData ?? [], me?.id),
+    [clubsData, me?.id, me?.capabilities],
   );
   // A fixed club wins outright over both the picker and the #364 owner default.
   const fixedClub = fixedClubPublicCode

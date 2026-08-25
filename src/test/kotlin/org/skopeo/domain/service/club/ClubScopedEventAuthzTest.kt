@@ -290,7 +290,7 @@ class ClubScopedEventAuthzTest {
         val p2 = provision(uid = "p2", rated = true)
         val owned = club("Downtown TC", owner, colleague)
         // Filed by the colleague, so before #789 the owner had no path to any of these operations.
-        val event = eventBy(creatorUid = "colleague", clubId = owned.id, participants = listOf(p1.id))
+        val event = eventBy(creatorUid = "colleague", clubId = owned.id, participants = listOf(element = p1.id))
 
         service.get(token = token(uid = "owner"), id = event.id).shouldBeRight()
         service.manageByCode(token = token(uid = "owner"), code = event.publicCode).shouldBeRight()
@@ -325,7 +325,7 @@ class ClubScopedEventAuthzTest {
         provision(uid = "outsider", roles = setOf(Capability.PLAYER, Capability.CLUB_OWNER))
         val p1 = provision(uid = "p1", rated = true)
         val owned = club("Downtown TC", owner)
-        val event = eventBy(creatorUid = "owner", clubId = owned.id, participants = listOf(p1.id))
+        val event = eventBy(creatorUid = "owner", clubId = owned.id, participants = listOf(element = p1.id))
         val outsiderToken = token(uid = "outsider")
 
         service.get(token = outsiderToken, id = event.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
@@ -374,7 +374,7 @@ class ClubScopedEventAuthzTest {
         val p1 = provision(uid = "p1", rated = true)
         val p2 = provision(uid = "p2", rated = true)
         val owned = club("Downtown TC", owner)
-        val event = eventBy(creatorUid = "owner", clubId = owned.id, participants = listOf(p1.id))
+        val event = eventBy(creatorUid = "owner", clubId = owned.id, participants = listOf(element = p1.id))
         val adminToken = token(uid = "admin")
 
         service.get(token = adminToken, id = event.id).shouldBeRight()

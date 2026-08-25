@@ -1814,8 +1814,12 @@ paths:
         '403':
           description: Caller is not an ADMINISTRATOR
     post:
-      summary: Create a match fixture (HOST/ADMINISTRATOR)
-      description: Scheduled fixture, no results. Every participant must already be rated.
+      summary: Create a match fixture (staff; an event's fixtures follow its club rule)
+      description: >-
+        Scheduled fixture, no results. Every participant must already be rated. When the fixture belongs
+        to an event it inherits that event's club rule (#789): only an ADMINISTRATOR, a named owner of the
+        event's club, or the event's creator may add fixtures to it. The event-expiry gate (#310) is a
+        separate axis and also applies.
       tags:
         - Matches
       security:
@@ -1836,7 +1840,10 @@ paths:
         '400':
           description: Invalid input (bad ids/date, unrated participant, bad composition)
         '403':
-          description: Caller is not HOST/ADMINISTRATOR
+          description: >-
+            Caller is not staff, or — for a fixture that belongs to an event — may not organize that
+            event (#789): not an ADMINISTRATOR, not a named owner of the event's club, and not the
+            event's creator. A fixture with no event keeps the plain staff gate.
 
   /api/v1/matches/upcoming:
     get:
@@ -1945,7 +1952,7 @@ paths:
 
   /api/v1/matches/calculation-order:
     put:
-      summary: Reorder same-date matches for calculation (HOST/ADMINISTRATOR)
+      summary: Reorder same-date matches for calculation (staff; evented fixtures follow their club rule)
       description: |
         Set the manual calculation-order tiebreaker (#331/#332). The rating calculation orders matches
         by match date first, so this only re-sequences matches that share the same date. The request
@@ -1967,7 +1974,10 @@ paths:
         '400':
           description: Empty/duplicate ids, a disabled match, or matches spanning more than one date
         '403':
-          description: Caller is not HOST/ADMINISTRATOR
+          description: >-
+            Caller is not staff, or — for a fixture that belongs to an event — may not organize that
+            event (#789): not an ADMINISTRATOR, not a named owner of the event's club, and not the
+            event's creator. A fixture with no event keeps the plain staff gate.
         '404':
           description: No such match
         '409':
@@ -1982,7 +1992,7 @@ paths:
           type: string
           format: uuid
     post:
-      summary: Upload or edit match results (HOST/ADMINISTRATOR)
+      summary: Upload or edit match results (staff; an event's fixtures follow its club rule)
       description: |
         Records the set scores, derives the winner, and marks the match COMPLETED (pending
         calculation). Ratings are NOT computed here. May be called again to EDIT the result while the
@@ -2008,7 +2018,10 @@ paths:
         '400':
           description: Invalid scores or no clear winner
         '403':
-          description: Caller is not HOST/ADMINISTRATOR
+          description: >-
+            Caller is not staff, or — for a fixture that belongs to an event — may not organize that
+            event (#789): not an ADMINISTRATOR, not a named owner of the event's club, and not the
+            event's creator. A fixture with no event keeps the plain staff gate.
         '404':
           description: No such match
         '409':
@@ -2079,7 +2092,7 @@ paths:
           type: string
           format: uuid
     put:
-      summary: Enable or disable a match (HOST/ADMINISTRATOR)
+      summary: Enable or disable a match (staff; an event's fixtures follow its club rule)
       description: |
         Append-only corrections: disable the original and add a new match. Disabling is allowed
         only while the match is unrated.
@@ -2101,7 +2114,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/MatchResponse'
         '403':
-          description: Caller is not HOST/ADMINISTRATOR
+          description: >-
+            Caller is not staff, or — for a fixture that belongs to an event — may not organize that
+            event (#789): not an ADMINISTRATOR, not a named owner of the event's club, and not the
+            event's creator. A fixture with no event keeps the plain staff gate.
         '404':
           description: No such match
         '409':
@@ -2116,7 +2132,7 @@ paths:
           type: string
           format: uuid
     put:
-      summary: Set or clear a fixture's per-side rating handicaps (HOST/CLUB_OWNER/ADMINISTRATOR)
+      summary: Set or clear a fixture's per-side rating handicaps (staff; an event's fixtures follow its club rule)
       description: >-
         Set (or clear) a fixture's per-side rating handicaps (#486). Each is a team-mean NTRP-unit value
         in the range 0 < h <= 1.0, or null to clear that side. A handicap is deducted from the designated
@@ -2142,7 +2158,10 @@ paths:
         '400':
           description: A handicap is out of range (must be 0 < h <= 1.0)
         '403':
-          description: Caller is not HOST/CLUB_OWNER/ADMINISTRATOR
+          description: >-
+            Caller is not staff, or — for a fixture that belongs to an event — may not organize that
+            event (#789): not an ADMINISTRATOR, not a named owner of the event's club, and not the
+            event's creator. A fixture with no event keeps the plain staff gate.
         '404':
           description: No such match
         '409':
@@ -2150,8 +2169,11 @@ paths:
 
   /api/v1/events:
     get:
-      summary: List events (HOST/ADMINISTRATOR)
-      description: An ADMINISTRATOR sees all events; a HOST sees their own. (#138)
+      summary: List events (staff, scoped to the clubs the caller owns)
+      description: >-
+        An ADMINISTRATOR sees every active event. Anyone else sees the events of every club they are a
+        named owner of, plus the events they created themselves (#789) — creator-only scoping was the
+        pre-#789 behaviour and left a club's co-owner unable to find events they may manage (#138).
       tags:
         - Events
       security:
@@ -2166,9 +2188,13 @@ paths:
                 items:
                   $ref: '#/components/schemas/EventResponse'
         '403':
-          description: Caller is not HOST/ADMINISTRATOR
+          description: Caller is not staff, or may not organize this event (#789)
     post:
-      summary: Create an event (HOST/ADMINISTRATOR)
+      summary: Create an event (staff; a club must be one the caller owns)
+      description: >-
+        Filing the event under a club requires being a named owner of that club, or an ADMINISTRATOR
+        (#789); previously only the club's existence was checked, so any host could file under any club.
+        A clubless ("Open") event is open to any staff caller. An unknown club id is a 400, not a 403.
       tags:
         - Events
       security:
@@ -2189,7 +2215,7 @@ paths:
         '400':
           description: Invalid input (blank name, bad dates, unknown participant)
         '403':
-          description: Caller is not HOST/ADMINISTRATOR
+          description: Caller is not staff, or may not organize this event (#789)
 
   /api/v1/events/mine:
     get:
@@ -2296,7 +2322,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/EventResponse'
         '403':
-          description: Caller is not staff
+          description: Caller is not staff, or may not organize this event (#789)
         '404':
           description: No event with that code
 
@@ -2309,7 +2335,7 @@ paths:
           type: string
           format: uuid
     get:
-      summary: Get an event with its participants (HOST/ADMINISTRATOR)
+      summary: Get an event with its participants (staff, scoped to the clubs the caller owns)
       tags:
         - Events
       security:
@@ -2322,11 +2348,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/EventResponse'
         '403':
-          description: Caller is not HOST/ADMINISTRATOR
+          description: Caller is not staff, or may not organize this event (#789)
         '404':
           description: No such event
     patch:
-      summary: Rename an event (HOST owns / ADMINISTRATOR any)
+      summary: Rename an event (staff, scoped to the clubs the caller owns)
       description: |
         Partial update of an event (#269). Currently only the name is editable; the name is
         validated (non-blank) and trimmed. A HOST may rename only their own event; an ADMINISTRATOR
@@ -2351,11 +2377,11 @@ paths:
         '400':
           description: Missing or blank name
         '403':
-          description: Caller is not HOST/ADMINISTRATOR, or a HOST renaming another's event
+          description: Caller is not staff, or may not organize this event (not an ADMINISTRATOR, not a named owner of its club, not its creator — #789)
         '404':
           description: No such event
     delete:
-      summary: Delete an event (HOST owns / ADMINISTRATOR any)
+      summary: Delete an event (staff, scoped to the clubs the caller owns)
       description: |
         Soft-deletes an event, gated by its matches. Any rated match blocks deletion outright; any
         recorded (but unrated) match is refused with advice to delete those matches first. Remaining
@@ -2368,7 +2394,7 @@ paths:
         '204':
           description: Event deleted
         '403':
-          description: Caller is not HOST/ADMINISTRATOR, or a HOST deleting another's event
+          description: Caller is not staff, or may not organize this event (#789)
         '404':
           description: No such event
         '409':
@@ -2416,7 +2442,7 @@ paths:
         '400':
           description: Malformed id or unknown club
         '403':
-          description: Caller is not HOST/ADMINISTRATOR, or a HOST editing another's event
+          description: Caller is not staff, may not organize this event, or does not own the club it is being re-filed under (#789)
         '404':
           description: No such event
 
@@ -2467,7 +2493,7 @@ paths:
           type: string
           format: uuid
     post:
-      summary: Finalize an event (HOST owns / CLUB_OWNER / ADMINISTRATOR)
+      summary: Finalize an event (staff, scoped to the clubs the caller owns)
       description: >-
         Finalize an event (#403) — terminal: it closes the event to further changes and queues the
         event's matches for rating (moving the rating-queue trigger from result-upload time to finalize
@@ -2493,7 +2519,7 @@ paths:
         '400':
           description: Event is already finalized, or a deleted event
         '403':
-          description: Caller is not staff, or a HOST finalizing another's event
+          description: Caller is not staff, or may not organize this event (#789)
         '404':
           description: No such event
 
@@ -2506,7 +2532,7 @@ paths:
           type: string
           format: uuid
     post:
-      summary: Un-finalize an event (HOST owns / CLUB_OWNER / ADMINISTRATOR)
+      summary: Un-finalize an event (staff, scoped to the clubs the caller owns)
       description: >-
         Un-finalize an event (#477) — the reverse of finalize, so an erroneous score can be corrected and
         the event re-finalized. Clears the finalize flag and revokes every active ranking-point award the
@@ -2529,7 +2555,7 @@ paths:
         '400':
           description: Event is not finalized, or has already-rated matches
         '403':
-          description: Caller is not staff, or a HOST un-finalizing another's event
+          description: Caller is not staff, or may not organize this event (#789)
         '404':
           description: No such event
 
@@ -2580,7 +2606,7 @@ paths:
           type: string
           format: uuid
     post:
-      summary: Add a participant to an event (HOST/ADMINISTRATOR)
+      summary: Add a participant to an event (staff, scoped to the clubs the caller owns)
       tags:
         - Events
       security:
@@ -2601,7 +2627,7 @@ paths:
         '400':
           description: Unknown participant
         '403':
-          description: Caller is not HOST/ADMINISTRATOR
+          description: Caller is not staff, or may not organize this event (#789)
         '404':
           description: No such event
 
@@ -2633,7 +2659,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/SeedingResponse'
         '403':
-          description: Caller is not staff / not this event's host
+          description: Caller is not staff, or may not organize this event (#789)
         '404':
           description: No such event
     put:
@@ -2664,7 +2690,7 @@ paths:
         '400':
           description: The order is not exactly the current seedable set
         '403':
-          description: Caller is not staff / not this event's host
+          description: Caller is not staff, or may not organize this event (#789)
         '404':
           description: No such event
     get:
@@ -2681,7 +2707,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/SeedingResponse'
         '403':
-          description: Caller is not staff / not this event's host
+          description: Caller is not staff, or may not organize this event (#789)
         '404':
           description: No such event, or no seeding generated yet
 
@@ -2700,7 +2726,7 @@ paths:
           type: string
           format: uuid
     post:
-      summary: Decide a participant request — approve or hold (#201, HOST/ADMINISTRATOR)
+      summary: Decide a participant request — approve or hold (#201, staff, scoped to the clubs the caller owns)
       description: >-
         Approve a PENDING/HOLD request (→ APPROVED full roster member) or put it on HOLD (a soft deny
         that stays on file and can be approved later). Staff-only.
@@ -2724,7 +2750,7 @@ paths:
         '400':
           description: Invalid decision (must be APPROVED or HOLD)
         '403':
-          description: Caller is not HOST/ADMINISTRATOR
+          description: Caller is not staff, or may not organize this event (#789)
         '404':
           description: No such event
 
@@ -2743,7 +2769,7 @@ paths:
           type: string
           format: uuid
     delete:
-      summary: Remove a participant from an event (HOST/ADMINISTRATOR)
+      summary: Remove a participant from an event (staff, scoped to the clubs the caller owns)
       tags:
         - Events
       security:
@@ -2756,7 +2782,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/EventResponse'
         '403':
-          description: Caller is not HOST/ADMINISTRATOR
+          description: Caller is not staff, or may not organize this event (#789)
         '404':
           description: No such event
 
@@ -2769,7 +2795,7 @@ paths:
           type: string
           format: uuid
     get:
-      summary: List an event's durable teams (#720) (HOST/CLUB_OWNER/ADMINISTRATOR)
+      summary: List an event's durable teams (#720) (staff, scoped to the clubs the caller owns)
       tags:
         - Events
       security:
@@ -2784,11 +2810,11 @@ paths:
                 items:
                   $ref: '#/components/schemas/EventTeamResponse'
         '403':
-          description: Caller is not staff or does not own the event
+          description: Caller is not staff, or may not organize this event (#789)
         '404':
           description: No such event
     post:
-      summary: Create a durable event team (#720) (HOST/CLUB_OWNER/ADMINISTRATOR)
+      summary: Create a durable event team (#720) (staff, scoped to the clubs the caller owns)
       tags:
         - Events
       security:
@@ -2809,7 +2835,7 @@ paths:
         '400':
           description: Invalid members (0 or 3+ members, not a participant, already in another team)
         '403':
-          description: Caller is not staff or does not own the event
+          description: Caller is not staff, or may not organize this event (#789)
         '404':
           description: No such event
 
@@ -2828,7 +2854,7 @@ paths:
           type: string
           format: uuid
     patch:
-      summary: Update a durable event team (#720) (HOST/CLUB_OWNER/ADMINISTRATOR)
+      summary: Update a durable event team (#720) (staff, scoped to the clubs the caller owns)
       tags:
         - Events
       security:
@@ -2849,11 +2875,11 @@ paths:
         '400':
           description: Invalid members
         '403':
-          description: Caller is not staff or does not own the event
+          description: Caller is not staff, or may not organize this event (#789)
         '404':
           description: No such event or team
     delete:
-      summary: Dissolve a durable event team (#720) (HOST/CLUB_OWNER/ADMINISTRATOR)
+      summary: Dissolve a durable event team (#720) (staff, scoped to the clubs the caller owns)
       tags:
         - Events
       security:
@@ -2862,7 +2888,7 @@ paths:
         '204':
           description: Team dissolved (existing fixtures snapshot players, so they are untouched)
         '403':
-          description: Caller is not staff or does not own the event
+          description: Caller is not staff, or may not organize this event (#789)
         '404':
           description: No such event or team
 
@@ -3147,7 +3173,11 @@ paths:
           description: Caller is not an ADMINISTRATOR
     get:
       summary: List clubs
-      description: Staff (HOST/CLUB_OWNER/ADMINISTRATOR, #313) — e.g. to pick a club when creating an event. All active clubs, alphabetical, with owners.
+      description: >-
+        Staff (HOST/CLUB_OWNER/ADMINISTRATOR, #313) — e.g. to pick a club when creating an event. All
+        active clubs, alphabetical, with owners. The `owners[].userId` values are what a client matches
+        against its own id to tell whether it owns a club (#789), so no separate ownership endpoint or
+        field is needed; `ClubPublicResponse` deliberately carries no internal ids.
       tags:
         - Clubs
       security:

@@ -54,9 +54,24 @@ vi.mock("@tanstack/react-query", async () => {
   };
 });
 
+// "me" is a named owner of both clubs: after #789 the selector only lists clubs the caller may
+// actually file under, so a caller who owns nothing would see no selector at all.
+const OWNER = [{ userId: "me", publicCode: "OWN001" }];
 const clubs = [
-  { id: "c1", name: "Downtown TC", publicCode: "CLB001", isActive: true, owners: [] },
-  { id: "c2", name: "West End", publicCode: "CLB002", isActive: true, owners: [] },
+  {
+    id: "c1",
+    name: "Downtown TC",
+    publicCode: "CLB001",
+    isActive: true,
+    owners: OWNER,
+  },
+  {
+    id: "c2",
+    name: "West End",
+    publicCode: "CLB002",
+    isActive: true,
+    owners: OWNER,
+  },
 ];
 
 function renderForm(props?: {
@@ -115,6 +130,45 @@ describe("NewEventForm — fixed club (#780)", () => {
   it("still offers the selector when no club is fixed", () => {
     renderForm();
     expect(screen.getByLabelText("Club")).toBeInTheDocument();
+    // Both are the caller's own clubs, so both are offered.
+    expect(screen.getByRole("option", { name: "Downtown TC" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "West End" })).toBeInTheDocument();
+  });
+
+  it("lists only the clubs the caller may file under (#789)", () => {
+    useGetApiV1Clubs.mockReturnValue({
+      data: [clubs[0], { ...clubs[1], owners: [{ userId: "someone-else", publicCode: "X" }] }],
+      isLoading: false,
+    });
+    renderForm();
+
+    // Filing under a club you don't own is refused server-side, so it isn't offered.
+    expect(screen.getByRole("option", { name: "Downtown TC" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "West End" })).not.toBeInTheDocument();
+  });
+
+  it("hides the selector entirely from a host who owns no club (#789)", () => {
+    useGetApiV1Clubs.mockReturnValue({
+      data: clubs.map((c) => ({ ...c, owners: [] })),
+      isLoading: false,
+    });
+    renderForm();
+
+    expect(screen.queryByLabelText("Club")).not.toBeInTheDocument();
+  });
+
+  it("offers every club to an administrator, owned or not (#789)", () => {
+    useGetApiV1UsersMe.mockReturnValue({
+      data: { id: "me", capabilities: ["ADMINISTRATOR"] },
+    });
+    useGetApiV1Clubs.mockReturnValue({
+      data: clubs.map((c) => ({ ...c, owners: [] })),
+      isLoading: false,
+    });
+    renderForm();
+
+    expect(screen.getByRole("option", { name: "Downtown TC" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "West End" })).toBeInTheDocument();
   });
 
   it("blocks submission until the fixed club's id resolves", async () => {

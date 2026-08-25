@@ -100,6 +100,43 @@ The backend grants each user a set of capabilities (`PLAYER`, `HOST`, `CLUB_OWNE
 `ADMINISTRATOR` implicitly satisfies `canRate` and `isResearcher`. These gates drive which
 dashboard tabs render (see below).
 
+#### Capability vs club ownership (#789)
+
+A capability is not a claim on a particular club. Event and match authorization is **club-scoped**:
+
+```
+mayOrganize(caller, event) =
+     ADMINISTRATOR
+  OR (event.clubId != null AND caller is a named owner of event.clubId)
+  OR event.createdBy == caller.id      // grandfathered permanently; also the clubless rule
+```
+
+`canManageMatches` therefore answers only "could this person organize *something*" — which is what the
+Event Organizer / Seeding / Placeholder Players tabs are gated on. Whether they may organize a *given*
+club's events is a second question, answered by `src/auth/clubAccess.ts`:
+
+| Helper | Answers |
+|---|---|
+| `ownedClubs(clubs, meId)` | the clubs the viewer is a **named owner** of |
+| `ownsClubWithPublicCode(clubs, meId, code)` | ownership of the club a public page is addressing |
+| `canOrganizeClub({capabilities, clubs, meId, publicCode})` | ADMINISTRATOR anywhere, otherwise owner of *that* club |
+
+Ownership is read from `GET /api/v1/clubs`, which already carries `owners[].userId` and is
+staff-readable, matched against `me.id`. No new field was added to the wire, and `ClubPublicResponse`
+still carries no internal ids. The fetch is `enabled` only for `canManageMatches` viewers — the only
+people who could own a club — so an anonymous visitor to a club page never fires a 403.
+
+Two surfaces use it:
+
+- **`ClubPage`'s New Event form** (`/clubs/:code`) renders only for a named owner of that club, plus
+  administrators. It used to render for anyone with `canManageMatches`, which the server now refuses.
+- **`NewEventForm`'s Club selector** lists only the clubs the caller may file under, so a host cannot
+  pick a club and then eat a 403.
+
+Both mirror the server rule; neither is the gate. Note the creator clause: an organizer keeps access to
+an event they filed even under a club they do not own, so no existing event became unmanageable and no
+backfill was needed.
+
 ## Generated API client
 
 `web/src/api/generated/` is produced by **orval** (`web/orval.config.ts`) from the backend's
@@ -304,7 +341,7 @@ control the server would refuse.
 
 | Operation | Who |
 |---|---|
-| Read the club list | HOST · CLUB_OWNER · ADMINISTRATOR (#313 — event creators pick a club) |
+| Read the club list | HOST · CLUB_OWNER · ADMINISTRATOR (#313 — event creators pick a club; the selector then narrows to the clubs the caller *owns*, #789) |
 | Create / rename / delete a club | ADMINISTRATOR |
 | Assign / remove an owner | ADMINISTRATOR |
 | Toggle tournament sanctioning | CLUB_OWNER · ADMINISTRATOR — it scales the placement points schedule (#525), so a plain HOST reads it without setting it |
