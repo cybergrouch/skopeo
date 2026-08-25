@@ -163,6 +163,21 @@ describe("ClubPage", () => {
     expect(screen.getByText("No finalized events.")).toBeInTheDocument();
   });
 
+  it("renders without events when the payload omits them entirely (#780)", () => {
+    // The web and API deploy as separate artifacts, web first, so a freshly-deployed page can briefly
+    // see an API that still returns the old upcoming/past pair. That must not white-screen the page.
+    const withoutEvents: Record<string, unknown> = { ...club };
+    delete withoutEvents.events;
+    useGetApiV1ClubsCodeCode.mockReturnValue({
+      data: withoutEvents,
+      isLoading: false,
+    });
+    renderAt();
+
+    expect(screen.getByText("Downtown TC")).toBeInTheDocument();
+    expect(screen.getByText("No upcoming events.")).toBeInTheDocument();
+  });
+
   it("offers a New Event form fixed to this club for a match manager (#780)", () => {
     useGetApiV1UsersMe.mockReturnValue({
       data: { capabilities: ["PLAYER", "HOST"] },

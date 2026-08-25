@@ -97,7 +97,11 @@ export function ClubPage() {
               </p>
             ) : null}
             <EventBuckets
-              events={club.events}
+              // Tolerate a payload without `events` (#780). The web and API deploy as separate
+              // artifacts and the web lands minutes first, so a freshly-deployed page can briefly be
+              // talking to an API that still returns the old upcoming/past pair. Degrade to "no events"
+              // instead of throwing on undefined, which would white-screen the whole public page.
+              events={club.events ?? []}
               today={todayIso()}
               renderRow={(event, { upcoming }) => (
                 <EventRow
