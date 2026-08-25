@@ -6,7 +6,6 @@ package org.skopeo.domain.service.event
 import arrow.core.Either
 import arrow.core.raise.either
 import arrow.core.raise.ensure
-import arrow.core.raise.ensureNotNull
 import org.skopeo.common.error.ServiceError
 import org.skopeo.domain.mapper.entity.event.toDomain
 import org.skopeo.domain.model.Event
@@ -38,18 +37,19 @@ class EventOrganizerGate(
             ensure(condition = access.mayOrganize(caller = caller, event = event)) { ServiceError.Forbidden() }
         }
 
-    /** [ensure] for an event referenced by id. A null [eventId] (no event) is allowed; a missing one is a NotFound. */
+    /**
+     * [ensure] for an event referenced by id — a match's `event_id`. A null [eventId] means the match has
+     * no event, which is allowed (see the class doc).
+     *
+     * A non-null value is resolved with [EventRepository.getById] rather than a nullable lookup plus a
+     * NotFound: `matches.event_id` is an FK with `ON DELETE SET NULL` (#358), so it either is null or
+     * points at a live row. There is no third case to invent an error branch for.
+     */
     fun ensureForEventId(
         eventId: UUID?,
         caller: User,
     ): Either<ServiceError, Unit> =
         either {
-            eventId?.let { id ->
-                val event =
-                    ensureNotNull(value = events.findById(id = id)?.toDomain()) {
-                        ServiceError.NotFound(message = "Event $id not found")
-                    }
-                ensure(event = event, caller = caller).bind()
-            }
+            eventId?.let { id -> ensure(event = events.getById(id = id).toDomain(), caller = caller).bind() }
         }
 }
