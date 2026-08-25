@@ -4,6 +4,7 @@
 package org.skopeo.domain.model
 
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.util.UUID
 
 /**
@@ -57,6 +58,12 @@ data class ClubPublicEvent(
     val startDate: LocalDate,
     val endDate: LocalDate,
     val eventType: EventType,
+    // The three fields the Upcoming / Unfinalized / Finalized split needs (#483/#780). The club page now
+    // groups events exactly as the Event Organizer does, and the client owns that rule, so the payload
+    // carries the inputs rather than pre-splitting them server-side.
+    val isFinalized: Boolean = false,
+    val finalizedAt: LocalDateTime? = null,
+    val completedMatchCount: Int = 0,
 )
 
 /**
@@ -69,6 +76,7 @@ data class ClubPublicView(
     val publicCode: String,
     val name: String,
     val isActive: Boolean,
-    val upcoming: List<ClubPublicEvent>,
-    val past: List<ClubPublicEvent>,
+    // One flat list (#780), newest-ending first. Was `upcoming`/`past`; the client now derives the three
+    // Event Organizer groupings from it, so the rules live in exactly one place.
+    val events: List<ClubPublicEvent>,
 )

@@ -7866,13 +7866,14 @@ components:
     ClubPublicResponse:
       type: object
       description: >-
-        Read-only public summary of a club (#327) — its name plus the events it organizes, split into
-        upcoming and past. No owner or roster PII is exposed.
+        Read-only public summary of a club (#327) — its name plus the events it organizes. The client
+        groups those events into Upcoming / Unfinalized / Finalized exactly as the Event Organizer does
+        (#780), so the rules live in one place rather than being duplicated server-side. No owner or
+        roster PII is exposed.
       required:
         - publicCode
         - name
-        - upcoming
-        - past
+        - events
       properties:
         publicCode:
           type: string
@@ -7881,12 +7882,11 @@ components:
         isActive:
           type: boolean
           description: False once the club is soft-deleted (#325); the public page flags it as deleted.
-        upcoming:
+        events:
           type: array
-          items:
-            $ref: '#/components/schemas/ClubPublicEventResponse'
-        past:
-          type: array
+          description: >-
+            The club's events, newest-ending first. Replaces the previous upcoming/past pair, which could
+            not express the "unfinalized" grouping.
           items:
             $ref: '#/components/schemas/ClubPublicEventResponse'
 
@@ -7914,6 +7914,20 @@ components:
         eventType:
           type: string
           enum: [OPEN_PLAY, TOURNAMENT]
+        isFinalized:
+          type: boolean
+          description: >-
+            True once the event is finalized (#403). The first input to the client's Upcoming /
+            Unfinalized / Finalized split (#780) — finalized wins over dates and results.
+        finalizedAt:
+          type: string
+          nullable: true
+          description: When the event was finalized; the Finalized group's newest-first sort key.
+        completedMatchCount:
+          type: integer
+          description: >-
+            Recorded results in this event (#483) — the "activity started" signal that separates
+            Unfinalized from Upcoming.
 
     CreateInviteRequest:
       type: object

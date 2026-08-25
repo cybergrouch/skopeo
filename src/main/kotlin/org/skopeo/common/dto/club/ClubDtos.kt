@@ -58,18 +58,26 @@ data class ClubPublicEventDto(
     val startDate: String,
     val endDate: String,
     val eventType: String,
+    // Inputs for the Upcoming / Unfinalized / Finalized split (#483/#780): the club page groups events
+    // exactly as the Event Organizer does, and the client owns that rule, so these are carried rather
+    // than the lists being pre-split server-side. [completedMatchCount] is the "has results" signal.
+    val isFinalized: Boolean = false,
+    val finalizedAt: String? = null,
+    val completedMatchCount: Int = 0,
 )
 
 /**
- * Read-only public summary of a club (#327): its name plus the events it organizes, split into
- * [upcoming] and [past]. No owner/roster PII is exposed. [isActive] is false once the club has been
- * soft-deleted, so the public page can flag it while the link stays honored.
+ * Read-only public summary of a club (#327): its name plus the [events] it organizes, which the client
+ * groups into Upcoming / Unfinalized / Finalized exactly as the Event Organizer does (#780). No
+ * owner/roster PII is exposed. [isActive] is false once the club has been soft-deleted, so the public
+ * page can flag it while the link stays honored.
  */
 @Serializable
 data class ClubPublicResponse(
     val publicCode: String,
     val name: String,
     val isActive: Boolean = true,
-    val upcoming: List<ClubPublicEventDto>,
-    val past: List<ClubPublicEventDto>,
+    // One flat list (#780), newest-ending first; the client derives the three groupings from it. Replaces
+    // the previous `upcoming`/`past` pair, which could not express "unfinalized".
+    val events: List<ClubPublicEventDto>,
 )

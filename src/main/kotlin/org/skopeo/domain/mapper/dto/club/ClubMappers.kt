@@ -31,6 +31,9 @@ private fun ClubPublicEvent.toDto(): ClubPublicEventDto =
         startDate = startDate.toString(),
         endDate = endDate.toString(),
         eventType = eventType.name,
+        isFinalized = isFinalized,
+        finalizedAt = finalizedAt?.toString(),
+        completedMatchCount = completedMatchCount,
     )
 
 fun ClubPublicView.toResponse(): ClubPublicResponse =
@@ -38,6 +41,5 @@ fun ClubPublicView.toResponse(): ClubPublicResponse =
         publicCode = publicCode,
         name = name,
         isActive = isActive,
-        upcoming = upcoming.map { it.toDto() },
-        past = past.map { it.toDto() },
+        events = events.map { it.toDto() },
     )

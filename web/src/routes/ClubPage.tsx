@@ -1,4 +1,4 @@
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import {
   Card,
   CardContent,
@@ -7,70 +7,60 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useGetApiV1ClubsCodeCode } from "@/api/generated/clubs/clubs";
+import { useGetApiV1UsersMe } from "@/api/generated/users/users";
 import type { ClubPublicEventResponse } from "@/api/generated/model";
+import { canManageMatches } from "@/auth/capabilities";
 import { ShareCard } from "@/components/ShareCard";
 import { PublicPageShell } from "@/components/PublicPageShell";
+import { ContentLink } from "@/components/ContentLink";
+import { EventBuckets } from "@/features/event/EventBucketSections";
+import { todayIso } from "@/features/event/eventBuckets";
+import { NewEventForm } from "@/features/event/NewEventForm";
 
-/** One event under a heading, linking to its own public event page, with its type. */
-function EventRow({ event }: { event: ClubPublicEventResponse }) {
+/** One event, linking to its own public page, with the date that matters for its grouping (#296). */
+function EventRow({
+  event,
+  upcoming,
+}: {
+  event: ClubPublicEventResponse;
+  upcoming: boolean;
+}) {
+  const date = upcoming ? `Starts ${event.startDate}` : `Ended ${event.endDate}`;
   return (
-    <li>
-      <Link
-        to={`/events/${event.publicCode}`}
-        className="block rounded-lg border p-2 hover:bg-muted/50"
-      >
-        <span className="flex items-center justify-between gap-2">
-          <span>{event.name}</span>
-          <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase text-muted-foreground">
-            {event.eventType}
-          </span>
+    <li key={event.publicCode} className="rounded-lg border p-3 text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <ContentLink to={`/events/${event.publicCode}`}>
+          {event.name}
+        </ContentLink>
+        <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase text-muted-foreground">
+          {event.eventType}
         </span>
-        <span className="block text-xs text-muted-foreground">
-          {event.startDate} – {event.endDate}
-        </span>
-      </Link>
+      </div>
+      <div className="mt-1 text-xs text-muted-foreground">{date}</div>
     </li>
   );
 }
 
-/** A read-only list of events under a heading; shows an empty note when there are none. */
-function EventSection({
-  title,
-  events,
-  emptyText,
-}: {
-  title: string;
-  events: ClubPublicEventResponse[];
-  emptyText: string;
-}) {
-  return (
-    <div>
-      <div className="text-xs font-medium uppercase text-muted-foreground">
-        {title}
-      </div>
-      {events.length > 0 ? (
-        <ul className="mt-1 space-y-1">
-          {events.map((e) => (
-            <EventRow key={e.publicCode} event={e} />
-          ))}
-        </ul>
-      ) : (
-        <p className="text-muted-foreground">{emptyText}</p>
-      )}
-    </div>
-  );
-}
-
 /**
- * Public, read-only club page reached via `/clubs/:code` (issue #327). Resolves the club by its
- * shareable code and shows its name plus the events it organizes, split into "Upcoming" and "Past"
- * (each event links to its own public page, with its type), with a QR for sharing. Viewable without
- * login (#193); no owner or roster PII is exposed.
+ * Public club page reached via `/clubs/:code` (#327), and that club's own event organizer (#780).
+ *
+ * Its events are grouped Upcoming / Unfinalized / Finalized by the same `EventBuckets` the Event Organizer
+ * tab uses, so the two surfaces cannot drift — the club page used to carry its own Upcoming/Past listing,
+ * which is exactly the duplication #780 set out to remove.
+ *
+ * A match manager (HOST / CLUB_OWNER / ADMINISTRATOR) additionally gets a New Event form filed under this
+ * club, with no club selector — the page already answers that question. The page stays fully renderable for
+ * anonymous visitors: the viewer lookup is best-effort, no capabilities simply means no form, and the
+ * server enforces the rule regardless.
  */
 export function ClubPage() {
   const { code = "" } = useParams();
   const query = useGetApiV1ClubsCodeCode(code);
   const club = query.data;
+  const me = useGetApiV1UsersMe().data;
+  // A deleted club is kept for reference only (#325), so it gains no organizer affordances.
+  const canOrganize =
+    canManageMatches(me?.capabilities) && club?.isActive !== false;
 
   return (
     <PublicPageShell>
@@ -106,18 +96,26 @@ export function ClubPage() {
                 This club has been deleted. It’s kept for reference only.
               </p>
             ) : null}
-            <EventSection
-              title="Upcoming events"
-              events={club.upcoming}
-              emptyText="No upcoming events."
-            />
-            <EventSection
-              title="Past events"
-              events={club.past}
-              emptyText="No past events."
+            <EventBuckets
+              events={club.events}
+              today={todayIso()}
+              renderRow={(event, { upcoming }) => (
+                <EventRow
+                  key={event.publicCode}
+                  event={event}
+                  upcoming={upcoming}
+                />
+              )}
             />
           </CardContent>
         </Card>
+      ) : null}
+
+      {club && canOrganize ? (
+        <NewEventForm
+          fixedClubPublicCode={club.publicCode}
+          publicCodeToRefresh={club.publicCode}
+        />
       ) : null}
 
       {club ? (

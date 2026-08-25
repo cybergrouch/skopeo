@@ -370,7 +370,7 @@ class ClubServiceTest {
     }
 
     @Test
-    fun `publicByCode returns the club name and splits its events into upcoming and past (#327)`() {
+    fun `publicByCode returns the club name and the events it organizes, newest-ending first (#327, #780)`() {
         val admin = provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val p1 = provision(uid = "p1")
         val club = service.create(token = token(uid = "admin"), name = "Downtown TC").shouldBeRight()
@@ -414,9 +414,14 @@ class ClubServiceTest {
         val view = service.publicByCode(code = club.publicCode).shouldBeRight()
         view.name shouldBe "Downtown TC"
         view.isActive shouldBe true
-        // Ends-today and future are upcoming, soonest-first; ended-yesterday is past.
-        view.upcoming.map { it.name } shouldBe listOf("Running Now", "Next Month")
-        view.past.map { it.name } shouldBe listOf(element = "Last Week")
+        // One flat list, newest-ending first (#780); the client groups it into Upcoming / Unfinalized /
+        // Finalized exactly as the Event Organizer does, so the payload carries the inputs, not the split.
+        view.events.map { it.name } shouldBe listOf("Next Month", "Running Now", "Last Week")
+        view.events.forEach {
+            it.isFinalized shouldBe false
+            it.finalizedAt.shouldBeNull()
+            it.completedMatchCount shouldBe 0
+        }
     }
 
     @Test
@@ -424,10 +429,9 @@ class ClubServiceTest {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val club = service.create(token = token(uid = "admin"), name = "Empty Club").shouldBeRight()
 
-        // A club with no events resolves with empty splits.
+        // A club with no events resolves with an empty list.
         val view = service.publicByCode(code = club.publicCode).shouldBeRight()
-        view.upcoming shouldHaveSize 0
-        view.past shouldHaveSize 0
+        view.events shouldHaveSize 0
 
         service.publicByCode(code = "ZZZZZZ").shouldBeLeft().shouldBeInstanceOf<ServiceError.NotFound>()
     }
