@@ -100,9 +100,16 @@ function groupByClub(events: EventResponse[]): ClubGroup[] {
 }
 
 /**
- * A collapsible per-club group (#367): the header is an accessible toggle (aria-expanded, keyboard-
- * operable button) showing the club name and its event count; the Upcoming/Unfinalized/Finalized
- * subsections (#483) render only while expanded.
+ * A collapsible per-club group (#367), with a header that differs by whether the group HAS a club (#788).
+ *
+ * For a named club the name links to its public page (#780) and a separate chevron owns the collapse —
+ * two distinct controls, because a link nested inside a button is invalid markup and a known
+ * screen-reader trap.
+ *
+ * The clubless "Open" group has no page to link to, so nothing competes for the click and the WHOLE
+ * header is the toggle. That matters: with only a chevron to aim at, a header of plain text read as
+ * inert and the club-less events behind it looked unreachable (#788). Groups load collapsed (#591), so
+ * the click target is the only way in.
  */
 function ClubGroupSection({
   group,
@@ -117,31 +124,40 @@ function ClubGroupSection({
   onToggle: () => void;
   onSelect: (publicCode: string) => void;
 }) {
+  const heading = `${group.label} (${group.events.length})`;
+  const chevron = (
+    <span aria-hidden className="text-muted-foreground">
+      {isOpen ? "▾" : "▸"}
+    </span>
+  );
   return (
     <div className="space-y-3">
-      {/* The club name links to its public page (#780) while a separate chevron keeps the collapse
-          (#367). Two distinct controls rather than a link nested inside a button — that markup is
-          invalid and a known screen-reader trap. The clubless "Open" group has no page to link to. */}
-      <div className="flex w-full items-center justify-between gap-2 text-sm font-semibold">
-        {group.publicCode ? (
-          <ContentLink to={`/clubs/${group.publicCode}`}>
-            {group.label} ({group.events.length})
-          </ContentLink>
-        ) : (
-          <span>
-            {group.label} ({group.events.length})
-          </span>
-        )}
+      {group.publicCode ? (
+        <div className="flex w-full items-center justify-between gap-2 text-sm font-semibold">
+          <ContentLink to={`/clubs/${group.publicCode}`}>{heading}</ContentLink>
+          <button
+            type="button"
+            // Padding, not a bare glyph: the chevron is the only way to collapse a named group, so it
+            // needs a real hit area (#788).
+            className="-m-1 flex h-8 w-8 items-center justify-center rounded hover:text-foreground/80"
+            aria-expanded={isOpen}
+            aria-label={`${isOpen ? "Collapse" : "Expand"} ${group.label}`}
+            onClick={onToggle}
+          >
+            {chevron}
+          </button>
+        </div>
+      ) : (
         <button
           type="button"
-          className="text-muted-foreground hover:text-foreground/80"
+          className="flex w-full items-center justify-between gap-2 text-left text-sm font-semibold hover:text-foreground/80"
           aria-expanded={isOpen}
-          aria-label={`${isOpen ? "Collapse" : "Expand"} ${group.label}`}
           onClick={onToggle}
         >
-          <span aria-hidden>{isOpen ? "▾" : "▸"}</span>
+          <span>{heading}</span>
+          {chevron}
         </button>
-      </div>
+      )}
       {isOpen ? (
         <EventBuckets
           events={group.events}
