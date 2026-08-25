@@ -111,6 +111,19 @@ class ClubRepository {
             club.toClubAggregate()
         }
 
+    /**
+     * The ids of the clubs [userId] is a named owner of (#789) — the single `club_owners` read behind
+     * event/match authorization (see `ClubAccess`). Ids only: ownership is a membership question, so
+     * there is no reason to hydrate each club's aggregate graph just to answer it.
+     */
+    fun findOwnedClubIds(userId: UUID): List<UUID> =
+        transaction {
+            ClubOwnersTable
+                .selectAll()
+                .where { ClubOwnersTable.userId eq userId }
+                .map { it[ClubOwnersTable.clubId].value }
+        }
+
     /** Set whether this club's tournaments are sanctioned (#525). Returns the refreshed club, or null if missing. */
     fun setSanction(
         id: UUID,

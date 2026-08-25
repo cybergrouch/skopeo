@@ -24,7 +24,13 @@ import type {
   CreateEventRequestFormat,
   UserSummaryResponse,
 } from "@/api/generated/model";
-import { Capability, hasCapability, canRate } from "@/auth/capabilities";
+import {
+  Capability,
+  hasCapability,
+  canRate,
+  isAdministrator,
+} from "@/auth/capabilities";
+import { ownedClubs } from "@/auth/clubAccess";
 import { PlayerPicker } from "@/components/PlayerPicker";
 import { playerLabel } from "@/lib/playerLabel";
 import { PlaceholderTag } from "@/components/PlaceholderTag";
@@ -58,9 +64,7 @@ function defaultOwnedClubId(
   capabilities: readonly Capability[] | undefined,
 ): string {
   if (!meId || !hasCapability(capabilities, Capability.CLUB_OWNER)) return "";
-  const owned = clubs.filter((club) =>
-    club.owners.some((owner) => owner.userId === meId),
-  );
+  const owned = ownedClubs(clubs, meId);
   return owned.length === 1 ? owned[0].id : "";
 }
 
@@ -111,7 +115,7 @@ export function NewEventForm({
 
   // Clubs to optionally file the event under (#313). Readable by staff; empty when none exist.
   const clubsData = useGetApiV1Clubs().data;
-  const clubs = clubsData ?? [];
+  const clubs = useMemo(() => clubsData ?? [], [clubsData]);
   // Circuits to file a TOURNAMENT under (#525). Staff-readable; empty when none exist.
   const circuits = useGetApiV1Circuits().data ?? [];
   const me = useGetApiV1UsersMe().data;
@@ -123,8 +127,16 @@ export function NewEventForm({
   // Default the selector to a CLUB_OWNER's own club (#364), but only while the field is untouched;
   // once the user selects anything (including "Open") their choice wins.
   const ownerDefault = useMemo(
-    () => defaultOwnedClubId(clubsData ?? [], me?.id, me?.capabilities),
-    [clubsData, me?.id, me?.capabilities],
+    () => defaultOwnedClubId(clubs, me?.id, me?.capabilities),
+    [clubs, me?.id, me?.capabilities],
+  );
+  // The clubs this caller may actually FILE under (#789): an ADMINISTRATOR any club, anyone else only
+  // the clubs they are a named owner of. The server refuses the rest, so offering them would only hand
+  // out a 403; the selector shows the reachable subset instead.
+  const fileableClubs = useMemo(
+    () =>
+      isAdministrator(me?.capabilities) ? clubs : ownedClubs(clubs, me?.id),
+    [clubs, me?.id, me?.capabilities],
   );
   // A fixed club wins outright over both the picker and the #364 owner default.
   const fixedClub = fixedClubPublicCode
@@ -301,7 +313,7 @@ export function NewEventForm({
           ) : null}
           {/* Hidden entirely when the club is fixed by the surface (#780) — the club page's form files
               under its own club, so there is nothing to choose. */}
-          {!fixedClubPublicCode && clubs.length > 0 ? (
+          {!fixedClubPublicCode && fileableClubs.length > 0 ? (
             <div className="space-y-1">
               <Label htmlFor="event-club" className="text-xs">
                 Club
@@ -313,7 +325,7 @@ export function NewEventForm({
                 className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
               >
                 <option value="">No club (Open)</option>
-                {clubs.map((club) => (
+                {fileableClubs.map((club) => (
                   <option key={club.id} value={club.id}>
                     {club.name}
                   </option>

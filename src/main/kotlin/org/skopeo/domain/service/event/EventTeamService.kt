@@ -23,6 +23,7 @@ import org.skopeo.domain.model.EventTeamView
 import org.skopeo.domain.model.UpdateEventTeamCommand
 import org.skopeo.domain.model.User
 import org.skopeo.domain.model.isExpired
+import org.skopeo.domain.service.club.ClubAccess
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.domain.service.user.displayName
 import org.skopeo.domain.service.user.isDeleted
@@ -52,6 +53,7 @@ class EventTeamService(
     private val events: EventRepository = EventRepository(),
     private val teams: EventTeamRepository = EventTeamRepository(),
     private val users: UserRepository = UserRepository(),
+    private val clubAccess: ClubAccess = ClubAccess(),
 ) {
     /** List an event's teams (#720). Staff-gated (owner-or-admin); read-only, so no expiry/finalize gate. */
     fun list(
@@ -189,7 +191,10 @@ class EventTeamService(
         return EventTeamView(team = team, members = members)
     }
 
-    /** Staff-gated read access to an event (#720): owner-or-admin, but no expiry/finalize gate. */
+    /**
+     * Staff-gated read access to an event (#720), scoped by [ClubAccess.mayOrganize] (#789) — an owner of
+     * the event's club, its creator, or an ADMINISTRATOR. Read-only, so no expiry/finalize gate.
+     */
     private fun authorizedEvent(
         token: VerifiedFirebaseToken,
         eventId: UUID,
@@ -200,7 +205,7 @@ class EventTeamService(
                 ensureNotNull(
                     value = events.findById(id = eventId)?.toDomain(),
                 ) { ServiceError.NotFound(message = "Event $eventId not found") }
-            ensure(condition = callerOwnsOrIsAdmin(caller = caller, event = event)) { ServiceError.Forbidden() }
+            ensure(condition = clubAccess.mayOrganize(caller = caller, event = event)) { ServiceError.Forbidden() }
             event
         }
 
@@ -218,7 +223,8 @@ class EventTeamService(
                 ensureNotNull(
                     value = events.findById(id = eventId)?.toDomain(),
                 ) { ServiceError.NotFound(message = "Event $eventId not found") }
-            ensure(condition = callerOwnsOrIsAdmin(caller = caller, event = event)) { ServiceError.Forbidden() }
+            ensure(condition = clubAccess.mayOrganize(caller = caller, event = event)) { ServiceError.Forbidden() }
+            // The expiry gate (#310) is a separate axis from club ownership (#789); both apply.
             val exempt = caller.capabilities.any { it in TEAM_EXPIRY_EXEMPT_ROLES }
             ensure(condition = exempt || !event.isExpired(asOf = LocalDate.now())) {
                 ServiceError.Conflict(message = "This event has ended; only an administrator or club owner can modify it.")
@@ -226,15 +232,6 @@ class EventTeamService(
             ensure(condition = !event.isFinalized) { ServiceError.Validation(message = "Event is finalized") }
             event
         }
-}
-
-/** True when [caller] may manage [event]'s teams (#720): the event owner, an ADMINISTRATOR, or a CLUB_OWNER. */
-private fun callerOwnsOrIsAdmin(
-    caller: User,
-    event: Event,
-): Boolean {
-    val isAdminOrOwner = caller.capabilities.any { it == Capability.ADMINISTRATOR || it == Capability.CLUB_OWNER }
-    return isAdminOrOwner || event.createdBy == caller.id
 }
 
 /** Resolve the caller and require HOST/CLUB_OWNER/ADMINISTRATOR, else [ServiceError.Forbidden]. */

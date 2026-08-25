@@ -110,6 +110,16 @@ class EventServiceTest {
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
+    // A club [owner] is a NAMED OWNER of (#789). `created_by` on a club is provenance, not ownership, so
+    // the club_owners row is what event authorization actually reads.
+    private fun ownedClub(
+        name: String,
+        owner: User,
+    ) = clubs
+        .create(command = CreateClubCommand(name = name, createdBy = owner.id))
+        .toDomain()
+        .also { clubs.addOwner(clubId = it.id, userId = owner.id) }
+
     // Default to a currently-running event (ends a week out) so host data-entry stays allowed; the
     // expired-event tests (#310) pass explicit past dates.
     private fun input(
@@ -259,7 +269,8 @@ class EventServiceTest {
     @Test
     fun `an event can be created under a club, and an unknown club is rejected (#313)`() {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
-        val club = clubs.create(command = CreateClubCommand(name = "Downtown TC", createdBy = host.id)).toDomain()
+        // The host must OWN the club to file under it (#789).
+        val club = ownedClub(name = "Downtown TC", owner = host)
 
         // A club event of any type now requires a points config (OPEN_PLAY unified); supply a valid window.
         val view = service.create(token = token(uid = "host"), input = clubInput(clubId = club.id)).shouldBeRight()
@@ -282,7 +293,8 @@ class EventServiceTest {
     fun `an administrator re-files a FINALIZED event's club, and a host still cannot (#782)`() {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
-        val clubA = clubs.create(command = CreateClubCommand(name = "Downtown TC", createdBy = host.id)).toDomain()
+        val clubA = ownedClub(name = "Downtown TC", owner = host)
+        // Deliberately NOT owned by the host: only the administrator can re-file the event here (#789).
         val clubB = clubs.create(command = CreateClubCommand(name = "West End", createdBy = host.id)).toDomain()
         val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight().domain()
         service.setClub(token = token(uid = "host"), id = event.id, clubId = clubA.id).shouldBeRight()
@@ -336,8 +348,8 @@ class EventServiceTest {
     @Test
     fun `setClub sets, changes, and clears an event's club (#319)`() {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
-        val clubA = clubs.create(command = CreateClubCommand(name = "Downtown TC", createdBy = host.id)).toDomain()
-        val clubB = clubs.create(command = CreateClubCommand(name = "West End", createdBy = host.id)).toDomain()
+        val clubA = ownedClub(name = "Downtown TC", owner = host)
+        val clubB = ownedClub(name = "West End", owner = host)
         val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight()
         event.club.shouldBeNull() // clubless to start, so there is no club page to link to
 
@@ -425,12 +437,16 @@ class EventServiceTest {
     @Test
     fun `an event whose creator was removed has a null creator (#270)`() {
         provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight().domain()
 
         // Orphan the creator — the FK is ON DELETE SET NULL (created_by becomes null).
         transaction { EventsTable.update(where = { EventsTable.id eq event.id }) { it[createdBy] = null } }
 
-        service.get(token = token(uid = "host"), id = event.id).shouldBeRight().creatorPublicCode.shouldBeNull()
+        // Read as an administrator: a clubless event whose creator has been orphaned has no ownership
+        // anchor left at all (#789), so an administrator is the only caller who can still organize it.
+        service.get(token = token(uid = "admin"), id = event.id).shouldBeRight().creatorPublicCode.shouldBeNull()
+        service.get(token = token(uid = "host"), id = event.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
@@ -520,13 +536,21 @@ class EventServiceTest {
 
     @Test
     fun `a host cannot add a participant to an expired event, but an admin or club owner can (#310)`() {
-        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
-        provision(uid = "owner", roles = setOf(Capability.PLAYER, Capability.CLUB_OWNER))
+        val clubOwner = provision(uid = "owner", roles = setOf(Capability.PLAYER, Capability.CLUB_OWNER))
         val p1 = provision(uid = "p1")
         val p2 = provision(uid = "p2")
+        // The event is filed under a club BOTH staff members own (#789) — expiry (#310) is the axis under
+        // test here, so club ownership must not be what refuses anyone.
+        val club = ownedClub(name = "Downtown TC", owner = clubOwner)
+        clubs.addOwner(clubId = club.id, userId = host.id)
         val expired =
-            input(start = LocalDate.now().minusDays(3).toString(), end = LocalDate.now().minusDays(1).toString())
+            input(
+                start = LocalDate.now().minusDays(3).toString(),
+                end = LocalDate.now().minusDays(1).toString(),
+                clubId = club.id,
+            )
         val event = service.create(token = token(uid = "host"), input = expired).shouldBeRight()
 
         // The event has ended → the HOST is blocked.
@@ -624,7 +648,7 @@ class EventServiceTest {
     @Test
     fun `publicByCode surfaces the organizing club's name, and null when clubless (#313)`() {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
-        val club = clubs.create(command = CreateClubCommand(name = "Downtown TC", createdBy = host.id)).toDomain()
+        val club = ownedClub(name = "Downtown TC", owner = host)
         val underClub = service.create(token = token(uid = "host"), input = clubInput(clubId = club.id)).shouldBeRight()
         val clubless = service.create(token = token(uid = "host"), input = input()).shouldBeRight()
 
@@ -895,16 +919,19 @@ class EventServiceTest {
 
     @Test
     fun `a non-staff caller cannot finalize, and a host cannot finalize another host's event (#403)`() {
-        provision(uid = "owner", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val creator = provision(uid = "owner", roles = setOf(Capability.PLAYER, Capability.HOST))
         provision(uid = "other", roles = setOf(Capability.PLAYER, Capability.HOST))
-        val event = service.create(token = token(uid = "owner"), input = input()).shouldBeRight().domain()
+        val clubOwner = provision(uid = "clubowner", roles = setOf(Capability.PLAYER, Capability.CLUB_OWNER))
+        // The club's named owner is the club owner; the creating host owns it too so they can file under it.
+        val club = ownedClub(name = "Downtown TC", owner = clubOwner)
+        clubs.addOwner(clubId = club.id, userId = creator.id)
+        val event = service.create(token = token(uid = "owner"), input = clubInput(clubId = club.id)).shouldBeRight().domain()
 
         service.finalize(token = token(uid = "ghost"), id = event.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
         service.finalize(token = token(uid = "other"), id = event.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
         events.findById(id = event.id)!!.toDomain().isFinalized.shouldBeFalse()
 
-        // A club owner may finalize an event they didn't create.
-        provision(uid = "clubowner", roles = setOf(Capability.PLAYER, Capability.CLUB_OWNER))
+        // A named owner of the event's club may finalize an event they didn't create (#789).
         service.finalize(token = token(uid = "clubowner"), id = event.id).shouldBeRight().domain().isFinalized.shouldBeTrue()
     }
 
@@ -977,15 +1004,17 @@ class EventServiceTest {
 
     @Test
     fun `an administrator may un-finalize any event, and a club owner too (#477)`() {
-        provision(uid = "owner", roles = setOf(Capability.PLAYER, Capability.HOST))
+        val creator = provision(uid = "owner", roles = setOf(Capability.PLAYER, Capability.HOST))
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
-        val event = service.create(token = token(uid = "owner"), input = input()).shouldBeRight().domain()
+        val clubOwner = provision(uid = "clubowner", roles = setOf(Capability.PLAYER, Capability.CLUB_OWNER))
+        val club = ownedClub(name = "Downtown TC", owner = clubOwner)
+        clubs.addOwner(clubId = club.id, userId = creator.id)
+        val event = service.create(token = token(uid = "owner"), input = clubInput(clubId = club.id)).shouldBeRight().domain()
         service.finalize(token = token(uid = "owner"), id = event.id).shouldBeRight()
 
         service.unfinalize(token = token(uid = "admin"), id = event.id).shouldBeRight().domain().isFinalized.shouldBeFalse()
 
-        // A club owner may also un-finalize an event they didn't create.
-        provision(uid = "clubowner", roles = setOf(Capability.PLAYER, Capability.CLUB_OWNER))
+        // A named owner of the event's club may also un-finalize an event they didn't create (#789).
         service.finalize(token = token(uid = "owner"), id = event.id).shouldBeRight()
         service.unfinalize(token = token(uid = "clubowner"), id = event.id).shouldBeRight().domain().isFinalized.shouldBeFalse()
     }
@@ -2023,7 +2052,7 @@ class EventServiceTest {
         val p2 = provision(uid = "p2")
         rate(userId = p1.id, level = "4.0")
         rate(userId = p2.id, level = "4.0")
-        val club = clubs.create(command = CreateClubCommand(name = "Downtown TC", createdBy = host.id)).toDomain()
+        val club = ownedClub(name = "Downtown TC", owner = host)
         clubs.setSanction(id = club.id, sanctioned = true)
         enableGlobalAwarding(hostUid = "host")
         val event =

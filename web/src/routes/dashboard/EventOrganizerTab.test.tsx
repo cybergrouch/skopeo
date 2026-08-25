@@ -521,7 +521,15 @@ describe("EventOrganizerTab", () => {
 
   it("offers a club dropdown and files the event under the selected club (#313)", async () => {
     useGetApiV1Clubs.mockReturnValue({
-      data: [{ id: "c1", name: "Downtown TC", isActive: true, owners: [] }],
+      // Owned by the caller: after #789 the selector lists only clubs they may file under.
+      data: [
+        {
+          id: "c1",
+          name: "Downtown TC",
+          isActive: true,
+          owners: [{ userId: "me", publicCode: "MEE000" }],
+        },
+      ],
       isLoading: false,
     });
     const user = userEvent.setup();
@@ -571,8 +579,10 @@ describe("EventOrganizerTab", () => {
   });
 
   it("pre-selects a CLUB_OWNER's single owned club, still allowing a change or clear (#364)", async () => {
+    // CLUB_OWNER of exactly one club drives the #364 default; ADMINISTRATOR keeps the *other* club
+    // selectable, since after #789 a non-admin is only offered the clubs they own.
     useGetApiV1UsersMe.mockReturnValue({
-      data: { id: "me", capabilities: ["CLUB_OWNER"] },
+      data: { id: "me", capabilities: ["CLUB_OWNER", "ADMINISTRATOR"] },
     });
     useGetApiV1Clubs.mockReturnValue({
       data: [

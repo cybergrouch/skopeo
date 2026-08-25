@@ -73,6 +73,29 @@ class EventRepository {
                 .map { buildEventAggregate(row = it) }
         }
 
+    /**
+     * The active events a non-admin organizer may manage (#789), newest start date first: every event
+     * filed under one of [clubIds] — the clubs they are a named owner of — plus every event they created
+     * themselves (the grandfathered creator clause, which is also the only handle on a clubless event).
+     *
+     * This is the list counterpart of `ClubAccess.mayOrganize`: without the club arm, a co-owner still
+     * could not *find* the events they are newly allowed to run. An ADMINISTRATOR keeps using
+     * [list] with a null creator, which is unscoped.
+     */
+    fun listForOrganizer(
+        createdBy: UUID,
+        clubIds: Set<UUID>,
+    ): List<EventAggregateEntity> =
+        transaction {
+            val mine: Op<Boolean> = EventsTable.createdBy eq createdBy
+            val scope = clubIds.fold(initial = mine) { acc, clubId -> acc or (EventsTable.clubId eq clubId) }
+            EventsTable
+                .selectAll()
+                .where { EventsTable.isActive and scope }
+                .orderBy(EventsTable.startDate to SortOrder.DESC)
+                .map { buildEventAggregate(row = it) }
+        }
+
     fun findById(id: UUID): EventAggregateEntity? = transaction { loadEvent(id = id) }
 
     /**

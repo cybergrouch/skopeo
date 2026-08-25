@@ -6,9 +6,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { useGetApiV1ClubsCodeCode } from "@/api/generated/clubs/clubs";
+import {
+  useGetApiV1Clubs,
+  useGetApiV1ClubsCodeCode,
+} from "@/api/generated/clubs/clubs";
 import { useGetApiV1UsersMe } from "@/api/generated/users/users";
 import { canManageMatches } from "@/auth/capabilities";
+import { canOrganizeClub } from "@/auth/clubAccess";
 import { ShareCard } from "@/components/ShareCard";
 import { PublicPageShell } from "@/components/PublicPageShell";
 import { NewEventForm } from "@/features/event/NewEventForm";
@@ -42,19 +46,33 @@ const BUCKETS = [
  * longer serializes every event the club has ever run just to render a header. The bucket rules themselves
  * moved into SQL for the same reason (see `EventBucket`).
  *
- * A match manager (HOST / CLUB_OWNER / ADMINISTRATOR) additionally gets a New Event form filed under this
- * club, with no club selector — the page already answers that question. The page stays fully renderable for
- * anonymous visitors: the viewer lookup is best-effort, no capabilities simply means no form, and the
- * server enforces the rule regardless.
+ * An **owner of this club** — plus any ADMINISTRATOR — additionally gets a New Event form filed under it,
+ * with no club selector, since the page already answers that question. Ownership, not the bare
+ * match-management capability, is the gate (#789): filing an event under a club you don't own is refused
+ * server-side, so offering the form to every host would only invite a 403. Ownership is read from the
+ * staff-only clubs list, which already carries each club's owners; the page stays fully renderable for
+ * anonymous visitors (both lookups are best-effort, and no data simply means no form).
  */
 export function ClubPage() {
   const { code = "" } = useParams();
   const query = useGetApiV1ClubsCodeCode(code);
   const club = query.data;
   const me = useGetApiV1UsersMe().data;
+  // Only staff can read the clubs list, and only staff could ever own a club, so the fetch that answers
+  // "do I own THIS club?" is gated on the capability rather than being the answer itself (#789).
+  const clubs =
+    useGetApiV1Clubs({
+      query: { enabled: canManageMatches(me?.capabilities) },
+    }).data ?? [];
   // A deleted club is kept for reference only (#325), so it gains no organizer affordances.
   const canOrganize =
-    canManageMatches(me?.capabilities) && club?.isActive !== false;
+    club?.isActive !== false &&
+    canOrganizeClub({
+      capabilities: me?.capabilities,
+      clubs,
+      meId: me?.id,
+      publicCode: club?.publicCode,
+    });
 
   return (
     <PublicPageShell>

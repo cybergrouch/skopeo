@@ -47,6 +47,7 @@ import org.skopeo.domain.model.User
 import org.skopeo.domain.model.canSeeRawRatingOrFalse
 import org.skopeo.domain.model.isExpired
 import org.skopeo.domain.service.audit.AuditService
+import org.skopeo.domain.service.event.EventOrganizerGate
 import org.skopeo.domain.service.rating.RatingAssembler
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.domain.service.user.displayName
@@ -121,6 +122,8 @@ class MatchService(
     private val events: EventRepository = EventRepository(),
     private val eventTeams: EventTeamRepository = EventTeamRepository(),
     private val audit: AuditService = AuditService(),
+    // The club-ownership gate for an event-scoped operation (#789); see [EventOrganizerGate].
+    private val organizer: EventOrganizerGate = EventOrganizerGate(),
 ) {
     /** Create a fixture from the raw HTTP request (#116): parse/validate enums, date, ids, and composition. */
     fun createFixture(
@@ -223,6 +226,7 @@ class MatchService(
                         ensureNotNull(value = events.findById(id = eventId)?.toDomain()) {
                             ServiceError.Validation(message = "Event $eventId not found")
                         }
+                    organizer.ensure(event = loaded, caller = caller).bind()
                     ensureHostMayEnter(event = loaded, caller = caller).bind()
                     ensureEventNotFinalized(event = loaded).bind()
                     loaded
@@ -370,6 +374,7 @@ class MatchService(
                     ensureNotNull(value = events.findById(id = eventId)?.toDomain()) {
                         ServiceError.NotFound(message = "Event $eventId not found")
                     }
+                organizer.ensure(event = event, caller = caller).bind()
                 ensureHostMayEnter(event = event, caller = caller).bind()
                 ensureEventNotFinalized(event = event).bind()
             }
@@ -422,6 +427,8 @@ class MatchService(
             ensure(condition = match.ratedAt == null) {
                 ServiceError.Conflict(message = "Cannot change the handicap on a match that has already been rated")
             }
+            // An evented fixture inherits its event's club rule (#789).
+            organizer.ensureForEventId(eventId = match.eventId, caller = caller).bind()
             val updated =
                 matches.setHandicaps(matchId = matchId, team1Handicap = team1Handicap, team2Handicap = team2Handicap).bind().toDomain()
             audit.record(
@@ -448,11 +455,13 @@ class MatchService(
         active: Boolean,
     ): Either<ServiceError, MatchResponse> =
         either {
-            requireStaff(token = token).bind()
+            val caller = staffCaller(token = token).bind()
             val match = matches.findById(matchId = matchId).bind().toDomain()
             ensure(condition = active || match.ratedAt == null) {
                 ServiceError.Conflict(message = "Cannot disable a match that has already been rated")
             }
+            // An evented fixture inherits its event's club rule (#789).
+            organizer.ensureForEventId(eventId = match.eventId, caller = caller).bind()
             val disabledAt = if (active) null else LocalDateTime.now()
             matches.setActive(matchId = matchId, active = active, disabledAt = disabledAt).bind().toDomain().toResponse()
         }
@@ -468,7 +477,7 @@ class MatchService(
         matchIds: List<UUID>,
     ): Either<ServiceError, Unit> =
         either {
-            requireStaff(token = token).bind()
+            val caller = staffCaller(token = token).bind()
             ensure(condition = matchIds.isNotEmpty()) { ServiceError.Validation(message = "No matches to reorder") }
             ensure(condition = matchIds.size == matchIds.distinct().size) {
                 ServiceError.Validation(message = "Duplicate match ids in the reorder request")
@@ -483,6 +492,8 @@ class MatchService(
             ensure(condition = loaded.map { it.matchDate }.toSet().size == 1) {
                 ServiceError.Validation(message = "Only matches on the same date can be reordered")
             }
+            // Every evented fixture in the batch inherits its event's club rule (#789).
+            loaded.forEach { organizer.ensureForEventId(eventId = it.eventId, caller = caller).bind() }
             matches.reorderCalcSequence(matchIds = matchIds)
         }
 
@@ -790,8 +801,6 @@ class MatchService(
             else -> ServiceError.Validation(message = "All players must be participants of the event").left()
         }
     }
-
-    private fun requireStaff(token: VerifiedFirebaseToken): Either<ServiceError, UUID> = staffCaller(token = token).map { it.id }
 
     /**
      * Gate host data entry on an event (#310): once the event has ended, a plain HOST may no longer
