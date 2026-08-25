@@ -96,14 +96,18 @@ function renderTab() {
 }
 
 /**
- * Club groups load collapsed (#591); click a group's chevron to reveal its event rows.
+ * Club groups load collapsed (#591); click a group's expander to reveal its event rows.
  *
- * The header is two controls since #780: the club name links to its public page, and this separate
- * chevron owns the collapse — so the expander is matched by its "Expand <club>" label rather than by the
- * "Club name (count)" text, which now belongs to the link.
+ * The expander differs by group (#788). A NAMED club's header is a link plus a separate chevron, matched
+ * by its "Expand <club>" label. The clubless "Open" group has no link, so its whole header is the button
+ * and its accessible name is the "Open (count)" heading. Handles both so callers don't care.
  */
 function expandGroup(label: string) {
-  fireEvent.click(screen.getByRole("button", { name: `Expand ${label}` }));
+  const chevron = screen.queryByRole("button", { name: `Expand ${label}` });
+  fireEvent.click(
+    chevron ??
+      screen.getByRole("button", { name: new RegExp(`${label} \\(\\d+\\)`) }),
+  );
 }
 
 const event = {
@@ -777,4 +781,76 @@ describe("EventOrganizerTab", () => {
     });
   });
 
+
+  describe("clubless \"Open\" group header (#788)", () => {
+    const openEvent = { ...event, id: "o1", name: "Casual Meetup" }; // no club
+
+    it("expands when its label is clicked, not only its chevron", async () => {
+      useGetApiV1Events.mockReturnValue({ data: [openEvent], isLoading: false });
+      const user = userEvent.setup();
+      renderTab();
+
+      // The whole header is the toggle: clicking the heading text must work. Before #788 only a small
+      // chevron did, so the clubless events looked unreachable.
+      const header = screen.getByRole("button", { name: /Open \(1\)/ });
+      expect(header).toHaveAttribute("aria-expanded", "false");
+      expect(screen.queryByText("Casual Meetup")).not.toBeInTheDocument();
+
+      await user.click(screen.getByText(/Open \(1\)/));
+      expect(header).toHaveAttribute("aria-expanded", "true");
+      expect(screen.getByText("Casual Meetup")).toBeInTheDocument();
+
+      // ...and collapses again from the same target.
+      await user.click(screen.getByText(/Open \(1\)/));
+      expect(header).toHaveAttribute("aria-expanded", "false");
+      expect(screen.queryByText("Casual Meetup")).not.toBeInTheDocument();
+    });
+
+    it("has no link, since a clubless group has no public page", () => {
+      useGetApiV1Events.mockReturnValue({ data: [openEvent], isLoading: false });
+      renderTab();
+
+      // No /clubs/undefined, and nothing that looks navigable.
+      expect(
+        screen.queryByRole("link", { name: /Open \(1\)/ }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("reaches clubless events when they are the only ones there", async () => {
+      // The reported case: everything is clubless, so the "Open" group is the entire list.
+      useGetApiV1Events.mockReturnValue({
+        data: [openEvent, { ...event, id: "o2", name: "Sunday Hit" }],
+        isLoading: false,
+      });
+      const user = userEvent.setup();
+      renderTab();
+
+      await user.click(screen.getByText(/Open \(2\)/));
+      expect(screen.getByText("Casual Meetup")).toBeInTheDocument();
+      expect(screen.getByText("Sunday Hit")).toBeInTheDocument();
+    });
+
+    it("keeps a named club's label navigating rather than toggling", async () => {
+      const alpha = {
+        ...event,
+        id: "a1",
+        name: "Alpha Cup",
+        club: { id: "c1", name: "Alpha TC", publicCode: "CLBC1" },
+      };
+      useGetApiV1Events.mockReturnValue({ data: [alpha], isLoading: false });
+      const user = userEvent.setup();
+      renderTab();
+
+      // The name is a link to the club page; the separate chevron owns the collapse.
+      expect(
+        screen.getByRole("link", { name: /Alpha TC \(1\)/ }),
+      ).toHaveAttribute("href", "/clubs/CLBC1");
+      const chevron = screen.getByRole("button", { name: "Expand Alpha TC" });
+      expect(chevron).toHaveAttribute("aria-expanded", "false");
+
+      await user.click(chevron);
+      expect(chevron).toHaveAttribute("aria-expanded", "true");
+      expect(screen.getByText("Alpha Cup")).toBeInTheDocument();
+    });
+  });
 });
