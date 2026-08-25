@@ -115,7 +115,7 @@ export function NewEventForm({
 
   // Clubs to optionally file the event under (#313). Readable by staff; empty when none exist.
   const clubsData = useGetApiV1Clubs().data;
-  const clubs = clubsData ?? [];
+  const clubs = useMemo(() => clubsData ?? [], [clubsData]);
   // Circuits to file a TOURNAMENT under (#525). Staff-readable; empty when none exist.
   const circuits = useGetApiV1Circuits().data ?? [];
   const me = useGetApiV1UsersMe().data;
@@ -127,18 +127,16 @@ export function NewEventForm({
   // Default the selector to a CLUB_OWNER's own club (#364), but only while the field is untouched;
   // once the user selects anything (including "Open") their choice wins.
   const ownerDefault = useMemo(
-    () => defaultOwnedClubId(clubsData ?? [], me?.id, me?.capabilities),
-    [clubsData, me?.id, me?.capabilities],
+    () => defaultOwnedClubId(clubs, me?.id, me?.capabilities),
+    [clubs, me?.id, me?.capabilities],
   );
   // The clubs this caller may actually FILE under (#789): an ADMINISTRATOR any club, anyone else only
   // the clubs they are a named owner of. The server refuses the rest, so offering them would only hand
   // out a 403; the selector shows the reachable subset instead.
   const fileableClubs = useMemo(
     () =>
-      isAdministrator(me?.capabilities)
-        ? (clubsData ?? [])
-        : ownedClubs(clubsData ?? [], me?.id),
-    [clubsData, me?.id, me?.capabilities],
+      isAdministrator(me?.capabilities) ? clubs : ownedClubs(clubs, me?.id),
+    [clubs, me?.id, me?.capabilities],
   );
   // A fixed club wins outright over both the picker and the #364 owner default.
   const fixedClub = fixedClubPublicCode
