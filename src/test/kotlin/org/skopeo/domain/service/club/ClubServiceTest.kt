@@ -86,7 +86,7 @@ class ClubServiceTest {
         bucket: EventBucket,
         limit: Int = 10,
         offset: Int = 0,
-    ) = reader.publicEventsByCode(code = code, bucket = bucket, limit = limit, offset = offset).shouldBeRight()
+    ) = reader.publicEventsByCode(code = code, bucket = bucket.name, limit = limit, offset = offset).shouldBeRight()
 
     @Test
     fun `an admin creates a club and it appears in the list`() {

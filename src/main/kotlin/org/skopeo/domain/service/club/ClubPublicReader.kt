@@ -60,16 +60,24 @@ class ClubPublicReader(
      */
     fun publicEventsByCode(
         code: String,
-        bucket: EventBucket,
+        bucket: String?,
         limit: Int,
         offset: Int,
     ): Either<ServiceError, ClubPublicEventsResponse> =
         either {
+            // Input parsing lives here, not at the route: `routes` must not depend on `model`
+            // (LayeredArchitectureTest), and an unknown bucket is a business validation, not a shape error.
+            val parsed =
+                ensureNotNull(value = EventBucket.entries.firstOrNull { it.name == bucket }) {
+                    ServiceError.Validation(
+                        message = "Invalid bucket '$bucket'; expected one of ${EventBucket.entries.joinToString { it.name }}",
+                    )
+                }
             val club = findPublicClub(code = code).bind()
             val (page, total) =
                 events.listByClubAndBucket(
                     clubId = club.id,
-                    bucket = bucket,
+                    bucket = parsed,
                     today = LocalDate.now(),
                     limit = limit.coerceIn(range = MIN_PAGE_SIZE..MAX_PAGE_SIZE),
                     offset = offset.coerceAtLeast(minimumValue = 0),
@@ -79,7 +87,7 @@ class ClubPublicReader(
             val domainEvents = page.map { it.toDomain() }
             val counts = matches.completedResultCountByEvents(eventIds = domainEvents.map { it.id })
             ClubPublicEventsResponse(
-                bucket = bucket.name,
+                bucket = parsed.name,
                 items =
                     domainEvents.map { event ->
                         ClubPublicEvent(

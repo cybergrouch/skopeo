@@ -21,7 +21,6 @@ import org.skopeo.common.dto.club.AssignOwnerRequest
 import org.skopeo.common.dto.club.CreateClubRequest
 import org.skopeo.common.dto.club.SetSanctionRequest
 import org.skopeo.common.dto.club.UpdateClubRequest
-import org.skopeo.domain.model.EventBucket
 import org.skopeo.domain.service.club.ClubPublicReader
 import org.skopeo.domain.service.club.ClubService
 import java.util.UUID
@@ -68,12 +67,11 @@ private fun Route.publicClubByCode(reader: ClubPublicReader) {
     get(path = "/code/{code}/events") {
         respondMappingErrors {
             val code = call.parameters["code"].orEmpty()
-            val bucket = parseEventBucket(raw = call.request.queryParameters["bucket"])
             respondEither(
                 result =
                     reader.publicEventsByCode(
                         code = code,
-                        bucket = bucket,
+                        bucket = call.request.queryParameters["bucket"],
                         limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_EVENT_PAGE_SIZE,
                         offset = call.request.queryParameters["offset"]?.toIntOrNull() ?: 0,
                     ),
@@ -84,16 +82,6 @@ private fun Route.publicClubByCode(reader: ClubPublicReader) {
 
 /** The club page loads a bucket ten at a time (#786). */
 private const val DEFAULT_EVENT_PAGE_SIZE = 10
-
-/**
- * Parse the required `bucket` query parameter (#786). An absent or unknown value is an
- * [IllegalArgumentException], which the route layer maps to a 400 — better than silently defaulting to a
- * bucket the caller did not ask for.
- */
-private fun parseEventBucket(raw: String?): EventBucket =
-    requireNotNull(value = EventBucket.entries.firstOrNull { it.name == raw }) {
-        "Invalid bucket '$raw'; expected one of ${EventBucket.entries.joinToString { it.name }}"
-    }
 
 private fun Route.listAndCreateClubs(service: ClubService) {
     post {

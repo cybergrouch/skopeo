@@ -3,12 +3,15 @@
 
 package org.skopeo.domain.service.club
 
+import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
 import org.skopeo.domain.mapper.entity.club.toDomain
 import org.skopeo.domain.mapper.entity.event.toDomain
@@ -151,7 +154,7 @@ class ClubPublicEventsBucketTest {
         offset: Int = 0,
     ): List<String> =
         reader
-            .publicEventsByCode(code = f.publicCode, bucket = bucket, limit = limit, offset = offset)
+            .publicEventsByCode(code = f.publicCode, bucket = bucket.name, limit = limit, offset = offset)
             .shouldBeRight()
             .items
             .map { it.name }
@@ -243,7 +246,7 @@ class ClubPublicEventsBucketTest {
 
         val first =
             reader
-                .publicEventsByCode(code = f.publicCode, bucket = EventBucket.UPCOMING, limit = 10, offset = 0)
+                .publicEventsByCode(code = f.publicCode, bucket = EventBucket.UPCOMING.name, limit = 10, offset = 0)
                 .shouldBeRight()
         first.items.map { it.name } shouldBe (1..10).map { "Event %02d".format(it) }
         // total is the size of the BUCKET, not the page — so a pager can say "Showing 1–10 of 12".
@@ -251,7 +254,7 @@ class ClubPublicEventsBucketTest {
 
         val second =
             reader
-                .publicEventsByCode(code = f.publicCode, bucket = EventBucket.UPCOMING, limit = 10, offset = 10)
+                .publicEventsByCode(code = f.publicCode, bucket = EventBucket.UPCOMING.name, limit = 10, offset = 10)
                 .shouldBeRight()
         second.items.map { it.name } shouldBe listOf("Event 11", "Event 12")
         second.total shouldBe 12L
@@ -264,7 +267,7 @@ class ClubPublicEventsBucketTest {
 
         val page =
             reader
-                .publicEventsByCode(code = f.publicCode, bucket = EventBucket.UPCOMING, limit = 10, offset = 500)
+                .publicEventsByCode(code = f.publicCode, bucket = EventBucket.UPCOMING.name, limit = 10, offset = 500)
                 .shouldBeRight()
         page.items.shouldBeEmpty()
         page.total shouldBe 1L
@@ -279,7 +282,7 @@ class ClubPublicEventsBucketTest {
 
         // 100 is the ceiling; asking for more must not turn the endpoint into an unbounded scan.
         reader
-            .publicEventsByCode(code = f.publicCode, bucket = EventBucket.UPCOMING, limit = 5_000, offset = 0)
+            .publicEventsByCode(code = f.publicCode, bucket = EventBucket.UPCOMING.name, limit = 5_000, offset = 0)
             .shouldBeRight()
             .items
             .size shouldBe 3
@@ -303,5 +306,19 @@ class ClubPublicEventsBucketTest {
         )
 
         namesIn(f = f, bucket = EventBucket.UPCOMING) shouldBe listOf(element = "Ours")
+    }
+
+    @Test
+    fun `an unknown or missing bucket is a validation failure, not a silent default (#786)`() {
+        val f = fixture()
+
+        // Parsing lives in the service (routes must not depend on `model`), so a bad value surfaces as a
+        // Validation the route maps to 400 — never as a quiet fallback to some other bucket.
+        reader.publicEventsByCode(code = f.publicCode, bucket = "NOPE", limit = 10, offset = 0)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+        reader.publicEventsByCode(code = f.publicCode, bucket = null, limit = 10, offset = 0)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
     }
 }
