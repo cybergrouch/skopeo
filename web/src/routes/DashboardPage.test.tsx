@@ -219,6 +219,11 @@ describe("DashboardPage", () => {
     expect(
       screen.getByRole("button", { name: "Standings" }),
     ).toBeInTheDocument();
+    // Club Management is a match-manager surface now (#786) — a HOST sees it, though the writes inside
+    // keep their own server rules, so they get the club list read-only.
+    expect(
+      screen.getByRole("button", { name: "Club Management" }),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Admin" }),
     ).not.toBeInTheDocument();
@@ -289,7 +294,7 @@ describe("DashboardPage", () => {
     expect(
       screen.getByRole("button", { name: "Account Management" }),
     ).toBeInTheDocument();
-    // Club Management is an admin-only tab split out of Admin (#698).
+    // Club Management was split out of Admin (#698) and is now a match-manager tab (#786).
     expect(
       screen.getByRole("button", { name: "Club Management" }),
     ).toBeInTheDocument();

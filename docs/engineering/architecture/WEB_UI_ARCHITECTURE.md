@@ -234,7 +234,7 @@ gates above:
 | Reports | `ReportTab` | `isAdministrator` |
 | Points Management | `PointsManagementSection` | `canManagePointsBudget` |
 | Account Management | `AccountManagementTab` (includes onboarding invites, #725) | `isAdministrator` |
-| Club Management | `ClubManagementTab` | `isAdministrator` |
+| Club Management | `ClubManagementTab` | `canManageMatches` (#786) — visibility only; each operation inside keeps its own server rule |
 | Admin | `AdminTab` | `isAdministrator` |
 | About | `AboutTab` | Always |
 
@@ -274,7 +274,7 @@ flowchart TD
     Pred -->|canRate| Ratings[Ratings]
     Pred -->|isResearcher| Research[Research]
     Pred -->|canManagePointsBudget| Points[Points Management]
-    Pred -->|isAdministrator| Adm["Activity Log, Reports, Account Management (incl. invites), Club Management, Admin"]
+    Pred -->|isAdministrator| Adm["Activity Log, Reports, Account Management (incl. invites), Admin"]
     Always --> Sec["Section array: nav + active content"]
     Settings --> Sec
     Org --> Sec
@@ -297,6 +297,18 @@ split out of the Admin tab (#648):
 - **Duplicate Candidates** (`DuplicateCandidatesSection`) — suspected duplicates for triage.
 
 ### Club Management tab sections
+
+The tab is visible to HOST / CLUB_OWNER / ADMINISTRATOR (#786), but visibility and capability are separate:
+the API keeps its existing per-operation rules and `ClubsSection` mirrors them, so a viewer never sees a
+control the server would refuse.
+
+| Operation | Who |
+|---|---|
+| Read the club list | HOST · CLUB_OWNER · ADMINISTRATOR (#313 — event creators pick a club) |
+| Create / rename / delete a club | ADMINISTRATOR |
+| Assign / remove an owner | ADMINISTRATOR |
+| Toggle tournament sanctioning | CLUB_OWNER · ADMINISTRATOR — it scales the placement points schedule (#525), so a plain HOST reads it without setting it |
+
 
 `ClubManagementTab.tsx` composes the clubs administration section (`src/routes/dashboard/admin/`),
 split out of the Admin tab (#698):

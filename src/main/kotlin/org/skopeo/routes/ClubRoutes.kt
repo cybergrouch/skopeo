@@ -21,6 +21,7 @@ import org.skopeo.common.dto.club.AssignOwnerRequest
 import org.skopeo.common.dto.club.CreateClubRequest
 import org.skopeo.common.dto.club.SetSanctionRequest
 import org.skopeo.common.dto.club.UpdateClubRequest
+import org.skopeo.domain.service.club.ClubPublicReader
 import org.skopeo.domain.service.club.ClubService
 import java.util.UUID
 
@@ -29,12 +30,15 @@ import java.util.UUID
  * (enforced in [ClubService]). The public-by-code page (#327) is viewable anonymously, mirroring the
  * event/match/player public pages.
  */
-fun Application.configureClubRoutes(service: ClubService = ClubService()) {
+fun Application.configureClubRoutes(
+    service: ClubService = ClubService(),
+    reader: ClubPublicReader = ClubPublicReader(),
+) {
     routing {
         route(path = "/api/v1/clubs") {
             // The public club page is viewable anonymously (#327); the management routes stay required.
             authenticate(FIREBASE_AUTH, optional = true) {
-                publicClubByCode(service = service)
+                publicClubByCode(reader = reader)
             }
             authenticate(FIREBASE_AUTH) {
                 listAndCreateClubs(service = service)
@@ -49,16 +53,35 @@ fun Application.configureClubRoutes(service: ClubService = ClubService()) {
  * Public club page lookup by code (#327), viewable anonymously (#193). The literal `code` segment
  * matches before `/{id}`, so it never collides with the UUID routes.
  */
-private fun Route.publicClubByCode(service: ClubService) {
+private fun Route.publicClubByCode(reader: ClubPublicReader) {
     get(path = "/code/{code}") {
         respondMappingErrors {
             val code = call.parameters["code"].orEmpty()
-            respondEither(result = service.publicByCode(code = code)) { club ->
+            respondEither(result = reader.publicByCode(code = code)) { club ->
                 call.respond(status = HttpStatusCode.OK, message = club)
             }
         }
     }
+    // One page of the club's events in a single bucket (#786), so the public page loads ten at a time
+    // instead of every event the club has run. Anonymous, like the summary above.
+    get(path = "/code/{code}/events") {
+        respondMappingErrors {
+            val code = call.parameters["code"].orEmpty()
+            respondEither(
+                result =
+                    reader.publicEventsByCode(
+                        code = code,
+                        bucket = call.request.queryParameters["bucket"],
+                        limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_EVENT_PAGE_SIZE,
+                        offset = call.request.queryParameters["offset"]?.toIntOrNull() ?: 0,
+                    ),
+            ) { page -> call.respond(status = HttpStatusCode.OK, message = page) }
+        }
+    }
 }
+
+/** The club page loads a bucket ten at a time (#786). */
+private const val DEFAULT_EVENT_PAGE_SIZE = 10
 
 private fun Route.listAndCreateClubs(service: ClubService) {
     post {

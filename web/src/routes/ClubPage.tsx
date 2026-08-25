@@ -8,45 +8,39 @@ import {
 } from "@/components/ui/card";
 import { useGetApiV1ClubsCodeCode } from "@/api/generated/clubs/clubs";
 import { useGetApiV1UsersMe } from "@/api/generated/users/users";
-import type { ClubPublicEventResponse } from "@/api/generated/model";
 import { canManageMatches } from "@/auth/capabilities";
 import { ShareCard } from "@/components/ShareCard";
 import { PublicPageShell } from "@/components/PublicPageShell";
-import { ContentLink } from "@/components/ContentLink";
-import { EventBuckets } from "@/features/event/EventBucketSections";
-import { todayIso } from "@/features/event/eventBuckets";
 import { NewEventForm } from "@/features/event/NewEventForm";
+import { ClubEventsCard } from "@/features/club/ClubEventsCard";
 
-/** One event, linking to its own public page, with the date that matters for its grouping (#296). */
-function EventRow({
-  event,
-  upcoming,
-}: {
-  event: ClubPublicEventResponse;
-  upcoming: boolean;
-}) {
-  const date = upcoming ? `Starts ${event.startDate}` : `Ended ${event.endDate}`;
-  return (
-    <li key={event.publicCode} className="rounded-lg border p-3 text-sm">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <ContentLink to={`/events/${event.publicCode}`}>
-          {event.name}
-        </ContentLink>
-        <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase text-muted-foreground">
-          {event.eventType}
-        </span>
-      </div>
-      <div className="mt-1 text-xs text-muted-foreground">{date}</div>
-    </li>
-  );
-}
+/** The three groupings, in the order they appear down the page (#483/#786). */
+const BUCKETS = [
+  {
+    bucket: "UPCOMING",
+    title: "Upcoming events",
+    emptyLabel: "No upcoming events.",
+  },
+  {
+    bucket: "UNFINALIZED",
+    title: "Unfinalized events",
+    emptyLabel: "No unfinalized events.",
+  },
+  {
+    bucket: "FINALIZED",
+    title: "Finalized events",
+    emptyLabel: "No finalized events.",
+  },
+] as const;
 
 /**
  * Public club page reached via `/clubs/:code` (#327), and that club's own event organizer (#780).
  *
- * Its events are grouped Upcoming / Unfinalized / Finalized by the same `EventBuckets` the Event Organizer
- * tab uses, so the two surfaces cannot drift — the club page used to carry its own Upcoming/Past listing,
- * which is exactly the duplication #780 set out to remove.
+ * Laid out as discrete cards (#786): the club's identity, the New Event form beside it, then one card per
+ * event grouping — Upcoming / Unfinalized / Finalized — each fetching and paging its own ten at a time.
+ * Splitting the groupings into separately-paginated queries is what makes the page cheap to open: it no
+ * longer serializes every event the club has ever run just to render a header. The bucket rules themselves
+ * moved into SQL for the same reason (see `EventBucket`).
  *
  * A match manager (HOST / CLUB_OWNER / ADMINISTRATOR) additionally gets a New Event form filed under this
  * club, with no club selector — the page already answers that question. The page stays fully renderable for
@@ -86,32 +80,17 @@ export function ClubPage() {
               </code>
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4 text-sm">
-            {/* A soft-deleted club stays reachable by link for traceability (#325) — flag it. */}
-            {club.isActive === false ? (
+          {/* A soft-deleted club stays reachable by link for traceability (#325) — flag it. */}
+          {club.isActive === false ? (
+            <CardContent className="text-sm">
               <p
                 role="status"
                 className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
               >
                 This club has been deleted. It’s kept for reference only.
               </p>
-            ) : null}
-            <EventBuckets
-              // Tolerate a payload without `events` (#780). The web and API deploy as separate
-              // artifacts and the web lands minutes first, so a freshly-deployed page can briefly be
-              // talking to an API that still returns the old upcoming/past pair. Degrade to "no events"
-              // instead of throwing on undefined, which would white-screen the whole public page.
-              events={club.events ?? []}
-              today={todayIso()}
-              renderRow={(event, { upcoming }) => (
-                <EventRow
-                  key={event.publicCode}
-                  event={event}
-                  upcoming={upcoming}
-                />
-              )}
-            />
-          </CardContent>
+            </CardContent>
+          ) : null}
         </Card>
       ) : null}
 
@@ -121,6 +100,19 @@ export function ClubPage() {
           publicCodeToRefresh={club.publicCode}
         />
       ) : null}
+
+      {/* One separately-paginated card per grouping (#786), ten at a time. */}
+      {club
+        ? BUCKETS.map((b) => (
+            <ClubEventsCard
+              key={b.bucket}
+              code={club.publicCode}
+              bucket={b.bucket}
+              title={b.title}
+              emptyLabel={b.emptyLabel}
+            />
+          ))
+        : null}
 
       {club ? (
         <ShareCard

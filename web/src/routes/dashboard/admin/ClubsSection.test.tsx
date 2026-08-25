@@ -33,10 +33,13 @@ const {
   },
 }));
 
-const { toastSuccess, toastError } = vi.hoisted(() => ({
+const { toastSuccess, toastError, useGetApiV1UsersMe } = vi.hoisted(() => ({
   toastSuccess: vi.fn(),
   toastError: vi.fn(),
+  useGetApiV1UsersMe: vi.fn(),
 }));
+// The section mirrors the server's per-operation rules (#786), so it needs the viewer's capabilities.
+vi.mock("@/api/generated/users/users", () => ({ useGetApiV1UsersMe }));
 vi.mock("sonner", () => ({ toast: { success: toastSuccess, error: toastError } }));
 
 vi.mock("@/api/generated/clubs/clubs", () => ({
@@ -124,6 +127,11 @@ function renderSection() {
 describe("ClubsSection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // These tests exercise the full surface, so default the viewer to an ADMINISTRATOR (#786); the
+    // narrower roles get their own cases below.
+    useGetApiV1UsersMe.mockReturnValue({
+      data: { capabilities: ["PLAYER", "ADMINISTRATOR"] },
+    });
     state.createFail = false;
     state.createPending = false;
     state.renameFail = false;
@@ -455,5 +463,83 @@ describe("ClubsSection", () => {
         duration: 8000,
       }),
     );
+  });
+
+  describe("per-operation gating (#786)", () => {
+    beforeEach(() => {
+      useGetApiV1Clubs.mockReturnValue({
+        data: [
+          {
+            id: "c1",
+            name: "Downtown TC",
+            publicCode: "CLB001",
+            isActive: true,
+            tournamentsSanctioned: false,
+            owners: [{ userId: "o1", displayName: "Ann", publicCode: "AAA" }],
+          },
+        ],
+        isLoading: false,
+      });
+    });
+
+    function asHost() {
+      useGetApiV1UsersMe.mockReturnValue({
+        data: { capabilities: ["PLAYER", "HOST"] },
+      });
+    }
+
+    it("gives a HOST the club list but none of the write controls", () => {
+      asHost();
+      renderSection();
+
+      // Reading the list is theirs (#313); everything else stays with an administrator.
+      expect(screen.getByText("Downtown TC")).toBeInTheDocument();
+      expect(screen.queryByLabelText("New club")).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Edit" }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Delete" }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /Assign an owner/ }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("shows a HOST the sanction state but does not let them change it", () => {
+      asHost();
+      renderSection();
+
+      // Flipping this would let a host double their own tournament's payout (#525), so it is read-only
+      // for them — matching the server's CLUB_OWNER-or-ADMIN rule rather than the tab's visibility rule.
+      expect(screen.getByLabelText("Tournaments sanctioned")).toBeDisabled();
+    });
+
+    it("lets a CLUB_OWNER set sanctioning but not rename or delete", () => {
+      useGetApiV1UsersMe.mockReturnValue({
+        data: { capabilities: ["PLAYER", "CLUB_OWNER"] },
+      });
+      renderSection();
+
+      expect(screen.getByLabelText("Tournaments sanctioned")).toBeEnabled();
+      expect(
+        screen.queryByRole("button", { name: "Edit" }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Delete" }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("gives an administrator every control", () => {
+      renderSection();
+
+      expect(screen.getByLabelText("New club")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
+      expect(screen.getByLabelText("Tournaments sanctioned")).toBeEnabled();
+      expect(
+        screen.getByRole("button", { name: /Assign an owner/ }),
+      ).toBeInTheDocument();
+    });
   });
 });

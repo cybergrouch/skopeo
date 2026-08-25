@@ -3,24 +3,34 @@
 
 package org.skopeo.repository
 
+import org.jetbrains.exposed.sql.Op
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
+import org.jetbrains.exposed.sql.SqlExpressionBuilder
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.greaterEq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.less
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.deleteWhere
+import org.jetbrains.exposed.sql.exists
 import org.jetbrains.exposed.sql.innerJoin
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.insertAndGetId
+import org.jetbrains.exposed.sql.not
+import org.jetbrains.exposed.sql.or
 import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.skopeo.domain.model.CreateEventCommand
+import org.skopeo.domain.model.EventBucket
 import org.skopeo.domain.model.EventParticipantEntry
 import org.skopeo.domain.model.EventParticipantStatus
+import org.skopeo.domain.model.MatchStatus
 import org.skopeo.repository.persistence.EventAggregateEntity
 import org.skopeo.repository.persistence.EventEntity
 import org.skopeo.repository.persistence.MyEventEntity
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -79,6 +89,76 @@ class EventRepository {
                 .selectAll()
                 .where { EventsTable.isActive and (EventsTable.clubId eq clubId) }
                 .map { buildEventAggregate(row = it) }
+        }
+
+    /**
+     * One page of a club's ACTIVE events in a single bucket (#786), plus the total in that bucket.
+     *
+     * The bucket predicates live here, in SQL, so the club page fetches and counts ten rows instead of
+     * every event the club has ever run — the whole point of paginating per bucket. They mirror
+     * [EventBucket]'s contract exactly:
+     *
+     *  - FINALIZED   → `finalized_at IS NOT NULL` (there is no `is_finalized` column; the timestamp *is*
+     *                  the flag). Wins over dates and results.
+     *  - UNFINALIZED → not finalized AND (ended before [today] OR has a recorded result)
+     *  - UPCOMING    → not finalized AND ends on/after [today] AND has no recorded result
+     *
+     * "Has a recorded result" is an EXISTS over `matches`, matching
+     * [MatchRepository.completedResultCountByEvents]'s definition (active, COMPLETED, with a winner) so
+     * the "activity started" signal cannot drift between the two.
+     *
+     * Sort mirrors the client's: UPCOMING by start date asc, UNFINALIZED by end date desc, FINALIZED by
+     * finalized_at desc. The client falls back to end date for a finalized row with no timestamp; here
+     * such a row sorts last within FINALIZED instead, which is unreachable in practice because finalize
+     * always stamps it.
+     */
+    fun listByClubAndBucket(
+        clubId: UUID,
+        bucket: EventBucket,
+        today: LocalDate,
+        limit: Int,
+        offset: Int,
+    ): Pair<List<EventAggregateEntity>, Long> =
+        transaction {
+            // Built under SqlExpressionBuilder so the nullability and comparison operators are in scope.
+            val inBucket: Op<Boolean> =
+                with(receiver = SqlExpressionBuilder) {
+                    // "Has a recorded result" — the same definition as completedResultCountByEvents, as a
+                    // correlated EXISTS so the signal can't drift between the two.
+                    val hasResult =
+                        exists(
+                            query =
+                                MatchesTable.selectAll().where {
+                                    (MatchesTable.eventId eq EventsTable.id) and
+                                        MatchesTable.isActive and
+                                        (MatchesTable.status eq MatchStatus.COMPLETED.name) and
+                                        MatchesTable.winnerTeamId.isNotNull()
+                                },
+                        )
+                    when (bucket) {
+                        EventBucket.FINALIZED -> EventsTable.finalizedAt.isNotNull()
+                        EventBucket.UNFINALIZED ->
+                            EventsTable.finalizedAt.isNull() and ((EventsTable.endDate less today) or hasResult)
+                        EventBucket.UPCOMING ->
+                            EventsTable.finalizedAt.isNull() and (EventsTable.endDate greaterEq today) and not(op = hasResult)
+                    }
+                }
+            val scope = EventsTable.isActive and (EventsTable.clubId eq clubId) and inBucket
+            val total = EventsTable.selectAll().where { scope }.count()
+            val order =
+                when (bucket) {
+                    EventBucket.UPCOMING -> EventsTable.startDate to SortOrder.ASC
+                    EventBucket.UNFINALIZED -> EventsTable.endDate to SortOrder.DESC
+                    EventBucket.FINALIZED -> EventsTable.finalizedAt to SortOrder.DESC_NULLS_LAST
+                }
+            val page =
+                EventsTable
+                    .selectAll()
+                    .where { scope }
+                    .orderBy(order, EventsTable.endDate to SortOrder.DESC)
+                    .limit(count = limit).offset(start = offset.toLong())
+                    .map { buildEventAggregate(row = it) }
+            page to total
         }
 
     /** Rename an event (#269): update its name and return the event, or null if it doesn't exist. */
