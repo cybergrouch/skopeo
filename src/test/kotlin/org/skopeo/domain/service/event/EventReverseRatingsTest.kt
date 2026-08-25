@@ -51,6 +51,7 @@ import org.skopeo.repository.RankingPointRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
 import org.skopeo.testsupport.TestAppSettings
+import org.skopeo.testsupport.seedFixtureClub
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.util.UUID
@@ -120,6 +121,7 @@ class EventReverseRatingsTest {
             token = token(uid = hostUid),
             input =
                 CreateEventInput(
+                    clubId = seedFixtureClub(ownerUids = arrayOf("host")).id,
                     name = "Spring Open",
                     startDate = LocalDate.now(),
                     endDate = LocalDate.now().plusDays(7),
@@ -315,6 +317,7 @@ class EventReverseRatingsTest {
                 token = token(uid = "host"),
                 input =
                     CreateEventInput(
+                        clubId = seedFixtureClub(ownerUids = arrayOf("host")).id,
                         name = "Later Cup",
                         startDate = LocalDate.now(),
                         endDate = LocalDate.now().plusDays(1),

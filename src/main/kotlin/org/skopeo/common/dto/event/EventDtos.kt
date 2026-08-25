@@ -16,8 +16,9 @@ data class CreateEventRequest(
     // The event's organizing format (#720): "SINGLES" | "DOUBLES" | "MIXED_DOUBLES". REQUIRED at create.
     val format: String,
     val participantIds: List<String> = emptyList(),
-    // Optional club (#313) to assign the event to; omit for a clubless ("Open") event.
-    val clubId: String? = null,
+    // The club (#313) the event is filed under. REQUIRED since #794: every event now belongs to a club,
+    // because every organizer surface is club-scoped. Clubless ("Open") events no longer exist.
+    val clubId: String,
     // The circuit a TOURNAMENT event belongs to (#525); required for tournaments, ignored otherwise.
     val circuitId: String? = null,
     // The event's class (#403): OPEN_PLAY | TOURNAMENT; omit for the OPEN_PLAY default.
@@ -37,10 +38,16 @@ data class UpdateEventRequest(
     val name: String? = null,
 )
 
-/** Body for `PUT /api/v1/events/{id}/club` — set the event's club, or clear it when null (#319). */
+/**
+ * Body for `PUT /api/v1/events/{id}/club` — RE-FILE the event under a different club (#319).
+ *
+ * Non-null since #794: an event always belongs to a club, so this can change which one but can no longer
+ * clear it. That was the second way a clubless event could come into existence, alongside omitting the
+ * club at create. #782's administrator re-filing of a FINALIZED event is unaffected — it is club→club.
+ */
 @Serializable
 data class SetEventClubRequest(
-    val clubId: String? = null,
+    val clubId: String,
 )
 
 /** Body for `PUT /api/v1/events/{id}/calculation-priority` — set the calculation processing order (#335). */

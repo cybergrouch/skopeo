@@ -29,18 +29,18 @@ describe("EventClubSection", () => {
       <EventClubSection clubId="c2" clubs={clubs} onChange={() => {}} />,
     );
     expect(screen.getByLabelText("Club")).toHaveValue("c2");
-    expect(screen.getByRole("option", { name: "No club (Open)" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Beta TC" })).toBeInTheDocument();
   });
 
-  it("still offers the Open choice when no clubs exist yet", () => {
-    // The manager surface loads clubs separately, so the select can render before (or without) them.
+  it("renders an empty select before the clubs have loaded", () => {
+    // The manager surface loads clubs separately, so the select can render before them. Since #794 there
+    // is no "No club (Open)" placeholder, so with no clubs there are no options at all.
     render(<EventClubSection onChange={() => {}} />);
-    expect(screen.getAllByRole("option")).toHaveLength(1);
-    expect(screen.getByRole("option", { name: "No club (Open)" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Club")).toBeInTheDocument();
+    expect(screen.queryAllByRole("option")).toHaveLength(0);
   });
 
-  it("reports a chosen club, and the empty option that clears it", async () => {
+  it("reports a chosen club", async () => {
     const onChange = vi.fn();
     const user = setupUser();
     render(
@@ -50,8 +50,11 @@ describe("EventClubSection", () => {
     await user.selectOptions(screen.getByLabelText("Club"), "c2");
     expect(onChange).toHaveBeenCalledWith("c2");
 
-    await user.selectOptions(screen.getByLabelText("Club"), "");
-    expect(onChange).toHaveBeenCalledWith("");
+    // There is no longer an empty option to select: an event always belongs to a club (#794), so this
+    // re-files rather than clearing.
+    expect(
+      screen.queryByRole("option", { name: /No club/ }),
+    ).not.toBeInTheDocument();
   });
 
   it("locks the select while a save is in flight or the event is closed to changes", () => {

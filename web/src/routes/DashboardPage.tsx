@@ -51,6 +51,10 @@ export function DashboardPage() {
 
   const me = meQuery.data;
   const capabilities = me?.capabilities ?? [];
+  // The Event Organizer tab is ADMINISTRATOR-only since #794: it is a cross-club index plus a create form
+  // with a free club choice, which is what only an administrator needs. Hosts and club owners organize
+  // from their own club's public page (#780). Seeding still follows match-management.
+  const showEventOrganizer = isAdministrator(capabilities);
   const showMatches = canManageMatches(capabilities);
   const showSeeding = canManageMatches(capabilities);
   const showRatings = canRate(capabilities);
@@ -109,7 +113,7 @@ export function DashboardPage() {
     { value: "standings", label: "Standings", element: <StandingsTab /> },
     // Claiming a placeholder account (#496) now lives conditionally on the Profile tab (#727), shown
     // only while the owner's account is still claim-eligible — no standalone Claim tab.
-    ...(showMatches
+    ...(showEventOrganizer
       ? [
           {
             value: "matches",

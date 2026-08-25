@@ -54,6 +54,7 @@ import org.skopeo.repository.RankingPointRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
 import org.skopeo.testsupport.TestFirebaseAuth
+import org.skopeo.testsupport.seedFixtureClub
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -109,6 +110,8 @@ class EventFinalizeApiIntegrationTest {
             setBody(
                 body =
                     CreateEventRequest(
+                        // Every event needs a club (#794), owned by its creator (#789).
+                        clubId = seedFixtureClub(ownerUids = arrayOf("host")).id.toString(),
                         name = "Spring Open",
                         startDate = LocalDate.now().toString(),
                         endDate = LocalDate.now().plusDays(7).toString(),
@@ -334,6 +337,8 @@ class EventFinalizeApiIntegrationTest {
                         endDate = LocalDate.now().plusDays(7),
                         participantIds = listOf(p1.id, p2.id),
                         type = EventType.OPEN_PLAY.name,
+                        // Every event needs a club (#794), owned by its creator (#789).
+                        clubId = seedFixtureClub(ownerUids = arrayOf("host")).id,
                     ),
             ).let { UUID.fromString(requireNotNull(value = it.getOrNull()).id) }
         val fixture =

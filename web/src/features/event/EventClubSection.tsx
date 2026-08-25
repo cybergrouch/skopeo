@@ -9,8 +9,8 @@ import { Label } from "@/components/ui/label";
  * read-only line on the public page and an editable one in the organizer surface — which is exactly
  * the drift this issue set out to remove.
  *
- * The read-only variant renders nothing for a clubless ("Open") event: there is no fact to state.
- * The editable one always renders, because "No club (Open)" is a choice the manager can make.
+ * Since #794 every event belongs to a club, so the editable variant re-files rather than offering "none";
+ * the read-only variant still renders nothing when it has no name to show.
  */
 export function EventClubSection({
   clubName,
@@ -52,7 +52,6 @@ export function EventClubSection({
         onChange={(e) => onChange(e.target.value)}
         className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
       >
-        <option value="">No club (Open)</option>
         {(clubs ?? []).map((club) => (
           <option key={club.id} value={club.id}>
             {club.name}

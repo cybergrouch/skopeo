@@ -45,6 +45,7 @@ import org.skopeo.repository.RankingPointRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
 import org.skopeo.testsupport.TestAppSettings
+import org.skopeo.testsupport.seedFixtureClub
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -162,6 +163,7 @@ class MatchScoreCorrectionPointsTest {
                     token = token(uid = "host"),
                     input =
                         CreateEventInput(
+                            clubId = seedFixtureClub(ownerUids = arrayOf("host")).id,
                             name = "Spring Open",
                             startDate = LocalDate.now(),
                             endDate = LocalDate.now().plusDays(7),
@@ -236,6 +238,7 @@ class MatchScoreCorrectionPointsTest {
                     token = token(uid = "host"),
                     input =
                         CreateEventInput(
+                            clubId = seedFixtureClub(ownerUids = arrayOf("host")).id,
                             name = "Weekend Social",
                             startDate = LocalDate.now(),
                             endDate = LocalDate.now().plusDays(1),

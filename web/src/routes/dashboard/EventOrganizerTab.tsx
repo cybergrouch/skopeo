@@ -1,5 +1,3 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   Card,
   CardContent,
@@ -7,229 +5,66 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { useGetApiV1Events } from "@/api/generated/events/events";
-import type { EventResponse } from "@/api/generated/model";
-import { Badge } from "@/components/ui/badge";
-import { plural } from "@/lib/plural";
+import { useGetApiV1Clubs } from "@/api/generated/clubs/clubs";
 import { ContentLink } from "@/components/ContentLink";
-import { EventBuckets } from "@/features/event/EventBucketSections";
 import { NewEventForm } from "@/features/event/NewEventForm";
-import { todayIso } from "@/features/event/eventBuckets";
 
 /**
- * One selectable event row: name, filing host, the relevant date, and participant count; opens the event
- * on click. Upcoming events show only their start date, past events only their end date (#296).
- */
-function EventRow({
-  event,
-  upcoming,
-  onSelect,
-}: {
-  event: EventResponse;
-  upcoming: boolean;
-  onSelect: () => void;
-}) {  const date = upcoming
-    ? `Starts ${event.startDate}`
-    : `Ended ${event.endDate}`;
-  return (
-    <li>
-      <button
-        type="button"
-        className="flex w-full items-start justify-between gap-2 rounded-lg border p-3 text-left text-sm hover:bg-muted/50"
-        onClick={onSelect}
-      >
-        <span className="flex min-w-0 flex-col">
-          <span className="flex flex-wrap items-center gap-2 font-medium">
-            {event.name}
-            {/* Finalizing only QUEUES an event's matches for rating (#403); the ratings land later, when
-                an administrator runs the calculation. This badge is the difference between the two —
-                and the precondition for Reverse Ratings (#478), which a not-yet-rated event refuses. */}
-            {event.isRated ? <Badge variant="default">Rated</Badge> : null}
-          </span>
-          {/* The filing host (#270), shown as text — the whole card is a button, so no nested link. */}
-          {event.creatorDisplayName ? (
-            <span className="text-xs text-muted-foreground">
-              Filed by {event.creatorDisplayName}
-            </span>
-          ) : null}
-        </span>
-        <span className="shrink-0 text-muted-foreground">
-          {date} · {event.participants.length} player
-          {plural(event.participants.length)}
-        </span>
-      </button>
-    </li>
-  );
-}
-
-/** Events grouped under a club (#313); clubless events fall under the "Open" group, shown last. */
-interface ClubGroup {
-  key: string;
-  label: string;
-  /** The club's shareable code (#780), for linking to its public page; absent for the "Open" group. */
-  publicCode?: string;
-  events: EventResponse[];
-}
-
-const OPEN_GROUP_KEY = "__open__";
-
-function groupByClub(events: EventResponse[]): ClubGroup[] {
-  const groups = new Map<string, ClubGroup>();
-  for (const event of events) {
-    // One nested `club` object (#780): present with every detail, or absent for a clubless event — so a
-    // single check decides both the grouping key and the label.
-    const key = event.club?.id ?? OPEN_GROUP_KEY;
-    const group = groups.get(key) ?? {
-      key,
-      label: event.club?.name ?? "Open",
-      publicCode: event.club?.publicCode,
-      events: [],
-    };
-    group.events.push(event);
-    groups.set(key, group);
-  }
-  // Named clubs alphabetically; the clubless "Open" group always last. A precomputed sort key
-  // ("￿" sorts after any name) keeps the comparator branchless and fully covered.
-  return [...groups.values()]
-    .map((group) => ({
-      group,
-      sortKey: group.key === OPEN_GROUP_KEY ? "￿" : group.label.toLowerCase(),
-    }))
-    .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
-    .map((entry) => entry.group);
-}
-
-/**
- * A collapsible per-club group (#367), with a header that differs by whether the group HAS a club (#788).
+ * The Event Organizer tab (#138), ADMINISTRATOR-only since #794.
  *
- * For a named club the name links to its public page (#780) and a separate chevron owns the collapse —
- * two distinct controls, because a link nested inside a button is invalid markup and a known
- * screen-reader trap.
+ * It used to list every event, grouped by club — which meant one unbounded query over every event a club
+ * had ever run, and it was the slowest screen in the dashboard. Each club now has its own paginated
+ * organizer on its public page (#780/#786), so the list is gone entirely: this tab fetches **no events at
+ * all**. What remains is what only an administrator needs — a way into any club, and a create form whose
+ * club is a free choice rather than one implied by the page you happen to be on.
  *
- * The clubless "Open" group has no page to link to, so nothing competes for the click and the WHOLE
- * header is the toggle. That matters: with only a chevron to aim at, a header of plain text read as
- * inert and the club-less events behind it looked unreachable (#788). Groups load collapsed (#591), so
- * the click target is the only way in.
- */
-function ClubGroupSection({
-  group,
-  today,
-  isOpen,
-  onToggle,
-  onSelect,
-}: {
-  group: ClubGroup;
-  today: string;
-  isOpen: boolean;
-  onToggle: () => void;
-  onSelect: (publicCode: string) => void;
-}) {
-  const heading = `${group.label} (${group.events.length})`;
-  const chevron = (
-    <span aria-hidden className="text-muted-foreground">
-      {isOpen ? "▾" : "▸"}
-    </span>
-  );
-  return (
-    <div className="space-y-3">
-      {group.publicCode ? (
-        <div className="flex w-full items-center justify-between gap-2 text-sm font-semibold">
-          <ContentLink to={`/clubs/${group.publicCode}`}>{heading}</ContentLink>
-          <button
-            type="button"
-            // Padding, not a bare glyph: the chevron is the only way to collapse a named group, so it
-            // needs a real hit area (#788).
-            className="-m-1 flex h-8 w-8 items-center justify-center rounded hover:text-foreground/80"
-            aria-expanded={isOpen}
-            aria-label={`${isOpen ? "Collapse" : "Expand"} ${group.label}`}
-            onClick={onToggle}
-          >
-            {chevron}
-          </button>
-        </div>
-      ) : (
-        <button
-          type="button"
-          className="flex w-full items-center justify-between gap-2 text-left text-sm font-semibold hover:text-foreground/80"
-          aria-expanded={isOpen}
-          onClick={onToggle}
-        >
-          <span>{heading}</span>
-          {chevron}
-        </button>
-      )}
-      {isOpen ? (
-        <EventBuckets
-          events={group.events}
-          today={today}
-          renderRow={(event, { upcoming }) => (
-            <EventRow
-              key={event.id}
-              event={event}
-              upcoming={upcoming}
-              onSelect={() => onSelect(event.publicCode)}
-            />
-          )}
-        />
-      ) : null}
-    </div>
-  );
-}
-
-/**
- * The Event Organizer tab (#138, renamed from Matches): hosts run events/meets that contain matches.
- * The events table is the entry point; selecting a row opens that event's working page (participant-
- * scoped fixtures + results).
+ * Hosts and club owners deliberately do not see this tab. They organize from their own club's page, which
+ * is the point of #780; showing them a cross-club index would duplicate Club Management (#786).
  */
 export function EventOrganizerTab() {
-  const navigate = useNavigate();
-  const eventsQuery = useGetApiV1Events();
-  const events = eventsQuery.data ?? [];
-  // Today counts as upcoming; the split mirrors the Profile Events history card (#271).
-  const today = todayIso();
-
-  const groups = groupByClub(events);
-  // Expanded-group keys (#367). Default: all collapsed (#591) — every club group starts minimized so
-  // the Events list loads as a short set of club headers; the user expands the club they want.
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
-  const toggle = (key: string) =>
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
+  // The only query this tab makes. NewEventForm's selector reads the same list, so React Query serves
+  // both from one request.
+  const clubsQuery = useGetApiV1Clubs();
+  const clubs = clubsQuery.data ?? [];
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
+    <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
       <NewEventForm />
 
       <Card>
         <CardHeader>
-          <CardTitle>Events</CardTitle>
+          <CardTitle>Clubs</CardTitle>
           <CardDescription>
-            Grouped by club; clubless events are under “Open”. Select an
-            event to open its page, where you manage its participants,
-            fixtures, and results.
+            Open a club to run its events — fixtures, results, and finalizing
+            all live on the club’s own page.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
-          {eventsQuery.isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
-          ) : events.length > 0 ? (
-            groups.map((group) => (
-              <ClubGroupSection
-                key={group.key}
-                group={group}
-                today={today}
-                isOpen={expanded.has(group.key)}
-                onToggle={() => toggle(group.key)}
-                onSelect={(code) => navigate(`/events/${code}`)}
-              />
-            ))
+        <CardContent className="text-sm">
+          {clubsQuery.isLoading ? (
+            <p className="text-muted-foreground">Loading clubs…</p>
+          ) : clubsQuery.isError ? (
+            <p className="text-muted-foreground">
+              We couldn’t load the clubs. Please try again.
+            </p>
+          ) : clubs.length > 0 ? (
+            <ul className="space-y-2">
+              {clubs.map((club) => (
+                <li
+                  key={club.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3"
+                >
+                  <ContentLink to={`/clubs/${club.publicCode}`}>
+                    {club.name}
+                  </ContentLink>
+                  <span className="font-mono text-xs text-muted-foreground">
+                    {club.publicCode}
+                  </span>
+                </li>
+              ))}
+            </ul>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              No events yet. Create one above.
+            <p className="text-muted-foreground">
+              No clubs yet. Create one in Club Management first.
             </p>
           )}
         </CardContent>

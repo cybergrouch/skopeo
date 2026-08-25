@@ -69,9 +69,8 @@ class ClubAccess(
      */
     fun mayFileUnder(
         caller: User,
-        clubId: UUID?,
+        clubId: UUID,
     ): Boolean =
         caller.capabilities.contains(element = Capability.ADMINISTRATOR) ||
-            clubId == null ||
             ownsClub(callerId = caller.id, clubId = clubId)
 }

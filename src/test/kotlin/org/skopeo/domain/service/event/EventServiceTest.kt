@@ -88,6 +88,7 @@ class EventServiceTest {
     @BeforeEach
     fun reset() {
         PostgresTestDatabase.truncate()
+        fixtureClubId = null
     }
 
     private fun provision(
@@ -107,6 +108,21 @@ class EventServiceTest {
     // A login-less placeholder ("dummy") player (#496/#505) — a real users row with placeholder = true.
     private fun placeholder(displayName: String): User =
         users.createPlaceholder(command = CreatePlaceholderCommand(displayName = displayName, sex = "Male")).toDomain()
+
+    private var fixtureClubId: UUID? = null
+
+    /**
+     * A club owned by [ownerUid], created once per test. Every event needs a club (#794) and the creator
+     * must own it (#789), so the default fixture club belongs to "host" — this suite's usual caller.
+     */
+    private fun clubOwnedBy(ownerUid: String): UUID {
+        val owner = requireNotNull(value = users.findByFirebaseUid(firebaseUid = ownerUid)).toDomain()
+        val club = clubs.create(command = CreateClubCommand(name = "Fixture TC", createdBy = owner.id)).toDomain()
+        clubs.addOwner(clubId = club.id, userId = owner.id)
+        return club.id
+    }
+
+    private fun fixtureClub(): UUID = fixtureClubId ?: clubOwnedBy(ownerUid = "host").also { fixtureClubId = it }
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
@@ -137,7 +153,7 @@ class EventServiceTest {
         startDate = LocalDate.parse(start),
         endDate = LocalDate.parse(end),
         participantIds = participants,
-        clubId = clubId,
+        clubId = clubId ?: fixtureClub(),
         circuitId = circuitId,
         type = type.name,
         format = format,
@@ -318,8 +334,11 @@ class EventServiceTest {
             it.finalizedAt.shouldNotBeNull()
         }
 
-        // An admin can also clear a finalized event back to Open.
-        service.setClub(token = token(uid = "admin"), id = event.id, clubId = null).shouldBeRight().club.shouldBeNull()
+        // Clearing back to "Open" is no longer possible (#794) — an admin re-files between clubs instead.
+        service.setClub(token = token(uid = "admin"), id = event.id, clubId = clubA.id).shouldBeRight().let {
+            it.club.shouldNotBeNull().id shouldBe clubA.id.toString()
+            it.isFinalized.shouldBeTrue()
+        }
     }
 
     @Test
@@ -366,10 +385,14 @@ class EventServiceTest {
                 c.publicCode shouldBe clubB.publicCode
             }
         }
-        // Clear it (back to Open).
-        service.setClub(token = token(uid = "host"), id = UUID.fromString(event.id), clubId = null).shouldBeRight().club.shouldBeNull()
+        // There is no "clear" any more (#794): re-filing moves the event between clubs.
+        service.setClub(token = token(uid = "host"), id = UUID.fromString(event.id), clubId = clubA.id)
+            .shouldBeRight()
+            .club
+            .shouldNotBeNull()
+            .id shouldBe clubA.id.toString()
 
-        // Each club change writes an Activity Log entry (#354); the newest records the clear as "Open".
+        // Each club change writes an Activity Log entry (#354).
         val entries = AuditRepository().list(actions = listOf(element = AuditAction.EVENT_CLUB_CHANGED), limit = 10, offset = 0).first
         entries shouldHaveSize 3
         entries.first().actorUserId shouldBe host.id
@@ -398,7 +421,7 @@ class EventServiceTest {
             .setClub(token = token(uid = "admin"), id = UUID.fromString(event.id), clubId = club.id)
             .shouldBeRight().club.shouldNotBeNull().id shouldBe club.id.toString()
         // Unknown event → NotFound.
-        service.setClub(token = token(uid = "admin"), id = UUID.randomUUID(), clubId = null)
+        service.setClub(token = token(uid = "admin"), id = UUID.randomUUID(), clubId = club.id)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.NotFound>()
     }
@@ -966,7 +989,7 @@ class EventServiceTest {
 
         service.rename(token = token(uid = "host"), id = event.id, name = "New Name")
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
-        service.setClub(token = token(uid = "host"), id = event.id, clubId = null)
+        service.setClub(token = token(uid = "host"), id = event.id, clubId = fixtureClub())
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
         service.addParticipant(token = token(uid = "host"), eventId = event.id, userId = player.id)
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()

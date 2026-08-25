@@ -206,9 +206,11 @@ describe("DashboardPage", () => {
     const user = setupUser();
     renderDashboard();
     await openMenu(user);
+    // The Event Organizer tab is ADMINISTRATOR-only since #794 — a host organizes from their club's
+    // own public page instead.
     expect(
-      screen.getByRole("button", { name: "Event Organizer" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: "Event Organizer" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Seeding" })).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Placeholder Players" }),
@@ -247,9 +249,11 @@ describe("DashboardPage", () => {
     const user = setupUser();
     renderDashboard();
     await openMenu(user);
+    // The Event Organizer tab is ADMINISTRATOR-only since #794 — a host organizes from their club's
+    // own public page instead.
     expect(
-      screen.getByRole("button", { name: "Event Organizer" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: "Event Organizer" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Research" }),
     ).toBeInTheDocument();

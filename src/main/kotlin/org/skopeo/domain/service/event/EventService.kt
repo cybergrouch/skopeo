@@ -70,7 +70,9 @@ data class CreateEventInput(
     val startDate: LocalDate,
     val endDate: LocalDate,
     val participantIds: List<UUID>,
-    val clubId: UUID? = null,
+    // The club the event is filed under (#313). REQUIRED since #794 — every organizer surface is
+    // club-scoped, so a clubless event has no home.
+    val clubId: UUID,
     // The circuit a TOURNAMENT event belongs to (#525); required for tournaments, ignored otherwise.
     val circuitId: UUID? = null,
     // The event's organizing format name (#720): SINGLES | DOUBLES | MIXED_DOUBLES. Required at create;
@@ -153,8 +155,10 @@ class EventService(
             val type = input.type?.let { parseEventType(raw = it).bind() } ?: EventType.OPEN_PLAY
             // An optional club must exist (#313); a clubless event is fine. Existence is checked before
             // ownership so a typo'd id still reads as a 400 rather than a misleading 403.
-            input.clubId?.let { clubId ->
-                ensureNotNull(value = clubs.findById(id = clubId)) { ServiceError.Validation(message = "Club $clubId not found") }
+            // The club must exist (#313); checked before the ownership gate so an unknown id stays a 400
+            // rather than reading as a permission problem.
+            ensureNotNull(value = clubs.findById(id = input.clubId)) {
+                ServiceError.Validation(message = "Club ${input.clubId} not found")
             }
             // …and the caller must own it (#789). This is the tightening: filing under someone else's club
             // used to succeed.
@@ -350,7 +354,7 @@ class EventService(
         }
 
     /**
-     * Set (or clear, when [clubId] is null) an event's club (#319). Staff-only, the same authz as rename
+     * RE-FILE an event under a different club (#319). Staff-only, the same authz as rename
      * ([ClubAccess.mayOrganize], #789) — plus, because re-filing is a claim on the *destination* club's
      * calendar exactly as creating is, the caller must also be allowed to file under the new club
      * ([ClubAccess.mayFileUnder]). A non-null club must exist.
@@ -358,7 +362,7 @@ class EventService(
     fun setClub(
         token: VerifiedFirebaseToken,
         id: UUID,
-        clubId: UUID?,
+        clubId: UUID,
     ): Either<ServiceError, EventResponse> =
         either {
             val caller = staffCaller(users = users, token = token).bind()
@@ -378,9 +382,7 @@ class EventService(
             if (!isAdmin) {
                 ensureNotFinalized(event = event).bind()
             }
-            clubId?.let { cid ->
-                ensureNotNull(value = clubs.findById(id = cid)) { ServiceError.Validation(message = "Club $cid not found") }
-            }
+            ensureNotNull(value = clubs.findById(id = clubId)) { ServiceError.Validation(message = "Club $clubId not found") }
             // Re-filing under a club you don't own is refused for the same reason creating one there is (#789).
             ensure(condition = clubAccess.mayFileUnder(caller = caller, clubId = clubId)) { ServiceError.Forbidden() }
             // Existence is already confirmed above (needed for the authz check), so the update can't miss.

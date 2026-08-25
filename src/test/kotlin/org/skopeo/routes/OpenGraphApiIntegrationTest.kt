@@ -35,6 +35,7 @@ import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
+import org.skopeo.testsupport.seedFixtureClub
 import java.math.BigDecimal
 import java.time.LocalDate
 
@@ -153,6 +154,8 @@ class OpenGraphApiIntegrationTest {
                             startDate = LocalDate.parse("2026-07-01"),
                             endDate = LocalDate.parse("2026-07-03"),
                             participantIds = emptyList(),
+                            // Every event needs a club (#794), owned by its creator (#789).
+                            clubId = seedFixtureClub(ownerUids = arrayOf("host")).id,
                         ),
                 ).shouldBeRight()
 

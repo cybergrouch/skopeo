@@ -129,7 +129,7 @@ class ClubScopedEventAuthzTest {
 
     private fun eventInput(
         name: String = "Spring Open",
-        clubId: UUID? = null,
+        clubId: UUID,
         participants: List<UUID> = emptyList(),
     ) = CreateEventInput(
         name = name,
@@ -142,7 +142,7 @@ class ClubScopedEventAuthzTest {
     /** An event filed under [clubId] created by [creatorUid], resolved back to the domain for its ids. */
     private fun eventBy(
         creatorUid: String,
-        clubId: UUID?,
+        clubId: UUID,
         participants: List<UUID> = emptyList(),
         name: String = "Spring Open",
     ): Event =
@@ -238,8 +238,6 @@ class ClubScopedEventAuthzTest {
             .shouldBeInstanceOf<ServiceError.Forbidden>()
         // A club they DO own is fine — a plain HOST has the same reach as a CLUB_OWNER here (decision 1).
         service.create(token = token(uid = "host"), input = eventInput(clubId = ours.id)).shouldBeRight()
-        // And a clubless ("Open") event is unchanged: any staff caller may file one.
-        service.create(token = token(uid = "host"), input = eventInput()).shouldBeRight().club shouldBe null
     }
 
     @Test
@@ -271,7 +269,7 @@ class ClubScopedEventAuthzTest {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val theirs = club("Downtown TC", owner)
         val ours = club("West End", host)
-        val event = eventBy(creatorUid = "host", clubId = null)
+        val event = eventBy(creatorUid = "host", clubId = club("Host's TC", host).id)
 
         service
             .setClub(token = token(uid = "host"), id = event.id, clubId = theirs.id)
@@ -338,7 +336,7 @@ class ClubScopedEventAuthzTest {
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
         service
-            .setClub(token = outsiderToken, id = event.id, clubId = null)
+            .setClub(token = outsiderToken, id = event.id, clubId = requireNotNull(value = event.clubId))
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.Forbidden>()
         service
@@ -383,32 +381,13 @@ class ClubScopedEventAuthzTest {
         service.removeParticipant(token = adminToken, eventId = event.id, userId = p2.id).shouldBeRight()
         teamService.list(token = adminToken, eventId = event.id).shouldBeRight()
         service.rosterForSeeding(token = adminToken, id = event.id).shouldBeRight()
-        service.setClub(token = adminToken, id = event.id, clubId = null).shouldBeRight()
+        service.setClub(token = adminToken, id = event.id, clubId = requireNotNull(value = event.clubId)).shouldBeRight()
         service.finalize(token = adminToken, id = event.id).shouldBeRight()
         service.unfinalize(token = adminToken, id = event.id).shouldBeRight()
         service.delete(token = adminToken, id = event.id).shouldBeRight()
     }
 
     // --- clubless events keep the creator fallback -----------------------
-
-    @Test
-    fun `a clubless event stays manageable by its creator and refused for another staff caller (#789)`() {
-        provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
-        provision(uid = "other", roles = setOf(Capability.PLAYER, Capability.CLUB_OWNER))
-        val event = eventBy(creatorUid = "host", clubId = null)
-
-        service.get(token = token(uid = "host"), id = event.id).shouldBeRight()
-        service.rename(token = token(uid = "host"), id = event.id, name = "Autumn Open").shouldBeRight()
-        service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight().isFinalized.shouldBeTrue()
-        service.unfinalize(token = token(uid = "host"), id = event.id).shouldBeRight()
-
-        // Holding CLUB_OWNER is not itself a claim on someone else's clubless event.
-        service.get(token = token(uid = "other"), id = event.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
-        service
-            .finalize(token = token(uid = "other"), id = event.id)
-            .shouldBeLeft()
-            .shouldBeInstanceOf<ServiceError.Forbidden>()
-    }
 
     @Test
     fun `an event filed under a club the creator no longer owns stays theirs, grandfathered (#789)`() {
@@ -436,8 +415,8 @@ class ClubScopedEventAuthzTest {
 
         // Their club's event, filed by a colleague — the whole point of the widening.
         val colleagues = eventBy(creatorUid = "colleague", clubId = owned.id, name = "Colleague's")
-        // Their own clubless event, reachable only through the creator clause.
-        val mine = eventBy(creatorUid = "owner", clubId = null, name = "Mine")
+        // Their own event filed under someone else's club, reachable only through the creator clause.
+        val mine = eventBy(creatorUid = "owner", clubId = theirs.id, name = "Mine")
         // Someone else's club, someone else's event — invisible.
         val foreign = eventBy(creatorUid = "outsider", clubId = theirs.id, name = "Foreign")
 
