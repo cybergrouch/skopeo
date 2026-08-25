@@ -1508,6 +1508,69 @@ describe('EventManagerView', () => {
     expect(screen.queryByRole('button', { name: 'Reverse ratings' })).not.toBeInTheDocument()
   })
 
+  it("keeps the club editable for an administrator on a finalized event (#782)", () => {
+    useGetApiV1EventsId.mockReturnValue({
+      data: { ...event, type: 'OPEN_PLAY', endDate: '2999-01-01', isFinalized: true },
+      isLoading: false,
+    })
+    renderDetail()
+
+    // The club select stays operable — it is the one finalized-event field an admin may still change.
+    expect(screen.getByLabelText('Club')).toBeEnabled()
+    expect(screen.getByText(/bookkeeping correction/i)).toBeInTheDocument()
+    // ...and the terminal banner no longer claims the event is closed to *every* change.
+    expect(screen.getByText(/apart from its club/i)).toBeInTheDocument()
+    // Everything else stays locked.
+    expect(screen.queryByRole('button', { name: 'Rename' })).not.toBeInTheDocument()
+  })
+
+  it("locks the club for a non-administrator on a finalized event (#782)", () => {
+    useGetApiV1UsersMe.mockReturnValue({ data: { capabilities: ['HOST'] } })
+    useGetApiV1EventsId.mockReturnValue({
+      data: { ...event, type: 'OPEN_PLAY', endDate: '2999-01-01', isFinalized: true },
+      isLoading: false,
+    })
+    renderDetail()
+
+    expect(screen.getByLabelText('Club')).toBeDisabled()
+    expect(screen.queryByText(/bookkeeping correction/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/apart from its club/i)).not.toBeInTheDocument()
+  })
+
+  it("warns that a finalized tournament's placement points are left as issued (#782)", () => {
+    useGetApiV1EventsId.mockReturnValue({
+      data: {
+        ...event,
+        type: 'TOURNAMENT',
+        endDate: '2999-01-01',
+        isFinalized: true,
+        awardRankingPoints: true,
+      },
+      isLoading: false,
+    })
+    renderDetail()
+
+    expect(screen.getByText(/left as issued/i)).toBeInTheDocument()
+  })
+
+  it("omits the points warning for a finalized event that awards no points (#782)", () => {
+    useGetApiV1EventsId.mockReturnValue({
+      data: {
+        ...event,
+        type: 'TOURNAMENT',
+        endDate: '2999-01-01',
+        isFinalized: true,
+        awardRankingPoints: false,
+      },
+      isLoading: false,
+    })
+    renderDetail()
+
+    // Still correctable, but there are no awarded points to caveat.
+    expect(screen.getByText(/bookkeeping correction/i)).toBeInTheDocument()
+    expect(screen.queryByText(/left as issued/i)).not.toBeInTheDocument()
+  })
+
   it('shows a pending label on the reverse confirm while the mutation runs (#478)', async () => {
     useGetApiV1EventsId.mockReturnValue({
       data: { ...event, type: 'TOURNAMENT', endDate: '2999-01-01', isFinalized: true },

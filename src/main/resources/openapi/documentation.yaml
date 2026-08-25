@@ -2387,6 +2387,15 @@ paths:
       description: >-
         Set the event's club, or clear it when clubId is null/absent (#319). Staff-only — a HOST may
         edit only their own event, an ADMINISTRATOR any. A non-null club must exist.
+
+        An ADMINISTRATOR may also change the club of an ALREADY-FINALIZED event (#782), unlike every
+        other finalized-event edit. Which club an event is filed under is not an input to the rating
+        calculation, so re-filing one cannot invalidate a rating or history row and nothing is
+        recalculated; the event stays finalized and its matches stay rated. A HOST or CLUB_OWNER is
+        still refused on a finalized event (409). One consequence is deliberately NOT unwound: a
+        finalized TOURNAMENT that opted into points already paid its placement schedule under the
+        previous club's `tournamentsSanctioned` flag, and those awards are left as issued — the audit
+        entry records this via `placementPointsLeftAsIssued`.
       tags:
         - Events
       security:
