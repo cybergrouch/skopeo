@@ -43,6 +43,7 @@ import org.skopeo.domain.model.ageInYears
 import org.skopeo.domain.model.canSeeRawRatingOrFalse
 import org.skopeo.domain.model.isExpired
 import org.skopeo.domain.service.audit.AuditService
+import org.skopeo.domain.service.club.ClubAccess
 import org.skopeo.domain.service.rating.RatingAssembler
 import org.skopeo.domain.service.settings.SettingsService
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
@@ -92,9 +93,15 @@ data class EventSeedingRoster(
 )
 
 /**
- * Events/meets (issue #138): HOST/ADMINISTRATOR create and manage events; an ADMINISTRATOR sees all
- * events while a HOST sees their own. Matches are associated with an event at fixture creation
- * (enforced in MatchService). Expected failures are returned as an [Either] left ([ServiceError]).
+ * Events/meets (issue #138): staff (HOST/CLUB_OWNER/ADMINISTRATOR) create and manage events.
+ *
+ * Who may manage *which* event is [ClubAccess.mayOrganize] (#789): an ADMINISTRATOR any event, a named
+ * owner of the event's club any of that club's events (however created), and an event's creator their
+ * own event — the grandfathered clause that is also the whole rule for a clubless ("Open") event. The
+ * one place that predicate tightens rather than widens is filing: creating or re-filing an event under a
+ * club now requires owning it ([ClubAccess.mayFileUnder]), where before only the club's existence was
+ * checked. Matches are associated with an event at fixture creation (enforced in MatchService, which
+ * inherits the same rule). Expected failures are returned as an [Either] left ([ServiceError]).
  */
 class EventService(
     private val events: EventRepository = EventRepository(),
@@ -102,6 +109,7 @@ class EventService(
     private val matches: MatchRepository = MatchRepository(),
     private val ratings: RatingAssembler = RatingAssembler(),
     private val clubs: ClubRepository = ClubRepository(),
+    private val clubAccess: ClubAccess = ClubAccess(),
     private val circuits: CircuitRepository = CircuitRepository(),
     private val awarder: EventFinalizeAwarder = EventFinalizeAwarder(),
     private val reverser: EventFinalizeReverser = EventFinalizeReverser(),
@@ -122,13 +130,18 @@ class EventService(
      * from a stale bundle, a partner API client, or plain curl is COERCED to false rather than
      * rejected — a caller whose UI legitimately offered the checkbox a minute ago shouldn't eat a 400 —
      * and the coercion is spelled out in the EVENT_CREATED audit entry so it isn't silent.
+     *
+     * This is also the one place #789 *tightens* rather than widens: filing the event under a club now
+     * requires being a named owner of that club (or an ADMINISTRATOR). Before, only the club's existence
+     * was checked, so any host could file an event under any club at all. A clubless event is unchanged.
      */
     fun create(
         token: VerifiedFirebaseToken,
         input: CreateEventInput,
     ): Either<ServiceError, EventResponse> =
         either {
-            val createdBy = staffCaller(users = users, token = token).bind().id
+            val caller = staffCaller(users = users, token = token).bind()
+            val createdBy = caller.id
             ensure(condition = input.name.isNotBlank()) { ServiceError.Validation(message = "Event name is required") }
             ensure(condition = !input.endDate.isBefore(input.startDate)) {
                 ServiceError.Validation(message = "End date cannot be before the start date")
@@ -138,10 +151,14 @@ class EventService(
             val format = parseFormat(raw = input.format).bind()
             // Parse the optional event type (#403): one of the enum names, defaulting to OPEN_PLAY when absent.
             val type = input.type?.let { parseEventType(raw = it).bind() } ?: EventType.OPEN_PLAY
-            // An optional club must exist (#313); a clubless event is fine.
+            // An optional club must exist (#313); a clubless event is fine. Existence is checked before
+            // ownership so a typo'd id still reads as a 400 rather than a misleading 403.
             input.clubId?.let { clubId ->
                 ensureNotNull(value = clubs.findById(id = clubId)) { ServiceError.Validation(message = "Club $clubId not found") }
             }
+            // …and the caller must own it (#789). This is the tightening: filing under someone else's club
+            // used to succeed.
+            ensure(condition = clubAccess.mayFileUnder(caller = caller, clubId = input.clubId)) { ServiceError.Forbidden() }
             // A TOURNAMENT must belong to a circuit (#525); it must exist. Non-tournaments carry none.
             val circuitId = resolveCircuit(type = type, circuitId = input.circuitId).bind()
             // Server-side enforcement of the global award flag (#752): opting in while it is off is coerced.
@@ -194,11 +211,22 @@ class EventService(
             toView(event = event).toResponse()
         }
 
+    /**
+     * The organizer's event list, scoped to what they may actually manage (#789): an ADMINISTRATOR sees
+     * every active event; anyone else sees the events of every club they are a named owner of, plus the
+     * events they created themselves. The club arm is the point — before #789 this was creator-only, so a
+     * co-owner could be allowed to run their club's event and still be unable to find it here.
+     */
     fun list(token: VerifiedFirebaseToken): Either<ServiceError, List<EventResponse>> =
         either {
             val caller = staffCaller(users = users, token = token).bind()
-            val scopedTo = if (caller.capabilities.contains(element = Capability.ADMINISTRATOR)) null else caller.id
-            val views = events.list(createdBy = scopedTo).map { toView(event = it.toDomain()) }
+            val entries =
+                if (caller.capabilities.contains(element = Capability.ADMINISTRATOR)) {
+                    events.list(createdBy = null)
+                } else {
+                    events.listForOrganizer(createdBy = caller.id, clubIds = clubAccess.ownedClubIds(callerId = caller.id))
+                }
+            val views = entries.map { toView(event = it.toDomain()) }
             // Batched "has results" counts (#483) + the raw-rating reveal flag, assembled here so the route
             // stays thin and never touches the mapper: an ADMINISTRATOR sees raw NTRP values on the roster.
             val eventIds = views.map { it.event.id }
@@ -243,14 +271,21 @@ class EventService(
      */
     fun ratedResultCounts(eventIds: List<UUID>): Map<UUID, Int> = matches.ratedResultCountByEvents(eventIds = eventIds)
 
+    /**
+     * The organizer payload for one event. Staff-gated *and* scoped to the events the caller may organize
+     * (#789) — this is the manager view (roster facets, participant decisions, the ids every mutation
+     * route is keyed by), so it follows the same predicate as the mutations rather than being readable by
+     * any staff member anywhere. Anyone may still read the event's public page ([publicByCode]).
+     */
     fun get(
         token: VerifiedFirebaseToken,
         id: UUID,
     ): Either<ServiceError, EventResponse> =
         either {
-            staffCaller(users = users, token = token).bind().id
+            val caller = staffCaller(users = users, token = token).bind()
             val event =
                 ensureNotNull(value = events.findById(id = id)?.toDomain()) { ServiceError.NotFound(message = "Event $id not found") }
+            ensure(condition = clubAccess.mayOrganize(caller = caller, event = event)) { ServiceError.Forbidden() }
             toView(event = event).toResponse()
         }
 
@@ -265,17 +300,19 @@ class EventService(
         code: String,
     ): Either<ServiceError, EventResponse> =
         either {
-            staffCaller(users = users, token = token).bind().id
+            val caller = staffCaller(users = users, token = token).bind()
             val event =
                 ensureNotNull(value = events.findByPublicCode(code = code)?.toDomain()) {
                     ServiceError.NotFound(message = "Event $code not found")
                 }
+            ensure(condition = clubAccess.mayOrganize(caller = caller, event = event)) { ServiceError.Forbidden() }
             toView(event = event).toResponse()
         }
 
     /**
-     * Rename an event (#269). Staff-only; a HOST may rename only their own event, an ADMINISTRATOR any.
-     * The name is validated (non-blank) and trimmed, consistent with event creation.
+     * Rename an event (#269). Staff-only, scoped by [ClubAccess.mayOrganize] (#789): an owner of the
+     * event's club, its creator, or an ADMINISTRATOR. The name is validated (non-blank) and trimmed,
+     * consistent with event creation.
      */
     fun rename(
         token: VerifiedFirebaseToken,
@@ -286,8 +323,7 @@ class EventService(
             val caller = staffCaller(users = users, token = token).bind()
             val event =
                 ensureNotNull(value = events.findById(id = id)?.toDomain()) { ServiceError.NotFound(message = "Event $id not found") }
-            val isAdmin = caller.capabilities.contains(element = Capability.ADMINISTRATOR)
-            ensure(condition = isAdmin || event.createdBy == caller.id) { ServiceError.Forbidden() }
+            ensure(condition = clubAccess.mayOrganize(caller = caller, event = event)) { ServiceError.Forbidden() }
             ensureNotFinalized(event = event).bind()
             ensure(condition = name.isNotBlank()) { ServiceError.Validation(message = "Event name is required") }
             // Existence is already confirmed above (needed for the authz check), so the rename can't miss.
@@ -314,8 +350,10 @@ class EventService(
         }
 
     /**
-     * Set (or clear, when [clubId] is null) an event's club (#319). Staff-only; a HOST may edit only
-     * their own event, an ADMINISTRATOR any — the same authz as rename. A non-null club must exist.
+     * Set (or clear, when [clubId] is null) an event's club (#319). Staff-only, the same authz as rename
+     * ([ClubAccess.mayOrganize], #789) — plus, because re-filing is a claim on the *destination* club's
+     * calendar exactly as creating is, the caller must also be allowed to file under the new club
+     * ([ClubAccess.mayFileUnder]). A non-null club must exist.
      */
     fun setClub(
         token: VerifiedFirebaseToken,
@@ -327,7 +365,7 @@ class EventService(
             val event =
                 ensureNotNull(value = events.findById(id = id)?.toDomain()) { ServiceError.NotFound(message = "Event $id not found") }
             val isAdmin = caller.capabilities.contains(element = Capability.ADMINISTRATOR)
-            ensure(condition = isAdmin || event.createdBy == caller.id) { ServiceError.Forbidden() }
+            ensure(condition = clubAccess.mayOrganize(caller = caller, event = event)) { ServiceError.Forbidden() }
             // A finalized event is otherwise terminal (#403), but which club an event is filed under is
             // pure bookkeeping where ratings are concerned: `clubId` is not an input to the rating
             // calculation, so re-filing one cannot invalidate a rating or a history row, and nothing needs
@@ -343,6 +381,8 @@ class EventService(
             clubId?.let { cid ->
                 ensureNotNull(value = clubs.findById(id = cid)) { ServiceError.Validation(message = "Club $cid not found") }
             }
+            // Re-filing under a club you don't own is refused for the same reason creating one there is (#789).
+            ensure(condition = clubAccess.mayFileUnder(caller = caller, clubId = clubId)) { ServiceError.Forbidden() }
             // Existence is already confirmed above (needed for the authz check), so the update can't miss.
             events.updateClub(id = id, clubId = clubId)
             // Activity Log entry for the club change (#354).
@@ -397,8 +437,8 @@ class EventService(
     /**
      * Finalize an event (#403), the terminal state that closes it to further changes and moves the
      * event's matches into the rating queue (finalize-time queuing, replacing result-upload-time
-     * queuing for evented matches). Staff-only: a HOST may finalize only their own event, an
-     * ADMINISTRATOR/CLUB_OWNER any. Idempotency guard: an already-finalized event is a
+     * queuing for evented matches). Staff-only, scoped by [ClubAccess.mayOrganize] (#789): an owner of
+     * the event's club, its creator, or an ADMINISTRATOR. Idempotency guard: an already-finalized event is a
      * [ServiceError.Validation] (there is no un-finalize). Audited as EVENT_FINALIZED.
      *
      * After finalize, when the event's "Award Ranking Points" flag is set (#559), each qualifying
@@ -420,8 +460,7 @@ class EventService(
             val caller = staffCaller(users = users, token = token).bind()
             val event =
                 ensureNotNull(value = events.findById(id = id)?.toDomain()) { ServiceError.NotFound(message = "Event $id not found") }
-            val isAdminOrOwner = caller.capabilities.any { it == Capability.ADMINISTRATOR || it == Capability.CLUB_OWNER }
-            ensure(condition = isAdminOrOwner || event.createdBy == caller.id) { ServiceError.Forbidden() }
+            ensure(condition = clubAccess.mayOrganize(caller = caller, event = event)) { ServiceError.Forbidden() }
             ensure(condition = event.isActive) { ServiceError.Validation(message = "A deleted event cannot be finalized") }
             ensure(condition = !event.isFinalized) { ServiceError.Validation(message = "Event is already finalized") }
             val now = LocalDateTime.now()
@@ -479,8 +518,8 @@ class EventService(
 
     /**
      * Un-finalize an event (#477): the reverse of [finalize], so a Host who spots an erroneous score can
-     * reopen the event, correct it, and re-finalize. Symmetric authz (STAFF caller; event owner or an
-     * ADMINISTRATOR/CLUB_OWNER). Guards: the event must exist and be finalized; and — crucially — NONE of
+     * reopen the event, correct it, and re-finalize. Symmetric authz (a STAFF caller who may organize the
+     * event, #789). Guards: the event must exist and be finalized; and — crucially — NONE of
      * its matches may already be rated. A rated match means the bad score is already baked into rating
      * history, which un-finalize cannot reverse; those cases need the heavier rating-history correction
      * path (a companion issue). Reversal, in one transaction: revoke every ACTIVE award the finalize
@@ -495,8 +534,7 @@ class EventService(
             val caller = staffCaller(users = users, token = token).bind()
             val event =
                 ensureNotNull(value = events.findById(id = id)?.toDomain()) { ServiceError.NotFound(message = "Event $id not found") }
-            val isAdminOrOwner = caller.capabilities.any { it == Capability.ADMINISTRATOR || it == Capability.CLUB_OWNER }
-            ensure(condition = isAdminOrOwner || event.createdBy == caller.id) { ServiceError.Forbidden() }
+            ensure(condition = clubAccess.mayOrganize(caller = caller, event = event)) { ServiceError.Forbidden() }
             ensure(condition = event.isFinalized) { ServiceError.Validation(message = "Event is not finalized") }
             ensure(condition = matches.listByEvent(eventId = id).map { it.toDomain() }.none { it.ratedAt != null }) {
                 ServiceError.Validation(
@@ -560,8 +598,8 @@ class EventService(
      * blocks deletion outright (results are permanent); any *recorded* (COMPLETED) but unrated match is
      * refused with advice to delete those matches first (they're still deletable while unrated, #138).
      * Remaining scheduled fixtures — the only matches that can survive the guard — are soft-disabled
-     * alongside the event so they don't outlive it. A HOST may only delete their own event; an
-     * ADMINISTRATOR may delete any.
+     * alongside the event so they don't outlive it. Scoped by [ClubAccess.mayOrganize] (#789): an owner
+     * of the event's club, its creator, or an ADMINISTRATOR.
      */
     fun delete(
         token: VerifiedFirebaseToken,
@@ -571,8 +609,7 @@ class EventService(
             val caller = staffCaller(users = users, token = token).bind()
             val event =
                 ensureNotNull(value = events.findById(id = id)?.toDomain()) { ServiceError.NotFound(message = "Event $id not found") }
-            val isAdmin = caller.capabilities.contains(element = Capability.ADMINISTRATOR)
-            ensure(condition = isAdmin || event.createdBy == caller.id) { ServiceError.Forbidden() }
+            ensure(condition = clubAccess.mayOrganize(caller = caller, event = event)) { ServiceError.Forbidden() }
 
             val eventMatches = matches.listByEvent(eventId = id).map { it.toDomain() }
             ensure(condition = eventMatches.none { it.ratedAt != null }) {
@@ -615,6 +652,8 @@ class EventService(
                 ensureNotNull(value = events.findById(id = eventId)?.toDomain()) {
                     ServiceError.NotFound(message = "Event $eventId not found")
                 }
+            ensure(condition = clubAccess.mayOrganize(caller = caller, event = event)) { ServiceError.Forbidden() }
+            // The expiry gate (#310) is a separate axis from club ownership (#789); both apply.
             ensureHostMayEnter(event = event, caller = caller).bind()
             ensureNotFinalized(event = event).bind()
             ensureKnownUsers(users = users, ids = listOf(element = userId)).bind()
@@ -631,7 +670,12 @@ class EventService(
         userId: UUID,
     ): Either<ServiceError, EventResponse> =
         either {
-            staffCaller(users = users, token = token).bind().id
+            val caller = staffCaller(users = users, token = token).bind()
+            val event =
+                ensureNotNull(value = events.findById(id = eventId)?.toDomain()) {
+                    ServiceError.NotFound(message = "Event $eventId not found")
+                }
+            ensure(condition = clubAccess.mayOrganize(caller = caller, event = event)) { ServiceError.Forbidden() }
             val updated =
                 ensureNotNull(value = events.removeParticipant(eventId = eventId, userId = userId)?.toDomain()) {
                     ServiceError.NotFound(message = "Event $eventId not found")
@@ -641,8 +685,7 @@ class EventService(
 
     /**
      * Resolve an event's APPROVED roster for seeding (#714), enforcing the same access event management
-     * uses: a STAFF caller, and — as with rename/set-club — a HOST may only touch their own event while
-     * an ADMINISTRATOR/CLUB_OWNER may touch any. Returns the approved participant user ids and the
+     * uses: a STAFF caller who may organize the event ([ClubAccess.mayOrganize], #789). Returns the approved participant user ids and the
      * generating owner (the event's creator, for the seeding's audit column). The seeding computation
      * itself lives in [org.skopeo.domain.service.seeding.SeedingService].
      */
@@ -654,8 +697,7 @@ class EventService(
             val caller = staffCaller(users = users, token = token).bind()
             val event =
                 ensureNotNull(value = events.findById(id = id)?.toDomain()) { ServiceError.NotFound(message = "Event $id not found") }
-            val isAdminOrOwner = caller.capabilities.any { it == Capability.ADMINISTRATOR || it == Capability.CLUB_OWNER }
-            ensure(condition = isAdminOrOwner || event.createdBy == caller.id) { ServiceError.Forbidden() }
+            ensure(condition = clubAccess.mayOrganize(caller = caller, event = event)) { ServiceError.Forbidden() }
             EventSeedingRoster(participantUserIds = event.participantIds, generatedBy = event.createdBy)
         }
 
@@ -704,12 +746,14 @@ class EventService(
         statusRaw: String,
     ): Either<ServiceError, EventResponse> =
         either {
-            val actor = staffCaller(users = users, token = token).bind().id
+            val caller = staffCaller(users = users, token = token).bind()
+            val actor = caller.id
             val status = parseParticipantStatus(raw = statusRaw).bind()
             val event =
                 ensureNotNull(value = events.findById(id = eventId)?.toDomain()) {
                     ServiceError.NotFound(message = "Event $eventId not found")
                 }
+            ensure(condition = clubAccess.mayOrganize(caller = caller, event = event)) { ServiceError.Forbidden() }
             ensureNotFinalized(event = event).bind()
             ensure(condition = status == EventParticipantStatus.APPROVED || status == EventParticipantStatus.HOLD) {
                 ServiceError.Validation(message = "A decision must be APPROVED or HOLD")

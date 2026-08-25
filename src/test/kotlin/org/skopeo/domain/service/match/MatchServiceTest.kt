@@ -26,11 +26,13 @@ import org.skopeo.common.dto.match.MatchResultRequest
 import org.skopeo.common.dto.match.SetScoreRequest
 import org.skopeo.common.error.ServiceError
 import org.skopeo.common.security.Capability
+import org.skopeo.domain.mapper.entity.club.toDomain
 import org.skopeo.domain.mapper.entity.event.toDomain
 import org.skopeo.domain.mapper.entity.match.toDomain
 import org.skopeo.domain.mapper.entity.user.toDomain
 import org.skopeo.domain.model.AuditAction
 import org.skopeo.domain.model.AuthProvider
+import org.skopeo.domain.model.CreateClubCommand
 import org.skopeo.domain.model.CreateEventCommand
 import org.skopeo.domain.model.CreatePlaceholderCommand
 import org.skopeo.domain.model.MatchStatus
@@ -45,6 +47,7 @@ import org.skopeo.domain.service.rating.RatingAssembler
 import org.skopeo.domain.service.rating.RatingCalculationService
 import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.repository.AuditRepository
+import org.skopeo.repository.ClubRepository
 import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.MatchesTable
@@ -1083,9 +1086,14 @@ class MatchServiceTest {
     fun `a host cannot create a fixture or record a result on an expired event, an admin or club owner can (#310)`() {
         val host = provisionUser(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         provisionUser(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
-        provisionUser(uid = "owner", roles = setOf(Capability.PLAYER, Capability.CLUB_OWNER))
+        val clubOwner = provisionUser(uid = "owner", roles = setOf(Capability.PLAYER, Capability.CLUB_OWNER))
         val p1 = provisionUser(uid = "p1", rated = true)
         val p2 = provisionUser(uid = "p2", rated = true)
+        // The event is filed under a club the CLUB_OWNER owns (#789) so expiry (#310), not club ownership,
+        // is what this test measures; the creating host reaches it through the grandfathered creator path.
+        val clubs = ClubRepository()
+        val club = clubs.create(command = CreateClubCommand(name = "Downtown TC", createdBy = clubOwner.id)).toDomain()
+        clubs.addOwner(clubId = club.id, userId = clubOwner.id)
         val event =
             EventRepository().create(
                 command =
@@ -1095,6 +1103,7 @@ class MatchServiceTest {
                         endDate = LocalDate.now().minusDays(1),
                         participantIds = listOf(p1.id, p2.id),
                         createdBy = host.id,
+                        clubId = club.id,
                     ),
             ).toDomain()
 
