@@ -6757,6 +6757,28 @@ components:
           type: integer
           description: Recorded results (COMPLETED with a decided winner) in the event (#483); the client's has-results signal.
 
+    EventClubDto:
+      type: object
+      description: >-
+        The club an event is filed under (#313), as carried on an event response. Every field is
+        non-null by construction — the whole object is absent for a clubless ("Open") event, so a
+        consumer checks for the object once rather than testing each detail. publicCode is the club's
+        shareable code (#327), included so a club reference beside an event links straight to that
+        club's public page (#780) without a second lookup; the events list is read by viewers who
+        cannot list clubs.
+      required:
+        - id
+        - name
+        - publicCode
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        publicCode:
+          type: string
+
     EventResponse:
       type: object
       required:
@@ -6801,15 +6823,14 @@ components:
           type: string
           nullable: true
           description: The filing host's public code (#270), for linking to their profile; null if unknown.
-        clubId:
-          type: string
-          format: uuid
+        club:
+          allOf:
+            - $ref: '#/components/schemas/EventClubDto'
           nullable: true
-          description: The event's club (#313); null for a clubless event.
-        clubName:
-          type: string
-          nullable: true
-          description: The event's club name (#313), for grouping/display; null for a clubless event.
+          description: >-
+            The event's club (#313), or null for a clubless ("Open") event. Nested rather than flat
+            nullable fields so the invariant is structural: either the club is present with all of its
+            details, or it is absent entirely — one null check instead of three that could disagree.
         circuitId:
           type: string
           format: uuid

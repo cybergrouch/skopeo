@@ -167,7 +167,7 @@ class EventServiceTest {
         view.participants.map { it.userId }.shouldContainExactlyInAnyOrder(p1.id.toString(), p2.id.toString())
         // Participant order isn't guaranteed, so look p1 up by id rather than assuming it's first.
         view.participants.single { it.userId == p1.id.toString() }.displayName shouldBe "p1"
-        view.clubId.shouldBeNull() // clubless by default
+        view.club.shouldBeNull() // clubless by default
     }
 
     @Test
@@ -263,9 +263,14 @@ class EventServiceTest {
 
         // A club event of any type now requires a points config (OPEN_PLAY unified); supply a valid window.
         val view = service.create(token = token(uid = "host"), input = clubInput(clubId = club.id)).shouldBeRight()
-        view.clubId shouldBe club.id.toString()
-        view.clubName shouldBe "Downtown TC"
-        view.clubId shouldBe club.id.toString()
+        // One nested object (#780): present-with-everything, or absent entirely. Its public code lets a
+        // club reference link to the club's public page without a second lookup — the events list is
+        // read by viewers who cannot list clubs.
+        view.club.shouldNotBeNull().let {
+            it.id shouldBe club.id.toString()
+            it.name shouldBe "Downtown TC"
+            it.publicCode shouldBe club.publicCode
+        }
 
         // An unknown club is rejected at create.
         service.create(token = token(uid = "host"), input = clubInput(clubId = UUID.randomUUID()))
@@ -279,19 +284,23 @@ class EventServiceTest {
         val clubA = clubs.create(command = CreateClubCommand(name = "Downtown TC", createdBy = host.id)).toDomain()
         val clubB = clubs.create(command = CreateClubCommand(name = "West End", createdBy = host.id)).toDomain()
         val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight()
-        event.clubId.shouldBeNull() // clubless to start
+        event.club.shouldBeNull() // clubless to start, so there is no club page to link to
 
         // Add a club.
         service
             .setClub(token = token(uid = "host"), id = UUID.fromString(event.id), clubId = clubA.id)
-            .shouldBeRight().clubId shouldBe clubA.id.toString()
+            .shouldBeRight().club.shouldNotBeNull().id shouldBe clubA.id.toString()
         // Change it.
         service.setClub(token = token(uid = "host"), id = UUID.fromString(event.id), clubId = clubB.id).shouldBeRight().let {
-            it.clubId shouldBe clubB.id.toString()
-            it.clubName shouldBe "West End"
+            // Re-filing swaps the whole object, so the link always points at the CURRENT club.
+            it.club.shouldNotBeNull().let { c ->
+                c.id shouldBe clubB.id.toString()
+                c.name shouldBe "West End"
+                c.publicCode shouldBe clubB.publicCode
+            }
         }
         // Clear it (back to Open).
-        service.setClub(token = token(uid = "host"), id = UUID.fromString(event.id), clubId = null).shouldBeRight().clubId.shouldBeNull()
+        service.setClub(token = token(uid = "host"), id = UUID.fromString(event.id), clubId = null).shouldBeRight().club.shouldBeNull()
 
         // Each club change writes an Activity Log entry (#354); the newest records the clear as "Open".
         val entries = AuditRepository().list(actions = listOf(element = AuditAction.EVENT_CLUB_CHANGED), limit = 10, offset = 0).first
@@ -320,7 +329,7 @@ class EventServiceTest {
         // An ADMINISTRATOR may edit any event's club.
         service
             .setClub(token = token(uid = "admin"), id = UUID.fromString(event.id), clubId = club.id)
-            .shouldBeRight().clubId shouldBe club.id.toString()
+            .shouldBeRight().club.shouldNotBeNull().id shouldBe club.id.toString()
         // Unknown event → NotFound.
         service.setClub(token = token(uid = "admin"), id = UUID.randomUUID(), clubId = null)
             .shouldBeLeft()

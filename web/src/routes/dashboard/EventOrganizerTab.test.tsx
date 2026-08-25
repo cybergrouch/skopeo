@@ -465,8 +465,7 @@ describe("EventOrganizerTab", () => {
       ...event,
       id: "b1",
       name: "Bravo Cup",
-      clubId: "c2",
-      clubName: "Bravo TC",
+      club: { id: "c2", name: "Bravo TC", publicCode: "CLBC2" },
     };
     // Two upcoming Alpha events (distinct start dates) exercise the "reuse existing club group" path
     // and the upcoming date-sort within a group.
@@ -474,8 +473,7 @@ describe("EventOrganizerTab", () => {
       ...event,
       id: "a1",
       name: "Alpha Cup",
-      clubId: "c1",
-      clubName: "Alpha TC",
+      club: { id: "c1", name: "Alpha TC", publicCode: "CLBC1" },
       startDate: "2999-02-01",
       endDate: "2999-02-05",
     };
@@ -483,8 +481,7 @@ describe("EventOrganizerTab", () => {
       ...event,
       id: "a2",
       name: "Alpha Cup Two",
-      clubId: "c1",
-      clubName: "Alpha TC",
+      club: { id: "c1", name: "Alpha TC", publicCode: "CLBC1" },
       startDate: "2999-01-01",
       endDate: "2999-02-05",
     };
@@ -647,8 +644,7 @@ describe("EventOrganizerTab", () => {
       ...event,
       id: "a1",
       name: "Alpha Cup",
-      clubId: "c1",
-      clubName: "Alpha TC",
+      club: { id: "c1", name: "Alpha TC", publicCode: "CLBC1" },
     };
     useGetApiV1Events.mockReturnValue({ data: [alpha], isLoading: false });
     const user = userEvent.setup();
@@ -676,15 +672,13 @@ describe("EventOrganizerTab", () => {
       ...event,
       id: "a1",
       name: "Alpha Cup",
-      clubId: "c1",
-      clubName: "Alpha TC",
+      club: { id: "c1", name: "Alpha TC", publicCode: "CLBC1" },
     };
     const bravo = {
       ...event,
       id: "b1",
       name: "Bravo Cup",
-      clubId: "c2",
-      clubName: "Bravo TC",
+      club: { id: "c2", name: "Bravo TC", publicCode: "CLBC2" },
     };
     useGetApiV1Events.mockReturnValue({
       data: [alpha, bravo],

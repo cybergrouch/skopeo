@@ -103,6 +103,20 @@ data class MyEventResponse(
     val completedMatchCount: Int = 0,
 )
 
+/**
+ * The club an event is filed under (#313), as carried on an event response. Every field is non-null by
+ * construction: the whole object is absent for a clubless ("Open") event, so a consumer checks
+ * `club != null` once instead of testing each detail. [publicCode] is the club's shareable code (#327),
+ * included here so a club reference beside an event links straight to that club's public page (#780)
+ * without a second lookup — the events list is read by viewers who cannot list clubs.
+ */
+@Serializable
+data class EventClubDto(
+    val id: String,
+    val name: String,
+    val publicCode: String,
+)
+
 @Serializable
 data class EventResponse(
     val id: String,
@@ -115,9 +129,10 @@ data class EventResponse(
     // The filing host (#270): display name + public code, or null for legacy events with no creator.
     val creatorDisplayName: String? = null,
     val creatorPublicCode: String? = null,
-    // The event's club (#313): id + name, or null for a clubless event.
-    val clubId: String? = null,
-    val clubName: String? = null,
+    // The event's club (#313), or null for a clubless ("Open") event. Nested rather than three flat
+    // nullable fields so the invariant is structural: either there is a club and all of its details are
+    // present, or there is no club at all — one null check instead of three that could disagree.
+    val club: EventClubDto? = null,
     // The circuit a TOURNAMENT event belongs to (#525); null for non-tournament events.
     val circuitId: String? = null,
     // Admin override for calculation processing order (#335); null = order by end date.
