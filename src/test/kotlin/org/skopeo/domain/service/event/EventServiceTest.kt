@@ -279,6 +279,61 @@ class EventServiceTest {
     }
 
     @Test
+    fun `an administrator re-files a FINALIZED event's club, and a host still cannot (#782)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val clubA = clubs.create(command = CreateClubCommand(name = "Downtown TC", createdBy = host.id)).toDomain()
+        val clubB = clubs.create(command = CreateClubCommand(name = "West End", createdBy = host.id)).toDomain()
+        val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight().domain()
+        service.setClub(token = token(uid = "host"), id = event.id, clubId = clubA.id).shouldBeRight()
+        service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+
+        // The host who filed it can no longer touch the club once finalized — the terminal rule holds.
+        service
+            .setClub(token = token(uid = "host"), id = event.id, clubId = clubB.id)
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Validation>()
+
+        // An administrator may, because the club is not an input to the rating calculation (#782).
+        service.setClub(token = token(uid = "admin"), id = event.id, clubId = clubB.id).shouldBeRight().let {
+            it.club.shouldNotBeNull().id shouldBe clubB.id.toString()
+            // Still finalized: this is a bookkeeping correction, not an un-finalize.
+            it.isFinalized.shouldBeTrue()
+        }
+        events.findById(id = event.id)!!.toDomain().let {
+            it.clubId shouldBe clubB.id
+            it.isFinalized.shouldBeTrue()
+            it.finalizedAt.shouldNotBeNull()
+        }
+
+        // An admin can also clear a finalized event back to Open.
+        service.setClub(token = token(uid = "admin"), id = event.id, clubId = null).shouldBeRight().club.shouldBeNull()
+    }
+
+    @Test
+    fun `re-filing a finalized event records that it happened after finalize (#782)`() {
+        val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
+        val club = clubs.create(command = CreateClubCommand(name = "Downtown TC", createdBy = host.id)).toDomain()
+        val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight().domain()
+        service.finalize(token = token(uid = "host"), id = event.id).shouldBeRight()
+
+        service.setClub(token = token(uid = "admin"), id = event.id, clubId = club.id).shouldBeRight()
+
+        AuditRepository()
+            .list(actions = listOf(element = AuditAction.EVENT_CLUB_CHANGED), limit = 10, offset = 0)
+            .first
+            .first()
+            .let {
+                it.summary shouldContain "after finalize"
+                it.details["wasFinalized"] shouldBe "true"
+                // An OPEN_PLAY event pays from band difference and never consults the club, so there are
+                // no placement points to leave as-issued.
+                it.details["placementPointsLeftAsIssued"] shouldBe "false"
+            }
+    }
+
+    @Test
     fun `setClub sets, changes, and clears an event's club (#319)`() {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val clubA = clubs.create(command = CreateClubCommand(name = "Downtown TC", createdBy = host.id)).toDomain()

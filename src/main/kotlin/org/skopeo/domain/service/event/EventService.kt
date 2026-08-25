@@ -328,7 +328,18 @@ class EventService(
                 ensureNotNull(value = events.findById(id = id)?.toDomain()) { ServiceError.NotFound(message = "Event $id not found") }
             val isAdmin = caller.capabilities.contains(element = Capability.ADMINISTRATOR)
             ensure(condition = isAdmin || event.createdBy == caller.id) { ServiceError.Forbidden() }
-            ensureNotFinalized(event = event).bind()
+            // A finalized event is otherwise terminal (#403), but which club an event is filed under is
+            // pure bookkeeping where ratings are concerned: `clubId` is not an input to the rating
+            // calculation, so re-filing one cannot invalidate a rating or a history row, and nothing needs
+            // recalculating. An ADMINISTRATOR may therefore correct a mis-filed club after finalize
+            // (#782) — the cheap alternative to un-finalizing (#477) or reversing ratings (#478).
+            // Everyone else is still refused. The one thing this deliberately does NOT unwind is
+            // already-issued tournament placement points, whose full-vs-halved schedule depends on the
+            // club's `tournamentsSanctioned` flag; the audit detail below records that they were left
+            // as issued rather than silently re-priced.
+            if (!isAdmin) {
+                ensureNotFinalized(event = event).bind()
+            }
             clubId?.let { cid ->
                 ensureNotNull(value = clubs.findById(id = cid)) { ServiceError.Validation(message = "Club $cid not found") }
             }
@@ -342,12 +353,22 @@ class EventService(
                         action = AuditAction.EVENT_CLUB_CHANGED,
                         entityType = AuditEntityType.EVENT,
                         entityId = event.id,
-                        summary = "Set event ${event.name} club to ${if (clubId == null) "Open" else clubId.toString()}",
+                        summary =
+                            "Set event ${event.name} club to ${if (clubId == null) "Open" else clubId.toString()}" +
+                                if (event.isFinalized) " (after finalize)" else "",
                         details =
                             mapOf(
                                 "publicCode" to event.publicCode,
                                 "oldClubId" to event.clubId?.toString(),
                                 "newClubId" to clubId?.toString(),
+                                // Re-filing after finalize is an admin correction (#782); flag it so the
+                                // Activity Log distinguishes it from an ordinary pre-finalize club change.
+                                "wasFinalized" to event.isFinalized.toString(),
+                                // The one consequence this does not unwind: a finalized tournament that opted
+                                // into points already paid its placement schedule under the OLD club's
+                                // sanctioning. Recorded so the ledger never looks silently re-priced.
+                                "placementPointsLeftAsIssued" to
+                                    (event.isFinalized && event.type == EventType.TOURNAMENT && event.awardRankingPoints).toString(),
                             ),
                     ),
             )

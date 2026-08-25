@@ -100,6 +100,15 @@ export function EventManagerView({ eventId }: { eventId: string }) {
   const locked = readOnly || finalized;
   // Reverse Ratings (#478): a distinct, destructive, ADMINISTRATOR-only action for an already-rated event.
   const isAdmin = isAdministrator(me?.capabilities);
+  // The club is the one finalized-event field an ADMINISTRATOR may still change (#782): re-filing an event
+  // under another club is not an input to the rating calculation, so nothing needs recalculating and the
+  // event stays finalized. Everyone else keeps the terminal rule, matching what the server enforces.
+  const clubLocked = readOnly || (finalized && !isAdmin);
+  // A finalized TOURNAMENT that opted into points already paid its placement schedule under the previous
+  // club's sanctioning, and re-filing does not re-price it (#782). Say so rather than letting the change
+  // look like an ordinary edit.
+  const clubChangeLeavesPoints =
+    finalized && isAdmin && event?.type === "TOURNAMENT" && event?.awardRankingPoints === true;
 
   // Clubs to (re)assign the event to (#319); staff-readable, empty when none exist.
   const clubs = useGetApiV1Clubs().data ?? [];
@@ -401,13 +410,24 @@ export function EventManagerView({ eventId }: { eventId: string }) {
               renaming={renameEvent.isPending}
             />
             <CardContent className="space-y-3">
-              {/* Club (#319): set, change, or clear the event's club. */}
+              {/* Club (#319): set, change, or clear the event's club. Still editable by an
+                  ADMINISTRATOR after finalize (#782), unlike every other field on this card. */}
               <EventClubSection
                 clubId={event.club?.id}
                 clubs={clubs}
-                disabled={setClub.isPending || locked}
+                disabled={setClub.isPending || clubLocked}
                 onChange={saveClub}
               />
+              {finalized && isAdmin ? (
+                <p className="text-xs text-muted-foreground">
+                  Re-filing a finalized event under another club is a
+                  bookkeeping correction — no rating is recalculated and the
+                  event stays finalized.
+                  {clubChangeLeavesPoints
+                    ? " Its placement points were already awarded under the previous club's sanctioning and are left as issued."
+                    : ""}
+                </p>
+              ) : null}
 
               <div className="text-xs font-medium uppercase text-muted-foreground">
                 Participants
@@ -500,8 +520,9 @@ export function EventManagerView({ eventId }: { eventId: string }) {
               role="status"
               className="rounded-md border border-emerald-500/50 bg-emerald-500/10 px-3 py-2 text-sm"
             >
-              This event is finalized. It is closed to changes and its matches
-              have been queued for rating.
+              This event is finalized. It is closed to changes
+              {isAdmin ? " apart from its club" : ""} and its matches have been
+              queued for rating.
             </p>
           ) : readOnly ? (
             <p
