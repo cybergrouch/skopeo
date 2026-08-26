@@ -88,7 +88,7 @@ class EventServiceTest {
     @BeforeEach
     fun reset() {
         PostgresTestDatabase.truncate()
-        fixtureClubId = null
+        fixtureClubs.clear()
     }
 
     private fun provision(
@@ -109,20 +109,21 @@ class EventServiceTest {
     private fun placeholder(displayName: String): User =
         users.createPlaceholder(command = CreatePlaceholderCommand(displayName = displayName, sex = "Male")).toDomain()
 
-    private var fixtureClubId: UUID? = null
+    private val fixtureClubs = mutableMapOf<String, UUID>()
 
     /**
-     * A club owned by [ownerUid], created once per test. Every event needs a club (#794) and the creator
-     * must own it (#789), so the default fixture club belongs to "host" — this suite's usual caller.
+     * A club owned by [ownerUid], one per owner per test. Every event needs a club (#794) and its creator
+     * must own it (#789) — and the club must be owned by ONLY that creator, or the authz-refusal tests
+     * ("a host cannot rename another host's event") would start passing for the wrong reason.
      */
+    private fun fixtureClub(ownerUid: String): UUID = fixtureClubs.getOrPut(key = ownerUid) { clubOwnedBy(ownerUid = ownerUid) }
+
     private fun clubOwnedBy(ownerUid: String): UUID {
         val owner = requireNotNull(value = users.findByFirebaseUid(firebaseUid = ownerUid)).toDomain()
         val club = clubs.create(command = CreateClubCommand(name = "Fixture TC", createdBy = owner.id)).toDomain()
         clubs.addOwner(clubId = club.id, userId = owner.id)
         return club.id
     }
-
-    private fun fixtureClub(): UUID = fixtureClubId ?: clubOwnedBy(ownerUid = "host").also { fixtureClubId = it }
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
@@ -144,6 +145,8 @@ class EventServiceTest {
         end: String = LocalDate.now().plusDays(7).toString(),
         participants: List<UUID> = emptyList(),
         clubId: UUID? = null,
+        // Whose club the event is filed under when [clubId] is absent; the creator must own it (#789).
+        ownerUid: String = "host",
         circuitId: UUID? = null,
         type: EventType = EventType.OPEN_PLAY,
         format: String = "SINGLES",
@@ -153,7 +156,7 @@ class EventServiceTest {
         startDate = LocalDate.parse(start),
         endDate = LocalDate.parse(end),
         participantIds = participants,
-        clubId = clubId ?: fixtureClub(),
+        clubId = clubId ?: fixtureClub(ownerUid = ownerUid),
         circuitId = circuitId,
         type = type.name,
         format = format,
@@ -989,7 +992,7 @@ class EventServiceTest {
 
         service.rename(token = token(uid = "host"), id = event.id, name = "New Name")
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
-        service.setClub(token = token(uid = "host"), id = event.id, clubId = fixtureClub())
+        service.setClub(token = token(uid = "host"), id = event.id, clubId = fixtureClub(ownerUid = "host"))
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
         service.addParticipant(token = token(uid = "host"), eventId = event.id, userId = player.id)
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
