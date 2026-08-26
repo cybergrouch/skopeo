@@ -200,11 +200,8 @@ class ClubScopedEventAuthzTest {
         access.mayOrganize(caller = creator, event = event).shouldBeTrue()
         access.mayOrganize(caller = stranger, event = event).shouldBeFalse()
 
-        // A clubless event has no ownership anchor: only the administrator and the creator reach it.
-        val clubless = event.copy(clubId = null)
-        access.mayOrganize(caller = admin, event = clubless).shouldBeTrue()
-        access.mayOrganize(caller = owner, event = clubless).shouldBeFalse()
-        access.mayOrganize(caller = creator, event = clubless).shouldBeTrue()
+        // There is no clubless case any more (#794): Event.clubId is non-null, so every event has an
+        // ownership anchor and the creator clause exists only for the #789 grandfathering above.
     }
 
     @Test

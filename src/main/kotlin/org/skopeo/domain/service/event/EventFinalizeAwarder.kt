@@ -132,7 +132,7 @@ class EventFinalizeAwarder(
         now: LocalDateTime,
     ): AwardSummary {
         val tournament = pointsConfig.getTournament().value
-        val sanctioned = event.clubId?.let { clubs.findById(id = it)?.toDomain()?.tournamentsSanctioned } ?: false
+        val sanctioned = clubs.findById(id = event.clubId)?.toDomain()?.tournamentsSanctioned ?: false
         val schedule = tournament.schedule(sanctioned = sanctioned)
         // Validity runs from the event end for the configured tournament window (#559: no per-event override).
         val start = event.endDate

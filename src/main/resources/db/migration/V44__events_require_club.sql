@@ -1,24 +1,21 @@
 -- V44: every event belongs to a club (#794).
 --
 -- Each club now has its own event organizer on its public page (#780/#786), and the create form requires
--- a club, so a clubless ("Open") event has no home and no way to be created. This puts the invariant in
--- the schema rather than trusting the service layer alone.
+-- a club, so a clubless ("Open") event has no home and no way to be created. The invariant belongs in the
+-- schema rather than resting on the service layer alone -- and with it in the schema, the domain model can
+-- carry `clubId` as non-null instead of every call site re-checking.
 --
--- WHY A CHECK CONSTRAINT AND NOT `SET NOT NULL`
+-- PRE-FLIGHT, and why it matters: Flyway runs on startup (config/DatabaseConfig.kt), so this validates
+-- every existing row immediately. One clubless row -- INCLUDING a soft-deleted one, which NOT NULL does
+-- not care that we consider deleted -- fails the migration, fails the boot, and takes the service down
+-- rather than degrading. Confirm zero before deploying, unfiltered by is_active:
 --
--- Flyway runs on startup (config/DatabaseConfig.kt). A plain `ALTER COLUMN club_id SET NOT NULL` validates
--- every existing row immediately, so ONE legacy clubless row — including a soft-deleted one, which
--- NOT NULL does not care that we consider deleted — would fail the migration, fail the boot, and take
--- production down rather than degrading. A CHECK ... NOT VALID enforces the rule on every INSERT and
--- UPDATE from here on while leaving pre-existing rows alone, so the deploy cannot wedge.
+--     SELECT count(*) FROM events WHERE club_id IS NULL;   -- must be 0
 --
--- Follow-up, once `SELECT count(*) FROM events WHERE club_id IS NULL` is confirmed 0 in production:
---   ALTER TABLE events VALIDATE CONSTRAINT events_club_id_present;
--- and, if desired, convert to a true NOT NULL. Both are safe at that point and neither is urgent — the
--- constraint above already stops anything new.
+-- The clubless events that predated #794 have been re-filed under clubs, so this is expected to be 0.
 
 ALTER TABLE events
-    ADD CONSTRAINT events_club_id_present CHECK (club_id IS NOT NULL) NOT VALID;
+    ALTER COLUMN club_id SET NOT NULL;
 
-COMMENT ON CONSTRAINT events_club_id_present ON events IS
-    'Every event belongs to a club (#794). NOT VALID so the deploy cannot fail on a legacy clubless row; VALIDATE once the null count is confirmed 0.';
+COMMENT ON COLUMN events.club_id IS
+    'The club this event is filed under (#313). Required since #794: every organizer surface is club-scoped, so a clubless event has no home.';

@@ -25,7 +25,10 @@ internal object EventsTable : UUIDTable(name = "events") {
     val disabledAt = datetime(name = "disabled_at").nullable()
 
     // The club this event belongs to (#313), or null for a clubless event. SET NULL on club delete.
-    val clubId = reference(name = "club_id", foreign = ClubsTable, onDelete = ReferenceOption.SET_NULL).nullable()
+    // NOT NULL since #794 (V44): every event belongs to a club. The DB-level FK is still ON DELETE SET
+    // NULL from V1, which would now conflict — but clubs are only ever SOFT-deleted (ClubService.disable
+    // flips is_active and soft-deletes the club's events), so it never fires. Flyway owns the DDL.
+    val clubId = reference(name = "club_id", foreign = ClubsTable, onDelete = ReferenceOption.SET_NULL)
 
     // The circuit a TOURNAMENT event belongs to (#525); SET NULL on circuit delete.
     val circuitId = reference(name = "circuit_id", foreign = CircuitsTable, onDelete = ReferenceOption.SET_NULL).nullable()

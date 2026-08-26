@@ -205,7 +205,7 @@ class EventRepository {
      */
     fun updateClub(
         id: UUID,
-        clubId: UUID?,
+        clubId: UUID,
     ): Unit =
         transaction {
             EventsTable.update(where = { EventsTable.id eq id }) { it[EventsTable.clubId] = clubId }
@@ -469,7 +469,7 @@ class EventRepository {
             endDate = this[EventsTable.endDate],
             isActive = this[EventsTable.isActive],
             createdBy = this[EventsTable.createdBy]?.value,
-            clubId = this[EventsTable.clubId]?.value,
+            clubId = this[EventsTable.clubId].value,
             circuitId = this[EventsTable.circuitId]?.value,
             calcPriority = this[EventsTable.calcPriority],
             format = this[EventsTable.format],

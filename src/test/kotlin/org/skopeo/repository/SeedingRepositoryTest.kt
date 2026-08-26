@@ -27,6 +27,7 @@ import org.skopeo.domain.model.User
 import org.skopeo.domain.model.UserIdentity
 import org.skopeo.domain.model.UserName
 import org.skopeo.testsupport.PostgresTestDatabase
+import org.skopeo.testsupport.seedFixtureClub
 import java.time.LocalDate
 
 class SeedingRepositoryTest {
@@ -119,6 +120,8 @@ class SeedingRepositoryTest {
             events.create(
                 command =
                     CreateEventCommand(
+                        // Every event needs a club (#794).
+                        clubId = seedFixtureClub(ownerUids = arrayOf("host")).id,
                         name = "Club Open",
                         startDate = LocalDate.now(),
                         endDate = LocalDate.now(),
@@ -149,6 +152,8 @@ class SeedingRepositoryTest {
             events.create(
                 command =
                     CreateEventCommand(
+                        // Every event needs a club (#794).
+                        clubId = seedFixtureClub(ownerUids = arrayOf("host")).id,
                         name = "Empty",
                         startDate = LocalDate.now(),
                         endDate = LocalDate.now(),

@@ -19,7 +19,7 @@ import java.util.UUID
  * ```
  * mayOrganize(caller, event) =
  *      ADMINISTRATOR
- *   OR (event.clubId != null AND caller is a named owner of event.clubId)
+ *   OR caller is a named owner of event.clubId
  *   OR event.createdBy == caller.id
  * ```
  *
@@ -46,7 +46,7 @@ class ClubAccess(
     fun ownsClub(
         callerId: UUID,
         clubId: UUID?,
-    ): Boolean = clubId != null && clubs.findOwnedClubIds(userId = callerId).contains(element = clubId)
+    ): Boolean = clubs.findOwnedClubIds(userId = callerId).contains(element = clubId)
 
     /**
      * The #789 predicate: whether [caller] may organize [event] — read its organizer payload, edit it,

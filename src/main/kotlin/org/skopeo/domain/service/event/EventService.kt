@@ -203,7 +203,7 @@ class EventService(
                                 "startDate" to event.startDate.toString(),
                                 "endDate" to event.endDate.toString(),
                                 "participants" to event.participantIds.size.toString(),
-                                "clubId" to event.clubId?.toString(),
+                                "clubId" to event.clubId.toString(),
                                 "format" to event.format.name,
                                 "type" to event.type.name,
                                 "awardRankingPoints" to event.awardRankingPoints.toString(),
@@ -396,12 +396,12 @@ class EventService(
                         entityType = AuditEntityType.EVENT,
                         entityId = event.id,
                         summary =
-                            "Set event ${event.name} club to ${if (clubId == null) "Open" else clubId.toString()}" +
+                            "Re-filed event ${event.name} under club $clubId" +
                                 if (event.isFinalized) " (after finalize)" else "",
                         details =
                             mapOf(
                                 "publicCode" to event.publicCode,
-                                "oldClubId" to event.clubId?.toString(),
+                                "oldClubId" to event.clubId.toString(),
                                 "newClubId" to clubId.toString(),
                                 // Re-filing after finalize is an admin correction (#782); flag it so the
                                 // Activity Log distinguishes it from an ordinary pre-finalize club change.
@@ -802,7 +802,7 @@ class EventService(
             val participants = publicParticipants(participantIds = event.participantIds, byId = byId)
             val matchResponses = publicMatches(eventMatches = eventMatches, byId = byId)
             // Surface the organizing club's name (#313), read-only; null for a clubless event.
-            val clubEntity = event.clubId?.let { clubs.findById(id = it)?.toDomain() }
+            val clubEntity = clubs.findById(id = event.clubId)?.toDomain()
             val clubName = clubEntity?.name
             EventPublicResponse(
                 publicCode = event.publicCode,
@@ -893,7 +893,7 @@ class EventService(
             }
         // Resolve the club (#313) for grouping/display, carrying its public code (#327) so the reference
         // can link to the club's public page (#780); null for a clubless event.
-        val clubEntity = event.clubId?.let { clubs.findById(id = it)?.toDomain() }
+        val clubEntity = clubs.findById(id = event.clubId)?.toDomain()
         val club = clubEntity?.let { EventClubRef(id = it.id, name = it.name, publicCode = it.publicCode) }
         return EventView(event = event, participants = participants, creator = creator, club = club)
     }

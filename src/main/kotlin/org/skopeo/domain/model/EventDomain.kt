@@ -43,8 +43,9 @@ data class Event(
     val participantIds: List<UUID>,
     val isActive: Boolean = true,
     val createdBy: UUID? = null,
-    // The club this event belongs to (#313), or null for a clubless ("Open") event.
-    val clubId: UUID? = null,
+    // The club this event is filed under (#313). Non-null since #794 — every organizer surface is
+    // club-scoped, and V44 enforces it in the schema, so no call site needs to re-check.
+    val clubId: UUID,
     // The circuit a TOURNAMENT event belongs to (#525); required for tournaments, null otherwise.
     val circuitId: UUID? = null,
     // Admin override for calculation processing order (#335); null = order by end date.
@@ -79,7 +80,7 @@ data class CreateEventCommand(
     val endDate: LocalDate,
     val participantIds: List<UUID>,
     val createdBy: UUID,
-    val clubId: UUID? = null,
+    val clubId: UUID,
     // The circuit a TOURNAMENT event belongs to (#525); required for tournaments.
     val circuitId: UUID? = null,
     // The event's organizing format (#720): SINGLES | DOUBLES | MIXED_DOUBLES. Required at create; the

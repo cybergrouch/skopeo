@@ -27,6 +27,7 @@ import org.skopeo.domain.model.ProvisionUserCommand
 import org.skopeo.domain.model.UserIdentity
 import org.skopeo.domain.model.UserName
 import org.skopeo.testsupport.PostgresTestDatabase
+import org.skopeo.testsupport.seedFixtureClub
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
@@ -65,6 +66,8 @@ class EventRepositoryTest {
             events.create(
                 command =
                     CreateEventCommand(
+                        // Every event needs a club (#794).
+                        clubId = seedFixtureClub(ownerUids = arrayOf("host")).id,
                         name = "Orphan Cup",
                         startDate = LocalDate.parse("2026-04-01"),
                         endDate = LocalDate.parse("2026-04-02"),
@@ -87,6 +90,8 @@ class EventRepositoryTest {
             events.create(
                 command =
                     CreateEventCommand(
+                        // Every event needs a club (#794).
+                        clubId = seedFixtureClub(ownerUids = arrayOf("host")).id,
                         name = "Code Cup",
                         startDate = LocalDate.parse("2026-05-01"),
                         endDate = LocalDate.parse("2026-05-02"),
@@ -109,6 +114,8 @@ class EventRepositoryTest {
             events.create(
                 command =
                     CreateEventCommand(
+                        // Every event needs a club (#794).
+                        clubId = seedFixtureClub(ownerUids = arrayOf("host")).id,
                         name = "Old Name",
                         startDate = LocalDate.parse("2026-06-01"),
                         endDate = LocalDate.parse("2026-06-02"),
@@ -129,6 +136,8 @@ class EventRepositoryTest {
             events.create(
                 command =
                     CreateEventCommand(
+                        // Every event needs a club (#794).
+                        clubId = seedFixtureClub(ownerUids = arrayOf("host")).id,
                         name = "Priority Cup",
                         startDate = LocalDate.parse("2026-07-01"),
                         endDate = LocalDate.parse("2026-07-02"),
@@ -285,6 +294,8 @@ class EventRepositoryTest {
             .create(
                 command =
                     CreateEventCommand(
+                        // Every event needs a club (#794).
+                        clubId = seedFixtureClub(ownerUids = arrayOf("host")).id,
                         name = name,
                         startDate = LocalDate.parse("2026-08-01"),
                         endDate = LocalDate.parse("2026-08-02"),

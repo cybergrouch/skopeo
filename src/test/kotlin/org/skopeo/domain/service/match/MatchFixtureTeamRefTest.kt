@@ -32,6 +32,7 @@ import org.skopeo.repository.EventTeamRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
+import org.skopeo.testsupport.seedFixtureClub
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.util.UUID
@@ -94,6 +95,8 @@ class MatchFixtureTeamRefTest {
             .create(
                 command =
                     CreateEventCommand(
+                        // Every event needs a club (#794).
+                        clubId = seedFixtureClub(ownerUids = arrayOf("host")).id,
                         name = "Doubles Cup",
                         startDate = LocalDate.now(),
                         endDate = LocalDate.now().plusDays(7),
@@ -112,6 +115,8 @@ class MatchFixtureTeamRefTest {
             .create(
                 command =
                     CreateEventCommand(
+                        // Every event needs a club (#794).
+                        clubId = seedFixtureClub(ownerUids = arrayOf("host")).id,
                         name = "Singles Cup",
                         startDate = LocalDate.now(),
                         endDate = LocalDate.now().plusDays(7),
