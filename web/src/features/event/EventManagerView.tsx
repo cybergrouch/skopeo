@@ -227,7 +227,7 @@ export function EventManagerView({ eventId }: { eventId: string }) {
     try {
       await setClub.mutateAsync({
         id: eventId,
-        data: { clubId: clubId || null },
+        data: { clubId },
       });
     } catch (e) {
       toast.error(eventErrorMessage(e, "Could not update the club."), {

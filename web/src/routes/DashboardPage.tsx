@@ -27,7 +27,6 @@ import { AdminTab } from "./dashboard/AdminTab";
 import { AccountManagementTab } from "./dashboard/AccountManagementTab";
 import { ClubManagementTab } from "./dashboard/ClubManagementTab";
 import { PointsManagementSection } from "./dashboard/admin/PointsManagementSection";
-import { EventOrganizerTab } from "./dashboard/EventOrganizerTab";
 import { PlaceholderPlayersTab } from "./dashboard/PlaceholderPlayersTab";
 import { SeedingTab } from "./dashboard/SeedingTab";
 import { RatingsTab } from "./dashboard/RatingsTab";
@@ -51,6 +50,9 @@ export function DashboardPage() {
 
   const me = meQuery.data;
   const capabilities = me?.capabilities ?? [];
+  // The Event Organizer tab is gone (#794). Every club has its own organizer on its public page
+  // (#780/#786), so a cross-club index and a second create form had no remaining purpose — including for
+  // administrators, who reach any club from Club Management. Seeding still follows match-management.
   const showMatches = canManageMatches(capabilities);
   const showSeeding = canManageMatches(capabilities);
   const showRatings = canRate(capabilities);
@@ -109,15 +111,6 @@ export function DashboardPage() {
     { value: "standings", label: "Standings", element: <StandingsTab /> },
     // Claiming a placeholder account (#496) now lives conditionally on the Profile tab (#727), shown
     // only while the owner's account is still claim-eligible — no standalone Claim tab.
-    ...(showMatches
-      ? [
-          {
-            value: "matches",
-            label: "Event Organizer",
-            element: <EventOrganizerTab />,
-          },
-        ]
-      : []),
     ...(showSeeding
       ? [{ value: "seeding", label: "Seeding", element: <SeedingTab /> }]
       : []),

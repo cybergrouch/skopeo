@@ -39,6 +39,7 @@ import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
 import org.skopeo.testsupport.TestAppSettings
 import org.skopeo.testsupport.TestFirebaseAuth
+import org.skopeo.testsupport.seedFixtureClub
 import java.time.LocalDate
 
 /**
@@ -95,6 +96,8 @@ class EventPublicViewApiIntegrationTest {
             setBody(
                 body =
                     CreateEventRequest(
+                        // Every event needs a club (#794), owned by its creator (#789).
+                        clubId = seedFixtureClub(ownerUids = arrayOf("host")).id.toString(),
                         name = "Spring Open",
                         startDate = LocalDate.now().toString(),
                         endDate = LocalDate.now().plusDays(7).toString(),

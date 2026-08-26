@@ -28,6 +28,7 @@ import org.skopeo.repository.EventRepository
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
+import org.skopeo.testsupport.seedFixtureClub
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
@@ -74,6 +75,7 @@ class EventPublicMatchesTest {
 
     private fun input(participants: List<UUID>) =
         CreateEventInput(
+            clubId = seedFixtureClub(ownerUids = arrayOf("host")).id,
             name = "Spring Open",
             startDate = LocalDate.now(),
             endDate = LocalDate.now().plusDays(7),

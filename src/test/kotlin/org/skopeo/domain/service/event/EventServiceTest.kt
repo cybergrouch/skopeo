@@ -88,6 +88,7 @@ class EventServiceTest {
     @BeforeEach
     fun reset() {
         PostgresTestDatabase.truncate()
+        fixtureClubs.clear()
     }
 
     private fun provision(
@@ -107,6 +108,22 @@ class EventServiceTest {
     // A login-less placeholder ("dummy") player (#496/#505) — a real users row with placeholder = true.
     private fun placeholder(displayName: String): User =
         users.createPlaceholder(command = CreatePlaceholderCommand(displayName = displayName, sex = "Male")).toDomain()
+
+    private val fixtureClubs = mutableMapOf<String, UUID>()
+
+    /**
+     * A club owned by [ownerUid], one per owner per test. Every event needs a club (#794) and its creator
+     * must own it (#789) — and the club must be owned by ONLY that creator, or the authz-refusal tests
+     * ("a host cannot rename another host's event") would start passing for the wrong reason.
+     */
+    private fun fixtureClub(ownerUid: String): UUID = fixtureClubs.getOrPut(key = ownerUid) { clubOwnedBy(ownerUid = ownerUid) }
+
+    private fun clubOwnedBy(ownerUid: String): UUID {
+        val owner = requireNotNull(value = users.findByFirebaseUid(firebaseUid = ownerUid)).toDomain()
+        val club = clubs.create(command = CreateClubCommand(name = "Fixture TC", createdBy = owner.id)).toDomain()
+        clubs.addOwner(clubId = club.id, userId = owner.id)
+        return club.id
+    }
 
     private fun token(uid: String) = VerifiedFirebaseToken(uid = uid, providerUid = uid)
 
@@ -128,6 +145,8 @@ class EventServiceTest {
         end: String = LocalDate.now().plusDays(7).toString(),
         participants: List<UUID> = emptyList(),
         clubId: UUID? = null,
+        // Whose club the event is filed under when [clubId] is absent; the creator must own it (#789).
+        ownerUid: String = "host",
         circuitId: UUID? = null,
         type: EventType = EventType.OPEN_PLAY,
         format: String = "SINGLES",
@@ -137,7 +156,7 @@ class EventServiceTest {
         startDate = LocalDate.parse(start),
         endDate = LocalDate.parse(end),
         participantIds = participants,
-        clubId = clubId,
+        clubId = clubId ?: fixtureClub(ownerUid = ownerUid),
         circuitId = circuitId,
         type = type.name,
         format = format,
@@ -177,7 +196,8 @@ class EventServiceTest {
         view.participants.map { it.userId }.shouldContainExactlyInAnyOrder(p1.id.toString(), p2.id.toString())
         // Participant order isn't guaranteed, so look p1 up by id rather than assuming it's first.
         view.participants.single { it.userId == p1.id.toString() }.displayName shouldBe "p1"
-        view.club.shouldBeNull() // clubless by default
+        // Every event is filed under a club (#794); there is no clubless default any more.
+        view.club.shouldNotBeNull().id shouldBe fixtureClub(ownerUid = "host").toString()
     }
 
     @Test
@@ -318,8 +338,11 @@ class EventServiceTest {
             it.finalizedAt.shouldNotBeNull()
         }
 
-        // An admin can also clear a finalized event back to Open.
-        service.setClub(token = token(uid = "admin"), id = event.id, clubId = null).shouldBeRight().club.shouldBeNull()
+        // Clearing back to "Open" is no longer possible (#794) — an admin re-files between clubs instead.
+        service.setClub(token = token(uid = "admin"), id = event.id, clubId = clubA.id).shouldBeRight().let {
+            it.club.shouldNotBeNull().id shouldBe clubA.id.toString()
+            it.isFinalized.shouldBeTrue()
+        }
     }
 
     @Test
@@ -346,35 +369,43 @@ class EventServiceTest {
     }
 
     @Test
-    fun `setClub sets, changes, and clears an event's club (#319)`() {
+    fun `setClub re-files an event from one club to another, both ways (#319)`() {
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val clubA = ownedClub(name = "Downtown TC", owner = host)
         val clubB = ownedClub(name = "West End", owner = host)
-        val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight()
-        event.club.shouldBeNull() // clubless to start, so there is no club page to link to
+        // Every event is filed under a club from birth (#794), so there is no clubless start state to add
+        // one to, and no clearing back to "Open" at the end — setClub is purely a move between clubs.
+        val event = service.create(token = token(uid = "host"), input = clubInput(clubId = clubA.id)).shouldBeRight()
+        event.club.shouldNotBeNull().id shouldBe clubA.id.toString()
 
-        // Add a club.
-        service
-            .setClub(token = token(uid = "host"), id = UUID.fromString(event.id), clubId = clubA.id)
-            .shouldBeRight().club.shouldNotBeNull().id shouldBe clubA.id.toString()
-        // Change it.
+        // Move it. Re-filing swaps the whole nested object, so the link always points at the CURRENT club.
         service.setClub(token = token(uid = "host"), id = UUID.fromString(event.id), clubId = clubB.id).shouldBeRight().let {
-            // Re-filing swaps the whole object, so the link always points at the CURRENT club.
             it.club.shouldNotBeNull().let { c ->
                 c.id shouldBe clubB.id.toString()
                 c.name shouldBe "West End"
                 c.publicCode shouldBe clubB.publicCode
             }
         }
-        // Clear it (back to Open).
-        service.setClub(token = token(uid = "host"), id = UUID.fromString(event.id), clubId = null).shouldBeRight().club.shouldBeNull()
+        // And back — the move is symmetric.
+        service.setClub(token = token(uid = "host"), id = UUID.fromString(event.id), clubId = clubA.id)
+            .shouldBeRight()
+            .club
+            .shouldNotBeNull()
+            .id shouldBe clubA.id.toString()
 
-        // Each club change writes an Activity Log entry (#354); the newest records the clear as "Open".
+        // Each move writes an Activity Log entry (#354). Look them up by destination club rather than by
+        // position — two writes a moment apart can tie on occurred_at, so ordering is not load-bearing.
         val entries = AuditRepository().list(actions = listOf(element = AuditAction.EVENT_CLUB_CHANGED), limit = 10, offset = 0).first
-        entries shouldHaveSize 3
-        entries.first().actorUserId shouldBe host.id
-        entries.first().summary shouldBe "Set event ${event.name} club to Open"
-        entries.first().details["newClubId"].shouldBeNull()
+        entries shouldHaveSize 2
+        entries.map { it.actorUserId }.toSet() shouldBe setOf(element = host.id)
+        entries.single { it.details["newClubId"] == clubB.id.toString() }.let {
+            it.summary shouldBe "Re-filed event ${event.name} under club ${clubB.id}"
+            it.details["oldClubId"] shouldBe clubA.id.toString()
+        }
+        entries.single { it.details["newClubId"] == clubA.id.toString() }.let {
+            it.summary shouldBe "Re-filed event ${event.name} under club ${clubA.id}"
+            it.details["oldClubId"] shouldBe clubB.id.toString()
+        }
     }
 
     @Test
@@ -398,7 +429,7 @@ class EventServiceTest {
             .setClub(token = token(uid = "admin"), id = UUID.fromString(event.id), clubId = club.id)
             .shouldBeRight().club.shouldNotBeNull().id shouldBe club.id.toString()
         // Unknown event → NotFound.
-        service.setClub(token = token(uid = "admin"), id = UUID.randomUUID(), clubId = null)
+        service.setClub(token = token(uid = "admin"), id = UUID.randomUUID(), clubId = club.id)
             .shouldBeLeft()
             .shouldBeInstanceOf<ServiceError.NotFound>()
     }
@@ -435,18 +466,21 @@ class EventServiceTest {
     }
 
     @Test
-    fun `an event whose creator was removed has a null creator (#270)`() {
+    fun `an event whose creator was removed has a null creator, and falls back to its club (#270)`() {
         provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
+        provision(uid = "other", roles = setOf(Capability.PLAYER, Capability.HOST))
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
-        val event = service.create(token = token(uid = "host"), input = input()).shouldBeRight().domain()
+        val event = service.create(token = token(uid = "host"), input = input(ownerUid = "host")).shouldBeRight().domain()
 
         // Orphan the creator — the FK is ON DELETE SET NULL (created_by becomes null).
         transaction { EventsTable.update(where = { EventsTable.id eq event.id }) { it[createdBy] = null } }
 
-        // Read as an administrator: a clubless event whose creator has been orphaned has no ownership
-        // anchor left at all (#789), so an administrator is the only caller who can still organize it.
+        // The creator attribution is gone from the view.
         service.get(token = token(uid = "admin"), id = event.id).shouldBeRight().creatorPublicCode.shouldBeNull()
-        service.get(token = token(uid = "host"), id = event.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        // Losing the creator no longer strands the event: since #794 it always has a club, and that club's
+        // named owner is still an ownership anchor (#789). A host who owns neither is refused.
+        service.get(token = token(uid = "host"), id = event.id).shouldBeRight().creatorPublicCode.shouldBeNull()
+        service.get(token = token(uid = "other"), id = event.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 
     @Test
@@ -472,7 +506,9 @@ class EventServiceTest {
             level = "4.0",
         )
 
-        service.create(token = token(uid = "admin"), input = input(participants = listOf(element = player.id))).shouldBeRight()
+        service
+            .create(token = token(uid = "admin"), input = input(participants = listOf(element = player.id), ownerUid = "admin"))
+            .shouldBeRight()
         val view = service.list(token = token(uid = "admin")).shouldBeRight().single()
         val participant = view.participants.single()
         participant.sex shouldBe "Female"
@@ -498,8 +534,9 @@ class EventServiceTest {
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
         provision(uid = "host1", roles = setOf(Capability.PLAYER, Capability.HOST))
         provision(uid = "host2", roles = setOf(Capability.PLAYER, Capability.HOST))
-        val a = service.create(token = token(uid = "host1"), input = input(name = "H1 Cup")).shouldBeRight()
-        val b = service.create(token = token(uid = "host2"), input = input(name = "H2 Cup")).shouldBeRight()
+        // Each host files under their OWN club — a shared one would put both events in host1's scoped list.
+        val a = service.create(token = token(uid = "host1"), input = input(name = "H1 Cup", ownerUid = "host1")).shouldBeRight()
+        val b = service.create(token = token(uid = "host2"), input = input(name = "H2 Cup", ownerUid = "host2")).shouldBeRight()
 
         service.list(token = token(uid = "host1")).shouldBeRight().map { it.id } shouldBe listOf(element = a.id)
         service.list(token = token(uid = "admin")).shouldBeRight().map { it.id }.toSet() shouldBe setOf(a.id, b.id)
@@ -646,14 +683,14 @@ class EventServiceTest {
     }
 
     @Test
-    fun `publicByCode surfaces the organizing club's name, and null when clubless (#313)`() {
+    fun `publicByCode surfaces the organizing club's name (#313)`() {
+        // The "and null when clubless" half of this test is gone with #794: every event has a club, so the
+        // public page always has a club name to show.
         val host = provision(uid = "host", roles = setOf(Capability.PLAYER, Capability.HOST))
         val club = ownedClub(name = "Downtown TC", owner = host)
         val underClub = service.create(token = token(uid = "host"), input = clubInput(clubId = club.id)).shouldBeRight()
-        val clubless = service.create(token = token(uid = "host"), input = input()).shouldBeRight()
 
         service.publicByCode(token = null, code = underClub.publicCode).shouldBeRight().clubName shouldBe "Downtown TC"
-        service.publicByCode(token = null, code = clubless.publicCode).shouldBeRight().clubName.shouldBeNull()
     }
 
     // --- Event deletion (#243) ---
@@ -789,7 +826,7 @@ class EventServiceTest {
         val owner = provision(uid = "owner", roles = setOf(Capability.PLAYER, Capability.HOST))
         provision(uid = "other", roles = setOf(Capability.PLAYER, Capability.HOST))
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
-        val event = service.create(token = token(uid = "owner"), input = input()).shouldBeRight().domain()
+        val event = service.create(token = token(uid = "owner"), input = input(ownerUid = "owner")).shouldBeRight().domain()
 
         service.delete(token = token(uid = "other"), id = event.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
         events.findById(id = event.id)!!.toDomain().isActive.shouldBeTrue()
@@ -831,7 +868,8 @@ class EventServiceTest {
         provision(uid = "owner", roles = setOf(Capability.PLAYER, Capability.HOST))
         provision(uid = "other", roles = setOf(Capability.PLAYER, Capability.HOST))
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
-        val event = service.create(token = token(uid = "owner"), input = input(name = "Owner Cup")).shouldBeRight().domain()
+        val event =
+            service.create(token = token(uid = "owner"), input = input(name = "Owner Cup", ownerUid = "owner")).shouldBeRight().domain()
 
         service.rename(token = token(uid = "other"), id = event.id, name = "Hijacked")
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
@@ -939,7 +977,7 @@ class EventServiceTest {
     fun `an administrator may finalize any event (#403)`() {
         provision(uid = "owner", roles = setOf(Capability.PLAYER, Capability.HOST))
         provision(uid = "admin", roles = setOf(Capability.PLAYER, Capability.ADMINISTRATOR))
-        val event = service.create(token = token(uid = "owner"), input = input()).shouldBeRight().domain()
+        val event = service.create(token = token(uid = "owner"), input = input(ownerUid = "owner")).shouldBeRight().domain()
 
         service.finalize(token = token(uid = "admin"), id = event.id).shouldBeRight().domain().isFinalized.shouldBeTrue()
     }
@@ -966,7 +1004,7 @@ class EventServiceTest {
 
         service.rename(token = token(uid = "host"), id = event.id, name = "New Name")
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
-        service.setClub(token = token(uid = "host"), id = event.id, clubId = null)
+        service.setClub(token = token(uid = "host"), id = event.id, clubId = fixtureClub(ownerUid = "host"))
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
         service.addParticipant(token = token(uid = "host"), eventId = event.id, userId = player.id)
             .shouldBeLeft().shouldBeInstanceOf<ServiceError.Validation>()
@@ -1023,7 +1061,7 @@ class EventServiceTest {
     fun `a non-staff caller cannot un-finalize, and a host cannot un-finalize another host's event (#477)`() {
         provision(uid = "owner", roles = setOf(Capability.PLAYER, Capability.HOST))
         provision(uid = "other", roles = setOf(Capability.PLAYER, Capability.HOST))
-        val event = service.create(token = token(uid = "owner"), input = input()).shouldBeRight().domain()
+        val event = service.create(token = token(uid = "owner"), input = input(ownerUid = "owner")).shouldBeRight().domain()
         service.finalize(token = token(uid = "owner"), id = event.id).shouldBeRight()
 
         service.unfinalize(token = token(uid = "ghost"), id = event.id).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
@@ -1152,8 +1190,12 @@ class EventServiceTest {
 
     @Test
     fun `a caller whose token maps to no account is forbidden`() {
-        // The "ghost" token resolves to no user — the staff gate denies before any work.
-        service.create(token = token(uid = "ghost"), input = input()).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
+        // The "ghost" token resolves to no user — the staff gate denies before any work, so the club id
+        // never has to exist (nobody is provisioned here to own one).
+        service
+            .create(token = token(uid = "ghost"), input = input(clubId = UUID.randomUUID()))
+            .shouldBeLeft()
+            .shouldBeInstanceOf<ServiceError.Forbidden>()
         service.list(token = token(uid = "ghost")).shouldBeLeft().shouldBeInstanceOf<ServiceError.Forbidden>()
     }
 

@@ -20,17 +20,10 @@ import { useGetApiV1Circuits } from "@/api/generated/circuits/circuits";
 import { useGetApiV1UsersMe } from "@/api/generated/users/users";
 import { useGetApiV1SettingsAwardRankingPoints } from "@/api/generated/settings/settings";
 import type {
-  ClubResponse,
   CreateEventRequestFormat,
   UserSummaryResponse,
 } from "@/api/generated/model";
-import {
-  Capability,
-  hasCapability,
-  canRate,
-  isAdministrator,
-} from "@/auth/capabilities";
-import { ownedClubs } from "@/auth/clubAccess";
+import { canRate } from "@/auth/capabilities";
 import { PlayerPicker } from "@/components/PlayerPicker";
 import { playerLabel } from "@/lib/playerLabel";
 import { PlaceholderTag } from "@/components/PlaceholderTag";
@@ -54,21 +47,6 @@ const EVENT_FORMAT_OPTIONS: ReadonlyArray<{
 ];
 
 /**
- * The single club a CLUB_OWNER should default the create-event Club selector to (#364), or "" when
- * there is no unambiguous default: own exactly one club → that club's id; own multiple → "" (don't
- * guess); own zero, or not a CLUB_OWNER → "". Non-owners are unaffected.
- */
-function defaultOwnedClubId(
-  clubs: ClubResponse[],
-  meId: string | undefined,
-  capabilities: readonly Capability[] | undefined,
-): string {
-  if (!meId || !hasCapability(capabilities, Capability.CLUB_OWNER)) return "";
-  const owned = ownedClubs(clubs, meId);
-  return owned.length === 1 ? owned[0].id : "";
-}
-
-/**
  * The new-event roster being assembled before the event is created.
  *
  * Shared by the Event Organizer tab and a club's own public page (#780). Passing [fixedClubPublicCode]
@@ -85,21 +63,16 @@ function defaultOwnedClubId(
  * a new event appears in the club page's own listing without a reload.
  */
 export function NewEventForm({
-  fixedClubPublicCode,
+  clubPublicCode,
   publicCodeToRefresh,
 }: {
-  fixedClubPublicCode?: string;
+  clubPublicCode: string;
   publicCodeToRefresh?: string;
-} = {}) {
+}) {
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  // Undefined until the user picks a club; that keeps the CLUB_OWNER default (#364) from clobbering
-  // an explicit choice (including clearing to "Open", i.e. an empty string the user chose).
-  const [clubIdChoice, setClubIdChoice] = useState<string | undefined>(
-    undefined,
-  );
   const [roster, setRoster] = useState<UserSummaryResponse[]>([]);
   // The event's class (#403); OPEN_PLAY is the default and the backward-compatible choice.
   const [type, setType] = useState<EventType>("OPEN_PLAY");
@@ -126,25 +99,11 @@ export function NewEventForm({
 
   // Default the selector to a CLUB_OWNER's own club (#364), but only while the field is untouched;
   // once the user selects anything (including "Open") their choice wins.
-  const ownerDefault = useMemo(
-    () => defaultOwnedClubId(clubs, me?.id, me?.capabilities),
-    [clubs, me?.id, me?.capabilities],
-  );
-  // The clubs this caller may actually FILE under (#789): an ADMINISTRATOR any club, anyone else only
-  // the clubs they are a named owner of. The server refuses the rest, so offering them would only hand
-  // out a 403; the selector shows the reachable subset instead.
-  const fileableClubs = useMemo(
-    () =>
-      isAdministrator(me?.capabilities) ? clubs : ownedClubs(clubs, me?.id),
-    [clubs, me?.id, me?.capabilities],
-  );
-  // A fixed club wins outright over both the picker and the #364 owner default.
-  const fixedClub = fixedClubPublicCode
-    ? clubs.find((club) => club.publicCode === fixedClubPublicCode)
-    : undefined;
-  const clubId = fixedClubPublicCode
-    ? (fixedClub?.id ?? "")
-    : (clubIdChoice ?? ownerDefault);
+  // The club comes from the surface, resolved by its public code — the caller is a public page, whose
+  // payload carries no internal ids. Reading it from the clubs list is safe because the form only renders
+  // for a match manager, who may read that endpoint.
+  const club = clubs.find((c) => c.publicCode === clubPublicCode);
+  const clubId = club?.id ?? "";
 
   const create = usePostApiV1Events({
     mutation: {
@@ -154,7 +113,6 @@ export function NewEventForm({
         setName("");
         setStartDate("");
         setEndDate("");
-        setClubIdChoice(undefined);
         setRoster([]);
         setType("OPEN_PLAY");
         setFormat("SINGLES");
@@ -183,7 +141,7 @@ export function NewEventForm({
           type,
           format,
           participantIds: roster.map((u) => u.id),
-          ...(clubId ? { clubId } : {}),
+          clubId,
           ...(type === "TOURNAMENT" ? { circuitId } : {}),
           // A single "Award Ranking Points" flag (#559) replaces the old per-event points config.
           awardRankingPoints,
@@ -205,8 +163,8 @@ export function NewEventForm({
     endDate !== "" &&
     format !== ("" as CreateEventRequestFormat) &&
     (type !== "TOURNAMENT" || circuitId !== "") &&
-    // Never submit a fixed-club form before the club id resolves — it would file the event as "Open".
-    (!fixedClubPublicCode || Boolean(fixedClub));
+    // Never submit before the club id resolves, or the create would be rejected for a missing club.
+    Boolean(clubId);
 
   return (
     <Card>
@@ -306,28 +264,6 @@ export function NewEventForm({
                 {circuits.map((circuit) => (
                   <option key={circuit.id} value={circuit.id}>
                     {circuit.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : null}
-          {/* Hidden entirely when the club is fixed by the surface (#780) — the club page's form files
-              under its own club, so there is nothing to choose. */}
-          {!fixedClubPublicCode && fileableClubs.length > 0 ? (
-            <div className="space-y-1">
-              <Label htmlFor="event-club" className="text-xs">
-                Club
-              </Label>
-              <select
-                id="event-club"
-                value={clubId}
-                onChange={(e) => setClubIdChoice(e.target.value)}
-                className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-              >
-                <option value="">No club (Open)</option>
-                {fileableClubs.map((club) => (
-                  <option key={club.id} value={club.id}>
-                    {club.name}
                   </option>
                 ))}
               </select>

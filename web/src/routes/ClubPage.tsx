@@ -114,7 +114,7 @@ export function ClubPage() {
 
       {club && canOrganize ? (
         <NewEventForm
-          fixedClubPublicCode={club.publicCode}
+          clubPublicCode={club.publicCode}
           publicCodeToRefresh={club.publicCode}
         />
       ) : null}

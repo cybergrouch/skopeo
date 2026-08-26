@@ -54,6 +54,7 @@ import org.skopeo.repository.RankingPointRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
 import org.skopeo.testsupport.TestFirebaseAuth
+import org.skopeo.testsupport.seedFixtureClub
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -98,8 +99,15 @@ class EventFinalizeApiIntegrationTest {
 
     private fun tokenFor(uid: String): String = TestFirebaseAuth.mintToken(uid = uid, emailVerified = true)
 
+    /**
+     * POST an event as [token]. [ownerUid] must name the same account as [token]: every event needs a club
+     * (#794) and `mayFileUnder` requires the creator to own it (#789). It is a separate parameter only
+     * because the token here is an opaque string — and it stays a *single* uid so the refusal tests below
+     * ("a non-owner host cannot un-finalize…") keep refusing for the right reason.
+     */
     private suspend fun HttpClient.createEvent(
         token: String,
+        ownerUid: String = "host",
         awardRankingPoints: Boolean? = null,
         participantIds: List<UUID> = emptyList(),
     ): EventResponse =
@@ -109,6 +117,7 @@ class EventFinalizeApiIntegrationTest {
             setBody(
                 body =
                     CreateEventRequest(
+                        clubId = seedFixtureClub(ownerUids = arrayOf(ownerUid)).id.toString(),
                         name = "Spring Open",
                         startDate = LocalDate.now().toString(),
                         endDate = LocalDate.now().plusDays(7).toString(),
@@ -157,7 +166,7 @@ class EventFinalizeApiIntegrationTest {
             seedUser(uid = "owner", roles = setOf(Capability.PLAYER, Capability.HOST))
             seedUser(uid = "other", roles = setOf(Capability.PLAYER, Capability.HOST))
             val owner = tokenFor(uid = "owner")
-            val event = client.createEvent(token = owner)
+            val event = client.createEvent(token = owner, ownerUid = "owner")
             client.post(urlString = "/api/v1/events/${event.id}/finalize") {
                 header(key = HttpHeaders.Authorization, value = "Bearer $owner")
             }.let { it.status shouldBe HttpStatusCode.OK }
@@ -334,6 +343,8 @@ class EventFinalizeApiIntegrationTest {
                         endDate = LocalDate.now().plusDays(7),
                         participantIds = listOf(p1.id, p2.id),
                         type = EventType.OPEN_PLAY.name,
+                        // Every event needs a club (#794), owned by its creator (#789).
+                        clubId = seedFixtureClub(ownerUids = arrayOf("host")).id,
                     ),
             ).let { UUID.fromString(requireNotNull(value = it.getOrNull()).id) }
         val fixture =

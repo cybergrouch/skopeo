@@ -40,6 +40,7 @@ import org.skopeo.domain.model.WeightClass
 import org.skopeo.domain.model.WinLossRecord
 import org.skopeo.domain.model.WindowMatch
 import org.skopeo.testsupport.PostgresTestDatabase
+import org.skopeo.testsupport.seedClub
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
@@ -173,6 +174,8 @@ class MatchRepositoryTest {
         events.create(
             command =
                 CreateEventCommand(
+                    // Every event needs a club (#794).
+                    clubId = seedClub().id,
                     name = "E-$endDate",
                     startDate = endDate.minusDays(2),
                     endDate = endDate,

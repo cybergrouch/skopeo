@@ -1210,7 +1210,7 @@ describe('EventManagerView', () => {
     expect(renameMutate).not.toHaveBeenCalled()
   })
 
-  it('sets and clears the event club (#319)', async () => {
+  it('re-files the event under another club (#319, #794)', async () => {
     const user = setupUser()
     useGetApiV1Clubs.mockReturnValue({
       data: [
@@ -1221,25 +1221,32 @@ describe('EventManagerView', () => {
     })
     const { unmount } = renderDetail()
 
-    // No club saved yet — assigning one sends the chosen id.
+    // Re-filing sends the chosen id.
     await user.selectOptions(screen.getByLabelText('Club'), 'c2')
     expect(clubMutate).toHaveBeenCalledWith({ id: 'e1', data: { clubId: 'c2' } })
     unmount()
 
-    // Clearing the club (choosing "Open") sends a null id.
-    useGetApiV1EventsId.mockReturnValue({ data: { ...event, clubId: 'c2' }, isLoading: false })
+    // There is no longer an option that clears the club: an event always belongs to one (#794), so the
+    // only thing this control can do is move it between clubs.
+    useGetApiV1EventsId.mockReturnValue({
+      data: { ...event, club: { id: 'c2', name: 'Lakeside', publicCode: 'CLBC2' } },
+      isLoading: false,
+    })
     renderDetail()
-    await user.selectOptions(screen.getByLabelText('Club'), '')
-    expect(clubMutate).toHaveBeenLastCalledWith({ id: 'e1', data: { clubId: null } })
+    expect(
+      within(screen.getByLabelText('Club')).queryByRole('option', { name: /No club/ }),
+    ).not.toBeInTheDocument()
   })
 
-  it('renders the club picker with only the Open option when no clubs load (#319)', () => {
+  it('renders an empty club picker when no clubs load (#319, #794)', () => {
     useGetApiV1Clubs.mockReturnValue({ data: undefined, isLoading: false })
     renderDetail()
 
-    const options = within(screen.getByLabelText('Club')).getAllByRole('option')
-    expect(options).toHaveLength(1)
-    expect(options[0]).toHaveTextContent('No club (Open)')
+    // With the "No club (Open)" placeholder gone, an unloaded club list means no options at all.
+    expect(screen.getByLabelText('Club')).toBeInTheDocument()
+    expect(
+      within(screen.getByLabelText('Club')).queryAllByRole('option'),
+    ).toHaveLength(0)
   })
 
   it('surfaces a server error when setting the club fails (#319)', async () => {

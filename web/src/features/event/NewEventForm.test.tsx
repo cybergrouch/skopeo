@@ -11,6 +11,8 @@ const {
   useAwardFlag,
   createMutate,
   invalidate,
+  state,
+  toastError,
 } = vi.hoisted(() => ({
   useGetApiV1Clubs: vi.fn(),
   useGetApiV1Circuits: vi.fn(),
@@ -18,15 +20,18 @@ const {
   useAwardFlag: vi.fn(),
   createMutate: vi.fn(),
   invalidate: vi.fn(),
+  state: { createFails: false },
+  toastError: vi.fn(),
 }));
 
 vi.mock("@/api/generated/events/events", () => ({
   getGetApiV1EventsQueryKey: () => ["events"],
   usePostApiV1Events: (opts?: { mutation?: { onSuccess?: () => void } }) => ({
     isPending: false,
-    mutate: (vars: unknown) => {
+    mutate: (vars: unknown, handlers?: { onError?: () => void }) => {
       createMutate(vars);
-      opts?.mutation?.onSuccess?.();
+      if (state.createFails) handlers?.onError?.();
+      else opts?.mutation?.onSuccess?.();
     },
   }),
 }));
@@ -39,9 +44,22 @@ vi.mock("@/api/generated/users/users", () => ({ useGetApiV1UsersMe }));
 vi.mock("@/api/generated/settings/settings", () => ({
   useGetApiV1SettingsAwardRankingPoints: useAwardFlag,
 }));
-vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+vi.mock("sonner", () => ({ toast: { error: toastError, success: vi.fn() } }));
 vi.mock("@/components/PlayerPicker", () => ({
-  PlayerPicker: () => <div>picker</div>,
+  PlayerPicker: ({
+    placeholder,
+    onSelect,
+  }: {
+    placeholder?: string;
+    onSelect: (u: { id: string; publicCode: string; displayName: string }) => void;
+  }) => (
+    <button
+      type="button"
+      onClick={() => onSelect({ id: "u1", publicCode: "AAA111", displayName: "Ana" })}
+    >
+      {placeholder}
+    </button>
+  ),
 }));
 vi.mock("@tanstack/react-query", async () => {
   const actual =
@@ -74,17 +92,15 @@ const clubs = [
   },
 ];
 
-function renderForm(props?: {
-  fixedClubPublicCode?: string;
-  publicCodeToRefresh?: string;
-}) {
+function renderForm(props?: { clubPublicCode?: string; publicCodeToRefresh?: string }) {
   return render(
     <QueryClientProvider client={new QueryClient()}>
-      <NewEventForm {...props} />
+      <NewEventForm clubPublicCode="CLB001" {...props} />
     </QueryClientProvider>,
   );
 }
 
+/** Fill the required fields and submit; the club comes from the surface, not the form. */
 async function fillAndSubmit() {
   const user = userEvent.setup();
   await user.type(screen.getByLabelText("Name"), "Club Cup");
@@ -96,6 +112,7 @@ async function fillAndSubmit() {
 describe("NewEventForm — fixed club (#780)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    state.createFails = false;
     useGetApiV1Clubs.mockReturnValue({ data: clubs, isLoading: false });
     useGetApiV1Circuits.mockReturnValue({ data: [], isLoading: false });
     useGetApiV1UsersMe.mockReturnValue({
@@ -105,7 +122,7 @@ describe("NewEventForm — fixed club (#780)", () => {
   });
 
   it("hides the club selector and files under the fixed club", async () => {
-    renderForm({ fixedClubPublicCode: "CLB001" });
+    renderForm({ clubPublicCode: "CLB001" });
 
     // The page already answers "which club", so the choice isn't offered again.
     expect(screen.queryByLabelText("Club")).not.toBeInTheDocument();
@@ -127,25 +144,7 @@ describe("NewEventForm — fixed club (#780)", () => {
     });
   });
 
-  it("still offers the selector when no club is fixed", () => {
-    renderForm();
-    expect(screen.getByLabelText("Club")).toBeInTheDocument();
-    // Both are the caller's own clubs, so both are offered.
-    expect(screen.getByRole("option", { name: "Downtown TC" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "West End" })).toBeInTheDocument();
-  });
 
-  it("lists only the clubs the caller may file under (#789)", () => {
-    useGetApiV1Clubs.mockReturnValue({
-      data: [clubs[0], { ...clubs[1], owners: [{ userId: "someone-else", publicCode: "X" }] }],
-      isLoading: false,
-    });
-    renderForm();
-
-    // Filing under a club you don't own is refused server-side, so it isn't offered.
-    expect(screen.getByRole("option", { name: "Downtown TC" })).toBeInTheDocument();
-    expect(screen.queryByRole("option", { name: "West End" })).not.toBeInTheDocument();
-  });
 
   it("hides the selector entirely from a host who owns no club (#789)", () => {
     useGetApiV1Clubs.mockReturnValue({
@@ -157,24 +156,11 @@ describe("NewEventForm — fixed club (#780)", () => {
     expect(screen.queryByLabelText("Club")).not.toBeInTheDocument();
   });
 
-  it("offers every club to an administrator, owned or not (#789)", () => {
-    useGetApiV1UsersMe.mockReturnValue({
-      data: { id: "me", capabilities: ["ADMINISTRATOR"] },
-    });
-    useGetApiV1Clubs.mockReturnValue({
-      data: clubs.map((c) => ({ ...c, owners: [] })),
-      isLoading: false,
-    });
-    renderForm();
-
-    expect(screen.getByRole("option", { name: "Downtown TC" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "West End" })).toBeInTheDocument();
-  });
 
   it("blocks submission until the fixed club's id resolves", async () => {
     // Clubs not loaded yet: submitting now would silently file the event as "Open".
     useGetApiV1Clubs.mockReturnValue({ data: undefined, isLoading: true });
-    renderForm({ fixedClubPublicCode: "CLB001" });
+    renderForm({ clubPublicCode: "CLB001" });
 
     const user = userEvent.setup();
     await user.type(screen.getByLabelText("Name"), "Club Cup");
@@ -187,7 +173,7 @@ describe("NewEventForm — fixed club (#780)", () => {
   });
 
   it("refreshes the club page's own query after creating", async () => {
-    renderForm({ fixedClubPublicCode: "CLB001", publicCodeToRefresh: "CLB001" });
+    renderForm({ clubPublicCode: "CLB001", publicCodeToRefresh: "CLB001" });
     await fillAndSubmit();
 
     // The new event must appear in the club page's listing without a reload.
@@ -201,6 +187,123 @@ describe("NewEventForm — fixed club (#780)", () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["events"] });
     expect(invalidate).not.toHaveBeenCalledWith({
       queryKey: ["clubs", "CLB001"],
+    });
+  });
+
+
+
+  // These moved here with the form (#794): the Event Organizer tab no longer renders NewEventForm, so its
+  // test can't cover it any more. They belong with the component regardless.
+  describe("create payload", () => {
+    async function fillBasics(user: ReturnType<typeof userEvent.setup>) {
+      await user.type(screen.getByLabelText("Name"), "Summer Open");
+      await user.type(screen.getByLabelText("Start date"), "2026-06-01");
+      await user.type(screen.getByLabelText("End date"), "2026-06-02");
+          }
+
+    it("stages a roster and sends it, de-duplicating repeats", async () => {
+      const user = userEvent.setup();
+      renderForm();
+      await fillBasics(user);
+
+      // The mocked picker always returns the same player; adding twice must not duplicate them.
+      await user.click(screen.getByRole("button", { name: /Search players/ }));
+      await user.click(screen.getByRole("button", { name: /Search players/ }));
+      await user.click(screen.getByRole("button", { name: "Create event" }));
+
+      expect(createMutate).toHaveBeenCalledWith({
+        data: expect.objectContaining({ participantIds: ["u1"] }),
+      });
+    });
+
+    it("sends the chosen event type (#403)", async () => {
+      const user = userEvent.setup();
+      useGetApiV1Circuits.mockReturnValue({
+        data: [{ id: "ci1", name: "NORTH" }],
+        isLoading: false,
+      });
+      renderForm();
+      await fillBasics(user);
+      await user.selectOptions(screen.getByLabelText("Type"), "TOURNAMENT");
+      // A tournament must name a circuit (#525), so it gates submission until one is chosen.
+      expect(screen.getByRole("button", { name: "Create event" })).toBeDisabled();
+      await user.selectOptions(screen.getByLabelText("Circuit"), "ci1");
+      await user.click(screen.getByRole("button", { name: "Create event" }));
+
+      expect(createMutate).toHaveBeenCalledWith({
+        data: expect.objectContaining({ type: "TOURNAMENT", circuitId: "ci1" }),
+      });
+    });
+
+    it("sends the chosen organizing format (#720)", async () => {
+      const user = userEvent.setup();
+      renderForm();
+      await fillBasics(user);
+      await user.selectOptions(screen.getByLabelText("Format"), "DOUBLES");
+      await user.click(screen.getByRole("button", { name: "Create event" }));
+
+      expect(createMutate).toHaveBeenCalledWith({
+        data: expect.objectContaining({ format: "DOUBLES" }),
+      });
+    });
+
+    it("defaults award-ranking-points off and only offers it when the flag is on (#567, #641)", async () => {
+      const user = userEvent.setup();
+      renderForm();
+      // Flag off: no checkbox, and the payload opts out.
+      expect(
+        screen.queryByLabelText(/Award Ranking Points/i),
+      ).not.toBeInTheDocument();
+      await fillBasics(user);
+      await user.click(screen.getByRole("button", { name: "Create event" }));
+
+      expect(createMutate).toHaveBeenCalledWith({
+        data: expect.objectContaining({ awardRankingPoints: false }),
+      });
+    });
+
+    it("surfaces an error when the create fails", async () => {
+      const user = userEvent.setup();
+      state.createFails = true;
+      renderForm();
+      await fillBasics(user);
+      await user.click(screen.getByRole("button", { name: "Create event" }));
+
+      expect(toastError).toHaveBeenCalled();
+    });
+  });
+
+  it("offers and sends the award-points opt-in when the flag is enabled (#641)", async () => {
+    useAwardFlag.mockReturnValue({ data: { enabled: true } });
+    const user = userEvent.setup();
+    renderForm();
+
+    await user.type(screen.getByLabelText("Name"), "Summer Open");
+    await user.type(screen.getByLabelText("Start date"), "2026-06-01");
+    await user.type(screen.getByLabelText("End date"), "2026-06-02");
+        await user.click(screen.getByLabelText("Award Ranking Points"));
+    await user.click(screen.getByRole("button", { name: "Create event" }));
+
+    expect(createMutate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ awardRankingPoints: true }),
+    });
+  });
+
+  it("removes a staged participant before creating", async () => {
+    const user = userEvent.setup();
+    renderForm();
+
+    await user.type(screen.getByLabelText("Name"), "Summer Open");
+    await user.type(screen.getByLabelText("Start date"), "2026-06-01");
+    await user.type(screen.getByLabelText("End date"), "2026-06-02");
+        await user.click(screen.getByRole("button", { name: /Search players/ }));
+
+    // Clicking the staged chip takes them back off the roster.
+    await user.click(screen.getByRole("button", { name: /Ana/ }));
+    await user.click(screen.getByRole("button", { name: "Create event" }));
+
+    expect(createMutate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ participantIds: [] }),
     });
   });
 });

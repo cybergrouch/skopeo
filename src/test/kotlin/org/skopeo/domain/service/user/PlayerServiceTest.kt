@@ -46,6 +46,7 @@ import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.RankingPointRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
+import org.skopeo.testsupport.seedClub
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -1011,6 +1012,8 @@ class PlayerServiceTest {
         createdBy: UUID,
         participantIds: List<UUID> = emptyList(),
     ) = org.skopeo.domain.model.CreateEventCommand(
+        // Every event needs a club (#794).
+        clubId = seedClub().id,
         name = "Points Cup",
         startDate = LocalDate.now(),
         endDate = LocalDate.now().plusDays(7),

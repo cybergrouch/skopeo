@@ -70,7 +70,9 @@ data class CreateEventInput(
     val startDate: LocalDate,
     val endDate: LocalDate,
     val participantIds: List<UUID>,
-    val clubId: UUID? = null,
+    // The club the event is filed under (#313). REQUIRED since #794 — every organizer surface is
+    // club-scoped, so a clubless event has no home.
+    val clubId: UUID,
     // The circuit a TOURNAMENT event belongs to (#525); required for tournaments, ignored otherwise.
     val circuitId: UUID? = null,
     // The event's organizing format name (#720): SINGLES | DOUBLES | MIXED_DOUBLES. Required at create;
@@ -153,8 +155,10 @@ class EventService(
             val type = input.type?.let { parseEventType(raw = it).bind() } ?: EventType.OPEN_PLAY
             // An optional club must exist (#313); a clubless event is fine. Existence is checked before
             // ownership so a typo'd id still reads as a 400 rather than a misleading 403.
-            input.clubId?.let { clubId ->
-                ensureNotNull(value = clubs.findById(id = clubId)) { ServiceError.Validation(message = "Club $clubId not found") }
+            // The club must exist (#313); checked before the ownership gate so an unknown id stays a 400
+            // rather than reading as a permission problem.
+            ensureNotNull(value = clubs.findById(id = input.clubId)) {
+                ServiceError.Validation(message = "Club ${input.clubId} not found")
             }
             // …and the caller must own it (#789). This is the tightening: filing under someone else's club
             // used to succeed.
@@ -199,7 +203,7 @@ class EventService(
                                 "startDate" to event.startDate.toString(),
                                 "endDate" to event.endDate.toString(),
                                 "participants" to event.participantIds.size.toString(),
-                                "clubId" to event.clubId?.toString(),
+                                "clubId" to event.clubId.toString(),
                                 "format" to event.format.name,
                                 "type" to event.type.name,
                                 "awardRankingPoints" to event.awardRankingPoints.toString(),
@@ -350,7 +354,7 @@ class EventService(
         }
 
     /**
-     * Set (or clear, when [clubId] is null) an event's club (#319). Staff-only, the same authz as rename
+     * RE-FILE an event under a different club (#319). Staff-only, the same authz as rename
      * ([ClubAccess.mayOrganize], #789) — plus, because re-filing is a claim on the *destination* club's
      * calendar exactly as creating is, the caller must also be allowed to file under the new club
      * ([ClubAccess.mayFileUnder]). A non-null club must exist.
@@ -358,7 +362,7 @@ class EventService(
     fun setClub(
         token: VerifiedFirebaseToken,
         id: UUID,
-        clubId: UUID?,
+        clubId: UUID,
     ): Either<ServiceError, EventResponse> =
         either {
             val caller = staffCaller(users = users, token = token).bind()
@@ -378,9 +382,7 @@ class EventService(
             if (!isAdmin) {
                 ensureNotFinalized(event = event).bind()
             }
-            clubId?.let { cid ->
-                ensureNotNull(value = clubs.findById(id = cid)) { ServiceError.Validation(message = "Club $cid not found") }
-            }
+            ensureNotNull(value = clubs.findById(id = clubId)) { ServiceError.Validation(message = "Club $clubId not found") }
             // Re-filing under a club you don't own is refused for the same reason creating one there is (#789).
             ensure(condition = clubAccess.mayFileUnder(caller = caller, clubId = clubId)) { ServiceError.Forbidden() }
             // Existence is already confirmed above (needed for the authz check), so the update can't miss.
@@ -394,13 +396,13 @@ class EventService(
                         entityType = AuditEntityType.EVENT,
                         entityId = event.id,
                         summary =
-                            "Set event ${event.name} club to ${if (clubId == null) "Open" else clubId.toString()}" +
+                            "Re-filed event ${event.name} under club $clubId" +
                                 if (event.isFinalized) " (after finalize)" else "",
                         details =
                             mapOf(
                                 "publicCode" to event.publicCode,
-                                "oldClubId" to event.clubId?.toString(),
-                                "newClubId" to clubId?.toString(),
+                                "oldClubId" to event.clubId.toString(),
+                                "newClubId" to clubId.toString(),
                                 // Re-filing after finalize is an admin correction (#782); flag it so the
                                 // Activity Log distinguishes it from an ordinary pre-finalize club change.
                                 "wasFinalized" to event.isFinalized.toString(),
@@ -800,7 +802,7 @@ class EventService(
             val participants = publicParticipants(participantIds = event.participantIds, byId = byId)
             val matchResponses = publicMatches(eventMatches = eventMatches, byId = byId)
             // Surface the organizing club's name (#313), read-only; null for a clubless event.
-            val clubEntity = event.clubId?.let { clubs.findById(id = it)?.toDomain() }
+            val clubEntity = clubs.findById(id = event.clubId)?.toDomain()
             val clubName = clubEntity?.name
             EventPublicResponse(
                 publicCode = event.publicCode,
@@ -891,7 +893,7 @@ class EventService(
             }
         // Resolve the club (#313) for grouping/display, carrying its public code (#327) so the reference
         // can link to the club's public page (#780); null for a clubless event.
-        val clubEntity = event.clubId?.let { clubs.findById(id = it)?.toDomain() }
+        val clubEntity = clubs.findById(id = event.clubId)?.toDomain()
         val club = clubEntity?.let { EventClubRef(id = it.id, name = it.name, publicCode = it.publicCode) }
         return EventView(event = event, participants = participants, creator = creator, club = club)
     }

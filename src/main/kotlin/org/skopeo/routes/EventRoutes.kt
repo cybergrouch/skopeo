@@ -138,8 +138,9 @@ private fun Route.renameEvent(service: EventService) {
     }
     put(path = "/{id}/club") {
         respondMappingErrors {
-            // A null/absent clubId clears the club (event becomes "Open"); a non-null id must parse + exist.
-            val clubId = call.receive<SetEventClubRequest>().clubId?.let { parseEventUuid(value = it, field = "club id") }
+            // Re-file under another club (#794): the id is required and must parse + exist. Clearing a
+            // club is no longer possible — an event always belongs to one.
+            val clubId = parseEventUuid(value = call.receive<SetEventClubRequest>().clubId, field = "club id")
             respondEither(
                 result = service.setClub(token = verifiedToken(), id = uuidParam(name = "id"), clubId = clubId),
             ) { event -> call.respond(status = HttpStatusCode.OK, message = event) }
@@ -266,7 +267,7 @@ private fun toCreateEventInput(request: CreateEventRequest): CreateEventInput {
         startDate = parseDate(value = request.startDate, field = "startDate"),
         endDate = parseDate(value = request.endDate, field = "endDate"),
         participantIds = request.participantIds.map { parseEventUuid(value = it) },
-        clubId = request.clubId?.let { parseEventUuid(value = it, field = "club id") },
+        clubId = parseEventUuid(value = request.clubId, field = "club id"),
         circuitId = request.circuitId?.let { parseEventUuid(value = it, field = "circuit id") },
         format = request.format,
         type = request.type,

@@ -42,6 +42,7 @@ import org.skopeo.module
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
 import org.skopeo.testsupport.TestFirebaseAuth
+import org.skopeo.testsupport.seedFixtureClub
 import java.time.LocalDate
 import java.util.UUID
 
@@ -84,13 +85,22 @@ class EventTeamApiIntegrationTest {
 
     private fun tokenFor(uid: String): String = TestFirebaseAuth.mintToken(uid = uid, emailVerified = true)
 
-    private suspend fun HttpClient.createDoublesEvent(token: String): EventResponse =
+    /**
+     * POST a doubles event as [token]. [ownerUid] must name the same account as [token]: every event needs
+     * a club (#794) and `mayFileUnder` requires the creator to own it (#789). Kept to a *single* uid so
+     * "a non-owner host cannot create a team (403)" below still refuses for the right reason.
+     */
+    private suspend fun HttpClient.createDoublesEvent(
+        token: String,
+        ownerUid: String = "host",
+    ): EventResponse =
         post(urlString = "/api/v1/events") {
             header(key = HttpHeaders.Authorization, value = "Bearer $token")
             contentType(type = ContentType.Application.Json)
             setBody(
                 body =
                     CreateEventRequest(
+                        clubId = seedFixtureClub(ownerUids = arrayOf(ownerUid)).id.toString(),
                         name = "Doubles Cup",
                         startDate = LocalDate.now().toString(),
                         endDate = LocalDate.now().plusDays(7).toString(),
@@ -199,7 +209,7 @@ class EventTeamApiIntegrationTest {
             val a = seedUser(uid = "Alice", roles = setOf(element = Capability.PLAYER))
             val b = seedUser(uid = "Bob", roles = setOf(element = Capability.PLAYER))
             val owner = tokenFor(uid = "owner")
-            val event = client.createDoublesEvent(token = owner)
+            val event = client.createDoublesEvent(token = owner, ownerUid = "owner")
             listOf(a, b).forEach { client.addParticipant(token = owner, eventId = event.id, userId = it.id.toString()) }
 
             client.post(urlString = "/api/v1/events/${event.id}/teams") {

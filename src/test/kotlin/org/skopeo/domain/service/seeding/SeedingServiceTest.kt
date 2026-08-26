@@ -33,6 +33,7 @@ import org.skopeo.domain.service.user.VerifiedFirebaseToken
 import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
+import org.skopeo.testsupport.seedFixtureClub
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -139,6 +140,7 @@ class SeedingServiceTest {
                 token = token(uid = "host"),
                 input =
                     CreateEventInput(
+                        clubId = seedFixtureClub(ownerUids = arrayOf("host")).id,
                         name = "Club Open",
                         startDate = LocalDate.now(),
                         endDate = LocalDate.now(),

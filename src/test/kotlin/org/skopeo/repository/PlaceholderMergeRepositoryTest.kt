@@ -88,9 +88,11 @@ class PlaceholderMergeRepositoryTest {
         insertTeamUser(teamId = sharedTeam, userId = ph.id)
         insertTeamUser(teamId = phOnlyTeam, userId = ph.id)
 
-        // An event both joined (dedupe) + an event only the placeholder joined (re-point).
-        val sharedEvent = insertEvent(name = "sharedEvent")
-        val phOnlyEvent = insertEvent(name = "phOnlyEvent")
+        // An event both joined (dedupe) + an event only the placeholder joined (re-point). Both are filed
+        // under one throwaway club because #794 made events.club_id NOT NULL; ownership is irrelevant here.
+        val host = insertClub(name = "hostClub")
+        val sharedEvent = insertEvent(name = "sharedEvent", clubId = host)
+        val phOnlyEvent = insertEvent(name = "phOnlyEvent", clubId = host)
         insertParticipant(eventId = sharedEvent, userId = claimant.id)
         insertParticipant(eventId = sharedEvent, userId = ph.id)
         insertParticipant(eventId = phOnlyEvent, userId = ph.id)
@@ -183,7 +185,14 @@ class PlaceholderMergeRepositoryTest {
         }
     }
 
-    private fun insertEvent(name: String): UUID =
+    /**
+     * A raw event row under [clubId] — required since #794 made `events.club_id` NOT NULL. The club is
+     * incidental scaffolding here; nothing in this suite reads it.
+     */
+    private fun insertEvent(
+        name: String,
+        clubId: UUID,
+    ): UUID =
         transaction {
             EventsTable.insertAndGetId {
                 it[publicCode] = name.take(n = 6).uppercase().padEnd(length = 6, padChar = 'X')
@@ -191,6 +200,7 @@ class PlaceholderMergeRepositoryTest {
                 it[startDate] = java.time.LocalDate.now()
                 it[endDate] = java.time.LocalDate.now()
                 it[createdBy] = null
+                it[EventsTable.clubId] = clubId
             }.value
         }
 
