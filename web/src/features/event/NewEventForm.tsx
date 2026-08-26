@@ -23,8 +23,7 @@ import type {
   CreateEventRequestFormat,
   UserSummaryResponse,
 } from "@/api/generated/model";
-import { canRate, isAdministrator } from "@/auth/capabilities";
-import { ownedClubs } from "@/auth/clubAccess";
+import { canRate } from "@/auth/capabilities";
 import { PlayerPicker } from "@/components/PlayerPicker";
 import { playerLabel } from "@/lib/playerLabel";
 import { PlaceholderTag } from "@/components/PlaceholderTag";
@@ -64,18 +63,16 @@ const EVENT_FORMAT_OPTIONS: ReadonlyArray<{
  * a new event appears in the club page's own listing without a reload.
  */
 export function NewEventForm({
-  fixedClubPublicCode,
+  clubPublicCode,
   publicCodeToRefresh,
 }: {
-  fixedClubPublicCode?: string;
+  clubPublicCode: string;
   publicCodeToRefresh?: string;
-} = {}) {
+}) {
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  // Empty until the user picks a club; a club is required (#794) so there is nothing to default to.
-  const [clubIdChoice, setClubIdChoice] = useState("");
   const [roster, setRoster] = useState<UserSummaryResponse[]>([]);
   // The event's class (#403); OPEN_PLAY is the default and the backward-compatible choice.
   const [type, setType] = useState<EventType>("OPEN_PLAY");
@@ -102,21 +99,11 @@ export function NewEventForm({
 
   // Default the selector to a CLUB_OWNER's own club (#364), but only while the field is untouched;
   // once the user selects anything (including "Open") their choice wins.
-  // The clubs this caller may actually FILE under (#789): an ADMINISTRATOR any club, anyone else only
-  // the clubs they are a named owner of. The server refuses the rest, so offering them would only hand
-  // out a 403; the selector shows the reachable subset instead.
-  const fileableClubs = useMemo(
-    () =>
-      isAdministrator(me?.capabilities) ? clubs : ownedClubs(clubs, me?.id),
-    [clubs, me?.id, me?.capabilities],
-  );
-  // Either the surface fixes the club (#780) or the user picks one; there is no default. The #364
-  // CLUB_OWNER auto-default was removed with #794: the admin tab exists precisely to choose a club
-  // freely, so silently pre-filling one would undo the reason it is there.
-  const fixedClub = fixedClubPublicCode
-    ? clubs.find((club) => club.publicCode === fixedClubPublicCode)
-    : undefined;
-  const clubId = fixedClubPublicCode ? (fixedClub?.id ?? "") : clubIdChoice;
+  // The club comes from the surface, resolved by its public code — the caller is a public page, whose
+  // payload carries no internal ids. Reading it from the clubs list is safe because the form only renders
+  // for a match manager, who may read that endpoint.
+  const club = clubs.find((c) => c.publicCode === clubPublicCode);
+  const clubId = club?.id ?? "";
 
   const create = usePostApiV1Events({
     mutation: {
@@ -126,7 +113,6 @@ export function NewEventForm({
         setName("");
         setStartDate("");
         setEndDate("");
-        setClubIdChoice("");
         setRoster([]);
         setType("OPEN_PLAY");
         setFormat("SINGLES");
@@ -177,8 +163,7 @@ export function NewEventForm({
     endDate !== "" &&
     format !== ("" as CreateEventRequestFormat) &&
     (type !== "TOURNAMENT" || circuitId !== "") &&
-    // A club is required (#794). For a fixed-club form that also means waiting for the id to resolve,
-    // which it does from the clubs list; before #794 an unresolved id would have filed it as "Open".
+    // Never submit before the club id resolves, or the create would be rejected for a missing club.
     Boolean(clubId);
 
   return (
@@ -279,30 +264,6 @@ export function NewEventForm({
                 {circuits.map((circuit) => (
                   <option key={circuit.id} value={circuit.id}>
                     {circuit.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : null}
-          {/* Hidden entirely when the club is fixed by the surface (#780) — the club page's form files
-              under its own club, so there is nothing to choose. */}
-          {!fixedClubPublicCode && fileableClubs.length > 0 ? (
-            <div className="space-y-1">
-              <Label htmlFor="event-club" className="text-xs">
-                Club
-              </Label>
-              <select
-                id="event-club"
-                value={clubId}
-                onChange={(e) => setClubIdChoice(e.target.value)}
-                className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-              >
-                <option value="" disabled>
-                  Select a club…
-                </option>
-                {fileableClubs.map((club) => (
-                  <option key={club.id} value={club.id}>
-                    {club.name}
                   </option>
                 ))}
               </select>

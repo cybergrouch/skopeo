@@ -25,8 +25,8 @@ vi.mock("@/api/generated/clubs/clubs", () => ({
 vi.mock("@/api/generated/users/users", () => ({ useGetApiV1UsersMe }));
 // Both are exercised in their own tests; here we only assert the page's wiring and gating.
 vi.mock("@/features/event/NewEventForm", () => ({
-  NewEventForm: ({ fixedClubPublicCode }: { fixedClubPublicCode?: string }) => (
-    <div>new-event-form:{fixedClubPublicCode}</div>
+  NewEventForm: ({ clubPublicCode }: { clubPublicCode: string }) => (
+    <div>new-event-form:{clubPublicCode}</div>
   ),
 }));
 vi.mock("@/features/club/ClubEventsCard", () => ({

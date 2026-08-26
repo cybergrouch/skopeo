@@ -32,9 +32,6 @@ vi.mock("./dashboard/ClubManagementTab", () => ({
 vi.mock("./dashboard/AdminTab", () => ({
   AdminTab: () => <div>admin content</div>,
 }));
-vi.mock("./dashboard/EventOrganizerTab", () => ({
-  EventOrganizerTab: () => <div>event organizer content</div>,
-}));
 vi.mock("./dashboard/SeedingTab", () => ({
   SeedingTab: () => <div>seeding content</div>,
 }));
@@ -117,6 +114,7 @@ describe("DashboardPage", () => {
     expect(
       screen.queryByRole("button", { name: "Claim account" }),
     ).not.toBeInTheDocument();
+    // The Event Organizer tab was removed entirely (#794) — every club organizes from its own page.
     expect(
       screen.queryByRole("button", { name: "Event Organizer" }),
     ).not.toBeInTheDocument();
@@ -184,6 +182,7 @@ describe("DashboardPage", () => {
     renderDashboard();
     await openMenu(user);
     expect(screen.getByRole("button", { name: "Ratings" })).toBeInTheDocument();
+    // The Event Organizer tab was removed entirely (#794) — every club organizes from its own page.
     expect(
       screen.queryByRole("button", { name: "Event Organizer" }),
     ).not.toBeInTheDocument();
@@ -208,6 +207,7 @@ describe("DashboardPage", () => {
     await openMenu(user);
     // The Event Organizer tab is ADMINISTRATOR-only since #794 — a host organizes from their club's
     // own public page instead.
+    // The Event Organizer tab was removed entirely (#794) — every club organizes from its own page.
     expect(
       screen.queryByRole("button", { name: "Event Organizer" }),
     ).not.toBeInTheDocument();
@@ -251,6 +251,7 @@ describe("DashboardPage", () => {
     await openMenu(user);
     // The Event Organizer tab is ADMINISTRATOR-only since #794 — a host organizes from their club's
     // own public page instead.
+    // The Event Organizer tab was removed entirely (#794) — every club organizes from its own page.
     expect(
       screen.queryByRole("button", { name: "Event Organizer" }),
     ).not.toBeInTheDocument();
@@ -270,9 +271,6 @@ describe("DashboardPage", () => {
     const user = setupUser();
     renderDashboard();
     await openMenu(user);
-    expect(
-      screen.getByRole("button", { name: "Event Organizer" }),
-    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Ratings" })).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Standings" }),
@@ -303,10 +301,7 @@ describe("DashboardPage", () => {
       screen.getByRole("button", { name: "Club Management" }),
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Event Organizer" }));
-    expect(screen.getByText("event organizer content")).toBeInTheDocument();
 
-    await openMenu(user);
     await user.click(
       screen.getByRole("button", { name: "Account Management" }),
     );

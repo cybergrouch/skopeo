@@ -2409,10 +2409,11 @@ paths:
           type: string
           format: uuid
     put:
-      summary: Set or clear an event's club
+      summary: Re-file an event under a different club
       description: >-
-        Set the event's club, or clear it when clubId is null/absent (#319). Staff-only — a HOST may
-        edit only their own event, an ADMINISTRATOR any. A non-null club must exist.
+        RE-FILE the event under a different club (#319) — since #794 the club cannot be cleared, because
+        every event belongs to one. Staff-only, scoped by club ownership (#789): the caller must own both
+        the event's current club and the destination, or be an ADMINISTRATOR. The club must exist.
 
         An ADMINISTRATOR may also change the club of an ALREADY-FINALIZED event (#782), unlike every
         other finalized-event edit. Which club an event is filed under is not an input to the rating
@@ -6665,6 +6666,7 @@ components:
         - startDate
         - endDate
         - format
+        - clubId
       properties:
         name:
           type: string
@@ -6686,7 +6688,6 @@ components:
         clubId:
           type: string
           format: uuid
-          nullable: true
           description: Optional club to file the event under (#313); omit for a clubless ("Open") event.
         circuitId:
           type: string
@@ -6732,13 +6733,17 @@ components:
 
     SetEventClubRequest:
       type: object
-      description: Set the event's club (#319); clubId null/absent clears it (event becomes "Open").
+      description: >-
+        RE-FILE the event under a different club (#319). Since #794 an event always belongs to a club, so
+        this changes which one but can no longer clear it — that was the second way a clubless event could
+        arise. #782's administrator re-filing of a FINALIZED event is unaffected; it is club-to-club.
+      required:
+        - clubId
       properties:
         clubId:
           type: string
           format: uuid
-          nullable: true
-          description: The club to assign, or null to remove the event's club.
+          description: The club to re-file the event under. Must exist, and the caller must own it (#789).
 
     SetCalcPriorityRequest:
       type: object

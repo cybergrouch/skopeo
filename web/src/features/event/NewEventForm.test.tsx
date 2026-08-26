@@ -92,25 +92,20 @@ const clubs = [
   },
 ];
 
-function renderForm(props?: {
-  fixedClubPublicCode?: string;
-  publicCodeToRefresh?: string;
-}) {
+function renderForm(props?: { clubPublicCode?: string; publicCodeToRefresh?: string }) {
   return render(
     <QueryClientProvider client={new QueryClient()}>
-      <NewEventForm {...props} />
+      <NewEventForm clubPublicCode="CLB001" {...props} />
     </QueryClientProvider>,
   );
 }
 
-/** Fill the required fields and submit. [club] picks one in the selector; omit it for a fixed-club form. */
-async function fillAndSubmit(club?: string) {
+/** Fill the required fields and submit; the club comes from the surface, not the form. */
+async function fillAndSubmit() {
   const user = userEvent.setup();
   await user.type(screen.getByLabelText("Name"), "Club Cup");
   await user.type(screen.getByLabelText("Start date"), "2026-06-01");
   await user.type(screen.getByLabelText("End date"), "2026-06-02");
-  // A club is required since #794, so a form with a free selector must choose one before it can submit.
-  if (club) await user.selectOptions(screen.getByLabelText("Club"), club);
   await user.click(screen.getByRole("button", { name: "Create event" }));
 }
 
@@ -127,7 +122,7 @@ describe("NewEventForm — fixed club (#780)", () => {
   });
 
   it("hides the club selector and files under the fixed club", async () => {
-    renderForm({ fixedClubPublicCode: "CLB001" });
+    renderForm({ clubPublicCode: "CLB001" });
 
     // The page already answers "which club", so the choice isn't offered again.
     expect(screen.queryByLabelText("Club")).not.toBeInTheDocument();
@@ -149,25 +144,7 @@ describe("NewEventForm — fixed club (#780)", () => {
     });
   });
 
-  it("still offers the selector when no club is fixed", () => {
-    renderForm();
-    expect(screen.getByLabelText("Club")).toBeInTheDocument();
-    // Both are the caller's own clubs, so both are offered.
-    expect(screen.getByRole("option", { name: "Downtown TC" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "West End" })).toBeInTheDocument();
-  });
 
-  it("lists only the clubs the caller may file under (#789)", () => {
-    useGetApiV1Clubs.mockReturnValue({
-      data: [clubs[0], { ...clubs[1], owners: [{ userId: "someone-else", publicCode: "X" }] }],
-      isLoading: false,
-    });
-    renderForm();
-
-    // Filing under a club you don't own is refused server-side, so it isn't offered.
-    expect(screen.getByRole("option", { name: "Downtown TC" })).toBeInTheDocument();
-    expect(screen.queryByRole("option", { name: "West End" })).not.toBeInTheDocument();
-  });
 
   it("hides the selector entirely from a host who owns no club (#789)", () => {
     useGetApiV1Clubs.mockReturnValue({
@@ -179,24 +156,11 @@ describe("NewEventForm — fixed club (#780)", () => {
     expect(screen.queryByLabelText("Club")).not.toBeInTheDocument();
   });
 
-  it("offers every club to an administrator, owned or not (#789)", () => {
-    useGetApiV1UsersMe.mockReturnValue({
-      data: { id: "me", capabilities: ["ADMINISTRATOR"] },
-    });
-    useGetApiV1Clubs.mockReturnValue({
-      data: clubs.map((c) => ({ ...c, owners: [] })),
-      isLoading: false,
-    });
-    renderForm();
-
-    expect(screen.getByRole("option", { name: "Downtown TC" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "West End" })).toBeInTheDocument();
-  });
 
   it("blocks submission until the fixed club's id resolves", async () => {
     // Clubs not loaded yet: submitting now would silently file the event as "Open".
     useGetApiV1Clubs.mockReturnValue({ data: undefined, isLoading: true });
-    renderForm({ fixedClubPublicCode: "CLB001" });
+    renderForm({ clubPublicCode: "CLB001" });
 
     const user = userEvent.setup();
     await user.type(screen.getByLabelText("Name"), "Club Cup");
@@ -209,7 +173,7 @@ describe("NewEventForm — fixed club (#780)", () => {
   });
 
   it("refreshes the club page's own query after creating", async () => {
-    renderForm({ fixedClubPublicCode: "CLB001", publicCodeToRefresh: "CLB001" });
+    renderForm({ clubPublicCode: "CLB001", publicCodeToRefresh: "CLB001" });
     await fillAndSubmit();
 
     // The new event must appear in the club page's listing without a reload.
@@ -218,7 +182,7 @@ describe("NewEventForm — fixed club (#780)", () => {
 
   it("does not touch a club page query when none was named", async () => {
     renderForm();
-    await fillAndSubmit("c1");
+    await fillAndSubmit();
 
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["events"] });
     expect(invalidate).not.toHaveBeenCalledWith({
@@ -226,36 +190,7 @@ describe("NewEventForm — fixed club (#780)", () => {
     });
   });
 
-  it("cannot submit without a club, and sends it once chosen (#794)", async () => {
-    const user = userEvent.setup();
-    renderForm();
-    await user.type(screen.getByLabelText("Name"), "Club Cup");
-    await user.type(screen.getByLabelText("Start date"), "2026-06-01");
-    await user.type(screen.getByLabelText("End date"), "2026-06-02");
 
-    // A club is required now; without one there is nothing to file the event under.
-    expect(screen.getByRole("button", { name: "Create event" })).toBeDisabled();
-
-    await user.selectOptions(screen.getByLabelText("Club"), "c2");
-    await user.click(screen.getByRole("button", { name: "Create event" }));
-    expect(createMutate).toHaveBeenCalledWith({
-      data: expect.objectContaining({ clubId: "c2" }),
-    });
-  });
-
-  it("does not pre-select a club for a CLUB_OWNER (#794 removes the #364 default)", () => {
-    // The admin tab exists precisely to choose a club freely, so guessing one would undo the point.
-    useGetApiV1UsersMe.mockReturnValue({
-      data: { id: "me", capabilities: ["CLUB_OWNER"] },
-    });
-    useGetApiV1Clubs.mockReturnValue({
-      data: [{ ...clubs[0], owners: [{ userId: "me" }] }],
-      isLoading: false,
-    });
-    renderForm();
-
-    expect(screen.getByLabelText("Club")).toHaveValue("");
-  });
 
   // These moved here with the form (#794): the Event Organizer tab no longer renders NewEventForm, so its
   // test can't cover it any more. They belong with the component regardless.
@@ -264,8 +199,7 @@ describe("NewEventForm — fixed club (#780)", () => {
       await user.type(screen.getByLabelText("Name"), "Summer Open");
       await user.type(screen.getByLabelText("Start date"), "2026-06-01");
       await user.type(screen.getByLabelText("End date"), "2026-06-02");
-      await user.selectOptions(screen.getByLabelText("Club"), "c1");
-    }
+          }
 
     it("stages a roster and sends it, de-duplicating repeats", async () => {
       const user = userEvent.setup();
@@ -347,8 +281,7 @@ describe("NewEventForm — fixed club (#780)", () => {
     await user.type(screen.getByLabelText("Name"), "Summer Open");
     await user.type(screen.getByLabelText("Start date"), "2026-06-01");
     await user.type(screen.getByLabelText("End date"), "2026-06-02");
-    await user.selectOptions(screen.getByLabelText("Club"), "c1");
-    await user.click(screen.getByLabelText("Award Ranking Points"));
+        await user.click(screen.getByLabelText("Award Ranking Points"));
     await user.click(screen.getByRole("button", { name: "Create event" }));
 
     expect(createMutate).toHaveBeenCalledWith({
@@ -363,8 +296,7 @@ describe("NewEventForm — fixed club (#780)", () => {
     await user.type(screen.getByLabelText("Name"), "Summer Open");
     await user.type(screen.getByLabelText("Start date"), "2026-06-01");
     await user.type(screen.getByLabelText("End date"), "2026-06-02");
-    await user.selectOptions(screen.getByLabelText("Club"), "c1");
-    await user.click(screen.getByRole("button", { name: /Search players/ }));
+        await user.click(screen.getByRole("button", { name: /Search players/ }));
 
     // Clicking the staged chip takes them back off the roster.
     await user.click(screen.getByRole("button", { name: /Ana/ }));

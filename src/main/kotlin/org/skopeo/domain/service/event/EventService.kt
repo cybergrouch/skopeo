@@ -402,7 +402,7 @@ class EventService(
                             mapOf(
                                 "publicCode" to event.publicCode,
                                 "oldClubId" to event.clubId?.toString(),
-                                "newClubId" to clubId?.toString(),
+                                "newClubId" to clubId.toString(),
                                 // Re-filing after finalize is an admin correction (#782); flag it so the
                                 // Activity Log distinguishes it from an ordinary pre-finalize club change.
                                 "wasFinalized" to event.isFinalized.toString(),

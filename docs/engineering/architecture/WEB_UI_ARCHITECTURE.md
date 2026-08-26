@@ -112,7 +112,7 @@ mayOrganize(caller, event) =
 ```
 
 `canManageMatches` therefore answers only "could this person organize *something*" — which is what the
-Event Organizer / Seeding / Placeholder Players tabs are gated on. Whether they may organize a *given*
+Seeding / Placeholder Players tabs are gated on. Whether they may organize a *given*
 club's events is a second question, answered by `src/auth/clubAccess.ts`:
 
 | Helper | Answers |
@@ -263,7 +263,6 @@ gates above:
 | Settings | `SettingsTab` | `isPlayer` (every signed-in user) |
 | Research | `ResearchTab` | `isResearcher` |
 | Standings | `StandingsTab` | Always |
-| Event Organizer | `EventOrganizerTab` | `canManageMatches` |
 | Seeding | `SeedingTab` | `canManageMatches` |
 | Placeholder Players | `PlaceholderPlayersTab` | `canManageMatches` |
 | Ratings | `RatingsTab` | `canRate` |
@@ -275,7 +274,9 @@ gates above:
 | Admin | `AdminTab` | `isAdministrator` |
 | About | `AboutTab` | Always |
 
-(The "Event Organizer" tab is keyed `matches` internally and lives under
+(The Event Organizer tab was removed in #794 — each club organizes from its own public page
+(`/clubs/:code`, #780/#786), so a cross-club index and a second create form had no remaining purpose.
+Its former sibling tabs live under
 `src/routes/dashboard/matches/`.)
 
 Claiming a placeholder account (#496) has no standalone tab. The claim form is embedded in
@@ -307,7 +308,7 @@ flowchart TD
     Me["me.capabilities (GET /users/me)"] --> Pred["capabilities.ts predicates"]
     Pred -->|always| Always["Profile, Standings, About"]
     Pred -->|isPlayer| Settings[Settings]
-    Pred -->|canManageMatches| Org["Event Organizer, Seeding, Placeholder Players"]
+    Pred -->|canManageMatches| Org["Seeding, Placeholder Players"]
     Pred -->|canRate| Ratings[Ratings]
     Pred -->|isResearcher| Research[Research]
     Pred -->|canManagePointsBudget| Points[Points Management]
