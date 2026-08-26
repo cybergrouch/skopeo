@@ -384,7 +384,7 @@ class ClubScopedEventAuthzTest {
         service.delete(token = adminToken, id = event.id).shouldBeRight()
     }
 
-    // --- clubless events keep the creator fallback -----------------------
+    // --- the grandfathered creator fallback -------------------------------
 
     @Test
     fun `an event filed under a club the creator no longer owns stays theirs, grandfathered (#789)`() {
@@ -412,8 +412,14 @@ class ClubScopedEventAuthzTest {
 
         // Their club's event, filed by a colleague — the whole point of the widening.
         val colleagues = eventBy(creatorUid = "colleague", clubId = owned.id, name = "Colleague's")
-        // Their own event filed under someone else's club, reachable only through the creator clause.
-        val mine = eventBy(creatorUid = "owner", clubId = theirs.id, name = "Mine")
+        // Their own event under a club they do NOT own, reachable only through the creator clause. Since
+        // #794 removed clubless events this shape can no longer be *created* directly — filing under a
+        // club you don't own is the #789 tightening — so it is produced the way it actually arises: file
+        // under your own club, then get dropped as an owner. That is precisely the pre-#789 data the
+        // grandfathered creator clause exists to keep reachable.
+        val formerlyOurs = club("West End", owner)
+        val mine = eventBy(creatorUid = "owner", clubId = formerlyOurs.id, name = "Mine")
+        clubs.removeOwner(clubId = formerlyOurs.id, userId = owner.id)
         // Someone else's club, someone else's event — invisible.
         val foreign = eventBy(creatorUid = "outsider", clubId = theirs.id, name = "Foreign")
 

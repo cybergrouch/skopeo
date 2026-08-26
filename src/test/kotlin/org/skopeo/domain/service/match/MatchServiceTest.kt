@@ -53,7 +53,7 @@ import org.skopeo.repository.MatchRepository
 import org.skopeo.repository.MatchesTable
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
-import org.skopeo.testsupport.seedFixtureClub
+import org.skopeo.testsupport.seedClub
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -732,7 +732,7 @@ class MatchServiceTest {
                 command =
                     CreateEventCommand(
                         // Every event needs a club (#794).
-                        clubId = seedFixtureClub(ownerUids = arrayOf("host")).id,
+                        clubId = seedClub().id,
                         name = "Spring Open",
                         startDate = LocalDate.now(),
                         endDate = LocalDate.now().plusDays(7),
@@ -1023,7 +1023,7 @@ class MatchServiceTest {
                 command =
                     CreateEventCommand(
                         // Every event needs a club (#794).
-                        clubId = seedFixtureClub(ownerUids = arrayOf("host")).id,
+                        clubId = seedClub().id,
                         name = "E",
                         startDate = LocalDate.now(),
                         endDate = LocalDate.now().plusDays(7),
@@ -1063,7 +1063,7 @@ class MatchServiceTest {
                 command =
                     CreateEventCommand(
                         // Every event needs a club (#794).
-                        clubId = seedFixtureClub(ownerUids = arrayOf("host")).id,
+                        clubId = seedClub().id,
                         name = "E",
                         startDate = LocalDate.now(),
                         endDate = LocalDate.now().plusDays(7),
@@ -1154,7 +1154,7 @@ class MatchServiceTest {
                 command =
                     CreateEventCommand(
                         // Every event needs a club (#794).
-                        clubId = seedFixtureClub(ownerUids = arrayOf("host")).id,
+                        clubId = seedClub().id,
                         name = "E",
                         startDate = LocalDate.now(),
                         endDate = LocalDate.now().plusDays(7),
@@ -1183,7 +1183,7 @@ class MatchServiceTest {
                 command =
                     CreateEventCommand(
                         // Every event needs a club (#794).
-                        clubId = seedFixtureClub(ownerUids = arrayOf("host")).id,
+                        clubId = seedClub().id,
                         name = "E",
                         startDate = LocalDate.now(),
                         endDate = LocalDate.now().plusDays(7),
@@ -1216,7 +1216,7 @@ class MatchServiceTest {
                 command =
                     CreateEventCommand(
                         // Every event needs a club (#794).
-                        clubId = seedFixtureClub(ownerUids = arrayOf("host")).id,
+                        clubId = seedClub().id,
                         name = "E",
                         startDate = LocalDate.now(),
                         endDate = LocalDate.now().plusDays(7),

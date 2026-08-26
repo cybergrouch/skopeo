@@ -84,15 +84,22 @@ class EventSeedingApiIntegrationTest {
 
     private fun tokenFor(uid: String): String = TestFirebaseAuth.mintToken(uid = uid, emailVerified = true)
 
-    private suspend fun HttpClient.createEvent(token: String): EventResponse =
+    /**
+     * POST an event as [token]. [ownerUid] must name the same account as [token]: every event needs a club
+     * (#794) and `mayFileUnder` requires the creator to own it (#789). Kept to a *single* uid so the
+     * "a non-owner host cannot seed another host's event" test below still refuses for the right reason.
+     */
+    private suspend fun HttpClient.createEvent(
+        token: String,
+        ownerUid: String = "host",
+    ): EventResponse =
         post(urlString = "/api/v1/events") {
             header(key = HttpHeaders.Authorization, value = "Bearer $token")
             contentType(type = ContentType.Application.Json)
             setBody(
                 body =
                     CreateEventRequest(
-                        // Every event needs a club (#794), owned by its creator (#789).
-                        clubId = seedFixtureClub(ownerUids = arrayOf("host")).id.toString(),
+                        clubId = seedFixtureClub(ownerUids = arrayOf(ownerUid)).id.toString(),
                         name = "Spring Open",
                         startDate = LocalDate.now().toString(),
                         endDate = LocalDate.now().plusDays(7).toString(),
@@ -176,7 +183,7 @@ class EventSeedingApiIntegrationTest {
         withApp { client ->
             seedUser(uid = "owner", roles = setOf(Capability.PLAYER, Capability.HOST))
             seedUser(uid = "other", roles = setOf(Capability.PLAYER, Capability.HOST))
-            val event = client.createEvent(token = tokenFor(uid = "owner"))
+            val event = client.createEvent(token = tokenFor(uid = "owner"), ownerUid = "owner")
 
             client.post(urlString = "/api/v1/events/${event.id}/seeding") {
                 header(key = HttpHeaders.Authorization, value = "Bearer ${tokenFor(uid = "other")}")

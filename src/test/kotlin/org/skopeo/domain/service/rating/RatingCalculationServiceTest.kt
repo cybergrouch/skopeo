@@ -52,7 +52,7 @@ import org.skopeo.repository.UserRatingHistoryTable
 import org.skopeo.repository.UserRatingsTable
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
-import org.skopeo.testsupport.seedFixtureClub
+import org.skopeo.testsupport.seedClub
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -436,7 +436,7 @@ class RatingCalculationServiceTest {
                 command =
                     CreateEventCommand(
                         // Every event needs a club (#794).
-                        clubId = seedFixtureClub(ownerUids = arrayOf("host")).id,
+                        clubId = seedClub().id,
                         name = "E",
                         startDate = LocalDate.parse("2026-01-01"),
                         endDate = LocalDate.parse("2026-01-03"),
@@ -730,7 +730,7 @@ class RatingCalculationServiceTest {
                 command =
                     CreateEventCommand(
                         // Every event needs a club (#794).
-                        clubId = seedFixtureClub(ownerUids = arrayOf("host")).id,
+                        clubId = seedClub().id,
                         name = name,
                         startDate = startDate,
                         endDate = endDate,

@@ -32,7 +32,7 @@ import org.skopeo.repository.EventRepository
 import org.skopeo.repository.EventTeamRepository
 import org.skopeo.repository.UserRepository
 import org.skopeo.testsupport.PostgresTestDatabase
-import org.skopeo.testsupport.seedFixtureClub
+import org.skopeo.testsupport.seedClub
 import java.time.LocalDate
 import java.util.UUID
 
@@ -81,7 +81,7 @@ class EventTeamServiceTest {
                 command =
                     CreateEventCommand(
                         // Every event needs a club (#794).
-                        clubId = seedFixtureClub(ownerUids = arrayOf("host")).id,
+                        clubId = seedClub().id,
                         name = "Cup",
                         startDate = LocalDate.now(),
                         endDate = LocalDate.now().plusDays(7),
@@ -427,7 +427,7 @@ class EventTeamServiceTest {
                 command =
                     CreateEventCommand(
                         // Every event needs a club (#794).
-                        clubId = seedFixtureClub(ownerUids = arrayOf("host")).id,
+                        clubId = seedClub().id,
                         name = "Old Cup",
                         startDate = LocalDate.now().minusDays(30),
                         endDate = LocalDate.now().minusDays(20),
